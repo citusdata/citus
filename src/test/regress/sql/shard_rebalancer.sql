@@ -31,13 +31,13 @@ SELECT count(*) FROM citus_local_table;
 -- verify drain_node uses the localhostname guc by seeing it fail to connect to a non-existing name
 ALTER SYSTEM SET citus.local_hostname TO 'foobar';
 SELECT pg_reload_conf();
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 SELECT master_drain_node('localhost', :master_port);
 
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 SELECT master_drain_node('localhost', :master_port);
 
@@ -61,14 +61,14 @@ SELECT create_distributed_table('dist_table_test_2', 'a');
 -- replicate_table_shards should fail when the hostname GUC is set to a non-reachable node
 ALTER SYSTEM SET citus.local_hostname TO 'foobar';
 SELECT pg_reload_conf();
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 SET citus.shard_replication_factor TO 2;
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 -- replicate reference table should ignore the coordinator
 SET citus.shard_replication_factor TO 2;
@@ -403,7 +403,7 @@ SELECT * FROM table_placements_per_node;
 -- check rebalances use the localhost guc by seeing it fail when the GUC is set to a non-existing host
 ALTER SYSTEM SET citus.local_hostname TO 'foobar';
 SELECT pg_reload_conf();
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 SELECT rebalance_table_shards('rebalance_test_table',
                               excluded_shard_list := excluded_shard_list,
@@ -417,7 +417,7 @@ FROM (
 
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 -- Check excluded_shard_list by excluding four shards with smaller ids
 

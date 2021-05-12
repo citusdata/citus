@@ -75,7 +75,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -90,7 +90,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -141,7 +141,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -158,7 +158,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -571,7 +571,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
  pg_sleep
 ---------------------------------------------------------------------
 
@@ -594,7 +594,7 @@ SELECT pg_reload_conf();
  t
 (1 row)
 
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
  pg_sleep
 ---------------------------------------------------------------------
 

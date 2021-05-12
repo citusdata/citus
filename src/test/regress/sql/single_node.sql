@@ -46,7 +46,7 @@ SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 
 -- verify the coordinator gets auto added with the localhost guc
 ALTER SYSTEM SET citus.local_hostname TO '127.0.0.1'; --although not a hostname, should work for connecting locally
 SELECT pg_reload_conf();
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
@@ -58,7 +58,7 @@ SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 
 
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
-SELECT pg_sleep(1); -- wait to make sure the config has changed before running the GUC
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
