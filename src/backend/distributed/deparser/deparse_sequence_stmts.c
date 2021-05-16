@@ -14,6 +14,7 @@
 #include "postgres.h"
 
 #include "catalog/namespace.h"
+#include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -22,6 +23,9 @@
 /* forward declaration for deparse functions */
 static void AppendDropSequenceStmt(StringInfo buf, DropStmt *stmt);
 static void AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype);
+static void AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt);
+static void AppendAlterSequenceSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
+static void AppendAlterSequenceOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt);
 
 /*
  * DeparseDropSequenceStmt builds and returns a string representing the DropStmt
@@ -91,4 +95,188 @@ AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype)
 																 seq->relname);
 		appendStringInfoString(buf, qualifiedSequenceName);
 	}
+}
+
+
+/*
+ * DeparseRenameSequenceStmt builds and returns a string representing the RenameStmt
+ */
+char *
+DeparseRenameSequenceStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->renameType == OBJECT_SEQUENCE);
+
+	AppendRenameSequenceStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendRenameSequenceStmt appends a string representing the RenameStmt to a buffer
+ */
+static void
+AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt)
+{
+	RangeVar *seq = stmt->relation;
+
+	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
+															 seq->relname);
+
+	appendStringInfoString(buf, "ALTER SEQUENCE ");
+
+	if (stmt->missing_ok)
+	{
+		appendStringInfoString(buf, "IF EXISTS ");
+	}
+
+	appendStringInfoString(buf, qualifiedSequenceName);
+
+	appendStringInfo(buf, " RENAME TO %s;", quote_identifier(stmt->newname));
+}
+
+
+/*
+ * QualifyRenameSequenceStmt transforms a
+ * ALTER SEQUENCE .. RENAME TO ..
+ * statement in place and makes the sequence name fully qualified.
+ */
+void
+QualifyRenameSequenceStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_SEQUENCE);
+
+	RangeVar *seq = stmt->relation;
+
+	if (seq->schemaname == NULL)
+	{
+		Oid schemaOid = RangeVarGetCreationNamespace(seq);
+		seq->schemaname = get_namespace_name(schemaOid);
+	}
+}
+
+
+/*
+ * QualifyAlterSequenceSchemaStmt transforms a
+ * ALTER SEQUENCE .. SET SCHEMA ..
+ * statement in place and makes the function name fully qualified.
+ */
+void
+QualifyAlterSequenceSchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+
+	RangeVar *seq = stmt->relation;
+
+	if (seq->schemaname == NULL)
+	{
+		Oid schemaOid = RangeVarGetCreationNamespace(seq);
+		seq->schemaname = get_namespace_name(schemaOid);
+	}
+}
+
+
+/*
+ * DeparseAlterSequenceSchemaStmt builds and returns a string representing the AlterObjectSchemaStmt
+ */
+char *
+DeparseAlterSequenceSchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+
+	AppendAlterSequenceSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendAlterSequenceSchemaStmt appends a string representing the AlterObjectSchemaStmt to a buffer
+ */
+static void
+AppendAlterSequenceSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
+{
+	RangeVar *seq = stmt->relation;
+
+	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
+															 seq->relname);
+
+	appendStringInfoString(buf, "ALTER SEQUENCE ");
+
+	if (stmt->missing_ok)
+	{
+		appendStringInfoString(buf, "IF EXISTS ");
+	}
+
+	appendStringInfoString(buf, qualifiedSequenceName);
+
+	appendStringInfo(buf, " SET SCHEMA %s;", quote_identifier(stmt->newschema));
+}
+
+
+/*
+ * QualifyAlterSequenceOwnerStmt transforms a
+ * ALTER SEQUENCE .. OWNER TO ..
+ * statement in place and makes the function name fully qualified.
+ */
+void
+QualifyAlterSequenceOwnerStmt(Node *node)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+
+	RangeVar *seq = stmt->relation;
+
+	if (seq->schemaname == NULL)
+	{
+		Oid schemaOid = RangeVarGetCreationNamespace(seq);
+		seq->schemaname = get_namespace_name(schemaOid);
+	}
+}
+
+
+/*
+ * DeparseAlterSequenceOwnerStmt builds and returns a string representing the AlterOwnerStmt
+ */
+char *
+DeparseAlterSequenceOwnerStmt(Node *node)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+
+	AppendAlterSequenceOwnerStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendAlterSequenceOwnerStmt appends a string representing the AlterOwnerStmt to a buffer
+ */
+static void
+AppendAlterSequenceOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
+{
+	RangeVar *seq = stmt->relation;
+
+	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
+															 seq->relname);
+
+	appendStringInfoString(buf, "ALTER SEQUENCE ");
+
+	appendStringInfoString(buf, qualifiedSequenceName);
+
+	appendStringInfo(buf, " OWNER TO %s;", RoleSpecString(stmt->newowner, true));
 }

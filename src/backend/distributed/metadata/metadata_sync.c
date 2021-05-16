@@ -1091,6 +1091,7 @@ SequenceDDLCommandsForTable(Oid relationId)
 
 		ObjectAddress sequenceAddress = { 0 };
 		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+		EnsureDependenciesExistOnAllNodes(&sequenceAddress);
 		MarkObjectDistributed(&sequenceAddress);
 	}
 

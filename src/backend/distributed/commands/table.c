@@ -1640,6 +1640,8 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		{
 			SendCommandToWorkersWithMetadata(sequenceCommand);
 		}
+
+		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 }
 
