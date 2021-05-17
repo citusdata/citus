@@ -644,8 +644,8 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 				 */
 				lastShardCleanTime = GetCurrentTimestamp();
 
-				bool waitForCleanupLock = false;
-				numberOfDroppedShards = TryDropMarkedShards(waitForCleanupLock);
+				bool waitForLocks = false;
+				numberOfDroppedShards = TryDropMarkedShards(waitForLocks);
 			}
 
 			CommitTransactionCommand();

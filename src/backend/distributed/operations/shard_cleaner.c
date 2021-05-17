@@ -24,6 +24,7 @@
 PG_FUNCTION_INFO_V1(master_defer_delete_shards);
 
 static bool TryDropShard(GroupShardPlacement *placement);
+static bool TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode);
 
 /*
  * master_defer_delete_shards implements a user-facing UDF to deleter orphaned shards that
@@ -43,8 +44,8 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 
-	bool waitForCleanupLock = true;
-	int droppedShardCount = DropMarkedShards(waitForCleanupLock);
+	bool waitForLocks = true;
+	int droppedShardCount = DropMarkedShards(waitForLocks);
 
 	PG_RETURN_INT32(droppedShardCount);
 }
@@ -58,13 +59,13 @@ master_defer_delete_shards(PG_FUNCTION_ARGS)
  * returns the number of dropped shards.
  */
 int
-TryDropMarkedShards(bool waitForCleanupLock)
+TryDropMarkedShards(bool waitForLocks)
 {
 	int droppedShardCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
 	PG_TRY();
 	{
-		droppedShardCount = DropMarkedShards(waitForCleanupLock);
+		droppedShardCount = DropMarkedShards(waitForLocks);
 	}
 	PG_CATCH();
 	{
@@ -91,32 +92,45 @@ TryDropMarkedShards(bool waitForCleanupLock)
  * will be removed at a later time when there are no locks held anymore on
  * those placements.
  *
+ * If waitForLocks is false, then if we cannot take a lock on pg_dist_placement
+ * we continue without waiting.
+ *
  * Before doing any of this it will take an exclusive PlacementCleanup lock.
  * This is to ensure that this function is not being run concurrently.
  * Otherwise really bad race conditions are possible, such as removing all
- * placements of a shard. waitForCleanupLock indicates if this function should
- * wait for this lock or error out.
+ * placements of a shard. waitForLocks indicates if this function should
+ * wait for this lock or not.
  *
  */
 int
-DropMarkedShards(bool waitForCleanupLock)
+DropMarkedShards(bool waitForLocks)
 {
 	int removedShardCount = 0;
 	ListCell *shardPlacementCell = NULL;
+
+	/*
+	 * We should try to take the highest lock that we take
+	 * later in this function for pg_dist_placement. We take RowExclusiveLock
+	 * in DeleteShardPlacementRow.
+	 */
+	LOCKMODE lockmode = RowExclusiveLock;
 
 	if (!IsCoordinator())
 	{
 		return 0;
 	}
 
-	if (waitForCleanupLock)
+	if (waitForLocks)
 	{
 		LockPlacementCleanup();
 	}
-	else if (!TryLockPlacementCleanup())
+	else
 	{
-		ereport(WARNING, (errmsg("could not acquire lock to cleanup placements")));
-		return 0;
+		Oid distPlacementId = DistPlacementRelationId();
+		if (!TryLockRelationAndPlacementCleanup(distPlacementId, lockmode))
+		{
+			return 0;
+		}
 	}
 
 	int failedShardDropCount = 0;
@@ -154,9 +168,32 @@ DropMarkedShards(bool waitForCleanupLock)
 
 
 /*
+ * TryLockRelationAndCleanup tries to lock the given relation
+ * and the placement cleanup. If it cannot, it returns false.
+ *
+ */
+static bool
+TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode)
+{
+	if (!ConditionalLockRelationOid(relationId, lockmode))
+	{
+		ereport(DEBUG1, (errmsg(
+							 "could not acquire shard lock to cleanup placements")));
+		return false;
+	}
+
+	if (!TryLockPlacementCleanup())
+	{
+		ereport(DEBUG1, (errmsg("could not acquire lock to cleanup placements")));
+		return false;
+	}
+	return true;
+}
+
+
+/*
  * TryDropShard tries to drop the given shard placement and returns
- * true on success. On failure, this method swallows errors and emits them
- * as WARNINGs.
+ * true on success.
  */
 static bool
 TryDropShard(GroupShardPlacement *placement)

@@ -21,6 +21,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
 #include "funcapi.h"
 #include "miscadmin.h"
@@ -50,6 +51,7 @@ static ShardCost GetShardCost(uint64 shardId, void *context);
 PG_FUNCTION_INFO_V1(shard_placement_rebalance_array);
 PG_FUNCTION_INFO_V1(shard_placement_replication_array);
 PG_FUNCTION_INFO_V1(worker_node_responsive);
+PG_FUNCTION_INFO_V1(run_try_drop_marked_shards);
 
 typedef struct ShardPlacementTestInfo
 {
@@ -70,6 +72,17 @@ typedef struct RebalancePlanContext
 	List *workerTestInfoList;
 	List *shardPlacementTestInfoList;
 } RebalancePlacementContext;
+
+/*
+ * run_try_drop_marked_shards is a wrapper to run TryDropMarkedShards.
+ */
+Datum
+run_try_drop_marked_shards(PG_FUNCTION_ARGS)
+{
+	bool waitForLocks = false;
+	TryDropMarkedShards(waitForLocks);
+	PG_RETURN_VOID();
+}
 
 
 /*
