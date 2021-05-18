@@ -52,7 +52,9 @@ BEGIN
 	TRUNCATE TABLE extension_diff;
 
 	CREATE TABLE current_objects AS
-	SELECT pg_catalog.pg_describe_object(classid, objid, 0) AS description
+	SELECT pg_catalog.pg_describe_object(classid, objid, 0)
+           || ' ' ||
+           coalesce(pg_catalog.pg_get_function_result(objid), '') AS description
 	FROM pg_catalog.pg_depend, pg_catalog.pg_extension e
 	WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
 		AND refobjid = e.oid
