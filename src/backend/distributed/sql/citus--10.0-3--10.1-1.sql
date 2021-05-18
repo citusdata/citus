@@ -4,7 +4,7 @@
 -- this is to reliably propagate some of the alter database commands that might be
 -- supported.
 INSERT INTO citus.pg_dist_object SELECT
-  (SELECT oid FROM pg_class WHERE relname = 'pg_database') AS oid,
+  'pg_catalog.pg_database'::regclass::oid AS oid,
   (SELECT oid FROM pg_database WHERE datname = current_database()) as objid,
   0 as objsubid
 ON CONFLICT DO NOTHING;
