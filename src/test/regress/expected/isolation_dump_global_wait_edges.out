@@ -13,7 +13,7 @@ step s1-update:
 step s2-update:
     UPDATE distributed_table SET y = 2 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges:
+step detector-dump-wait-edges: 
     SELECT
         waiting_transaction_num,
         blocking_transaction_num,
@@ -28,11 +28,11 @@ step detector-dump-wait-edges:
 
 waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
 
-395            394            f
+400            399            f
 transactionnumberwaitingtransactionnumbers
 
-394
-395            394
+399
+400            399
 step s1-abort:
     ABORT;
 
@@ -57,10 +57,10 @@ step s1-update:
 step s2-update:
     UPDATE distributed_table SET y = 2 WHERE x = 1;
  <waiting ...>
-step s3-update:
+step s3-update: 
     UPDATE distributed_table SET y = 3 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges:
+step detector-dump-wait-edges: 
     SELECT
         waiting_transaction_num,
         blocking_transaction_num,
@@ -75,14 +75,14 @@ step detector-dump-wait-edges:
 
 waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
 
-399            398            f
-400            398            f
-400            399            t
+404            403            f
+405            403            f
+405            404            t
 transactionnumberwaitingtransactionnumbers
 
-398
-399            398
-400            398,399
+403
+404            403
+405            403,404
 step s1-abort:
     ABORT;
 
