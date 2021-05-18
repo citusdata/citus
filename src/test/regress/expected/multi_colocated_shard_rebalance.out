@@ -4,7 +4,6 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
-SET citus.defer_drop_after_shard_move to off;
 -- create distributed tables
 CREATE TABLE table1_group1 ( id int PRIMARY KEY);
 SELECT create_distributed_table('table1_group1', 'id', 'hash');
@@ -126,7 +125,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 (1 row)
 
 \c - - - :master_port
-SET citus.defer_drop_after_shard_move to off;
 -- copy colocated shards again to see error message
 SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
 ERROR:  the force_logical transfer mode is currently unsupported
@@ -268,6 +266,7 @@ ORDER BY s.shardid, sp.nodeport;
  13000000 | table1_group1 |    57637
  13000000 | table1_group1 |    57638
  13000001 | table1_group1 |    57637
+ 13000001 | table1_group1 |    57638
  13000002 | table1_group1 |    57637
  13000003 | table1_group1 |    57638
  13000004 | table1_group1 |    57637
@@ -275,11 +274,12 @@ ORDER BY s.shardid, sp.nodeport;
  13000006 | table2_group1 |    57637
  13000006 | table2_group1 |    57638
  13000007 | table2_group1 |    57637
+ 13000007 | table2_group1 |    57638
  13000008 | table2_group1 |    57637
  13000009 | table2_group1 |    57638
  13000010 | table2_group1 |    57637
  13000011 | table2_group1 |    57638
-(14 rows)
+(16 rows)
 
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
 \c - - - :worker_1_port
@@ -296,7 +296,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 (1 row)
 
 \c - - - :master_port
-SET citus.defer_drop_after_shard_move to off;
 -- test moving NOT colocated shard
 -- status before shard move
 SELECT s.shardid, s.logicalrelid::regclass, sp.nodeport
@@ -341,13 +340,14 @@ ORDER BY s.shardid, sp.nodeport;
  13000012 | table5_groupx |    57637
  13000012 | table5_groupx |    57638
  13000013 | table5_groupx |    57637
+ 13000013 | table5_groupx |    57638
  13000014 | table5_groupx |    57637
  13000015 | table5_groupx |    57638
  13000016 | table5_groupx |    57637
  13000017 | table5_groupx |    57638
  13000018 | table5_groupx |    57637
  13000019 | table5_groupx |    57638
-(9 rows)
+(10 rows)
 
 -- test moving shard in append distributed table
 -- status before shard move
@@ -384,8 +384,9 @@ ORDER BY s.shardid, sp.nodeport;
  shardid  | logicalrelid  | nodeport
 ---------------------------------------------------------------------
  13000020 | table6_append |    57638
+ 13000021 | table6_append |    57637
  13000021 | table6_append |    57638
-(2 rows)
+(3 rows)
 
 -- try to move shard from wrong node
 SELECT master_move_shard_placement(13000021, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
@@ -455,19 +456,21 @@ WHERE
 ORDER BY s.shardid, sp.nodeport;
  shardid  | logicalrelid  | nodeport
 ---------------------------------------------------------------------
+ 13000022 | table1_group1 |    57637
  13000022 | table1_group1 |    57638
  13000023 | table1_group1 |    57638
  13000024 | table1_group1 |    57637
  13000025 | table1_group1 |    57638
  13000026 | table1_group1 |    57637
  13000027 | table1_group1 |    57638
+ 13000028 | table2_group1 |    57637
  13000028 | table2_group1 |    57638
  13000029 | table2_group1 |    57638
  13000030 | table2_group1 |    57637
  13000031 | table2_group1 |    57638
  13000032 | table2_group1 |    57637
  13000033 | table2_group1 |    57638
-(12 rows)
+(14 rows)
 
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
 \c - - - :worker_2_port
@@ -496,7 +499,6 @@ SELECT  "Constraint", "Definition" FROM table_fkeys
 (4 rows)
 
 \c - - - :master_port
-SET citus.defer_drop_after_shard_move to off;
 -- test shard copy with foreign constraints
 -- we expect it to error out because we do not support foreign constraints with replication factor > 1
 SELECT master_copy_shard_placement(13000022, 'localhost', :worker_2_port, 'localhost', :worker_1_port, false);
@@ -602,7 +604,7 @@ ALTER TABLE move_partitions.events_1 ADD CONSTRAINT e_1_pk PRIMARY KEY (id);
 -- should be able to move automatically now
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
+WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port AND shardstate != 4
 ORDER BY shardid LIMIT 1;
  master_move_shard_placement
 ---------------------------------------------------------------------
@@ -618,7 +620,7 @@ SELECT count(*) FROM move_partitions.events;
 -- should also be able to move with block writes
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
+WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port AND shardstate != 4
 ORDER BY shardid LIMIT 1;
  master_move_shard_placement
 ---------------------------------------------------------------------

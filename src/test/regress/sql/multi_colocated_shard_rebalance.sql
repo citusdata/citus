@@ -7,7 +7,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
 
-SET citus.defer_drop_after_shard_move to off;
 
 -- create distributed tables
 CREATE TABLE table1_group1 ( id int PRIMARY KEY);
@@ -61,7 +60,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table1_
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_group1_13000006'::regclass;
 \c - - - :master_port
 
-SET citus.defer_drop_after_shard_move to off;
 
 -- copy colocated shards again to see error message
 SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
@@ -152,7 +150,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table1_
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_group1_13000007'::regclass;
 \c - - - :master_port
 
-SET citus.defer_drop_after_shard_move to off;
 
 
 -- test moving NOT colocated shard
@@ -259,7 +256,6 @@ SELECT  "Constraint", "Definition" FROM table_fkeys
 
 \c - - - :master_port
 
-SET citus.defer_drop_after_shard_move to off;
 
 
 -- test shard copy with foreign constraints
@@ -323,7 +319,7 @@ ALTER TABLE move_partitions.events_1 ADD CONSTRAINT e_1_pk PRIMARY KEY (id);
 -- should be able to move automatically now
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
+WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port AND shardstate != 4
 ORDER BY shardid LIMIT 1;
 
 SELECT count(*) FROM move_partitions.events;
@@ -331,7 +327,7 @@ SELECT count(*) FROM move_partitions.events;
 -- should also be able to move with block writes
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
+WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port AND shardstate != 4
 ORDER BY shardid LIMIT 1;
 
 SELECT count(*) FROM move_partitions.events;

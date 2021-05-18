@@ -61,7 +61,6 @@ step "s1-begin"
 
 step "s1-move-placement"
 {
-  SET citus.defer_drop_after_shard_move to off;
   SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes') FROM selected_shard;
 }
 
