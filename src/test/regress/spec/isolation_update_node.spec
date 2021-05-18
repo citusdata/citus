@@ -19,12 +19,34 @@ step "s1-begin"
 	BEGIN;
 }
 
+step "s1-prepare-transaction" {
+    PREPARE transaction 'label';
+}
+
+step "s1-commit-prepared" {
+    COMMIT prepared 'label';
+}
+
 step "s1-update-node-1"
 {
     SELECT 1 FROM master_update_node(
         (select nodeid from pg_dist_node where nodeport = 57637),
         'localhost',
         58637);
+}
+
+step "s1-update-node-nonexistent" {
+    SELECT 1 FROM master_update_node(
+        (select nodeid from pg_dist_node where nodeport = 57637),
+        'non-existent',
+        57637);
+}
+
+step "s1-update-node-existent" {
+    SELECT 1 FROM master_update_node(
+        (select nodeid from pg_dist_node where nodeport = 57637),
+        'localhost',
+        57637);
 }
 
 step "s1-commit"
@@ -62,6 +84,25 @@ step "s2-update-node-2"
         58638);
 }
 
+step "s2-create-table" {
+    CREATE TABLE test (a int);
+    SELECT create_distributed_table('test','a');
+}
+
+step "s2-cache-prepared-statement" {
+    PREPARE foo AS SELECT COUNT(*) FROM test WHERE a = 3;
+    EXECUTE foo;
+    EXECUTE foo;
+    EXECUTE foo;
+    EXECUTE foo;
+    EXECUTE foo;
+    EXECUTE foo;
+}
+
+step "s2-execute-prepared" {
+    EXECUTE foo;
+}
+
 step "s2-verify-metadata"
 {
     SELECT nodeid, groupid, nodename, nodeport FROM pg_dist_node ORDER BY nodeid;
@@ -74,6 +115,10 @@ step "s2-verify-metadata"
 step "s2-start-metadata-sync-node-2"
 {
     SELECT start_metadata_sync_to_node('localhost', 57638);
+}
+
+step "s2-drop-table" {
+    DROP TABLE test;
 }
 
 step "s2-abort"
@@ -91,3 +136,8 @@ permutation "s1-begin" "s1-update-node-1" "s2-begin" "s2-update-node-1" "s1-comm
 // cannot run start_metadata_sync_to_node in a transaction, so we're not
 // testing the reverse order here.
 permutation "s1-begin" "s1-update-node-1" "s2-start-metadata-sync-node-2" "s1-commit" "s2-verify-metadata"
+
+// make sure we have entries in prepared statement cache
+// then make sure that after we update pg_dist_node, the changes are visible to
+// the prepared statement
+permutation "s2-create-table" "s1-begin" "s1-update-node-nonexistent" "s1-prepare-transaction" "s2-cache-prepared-statement" "s1-commit-prepared" "s2-execute-prepared" "s1-update-node-existent" "s2-drop-table"
