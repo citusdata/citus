@@ -137,7 +137,7 @@ permutation "s1-begin" "s1-update-node-1" "s2-begin" "s2-update-node-1" "s1-comm
 // testing the reverse order here.
 permutation "s1-begin" "s1-update-node-1" "s2-start-metadata-sync-node-2" "s1-commit" "s2-verify-metadata"
 
-// make sure we have entries in prepared statement cache 
+// make sure we have entries in prepared statement cache
 // then make sure that after we update pg_dist_node, the changes are visible to
 // the prepared statement
 permutation "s2-create-table" "s1-begin" "s1-update-node-nonexistent" "s1-prepare-transaction" "s2-cache-prepared-statement" "s1-commit-prepared" "s2-execute-prepared" "s1-update-node-existent" "s2-drop-table"
