@@ -302,7 +302,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	ErrorIfMoveCitusLocalTable(relationId);
 	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
 
-	bool waitForCleanupLock = false;
+	bool waitForCleanupLock = true;
 
 	/*
 	 * We try to drop marked shards so that we won't unnecessarily error
@@ -1070,9 +1070,22 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 																 targetNodePort);
 	if (targetPlacement != NULL)
 	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("shard " INT64_FORMAT " already exists in the target node",
-							   shardId)));
+		if (targetPlacement->shardState == SHARD_STATE_TO_DELETE)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg(
+								"shard " INT64_FORMAT " already exists in the target node",
+								shardId),
+							errdetail(
+								"The existing shard is marked for deletion, but could not be deleted because there are still active queries on it")));
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg(
+								"shard " INT64_FORMAT " already exists in the target node",
+								shardId)));
+		}
 	}
 }
 

@@ -260,13 +260,13 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
  shardid  | logicalrelid  | nodeport
 ---------------------------------------------------------------------
  13000000 | table1_group1 |    57637
  13000000 | table1_group1 |    57638
  13000001 | table1_group1 |    57637
- 13000001 | table1_group1 |    57638
  13000002 | table1_group1 |    57637
  13000003 | table1_group1 |    57638
  13000004 | table1_group1 |    57637
@@ -274,12 +274,11 @@ ORDER BY s.shardid, sp.nodeport;
  13000006 | table2_group1 |    57637
  13000006 | table2_group1 |    57638
  13000007 | table2_group1 |    57637
- 13000007 | table2_group1 |    57638
  13000008 | table2_group1 |    57637
  13000009 | table2_group1 |    57638
  13000010 | table2_group1 |    57637
  13000011 | table2_group1 |    57638
-(16 rows)
+(14 rows)
 
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
 \c - - - :worker_1_port
@@ -305,6 +304,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table5_groupX'::regclass
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
  shardid  | logicalrelid  | nodeport
 ---------------------------------------------------------------------
@@ -333,21 +333,21 @@ FROM
 WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
-    p.logicalrelid = 'table5_groupX'::regclass
+    p.logicalrelid = 'table5_groupX'::regclass AND
+    sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
  shardid  | logicalrelid  | nodeport
 ---------------------------------------------------------------------
  13000012 | table5_groupx |    57637
  13000012 | table5_groupx |    57638
  13000013 | table5_groupx |    57637
- 13000013 | table5_groupx |    57638
  13000014 | table5_groupx |    57637
  13000015 | table5_groupx |    57638
  13000016 | table5_groupx |    57637
  13000017 | table5_groupx |    57638
  13000018 | table5_groupx |    57637
  13000019 | table5_groupx |    57638
-(10 rows)
+(9 rows)
 
 -- test moving shard in append distributed table
 -- status before shard move
@@ -358,6 +358,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table6_append'::regclass
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
  shardid  | logicalrelid  | nodeport
 ---------------------------------------------------------------------
@@ -379,14 +380,14 @@ FROM
 WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
-    p.logicalrelid = 'table6_append'::regclass
+    p.logicalrelid = 'table6_append'::regclass AND
+    sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
  shardid  | logicalrelid  | nodeport
 ---------------------------------------------------------------------
  13000020 | table6_append |    57638
- 13000021 | table6_append |    57637
  13000021 | table6_append |    57638
-(3 rows)
+(2 rows)
 
 -- try to move shard from wrong node
 SELECT master_move_shard_placement(13000021, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
@@ -422,6 +423,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
 	colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
  shardid  | logicalrelid  | nodeport
 ---------------------------------------------------------------------
@@ -453,24 +455,23 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
 	colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
  shardid  | logicalrelid  | nodeport
 ---------------------------------------------------------------------
- 13000022 | table1_group1 |    57637
  13000022 | table1_group1 |    57638
  13000023 | table1_group1 |    57638
  13000024 | table1_group1 |    57637
  13000025 | table1_group1 |    57638
  13000026 | table1_group1 |    57637
  13000027 | table1_group1 |    57638
- 13000028 | table2_group1 |    57637
  13000028 | table2_group1 |    57638
  13000029 | table2_group1 |    57638
  13000030 | table2_group1 |    57637
  13000031 | table2_group1 |    57638
  13000032 | table2_group1 |    57637
  13000033 | table2_group1 |    57638
-(14 rows)
+(12 rows)
 
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
 \c - - - :worker_2_port
@@ -587,6 +588,7 @@ SELECT count(*) FROM move_partitions.events;
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
+AND shardstate != 4
 ORDER BY shardid LIMIT 1;
  master_move_shard_placement
 ---------------------------------------------------------------------

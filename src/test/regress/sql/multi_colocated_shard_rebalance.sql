@@ -142,6 +142,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
@@ -161,6 +162,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table5_groupX'::regclass
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 -- move NOT colocated shard
@@ -173,7 +175,8 @@ FROM
 WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
-    p.logicalrelid = 'table5_groupX'::regclass
+    p.logicalrelid = 'table5_groupX'::regclass AND
+    sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 
@@ -186,6 +189,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table6_append'::regclass
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 -- move shard in append distributed table
@@ -198,7 +202,8 @@ FROM
 WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
-    p.logicalrelid = 'table6_append'::regclass
+    p.logicalrelid = 'table6_append'::regclass AND
+    sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 
@@ -231,6 +236,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
 	colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 SELECT master_move_shard_placement(13000022, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'block_writes');
@@ -243,6 +249,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
 	colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
@@ -309,6 +316,7 @@ SELECT count(*) FROM move_partitions.events;
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
+AND shardstate != 4
 ORDER BY shardid LIMIT 1;
 
 SELECT count(*) FROM move_partitions.events;

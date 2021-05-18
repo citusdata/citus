@@ -61,10 +61,15 @@ SELECT count(*) FROM referencing_table2;
    101
 (1 row)
 
+SELECT 1 FROM public.master_defer_delete_shards();
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_rebalance.%' AND refd_relid LIKE 'fkey_to_reference_shard_rebalance.%' ORDER BY 1,2,3;
                   name                   |                             relid                             |                          refd_relid
 ---------------------------------------------------------------------
- referencing_table2_id_fkey_15000009     | fkey_to_reference_shard_rebalance.referencing_table2_15000009 | fkey_to_reference_shard_rebalance.referencing_table_15000001
  referencing_table2_id_fkey_15000009     | fkey_to_reference_shard_rebalance.referencing_table2_15000009 | fkey_to_reference_shard_rebalance.referencing_table_15000001
  referencing_table2_id_fkey_15000010     | fkey_to_reference_shard_rebalance.referencing_table2_15000010 | fkey_to_reference_shard_rebalance.referencing_table_15000002
  referencing_table2_id_fkey_15000011     | fkey_to_reference_shard_rebalance.referencing_table2_15000011 | fkey_to_reference_shard_rebalance.referencing_table_15000003
@@ -74,7 +79,6 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_r
  referencing_table2_id_fkey_15000015     | fkey_to_reference_shard_rebalance.referencing_table2_15000015 | fkey_to_reference_shard_rebalance.referencing_table_15000007
  referencing_table2_id_fkey_15000016     | fkey_to_reference_shard_rebalance.referencing_table2_15000016 | fkey_to_reference_shard_rebalance.referencing_table_15000008
  referencing_table2_ref_id_fkey_15000009 | fkey_to_reference_shard_rebalance.referencing_table2_15000009 | fkey_to_reference_shard_rebalance.referenced_table_15000000
- referencing_table2_ref_id_fkey_15000009 | fkey_to_reference_shard_rebalance.referencing_table2_15000009 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table2_ref_id_fkey_15000010 | fkey_to_reference_shard_rebalance.referencing_table2_15000010 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table2_ref_id_fkey_15000011 | fkey_to_reference_shard_rebalance.referencing_table2_15000011 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table2_ref_id_fkey_15000012 | fkey_to_reference_shard_rebalance.referencing_table2_15000012 | fkey_to_reference_shard_rebalance.referenced_table_15000000
@@ -83,7 +87,6 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_r
  referencing_table2_ref_id_fkey_15000015 | fkey_to_reference_shard_rebalance.referencing_table2_15000015 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table2_ref_id_fkey_15000016 | fkey_to_reference_shard_rebalance.referencing_table2_15000016 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000001      | fkey_to_reference_shard_rebalance.referencing_table_15000001  | fkey_to_reference_shard_rebalance.referenced_table_15000000
- referencing_table_id_fkey_15000001      | fkey_to_reference_shard_rebalance.referencing_table_15000001  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000002      | fkey_to_reference_shard_rebalance.referencing_table_15000002  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000003      | fkey_to_reference_shard_rebalance.referencing_table_15000003  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000004      | fkey_to_reference_shard_rebalance.referencing_table_15000004  | fkey_to_reference_shard_rebalance.referenced_table_15000000
@@ -91,7 +94,7 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_r
  referencing_table_id_fkey_15000006      | fkey_to_reference_shard_rebalance.referencing_table_15000006  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000007      | fkey_to_reference_shard_rebalance.referencing_table_15000007  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000008      | fkey_to_reference_shard_rebalance.referencing_table_15000008  | fkey_to_reference_shard_rebalance.referenced_table_15000000
-(27 rows)
+(24 rows)
 
 SELECT master_move_shard_placement(15000009, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes');
  master_move_shard_placement
@@ -105,10 +108,15 @@ SELECT count(*) FROM referencing_table2;
    101
 (1 row)
 
+SELECT 1 FROM public.master_defer_delete_shards();
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_rebalance.%' AND refd_relid LIKE 'fkey_to_reference_shard_rebalance.%' ORDER BY 1,2,3;
                   name                   |                             relid                             |                          refd_relid
 ---------------------------------------------------------------------
- referencing_table2_id_fkey_15000009     | fkey_to_reference_shard_rebalance.referencing_table2_15000009 | fkey_to_reference_shard_rebalance.referencing_table_15000001
  referencing_table2_id_fkey_15000009     | fkey_to_reference_shard_rebalance.referencing_table2_15000009 | fkey_to_reference_shard_rebalance.referencing_table_15000001
  referencing_table2_id_fkey_15000010     | fkey_to_reference_shard_rebalance.referencing_table2_15000010 | fkey_to_reference_shard_rebalance.referencing_table_15000002
  referencing_table2_id_fkey_15000011     | fkey_to_reference_shard_rebalance.referencing_table2_15000011 | fkey_to_reference_shard_rebalance.referencing_table_15000003
@@ -118,7 +126,6 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_r
  referencing_table2_id_fkey_15000015     | fkey_to_reference_shard_rebalance.referencing_table2_15000015 | fkey_to_reference_shard_rebalance.referencing_table_15000007
  referencing_table2_id_fkey_15000016     | fkey_to_reference_shard_rebalance.referencing_table2_15000016 | fkey_to_reference_shard_rebalance.referencing_table_15000008
  referencing_table2_ref_id_fkey_15000009 | fkey_to_reference_shard_rebalance.referencing_table2_15000009 | fkey_to_reference_shard_rebalance.referenced_table_15000000
- referencing_table2_ref_id_fkey_15000009 | fkey_to_reference_shard_rebalance.referencing_table2_15000009 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table2_ref_id_fkey_15000010 | fkey_to_reference_shard_rebalance.referencing_table2_15000010 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table2_ref_id_fkey_15000011 | fkey_to_reference_shard_rebalance.referencing_table2_15000011 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table2_ref_id_fkey_15000012 | fkey_to_reference_shard_rebalance.referencing_table2_15000012 | fkey_to_reference_shard_rebalance.referenced_table_15000000
@@ -127,7 +134,6 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_r
  referencing_table2_ref_id_fkey_15000015 | fkey_to_reference_shard_rebalance.referencing_table2_15000015 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table2_ref_id_fkey_15000016 | fkey_to_reference_shard_rebalance.referencing_table2_15000016 | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000001      | fkey_to_reference_shard_rebalance.referencing_table_15000001  | fkey_to_reference_shard_rebalance.referenced_table_15000000
- referencing_table_id_fkey_15000001      | fkey_to_reference_shard_rebalance.referencing_table_15000001  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000002      | fkey_to_reference_shard_rebalance.referencing_table_15000002  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000003      | fkey_to_reference_shard_rebalance.referencing_table_15000003  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000004      | fkey_to_reference_shard_rebalance.referencing_table_15000004  | fkey_to_reference_shard_rebalance.referenced_table_15000000
@@ -135,7 +141,7 @@ SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_r
  referencing_table_id_fkey_15000006      | fkey_to_reference_shard_rebalance.referencing_table_15000006  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000007      | fkey_to_reference_shard_rebalance.referencing_table_15000007  | fkey_to_reference_shard_rebalance.referenced_table_15000000
  referencing_table_id_fkey_15000008      | fkey_to_reference_shard_rebalance.referencing_table_15000008  | fkey_to_reference_shard_rebalance.referenced_table_15000000
-(27 rows)
+(24 rows)
 
 -- create a function to show the
 CREATE FUNCTION get_foreign_key_to_reference_table_commands(Oid)
