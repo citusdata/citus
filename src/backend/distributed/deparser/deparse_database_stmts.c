@@ -14,6 +14,7 @@
 #include "catalog/namespace.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
+#include "utils/builtins.h"
 
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
@@ -43,6 +44,6 @@ AppendAlterDatabaseOwnerStmt(StringInfo buf, AlterOwnerStmt *stmt)
 
 	appendStringInfo(buf,
 					 "ALTER DATABASE %s OWNER TO %s;",
-					 strVal((Value *) stmt->object),
+					 quote_identifier(strVal((Value *) stmt->object)),
 					 RoleSpecString(stmt->newowner, true));
 }
