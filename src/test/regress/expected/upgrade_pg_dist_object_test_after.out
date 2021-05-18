@@ -39,11 +39,12 @@ drop cascades to table upgrade_basic.t_append
 SELECT i.* FROM citus.pg_dist_object, pg_identify_object_as_address(classid, objid, objsubid) i ORDER BY 1, 2, 3;
       type      | object_names | object_args
 ---------------------------------------------------------------------
+  database       | {postgres}          | {}
   extension      | {isn}               | {}
   role           | {postgres}          | {}
   schema         | {fooschema}         | {}
   schema         | {new_schema}        | {}
   schema         | {public}            | {}
   type           | {fooschema.footype} | {}
- (6 rows)
+ (7 rows)
 
