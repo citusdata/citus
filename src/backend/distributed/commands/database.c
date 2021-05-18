@@ -12,12 +12,12 @@
 #include "postgres.h"
 
 #include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_database.h"
 #include "commands/dbcommands.h"
+#include "miscadmin.h"
 #include "nodes/parsenodes.h"
-#include "server/access/xact.h"
-#include "server/miscadmin.h"
 #include "utils/syscache.h"
 
 #include "distributed/commands.h"
