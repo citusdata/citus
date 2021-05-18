@@ -73,7 +73,7 @@ char *CurrentCluster = "default";
 bool ReplicateReferenceTablesOnActivate = true;
 
 /* did current transaction modify pg_dist_node? */
-bool TransactionModifiedNodeMetadata = false;
+bool volatile TransactionModifiedNodeMetadata = false;
 
 typedef struct NodeMetadata
 {

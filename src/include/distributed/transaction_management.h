@@ -104,7 +104,7 @@ extern int DoBlockLevel;
 extern StringInfo activeSetStmts;
 
 /* did current transaction modify pg_dist_node? */
-extern bool TransactionModifiedNodeMetadata;
+extern bool volatile TransactionModifiedNodeMetadata;
 
 /*
  * Coordinated transaction management.
