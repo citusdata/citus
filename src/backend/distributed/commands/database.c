@@ -33,6 +33,12 @@ static void EnsureSequentialModeForDatabaseDDL(void);
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 static Oid get_database_owner(Oid db_oid);
 
+
+/*
+ * PreprocessAlterDatabaseOwnerStmt is called during the utility hook before the alter
+ * command is applied locally on the coordinator. This will verify if the command needs to
+ * be propagated to the workers and if so prepares a list of ddl commands to execute.
+ */
 List *
 PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 								 ProcessUtilityContext processUtilityContext)
@@ -78,8 +84,8 @@ PostprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString)
 
 
 /*
- * AlterTypeOwnerObjectAddress returns the ObjectAddress of the type that is the object
- * of the AlterOwnerStmt. Errors if missing_ok is false.
+ * AlterDatabaseOwnerObjectAddress returns the ObjectAddress of the database that is the
+ * object of the AlterOwnerStmt. Errors if missing_ok is false.
  */
 ObjectAddress
 AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok)
