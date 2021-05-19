@@ -20,6 +20,8 @@ SELECT run_command_on_workers('CREATE USER database_owner_2');
  (localhost,57638,t,"CREATE ROLE")
 (2 rows)
 
+-- make sure the propagation of ALTER DATABASE ... OWNER TO ... is on
+SET citus.enable_alter_database_owner TO on;
 -- list the owners of the current database on all nodes
 SELECT run_command_on_workers($$
     SELECT u.rolname
@@ -65,6 +67,37 @@ $$);
         run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,database_owner_1)
+(1 row)
+
+-- turn off propagation to verify it does _not_ propagate to new nodes when turned off
+SET citus.enable_alter_database_owner TO off;
+-- add back second node to verify the owner of the database was set accordingly
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- list the owners of the current database on all nodes, should reflect on newly added node
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_1)
+ (localhost,57638,t,postgres)
+(2 rows)
+
+-- turn on propagation to verify it does propagate to new nodes when enabled
+SET citus.enable_alter_database_owner TO on;
+SELECT master_remove_node('localhost', :worker_2_port); -- remove so we can re add with propagation on
+ master_remove_node
+---------------------------------------------------------------------
+
 (1 row)
 
 -- add back second node to verify the owner of the database was set accordingly
@@ -194,7 +227,35 @@ $$);
  (localhost,57638,t,database_owner_2)
 (2 rows)
 
+-- turn propagation off and verify it does not propagate interactively when turned off
+SET citus.enable_alter_database_owner TO off;
+ALTER DATABASE regression OWNER TO database_owner_1;
+-- list the owners of the current database on all nodes
+SELECT u.rolname
+  FROM pg_database d
+  JOIN pg_roles u
+    ON (d.datdba = u.oid)
+ WHERE d.datname = current_database();
+     rolname
+---------------------------------------------------------------------
+ database_owner_1
+(1 row)
+
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_2)
+ (localhost,57638,t,database_owner_2)
+(2 rows)
+
 -- reset state of cluster
+SET citus.enable_alter_database_owner TO on;
 ALTER DATABASE regression OWNER TO current_user;
 -- list the owners of the current database on all nodes
 SELECT u.rolname

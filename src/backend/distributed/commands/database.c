@@ -33,6 +33,9 @@ static void EnsureSequentialModeForDatabaseDDL(void);
 static AlterOwnerStmt * RecreateAlterDatabaseOwnerStmt(Oid databaseOid);
 static Oid get_database_owner(Oid db_oid);
 
+/* controlled via GUC */
+bool EnableAlterDatabaseOwner = false;
+
 
 /*
  * PreprocessAlterDatabaseOwnerStmt is called during the utility hook before the alter
@@ -49,6 +52,12 @@ PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateObject(&typeAddress))
 	{
+		return NIL;
+	}
+
+	if (!EnableAlterDatabaseOwner)
+	{
+		/* don't propagate if GUC is turned off */
 		return NIL;
 	}
 
@@ -75,6 +84,12 @@ PostprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString)
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateObject(&typeAddress))
 	{
+		return NIL;
+	}
+
+	if (!EnableAlterDatabaseOwner)
+	{
+		/* don't propagate if GUC is turned off */
 		return NIL;
 	}
 
