@@ -1,5 +1,10 @@
 -- citus--10.1-1--10.0-3
 
+-- remove databases as distributed objects to prevent unknown object types being managed
+-- on older versions.
+DELETE FROM citus.pg_dist_object
+      WHERE classid = 'pg_catalog.pg_database'::regclass::oid;
+
 #include "../../../columnar/sql/downgrades/columnar--10.1-1--10.0-3.sql"
 
 DROP FUNCTION pg_catalog.create_distributed_table(regclass, text, citus.distribution_type, text, int);
