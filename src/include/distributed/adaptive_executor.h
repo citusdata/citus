@@ -12,6 +12,7 @@ extern bool EnableBinaryProtocol;
 /* GUC, number of ms to wait between opening connections to the same worker */
 extern int ExecutorSlowStartInterval;
 extern bool EnableCostBasedConnectionEstablishment;
+extern bool PreventIncompleteConnectionEstablishment;
 
 extern bool ShouldRunTasksSequentially(List *taskList);
 extern uint64 ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported);
