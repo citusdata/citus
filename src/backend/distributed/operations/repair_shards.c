@@ -96,6 +96,7 @@ static void EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 											  char *targetNodeName, uint32
 											  targetNodePort);
 
+
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_copy_shard_placement);
 PG_FUNCTION_INFO_V1(master_copy_shard_placement);
@@ -299,6 +300,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 
 	Oid relationId = RelationIdForShard(shardId);
 	ErrorIfMoveCitusLocalTable(relationId);
+	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
@@ -418,6 +420,51 @@ EnsureEnoughDiskSpaceForShardMove(List *colocatedShardList,
 	MultiConnection *connection = GetNodeConnection(connectionFlag, targetNodeName,
 													targetNodePort);
 	CheckSpaceConstraints(connection, colocationSizeInBytes);
+}
+
+
+/*
+ * ErrorIfTargetNodeIsNotSafeToMove throws error if the target node is not
+ * eligible for moving shards.
+ */
+void
+ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int targetNodePort)
+{
+	WorkerNode *workerNode = FindWorkerNode(targetNodeName, targetNodePort);
+	if (workerNode == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Moving shards to a non-existing node is not supported"),
+						errhint(
+							"Add the target node via SELECT citus_add_node('%s', %d);",
+							targetNodeName, targetNodePort)));
+	}
+
+	if (!workerNode->isActive)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Moving shards to a non-active node is not supported"),
+						errhint(
+							"Activate the target node via SELECT citus_activate_node('%s', %d);",
+							targetNodeName, targetNodePort)));
+	}
+
+	if (!workerNode->shouldHaveShards)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Moving shards to a node that shouldn't have a shard is "
+							   "not supported"),
+						errhint("Allow shards on the target node via "
+								"SELECT * FROM citus_set_node_property('%s', %d, 'shouldhaveshards', true);",
+								targetNodeName, targetNodePort)));
+	}
+
+	if (!NodeIsPrimary(workerNode))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Moving shards to a secondary (e.g., replica) node is "
+							   "not supported")));
+	}
 }
 
 

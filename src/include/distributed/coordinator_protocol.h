@@ -278,6 +278,8 @@ extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
 extern ShardPlacement * SearchShardPlacementInListOrError(List *shardPlacementList,
 														  const char *nodeName,
 														  uint32 nodePort);
+extern void ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int
+											 targetNodePort);
 extern void ErrorIfMoveCitusLocalTable(Oid relationId);
 extern char LookupShardTransferMode(Oid shardReplicationModeOid);
 extern void BlockWritesToShardList(List *shardList);
