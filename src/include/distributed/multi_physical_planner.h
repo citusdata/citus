@@ -448,6 +448,9 @@ typedef struct DistributedPlan
 	 */
 	bool fastPathRouterPlan;
 
+	/* number of times this plan has been used (as a prepared statement) */
+	uint32 numberOfTimesExecuted;
+
 	/*
 	 * NULL if this a valid plan, an error description otherwise. This will
 	 * e.g. be set if SQL features are present that a planner doesn't support,
