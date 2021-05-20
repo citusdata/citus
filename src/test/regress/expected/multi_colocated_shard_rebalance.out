@@ -391,8 +391,7 @@ ORDER BY s.shardid, sp.nodeport;
 
 -- try to move shard from wrong node
 SELECT master_move_shard_placement(13000021, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
-ERROR:  could not find placement matching "localhost:xxxxx"
-HINT:  Confirm the placement still exists and try again.
+ERROR:  source placement must be in active state
 -- test shard move with foreign constraints
 DROP TABLE IF EXISTS table1_group1, table2_group1;
 SET citus.shard_count TO 6;

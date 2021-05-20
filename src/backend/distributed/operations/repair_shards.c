@@ -302,14 +302,6 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	ErrorIfMoveCitusLocalTable(relationId);
 	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
 
-	bool waitForCleanupLock = true;
-
-	/*
-	 * We try to drop marked shards so that we won't unnecessarily error
-	 * for old shard placements.
-	 */
-	TryDropMarkedShards(waitForCleanupLock);
-
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
 
