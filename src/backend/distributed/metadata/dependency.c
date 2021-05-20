@@ -17,6 +17,7 @@
 #include "access/htup_details.h"
 #include "access/skey.h"
 #include "access/sysattr.h"
+#include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
@@ -379,9 +380,19 @@ DependencyDefinitionFromPgShDepend(ObjectAddress target)
 	/*
 	 * Scan pg_shdepend for dbid = $1 AND classid = $2 AND objid = $3 using
 	 * pg_shdepend_depender_index
+	 *
+	 * where $1 is decided as follows:
+	 *   - shared dependencies $1 = InvalidOid
+	 *   - other dependencies $1 = MyDatabaseId
+	 * This is consistent with postgres' static classIdGetDbId function
 	 */
+	Oid dbid = InvalidOid;
+	if (!IsSharedRelation(target.classId))
+	{
+		dbid = MyDatabaseId;
+	}
 	ScanKeyInit(&key[0], Anum_pg_shdepend_dbid, BTEqualStrategyNumber, F_OIDEQ,
-				MyDatabaseId);
+				ObjectIdGetDatum(dbid));
 	ScanKeyInit(&key[1], Anum_pg_shdepend_classid, BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(target.classId));
 	ScanKeyInit(&key[2], Anum_pg_shdepend_objid, BTEqualStrategyNumber, F_OIDEQ,
