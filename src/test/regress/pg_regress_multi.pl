@@ -499,6 +499,8 @@ if($isolationtester)
    push(@pgOptions, "citus.metadata_sync_interval=1000");
    push(@pgOptions, "citus.metadata_sync_retry_interval=100");
    push(@pgOptions, "client_min_messages='warning'"); # pg12 introduced notice showing during isolation tests
+   push(@pgOptions, "citus.running_under_isolation_test=true");
+
 }
 
 # Add externally added options last, so they overwrite the default ones above

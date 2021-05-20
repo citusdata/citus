@@ -31,6 +31,7 @@
 #include "distributed/enterprise.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/listutils.h"
+#include "distributed/lock_graph.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
@@ -139,11 +140,52 @@ typedef struct RebalanceContext
 	FmgrInfo shardAllowedOnNodeUDF;
 } RebalanceContext;
 
+/* WorkerHashKey contains hostname and port to be used as a key in a hash */
+typedef struct WorkerHashKey
+{
+	char hostname[MAX_NODE_LENGTH];
+	int port;
+} WorkerHashKey;
+
+/* WorkerShardIds represents a set of shardIds grouped by worker */
+typedef struct WorkerShardIds
+{
+	WorkerHashKey worker;
+
+	/* This is a uint64 hashset representing the shard ids for a specific worker */
+	HTAB *shardIds;
+} WorkerShardIds;
+
+/* ShardStatistics contains statistics about a shard */
+typedef struct ShardStatistics
+{
+	uint64 shardId;
+
+	/* The shard its size in bytes. */
+	uint64 totalSize;
+} ShardStatistics;
+
+/*
+ * WorkerShardStatistics represents a set of statistics about shards,
+ * grouped by worker.
+ */
+typedef struct WorkerShardStatistics
+{
+	WorkerHashKey worker;
+
+	/*
+	 * Statistics for each shard on this worker:
+	 * key: shardId
+	 * value: ShardStatistics
+	 */
+	HTAB *statistics;
+} WorkerShardStatistics;
+
 
 /* static declarations for main logic */
 static int ShardActivePlacementCount(HTAB *activePlacementsHash, uint64 shardId,
 									 List *activeWorkerNodeList);
-static bool UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
+static void UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 								 List *responsiveNodeList, Oid shardReplicationModeOid);
 
 /* static declarations for main logic's utility functions */
@@ -192,6 +234,17 @@ static Form_pg_dist_rebalance_strategy GetRebalanceStrategy(Name name);
 static void EnsureShardCostUDF(Oid functionOid);
 static void EnsureNodeCapacityUDF(Oid functionOid);
 static void EnsureShardAllowedOnNodeUDF(Oid functionOid);
+static void ConflictShardPlacementUpdateOnlyWithIsolationTesting(uint64 shardId);
+static HTAB * BuildWorkerShardStatisticsHash(PlacementUpdateEventProgress *steps,
+											 int stepCount);
+static HTAB * GetShardStatistics(MultiConnection *connection, HTAB *shardIds);
+static HTAB * GetMovedShardIdsByWorker(PlacementUpdateEventProgress *steps,
+									   int stepCount, bool fromSource);
+static uint64 WorkerShardSize(HTAB *workerShardStatistics,
+							  char *workerName, int workerPort, uint64 shardId);
+static void AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int workerPort,
+								  uint64 shardId);
+static HTAB * BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(rebalance_table_shards);
@@ -204,7 +257,16 @@ PG_FUNCTION_INFO_V1(citus_shard_cost_by_disk_size);
 PG_FUNCTION_INFO_V1(citus_validate_rebalance_strategy_functions);
 PG_FUNCTION_INFO_V1(pg_dist_rebalance_strategy_enterprise_check);
 
+bool RunningUnderIsolationTest = false;
 int MaxRebalancerLoggedIgnoredMoves = 5;
+
+/*
+ * This is randomly generated hardcoded number. It's used as the first part of
+ * the advisory lock identifier that's used during isolation tests. See the
+ * comments on ConflictShardPlacementUpdateOnlyWithIsolationTesting, for more
+ * information.
+ */
+#define SHARD_PLACEMENT_UPDATE_ADVISORY_LOCK_FIRST_KEY 29279
 
 
 #ifdef USE_ASSERT_CHECKING
@@ -464,8 +526,7 @@ NodeCapacity(WorkerNode *workerNode, void *voidContext)
 static ShardCost
 GetShardCost(uint64 shardId, void *voidContext)
 {
-	ShardCost shardCost;
-	memset_struct_0(shardCost);
+	ShardCost shardCost = { 0 };
 	shardCost.shardId = shardId;
 	RebalanceContext *context = voidContext;
 	Datum shardCostDatum = FunctionCall1(&context->shardCostUDF, UInt64GetDatum(shardId));
@@ -698,8 +759,6 @@ SetupRebalanceMonitor(List *placementUpdateList, Oid relationId)
 		event->shardId = colocatedUpdate->shardId;
 		event->sourcePort = colocatedUpdate->sourceNode->workerPort;
 		event->targetPort = colocatedUpdate->targetNode->workerPort;
-		event->shardSize = ShardLength(colocatedUpdate->shardId);
-
 		eventIndex++;
 	}
 }
@@ -1015,19 +1074,35 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 	List *rebalanceMonitorList = ProgressMonitorList(REBALANCE_ACTIVITY_MAGIC_NUMBER,
 													 &segmentList);
 
+
 	foreach(rebalanceMonitorCell, rebalanceMonitorList)
 	{
 		ProgressMonitorData *monitor = lfirst(rebalanceMonitorCell);
 		PlacementUpdateEventProgress *placementUpdateEvents = monitor->steps;
-
+		HTAB *shardStatistics = BuildWorkerShardStatisticsHash(monitor->steps,
+															   monitor->stepCount);
+		HTAB *shardSizes = BuildShardSizesHash(monitor, shardStatistics);
 		for (int eventIndex = 0; eventIndex < monitor->stepCount; eventIndex++)
 		{
 			PlacementUpdateEventProgress *step = placementUpdateEvents + eventIndex;
 			uint64 shardId = step->shardId;
 			ShardInterval *shardInterval = LoadShardInterval(shardId);
 
-			Datum values[9];
-			bool nulls[9];
+			uint64 sourceSize = WorkerShardSize(shardStatistics, step->sourceName,
+												step->sourcePort, shardId);
+			uint64 targetSize = WorkerShardSize(shardStatistics, step->targetName,
+												step->targetPort, shardId);
+
+			uint64 shardSize = 0;
+			ShardStatistics *shardSizesStat =
+				hash_search(shardSizes, &shardId, HASH_FIND, NULL);
+			if (shardSizesStat)
+			{
+				shardSize = shardSizesStat->totalSize;
+			}
+
+			Datum values[11];
+			bool nulls[11];
 
 			memset(values, 0, sizeof(values));
 			memset(nulls, 0, sizeof(nulls));
@@ -1035,12 +1110,14 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 			values[0] = monitor->processId;
 			values[1] = ObjectIdGetDatum(shardInterval->relationId);
 			values[2] = UInt64GetDatum(shardId);
-			values[3] = UInt64GetDatum(step->shardSize);
+			values[3] = UInt64GetDatum(shardSize);
 			values[4] = PointerGetDatum(cstring_to_text(step->sourceName));
 			values[5] = UInt32GetDatum(step->sourcePort);
 			values[6] = PointerGetDatum(cstring_to_text(step->targetName));
 			values[7] = UInt32GetDatum(step->targetPort);
 			values[8] = UInt64GetDatum(step->progress);
+			values[9] = UInt64GetDatum(sourceSize);
+			values[10] = UInt64GetDatum(targetSize);
 
 			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 		}
@@ -1051,6 +1128,348 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 	DetachFromDSMSegments(segmentList);
 
 	return (Datum) 0;
+}
+
+
+/*
+ * BuildShardSizesHash creates a hash that maps a shardid to its full size
+ * within the cluster. It does this by using the rebalance progress monitor
+ * state to find the node the shard is currently on. It then looks up the shard
+ * size in the shardStatistics hashmap for this node.
+ */
+static HTAB *
+BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics)
+{
+	HASHCTL info = {
+		.keysize = sizeof(uint64),
+		.entrysize = sizeof(ShardStatistics),
+		.hcxt = CurrentMemoryContext
+	};
+
+	HTAB *shardSizes = hash_create(
+		"ShardSizeHash", 32, &info,
+		HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+	PlacementUpdateEventProgress *placementUpdateEvents = monitor->steps;
+	for (int eventIndex = 0; eventIndex < monitor->stepCount; eventIndex++)
+	{
+		PlacementUpdateEventProgress *step = placementUpdateEvents + eventIndex;
+		uint64 shardId = step->shardId;
+		uint64 shardSize = 0;
+		uint64 backupShardSize = 0;
+
+		uint64 sourceSize = WorkerShardSize(shardStatistics, step->sourceName,
+											step->sourcePort, shardId);
+		uint64 targetSize = WorkerShardSize(shardStatistics, step->targetName,
+											step->targetPort, shardId);
+
+
+		if (step->progress == REBALANCE_PROGRESS_WAITING ||
+			step->progress == REBALANCE_PROGRESS_MOVING)
+		{
+			/*
+			 * If we are not done with the move, the correct shard size is the
+			 * size on the source.
+			 */
+			shardSize = sourceSize;
+			backupShardSize = targetSize;
+		}
+		else if (step->progress == REBALANCE_PROGRESS_MOVED)
+		{
+			/*
+			 * If we are done with the move, the correct shard size is the size
+			 * on the target
+			 */
+			shardSize = targetSize;
+			backupShardSize = sourceSize;
+		}
+
+		if (shardSize == 0)
+		{
+			if (backupShardSize == 0)
+			{
+				/*
+				 * We don't have any useful shard size. This can happen when a
+				 * shard is moved multiple times and it is not present on
+				 * either of these nodes. Probably the shard is on a worker
+				 * related to another event. In the weird case that this shard
+				 * is on the nodes and actually is size 0, we will have no
+				 * entry in the hashmap. When fetching from it we always
+				 * default to 0 if no entry is found, so that's fine.
+				 */
+				continue;
+			}
+
+			/*
+			 * There exist some race conditions where it's possible that the
+			 * the state of the steps we see in shared memory are a bit behind
+			 * what is actually going on. So it is possible that even though a
+			 * step is reported as still being in the MOVING state, the shard
+			 * move might have just finished completing. This in turn can mean
+			 * that the source size is 0 while the target size is not. We try
+			 * to handle such rare edge cases by falling back on the other
+			 * shard size if that one is not 0.
+			 */
+			shardSize = backupShardSize;
+		}
+
+
+		ShardStatistics *currentWorkerStatistics =
+			hash_search(shardSizes, &shardId, HASH_ENTER, NULL);
+		currentWorkerStatistics->totalSize = shardSize;
+	}
+	return shardSizes;
+}
+
+
+/*
+ * WorkerShardSize returns the size of a shard in bytes on a worker, based on
+ * the workerShardStatisticsHash.
+ */
+static uint64
+WorkerShardSize(HTAB *workerShardStatisticsHash, char *workerName, int workerPort,
+				uint64 shardId)
+{
+	WorkerHashKey workerKey = { 0 };
+	strlcpy(workerKey.hostname, workerName, MAX_NODE_LENGTH);
+	workerKey.port = workerPort;
+
+	WorkerShardStatistics *workerStats =
+		hash_search(workerShardStatisticsHash, &workerKey, HASH_FIND, NULL);
+	if (!workerStats)
+	{
+		return 0;
+	}
+
+	ShardStatistics *shardStats =
+		hash_search(workerStats->statistics, &shardId, HASH_FIND, NULL);
+	if (!shardStats)
+	{
+		return 0;
+	}
+	return shardStats->totalSize;
+}
+
+
+/*
+ * BuildWorkerShardStatisticsHash returns a shard id -> shard statistics hash containing
+ * sizes of shards on the source node and destination node.
+ */
+static HTAB *
+BuildWorkerShardStatisticsHash(PlacementUpdateEventProgress *steps, int stepCount)
+{
+	HTAB *shardsByWorker = GetMovedShardIdsByWorker(steps, stepCount, true);
+
+	HASHCTL info = {
+		.keysize = sizeof(WorkerHashKey),
+		.entrysize = sizeof(WorkerShardStatistics),
+		.hcxt = CurrentMemoryContext
+	};
+
+	HTAB *workerShardStatistics = hash_create("WorkerShardStatistics", 32, &info,
+											  HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+	WorkerShardIds *entry = NULL;
+
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, shardsByWorker);
+	while ((entry = hash_seq_search(&status)) != NULL)
+	{
+		int connectionFlags = 0;
+		MultiConnection *connection = GetNodeConnection(connectionFlags,
+														entry->worker.hostname,
+														entry->worker.port);
+
+		HTAB *statistics =
+			GetShardStatistics(connection, entry->shardIds);
+
+		WorkerHashKey workerKey = { 0 };
+		strlcpy(workerKey.hostname, entry->worker.hostname, MAX_NODE_LENGTH);
+		workerKey.port = entry->worker.port;
+
+		WorkerShardStatistics *moveStat =
+			hash_search(workerShardStatistics, &entry->worker, HASH_ENTER, NULL);
+		moveStat->statistics = statistics;
+	}
+
+	return workerShardStatistics;
+}
+
+
+/*
+ * GetShardStatistics fetches the statics for the given shard ids over the
+ * given connection. It returns a hashmap where the keys are the shard ids and
+ * the values are the statistics.
+ */
+static HTAB *
+GetShardStatistics(MultiConnection *connection, HTAB *shardIds)
+{
+	StringInfo query = makeStringInfo();
+
+	appendStringInfoString(
+		query,
+		"WITH shard_names (shard_id, schema_name, table_name) AS ((VALUES ");
+
+	bool isFirst = true;
+	uint64 *shardIdPtr = NULL;
+	HASH_SEQ_STATUS status;
+	hash_seq_init(&status, shardIds);
+	while ((shardIdPtr = hash_seq_search(&status)) != NULL)
+	{
+		uint64 shardId = *shardIdPtr;
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+		Oid relationId = shardInterval->relationId;
+		char *shardName = get_rel_name(relationId);
+
+		AppendShardIdToName(&shardName, shardId);
+
+		Oid schemaId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(schemaId);
+		if (!isFirst)
+		{
+			appendStringInfo(query, ", ");
+		}
+
+		appendStringInfo(query, "(" UINT64_FORMAT ",%s,%s)",
+						 shardId,
+						 quote_literal_cstr(schemaName),
+						 quote_literal_cstr(shardName));
+
+		isFirst = false;
+	}
+
+	appendStringInfoString(query, "))");
+	appendStringInfoString(
+		query,
+		" SELECT shard_id, coalesce(pg_total_relation_size(tables.relid),0)"
+
+		/* for each shard in shardIds */
+		" FROM shard_names"
+
+		/* check if its name can be found in pg_class, if so return size */
+		" LEFT JOIN"
+		" (SELECT c.oid AS relid, c.relname, n.nspname"
+		" FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace) tables"
+		" ON tables.relname = shard_names.table_name AND"
+		" tables.nspname = shard_names.schema_name ");
+
+	PGresult *result = NULL;
+	int queryResult = ExecuteOptionalRemoteCommand(connection, query->data, &result);
+	if (queryResult != RESPONSE_OKAY)
+	{
+		ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+						errmsg("cannot get the size because of a connection error")));
+	}
+
+	int rowCount = PQntuples(result);
+	int colCount = PQnfields(result);
+
+	/* This is not expected to ever happen, but we check just to be sure */
+	if (colCount < 2)
+	{
+		ereport(ERROR, (errmsg("unexpected number of columns returned by: %s",
+							   query->data)));
+	}
+
+	HASHCTL info = {
+		.keysize = sizeof(uint64),
+		.entrysize = sizeof(ShardStatistics),
+		.hcxt = CurrentMemoryContext
+	};
+
+	HTAB *shardStatistics = hash_create("ShardStatisticsHash", 32, &info,
+										HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+
+	for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
+	{
+		char *shardIdString = PQgetvalue(result, rowIndex, 0);
+		uint64 shardId = pg_strtouint64(shardIdString, NULL, 10);
+		char *sizeString = PQgetvalue(result, rowIndex, 1);
+		uint64 totalSize = pg_strtouint64(sizeString, NULL, 10);
+
+		ShardStatistics *statistics =
+			hash_search(shardStatistics, &shardId, HASH_ENTER, NULL);
+		statistics->totalSize = totalSize;
+	}
+
+	PQclear(result);
+
+	bool raiseErrors = true;
+	ClearResults(connection, raiseErrors);
+
+	return shardStatistics;
+}
+
+
+/*
+ * GetMovedShardIdsByWorker groups the shard ids in the provided steps by
+ * worker. It returns a hashmap that contains a set of these shard ids.
+ */
+static HTAB *
+GetMovedShardIdsByWorker(PlacementUpdateEventProgress *steps, int stepCount,
+						 bool fromSource)
+{
+	HASHCTL info = {
+		.keysize = sizeof(WorkerHashKey),
+		.entrysize = sizeof(WorkerShardIds),
+		.hcxt = CurrentMemoryContext
+	};
+
+	HTAB *shardsByWorker = hash_create("GetRebalanceStepsByWorker", 32, &info,
+									   HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+
+	for (int stepIndex = 0; stepIndex < stepCount; stepIndex++)
+	{
+		PlacementUpdateEventProgress *step = &(steps[stepIndex]);
+
+		AddToWorkerShardIdSet(shardsByWorker, step->sourceName, step->sourcePort,
+							  step->shardId);
+
+		if (step->progress == REBALANCE_PROGRESS_WAITING)
+		{
+			/*
+			 * shard move has not started so we don't need target stats for
+			 * this shard
+			 */
+			continue;
+		}
+
+		AddToWorkerShardIdSet(shardsByWorker, step->targetName, step->targetPort,
+							  step->shardId);
+	}
+
+	return shardsByWorker;
+}
+
+
+/*
+ * AddToWorkerShardIdSet adds the shard id to the shard id set for the
+ * specified worker in the shardsByWorker hashmap.
+ */
+static void
+AddToWorkerShardIdSet(HTAB *shardsByWorker, char *workerName, int workerPort,
+					  uint64 shardId)
+{
+	WorkerHashKey workerKey = { 0 };
+
+	strlcpy(workerKey.hostname, workerName, MAX_NODE_LENGTH);
+	workerKey.port = workerPort;
+
+	bool isFound = false;
+	WorkerShardIds *workerShardIds =
+		hash_search(shardsByWorker, &workerKey, HASH_ENTER, &isFound);
+	if (!isFound)
+	{
+		HASHCTL info = {
+			.keysize = sizeof(uint64),
+			.entrysize = sizeof(uint64),
+			.hcxt = CurrentMemoryContext
+		};
+
+		workerShardIds->shardIds = hash_create(
+			"WorkerShardIdsSet", 32, &info,
+			HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
+	}
+
+	hash_search(workerShardIds->shardIds, &shardId, HASH_ENTER, NULL);
 }
 
 
@@ -1152,10 +1571,46 @@ RebalanceTableShards(RebalanceOptions *options, Oid shardReplicationModeOid)
 
 
 /*
+ * ConflictShardPlacementUpdateOnlyWithIsolationTesting is only useful for
+ * testing and should not be called by any code-path except for
+ * UpdateShardPlacement().
+ *
+ * To be able to test the rebalance monitor functionality correctly, we need to
+ * be able to pause the rebalancer at a specific place in time. We cannot do
+ * this by block the shard move itself someway (e.g. by calling truncate on the
+ * distributed table). The reason for this is that we do the shard move in a
+ * newly opened connection. This causes our isolation tester block detection to
+ * not realise that the rebalance_table_shards call is blocked.
+ *
+ * So instead, before opening a connection we lock an advisory lock that's
+ * based on the shard id (shard id mod 1000). By locking this advisory lock in
+ * a different session we can block the rebalancer in a way that the isolation
+ * tester block detection is able to detect.
+ */
+static void
+ConflictShardPlacementUpdateOnlyWithIsolationTesting(uint64 shardId)
+{
+	LOCKTAG tag;
+	const bool sessionLock = false;
+	const bool dontWait = false;
+
+	if (RunningUnderIsolationTest)
+	{
+		/* we've picked a random lock */
+		SET_LOCKTAG_ADVISORY(tag, MyDatabaseId,
+							 SHARD_PLACEMENT_UPDATE_ADVISORY_LOCK_FIRST_KEY,
+							 shardId % 1000, 2);
+
+		(void) LockAcquire(&tag, ExclusiveLock, sessionLock, dontWait);
+	}
+}
+
+
+/*
  * UpdateShardPlacement copies or moves a shard placement by calling
  * the corresponding functions in Citus in a subtransaction.
  */
-static bool
+static void
 UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 					 List *responsiveNodeList, Oid shardReplicationModeOid)
 {
@@ -1177,13 +1632,9 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 												   targetNode->workerPort);
 	if (!targetResponsive)
 	{
-		ereport(WARNING, (errmsg("%s:%d is not responsive", targetNode->workerName,
-								 targetNode->workerPort)));
-		UpdateColocatedShardPlacementProgress(shardId,
-											  sourceNode->workerName,
-											  sourceNode->workerPort,
-											  REBALANCE_PROGRESS_ERROR);
-		return false;
+		ereport(ERROR, (errmsg("target node %s:%d is not responsive",
+							   targetNode->workerName,
+							   targetNode->workerPort)));
 	}
 
 	/* if source node is not responsive, don't continue */
@@ -1192,13 +1643,9 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 												   sourceNode->workerPort);
 	if (!sourceResponsive)
 	{
-		ereport(WARNING, (errmsg("%s:%d is not responsive", sourceNode->workerName,
-								 sourceNode->workerPort)));
-		UpdateColocatedShardPlacementProgress(shardId,
-											  sourceNode->workerName,
-											  sourceNode->workerPort,
-											  REBALANCE_PROGRESS_ERROR);
-		return false;
+		ereport(ERROR, (errmsg("source node %s:%d is not responsive",
+							   sourceNode->workerName,
+							   sourceNode->workerPort)));
 	}
 
 	if (updateType == PLACEMENT_UPDATE_MOVE)
@@ -1235,6 +1682,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 										  sourceNode->workerPort,
 										  REBALANCE_PROGRESS_MOVING);
 
+	ConflictShardPlacementUpdateOnlyWithIsolationTesting(shardId);
 	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
@@ -1250,8 +1698,6 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 										  sourceNode->workerPort,
 										  REBALANCE_PROGRESS_MOVED);
 	CloseConnection(connection);
-
-	return true;
 }
 
 

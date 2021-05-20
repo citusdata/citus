@@ -22,6 +22,7 @@ teardown
 	 SELECT set_max_shared_pool_size(100);
 	DROP FUNCTION wake_up_connection_pool_waiters();
 	DROP FUNCTION set_max_shared_pool_size(int);
+	DROP TABLE test;
 }
 
 session "s1"

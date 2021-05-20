@@ -80,6 +80,9 @@ RESET citus.shard_replication_factor;
 RESET citus.replication_model;
 
 -- Create a user to test multiuser usage of rebalancer functions
+-- We explicitely don't create this user on worker nodes yet, so we can
+-- test some more error handling. We create them later there.
+SET citus.enable_create_role_propagation TO OFF;
 CREATE USER testrole;
 GRANT ALL ON SCHEMA public TO testrole;
 
@@ -436,11 +439,34 @@ SELECT * FROM table_placements_per_node;
 -- Check that max_shard_moves limits number of move operations
 
 -- First check that we error if not table owner
+-- Turn on NOTICE messages
+SET ROLE testrole;
+-- Make sure that rebalance is stopped if source or target nodes are
+-- unresponsive.
+SELECT rebalance_table_shards('rebalance_test_table',
+    shard_transfer_mode:='block_writes');
+\c - - - :worker_1_port
+SET citus.enable_create_role_propagation TO OFF;
+CREATE USER testrole;
+GRANT ALL ON SCHEMA public TO testrole;
+\c - - - :master_port
+SET client_min_messages TO WARNING;
 SET ROLE testrole;
 SELECT rebalance_table_shards('rebalance_test_table',
-    threshold := 0, max_shard_moves := 1,
+    shard_transfer_mode:='block_writes');
+\c - - - :worker_2_port
+SET citus.enable_create_role_propagation TO OFF;
+CREATE USER testrole;
+GRANT ALL ON SCHEMA public TO testrole;
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+SET citus.next_shard_id TO 123010;
+SET ROLE testrole;
+SELECT rebalance_table_shards('rebalance_test_table',
     shard_transfer_mode:='block_writes');
 RESET ROLE;
+-- Confirm no moves took place at all during these errors
+SELECT * FROM table_placements_per_node;
 
 SELECT rebalance_table_shards('rebalance_test_table',
     threshold := 0, max_shard_moves := 1,

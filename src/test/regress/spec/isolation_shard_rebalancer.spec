@@ -3,9 +3,9 @@ setup
 	SELECT 1 FROM master_add_node('localhost', 57637);
 	SELECT 1 FROM master_add_node('localhost', 57638);
 	CREATE TABLE colocated1 (test_id integer NOT NULL, data text);
-	SELECT create_distributed_table('colocated1', 'test_id', 'hash');
+	SELECT create_distributed_table('colocated1', 'test_id', 'hash', 'none');
 	CREATE TABLE colocated2 (test_id integer NOT NULL, data text);
-	SELECT create_distributed_table('colocated2', 'test_id', 'hash');
+	SELECT create_distributed_table('colocated2', 'test_id', 'hash', 'colocated1');
 	CREATE TABLE non_colocated (test_id integer NOT NULL, data text);
 	SELECT create_distributed_table('non_colocated', 'test_id', 'hash', 'none');
 }

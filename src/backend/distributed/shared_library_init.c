@@ -1500,6 +1500,19 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.running_under_isolation_test",
+		gettext_noop(
+			"Only useful for testing purposes, when set to true, Citus does some "
+			"tricks to implement useful isolation tests with rebalancing. Should "
+			"never be set to true on production systems "),
+		gettext_noop("for details of the tricks implemented, refer to the source code"),
+		&RunningUnderIsolationTest,
+		false,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.select_opens_transaction_block",
 		gettext_noop("Open transaction blocks for SELECT commands"),
 		gettext_noop("When enabled, Citus will always send a BEGIN to workers when "
