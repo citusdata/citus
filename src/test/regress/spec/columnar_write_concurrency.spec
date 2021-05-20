@@ -57,11 +57,11 @@ step "s2-commit"
     COMMIT;
 }
 
-# writes shouldn't block writes or reads
+// writes shouldn't block writes or reads
 permutation "s1-begin" "s2-begin" "s1-insert" "s2-insert" "s1-select" "s2-select" "s1-commit" "s2-commit" "s1-select"
 
-# copy vs insert
+// copy vs insert
 permutation "s1-begin" "s2-begin" "s1-copy" "s2-insert" "s1-select" "s2-select" "s1-commit" "s2-commit" "s1-select"
 
-# insert vs copy
+// insert vs copy
 permutation "s1-begin" "s2-begin" "s2-insert" "s1-copy" "s1-select" "s2-select" "s1-commit" "s2-commit" "s1-select"

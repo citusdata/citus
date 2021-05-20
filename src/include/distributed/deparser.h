@@ -127,4 +127,7 @@ extern char * DeparseDropExtensionStmt(Node *stmt);
 extern char * DeparseAlterExtensionSchemaStmt(Node *stmt);
 extern char * DeparseAlterExtensionStmt(Node *stmt);
 
+/* forward declarations for deparse_database_stmts.c */
+extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
+
 #endif /* CITUS_DEPARSER_H */

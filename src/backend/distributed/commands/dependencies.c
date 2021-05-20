@@ -14,6 +14,7 @@
 #include "catalog/objectaddress.h"
 #include "commands/extension.h"
 #include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata/dependency.h"
@@ -189,6 +190,20 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 		case OCLASS_COLLATION:
 		{
 			return CreateCollationDDLsIdempotent(dependency->objectId);
+		}
+
+		case OCLASS_DATABASE:
+		{
+			List *databaseDDLCommands = NIL;
+
+			/* only propagate the ownership of the database when the feature is on */
+			if (EnableAlterDatabaseOwner)
+			{
+				List *ownerDDLCommands = DatabaseOwnerDDLCommands(dependency);
+				databaseDDLCommands = list_concat(databaseDDLCommands, ownerDDLCommands);
+			}
+
+			return databaseDDLCommands;
 		}
 
 		case OCLASS_PROC:

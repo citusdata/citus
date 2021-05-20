@@ -240,6 +240,13 @@ static DistributeObjectOps Collation_Rename = {
 	.postprocess = NULL,
 	.address = RenameCollationStmtObjectAddress,
 };
+static DistributeObjectOps Database_AlterOwner = {
+	.deparse = DeparseAlterDatabaseOwnerStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterDatabaseOwnerStmt,
+	.postprocess = PostprocessAlterDatabaseOwnerStmt,
+	.address = AlterDatabaseOwnerObjectAddress,
+};
 static DistributeObjectOps Extension_AlterObjectSchema = {
 	.deparse = DeparseAlterExtensionSchemaStmt,
 	.qualify = NULL,
@@ -656,6 +663,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_AlterOwner;
+				}
+
+				case OBJECT_DATABASE:
+				{
+					return &Database_AlterOwner;
 				}
 
 				case OBJECT_FUNCTION:

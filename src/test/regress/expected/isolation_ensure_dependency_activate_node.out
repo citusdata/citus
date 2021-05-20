@@ -24,6 +24,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -91,6 +92,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -143,6 +145,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -216,6 +219,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -268,6 +272,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -341,6 +346,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -393,6 +399,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -461,6 +468,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
@@ -514,6 +522,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -588,6 +597,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
@@ -641,6 +651,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -715,6 +726,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
@@ -768,6 +780,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -861,6 +874,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
@@ -914,6 +928,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -1000,6 +1015,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
@@ -1053,6 +1069,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -1147,6 +1164,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{myschema2},{})
@@ -1201,6 +1219,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -1261,6 +1280,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 (type,{public.tt1},{})
@@ -1314,6 +1334,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -1373,6 +1394,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 (type,{public.tt1},{})
@@ -1426,6 +1448,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -1503,6 +1526,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
@@ -1557,6 +1581,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -1633,6 +1658,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (function,"{public,add}","{integer,integer}")
 (role,{postgres},{})
 (schema,{public},{})
@@ -1686,6 +1712,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -1767,6 +1794,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (function,"{public,add}","{integer,integer}")
 (role,{postgres},{})
 (schema,{public},{})
@@ -1820,6 +1848,7 @@ step s1-print-distributed-objects:
 1
 pg_identify_object_as_address
 
+(database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 count
@@ -1902,6 +1931,7 @@ step s2-print-distributed-objects:
 
 pg_identify_object_as_address
 
+(database,{regression},{})
 (function,"{myschema,add}","{integer,integer}")
 (role,{postgres},{})
 (schema,{myschema},{})

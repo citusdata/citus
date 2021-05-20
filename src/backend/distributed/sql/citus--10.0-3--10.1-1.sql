@@ -1,5 +1,14 @@
 -- citus--10.0-3--10.1-1
 
+-- add the current database to the distributed objects if not already in there.
+-- this is to reliably propagate some of the alter database commands that might be
+-- supported.
+INSERT INTO citus.pg_dist_object SELECT
+  'pg_catalog.pg_database'::regclass::oid AS oid,
+  (SELECT oid FROM pg_database WHERE datname = current_database()) as objid,
+  0 as objsubid
+ON CONFLICT DO NOTHING;
+
 #include "../../columnar/sql/columnar--10.0-3--10.1-1.sql"
 #include "udfs/create_distributed_table/10.1-1.sql";
 #include "udfs/worker_partitioned_relation_total_size/10.1-1.sql"

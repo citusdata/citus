@@ -695,6 +695,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_alter_database_owner",
+		gettext_noop("Enables propagating ALTER DATABASE ... OWNER TO ... statements to "
+					 "workers"),
+		NULL,
+		&EnableAlterDatabaseOwner,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_binary_protocol",
 		gettext_noop(
 			"Enables communication between nodes using binary protocol when possible"),

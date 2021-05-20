@@ -149,6 +149,13 @@ extern char * GenerateBackupNameForCollationCollision(const ObjectAddress *addre
 extern ObjectAddress DefineCollationStmtObjectAddress(Node *stmt, bool missing_ok);
 extern List * PostprocessDefineCollationStmt(Node *stmt, const char *queryString);
 
+/* database.c - forward declarations */
+extern List * PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
+											   ProcessUtilityContext processUtilityContext);
+extern List * PostprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString);
+extern ObjectAddress AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok);
+extern List * DatabaseOwnerDDLCommands(const ObjectAddress *address);
+
 /* extension.c - forward declarations */
 extern bool IsDropCitusExtensionStmt(Node *parsetree);
 extern bool IsCreateAlterExtensionUpdateCitusStmt(Node *parsetree);
