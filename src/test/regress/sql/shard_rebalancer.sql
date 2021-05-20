@@ -579,11 +579,40 @@ CREATE TABLE colocated_rebalance_test(id integer);
 CREATE TABLE colocated_rebalance_test2(id integer);
 SELECT create_distributed_table('colocated_rebalance_test', 'id');
 
+
+-- make sure that we do not allow shards on target nodes
+-- that are not eligable to move shards
+
+-- Try to move shards to a non-existing node
+SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', 10000, 'block_writes')
+FROM pg_dist_shard_placement
+WHERE nodeport = :worker_2_port;
+
+-- Try to move shards to a node where shards are not allowed
+SELECT * from master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
+SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
+FROM pg_dist_shard_placement
+WHERE nodeport = :worker_2_port;
+SELECT * from master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
+
+-- Try to move shards to a non-active node
+UPDATE pg_dist_node SET isactive = false WHERE nodeport = :worker_1_port;
+SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
+FROM pg_dist_shard_placement
+WHERE nodeport = :worker_2_port;
+UPDATE pg_dist_node SET isactive = true WHERE nodeport = :worker_1_port;
+
+-- Try to move shards to a secondary node
+UPDATE pg_dist_node SET noderole = 'secondary' WHERE nodeport = :worker_1_port;
+SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
+FROM pg_dist_shard_placement
+WHERE nodeport = :worker_2_port;
+UPDATE pg_dist_node SET noderole = 'primary' WHERE nodeport = :worker_1_port;
+
 -- Move all shards to worker1
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
 FROM pg_dist_shard_placement
 WHERE nodeport = :worker_2_port;
-
 
 SELECT create_distributed_table('colocated_rebalance_test2', 'id');
 
@@ -839,6 +868,8 @@ CREATE OR REPLACE FUNCTION capacity_high_worker_2(nodeidarg int)
         (CASE WHEN nodeport = 57638 THEN 1000 ELSE 1 END)::real
     FROM pg_dist_node where nodeid = nodeidarg
     $$ LANGUAGE sql;
+
+\set VERBOSITY terse
 
 SELECT citus_add_rebalance_strategy(
         'capacity_high_worker_2',
