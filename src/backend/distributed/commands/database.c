@@ -75,6 +75,14 @@ PreprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString,
 }
 
 
+/*
+ * PostprocessAlterDatabaseOwnerStmt is called during the utility hook after the alter
+ * database command has been applied locally.
+ *
+ * Its main purpose is to propagate the newly formed dependencies onto the nodes before
+ * applying the change of owner of the databse. This ensures, for systems that have role
+ * management, that the roles will be created before applying the alter owner command.
+ */
 List *
 PostprocessAlterDatabaseOwnerStmt(Node *node, const char *queryString)
 {
@@ -116,6 +124,11 @@ AlterDatabaseOwnerObjectAddress(Node *node, bool missing_ok)
 }
 
 
+/*
+ * DatabaseOwnerDDLCommands returns a list of sql statements to idempotently apply a
+ * change of the database owner on the workers so that the database is owned by the same
+ * user on all nodes in the cluster.
+ */
 List *
 DatabaseOwnerDDLCommands(const ObjectAddress *address)
 {
