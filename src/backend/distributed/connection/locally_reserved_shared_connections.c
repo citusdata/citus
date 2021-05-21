@@ -377,7 +377,7 @@ EnsureConnectionPossibilityForNodeList(List *nodeList)
 /*
  * EnsureConnectionPossibilityForNode reserves a shared connection
  * counter per node in the nodeList unless:
- *  - Reservation is possible/allowed (see IsReservationPossible())
+ *  - Reservation is not possible/allowed (see IsReservationPossible())
  *  - there is at least one connection to the node so that we are guranteed
  *    to get a connection
  *  - An earlier call already reserved a connection (e.g., we allow only a

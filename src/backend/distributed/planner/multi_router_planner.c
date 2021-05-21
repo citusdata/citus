@@ -830,13 +830,8 @@ IsTableLocallyAccessible(Oid relationId)
 	ShardInterval *shardInterval = linitial(shardIntervalList);
 	uint64 shardId = shardInterval->shardId;
 	ShardPlacement *localShardPlacement =
-		ShardPlacementOnGroup(shardId, GetLocalGroupId());
-	if (localShardPlacement != NULL)
-	{
-		/* the table has a placement on this node */
-		return true;
-	}
-	return false;
+		ActiveShardPlacementOnGroup(GetLocalGroupId(), shardId);
+	return localShardPlacement != NULL;
 }
 
 
@@ -1667,7 +1662,8 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 		relationShard->relationId = distributedTableId;
 
 		modifyTask->relationShardList = list_make1(relationShard);
-		modifyTask->taskPlacementList = ShardPlacementList(modifyRoute->shardId);
+		modifyTask->taskPlacementList = ActiveShardPlacementList(
+			modifyRoute->shardId);
 		modifyTask->parametersInQueryStringResolved = parametersInQueryResolved;
 
 		insertTaskList = lappend(insertTaskList, modifyTask);
