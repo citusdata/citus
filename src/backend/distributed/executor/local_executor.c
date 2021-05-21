@@ -263,7 +263,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			 * queries are also ReadOnly, our 2PC logic is smart enough to skip sending
 			 * PREPARE to those connections.
 			 */
-			CoordinatedTransactionShouldUse2PC();
+			Use2PCForCoordinatedTransaction();
 		}
 
 		LogLocalCommand(task);
