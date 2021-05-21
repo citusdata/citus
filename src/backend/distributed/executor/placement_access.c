@@ -128,8 +128,8 @@ BuildPlacementAccessList(int32 groupId, List *relationShardList,
 	RelationShard *relationShard = NULL;
 	foreach_ptr(relationShard, relationShardList)
 	{
-		ShardPlacement *placement = FindShardPlacementOnGroup(groupId,
-															  relationShard->shardId);
+		ShardPlacement *placement = ActiveShardPlacementOnGroup(groupId,
+																relationShard->shardId);
 		if (placement == NULL)
 		{
 			continue;

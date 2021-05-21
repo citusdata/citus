@@ -594,12 +594,14 @@ LoadShardPlacement(uint64 shardId, uint64 placementId)
 
 
 /*
- * FindShardPlacementOnGroup returns the shard placement for the given shard
- * on the given group, or returns NULL if no placement for the shard exists
- * on the group.
+ * ShardPlacementOnGroupIncludingOrphanedPlacements returns the shard placement
+ * for the given shard on the given group, or returns NULL if no placement for
+ * the shard exists on the group.
+ *
+ * NOTE: This can return inactive or orphaned placements.
  */
 ShardPlacement *
-FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
+ShardPlacementOnGroupIncludingOrphanedPlacements(int32 groupId, uint64 shardId)
 {
 	ShardPlacement *placementOnNode = NULL;
 
@@ -614,7 +616,6 @@ FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
 	for (int placementIndex = 0; placementIndex < numberOfPlacements; placementIndex++)
 	{
 		GroupShardPlacement *placement = &placementArray[placementIndex];
-
 		if (placement->groupId == groupId)
 		{
 			placementOnNode = ResolveGroupShardPlacement(placement, tableEntry,
@@ -624,6 +625,28 @@ FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
 	}
 
 	return placementOnNode;
+}
+
+
+/*
+ * ActiveShardPlacementOnGroup returns the active shard placement for the
+ * given shard on the given group, or returns NULL if no active placement for
+ * the shard exists on the group.
+ */
+ShardPlacement *
+ActiveShardPlacementOnGroup(int32 groupId, uint64 shardId)
+{
+	ShardPlacement *placement =
+		ShardPlacementOnGroupIncludingOrphanedPlacements(groupId, shardId);
+	if (placement == NULL)
+	{
+		return NULL;
+	}
+	if (placement->shardState != SHARD_STATE_ACTIVE)
+	{
+		return NULL;
+	}
+	return placement;
 }
 
 
@@ -791,13 +814,14 @@ LookupNodeForGroup(int32 groupId)
 
 /*
  * ShardPlacementList returns the list of placements for the given shard from
- * the cache.
+ * the cache. This list includes placements that are orphaned, because they
+ * their deletion is postponed to a later point (shardstate = 4).
  *
  * The returned list is deep copied from the cache and thus can be modified
  * and pfree()d freely.
  */
 List *
-ShardPlacementList(uint64 shardId)
+ShardPlacementListIncludingOrphanedPlacements(uint64 shardId)
 {
 	List *placementList = NIL;
 

@@ -748,7 +748,7 @@ RepairShardPlacement(int64 shardId, const char *sourceNodeName, int32 sourceNode
 											   ddlCommandList);
 
 	/* after successful repair, we update shard state as healthy*/
-	List *placementList = ShardPlacementList(shardId);
+	List *placementList = ShardPlacementListWithoutOrphanedPlacements(shardId);
 	ShardPlacement *placement = SearchShardPlacementInListOrError(placementList,
 																  targetNodeName,
 																  targetNodePort);
@@ -1029,7 +1029,8 @@ static void
 EnsureShardCanBeRepaired(int64 shardId, const char *sourceNodeName, int32 sourceNodePort,
 						 const char *targetNodeName, int32 targetNodePort)
 {
-	List *shardPlacementList = ShardPlacementList(shardId);
+	List *shardPlacementList =
+		ShardPlacementListIncludingOrphanedPlacements(shardId);
 
 	ShardPlacement *sourcePlacement = SearchShardPlacementInListOrError(
 		shardPlacementList,
@@ -1061,7 +1062,7 @@ static void
 EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNodePort,
 					   const char *targetNodeName, int32 targetNodePort)
 {
-	List *shardPlacementList = ShardPlacementList(shardId);
+	List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 
 	ShardPlacement *sourcePlacement = SearchShardPlacementInListOrError(
 		shardPlacementList,
@@ -1085,7 +1086,7 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 			 * the shard.
 			 */
 			DropOrphanedShardsInSeparateTransaction();
-			shardPlacementList = ShardPlacementList(shardId);
+			shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 			targetPlacement = SearchShardPlacementInList(shardPlacementList,
 														 targetNodeName,
 														 targetNodePort);
@@ -1429,7 +1430,8 @@ DropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName, int32 
 		char *qualifiedTableName = ConstructQualifiedShardName(colocatedShard);
 		StringInfo dropQuery = makeStringInfo();
 		uint64 shardId = colocatedShard->shardId;
-		List *shardPlacementList = ShardPlacementList(shardId);
+		List *shardPlacementList =
+			ShardPlacementListIncludingOrphanedPlacements(shardId);
 		ShardPlacement *placement =
 			SearchShardPlacementInListOrError(shardPlacementList, nodeName, nodePort);
 
@@ -1442,9 +1444,9 @@ DropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName, int32 
 
 
 /*
- * MarkForDropColocatedShardPlacement marks the shard placement metadata for the given
- * shard placement to be deleted in pg_dist_placement. The function does this for all
- * colocated placements.
+ * MarkForDropColocatedShardPlacement marks the shard placement metadata for
+ * the given shard placement to be deleted in pg_dist_placement. The function
+ * does this for all colocated placements.
  */
 static void
 MarkForDropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName, int32
@@ -1457,7 +1459,8 @@ MarkForDropColocatedShardPlacement(ShardInterval *shardInterval, char *nodeName,
 	{
 		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
 		uint64 shardId = colocatedShard->shardId;
-		List *shardPlacementList = ShardPlacementList(shardId);
+		List *shardPlacementList =
+			ShardPlacementListIncludingOrphanedPlacements(shardId);
 		ShardPlacement *placement =
 			SearchShardPlacementInListOrError(shardPlacementList, nodeName, nodePort);
 
