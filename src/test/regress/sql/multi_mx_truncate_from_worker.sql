@@ -6,7 +6,6 @@ SET citus.next_placement_id TO 2380000;
 
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 6;
-SET citus.replication_model TO streaming;
 
 CREATE TABLE "refer'ence_table"(id int PRIMARY KEY);
 SELECT create_reference_table('refer''ence_table');

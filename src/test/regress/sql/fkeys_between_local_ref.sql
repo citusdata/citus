@@ -13,7 +13,7 @@ CREATE VIEW citus_local_tables_in_schema AS
 SELECT logicalrelid FROM pg_dist_partition, pg_tables
 WHERE tablename=logicalrelid::regclass::text AND
       schemaname='fkeys_between_local_ref' AND
-      partmethod = 'n' AND repmodel = 'c';
+      partmethod = 'n' AND repmodel = 's';
 
 
 -- remove coordinator if it is added to pg_dist_node and test

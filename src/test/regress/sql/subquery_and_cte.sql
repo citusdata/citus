@@ -5,6 +5,7 @@ SET search_path TO subquery_and_ctes;
 
 
 CREATE TABLE users_table_local AS SELECT * FROM users_table;
+SET citus.shard_replication_factor TO 1;
 
 CREATE TABLE dist_table (id int, value int);
 SELECT create_distributed_table('dist_table', 'id', colocate_with => 'users_table');

@@ -159,7 +159,6 @@ FUNCTION 1 test_udt_hash(test_udt);
 
 -- Distribute and populate the two tables.
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 
 SET citus.shard_count TO 3;
 SELECT create_distributed_table('repartition_udt', 'pk');

@@ -169,8 +169,7 @@ CREATE AGGREGATE agg_names(x dup_result, yz dup_result) (
 SET citus.enable_ddl_propagation TO on;
 -- use an unusual type to force a new colocation group
 CREATE TABLE statement_table(id int2);
-SET citus.replication_model TO 'statement';
-SET citus.shard_replication_factor TO 1;
+SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('statement_table','id');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -179,7 +178,6 @@ SELECT create_distributed_table('statement_table','id');
 
 -- create a table uses streaming-based replication (can be synced)
 CREATE TABLE streaming_table(id macaddr);
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('streaming_table','id');
  create_distributed_table
@@ -228,19 +226,17 @@ select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'pr
 
 -- try to co-locate with a table that uses statement-based replication
 SELECT create_distributed_function('increment(int2)', '$1');
-ERROR:  cannot colocate function "increment" and table "statement_table"
-DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
-HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
+ERROR:  cannot distribute the function "increment" since there is no table to colocate with
+HINT:  Provide a distributed table via "colocate_with" option to create_distributed_function()
 SELECT create_distributed_function('increment(int2)', '$1', colocate_with := 'statement_table');
 ERROR:  cannot colocate function "increment" and table "statement_table"
 DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
-HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
+HINT:  When distributing tables make sure that citus.shard_replication_factor = 1
 BEGIN;
-SET LOCAL citus.replication_model TO 'statement';
 DROP TABLE statement_table;
 SELECT create_distributed_function('increment(int2)', '$1');
-ERROR:  cannot create a function with a distribution argument when citus.replication_model is 'statement'
-HINT:  Set citus.replication_model to 'streaming' before creating distributed tables
+ERROR:  cannot distribute the function "increment" since there is no table to colocate with
+HINT:  Provide a distributed table via "colocate_with" option to create_distributed_function()
 END;
 -- try to co-locate with a table that uses streaming replication
 SELECT create_distributed_function('dup(macaddr)', '$1', colocate_with := 'streaming_table');
@@ -649,7 +645,6 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)','$1')
 -- a function cannot be colocated with a table that is not "streaming" replicated
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE replicated_table_func_test (a macaddr);
-SET citus.replication_model TO "statement";
 SELECT create_distributed_table('replicated_table_func_test', 'a');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -659,7 +654,7 @@ SELECT create_distributed_table('replicated_table_func_test', 'a');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1', colocate_with:='replicated_table_func_test');
 ERROR:  cannot colocate function "eq_with_param_names" and table "replicated_table_func_test"
 DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
-HINT:  When distributing tables make sure that citus.replication_model = 'streaming'
+HINT:  When distributing tables make sure that citus.shard_replication_factor = 1
 SELECT public.wait_until_metadata_sync(30000);
  wait_until_metadata_sync
 ---------------------------------------------------------------------
@@ -670,7 +665,6 @@ SELECT public.wait_until_metadata_sync(30000);
 -- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE replicated_table_func_test_2 (a macaddr8);
-SET citus.replication_model TO "streaming";
 SELECT create_distributed_table('replicated_table_func_test_2', 'a');
  create_distributed_table
 ---------------------------------------------------------------------
@@ -694,7 +688,6 @@ ERROR:  relation replicated_table_func_test_3 is not distributed
 -- finally, colocate the function with a distributed table
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE replicated_table_func_test_4 (a macaddr);
-SET citus.replication_model TO "streaming";
 SELECT create_distributed_table('replicated_table_func_test_4', 'a');
  create_distributed_table
 ---------------------------------------------------------------------

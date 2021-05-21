@@ -12,7 +12,6 @@ SET search_path TO 'mx_modify_reference_table';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 
-SET citus.replication_model TO 'streaming';
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 

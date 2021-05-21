@@ -8,7 +8,6 @@ SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gse
 SELECT nextval('pg_catalog.pg_dist_shardid_seq') AS last_shard_id \gset
 
 
-SET citus.replication_model TO streaming;
 SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 1;
 SET citus.replicate_reference_tables_on_activate TO off;
@@ -366,4 +365,3 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART :last_shard_id;
 
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
-RESET citus.replication_model;

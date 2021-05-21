@@ -90,11 +90,11 @@ BEGIN;
         tablename         | partmethod | repmodel
 ---------------------------------------------------------------------
  citus_local_table_1      | n          | t
- citus_local_table_2      | n          | c
- citus_local_table_3      | n          | c
- citus_local_table_4      | n          | c
- distributed_table_1      | h          | c
- partitioned_dist_table_1 | h          | c
+ citus_local_table_2      | n          | s
+ citus_local_table_3      | n          | s
+ citus_local_table_4      | n          | s
+ distributed_table_1      | h          | s
+ partitioned_dist_table_1 | h          | s
  reference_table_1        | n          | t
  reference_table_2        | n          | t
 (8 rows)
@@ -120,12 +120,12 @@ BEGIN;
   ORDER BY tablename;
         tablename         | partmethod | repmodel
 ---------------------------------------------------------------------
- citus_local_table_1      | n          | c
+ citus_local_table_1      | n          | s
  citus_local_table_2      | n          | t
- citus_local_table_3      | n          | c
- citus_local_table_4      | n          | c
- distributed_table_1      | h          | c
- partitioned_dist_table_1 | h          | c
+ citus_local_table_3      | n          | s
+ citus_local_table_4      | n          | s
+ distributed_table_1      | h          | s
+ partitioned_dist_table_1 | h          | s
  reference_table_1        | n          | t
  reference_table_2        | n          | t
 (8 rows)
@@ -204,13 +204,13 @@ BEGIN;
   ORDER BY tablename;
         tablename         | partmethod | repmodel
 ---------------------------------------------------------------------
- citus_local_table_1      | n          | c
- citus_local_table_2      | n          | c
- citus_local_table_3      | n          | c
- citus_local_table_4      | n          | c
- citus_local_table_5      | h          | c
- distributed_table_1      | h          | c
- partitioned_dist_table_1 | h          | c
+ citus_local_table_1      | n          | s
+ citus_local_table_2      | n          | s
+ citus_local_table_3      | n          | s
+ citus_local_table_4      | n          | s
+ citus_local_table_5      | h          | s
+ distributed_table_1      | h          | s
+ partitioned_dist_table_1 | h          | s
  reference_table_1        | n          | t
  reference_table_2        | n          | t
 (9 rows)
@@ -237,13 +237,13 @@ BEGIN;
   ORDER BY tablename;
         tablename         | partmethod | repmodel
 ---------------------------------------------------------------------
- citus_local_table_1      | n          | c
- citus_local_table_2      | n          | c
- citus_local_table_3      | n          | c
- citus_local_table_4      | n          | c
- citus_local_table_5      | h          | c
- distributed_table_1      | h          | c
- partitioned_dist_table_1 | h          | c
+ citus_local_table_1      | n          | s
+ citus_local_table_2      | n          | s
+ citus_local_table_3      | n          | s
+ citus_local_table_4      | n          | s
+ citus_local_table_5      | h          | s
+ distributed_table_1      | h          | s
+ partitioned_dist_table_1 | h          | s
  reference_table_1        | n          | t
  reference_table_2        | n          | t
 (9 rows)
@@ -272,13 +272,13 @@ BEGIN;
   ORDER BY tablename;
         tablename         | partmethod | repmodel
 ---------------------------------------------------------------------
- citus_local_table_1      | n          | c
- citus_local_table_2      | n          | c
- citus_local_table_3      | n          | c
- citus_local_table_4      | n          | c
- citus_local_table_5      | h          | c
- distributed_table_1      | h          | c
- partitioned_dist_table_1 | h          | c
+ citus_local_table_1      | n          | s
+ citus_local_table_2      | n          | s
+ citus_local_table_3      | n          | s
+ citus_local_table_4      | n          | s
+ citus_local_table_5      | h          | s
+ distributed_table_1      | h          | s
+ partitioned_dist_table_1 | h          | s
  reference_table_1        | n          | t
  reference_table_2        | n          | t
 (9 rows)

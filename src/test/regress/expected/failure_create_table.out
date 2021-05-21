@@ -418,7 +418,7 @@ COMMIT;
 SELECT recover_prepared_transactions();
  recover_prepared_transactions
 ---------------------------------------------------------------------
-                             1
+                             4
 (1 row)
 
 SELECT citus.mitmproxy('conn.allow()');

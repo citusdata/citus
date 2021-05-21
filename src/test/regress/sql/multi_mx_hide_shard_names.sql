@@ -23,8 +23,6 @@ SET search_path TO 'mx_hide_shard_names';
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-
-SET citus.replication_model TO 'streaming';
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
@@ -84,8 +82,6 @@ SET search_path TO 'mx_hide_shard_names';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 
-SET citus.replication_model TO 'streaming';
-
 -- not existing shard ids appended to the distributed table name
 CREATE TABLE test_table_102008(id int, time date);
 SELECT create_distributed_table('test_table_102008', 'id');
@@ -109,8 +105,6 @@ CREATE SCHEMA mx_hide_shard_names_2;
 SET search_path TO 'mx_hide_shard_names_2';
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-
-SET citus.replication_model TO 'streaming';
 CREATE TABLE test_table(id int, time date);
 SELECT create_distributed_table('test_table', 'id');
 CREATE INDEX test_index ON mx_hide_shard_names_2.test_table(id);
@@ -131,8 +125,6 @@ SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-
-SET citus.replication_model TO 'streaming';
 
 CREATE SCHEMA mx_hide_shard_names_3;
 SET search_path TO 'mx_hide_shard_names_3';
@@ -155,8 +147,6 @@ SELECT * FROM citus_shards_on_worker ORDER BY 2;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-
-SET citus.replication_model TO 'streaming';
 
 CREATE SCHEMA "CiTuS.TeeN";
 SET search_path TO "CiTuS.TeeN";

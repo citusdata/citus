@@ -30,7 +30,6 @@ setup
           false)
   FROM pg_dist_node;
 
-  SET citus.replication_model to streaming;
 	SET citus.shard_replication_factor TO 1;
 
 

@@ -193,6 +193,18 @@ SELECT create_distributed_table('test_2pcskip', 'a');
 INSERT INTO test_2pcskip SELECT i FROM generate_series(0, 5)i;
 SELECT recover_prepared_transactions();
 
+SELECT shardid INTO selected_shard FROM pg_dist_shard WHERE logicalrelid='test_2pcskip'::regclass LIMIT 1;
+SELECT COUNT(*) FROM pg_dist_transaction;
+BEGIN;
+SET LOCAL citus.defer_drop_after_shard_move TO OFF;
+SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+COMMIT;
+SELECT COUNT(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+
+
 -- for the following test, ensure that 6 and 7 go to different shards on different workers
 SELECT count(DISTINCT nodeport) FROM pg_dist_shard_placement WHERE shardid IN (get_shard_id_for_distribution_column('test_2pcskip', 6),get_shard_id_for_distribution_column('test_2pcskip', 7));
 -- only two of the connections will perform a write (INSERT)
