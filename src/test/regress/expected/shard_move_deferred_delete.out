@@ -133,6 +133,10 @@ $cmd$);
  (localhost,57638,t,1)
 (2 rows)
 
+-- we expect to get an error since the old placement is still there
+SELECT master_move_shard_placement(20000000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+ERROR:  shard xxxxx already exists in the target node
+DETAIL:  The existing shard is marked for deletion, but could not be deleted because there are still active queries on it
 SELECT run_command_on_workers($cmd$
     -- override the function for testing purpose
     create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
@@ -169,7 +173,6 @@ SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'local
 (1 row)
 
 ROLLBACK;
--- we expect shard xxxxx to be on both of the workers
 SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);

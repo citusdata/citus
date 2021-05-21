@@ -8,6 +8,7 @@ SET search_path to fkey_to_reference_shard_rebalance;
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count to 8;
 
+
 CREATE TYPE foreign_details AS (name text, relid text, refd_relid text);
 
 CREATE VIEW table_fkeys_in_workers AS
@@ -44,12 +45,14 @@ SELECT master_move_shard_placement(15000009, 'localhost', :worker_1_port, 'local
 
 SELECT count(*) FROM referencing_table2;
 
+SELECT 1 FROM public.master_defer_delete_shards();
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_rebalance.%' AND refd_relid LIKE 'fkey_to_reference_shard_rebalance.%' ORDER BY 1,2,3;
 
 SELECT master_move_shard_placement(15000009, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes');
 
 SELECT count(*) FROM referencing_table2;
 
+SELECT 1 FROM public.master_defer_delete_shards();
 SELECT * FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_to_reference_shard_rebalance.%' AND refd_relid LIKE 'fkey_to_reference_shard_rebalance.%' ORDER BY 1,2,3;
 
 -- create a function to show the

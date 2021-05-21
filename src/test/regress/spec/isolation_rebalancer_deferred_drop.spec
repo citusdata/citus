@@ -36,7 +36,6 @@ COMMENT ON FUNCTION master_defer_delete_shards()
     SET citus.next_shard_id to 120000;
 	SET citus.shard_count TO 8;
 	SET citus.shard_replication_factor TO 1;
-    SET citus.defer_drop_after_shard_move TO ON;
 	CREATE TABLE t1 (x int PRIMARY KEY, y int);
 	SELECT create_distributed_table('t1', 'x');
 
@@ -61,8 +60,13 @@ step "s1-begin"
 
 step "s1-move-placement"
 {
-        SET citus.defer_drop_after_shard_move TO ON;
-    	SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+}
+
+step "s1-move-placement-without-deferred" {
+    SET citus.defer_drop_after_shard_move TO OFF;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+
 }
 
 step "s1-drop-marked-shards"
@@ -80,6 +84,10 @@ step "s1-commit"
 }
 
 session "s2"
+
+step "s2-begin" {
+    BEGIN;
+}
 
 step "s2-drop-old-shards" {
     SELECT run_try_drop_marked_shards();
@@ -101,10 +109,18 @@ step "s2-lock-table-on-worker"
     SELECT run_commands_on_session_level_connection_to_node('LOCK TABLE t1_120000');
 }
 
+step "s2-select" {
+    SELECT COUNT(*) FROM t1;
+}
+
 step "s2-drop-marked-shards"
 {
     SET client_min_messages to DEBUG1;
     SELECT public.master_defer_delete_shards();
+}
+
+step "s2-commit" {
+    COMMIT;
 }
 
 
@@ -113,3 +129,4 @@ permutation "s1-begin" "s1-move-placement" "s2-drop-marked-shards" "s1-drop-mark
 permutation "s1-begin" "s1-move-placement" "s2-start-session-level-connection" "s2-lock-table-on-worker" "s1-drop-marked-shards" "s1-commit" "s2-stop-connection"
 // make sure we error if we cannot get the lock on pg_dist_placement
 permutation "s1-begin" "s1-lock-pg-dist-placement" "s2-drop-old-shards" "s1-commit"
+permutation "s1-begin" "s2-begin" "s2-select" "s1-move-placement-without-deferred" "s2-commit" "s1-commit"

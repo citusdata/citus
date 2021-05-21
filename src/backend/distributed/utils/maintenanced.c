@@ -93,7 +93,7 @@ typedef struct MaintenanceDaemonDBData
 /* config variable for distributed deadlock detection timeout */
 double DistributedDeadlockDetectionTimeoutFactor = 2.0;
 int Recover2PCInterval = 60000;
-int DeferShardDeleteInterval = 60000;
+int DeferShardDeleteInterval = 15000;
 
 /* config variables for metadata sync timeout */
 int MetadataSyncInterval = 60000;

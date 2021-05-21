@@ -442,6 +442,7 @@ push(@pgOptions, "wal_retrieve_retry_interval=1000");
 push(@pgOptions, "citus.shard_count=4");
 push(@pgOptions, "citus.max_adaptive_executor_pool_size=4");
 push(@pgOptions, "citus.shard_max_size=1500kB");
+push(@pgOptions, "citus.defer_shard_delete_interval=-1");
 push(@pgOptions, "citus.repartition_join_bucket_count_per_node=2");
 push(@pgOptions, "citus.sort_returning='on'");
 push(@pgOptions, "citus.shard_replication_factor=2");

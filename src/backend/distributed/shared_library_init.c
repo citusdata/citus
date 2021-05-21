@@ -640,7 +640,7 @@ RegisterCitusConfigVariables(void)
 					 "citus.defer_shard_delete_interval to make sure defered deletions "
 					 "will be executed"),
 		&DeferShardDeleteOnMove,
-		false,
+		true,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);
@@ -655,7 +655,7 @@ RegisterCitusConfigVariables(void)
 					 "the background worker moves on. When set to -1 this background "
 					 "process is skipped."),
 		&DeferShardDeleteInterval,
-		-1, -1, 7 * 24 * 3600 * 1000,
+		15000, -1, 7 * 24 * 3600 * 1000,
 		PGC_SIGHUP,
 		GUC_UNIT_MS,
 		NULL, NULL, NULL);

@@ -7,6 +7,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 13000000;
 SET citus.shard_count TO 6;
 SET citus.shard_replication_factor TO 1;
 
+
 -- create distributed tables
 CREATE TABLE table1_group1 ( id int PRIMARY KEY);
 SELECT create_distributed_table('table1_group1', 'id', 'hash');
@@ -58,6 +59,7 @@ ORDER BY s.shardid, sp.nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table1_group1_13000000'::regclass;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_group1_13000006'::regclass;
 \c - - - :master_port
+
 
 -- copy colocated shards again to see error message
 SELECT master_copy_shard_placement(13000000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, false, 'force_logical');
@@ -140,6 +142,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
@@ -147,6 +150,7 @@ ORDER BY s.shardid, sp.nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table1_group1_13000001'::regclass;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_group1_13000007'::regclass;
 \c - - - :master_port
+
 
 
 -- test moving NOT colocated shard
@@ -158,6 +162,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table5_groupX'::regclass
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 -- move NOT colocated shard
@@ -170,7 +175,8 @@ FROM
 WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
-    p.logicalrelid = 'table5_groupX'::regclass
+    p.logicalrelid = 'table5_groupX'::regclass AND
+    sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 
@@ -183,6 +189,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
     p.logicalrelid = 'table6_append'::regclass
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 -- move shard in append distributed table
@@ -195,7 +202,8 @@ FROM
 WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
-    p.logicalrelid = 'table6_append'::regclass
+    p.logicalrelid = 'table6_append'::regclass AND
+    sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 
@@ -228,6 +236,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
 	colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 SELECT master_move_shard_placement(13000022, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'block_writes');
@@ -240,6 +249,7 @@ WHERE
     p.logicalrelid = s.logicalrelid AND
     s.shardid = sp.shardid AND
 	colocationid = (SELECT colocationid FROM pg_dist_partition WHERE logicalrelid = 'table1_group1'::regclass)
+    AND sp.shardstate != 4
 ORDER BY s.shardid, sp.nodeport;
 
 -- also connect worker to verify we successfully moved given shard (and other colocated shards)
@@ -252,6 +262,7 @@ SELECT  "Constraint", "Definition" FROM table_fkeys
   WHERE "Constraint" LIKE 'table2_group%' OR "Constraint" LIKE 'table1_group%';
 
 \c - - - :master_port
+
 
 
 -- test shard copy with foreign constraints
@@ -305,6 +316,7 @@ SELECT count(*) FROM move_partitions.events;
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
+AND shardstate != 4
 ORDER BY shardid LIMIT 1;
 
 SELECT count(*) FROM move_partitions.events;
@@ -315,7 +327,7 @@ ALTER TABLE move_partitions.events_1 ADD CONSTRAINT e_1_pk PRIMARY KEY (id);
 -- should be able to move automatically now
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port)
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
+WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port AND shardstate != 4
 ORDER BY shardid LIMIT 1;
 
 SELECT count(*) FROM move_partitions.events;
@@ -323,7 +335,7 @@ SELECT count(*) FROM move_partitions.events;
 -- should also be able to move with block writes
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
 FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port
+WHERE logicalrelid = 'move_partitions.events'::regclass AND nodeport = :worker_2_port AND shardstate != 4
 ORDER BY shardid LIMIT 1;
 
 SELECT count(*) FROM move_partitions.events;

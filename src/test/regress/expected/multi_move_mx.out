@@ -141,9 +141,10 @@ SELECT
 FROM
 	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE
-	logicalrelid = 'mx_table_1'::regclass
+	(logicalrelid = 'mx_table_1'::regclass
 	OR logicalrelid = 'mx_table_2'::regclass
-	OR logicalrelid = 'mx_table_3'::regclass
+	OR logicalrelid = 'mx_table_3'::regclass)
+	AND shardstate != 4
 ORDER BY
 	logicalrelid, shardid;
  logicalrelid | shardid | nodename  | nodeport
