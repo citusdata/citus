@@ -101,7 +101,7 @@ MemoryContext CommitContext = NULL;
  * do 2PC on the remote connections that did a modification.
  *
  * As a variable name ShouldCoordinatedTransactionUse2PC could
- * be improved. We use CoordinatedTransactionShouldUse2PC() as the
+ * be improved. We use Use2PCForCoordinatedTransaction() as the
  * public API function, hence couldn't come up with a better name
  * for the underlying variable at the moment.
  */
@@ -190,14 +190,14 @@ InCoordinatedTransaction(void)
 
 
 /*
- * CoordinatedTransactionShouldUse2PC() signals that the current coordinated
+ * Use2PCForCoordinatedTransaction() signals that the current coordinated
  * transaction should use 2PC to commit.
  *
  * Note that even if 2PC is enabled, it is only used for connections that make
  * modification (DML or DDL).
  */
 void
-CoordinatedTransactionShouldUse2PC(void)
+Use2PCForCoordinatedTransaction(void)
 {
 	Assert(InCoordinatedTransaction());
 

@@ -2228,7 +2228,7 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC ||
 		MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
-		CoordinatedTransactionShouldUse2PC();
+		Use2PCForCoordinatedTransaction();
 	}
 
 	/* define how tuples will be serialised */
