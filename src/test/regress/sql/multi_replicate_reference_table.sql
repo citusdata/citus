@@ -234,7 +234,6 @@ SELECT create_reference_table('replicate_reference_table_reference_one');
 
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 
 CREATE TABLE replicate_reference_table_reference_two(column1 int);
 
@@ -591,7 +590,7 @@ SET citus.replicate_reference_tables_on_activate TO off;
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
-SET citus.replication_model TO streaming;
+SET citus.shard_replication_factor TO 1;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 SELECT master_copy_shard_placement(

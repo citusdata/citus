@@ -3,7 +3,6 @@ SET search_path TO single_node;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 90630500;
-SET citus.replication_model TO 'streaming';
 -- adding the coordinator as inactive is disallowed
 SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
 ERROR:  coordinator node cannot be added as inactive node

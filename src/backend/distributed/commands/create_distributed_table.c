@@ -86,13 +86,9 @@
  */
 #define LOG_PER_TUPLE_AMOUNT 1000000
 
-
-/* Replication model to use when creating distributed tables */
-int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
-
-
 /* local function forward declarations */
-static char DecideReplicationModel(char distributionMethod, bool viaDeprecatedAPI);
+static char DecideReplicationModel(char distributionMethod, char *colocateWithTableName,
+								   bool viaDeprecatedAPI);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
 static uint32 ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
@@ -442,6 +438,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	char replicationModel = DecideReplicationModel(distributionMethod,
+												   colocateWithTableName,
 												   viaDeprecatedAPI);
 
 	/*
@@ -631,44 +628,38 @@ DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
 
 /*
  * DecideReplicationModel function decides which replication model should be
- * used depending on given distribution configuration and global ReplicationModel
- * variable. If ReplicationModel conflicts with distribution configuration, this
- * function errors out.
+ * used depending on given distribution configuration.
  */
 static char
-DecideReplicationModel(char distributionMethod, bool viaDeprecatedAPI)
+DecideReplicationModel(char distributionMethod, char *colocateWithTableName, bool
+					   viaDeprecatedAPI)
 {
 	if (viaDeprecatedAPI)
 	{
-		if (ReplicationModel != REPLICATION_MODEL_COORDINATOR)
-		{
-			ereport(NOTICE, (errmsg("using statement-based replication"),
-							 errdetail("The current replication_model setting is "
-									   "'streaming', which is not supported by "
-									   "master_create_distributed_table."),
-							 errhint("Use create_distributed_table to use the streaming "
-									 "replication model.")));
-		}
-
 		return REPLICATION_MODEL_COORDINATOR;
 	}
 	else if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		return REPLICATION_MODEL_2PC;
 	}
-	else if (distributionMethod == DISTRIBUTE_BY_HASH)
+	else if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
+			 !IsColocateWithNone(colocateWithTableName))
 	{
-		return ReplicationModel;
+		text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
+		Oid colocatedRelationId = ResolveRelationId(colocateWithTableNameText, false);
+		CitusTableCacheEntry *targetTableEntry = GetCitusTableCacheEntry(
+			colocatedRelationId);
+		char replicationModel = targetTableEntry->replicationModel;
+
+		return replicationModel;
+	}
+	else if (distributionMethod == DISTRIBUTE_BY_HASH &&
+			 !DistributedTableReplicationIsEnabled())
+	{
+		return REPLICATION_MODEL_STREAMING;
 	}
 	else
 	{
-		if (ReplicationModel != REPLICATION_MODEL_COORDINATOR)
-		{
-			ereport(NOTICE, (errmsg("using statement-based replication"),
-							 errdetail("Streaming replication is supported only for "
-									   "hash-distributed tables.")));
-		}
-
 		return REPLICATION_MODEL_COORDINATOR;
 	}
 
@@ -863,7 +854,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	EnsureTableNotDistributed(relationId);
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod, viaDeprecatedAPI);
-	EnsureReplicationSettings(InvalidOid, replicationModel);
 	EnsureRelationHasNoTriggers(relationId);
 
 	/* we assume callers took necessary locks */
@@ -1152,36 +1142,6 @@ EnsureTableNotDistributed(Oid relationId)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("table \"%s\" is already distributed",
 							   relationName)));
-	}
-}
-
-
-/*
- * EnsureReplicationSettings checks whether the current replication factor
- * setting is compatible with the replication model. This function errors
- * out if caller tries to use streaming replication with more than one
- * replication factor.
- */
-void
-EnsureReplicationSettings(Oid relationId, char replicationModel)
-{
-	char *msgSuffix = "the streaming replication model";
-	char *extraHint = " or setting \"citus.replication_model\" to \"statement\"";
-
-	if (relationId != InvalidOid)
-	{
-		msgSuffix = "tables which use the streaming replication model";
-		extraHint = "";
-	}
-
-	if (replicationModel == REPLICATION_MODEL_STREAMING &&
-		DistributedTableReplicationIsEnabled())
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("replication factors above one are incompatible with %s",
-							   msgSuffix),
-						errhint("Try again after reducing \"citus.shard_replication_"
-								"factor\" to one%s.", extraHint)));
 	}
 }
 

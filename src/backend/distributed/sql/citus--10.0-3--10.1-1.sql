@@ -24,3 +24,22 @@ ALTER TABLE pg_catalog.pg_dist_rebalance_strategy ADD COLUMN improvement_thresho
 UPDATE pg_catalog.pg_dist_rebalance_strategy SET improvement_threshold = 0.5 WHERE name = 'by_disk_size';
 
 #include "udfs/get_rebalance_progress/10.1-1.sql"
+
+-- use streaming replication when replication factor = 1
+WITH replicated_shards AS (
+    SELECT shardid
+    FROM pg_dist_placement
+    WHERE shardstate = 1 OR shardstate = 3
+    GROUP BY shardid
+    HAVING count(*) <> 1 ),
+replicated_relations AS (
+    SELECT DISTINCT logicalrelid
+    FROM pg_dist_shard
+    JOIN replicated_shards
+    USING (shardid)
+)
+UPDATE pg_dist_partition
+SET repmodel = 's'
+WHERE repmodel = 'c'
+    AND partmethod = 'h'
+    AND logicalrelid NOT IN (SELECT * FROM replicated_relations);

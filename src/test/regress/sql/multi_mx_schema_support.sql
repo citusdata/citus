@@ -229,7 +229,6 @@ CREATE SCHEMA "CiTuS.TeAeN";
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 
 -- in the first test make sure that we handle DDLs
 -- when search path is set

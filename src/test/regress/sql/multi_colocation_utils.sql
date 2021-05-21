@@ -429,6 +429,7 @@ UPDATE pg_dist_partition SET repmodel = 's' WHERE logicalrelid = 'table1_groupG'
 
 CREATE TABLE table2_groupG ( id int );
 SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'table1_groupG');
+DROP TABLE table2_groupG;
 
 CREATE TABLE table2_groupG ( id int );
 SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'NONE');

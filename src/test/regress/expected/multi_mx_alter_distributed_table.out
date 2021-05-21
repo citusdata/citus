@@ -2,7 +2,6 @@ CREATE SCHEMA mx_alter_distributed_table;
 SET search_path TO mx_alter_distributed_table;
 SET citus.shard_replication_factor TO 1;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1410000;
-SET citus.replication_model TO 'streaming';
 -- test alter_distributed_table UDF
 CREATE TABLE adt_table (a INT, b INT);
 CREATE TABLE adt_col (a INT UNIQUE, b INT);

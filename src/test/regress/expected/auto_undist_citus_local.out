@@ -30,7 +30,7 @@ ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) R
 SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid IN ('citus_local_table'::regclass, 'reference_table'::regclass) ORDER BY logicalrelid;
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
- citus_local_table | n          | c
+ citus_local_table | n          | s
  reference_table   | n          | t
 (2 rows)
 
@@ -50,7 +50,7 @@ BEGIN;
   SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid IN ('citus_local_table'::regclass, 'reference_table'::regclass) ORDER BY logicalrelid;
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
- citus_local_table | n          | c
+ citus_local_table | n          | s
  reference_table   | n          | t
 (2 rows)
 
@@ -76,7 +76,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table   | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (2 rows)
 
 ALTER TABLE reference_table DROP COLUMN r1 CASCADE;
@@ -100,7 +100,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table   | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (2 rows)
 
 ALTER TABLE citus_local_table DROP COLUMN l1 CASCADE;
@@ -124,7 +124,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table   | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (2 rows)
 
 ALTER TABLE reference_table DROP CONSTRAINT reference_table_pkey CASCADE;
@@ -149,7 +149,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table   | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (2 rows)
 
 DROP INDEX ref_unique CASCADE;
@@ -173,7 +173,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table   | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (2 rows)
 
 ALTER TABLE reference_table DROP CONSTRAINT reference_table_r1_key  CASCADE;
@@ -197,7 +197,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table   | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (2 rows)
 
 DROP TABLE reference_table CASCADE;
@@ -220,7 +220,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table   | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (2 rows)
 
 ALTER TABLE reference_table DROP CONSTRAINT reference_table_r1_key  CASCADE;
@@ -245,7 +245,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
              logicalrelid              | partmethod | repmodel
 ---------------------------------------------------------------------
  ref_table_drop_schema.reference_table | n          | t
- citus_local_table                     | n          | c
+ citus_local_table                     | n          | s
 (2 rows)
 
 DROP SCHEMA ref_table_drop_schema CASCADE;
@@ -276,7 +276,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
 ---------------------------------------------------------------------
  reference_table_1 | n          | t
  reference_table_2 | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (3 rows)
 
 ALTER TABLE reference_table_1 DROP COLUMN r1 CASCADE;
@@ -285,7 +285,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
 ---------------------------------------------------------------------
  reference_table_1 | n          | t
  reference_table_2 | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (3 rows)
 
 -- local table has multiple foreign keys to two tables
@@ -311,7 +311,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
 ---------------------------------------------------------------------
  reference_table_1 | n          | t
  reference_table_2 | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (3 rows)
 
 DROP TABLE reference_table_1 CASCADE;
@@ -319,7 +319,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table_2 | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (2 rows)
 
 CREATE TABLE distributed_table (d1 int);
@@ -359,7 +359,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
 ---------------------------------------------------------------------
  reference_table_1 | n          | t
  reference_table_2 | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (3 rows)
 
 DROP TABLE reference_table_1, reference_table_2 CASCADE;
@@ -391,7 +391,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
 ---------------------------------------------------------------------
  reference_table_1 | n          | t
  reference_table_2 | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (3 rows)
 
 BEGIN;
@@ -413,7 +413,7 @@ BEGIN;
 ---------------------------------------------------------------------
  reference_table_1 | n          | t
  reference_table_2 | n          | t
- citus_local_table | n          | c
+ citus_local_table | n          | s
 (3 rows)
 
   -- this should undistribute citus_local_table again
@@ -442,9 +442,9 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
     logicalrelid     | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table_1   | n          | t
- citus_local_table_1 | n          | c
- citus_local_table_2 | n          | c
- citus_local_table_3 | n          | c
+ citus_local_table_1 | n          | s
+ citus_local_table_2 | n          | s
+ citus_local_table_3 | n          | s
 (4 rows)
 
 ALTER TABLE reference_table_1 DROP COLUMN r1 CASCADE;
@@ -470,9 +470,9 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
     logicalrelid     | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table_1   | n          | t
- citus_local_table_1 | n          | c
- citus_local_table_2 | n          | c
- citus_local_table_3 | n          | c
+ citus_local_table_1 | n          | s
+ citus_local_table_2 | n          | s
+ citus_local_table_3 | n          | s
 (4 rows)
 
 -- test DROP OWNED BY
@@ -525,7 +525,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
     logicalrelid     | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table_1   | n          | t
- citus_local_table_1 | n          | c
+ citus_local_table_1 | n          | s
 (2 rows)
 
 CREATE OR REPLACE FUNCTION drop_constraint_via_func()
@@ -577,7 +577,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
     logicalrelid     | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table_1   | n          | t
- citus_local_table_1 | n          | c
+ citus_local_table_1 | n          | s
 (2 rows)
 
 create or replace procedure drop_constraint_via_proc_top_level()
@@ -610,7 +610,7 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
     logicalrelid     | partmethod | repmodel
 ---------------------------------------------------------------------
  reference_table_1   | n          | t
- citus_local_table_1 | n          | c
+ citus_local_table_1 | n          | s
 (2 rows)
 
 create or replace procedure drop_constraint_via_proc_exception()

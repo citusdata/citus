@@ -356,7 +356,7 @@ BEGIN;
   SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
         schemaname='citus_local_tables_test_schema' AND
-        partmethod = 'n' AND repmodel = 'c'
+        partmethod = 'n' AND repmodel = 's'
   ORDER BY 1;
 ROLLBACK;
 
@@ -376,7 +376,7 @@ BEGIN;
   SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
         schemaname='citus_local_tables_test_schema' AND
-        partmethod = 'n' AND repmodel = 'c'
+        partmethod = 'n' AND repmodel = 's'
   ORDER BY 1;
 ROLLBACK;
 

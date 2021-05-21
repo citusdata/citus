@@ -1,7 +1,6 @@
 CREATE SCHEMA mx_coordinator_shouldhaveshards;
 SET search_path TO mx_coordinator_shouldhaveshards;
 SET citus.shard_replication_factor to 1;
-SET citus.replication_model TO streaming;
 SET client_min_messages TO WARNING;
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
  ?column?

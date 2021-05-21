@@ -8,7 +8,6 @@ SET citus.next_shard_id TO 1980000;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE failover_to_local (key int PRIMARY KEY, value varchar(10));
 SELECT create_distributed_table('failover_to_local', 'key');

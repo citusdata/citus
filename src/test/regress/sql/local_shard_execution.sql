@@ -3,7 +3,6 @@ SET search_path TO local_shard_execution;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 SET citus.next_shard_id TO 1470000;
 
 CREATE TABLE reference_table (key int PRIMARY KEY);
@@ -877,7 +876,6 @@ RESET citus.log_local_commands;
 \c - - - :master_port
 SET citus.next_shard_id TO 1480000;
 -- test both local and remote execution with custom type
-SET citus.replication_model TO "streaming";
 SET citus.shard_replication_factor TO 1;
 CREATE TYPE invite_resp AS ENUM ('yes', 'no', 'maybe');
 

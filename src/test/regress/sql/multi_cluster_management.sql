@@ -33,6 +33,11 @@ SELECT master_get_active_worker_nodes();
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 
+-- test warnings on setting the deprecated guc for replication model
+BEGIN;
+SET citus.replication_model to 'statement';
+ROLLBACK;
+
 SELECT * FROM citus_activate_node('localhost', :worker_2_port);
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
@@ -102,6 +107,7 @@ ABORT;
 \c - postgres - :master_port
 SET citus.next_shard_id TO 1220016;
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
+SET citus.shard_replication_factor TO 1;
 SELECT master_get_active_worker_nodes();
 
 -- restore the node for next tests
@@ -123,6 +129,7 @@ SELECT master_get_active_worker_nodes();
 UPDATE pg_dist_placement SET shardstate=4 WHERE groupid=:worker_2_group;
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
 CREATE TABLE cluster_management_test_colocated (col_1 text, col_2 int);
+-- Check that we warn the user about colocated shards that will not get created for shards that do not have active placements
 SELECT create_distributed_table('cluster_management_test_colocated', 'col_1', 'hash', colocate_with=>'cluster_management_test');
 
 -- Check that colocated shards don't get created for shards that are to be deleted

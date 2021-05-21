@@ -832,7 +832,6 @@ DEBUG:  Subplan XXX_2 will be written to local file
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 DEBUG:  Subplan XXX_3 will be sent to localhost:xxxxx
 -- append partitioned/heap-type
-SET citus.replication_model TO statement;
 -- do not print out 'building index pg_toast_xxxxx_index' messages
 SET client_min_messages TO DEFAULT;
 CREATE TABLE range_partitioned(range_column text, data int);

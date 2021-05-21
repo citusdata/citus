@@ -3,7 +3,6 @@ CREATE SCHEMA insert_select_repartition;
 SET search_path TO 'insert_select_repartition';
 SET citus.next_shard_id TO 4213581;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 -- 4 shards, hash distributed.
 -- Negate distribution column value.
 SET citus.shard_count TO 4;
@@ -51,8 +50,6 @@ CREATE TYPE composite_key_type AS (f1 int, f2 text);
 -- source
 CREATE TABLE source_table(f1 int, key composite_key_type, value int, mapped_key composite_key_type);
 SELECT create_distributed_table('source_table', 'key', 'range');
-NOTICE:  using statement-based replication
-DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -69,8 +66,6 @@ INSERT INTO source_table VALUES (6, (32, 'g'), 50, (8, 'g'));
 -- target
 CREATE TABLE target_table(f1 int DEFAULT 0, value int, key composite_key_type PRIMARY KEY);
 SELECT create_distributed_table('target_table', 'key', 'range');
-NOTICE:  using statement-based replication
-DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -824,7 +819,6 @@ UPDATE source_table SET b = NULL where b IN (9, 4);
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE target_table(a int, b int not null);
 SELECT create_distributed_table('target_table', 'a', 'range');
-NOTICE:  using statement-based replication
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -939,7 +933,6 @@ DROP TABLE source_table, target_table;
 -- Range partitioned target's ranges doesn't cover the whole range
 --
 SET citus.shard_replication_factor TO 2;
-SET citus.replication_model TO 'statement';
 SET citus.shard_count TO 4;
 CREATE TABLE source_table(a int, b int);
 SELECT create_distributed_table('source_table', 'a');

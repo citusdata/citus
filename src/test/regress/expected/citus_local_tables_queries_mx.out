@@ -21,7 +21,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 (1 row)
 
-SET citus.replication_model TO streaming;
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE dummy_reference_table(a int unique, b int);
 SELECT create_reference_table('dummy_reference_table');
  create_reference_table
@@ -874,7 +874,7 @@ SELECT reference_table.* FROM reference_table, distributed_table;
 TRUNCATE reference_table, citus_local_table, distributed_table;
 \c - - - :master_port
 SET search_path TO citus_local_table_queries_mx;
-SET citus.replication_model TO streaming;
+SET citus.shard_replication_factor TO 1;
 ALTER TABLE reference_table ADD CONSTRAINT pkey_ref PRIMARY KEY (a);
 ALTER TABLE citus_local_table ADD CONSTRAINT pkey_c PRIMARY KEY (a);
 -- define a foreign key chain distributed table -> reference table -> citus local table
@@ -918,7 +918,7 @@ NOTICE:  truncate cascades to table "distributed_table_xxxxx"
 ROLLBACK;
 \c - - - :master_port
 SET search_path TO citus_local_table_queries_mx;
-SET citus.replication_model TO streaming;
+SET citus.shard_replication_factor TO 1;
 ALTER TABLE distributed_table DROP CONSTRAINT fkey_dist_to_ref;
 \c - - - :worker_1_port
 SET search_path TO citus_local_table_queries_mx;
@@ -933,7 +933,7 @@ BEGIN;
 ROLLBACK;
 \c - - - :master_port
 SET search_path TO citus_local_table_queries_mx;
-SET citus.replication_model TO streaming;
+SET citus.shard_replication_factor TO 1;
 -- remove uniqueness constraint and dependent foreign key constraint for next tests
 ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;
 ALTER TABLE citus_local_table DROP CONSTRAINT pkey_c;

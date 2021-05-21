@@ -83,7 +83,6 @@ GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 \c - - - :master_port
 
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
 -- create prepare tests

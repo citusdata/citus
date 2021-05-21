@@ -35,7 +35,6 @@ END; $$ language plpgsql STABLE;
 
 CREATE TYPE user_data AS (name text, age int);
 
-SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor TO 1;
 
 CREATE TABLE user_info_data (user_id int, u_data user_data, user_index int);

@@ -4,7 +4,6 @@ SELECT citus.mitmproxy('conn.allow()');
 
 
 SET citus.shard_replication_factor TO 2;
-SET "citus.replication_model" to "statement";
 SET citus.shard_count TO 4;
 
 CREATE TABLE partitioned_table (

@@ -1037,10 +1037,13 @@ SELECT create_distributed_table('table1_groupG', 'id');
 UPDATE pg_dist_partition SET repmodel = 's' WHERE logicalrelid = 'table1_groupG'::regclass;
 CREATE TABLE table2_groupG ( id int );
 SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'table1_groupG');
-ERROR:  cannot colocate tables table1_groupg and table2_groupg
-DETAIL:  Replication models don't match for table1_groupg and table2_groupg.
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE table2_groupG;
 CREATE TABLE table2_groupG ( id int );
-ERROR:  relation "table2_groupg" already exists
 SELECT create_distributed_table('table2_groupG', 'id', colocate_with => 'NONE');
  create_distributed_table
 ---------------------------------------------------------------------

@@ -2,7 +2,6 @@
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 
 CREATE TABLE test_recovery (x text);
 SELECT create_distributed_table('test_recovery', 'x');

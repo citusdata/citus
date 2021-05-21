@@ -61,8 +61,11 @@ CREATE TABLE dist_table_test_2(a int);
 SET citus.shard_count TO 4;
 
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO "statement";
 SELECT create_distributed_table('dist_table_test_2', 'a');
+
+-- Mark tables as coordinator replicated in order to be able to test replicate_table_shards
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+	('dist_table_test_2'::regclass);
 
 -- replicate_table_shards should fail when the hostname GUC is set to a non-reachable node
 ALTER SYSTEM SET citus.local_hostname TO 'foobar';
@@ -83,7 +86,6 @@ SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shar
 DROP TABLE dist_table_test, dist_table_test_2, ref_table_test;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
-RESET citus.replication_model;
 
 -- Create a user to test multiuser usage of rebalancer functions
 -- We explicitely don't create this user on worker nodes yet, so we can
@@ -1188,7 +1190,6 @@ CREATE TABLE dist_table_test_3(a int);
 SET citus.shard_count TO 4;
 
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO "statement";
 SELECT create_distributed_table('dist_table_test_3', 'a');
 
 CREATE TABLE ref_table(a int);
@@ -1199,6 +1200,12 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
 SET citus.shard_replication_factor TO 2;
+SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
+
+-- Mark table as coordinator replicated in order to be able to test replicate_table_shards
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+	('dist_table_test_3'::regclass);
+
 SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
@@ -1307,6 +1314,11 @@ FROM pg_dist_shard
 JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'r1'::regclass;
 
+SELECT replicate_table_shards('t1',  shard_replication_factor := 2);
+
+-- Mark table as coordinator replicated in order to be able to test replicate_table_shards
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+	('t1'::regclass);
 SELECT replicate_table_shards('t1',  shard_replication_factor := 2);
 
 -- verify the reference table is on all nodes after replicate_table_shards

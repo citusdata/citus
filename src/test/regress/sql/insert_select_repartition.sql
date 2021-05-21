@@ -4,7 +4,6 @@ SET search_path TO 'insert_select_repartition';
 
 SET citus.next_shard_id TO 4213581;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 
 -- 4 shards, hash distributed.
 -- Negate distribution column value.
@@ -451,7 +450,6 @@ DROP TABLE source_table, target_table;
 --
 
 SET citus.shard_replication_factor TO 2;
-SET citus.replication_model TO 'statement';
 SET citus.shard_count TO 4;
 CREATE TABLE source_table(a int, b int);
 SELECT create_distributed_table('source_table', 'a');
