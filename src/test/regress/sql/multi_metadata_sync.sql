@@ -764,7 +764,6 @@ UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
 
 SELECT master_add_node('localhost', :worker_2_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
-SET citus.replication_model TO streaming;
 
 CREATE SEQUENCE mx_test_sequence_0;
 CREATE SEQUENCE mx_test_sequence_1;

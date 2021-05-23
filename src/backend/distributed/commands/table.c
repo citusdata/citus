@@ -579,10 +579,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 	}
 
-	if (ShouldSyncTableMetadata(leftRelationId))
-	{
-		EnsureCoordinator();
-	}
+	EnsureCoordinator();
 
 	/* these will be set in below loop according to subcommands */
 	Oid rightRelationId = InvalidOid;
@@ -610,11 +607,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 * alterTableStmt
 	 */
 	bool deparseAT = false;
-	bool doNothing = false;
-	AlterTableStmt *newStmt = makeNode(AlterTableStmt);
-	newStmt->relation = alterTableStatement->relation;
-	newStmt->relkind = alterTableStatement->relkind;
-	newStmt->missing_ok = alterTableStatement->missing_ok;
+	bool propagateCommandToWorkers = true;
+	AlterTableStmt *newStmt = copyObject(alterTableStatement);
 
 	AlterTableCmd *newCmd = makeNode(AlterTableCmd);
 
@@ -627,11 +621,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		 * if deparsing is needed, we will use a different version of the original
 		 * AlterTableCmd
 		 */
-		newCmd->name = command->name;
-		newCmd->num = command->num;
-		newCmd->newowner = command->newowner;
-		newCmd->behavior = command->behavior;
-		newCmd->missing_ok = command->missing_ok;
+		newCmd = copyObject(command);
 
 		if (alterTableType == AT_AddConstraint)
 		{
@@ -727,14 +717,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 						if (contain_nextval_expression_walker(expr, NULL))
 						{
 							deparseAT = true;
-							newCmd->subtype = command->subtype;
 
-							ColumnDef *newColDef = makeNode(ColumnDef);
-							newColDef->colname = columnDefinition->colname;
-							newColDef->typeName = columnDefinition->typeName;
-							newColDef->is_not_null = true;
-							newColDef->collClause = columnDefinition->collClause;
-							newColDef->collOid = columnDefinition->collOid;
+							ColumnDef *newColDef = copyObject(columnDefinition);
+							newColDef->is_not_null = false;
 
 							newCmd->def = (Node *) newColDef;
 						}
@@ -761,14 +746,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 					strcmp(typeName, "serial8") == 0)
 				{
 					deparseAT = true;
-					newCmd->subtype = command->subtype;
 
-					ColumnDef *newColDef = makeNode(ColumnDef);
-					newColDef->colname = columnDefinition->colname;
-					newColDef->typeName = columnDefinition->typeName;
-					newColDef->is_not_null = true;
-					newColDef->collClause = columnDefinition->collClause;
-					newColDef->collOid = columnDefinition->collOid;
+					ColumnDef *newColDef = copyObject(columnDefinition);
+					newColDef->is_not_null = false;
 
 					if (strcmp(typeName, "smallserial") == 0 ||
 						strcmp(typeName, "serial2") == 0)
@@ -804,7 +784,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 
 			if (contain_nextval_expression_walker(expr, NULL))
 			{
-				doNothing = true;
+				propagateCommandToWorkers = false;
 			}
 		}
 		else if (alterTableType == AT_AttachPartition)
@@ -884,7 +864,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	if (OidIsValid(rightRelationId))
 	{
 		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
-		if (referencedIsLocalTable || doNothing)
+		if (referencedIsLocalTable || !propagateCommandToWorkers)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -899,7 +879,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	{
 		/* ... otherwise use standard DDL task list function */
 		ddlJob->taskList = DDLTaskList(leftRelationId, sqlForTaskList);
-		if (doNothing)
+		if (!propagateCommandToWorkers)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -1623,7 +1603,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 	}
 
 	/* for the new sequences coming with this ALTER TABLE statement */
-	if (ShouldSyncTableMetadata(relationId))
+	if (ShouldSyncTableMetadata(relationId) && ClusterHasKnownMetadataWorkers())
 	{
 		List *sequenceCommandList = NIL;
 
@@ -1914,7 +1894,8 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 							 * We currently don't support adding a serial column for an MX table
 							 * TODO: record the dependency in the workers
 							 */
-							if (ShouldSyncTableMetadata(relationId))
+							if (ShouldSyncTableMetadata(relationId) &&
+								ClusterHasKnownMetadataWorkers())
 							{
 								ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 												errmsg(
@@ -1935,6 +1916,22 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 													"serial pseudotypes with other subcommands/constraints"),
 												errhint(
 													"You can issue each subcommand separately")));
+							}
+
+							/*
+							 * Currently we don't support backfilling the new column with default values
+							 * if the table is not empty
+							 */
+							if (!TableEmpty(relationId))
+							{
+								ereport(ERROR, (errcode(
+													ERRCODE_FEATURE_NOT_SUPPORTED),
+												errmsg(
+													"Cannot add a column involving serial pseudotypes "
+													"because the table is not empty"),
+												errhint(
+													"You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint\n"
+													"Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')")));
 							}
 						}
 					}
@@ -1968,6 +1965,22 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 															" command with other subcommands/constraints"),
 														errhint(
 															"You can issue each subcommand separately")));
+									}
+
+									/*
+									 * Currently we don't support backfilling the new column with default values
+									 * if the table is not empty
+									 */
+									if (!TableEmpty(relationId))
+									{
+										ereport(ERROR, (errcode(
+															ERRCODE_FEATURE_NOT_SUPPORTED),
+														errmsg(
+															"Cannot add a column involving DEFAULT nextval('..') "
+															"because the table is not empty"),
+														errhint(
+															"You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint\n"
+															"Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')")));
 									}
 								}
 							}

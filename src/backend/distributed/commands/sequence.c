@@ -99,15 +99,6 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 							errmsg("cannot alter OWNED BY option of a sequence "
 								   "already owned by a distributed table")));
 		}
-		else if (!hasDistributedOwner && IsCitusTable(newOwnedByTableId))
-		{
-			/* and don't let local sequences get a distributed OWNED BY */
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot associate an existing sequence with a "
-								   "distributed table"),
-							errhint("Use a sequence in a distributed table by specifying "
-									"a serial column type before creating any shards.")));
-		}
 	}
 }
 

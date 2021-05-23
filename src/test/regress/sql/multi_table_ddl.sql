@@ -68,7 +68,7 @@ SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('testserialtable', 'group_id', 'hash');
 
--- should not be able to add additional serial columns
+-- can add additional serial columns
 ALTER TABLE testserialtable ADD COLUMN other_id serial;
 
 -- and we shouldn't be able to change a distributed sequence's owner
@@ -76,13 +76,6 @@ ALTER SEQUENCE testserialtable_id_seq OWNED BY NONE;
 
 -- or create a sequence with a distributed owner
 CREATE SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
-
--- or even change a manual sequence to be owned by a distributed table
-CREATE SEQUENCE standalone_sequence;
-ALTER SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
-
--- an edge case, but it's OK to change an owner to the same distributed table
-ALTER SEQUENCE testserialtable_id_seq OWNED BY testserialtable.id;
 
 -- drop distributed table
 \c - - - :master_port

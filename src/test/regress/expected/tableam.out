@@ -31,7 +31,7 @@ insert into test_hash_dist values (1, 1);
 WARNING:  fake_tuple_insert
 select create_distributed_table('test_hash_dist','id');
 WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM test_tableam.test_hash_dist)"
+CONTEXT:  SQL statement "SELECT TRUE FROM test_tableam.test_hash_dist LIMIT 1"
 WARNING:  fake_scan_getnextslot
 NOTICE:  Copying data from local table...
 WARNING:  fake_scan_getnextslot
@@ -85,7 +85,7 @@ insert into test_ref values (1);
 WARNING:  fake_tuple_insert
 select create_reference_table('test_ref');
 WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM test_tableam.test_ref)"
+CONTEXT:  SQL statement "SELECT TRUE FROM test_tableam.test_ref LIMIT 1"
 WARNING:  fake_scan_getnextslot
 NOTICE:  Copying data from local table...
 WARNING:  fake_scan_getnextslot
@@ -156,9 +156,9 @@ SELECT master_remove_node('localhost', :master_port);
 CREATE TABLE test_range_dist(id int, val int) using fake_am;
 SELECT create_distributed_table('test_range_dist', 'id', 'range');
 WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM test_tableam.test_range_dist)"
+CONTEXT:  SQL statement "SELECT TRUE FROM test_tableam.test_range_dist LIMIT 1"
 WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM test_tableam.test_range_dist)"
+CONTEXT:  SQL statement "SELECT TRUE FROM test_tableam.test_range_dist LIMIT 1"
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -280,7 +280,7 @@ NOTICE:  copying the data has completed
 DETAIL:  The local data in the table is no longer visible, but is still on disk.
 HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$public.test_partitioned_p1$$)
 WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM public.test_partitioned_p2)"
+CONTEXT:  SQL statement "SELECT TRUE FROM public.test_partitioned_p2 LIMIT 1"
 WARNING:  fake_scan_getnextslot
 NOTICE:  Copying data from local table...
 WARNING:  fake_scan_getnextslot

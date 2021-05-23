@@ -115,7 +115,6 @@ static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationI
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
 static void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag);
-static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
@@ -459,7 +458,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	EnsureReferenceTablesExistOnAllNodes();
 
 	/* we need to calculate these variables before creating distributed metadata */
-	bool localTableEmpty = LocalTableEmpty(relationId);
+	bool localTableEmpty = TableEmpty(relationId);
 	Oid colocatedTableId = ColocatedTableId(colocationId);
 
 	/* create an entry for distributed table in pg_dist_partition */
@@ -1113,7 +1112,7 @@ static void
 EnsureLocalTableEmpty(Oid relationId)
 {
 	char *relationName = get_rel_name(relationId);
-	bool localTableEmpty = LocalTableEmpty(relationId);
+	bool localTableEmpty = TableEmpty(relationId);
 
 	if (!localTableEmpty)
 	{
@@ -1249,27 +1248,20 @@ SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 
 
 /*
- * LocalTableEmpty function checks whether given local table contains any row and
- * returns false if there is any data. This function is only for local tables and
- * should not be called for distributed tables.
+ * TableEmpty function checks whether given table contains any row and
+ * returns false if there is any data.
  */
-static bool
-LocalTableEmpty(Oid tableId)
+bool
+TableEmpty(Oid tableId)
 {
 	Oid schemaId = get_rel_namespace(tableId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *tableName = get_rel_name(tableId);
 	char *tableQualifiedName = quote_qualified_identifier(schemaName, tableName);
 
-	StringInfo selectExistQueryString = makeStringInfo();
+	StringInfo selectTrueQueryString = makeStringInfo();
 
-	bool columnNull = false;
 	bool readOnly = true;
-
-	int rowId = 0;
-	int attributeId = 1;
-
-	AssertArg(!IsCitusTable(tableId));
 
 	int spiConnectionResult = SPI_connect();
 	if (spiConnectionResult != SPI_OK_CONNECT)
@@ -1277,22 +1269,19 @@ LocalTableEmpty(Oid tableId)
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
-	appendStringInfo(selectExistQueryString, SELECT_EXIST_QUERY, tableQualifiedName);
+	appendStringInfo(selectTrueQueryString, SELECT_TRUE_QUERY, tableQualifiedName);
 
-	int spiQueryResult = SPI_execute(selectExistQueryString->data, readOnly, 0);
+	int spiQueryResult = SPI_execute(selectTrueQueryString->data, readOnly, 0);
 	if (spiQueryResult != SPI_OK_SELECT)
 	{
 		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-							   selectExistQueryString->data)));
+							   selectTrueQueryString->data)));
 	}
 
-	/* we expect that SELECT EXISTS query will return single value in a single row */
-	Assert(SPI_processed == 1);
+	/* we expect that SELECT TRUE query will return single value in a single row OR empty set */
+	Assert(SPI_processed == 1 || SPI_processed == 0);
 
-	HeapTuple tuple = SPI_tuptable->vals[rowId];
-	Datum hasDataDatum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, attributeId,
-									   &columnNull);
-	bool localTableEmpty = !DatumGetBool(hasDataDatum);
+	bool localTableEmpty = !SPI_processed;
 
 	SPI_finish();
 
