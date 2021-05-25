@@ -242,8 +242,6 @@ SELECT :worker_1_lastval = :worker_2_lastval;
 -- the type of sequences can't be changed
 ALTER TABLE mx_sequence ALTER value TYPE BIGINT;
 ALTER TABLE mx_sequence ALTER value TYPE INT;
-ERROR:  This operation is currently not allowed for a distributed sequence.
-CONTEXT:  SQL statement "ALTER SEQUENCE public.mx_sequence_value_seq AS integer"
 -- test distributed tables owned by extension
 CREATE TABLE seg_test (x int);
 INSERT INTO seg_test VALUES (42);
