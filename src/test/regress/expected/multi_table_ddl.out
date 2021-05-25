@@ -124,8 +124,8 @@ DROP TABLE testserialtable;
 -- test DEFAULT coming from serial prototypes and user-defined sequences
 CREATE SEQUENCE test_sequence_0;
 CREATE SEQUENCE test_sequence_1;
-CREATE TABLE test_table (id int DEFAULT nextval('test_sequence_0'));
-SELECT create_distributed_table('test_table', 'id');
+CREATE TABLE test_table (id1 int DEFAULT nextval('test_sequence_0'));
+SELECT create_distributed_table('test_table', 'id1');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -133,7 +133,7 @@ SELECT create_distributed_table('test_table', 'id');
 
 -- shouldn't work since it's partition column
 ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('test_sequence_1');
-ERROR:  column "id1" of relation "test_table" does not exist
+ERROR:  cannot execute ALTER TABLE command involving partition column
 -- test different plausible commands
 ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('test_sequence_1');
 ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
@@ -146,7 +146,7 @@ HINT:  You can issue each subcommand separately
 ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('test_sequence_1');
 ERROR:  cannot execute ADD COLUMN .. DEFAULT nextval('..') command with other subcommands/constraints
 HINT:  You can issue each subcommand separately
-ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
+ALTER TABLE test_table ALTER COLUMN id3 SET DEFAULT nextval('test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
 ERROR:  cannot execute ALTER COLUMN COLUMN .. SET DEFAULT nextval('..') command with other subcommands
 HINT:  You can issue each subcommand separately
 ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);

@@ -1599,6 +1599,56 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 														constraint);
 				}
 			}
+
+			/*
+			 * We check for ADD COLUMN .. DEFAULT expr
+			 * if expr contains nextval('user_defined_seq')
+			 * we should make sure that the type of the column that uses
+			 * that sequence is supported
+			 */
+			constraint = NULL;
+			foreach_ptr(constraint, columnConstraints)
+			{
+				if (constraint->contype == CONSTR_DEFAULT)
+				{
+					if (constraint->raw_expr != NULL)
+					{
+						ParseState *pstate = make_parsestate(NULL);
+						Node *expr = transformExpr(pstate, constraint->raw_expr,
+												   EXPR_KIND_COLUMN_DEFAULT);
+
+						/*
+						 * We should make sure that the type of the column that uses
+						 * that sequence is supported
+						 */
+						if (contain_nextval_expression_walker(expr, NULL))
+						{
+							AttrNumber attnum = get_attnum(relationId,
+														   columnDefinition->colname);
+							Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
+							EnsureSequenceTypeSupported(relationId, attnum, seqTypId);
+						}
+					}
+				}
+			}
+		}
+		/*
+		 * We check for ALTER COLUMN .. SET DEFAULT nextval('user_defined_seq')
+		 * we should make sure that the type of the column that uses
+		 * that sequence is supported
+		 */
+		else if (alterTableType == AT_ColumnDefault)
+		{
+			ParseState *pstate = make_parsestate(NULL);
+			Node *expr = transformExpr(pstate, command->def,
+									   EXPR_KIND_COLUMN_DEFAULT);
+
+			if (contain_nextval_expression_walker(expr, NULL))
+			{
+				AttrNumber attnum = get_attnum(relationId, command->name);
+				Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
+				EnsureSequenceTypeSupported(relationId, attnum, seqTypId);
+			}
 		}
 	}
 

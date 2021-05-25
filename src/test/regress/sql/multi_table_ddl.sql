@@ -91,8 +91,8 @@ DROP TABLE testserialtable;
 CREATE SEQUENCE test_sequence_0;
 CREATE SEQUENCE test_sequence_1;
 
-CREATE TABLE test_table (id int DEFAULT nextval('test_sequence_0'));
-SELECT create_distributed_table('test_table', 'id');
+CREATE TABLE test_table (id1 int DEFAULT nextval('test_sequence_0'));
+SELECT create_distributed_table('test_table', 'id1');
 
 -- shouldn't work since it's partition column
 ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('test_sequence_1');
@@ -107,7 +107,7 @@ ALTER TABLE test_table ADD COLUMN id3 bigserial;
 -- shouldn't work since the above operations should be the only subcommands
 ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('test_sequence_1') CHECK (id4 > 0);
 ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('test_sequence_1');
-ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
+ALTER TABLE test_table ALTER COLUMN id3 SET DEFAULT nextval('test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
 ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
 
 DROP TABLE test_table CASCADE;
