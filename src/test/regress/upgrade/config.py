@@ -1,8 +1,11 @@
 from os.path import expanduser
+import upgrade_common as common
 
 
 BEFORE_PG_UPGRADE_SCHEDULE = './before_pg_upgrade_schedule'
 AFTER_PG_UPGRADE_SCHEDULE = './after_pg_upgrade_schedule'
+
+CUSTOM_CITUS_SCHEDULE = './custom_citus_schedule'
 
 AFTER_CITUS_UPGRADE_COORD_SCHEDULE = './after_citus_upgrade_coord_schedule'
 BEFORE_CITUS_UPGRADE_COORD_SCHEDULE = './before_citus_upgrade_coord_schedule'
@@ -26,6 +29,7 @@ class CitusUpgradeConfig():
         self.pre_tar_path = arguments['--citus-pre-tar']
         self.post_tar_path = arguments['--citus-post-tar']
         self.pg_srcdir = arguments['--pgxsdir']
+        self.worker_amount = 2
         self.temp_dir = './tmp_citus_upgrade'
         self.datadir = self.temp_dir + '/data'
         self.settings = {
@@ -35,6 +39,84 @@ class CitusUpgradeConfig():
         }
         self.mixed_mode = arguments['--mixed']
 
+
+class CitusBaseClusterConfig():
+    def __init__(self, arguments):
+        self.bindir = arguments['--bindir']
+        self.pg_srcdir = arguments['--pgxsdir']
+        self.temp_dir = './tmp_citus_test'
+        self.worker_amount = 2
+        self.datadir = self.temp_dir + '/data'
+        self.settings = {
+            'shared_preload_libraries': 'citus',
+            'citus.node_conninfo': 'sslmode=prefer',
+        }
+
+    def setup_steps(self):
+        pass
+
+class CitusDefaultClusterConfig(CitusBaseClusterConfig):
+    pass
+
+class CitusSingleNodeClusterConfig(CitusBaseClusterConfig):
+
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.worker_amount = 0
+
+
+class CitusSingleNodeSingleShardClusterConfig(CitusBaseClusterConfig):
+
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.worker_amount = 0
+        self.new_settings = {
+            'citus.shard_count': 1
+        }
+        self.settings.update(self.new_settings)
+
+class CitusSingleShardClusterConfig(CitusBaseClusterConfig):
+
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            'citus.shard_count': 1
+        }
+        self.settings.update(self.new_settings)
+
+class CitusMxClusterConfig(CitusBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+
+    def setup_steps(self):
+        common.sync_metadata_to_workers(self.bindir)
+
+class CitusManyShardsClusterConfig(CitusBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            'citus.shard_count': 500
+        }
+        self.settings.update(self.new_settings)
+
+class CitusSingleNodeSingleConnectionClusterConfig(CitusBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            'citus.max_adaptive_executor_pool_size': 1
+        }
+        self.settings.update(self.new_settings)
+
+class CitusSingleNodeSingleSharedPoolSizeClusterConfig(CitusBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            'citus.max_shared_pool_size': 1
+        }
+        self.settings.update(self.new_settings)
+
+        
+
 class PGUpgradeConfig():
     def __init__(self, arguments):
         self.old_bindir = arguments['--old-bindir']
@@ -43,6 +125,8 @@ class PGUpgradeConfig():
         self.temp_dir = './tmp_upgrade'
         self.old_datadir = self.temp_dir + '/oldData'
         self.new_datadir = self.temp_dir + '/newData'
+        self.worker_amount = 2
+
         self.settings = {
             'shared_preload_libraries': 'citus',
             'citus.node_conninfo': 'sslmode=prefer'

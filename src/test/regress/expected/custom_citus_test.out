@@ -1,0 +1,22 @@
+CREATE TABLE dist(a int, b int);
+SELECT create_distributed_table('dist', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE table local(a int, b int);
+INSERT INTO dist SELECT *,* FROM generate_series(1,100);
+INSERT INTO local SELECT *,* FROM generate_series(1,100);
+SELECT COUNT(*) FROM dist join local USING (a);
+ count
+---------------------------------------------------------------------
+   100
+(1 row)
+
+SELECT COUNT(*) FROM dist join local USING (a) WHERE dist.a =5;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
