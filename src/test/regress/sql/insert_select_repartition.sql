@@ -625,6 +625,14 @@ insert into table_with_sequences values (1,1);
 select create_distributed_table('table_with_sequences','x');
 explain insert into table_with_sequences select y, x from table_with_sequences;
 
+-- verify that we don't report repartitioned insert/select for tables
+-- with user-defined sequences.
+CREATE SEQUENCE user_defined_sequence;
+create table table_with_user_sequences (x int, y int, z bigint default nextval('user_defined_sequence'));
+insert into table_with_user_sequences values (1,1);
+select create_distributed_table('table_with_user_sequences','x');
+explain insert into table_with_user_sequences select y, x from table_with_user_sequences;
+
 -- clean-up
 SET client_min_messages TO WARNING;
 DROP SCHEMA insert_select_repartition CASCADE;
