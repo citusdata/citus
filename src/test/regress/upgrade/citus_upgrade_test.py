@@ -37,7 +37,7 @@ def main(config):
     install_citus(config.pre_tar_path)
     common.initialize_temp_dir(config.temp_dir)
     common.initialize_citus_cluster(
-        config.bindir, config.datadir, config.settings)
+        config.bindir, config.datadir, config.settings, config)
 
     report_initial_version(config)
     before_upgrade_schedule = get_before_upgrade_schedule(config.mixed_mode)

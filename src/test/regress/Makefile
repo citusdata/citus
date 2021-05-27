@@ -29,6 +29,7 @@ MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) -
 
 pg_upgrade_check = $(citus_abs_srcdir)/upgrade/pg_upgrade_test.py
 citus_upgrade_check = $(citus_abs_srcdir)/upgrade/citus_upgrade_test.py
+custom_citus_check = $(citus_abs_srcdir)/upgrade/custom_citus.py
 
 template_isolation_files = $(shell find $(citus_abs_srcdir)/spec/ -name '*.spec')
 generated_isolation_files = $(patsubst $(citus_abs_srcdir)/spec/%,$(citus_abs_srcdir)/build/specs/%,$(template_isolation_files))
@@ -208,6 +209,9 @@ check-failure-base: all
 
 check-pg-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
+
+check-custom-citus:
+	${custom_citus_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir)
 
 check-citus-upgrade:
 	$(citus_upgrade_check) \
