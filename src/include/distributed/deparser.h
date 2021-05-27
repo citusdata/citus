@@ -133,5 +133,7 @@ extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
 
 /* forward declarations for deparse_sequence_stmts.c */
 extern char * DeparseDropSequenceStmt(Node *stmt);
+extern char * DeparseRenameSequenceStmt(Node *stmt);
+extern void QualifyRenameSequenceStmt(Node *stmt);
 
 #endif /* CITUS_DEPARSER_H */

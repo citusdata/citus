@@ -27,6 +27,7 @@
 
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
+static bool ShouldPropagateAlterSequence(const ObjectAddress *address);
 
 
 /*
@@ -310,4 +311,92 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * PreprocessRenameSequenceStmt is called when the user is renaming a sequence. The invocation
+ * happens before the statement is applied locally.
+ *
+ * As the sequence already exists we have access to the ObjectAddress, this is used to
+ * check if it is distributed. If so the rename is executed on all the workers to keep the
+ * types in sync across the cluster.
+ */
+List *
+PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtilityContext
+							 processUtilityContext)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_SEQUENCE);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+
+	if (!ShouldPropagateAlterSequence(&address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	QualifyTreeNode((Node *) stmt);
+
+	const char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * RenameSequenceStmtObjectAddress returns the ObjectAddress of the sequence that is the
+ * subject of the RenameStmt.
+ */
+ObjectAddress
+RenameSequenceStmtObjectAddress(Node *node, bool missing_ok)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_SEQUENCE);
+
+	RangeVar *sequence = stmt->relation;
+	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+
+	return sequenceAddress;
+}
+
+
+/*
+ * ShouldPropagateAlterSequence returns, based on the address of a sequence, if alter
+ * statements targeting the function should be propagated.
+ */
+static bool
+ShouldPropagateAlterSequence(const ObjectAddress *address)
+{
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, sequences cascading
+		 * from an extension should therefore not be propagated.
+		 */
+		return false;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return false;
+	}
+
+	if (!IsObjectDistributed(address))
+	{
+		/* do not propagate alter sequence for non-distributed sequences */
+		return false;
+	}
+
+	return true;
 }

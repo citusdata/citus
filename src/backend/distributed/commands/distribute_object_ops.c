@@ -373,6 +373,13 @@ static DistributeObjectOps Sequence_Drop = {
 	.postprocess = NULL,
 	.address = NULL,
 };
+static DistributeObjectOps Sequence_Rename = {
+	.deparse = DeparseRenameSequenceStmt,
+	.qualify = QualifyRenameSequenceStmt,
+	.preprocess = PreprocessRenameSequenceStmt,
+	.postprocess = NULL,
+	.address = RenameSequenceStmtObjectAddress,
+};
 static DistributeObjectOps Trigger_AlterObjectDepends = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -977,6 +984,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_SCHEMA:
 				{
 					return &Schema_Rename;
+				}
+
+				case OBJECT_SEQUENCE:
+				{
+					return &Sequence_Rename;
 				}
 
 				case OBJECT_STATISTIC_EXT:

@@ -22,6 +22,7 @@
 /* forward declaration for deparse functions */
 static void AppendDropSequenceStmt(StringInfo buf, DropStmt *stmt);
 static void AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype);
+static void AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt);
 
 /*
  * DeparseDropSequenceStmt builds and returns a string representing the DropStmt
@@ -90,5 +91,68 @@ AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype)
 		char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
 																 seq->relname);
 		appendStringInfoString(buf, qualifiedSequenceName);
+	}
+}
+
+
+/*
+ * DeparseRenameSequenceStmt builds and returns a string representing the RenameStmt
+ */
+char *
+DeparseRenameSequenceStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->renameType == OBJECT_SEQUENCE);
+
+	AppendRenameSequenceStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendRenameSequenceStmt appends a string representing the RenameStmt to a buffer
+ */
+static void
+AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt)
+{
+	RangeVar *seq = stmt->relation;
+
+	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
+															 seq->relname);
+
+	appendStringInfoString(buf, "ALTER SEQUENCE ");
+
+	if (stmt->missing_ok)
+	{
+		appendStringInfoString(buf, "IF EXISTS ");
+	}
+
+	appendStringInfoString(buf, qualifiedSequenceName);
+
+	appendStringInfo(buf, " RENAME TO %s;", quote_identifier(stmt->newname));
+}
+
+
+/*
+ * QualifyRenameSequenceStmt transforms a
+ * ALTER SEQUENCE .. RENAME TO ..
+ * statement in place and makes the sequence name fully qualified.
+ */
+void
+QualifyRenameSequenceStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_SEQUENCE);
+
+	RangeVar *seq = stmt->relation;
+
+	if (seq->schemaname == NULL)
+	{
+		Oid schemaOid = RangeVarGetCreationNamespace(seq);
+		seq->schemaname = get_namespace_name(schemaOid);
 	}
 }
