@@ -3344,8 +3344,7 @@ GetLocalGroupId(void)
 		return LocalGroupId;
 	}
 
-	Oid localGroupTableOid = get_relname_relid("pg_dist_local_group",
-											   PG_CATALOG_NAMESPACE);
+	Oid localGroupTableOid = DistLocalGroupIdRelationId();
 	if (localGroupTableOid == InvalidOid)
 	{
 		return 0;
