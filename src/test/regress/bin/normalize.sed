@@ -226,4 +226,4 @@ s/^(DEBUG:  the index name on the shards of the partition is too long, switching
 s/could not translate host name "foobar" to address: .*$/could not translate host name "foobar" to address: <system specific error>/g
 
 # ignore PL/pgSQL line numbers that differ on Mac builds
-s/(CONTEXT:  PL\/pgSQL function inline_code_block line )([0-9]+)/\1XX/g
+s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g

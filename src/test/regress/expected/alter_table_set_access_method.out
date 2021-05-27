@@ -191,7 +191,7 @@ SELECT * FROM partitioned_table_6_10 ORDER BY 1, 2;
 -- try to compress partitions with an integer partition column
 CALL alter_old_partitions_set_access_method('partitioned_table', '2021-01-01', 'columnar');
 ERROR:  partition column of partitioned_table cannot be cast to a timestamptz
-CONTEXT:  PL/pgSQL function alter_old_partitions_set_access_method(regclass,timestamp with time zone,name) line 13 at RAISE
+CONTEXT:  PL/pgSQL function alter_old_partitions_set_access_method(regclass,timestamp with time zone,name) line XX at RAISE
 CREATE TABLE time_partitioned (event_time timestamp, event int) partition by range (event_time);
 SELECT create_distributed_table('time_partitioned', 'event_time');
  create_distributed_table
