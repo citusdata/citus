@@ -112,7 +112,7 @@ static bool UnsetMetadataSyncedForAll(void);
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
 											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
-
+static void RemoveOldShardPlacementForNodeGroup(int groupId);
 
 /* declarations for dynamic loading */
 PG_FUNCTION_INFO_V1(citus_set_coordinator_host);
@@ -422,7 +422,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	char *nodeName = text_to_cstring(nodeNameText);
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	bool isActive = false;
-	bool onlyConsiderActivePlacements = true;
+	bool onlyConsiderActivePlacements = false;
 	MemoryContext savedContext = CurrentMemoryContext;
 
 	PG_TRY();
@@ -1291,9 +1291,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 			 */
 			DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
 		}
-		bool onlyConsiderActivePlacements = true;
-		if (NodeGroupHasShardPlacements(workerNode->groupId,
-										onlyConsiderActivePlacements))
+		if (NodeGroupHasLivePlacements(workerNode->groupId))
 		{
 			if (ClusterHasReferenceTable())
 			{
@@ -1320,12 +1318,37 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 
 	DeleteNodeRow(workerNode->workerName, nodePort);
 
+	RemoveOldShardPlacementForNodeGroup(workerNode->groupId);
+
 	char *nodeDeleteCommand = NodeDeleteCommand(workerNode->nodeId);
 
 	/* make sure we don't have any lingering session lifespan connections */
 	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
 	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
+}
+
+
+/*
+ * RemoveOldShardPlacementForNodeGroup removes all old shard placements
+ * for the given node group from pg_dist_placement.
+ */
+static void
+RemoveOldShardPlacementForNodeGroup(int groupId)
+{
+	/*
+	 * Prevent concurrent deferred drop
+	 */
+	LockPlacementCleanup();
+	List *shardPlacementsOnNode = AllShardPlacementsOnNodeGroup(groupId);
+	GroupShardPlacement *placement = NULL;
+	foreach_ptr(placement, shardPlacementsOnNode)
+	{
+		if (placement->shardState == SHARD_STATE_TO_DELETE)
+		{
+			DeleteShardPlacementRow(placement->placementId);
+		}
+	}
 }
 
 
