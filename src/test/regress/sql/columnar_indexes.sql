@@ -12,13 +12,12 @@ SET search_path tO columnar_indexes, public;
 --
 create table t(a int, b int) using columnar;
 create index CONCURRENTLY t_idx on t(a, b);
+REINDEX INDEX CONCURRENTLY t_idx;
 \d t
 explain insert into t values (1, 2);
 insert into t values (1, 2);
 SELECT * FROM t;
 
-create index t_idx on t(a, b);
-\d t
 explain insert into t values (1, 2);
 insert into t values (3, 4);
 SELECT * FROM t;
@@ -28,6 +27,27 @@ set columnar.enable_custom_scan to 'off';
 set enable_seqscan to off;
 
 CREATE table columnar_table (a INT, b int) USING columnar;
+
+INSERT INTO columnar_table (a) VALUES (1), (1);
+CREATE UNIQUE INDEX CONCURRENTLY ON columnar_table (a);
+
+-- CONCURRENTLY should leave an invalid index behind
+SELECT COUNT(*)=1 FROM pg_index WHERE indrelid = 'columnar_table'::regclass AND indisvalid = 'false';
+
+INSERT INTO columnar_table (a) VALUES (1), (1);
+
+REINDEX TABLE columnar_table;
+-- index is still invalid since REINDEX error'ed out
+SELECT COUNT(*)=1 FROM pg_index WHERE indrelid = 'columnar_table'::regclass AND indisvalid = 'false';
+
+TRUNCATE columnar_table;
+REINDEX TABLE columnar_table;
+
+-- now it should be valid
+SELECT COUNT(*)=0 FROM pg_index WHERE indrelid = 'columnar_table'::regclass AND indisvalid = 'false';
+
+DROP INDEX columnar_table_a_idx;
+
 INSERT INTO columnar_table (a, b) SELECT i,i*2 FROM generate_series(0, 16000) i;
 
 -- unique --
@@ -38,7 +58,7 @@ BEGIN;
   CREATE UNIQUE INDEX ON columnar_table (a);
 ROLLBACK;
 
-CREATE UNIQUE INDEX ON columnar_table (a);
+CREATE UNIQUE INDEX CONCURRENTLY ON columnar_table (a);
 
 BEGIN;
   INSERT INTO columnar_table VALUES (16050);
@@ -80,7 +100,7 @@ INSERT INTO partial_unique_idx_test VALUES (4, 600);
 INSERT INTO partial_unique_idx_test VALUES (4, 700);
 
 -- btree --
-CREATE INDEX ON columnar_table (a);
+CREATE INDEX CONCURRENTLY ON columnar_table (a);
 SELECT (SELECT SUM(b) FROM columnar_table WHERE a>700 and a<965)=439560;
 
 CREATE INDEX ON columnar_table (b)
@@ -98,7 +118,7 @@ EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30001;
 -- some more rows
 INSERT INTO columnar_table (a, b) SELECT i,i*2 FROM generate_series(16000, 17000) i;
 
-DROP INDEX columnar_table_a_idx;
+DROP INDEX CONCURRENTLY columnar_table_a_idx;
 TRUNCATE columnar_table;
 
 -- pkey --
@@ -199,7 +219,7 @@ CREATE TABLE include_test (a INT, b BIGINT, c BIGINT, d BIGINT) USING columnar;
 
 INSERT INTO include_test SELECT i, i, i, i FROM generate_series (1, 1000) i;
 
-CREATE UNIQUE INDEX unique_a ON include_test (a);
+CREATE UNIQUE INDEX CONCURRENTLY unique_a ON include_test (a);
 
 -- cannot use index only scan
 EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
@@ -281,7 +301,11 @@ INSERT INTO gist_point_tbl (id, p) SELECT g, point(g*10, g*10) FROM generate_ser
 -- sp gist --
 CREATE TABLE box_temp (f1 box) USING columnar;
 INSERT INTO box_temp SELECT box(point(i, i), point(i * 2, i * 2)) FROM generate_series(1, 10) AS i;
-CREATE INDEX box_spgist ON box_temp USING spgist (f1);
+CREATE INDEX CONCURRENTLY box_spgist ON box_temp USING spgist (f1);
+
+-- CONCURRENTLY should not leave an invalid index behind
+SELECT COUNT(*)=0 FROM pg_index WHERE indrelid = 'box_temp'::regclass AND indisvalid = 'false';
+
 INSERT INTO box_temp SELECT box(point(i, i), point(i * 2, i * 2)) FROM generate_series(1, 10) AS i;
 
 -- brin --
@@ -294,6 +318,8 @@ INSERT INTO parallel_scan_test SELECT i FROM generate_series(1,10) i;
 CREATE INDEX ON parallel_scan_test (a);
 VACUUM FULL parallel_scan_test;
 REINDEX TABLE parallel_scan_test;
+CREATE INDEX CONCURRENTLY ON parallel_scan_test (a);
+REINDEX TABLE CONCURRENTLY parallel_scan_test;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;
