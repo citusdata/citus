@@ -2074,8 +2074,34 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-			case AT_DropColumn:
 			case AT_AlterColumnType:
+			{
+				if (AlterInvolvesPartitionColumn(alterTableStatement, command))
+				{
+					ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
+										   "involving partition column")));
+				}
+
+				/*
+				 * We check for ALTER COLUMN TYPE ...
+				 * if the column has default coming from a user-defined sequence
+				 * changing the type of the column should not be allowed for now
+				 */
+				AttrNumber attnum = get_attnum(relationId, command->name);
+				List *attnumList = NIL;
+				List *dependentSequenceList = NIL;
+				GetDependentSequencesWithRelation(relationId, &attnumList,
+												  &dependentSequenceList, attnum);
+				if (dependentSequenceList != NIL)
+				{
+					ereport(ERROR, (errmsg("cannot execute ALTER COLUMN TYPE .. command "
+										   "because the column involves a default coming "
+										   "from a sequence")));
+				}
+				break;
+			}
+
+			case AT_DropColumn:
 			case AT_DropNotNull:
 			{
 				if (AlterInvolvesPartitionColumn(alterTableStatement, command))
