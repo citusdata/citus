@@ -1558,6 +1558,16 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 					   DestReceiver *dest,
 					   QueryCompletionCompat *completionTag)
 {
+	/*
+	 * We don't want to start a new GUCNestLevel unless we need to do so.
+	 * For example if we are executing a SAVEPOINT command, then we should
+	 * not get a new GUCNestLevel. Otherwise, both us and postgres
+	 * (PushTransaction) will increment GUCNestLevel and then postgres would
+	 * save the wrong GUCNestLevel for that savepoint since we will decrement
+	 * it back when utility command (SAVEPOINT) finishes.
+	 */
+	int save_nestlevel = -1;
+
 	Node *parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, IndexStmt))
@@ -1589,6 +1599,19 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 								errmsg("only btree and hash indexes are supported on "
 									   "columnar tables ")));
 			}
+
+			/*
+			 * Since we don't support parallel scans on columnar tables, we
+			 * should dissuade postgres from choosing parallel scan for index
+			 * builds. Otherwise, CONCURRENT index builds would leave
+			 * an invalid index behind. Note that we want to do the same for
+			 * non-concurrrent index builds too. This is because, we want to
+			 * fall-back to sync scan instead of throwing an error.
+			 */
+			save_nestlevel = NewGUCNestLevel();
+			(void) set_config_option("max_parallel_maintenance_workers", "0",
+									 PGC_USERSET, PGC_S_SESSION,
+									 GUC_ACTION_SAVE, true, 0, false);
 		}
 
 		RelationClose(rel);
@@ -1596,6 +1619,10 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 	PrevProcessUtilityHook(pstmt, queryString, context,
 						   params, queryEnv, dest, completionTag);
+	if (save_nestlevel != -1)
+	{
+		AtEOXact_GUC(true, save_nestlevel);
+	}
 }
 
 
