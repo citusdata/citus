@@ -318,10 +318,6 @@ static Node * WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimit
 static List * WorkerSortClauseList(Node *limitCount,
 								   List *groupClauseList, List *sortClauseList,
 								   OrderByLimitReference orderByLimitReference);
-static List * GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
-													 List *sortClauseList,
-													 AttrNumber *targetProjectionNumber,
-													 Index *nextSortGroupRefIndex);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList);
@@ -2701,38 +2697,6 @@ ProcessWindowFunctionsForWorkerQuery(List *windowClauseList,
 		return;
 	}
 
-	WindowClause *windowClause = NULL;
-	foreach_ptr(windowClause, windowClauseList)
-	{
-		List *partitionClauseTargetList =
-			GenerateNewTargetEntriesForSortClauses(originalTargetEntryList,
-												   windowClause->partitionClause,
-												   &(queryTargetList->
-													 targetProjectionNumber),
-												   queryWindowClause->
-												   nextSortGroupRefIndex);
-		List *orderClauseTargetList =
-			GenerateNewTargetEntriesForSortClauses(originalTargetEntryList,
-												   windowClause->orderClause,
-												   &(queryTargetList->
-													 targetProjectionNumber),
-												   queryWindowClause->
-												   nextSortGroupRefIndex);
-
-		/*
-		 * Note that even Citus does push down the window clauses as-is, we may still need to
-		 * add the generated entries to the target list. The reason is that the same aggregates
-		 * might be referred from another target entry that is a bare aggregate (e.g., no window
-		 * functions), which would have been mutated. For instance, when an average aggregate
-		 * is mutated on the target list, the window function would refer to a sum aggregate,
-		 * which is obviously wrong.
-		 */
-		queryTargetList->targetEntryList = list_concat(queryTargetList->targetEntryList,
-													   partitionClauseTargetList);
-		queryTargetList->targetEntryList = list_concat(queryTargetList->targetEntryList,
-													   orderClauseTargetList);
-	}
-
 	queryWindowClause->workerWindowClauseList = windowClauseList;
 	queryWindowClause->hasWindowFunctions = true;
 }
@@ -2798,19 +2762,6 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
 							 groupClauseList,
 							 sortClauseList,
 							 orderByLimitReference);
-
-	/*
-	 * TODO: Do we really need to add the target entries if we're not pushing
-	 * down ORDER BY?
-	 */
-	List *newTargetEntryListForSortClauses =
-		GenerateNewTargetEntriesForSortClauses(originalTargetList,
-											   queryOrderByLimit->workerSortClauseList,
-											   &(queryTargetList->targetProjectionNumber),
-											   queryOrderByLimit->nextSortGroupRefIndex);
-
-	queryTargetList->targetEntryList =
-		list_concat(queryTargetList->targetEntryList, newTargetEntryListForSortClauses);
 }
 
 
@@ -4792,87 +4743,6 @@ WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseLi
 	}
 
 	return workerSortClauseList;
-}
-
-
-/*
- * GenerateNewTargetEntriesForSortClauses goes over provided sort clause lists and
- * creates new target entries if needed to make sure sort clauses has correct
- * references. The function returns list of new target entries, caller is
- * responsible to add those target entries to the end of worker target list.
- *
- * The function is required because we change the target entry if it contains an
- * expression having an aggregate operation, or just the AVG aggregate.
- * Afterwards any order by clause referring to original target entry starts
- * to point to a wrong expression.
- *
- * Note the function modifies SortGroupClause items in sortClauseList,
- * targetProjectionNumber, and nextSortGroupRefIndex.
- */
-static List *
-GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
-									   List *sortClauseList,
-									   AttrNumber *targetProjectionNumber,
-									   Index *nextSortGroupRefIndex)
-{
-	List *createdTargetList = NIL;
-
-	SortGroupClause *sgClause = NULL;
-	foreach_ptr(sgClause, sortClauseList)
-	{
-		TargetEntry *targetEntry = get_sortgroupclause_tle(sgClause, originalTargetList);
-		Expr *targetExpr = targetEntry->expr;
-		bool containsAggregate = contain_aggs_of_level((Node *) targetExpr, 0);
-		bool createNewTargetEntry = false;
-
-		/* we are only interested in target entries containing aggregates */
-		if (!containsAggregate)
-		{
-			continue;
-		}
-
-		/*
-		 * If the target expression is not an Aggref, it is either an expression
-		 * on a single aggregate, or expression containing multiple aggregates.
-		 * Worker query mutates these target entries to have a naked target entry
-		 * per aggregate function. We want to use original target entries if this
-		 * the case.
-		 * If the original target expression is an avg aggref, we also want to use
-		 * original target entry.
-		 */
-		if (!IsA(targetExpr, Aggref))
-		{
-			createNewTargetEntry = true;
-		}
-		else
-		{
-			Aggref *aggNode = (Aggref *) targetExpr;
-			AggregateType aggregateType = GetAggregateType(aggNode);
-			if (aggregateType == AGGREGATE_AVERAGE)
-			{
-				createNewTargetEntry = true;
-			}
-		}
-
-		if (createNewTargetEntry)
-		{
-			bool resJunk = true;
-			AttrNumber nextResNo = (*targetProjectionNumber);
-			Expr *newExpr = copyObject(targetExpr);
-			TargetEntry *newTargetEntry = makeTargetEntry(newExpr, nextResNo,
-														  targetEntry->resname, resJunk);
-			newTargetEntry->ressortgroupref = *nextSortGroupRefIndex;
-
-			createdTargetList = lappend(createdTargetList, newTargetEntry);
-
-			sgClause->tleSortGroupRef = *nextSortGroupRefIndex;
-
-			(*nextSortGroupRefIndex)++;
-			(*targetProjectionNumber)++;
-		}
-	}
-
-	return createdTargetList;
 }
 
 

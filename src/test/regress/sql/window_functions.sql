@@ -44,6 +44,9 @@ ORDER BY
 
 -- window function operates on the results of
 -- a join
+-- we also want to verify that this doesn't crash
+-- when the logging level is DEBUG4
+SET log_min_messages TO DEBUG4;
 SELECT
 	us.user_id,
 	SUM(us.value_1) OVER (PARTITION BY us.user_id)
@@ -616,3 +619,21 @@ GROUP BY 1 ORDER BY 1;
 select null = sum(null::int2) over ()
 from public.users_table as ut limit 1;
 
+-- verify that this doesn't crash with DEBUG4
+SET log_min_messages TO DEBUG4;
+SELECT
+	user_id, max(value_1) OVER (PARTITION BY user_id, MIN(value_2))
+FROM (
+	SELECT
+		DISTINCT us.user_id, us.value_2, value_1, random() as r1
+	FROM
+		users_table as us, events_table
+	WHERE
+		us.user_id = events_table.user_id AND event_type IN (1,2)
+	ORDER BY
+		user_id, value_2
+	) s
+GROUP BY
+	1, value_1
+ORDER BY
+	2 DESC, 1;
