@@ -1348,24 +1348,24 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 	{
 		IndexStmt *indexStmt = (IndexStmt *) parsetree;
 
-		/*
-		 * We should reject CREATE INDEX CONCURRENTLY before DefineIndex() is
-		 * called. Erroring in callbacks called from DefineIndex() will create
-		 * the index and mark it as INVALID, which will cause segfault during
-		 * inserts.
-		 */
-		if (indexStmt->concurrent)
+		Relation rel = relation_openrv(indexStmt->relation,
+									   GetCreateIndexRelationLockMode(indexStmt));
+		if (rel->rd_tableam == GetColumnarTableAmRoutine())
 		{
-			Relation rel = relation_openrv(indexStmt->relation,
-										   ShareUpdateExclusiveLock);
-			if (rel->rd_tableam == GetColumnarTableAmRoutine())
+			/*
+			 * We should reject CREATE INDEX CONCURRENTLY before DefineIndex() is
+			 * called. Erroring in callbacks called from DefineIndex() will create
+			 * the index and mark it as INVALID, which will cause segfault during
+			 * inserts.
+			 */
+			if (indexStmt->concurrent)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("indexes not supported for columnar tables")));
 			}
-
-			RelationClose(rel);
 		}
+
+		RelationClose(rel);
 	}
 
 	PrevProcessUtilityHook(pstmt, queryString, context,
