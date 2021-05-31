@@ -281,5 +281,12 @@ INSERT INTO box_temp SELECT box(point(i, i), point(i * 2, i * 2)) FROM generate_
 CREATE TABLE brin_summarize (value int) USING columnar;
 CREATE INDEX brin_summarize_idx ON brin_summarize USING brin (value) WITH (pages_per_range=2);
 
+-- Show that we safely fallback to serial index build.
+CREATE TABLE parallel_scan_test(a int) USING columnar WITH ( parallel_workers = 2 );
+INSERT INTO parallel_scan_test SELECT i FROM generate_series(1,10) i;
+CREATE INDEX ON parallel_scan_test (a);
+VACUUM FULL parallel_scan_test;
+REINDEX TABLE parallel_scan_test;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;
