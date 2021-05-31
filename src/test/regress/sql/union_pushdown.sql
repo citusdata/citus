@@ -654,6 +654,68 @@ JOIN users_table_part USING(user_id)
 LIMIT 1;
 $$);
 
+-- #4781
+CREATE TABLE test_a (id int, k int);
+CREATE TABLE test_b (id int, k int);
+SELECT create_distributed_table('test_a','id');
+SELECT create_distributed_table('test_b','id');
+
+CREATE OR REPLACE VIEW v AS SELECT * from test_a where k>1 UNION ALL SELECT * from test_b where k<1;
+-- the followings can be pushed down since dist_key is used in the aggregation
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(id) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(id) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(id) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(id) FROM v;
+$$);
+
+-- cannot pushed down because postgres optimizes fields, needs to be fixed with #4781
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+
+-- order by prevents postgres from optimizing fields so can be pushed down
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT id, COUNT(*) FROM v GROUP BY id ORDER BY id;
+$$);
+
+-- order by is not on dist_key so can't pushed down, needs to be fixed with #4781
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT k, COUNT(*) FROM v GROUP BY k ORDER BY k;
+$$);
+
+
 
 RESET client_min_messages;
 DROP SCHEMA union_pushdown CASCADE;
