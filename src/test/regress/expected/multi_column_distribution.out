@@ -1,0 +1,35 @@
+CREATE SCHEMA multi_column_distribution;
+SET search_path TO multi_column_distribution;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 27905500;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 27905500;
+create table t(id int, a int);
+select create_distributed_table('t', ARRAY['id'], colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select * from pg_dist_partition WHERE NOT (logicalrelid::text LIKE '%.%');
+ logicalrelid | partmethod |                                                        partkey                                                         | colocationid | repmodel |                                                          partkeys
+---------------------------------------------------------------------
+ t            | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |     27905500 | s        | {"{VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}"}
+(1 row)
+
+create table t2(id int, a int);
+select create_distributed_table('t2', ARRAY['id', 'a'], colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select * from pg_dist_partition WHERE NOT (logicalrelid::text LIKE '%.%');
+ logicalrelid | partmethod |                                                        partkey                                                         | colocationid | repmodel |                                                                                                                      partkeys
+---------------------------------------------------------------------
+ t            | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |     27905500 | s        | {"{VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}"}
+ t2           | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |     27905501 | s        | {"{VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}","{VAR :varno 1 :varattno 2 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 2 :location -1}"}
+(2 rows)
+
+SET client_min_messages TO WARNING;
+DROP SCHEMA multi_column_distribution CASCADE;

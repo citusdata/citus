@@ -60,7 +60,7 @@ DROP TABLE testtableddl;
 RESET citus.shard_replication_factor;
 -- ensure no metadata of distributed tables are remaining
 SELECT * FROM pg_dist_partition;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | partkeys
 ---------------------------------------------------------------------
 (0 rows)
 

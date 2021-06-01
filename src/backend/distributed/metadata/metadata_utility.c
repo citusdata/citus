@@ -1733,11 +1733,9 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
  */
 void
 InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
-						  Var *distributionColumn, uint32 colocationId,
+						  List *distributionColumnList, uint32 colocationId,
 						  char replicationModel)
 {
-	char *distributionColumnString = NULL;
-
 	Datum newValues[Natts_pg_dist_partition];
 	bool newNulls[Natts_pg_dist_partition];
 
@@ -1758,15 +1756,29 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	/* set partkey column to NULL for reference tables */
 	if (distributionMethod != DISTRIBUTE_BY_NONE)
 	{
-		distributionColumnString = nodeToString((Node *) distributionColumn);
+		Datum *distributionColumnDatumArray =
+			palloc0(list_length(distributionColumnList) * sizeof(Datum));
 
-		newValues[Anum_pg_dist_partition_partkey - 1] =
-			CStringGetTextDatum(distributionColumnString);
+		Node *distributionColumn;
+		int distributionColumnIndex = 0;
+		foreach_ptr(distributionColumn, distributionColumnList)
+		{
+			distributionColumnDatumArray[distributionColumnIndex] = CStringGetTextDatum(
+				nodeToString(distributionColumn));
+			distributionColumnIndex++;
+		}
+		newValues[Anum_pg_dist_partition_partkey - 1] = distributionColumnDatumArray[0];
+		ArrayType *distributionColumnArray = DatumArrayToArrayType(
+			distributionColumnDatumArray, list_length(distributionColumnList), TEXTOID);
+		newValues[Anum_pg_dist_partition_partkeys - 1] = PointerGetDatum(
+			distributionColumnArray);
 	}
 	else
 	{
 		newValues[Anum_pg_dist_partition_partkey - 1] = PointerGetDatum(NULL);
 		newNulls[Anum_pg_dist_partition_partkey - 1] = true;
+		newValues[Anum_pg_dist_partition_partkeys - 1] = PointerGetDatum(NULL);
+		newNulls[Anum_pg_dist_partition_partkeys - 1] = true;
 	}
 
 	HeapTuple newTuple = heap_form_tuple(RelationGetDescr(pgDistPartition), newValues,

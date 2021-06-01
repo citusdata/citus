@@ -363,7 +363,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(parentRelationId,
 																  relationId);
 
-		CreateDistributedTable(relationId, parentDistributionColumn,
+		CreateDistributedTable(relationId, list_make1(parentDistributionColumn),
 							   parentDistributionMethod, ShardCount, false,
 							   parentRelationName, viaDeprecatedAPI);
 	}
@@ -440,7 +440,8 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(
 					relationId, partitionRelationId);
 
-				CreateDistributedTable(partitionRelationId, distributionColumn,
+				CreateDistributedTable(partitionRelationId,
+									   list_make1(distributionColumn),
 									   distributionMethod, ShardCount, false,
 									   parentRelationName, viaDeprecatedAPI);
 			}

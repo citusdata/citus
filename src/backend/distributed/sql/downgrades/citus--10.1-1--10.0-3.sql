@@ -85,3 +85,15 @@ CREATE TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger
   FOR EACH STATEMENT EXECUTE FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check();
 
 DROP PROCEDURE pg_catalog.citus_cleanup_orphaned_shards();
+
+DROP FUNCTION create_distributed_table(table_name regclass,
+                                       distribution_columns text[],
+                                       distribution_type citus.distribution_type,
+                                       colocate_with text,
+                                       shard_count int);
+-- TODO: Uncomment once moved to migration for 10.2
+-- #include "../udfs/create_distributed_table/10.1-1.sql";
+
+-- TODO: Check that no multi column distribution tables were created
+ALTER TABLE pg_catalog.pg_dist_partition DROP COLUMN partkeys;
+

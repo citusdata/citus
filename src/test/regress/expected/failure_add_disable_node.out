@@ -23,7 +23,7 @@ ORDER BY 1, 2;
 
 -- verify there are no tables that could prevent add/remove node operations
 SELECT * FROM pg_dist_partition;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | partkeys
 ---------------------------------------------------------------------
 (0 rows)
 

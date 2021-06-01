@@ -1072,7 +1072,8 @@ CreateDistributedTableLike(TableConversionState *con)
 		newShardCount = con->shardCount;
 	}
 	char partitionMethod = PartitionMethod(con->relationId);
-	CreateDistributedTable(con->newRelationId, newDistributionKey, partitionMethod,
+	CreateDistributedTable(con->newRelationId, list_make1(newDistributionKey),
+						   partitionMethod,
 						   newShardCount, true, newColocateWith, false);
 }
 

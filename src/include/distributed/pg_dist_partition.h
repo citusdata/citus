@@ -27,6 +27,7 @@ typedef struct FormData_pg_dist_partition
 	text partkey;        /* partition key expression */
 	uint32 colocationid; /* id of the co-location group of particular table belongs to */
 	char repmodel;       /* replication model; see codes below */
+	ArrayType partkeys;      /* partition key expressions */
 #endif
 } FormData_pg_dist_partition;
 
@@ -41,12 +42,13 @@ typedef FormData_pg_dist_partition *Form_pg_dist_partition;
  *      compiler constants for pg_dist_partitions
  * ----------------
  */
-#define Natts_pg_dist_partition 5
+#define Natts_pg_dist_partition 6
 #define Anum_pg_dist_partition_logicalrelid 1
 #define Anum_pg_dist_partition_partmethod 2
 #define Anum_pg_dist_partition_partkey 3
 #define Anum_pg_dist_partition_colocationid 4
 #define Anum_pg_dist_partition_repmodel 5
+#define Anum_pg_dist_partition_partkeys 6
 
 /* valid values for partmethod include append, hash, and range */
 #define DISTRIBUTE_BY_APPEND 'a'

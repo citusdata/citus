@@ -233,7 +233,7 @@ extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  char shardState, uint64 shardLength,
 									  int32 groupId);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
-									  Var *distributionColumn, uint32 colocationId,
+									  List *distributionColumnList, uint32 colocationId,
 									  char replicationModel);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
@@ -242,7 +242,7 @@ extern void UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlace
 extern void MarkShardPlacementInactive(ShardPlacement *shardPlacement);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern void DeleteShardPlacementRow(uint64 placementId);
-extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
+extern void CreateDistributedTable(Oid relationId, List *distributionColumnList,
 								   char distributionMethod, int shardCount,
 								   bool shardCountIsStrict, char *colocateWithTableName,
 								   bool viaDeprecatedAPI);

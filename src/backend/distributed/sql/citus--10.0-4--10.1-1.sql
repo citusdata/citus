@@ -49,3 +49,9 @@ DROP TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger ON pg_catalog.p
 DROP FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check();
 
 #include "udfs/citus_cleanup_orphaned_shards/10.1-1.sql"
+
+#include "udfs/create_distributed_table/10.2-1.sql";
+
+ALTER TABLE pg_catalog.pg_dist_partition ADD COLUMN partkeys text[];
+UPDATE pg_catalog.pg_dist_partition SET partkeys = ARRAY[partkey] WHERE partkey IS NOT NULL;
+-- TODO: Maybe drop partkey column

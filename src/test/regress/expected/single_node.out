@@ -1246,7 +1246,7 @@ NOTICE:  renaming the new table to single_node.test_2
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid = 'test_2'::regclass;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | partkeys
 ---------------------------------------------------------------------
 (0 rows)
 

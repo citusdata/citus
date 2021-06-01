@@ -109,6 +109,7 @@ ORDER BY 1;
  function coord_combine_agg_sfunc(internal,oid,cstring,anyelement)
  function create_distributed_function(regprocedure,text,text)
  function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
+ function create_distributed_table(regclass,text[],citus.distribution_type,text,integer)
  function create_intermediate_result(text,text)
  function create_reference_table(regclass)
  function distributed_tables_colocated(regclass,regclass)
@@ -248,5 +249,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(232 rows)
+(233 rows)
 

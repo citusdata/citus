@@ -36,6 +36,7 @@
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/trigger.h"
+#include "distributed/argutils.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -126,10 +127,16 @@ static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 										   DestReceiver *copyDest,
 										   TupleTableSlot *slot,
 										   EState *estate);
+static void CreateDistributedTableModern(Oid relationId,
+										 List *distributionColumnTexts,
+										 Oid distributionMethodOid,
+										 text *colocateWithTableNameText,
+										 int32 *shardCountPtr);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
 PG_FUNCTION_INFO_V1(create_distributed_table);
+PG_FUNCTION_INFO_V1(create_distributed_table_multi_column);
 PG_FUNCTION_INFO_V1(create_reference_table);
 
 
@@ -172,11 +179,48 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	Assert(distributionColumn != NULL);
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
-	CreateDistributedTable(relationId, distributionColumn, distributionMethod,
+	CreateDistributedTable(relationId, list_make1(distributionColumn), distributionMethod,
 						   ShardCount, false, colocateWithTableName, viaDeprecatedAPI);
 
 	relation_close(relation, NoLock);
 
+	PG_RETURN_VOID();
+}
+
+
+Datum
+create_distributed_table_multi_column(PG_FUNCTION_ARGS)
+{
+	PG_ENSURE_ARGNOTNULL(0, "table_name");
+	PG_ENSURE_ARGNOTNULL(1, "distribution_column");
+	PG_ENSURE_ARGNOTNULL(2, "distribution_type");
+	PG_ENSURE_ARGNOTNULL(3, "colocate_with");
+	Oid relationId = PG_GETARG_OID(0);
+	ArrayType *distributionColumnArray = PG_GETARG_ARRAYTYPE_P(1);
+	Oid distributionMethodOid = PG_GETARG_OID(2);
+	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
+	int32 *shardCountPtr = NULL;
+	int32 shardCount = 0;
+	if (!PG_ARGISNULL(4))
+	{
+		shardCount = PG_GETARG_INT32(4);
+		shardCountPtr = &shardCount;
+	}
+	int distributionColumnCount = ArrayObjectCount(distributionColumnArray);
+	Datum *distributionColumnArrayDatum = DeconstructArrayObject(distributionColumnArray);
+
+	List *distributionColumnTextList = NIL;
+	for (int i = 0; i < distributionColumnCount; i++)
+	{
+		text *distributionColumnText = DatumGetTextP(distributionColumnArrayDatum[i]);
+		distributionColumnTextList = lappend(
+			distributionColumnTextList, distributionColumnText);
+	}
+
+	CheckCitusVersion(ERROR);
+	CreateDistributedTableModern(relationId, distributionColumnTextList,
+								 distributionMethodOid, colocateWithTableNameText,
+								 shardCountPtr);
 	PG_RETURN_VOID();
 }
 
@@ -195,17 +239,37 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	{
 		PG_RETURN_VOID();
 	}
-	bool viaDeprecatedAPI = false;
-
 	Oid relationId = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
 	Oid distributionMethodOid = PG_GETARG_OID(2);
 	text *colocateWithTableNameText = PG_GETARG_TEXT_P(3);
-	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
+	int32 *shardCountPtr = NULL;
+	int32 shardCount = 0;
+	if (!PG_ARGISNULL(4))
+	{
+		shardCount = PG_GETARG_INT32(4);
+		shardCountPtr = &shardCount;
+	}
 
+	CheckCitusVersion(ERROR);
+	CreateDistributedTableModern(relationId, list_make1(distributionColumnText),
+								 distributionMethodOid, colocateWithTableNameText,
+								 shardCountPtr);
+	PG_RETURN_VOID();
+}
+
+
+static void
+CreateDistributedTableModern(Oid relationId,
+							 List *distributionColumnTextList,
+							 Oid distributionMethodOid,
+							 text *colocateWithTableNameText,
+							 int32 *shardCountPtr)
+{
+	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);
 	bool shardCountIsStrict = false;
 	int shardCount = ShardCount;
-	if (!PG_ARGISNULL(4))
+	if (shardCountPtr)
 	{
 		if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
 			pg_strncasecmp(colocateWithTableName, "none", NAMEDATALEN) != 0)
@@ -214,7 +278,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 								   "and shard_count at the same time")));
 		}
 
-		shardCount = PG_GETARG_INT32(4);
+		shardCount = *shardCountPtr;
 
 		/*
 		 * if shard_count parameter is given than we have to
@@ -242,10 +306,18 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 	relation_close(relation, NoLock);
 
-	char *distributionColumnName = text_to_cstring(distributionColumnText);
-	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
-																 distributionColumnName);
-	Assert(distributionColumn != NULL);
+	List *distributionColumnList = NIL;
+	text *distributionColumnText = NULL;
+	foreach_ptr(distributionColumnText, distributionColumnTextList)
+	{
+		char *distributionColumnName = text_to_cstring(distributionColumnText);
+		Var *distributionColumn = BuildDistributionKeyFromColumnName(
+			relation,
+			distributionColumnName);
+		Assert(distributionColumn != NULL);
+		distributionColumnList = lappend(distributionColumnList, distributionColumn);
+	}
+
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
 	if (shardCount < 1 || shardCount > MAX_SHARD_COUNT)
@@ -255,11 +327,12 @@ create_distributed_table(PG_FUNCTION_ARGS)
 							   shardCount, MAX_SHARD_COUNT)));
 	}
 
-	CreateDistributedTable(relationId, distributionColumn, distributionMethod,
+	bool viaDeprecatedAPI = false;
+
+	CreateDistributedTable(relationId, distributionColumnList,
+						   distributionMethod,
 						   shardCount, shardCountIsStrict, colocateWithTableName,
 						   viaDeprecatedAPI);
-
-	PG_RETURN_VOID();
 }
 
 
@@ -311,7 +384,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 						errdetail("There are no active worker nodes.")));
 	}
 
-	CreateDistributedTable(relationId, distributionColumn, DISTRIBUTE_BY_NONE,
+	CreateDistributedTable(relationId, list_make1(distributionColumn), DISTRIBUTE_BY_NONE,
 						   ShardCount, false, colocateWithTableName, viaDeprecatedAPI);
 	PG_RETURN_VOID();
 }
@@ -368,7 +441,8 @@ EnsureRelationExists(Oid relationId)
  * day, once we deprecate master_create_distribute_table completely.
  */
 void
-CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributionMethod,
+CreateDistributedTable(Oid relationId, List *distributionColumnList,
+					   char distributionMethod,
 					   int shardCount, bool shardCountIsStrict,
 					   char *colocateWithTableName, bool viaDeprecatedAPI)
 {
@@ -444,13 +518,15 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	 * ColocationIdForNewTable assumes caller acquires lock on relationId. In our case,
 	 * our caller already acquired lock on relationId.
 	 */
-	uint32 colocationId = ColocationIdForNewTable(relationId, distributionColumn,
+	uint32 colocationId = ColocationIdForNewTable(relationId, linitial(
+													  distributionColumnList),
 												  distributionMethod, replicationModel,
 												  shardCount, shardCountIsStrict,
 												  colocateWithTableName,
 												  viaDeprecatedAPI);
 
-	EnsureRelationCanBeDistributed(relationId, distributionColumn, distributionMethod,
+	EnsureRelationCanBeDistributed(relationId, linitial(distributionColumnList),
+								   distributionMethod,
 								   colocationId, replicationModel, viaDeprecatedAPI);
 
 	/*
@@ -464,7 +540,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	Oid colocatedTableId = ColocatedTableId(colocationId);
 
 	/* create an entry for distributed table in pg_dist_partition */
-	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
+	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumnList,
 							  colocationId, replicationModel);
 
 	/*
@@ -538,7 +614,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		Oid partitionRelationId = InvalidOid;
 		foreach_oid(partitionRelationId, partitionList)
 		{
-			CreateDistributedTable(partitionRelationId, distributionColumn,
+			CreateDistributedTable(partitionRelationId, distributionColumnList,
 								   distributionMethod, shardCount, false,
 								   colocateWithTableName, viaDeprecatedAPI);
 		}

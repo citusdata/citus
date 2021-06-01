@@ -259,7 +259,7 @@ NOTICE:  renaming the new table to columnar_citus_integration.table_option
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid = 'table_option'::regclass;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | partkeys
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -578,7 +578,7 @@ NOTICE:  renaming the new table to columnar_citus_integration.table_option
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid = 'table_option'::regclass;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | partkeys
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -817,7 +817,7 @@ NOTICE:  renaming the new table to columnar_citus_integration.table_option_refer
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid = 'table_option_reference'::regclass;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | partkeys
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -1050,7 +1050,7 @@ NOTICE:  renaming the new table to columnar_citus_integration.table_option_citus
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid = 'table_option_citus_local'::regclass;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | partkeys
 ---------------------------------------------------------------------
 (0 rows)
 
