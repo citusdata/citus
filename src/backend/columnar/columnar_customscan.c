@@ -27,6 +27,7 @@
 #include "columnar/columnar_customscan.h"
 #include "columnar/columnar_metadata.h"
 #include "columnar/columnar_tableam.h"
+#include "distributed/listutils.h"
 
 typedef struct ColumnarScanPath
 {
@@ -50,8 +51,13 @@ typedef struct ColumnarScanState
 } ColumnarScanState;
 
 
+typedef bool (*PathPredicate)(Node *node);
+
+
 static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 									   RangeTblEntry *rte);
+static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
+static bool IsNotIndexPath(Node *node);
 static Path * CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
 									 RangeTblEntry *rte);
 static Cost ColumnarScanCost(RangeTblEntry *rte);
@@ -138,18 +144,6 @@ columnar_customscan_init()
 
 
 static void
-clear_paths(RelOptInfo *rel)
-{
-	rel->pathlist = NIL;
-	rel->partial_pathlist = NIL;
-	rel->cheapest_startup_path = NULL;
-	rel->cheapest_total_path = NULL;
-	rel->cheapest_unique_path = NULL;
-	rel->cheapest_parameterized_paths = NIL;
-}
-
-
-static void
 ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 						   RangeTblEntry *rte)
 {
@@ -188,12 +182,49 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 
 			ereport(DEBUG1, (errmsg("pathlist hook for columnar table am")));
 
-			/* we propose a new path that will be the only path for scanning this relation */
-			clear_paths(rel);
+			/*
+			 * TODO: Since we don't have a proper costing model for
+			 * ColumnarCustomScan, we remove other paths to force postgres
+			 * using ColumnarCustomScan. Note that we still keep index paths
+			 * since they still might be useful.
+			 */
+			RemovePathsByPredicate(rel, IsNotIndexPath);
 			add_path(rel, customPath);
 		}
 	}
 	RelationClose(relation);
+}
+
+
+/*
+ * RemovePathsByPredicate removes the paths that removePathPredicate
+ * evaluates to true from pathlist of given rel.
+ */
+static void
+RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate)
+{
+	List *filteredPathList = NIL;
+
+	Node *node = NULL;
+	foreach_ptr(node, rel->pathlist)
+	{
+		if (!removePathPredicate(node))
+		{
+			filteredPathList = lappend(filteredPathList, node);
+		}
+	}
+
+	rel->pathlist = filteredPathList;
+}
+
+
+/*
+ * IsNotIndexPath returns true if given node is not an IndexPath.
+ */
+static bool
+IsNotIndexPath(Node *node)
+{
+	return !IsA(node, IndexPath);
 }
 
 
