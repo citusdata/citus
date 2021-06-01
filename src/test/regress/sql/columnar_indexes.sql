@@ -48,7 +48,10 @@ BEGIN;
 ROLLBACK;
 
 EXPLAIN (COSTS OFF) SELECT * FROM columnar_table WHERE a=6456;
+
+-- should not use index-only scan even if index includes column "a"
 EXPLAIN (COSTS OFF) SELECT a FROM columnar_table WHERE a=6456;
+
 SELECT (SELECT a FROM columnar_table WHERE a=6456 limit 1)=6456;
 SELECT (SELECT b FROM columnar_table WHERE a=6456 limit 1)=6456*2;
 
@@ -205,16 +208,21 @@ SELECT pg_total_relation_size ('unique_a') * 1.5 <
 
 DROP INDEX unique_a;
 
--- should use index only scan since unique_a_include_b_c_d includes column "b" too
+-- should NOT use index only scan even if unique_a_include_b_c_d includes column "b"
 EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
+
+-- We temporarily set enable_indexonlyscan to off to prevent index-only
+-- scan's on columnar tables.
+-- Make sure that we rollback this change after finishing the query, so
+-- this should print "on".
+SHOW enable_indexonlyscan;
 
 BEGIN;
   SET enable_indexonlyscan = OFF;
-  -- show that we respect enable_indexonlyscan GUC
   EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
 ROLLBACK;
 
--- make sure that we read the correct value for "b" when doing index only scan
+-- make sure that we read the correct value for "b"
 SELECT b=980 FROM include_test WHERE a = 980;
 
 -- some tests with distributed & partitioned tables --
