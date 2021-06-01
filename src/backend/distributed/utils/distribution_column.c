@@ -49,11 +49,11 @@ PG_FUNCTION_INFO_V1(column_to_column_name);
 Datum
 column_name_to_column(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	text *columnText = PG_GETARG_TEXT_P(1);
 	char *columnName = text_to_cstring(columnText);
-
-	CheckCitusVersion(ERROR);
 
 	Relation relation = relation_open(relationId, AccessShareLock);
 
@@ -100,12 +100,12 @@ column_name_to_column_id(PG_FUNCTION_ARGS)
 Datum
 column_to_column_name(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	text *columnNodeText = PG_GETARG_TEXT_P(1);
 
 	char *columnNodeString = text_to_cstring(columnNodeText);
-
-	CheckCitusVersion(ERROR);
 
 	char *columnName = ColumnToColumnName(relationId, columnNodeString);
 

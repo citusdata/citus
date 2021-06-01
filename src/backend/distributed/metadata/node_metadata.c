@@ -161,6 +161,8 @@ DefaultNodeMetadata()
 Datum
 citus_set_coordinator_host(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
@@ -172,8 +174,6 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 
 	Name nodeClusterName = PG_GETARG_NAME(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
-
-	CheckCitusVersion(ERROR);
 
 	/* prevent concurrent modification */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
@@ -219,6 +219,8 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 Datum
 citus_add_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
@@ -226,8 +228,6 @@ citus_add_node(PG_FUNCTION_ARGS)
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 	bool nodeAlreadyExists = false;
 	nodeMetadata.groupId = PG_GETARG_INT32(2);
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * During tests this function is called before nodeRole and nodeCluster have been
@@ -288,6 +288,8 @@ master_add_node(PG_FUNCTION_ARGS)
 Datum
 citus_add_inactive_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
@@ -298,8 +300,6 @@ citus_add_inactive_node(PG_FUNCTION_ARGS)
 	nodeMetadata.groupId = PG_GETARG_INT32(2);
 	nodeMetadata.nodeRole = PG_GETARG_OID(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
-
-	CheckCitusVersion(ERROR);
 
 	if (nodeMetadata.groupId == COORDINATOR_GROUP_ID)
 	{
@@ -331,6 +331,8 @@ master_add_inactive_node(PG_FUNCTION_ARGS)
 Datum
 citus_add_secondary_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
@@ -347,8 +349,6 @@ citus_add_secondary_node(PG_FUNCTION_ARGS)
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 	nodeMetadata.nodeRole = SecondaryNodeRoleId();
 	nodeMetadata.isActive = true;
-
-	CheckCitusVersion(ERROR);
 
 	int nodeId = AddNodeMetadata(nodeNameString, nodePort, &nodeMetadata,
 								 &nodeAlreadyExists);
@@ -380,10 +380,10 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
 Datum
 citus_remove_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-
-	CheckCitusVersion(ERROR);
 
 	RemoveNodeFromCluster(text_to_cstring(nodeNameText), nodePort);
 	TransactionModifiedNodeMetadata = true;
@@ -631,7 +631,6 @@ static WorkerNode *
 ModifiableWorkerNode(const char *nodeName, int32 nodePort)
 {
 	CheckCitusVersion(ERROR);
-
 	EnsureCoordinator();
 
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
@@ -843,6 +842,8 @@ ActivateNode(char *nodeName, int nodePort)
 Datum
 citus_update_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	int32 nodeId = PG_GETARG_INT32(0);
 
 	text *newNodeName = PG_GETARG_TEXT_P(1);
@@ -863,8 +864,6 @@ citus_update_node(PG_FUNCTION_ARGS)
 	char *newNodeNameString = text_to_cstring(newNodeName);
 	List *placementList = NIL;
 	BackgroundWorkerHandle *handle = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	WorkerNode *workerNodeWithSameAddress = FindWorkerNodeAnyCluster(newNodeNameString,
 																	 newNodePort);
@@ -1077,9 +1076,9 @@ UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort)
 Datum
 get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 {
-	ShardInterval *shardInterval = NULL;
-
 	CheckCitusVersion(ERROR);
+
+	ShardInterval *shardInterval = NULL;
 
 	/*
 	 * To have optional parameter as NULL, we defined this UDF as not strict, therefore

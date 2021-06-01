@@ -2641,6 +2641,8 @@ SecondaryNodeRoleId(void)
 Datum
 citus_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldLogicalRelationId = InvalidOid;
 	Oid newLogicalRelationId = InvalidOid;
@@ -2650,8 +2652,6 @@ citus_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	if (RelationGetRelid(triggerData->tg_relation) != DistPartitionRelationId())
 	{
@@ -2718,6 +2718,8 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldLogicalRelationId = InvalidOid;
 	Oid newLogicalRelationId = InvalidOid;
@@ -2727,8 +2729,6 @@ citus_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	if (RelationGetRelid(triggerData->tg_relation) != DistShardRelationId())
 	{
@@ -2795,6 +2795,8 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldShardId = InvalidOid;
 	Oid newShardId = InvalidOid;
@@ -2804,8 +2806,6 @@ citus_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * Before 7.0-2 this trigger is on pg_dist_shard_placement,
@@ -2884,13 +2884,13 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
@@ -2919,13 +2919,13 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_conninfo_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	/* no-op in community edition */
 
@@ -2954,13 +2954,13 @@ master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	CitusInvalidateRelcacheByRelid(DistLocalGroupIdRelationId());
 
@@ -2989,13 +2989,13 @@ master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_object_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	CitusInvalidateRelcacheByRelid(DistObjectRelationId());
 

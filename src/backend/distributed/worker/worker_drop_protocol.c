@@ -49,14 +49,14 @@ PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 Datum
 worker_drop_distributed_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
 	text *relationName = PG_GETARG_TEXT_P(0);
 	Oid relationId = ResolveRelationId(relationName, true);
 
 	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
 	char relationKind = '\0';
-
-	CheckCitusVersion(ERROR);
-	EnsureSuperUser();
 
 	if (!OidIsValid(relationId))
 	{

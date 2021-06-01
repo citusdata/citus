@@ -103,6 +103,8 @@ static bool got_SIGALRM = false;
 Datum
 start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 
@@ -126,10 +128,10 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	/* fail if metadata synchronization doesn't succeed */
 	bool raiseInterrupts = true;
 
+	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureSuperUser();
 	EnsureModificationsCanRun();
-	CheckCitusVersion(ERROR);
 
 	PreventInTransactionBlock(true, "start_metadata_sync_to_node");
 
@@ -185,13 +187,13 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 Datum
 stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureSuperUser();
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
-
-	EnsureCoordinator();
-	EnsureSuperUser();
-	CheckCitusVersion(ERROR);
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 

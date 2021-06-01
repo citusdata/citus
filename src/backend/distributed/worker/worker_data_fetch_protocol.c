@@ -94,6 +94,8 @@ PG_FUNCTION_INFO_V1(master_expire_table_cache);
 Datum
 worker_fetch_partition_file(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 partitionTaskId = PG_GETARG_UINT32(1);
 	uint32 partitionFileId = PG_GETARG_UINT32(2);
@@ -114,8 +116,6 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 	 * task directory does not exist. We then lock and create the directory.
 	 */
 	bool taskDirectoryExists = DirectoryExists(taskDirectoryName);
-
-	CheckCitusVersion(ERROR);
 
 	if (!taskDirectoryExists)
 	{
@@ -383,6 +383,8 @@ CitusDeleteFile(const char *filename)
 Datum
 worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 shardId = PG_GETARG_INT64(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *ddlCommandText = PG_GETARG_TEXT_P(2);
@@ -390,8 +392,6 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 	char *schemaName = text_to_cstring(schemaNameText);
 	const char *ddlCommand = text_to_cstring(ddlCommandText);
 	Node *ddlCommandNode = ParseTreeNode(ddlCommand);
-
-	CheckCitusVersion(ERROR);
 
 	/* extend names in ddl command and apply extended command */
 	RelayEventExtendNames(ddlCommandNode, schemaName, shardId);
@@ -410,6 +410,8 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 Datum
 worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 leftShardId = PG_GETARG_INT64(0);
 	text *leftShardSchemaNameText = PG_GETARG_TEXT_P(1);
 	uint64 rightShardId = PG_GETARG_INT64(2);
@@ -420,8 +422,6 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 	char *rightShardSchemaName = text_to_cstring(rightShardSchemaNameText);
 	const char *ddlCommand = text_to_cstring(ddlCommandText);
 	Node *ddlCommandNode = ParseTreeNode(ddlCommand);
-
-	CheckCitusVersion(ERROR);
 
 	/* extend names in ddl command and apply extended command */
 	RelayEventExtendNamesForInterShardCommands(ddlCommandNode, leftShardId,
@@ -443,14 +443,14 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 Datum
 worker_apply_sequence_command(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *commandText = PG_GETARG_TEXT_P(0);
 	Oid sequenceTypeId = PG_GETARG_OID(1);
 	const char *commandString = text_to_cstring(commandText);
 	Node *commandNode = ParseTreeNode(commandString);
 
 	NodeTag nodeType = nodeTag(commandNode);
-
-	CheckCitusVersion(ERROR);
 
 	if (nodeType != T_CreateSeqStmt)
 	{
@@ -579,6 +579,8 @@ ParseTreeRawStmt(const char *ddlCommand)
 Datum
 worker_append_table_to_shard(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *shardQualifiedNameText = PG_GETARG_TEXT_P(0);
 	text *sourceQualifiedNameText = PG_GETARG_TEXT_P(1);
 	text *sourceNodeNameText = PG_GETARG_TEXT_P(2);
@@ -595,8 +597,6 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 
 	Oid savedUserId = InvalidOid;
 	int savedSecurityContext = 0;
-
-	CheckCitusVersion(ERROR);
 
 	/* We extract schema names and table names from qualified names */
 	DeconstructQualifiedName(shardQualifiedNameList, &shardSchemaName, &shardTableName);

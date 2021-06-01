@@ -39,6 +39,8 @@ PG_FUNCTION_INFO_V1(get_adjacency_list_wait_graph);
 Datum
 get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	TupleDesc tupleDescriptor = NULL;
 
 	HASH_SEQ_STATUS status;
@@ -46,8 +48,6 @@ get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 
 	Datum values[2];
 	bool isNulls[2];
-
-	CheckCitusVersion(ERROR);
 
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 	WaitGraph *waitGraph = BuildGlobalWaitGraph();

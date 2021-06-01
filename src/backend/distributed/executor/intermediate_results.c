@@ -118,14 +118,14 @@ PG_FUNCTION_INFO_V1(fetch_intermediate_results);
 Datum
 broadcast_intermediate_result(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *resultIdText = PG_GETARG_TEXT_P(0);
 	char *resultIdString = text_to_cstring(resultIdText);
 	text *queryText = PG_GETARG_TEXT_P(1);
 	char *queryString = text_to_cstring(queryText);
 	bool writeLocalFile = false;
 	ParamListInfo paramListInfo = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * Make sure that this transaction has a distributed transaction ID.
@@ -159,6 +159,8 @@ broadcast_intermediate_result(PG_FUNCTION_ARGS)
 Datum
 create_intermediate_result(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *resultIdText = PG_GETARG_TEXT_P(0);
 	char *resultIdString = text_to_cstring(resultIdText);
 	text *queryText = PG_GETARG_TEXT_P(1);
@@ -166,8 +168,6 @@ create_intermediate_result(PG_FUNCTION_ARGS)
 	List *nodeList = NIL;
 	bool writeLocalFile = true;
 	ParamListInfo paramListInfo = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * Make sure that this transaction has a distributed transaction ID.
@@ -771,12 +771,12 @@ IntermediateResultSize(const char *resultId)
 Datum
 read_intermediate_result(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Datum resultId = PG_GETARG_DATUM(0);
 	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
 	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
 	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
-
-	CheckCitusVersion(ERROR);
 
 	ReadIntermediateResultsIntoFuncOutput(fcinfo, copyFormatLabel, &resultId, 1);
 
@@ -794,13 +794,13 @@ read_intermediate_result(PG_FUNCTION_ARGS)
 Datum
 read_intermediate_result_array(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	ArrayType *resultIdObject = PG_GETARG_ARRAYTYPE_P(0);
 	Datum copyFormatOidDatum = PG_GETARG_DATUM(1);
 
 	Datum copyFormatLabelDatum = DirectFunctionCall1(enum_out, copyFormatOidDatum);
 	char *copyFormatLabel = DatumGetCString(copyFormatLabelDatum);
-
-	CheckCitusVersion(ERROR);
 
 	int32 resultCount = ArrayGetNItems(ARR_NDIM(resultIdObject), ARR_DIMS(
 										   resultIdObject));
@@ -874,6 +874,8 @@ ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
 Datum
 fetch_intermediate_results(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	ArrayType *resultIdObject = PG_GETARG_ARRAYTYPE_P(0);
 	Datum *resultIdArray = DeconstructArrayObject(resultIdObject);
 	int32 resultCount = ArrayObjectCount(resultIdObject);
@@ -884,8 +886,6 @@ fetch_intermediate_results(PG_FUNCTION_ARGS)
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	int resultIndex = 0;
 	int64 totalBytesWritten = 0L;
-
-	CheckCitusVersion(ERROR);
 
 	if (resultCount == 0)
 	{

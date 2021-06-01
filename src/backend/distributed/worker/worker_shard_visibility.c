@@ -38,10 +38,10 @@ PG_FUNCTION_INFO_V1(relation_is_a_known_shard);
 Datum
 relation_is_a_known_shard(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool onlySearchPath = true;
-
-	CheckCitusVersion(ERROR);
 
 	PG_RETURN_BOOL(RelationIsAKnownShard(relationId, onlySearchPath));
 }
@@ -55,11 +55,11 @@ relation_is_a_known_shard(PG_FUNCTION_ARGS)
 Datum
 citus_table_is_visible(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	char relKind = '\0';
 	bool onlySearchPath = true;
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * We don't want to deal with not valid/existing relations

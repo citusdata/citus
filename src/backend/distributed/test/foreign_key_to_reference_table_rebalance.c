@@ -30,10 +30,10 @@ PG_FUNCTION_INFO_V1(get_foreign_key_to_reference_table_commands);
 Datum
 get_foreign_key_to_reference_table_commands(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	FuncCallContext *functionContext = NULL;
 	ListCell *commandsCell = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	/* for the first we call this UDF, we need to populate the result to return set */
 	if (SRF_IS_FIRSTCALL())

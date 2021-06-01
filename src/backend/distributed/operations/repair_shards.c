@@ -122,6 +122,9 @@ bool CheckAvailableSpaceBeforeMove = true;
 Datum
 citus_copy_shard_placement(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	int64 shardId = PG_GETARG_INT64(0);
 	text *sourceNodeNameText = PG_GETARG_TEXT_P(1);
 	int32 sourceNodePort = PG_GETARG_INT32(2);
@@ -132,9 +135,6 @@ citus_copy_shard_placement(PG_FUNCTION_ARGS)
 
 	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
 	char *targetNodeName = text_to_cstring(targetNodeNameText);
-
-	EnsureCoordinator();
-	CheckCitusVersion(ERROR);
 
 	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
 	if (shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL)
@@ -283,6 +283,9 @@ CheckSpaceConstraints(MultiConnection *connection, uint64 colocationSizeInBytes)
 Datum
 citus_move_shard_placement(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	int64 shardId = PG_GETARG_INT64(0);
 	char *sourceNodeName = text_to_cstring(PG_GETARG_TEXT_P(1));
 	int32 sourceNodePort = PG_GETARG_INT32(2);
@@ -293,10 +296,6 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 
 	ListCell *colocatedTableCell = NULL;
 	ListCell *colocatedShardCell = NULL;
-
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 
 	Oid relationId = RelationIdForShard(shardId);
 	ErrorIfMoveCitusLocalTable(relationId);

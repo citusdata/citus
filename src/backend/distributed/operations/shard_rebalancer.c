@@ -547,6 +547,7 @@ GetShardCost(uint64 shardId, void *voidContext)
 Datum
 citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	uint64 shardId = PG_GETARG_INT64(0);
 	bool missingOk = false;
 	ShardPlacement *shardPlacement = ActiveShardPlacement(shardId, missingOk);
@@ -784,6 +785,7 @@ SetupRebalanceMonitor(List *placementUpdateList, Oid relationId)
 Datum
 rebalance_table_shards(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	List *relationIdList = NIL;
 	if (!PG_ARGISNULL(0))
 	{
@@ -888,6 +890,7 @@ GetRebalanceStrategy(Name name)
 Datum
 citus_drain_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	PG_ENSURE_ARGNOTNULL(0, "nodename");
 	PG_ENSURE_ARGNOTNULL(1, "nodeport");
 	PG_ENSURE_ARGNOTNULL(2, "shard_transfer_mode");
@@ -932,6 +935,7 @@ citus_drain_node(PG_FUNCTION_ARGS)
 Datum
 replicate_table_shards(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	Oid relationId = PG_GETARG_OID(0);
 	uint32 shardReplicationFactor = PG_GETARG_INT32(1);
 	int32 maxShardCopies = PG_GETARG_INT32(2);
@@ -986,6 +990,7 @@ master_drain_node(PG_FUNCTION_ARGS)
 Datum
 get_rebalance_table_shards_plan(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	List *relationIdList = NIL;
 	if (!PG_ARGISNULL(0))
 	{
@@ -1067,6 +1072,7 @@ get_rebalance_table_shards_plan(PG_FUNCTION_ARGS)
 Datum
 get_rebalance_progress(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	List *segmentList = NIL;
 	ListCell *rebalanceMonitorCell = NULL;
 	TupleDesc tupdesc;
@@ -2811,6 +2817,7 @@ pg_dist_rebalance_strategy_enterprise_check(PG_FUNCTION_ARGS)
 Datum
 citus_validate_rebalance_strategy_functions(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	EnsureShardCostUDF(PG_GETARG_OID(0));
 	EnsureNodeCapacityUDF(PG_GETARG_OID(1));
 	EnsureShardAllowedOnNodeUDF(PG_GETARG_OID(2));

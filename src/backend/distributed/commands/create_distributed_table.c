@@ -142,11 +142,10 @@ PG_FUNCTION_INFO_V1(create_reference_table);
 Datum
 master_create_distributed_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	Oid relationId = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
 	Oid distributionMethodOid = PG_GETARG_OID(2);
-
-	CheckCitusVersion(ERROR);
 
 	EnsureCitusTableCanBeCreated(relationId);
 
@@ -189,6 +188,8 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 Datum
 create_distributed_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) || PG_ARGISNULL(3))
 	{
 		PG_RETURN_VOID();
@@ -220,8 +221,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		 */
 		shardCountIsStrict = true;
 	}
-
-	CheckCitusVersion(ERROR);
 
 	EnsureCitusTableCanBeCreated(relationId);
 
@@ -271,14 +270,13 @@ create_distributed_table(PG_FUNCTION_ARGS)
 Datum
 create_reference_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	Oid relationId = PG_GETARG_OID(0);
 
 	char *colocateWithTableName = NULL;
 	Var *distributionColumn = NULL;
 
 	bool viaDeprecatedAPI = false;
-
-	CheckCitusVersion(ERROR);
 
 	EnsureCitusTableCanBeCreated(relationId);
 
