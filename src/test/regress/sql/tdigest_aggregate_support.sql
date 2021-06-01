@@ -21,14 +21,15 @@ WHERE name = 'tdigest'
 SET citus.shard_count TO 4;
 SET citus.coordinator_aggregation_strategy TO 'disabled'; -- prevent aggregate execution when the aggregate can't be pushed down
 
-CREATE TABLE latencies (a int, b int, latency double precision);
+CREATE TABLE latencies (a int, b int, latency double precision, count int);
 SELECT create_distributed_table('latencies', 'a');
 SELECT setseed(0.42); -- make the random data inserted deterministic
 INSERT INTO latencies
 SELECT (random()*20)::int AS a,
        (random()*20)::int AS b,
-       random()*10000.0 AS latency
-FROM generate_series(1, 10000);
+       random()*10000.0 AS latency,
+       i % 3 + 1 AS count
+FROM generate_series(1, 10000) AS i;
 
 -- explain no grouping to verify partially pushed down for tdigest(value, compression)
 EXPLAIN (COSTS OFF, VERBOSE)
@@ -44,6 +45,23 @@ GROUP BY a;
 -- explain grouping by non-distribution column is partially pushed down for tdigest(value, compression)
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT b, tdigest(latency, 100)
+FROM latencies
+GROUP BY b;
+
+-- explain no grouping to verify partially pushed down for tdigest(value, count, compression)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest(latency, count, 100)
+FROM latencies;
+
+-- explain grouping by distribution column is completely pushed down for tdigest(value, count, compression)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest(latency, count, 100)
+FROM latencies
+GROUP BY a;
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest(value, count, compression)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest(latency, count, 100)
 FROM latencies
 GROUP BY b;
 
@@ -64,6 +82,23 @@ SELECT b, tdigest_percentile(latency, 100, 0.99)
 FROM latencies
 GROUP BY b;
 
+-- explain no grouping to verify partially pushed down for tdigest_precentile(value, count, compression, quantile)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile(latency, count, 100, 0.99)
+FROM latencies;
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile(value, count, compression, quantile)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile(latency, count, 100, 0.99)
+FROM latencies
+GROUP BY a;
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest_precentile(value, count, compression, quantile)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest_percentile(latency, count, 100, 0.99)
+FROM latencies
+GROUP BY b;
+
 -- explain no grouping to verify partially pushed down for tdigest_precentile(value, compression, quantiles[])
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT tdigest_percentile(latency, 100, ARRAY[0.99, 0.95])
@@ -78,6 +113,23 @@ GROUP BY a;
 -- explain grouping by non-distribution column is partially pushed down for tdigest_precentile(value, compression, quantiles[])
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT b, tdigest_percentile(latency, 100, ARRAY[0.99, 0.95])
+FROM latencies
+GROUP BY b;
+
+-- explain no grouping to verify partially pushed down for tdigest_precentile(value, count, compression, quantiles[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile(latency, count, 100, ARRAY[0.99, 0.95])
+FROM latencies;
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile(value, count, compression, quantiles[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile(latency, count, 100, ARRAY[0.99, 0.95])
+FROM latencies
+GROUP BY a;
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest_precentile(value, count, compression, quantiles[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest_percentile(latency, count, 100, ARRAY[0.99, 0.95])
 FROM latencies
 GROUP BY b;
 
@@ -98,6 +150,23 @@ SELECT b, tdigest_percentile_of(latency, 100, 9000)
 FROM latencies
 GROUP BY b;
 
+-- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, count, compression, hypotetical_value)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile_of(latency, count, 100, 9000)
+FROM latencies;
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, count, compression, hypotetical_value)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile_of(latency, count, 100, 9000)
+FROM latencies
+GROUP BY a;
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest_precentile_of(value, count, compression, hypotetical_value)
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest_percentile_of(latency, count, 100, 9000)
+FROM latencies
+GROUP BY b;
+
 -- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, compression, hypotetical_values[])
 EXPLAIN (COSTS OFF, VERBOSE)
 SELECT tdigest_percentile_of(latency, 100, ARRAY[9000, 9500])
@@ -115,6 +184,23 @@ SELECT b, tdigest_percentile_of(latency, 100, ARRAY[9000, 9500])
 FROM latencies
 GROUP BY b;
 
+-- explain no grouping to verify partially pushed down for tdigest_precentile_of(value, count, compression, hypotetical_values[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT tdigest_percentile_of(latency, count, 100, ARRAY[9000, 9500])
+FROM latencies;
+
+-- explain grouping by distribution column is completely pushed down for tdigest_precentile_of(value, count, compression, hypotetical_values[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT a, tdigest_percentile_of(latency, count, 100, ARRAY[9000, 9500])
+FROM latencies
+GROUP BY a;
+
+-- explain grouping by non-distribution column is partially pushed down for tdigest_precentile_of(value, count, compression, hypotetical_values[])
+EXPLAIN (COSTS OFF, VERBOSE)
+SELECT b, tdigest_percentile_of(latency, count, 100, ARRAY[9000, 9500])
+FROM latencies
+GROUP BY b;
+
 -- verifying results - should be stable due to seed while inserting the data, if failure due to data these queries could be removed or check for certain ranges
 SELECT tdigest(latency, 100) FROM latencies;
 SELECT tdigest_percentile(latency, 100, 0.99) FROM latencies;
@@ -122,9 +208,16 @@ SELECT tdigest_percentile(latency, 100, ARRAY[0.99, 0.95]) FROM latencies;
 SELECT tdigest_percentile_of(latency, 100, 9000) FROM latencies;
 SELECT tdigest_percentile_of(latency, 100, ARRAY[9000, 9500]) FROM latencies;
 
+SELECT tdigest(latency, count, 100) FROM latencies;
+SELECT tdigest_percentile(latency, count, 100, 0.99) FROM latencies;
+SELECT tdigest_percentile(latency, count, 100, ARRAY[0.99, 0.95]) FROM latencies;
+SELECT tdigest_percentile_of(latency, count, 100, 9000) FROM latencies;
+SELECT tdigest_percentile_of(latency, count, 100, ARRAY[9000, 9500]) FROM latencies;
+
 CREATE TABLE latencies_rollup (a int, tdigest tdigest);
 SELECT create_distributed_table('latencies_rollup', 'a', colocate_with => 'latencies');
 
+-- verify combining stored tdigests
 INSERT INTO latencies_rollup
 SELECT a, tdigest(latency, 100)
 FROM latencies
