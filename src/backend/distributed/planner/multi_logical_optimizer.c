@@ -1959,7 +1959,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterExpression = (Expr *) unionAggregate;
 	}
 	else if (aggregateType == AGGREGATE_TDIGEST_COMBINE ||
-			 aggregateType == AGGREGATE_TDIGEST_ADD_DOUBLE)
+			 aggregateType == AGGREGATE_TDIGEST_ADD_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_ADD_COUNT_DOUBLE)
 	{
 		/* tdigest of column */
 		Oid tdigestType = TDigestExtensionTypeOid(); /* tdigest type */
@@ -2034,6 +2035,60 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		unionAggregate->args = list_make2(
 			tdigestTargetEntry,
 			list_nth(originalAggregate->args, 2));
+		unionAggregate->aggkind = AGGKIND_NORMAL;
+		unionAggregate->aggfilter = NULL;
+		unionAggregate->aggtranstype = InvalidOid;
+		unionAggregate->aggargtypes = list_make2_oid(
+			tdigestType,
+			list_nth_oid(originalAggregate->aggargtypes, 2));
+		unionAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		newMasterExpression = (Expr *) unionAggregate;
+	}
+	else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_COUNT_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_COUNT_DOUBLEARRAY ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_COUNT_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_COUNT_DOUBLEARRAY)
+	{
+		/* tdigest of column */
+		Oid tdigestType = TDigestExtensionTypeOid();
+		Oid unionFunctionId = InvalidOid;
+		if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_COUNT_DOUBLE)
+		{
+			unionFunctionId = TDigestExtensionAggTDigestPercentile2();
+		}
+		else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_COUNT_DOUBLEARRAY)
+		{
+			unionFunctionId = TDigestExtensionAggTDigestPercentile2a();
+		}
+		else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_COUNT_DOUBLE)
+		{
+			unionFunctionId = TDigestExtensionAggTDigestPercentileOf2();
+		}
+		else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_COUNT_DOUBLEARRAY)
+		{
+			unionFunctionId = TDigestExtensionAggTDigestPercentileOf2a();
+		}
+		Assert(OidIsValid(unionFunctionId));
+
+		int32 tdigestReturnTypeMod = exprTypmod((Node *) originalAggregate);
+		Oid tdigestTypeCollationId = exprCollation((Node *) originalAggregate);
+
+		/* create first argument for tdigest_precentile(tdigest, double) */
+		Var *tdigestColumn = makeVar(masterTableId, walkerContext->columnId, tdigestType,
+									 tdigestReturnTypeMod, tdigestTypeCollationId,
+									 columnLevelsUp);
+		TargetEntry *tdigestTargetEntry = makeTargetEntry((Expr *) tdigestColumn,
+														  argumentId, NULL, false);
+		walkerContext->columnId++;
+
+		/* construct the master tdigest_precentile(tdigest, double) expression */
+		Aggref *unionAggregate = makeNode(Aggref);
+		unionAggregate->aggfnoid = unionFunctionId;
+		unionAggregate->aggtype = originalAggregate->aggtype;
+		unionAggregate->args = list_make2(
+			tdigestTargetEntry,
+			list_nth(originalAggregate->args, 3));
 		unionAggregate->aggkind = AGGKIND_NORMAL;
 		unionAggregate->aggfilter = NULL;
 		unionAggregate->aggtranstype = InvalidOid;
@@ -3209,6 +3264,42 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 
 		workerAggregateList = lappend(workerAggregateList, newWorkerAggregate);
 	}
+	else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_COUNT_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_ADD_COUNT_DOUBLEARRAY ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_COUNT_DOUBLE ||
+			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_COUNT_DOUBLEARRAY)
+	{
+		/*
+		 * The original query has an aggregate in the form of either
+		 *  - tdigest_percentile(column, count, compression, quantile)
+		 *  - tdigest_percentile(column, count, compression, quantile[])
+		 *  - tdigest_percentile_of(column, count, compression, value)
+		 *  - tdigest_percentile_of(column, count, compression, value[])
+		 *
+		 * We are creating the worker part of this query by creating a
+		 *  - tdigest(column, count, compression)
+		 *
+		 * One could see we are passing argument 0, 1 and 2 from the original query
+		 * in here. This corresponds with the list_nth calls in the args and aggargstypes
+		 * list construction. The tdigest function and type are read from the catalog.
+		 */
+		Aggref *newWorkerAggregate = copyObject(originalAggregate);
+		newWorkerAggregate->aggfnoid = TDigestExtensionAggTDigest3();
+		newWorkerAggregate->aggtype = TDigestExtensionTypeOid();
+		newWorkerAggregate->args = list_make3(
+			list_nth(newWorkerAggregate->args, 0),
+			list_nth(newWorkerAggregate->args, 1),
+			list_nth(newWorkerAggregate->args, 2));
+		newWorkerAggregate->aggkind = AGGKIND_NORMAL;
+		newWorkerAggregate->aggtranstype = InvalidOid;
+		newWorkerAggregate->aggargtypes = list_make3_oid(
+			list_nth_oid(newWorkerAggregate->aggargtypes, 0),
+			list_nth_oid(newWorkerAggregate->aggargtypes, 1),
+			list_nth_oid(newWorkerAggregate->aggargtypes, 2));
+		newWorkerAggregate->aggsplit = AGGSPLIT_SIMPLE;
+
+		workerAggregateList = lappend(workerAggregateList, newWorkerAggregate);
+	}
 	else if (aggregateType == AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLE ||
 			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLEARRAY ||
 			 aggregateType == AGGREGATE_TDIGEST_PERCENTILE_OF_TDIGEST_DOUBLE ||
@@ -3389,6 +3480,21 @@ GetAggregateType(Aggref *aggregateExpression)
 			return AGGREGATE_TDIGEST_ADD_DOUBLE;
 		}
 
+		if (aggFunctionId == TDigestExtensionAggTDigest3())
+		{
+			return AGGREGATE_TDIGEST_ADD_COUNT_DOUBLE;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentile4())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_ADD_COUNT_DOUBLE;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentile4a())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_ADD_COUNT_DOUBLEARRAY;
+		}
+
 		if (aggFunctionId == TDigestExtensionAggTDigestPercentile3())
 		{
 			return AGGREGATE_TDIGEST_PERCENTILE_ADD_DOUBLE;
@@ -3407,6 +3513,16 @@ GetAggregateType(Aggref *aggregateExpression)
 		if (aggFunctionId == TDigestExtensionAggTDigestPercentile2a())
 		{
 			return AGGREGATE_TDIGEST_PERCENTILE_TDIGEST_DOUBLEARRAY;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentileOf4())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_COUNT_DOUBLE;
+		}
+
+		if (aggFunctionId == TDigestExtensionAggTDigestPercentileOf4a())
+		{
+			return AGGREGATE_TDIGEST_PERCENTILE_OF_ADD_COUNT_DOUBLEARRAY;
 		}
 
 		if (aggFunctionId == TDigestExtensionAggTDigestPercentileOf3())

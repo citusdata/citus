@@ -130,6 +130,19 @@ TDigestExtensionAggTDigest2()
 
 
 /*
+ * TDigestExtensionAggTDigest3 performs a lookup for the Oid of the tdigest aggregate;
+ *   tdigest(value double precision, count bigint, compression int)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigest3()
+{
+	return LookupTDigestFunction("tdigest", 3, (Oid[]) { FLOAT8OID, INT8OID, INT4OID });
+}
+
+
+/*
  * TDigestExtensionAggTDigestPercentile2 performs a lookup for the Oid of the tdigest
  * aggregate;
  *   tdigest_percentile(tdigest, double precision)
@@ -190,6 +203,36 @@ TDigestExtensionAggTDigestPercentile3a(void)
 
 
 /*
+ * TDigestExtensionAggTDigestPercentile4 performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile(double precision, bigint, int, double precision)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentile4()
+{
+	return LookupTDigestFunction("tdigest_percentile", 4,
+								 (Oid[]) { FLOAT8OID, INT8OID, INT4OID, FLOAT8OID });
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentile4a performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile(double precision, bigint, int, double precision[])
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentile4a(void)
+{
+	return LookupTDigestFunction("tdigest_percentile", 4,
+								 (Oid[]) { FLOAT8OID, INT8OID, INT4OID, FLOAT8ARRAYOID });
+}
+
+
+/*
  * TDigestExtensionAggTDigestPercentileOf2 performs a lookup for the Oid of the tdigest
  * aggregate;
  *   tdigest_percentile_of(tdigest, double precision)
@@ -246,4 +289,34 @@ TDigestExtensionAggTDigestPercentileOf3a(void)
 {
 	return LookupTDigestFunction("tdigest_percentile_of", 3,
 								 (Oid[]) { FLOAT8OID, INT4OID, FLOAT8ARRAYOID });
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentileOf4 performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile_of(double precision, bigint, int, double precision)
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentileOf4()
+{
+	return LookupTDigestFunction("tdigest_percentile_of", 4,
+								 (Oid[]) { FLOAT8OID, INT8OID, INT4OID, FLOAT8OID });
+}
+
+
+/*
+ * TDigestExtensionAggTDigestPercentileOf4a performs a lookup for the Oid of the tdigest
+ * aggregate;
+ *   tdigest_percentile_of(double precision, bigint, int, double precision[])
+ *
+ * If the aggregate is not found InvalidOid is returned.
+ */
+Oid
+TDigestExtensionAggTDigestPercentileOf4a(void)
+{
+	return LookupTDigestFunction("tdigest_percentile_of", 4,
+								 (Oid[]) { FLOAT8OID, INT8OID, INT4OID, FLOAT8ARRAYOID });
 }

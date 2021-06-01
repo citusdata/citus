@@ -24,4 +24,11 @@ extern Oid TDigestExtensionAggTDigestPercentileOf2a(void);
 extern Oid TDigestExtensionAggTDigestPercentileOf3(void);
 extern Oid TDigestExtensionAggTDigestPercentileOf3a(void);
 
+/* v1.2.0 introduced API */
+extern Oid TDigestExtensionAggTDigest3(void);
+extern Oid TDigestExtensionAggTDigestPercentile4(void);
+extern Oid TDigestExtensionAggTDigestPercentile4a(void);
+extern Oid TDigestExtensionAggTDigestPercentileOf4(void);
+extern Oid TDigestExtensionAggTDigestPercentileOf4a(void);
+
 #endif /* CITUS_TDIGEST_EXTENSION_H */
