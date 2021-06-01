@@ -375,13 +375,13 @@ SELECT tdigest(latency, 100) FROM latencies;
 SELECT tdigest_percentile(latency, 100, 0.99) FROM latencies;
  tdigest_percentile
 ---------------------------------------------------------------------
-   9904.28342426494
+   9903.84313360471
 (1 row)
 
 SELECT tdigest_percentile(latency, 100, ARRAY[0.99, 0.95]) FROM latencies;
          tdigest_percentile
 ---------------------------------------------------------------------
- {9904.28342426494,9485.49009399385}
+ {9903.84313360471,9485.49009399385}
 (1 row)
 
 SELECT tdigest_percentile_of(latency, 100, 9000) FROM latencies;
@@ -626,13 +626,13 @@ SELECT tdigest(tdigest) FROM latencies_rollup;
 SELECT tdigest_percentile(tdigest, 0.99) FROM latencies_rollup;
  tdigest_percentile
 ---------------------------------------------------------------------
-   9903.76070790358
+   9903.32646580579
 (1 row)
 
 SELECT tdigest_percentile(tdigest, ARRAY[0.99, 0.95]) FROM latencies_rollup;
          tdigest_percentile
 ---------------------------------------------------------------------
- {9903.76070790358,9492.7106302226}
+ {9903.32646580579,9492.23455844499}
 (1 row)
 
 SELECT tdigest_percentile_of(tdigest, 9000) FROM latencies_rollup;
