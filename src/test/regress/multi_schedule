@@ -17,6 +17,7 @@
 # ---
 test: multi_extension
 test: single_node
+test: single_node_truncate
 test: multi_cluster_management
 
 # below tests are placed right after multi_cluster_management as we do
