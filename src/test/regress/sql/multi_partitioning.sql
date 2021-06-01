@@ -1245,9 +1245,12 @@ ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2010;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2011;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2013;
 
-DROP TABLE partitioning_test, partitioning_test_2008, partitioning_test_2009,
-           partitioning_test_2010, partitioning_test_2011, partitioning_test_2013,
-           reference_table, reference_table_2;
+DROP TABLE partitioning_test_2008, partitioning_test_2009, partitioning_test_2010,
+           partitioning_test_2011, partitioning_test_2013, reference_table_2;
+-- verify this doesn't crash and gives a debug message for dropped table
+SET client_min_messages TO DEBUG1;
+DROP TABLE partitioning_test, reference_table;
+RESET client_min_messages;
 
 RESET SEARCH_PATH;
 
