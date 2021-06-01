@@ -1164,6 +1164,7 @@ GROUP BY
 ORDER BY
 	1,2;
 
+SET citus.next_shard_id TO 1660300;
 
 -- test we don't deadlock when attaching and detaching partitions from partitioned
 -- tables with foreign keys
