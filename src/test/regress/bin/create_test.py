@@ -5,14 +5,16 @@ import random
 import os
 
 if len(sys.argv) != 2:
-    print("ERROR: Expected the name of the new test as an argument, such as:\n"
-           "src/test/regress/bin/create_test.py my_awesome_test")
+    print(
+        "ERROR: Expected the name of the new test as an argument, such as:\n"
+        "src/test/regress/bin/create_test.py my_awesome_test"
+    )
     sys.exit(1)
 
 test_name = sys.argv[1]
 
 regress_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-filename = os.path.join(regress_dir, 'sql', f"{test_name}.sql")
+filename = os.path.join(regress_dir, "sql", f"{test_name}.sql")
 
 if os.path.isfile(filename):
     print(f"ERROR: test file '{filename}' already exists")
