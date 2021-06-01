@@ -76,4 +76,11 @@ ORDER BY
 ;
 
 #include "../udfs/citus_finish_pg_upgrade/10.0-1.sql"
+CREATE FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check()
+  RETURNS TRIGGER
+  LANGUAGE C
+  AS 'MODULE_PATHNAME';
+CREATE TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger
+  BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON pg_dist_rebalance_strategy
+  FOR EACH STATEMENT EXECUTE FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check();
 

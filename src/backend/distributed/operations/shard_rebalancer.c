@@ -2786,13 +2786,12 @@ UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName, int sour
 
 
 /*
- * citus_rebalance_strategy_enterprise_check is trigger function, intended for
- * use in prohibiting writes to pg_dist_rebalance_strategy in Citus Community.
+ * pg_dist_rebalance_strategy_enterprise_check is a now removed function, but
+ * to avoid issues during upgrades a C stub is kept.
  */
 Datum
 pg_dist_rebalance_strategy_enterprise_check(PG_FUNCTION_ARGS)
 {
-	/* This is Enterprise, so this check is a no-op */
 	PG_RETURN_VOID();
 }
 

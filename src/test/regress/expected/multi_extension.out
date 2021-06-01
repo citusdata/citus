@@ -568,6 +568,7 @@ SELECT * FROM print_extension_changes();
 ---------------------------------------------------------------------
  function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real) void                                                                                                                                            |
  function citus_internal.columnar_ensure_objects_exist() void                                                                                                                                                                  |
+ function citus_internal.pg_dist_rebalance_strategy_enterprise_check() trigger                                                                                                                                                 |
  function create_distributed_table(regclass,text,citus.distribution_type,text) void                                                                                                                                            |
  function get_rebalance_progress() TABLE(sessionid integer, table_name regclass, shardid bigint, shard_size bigint, sourcename text, sourceport integer, targetname text, targetport integer, progress bigint)                 |
  function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name) TABLE(table_name regclass, shardid bigint, shard_size bigint, sourcename text, sourceport integer, targetname text, targetport integer) |
@@ -579,7 +580,7 @@ SELECT * FROM print_extension_changes();
                                                                                                                                                                                                                                | function worker_partitioned_relation_size(regclass) bigint
                                                                                                                                                                                                                                | function worker_partitioned_relation_total_size(regclass) bigint
                                                                                                                                                                                                                                | function worker_partitioned_table_size(regclass) bigint
-(13 rows)
+(14 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
