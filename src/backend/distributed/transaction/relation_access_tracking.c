@@ -793,7 +793,8 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 								 "foreign keys. Any parallel modification to "
 								 "those hash distributed tables in the same "
 								 "transaction can only be executed in sequential query "
-								 "execution mode", relationName)));
+								 "execution mode",
+								 relationName != NULL ? relationName : "<dropped>")));
 
 			/*
 			 * Switching to sequential mode is admittedly confusing and, could be useless
