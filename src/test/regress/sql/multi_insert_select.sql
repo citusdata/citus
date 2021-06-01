@@ -1729,7 +1729,7 @@ FROM
 GROUP BY
   store_id, first_name, last_name;
 
--- Volatile function in default should be disallowed - serial prototypes
+-- Volatile function in default should be disallowed - SERIAL pseudo-types
 CREATE TABLE table_with_serial (
   store_id int,
   s bigserial

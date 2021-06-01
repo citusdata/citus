@@ -133,7 +133,7 @@ AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt)
 
 	appendStringInfoString(buf, qualifiedSequenceName);
 
-	appendStringInfo(buf, " RENAME TO %s;", quote_identifier(stmt->newname));
+	appendStringInfo(buf, " RENAME TO %s", quote_identifier(stmt->newname));
 }
 
 

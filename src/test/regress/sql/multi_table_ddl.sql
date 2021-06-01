@@ -2,7 +2,7 @@
 -- MULTI_TABLE_DDL
 --
 -- Tests around changing the schema and dropping of a distributed table
--- Test DEFAULTS coming from serial prototypes, user-defined sequences
+-- Test DEFAULTS coming from SERIAL pseudo-types, user-defined sequences
 --
 
 
@@ -77,6 +77,17 @@ ALTER SEQUENCE testserialtable_id_seq OWNED BY NONE;
 -- or create a sequence with a distributed owner
 CREATE SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
 
+-- EDIT: this doesn't error out for now in order to allow adding
+-- new serial columns (they always come with owned_by command)
+-- should be fixed later in ALTER SEQUENCE preprocessing
+
+-- or even change a manual sequence to be owned by a distributed table
+CREATE SEQUENCE standalone_sequence;
+ALTER SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
+
+-- an edge case, but it's OK to change an owner to the same distributed table
+ALTER SEQUENCE testserialtable_id_seq OWNED BY testserialtable.id;
+
 -- drop distributed table
 \c - - - :master_port
 DROP TABLE testserialtable;
@@ -87,7 +98,7 @@ DROP TABLE testserialtable;
 
 \c - - - :master_port
 
--- test DEFAULT coming from serial prototypes and user-defined sequences
+-- test DEFAULT coming from SERIAL pseudo-types and user-defined sequences
 CREATE SEQUENCE test_sequence_0;
 CREATE SEQUENCE test_sequence_1;
 

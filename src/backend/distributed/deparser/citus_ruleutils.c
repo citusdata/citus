@@ -558,7 +558,7 @@ EnsureSequenceTypeSupported(Oid relationId, AttrNumber attnum, Oid seqTypId)
 						generate_qualified_relation_name(citusTableId);
 					ereport(ERROR, (errmsg(
 										"The sequence %s is already used for a different"
-										" type in column %d of the distributed table %s",
+										" type in column %d of the table %s",
 										sequenceName, currentAttnum,
 										citusTableName)));
 				}

@@ -387,12 +387,9 @@ MetadataCreateCommands(void)
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 
-		if (!PartitionTable(relationId))
-		{
-			List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-			metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-													  workerSequenceDDLCommands);
-		}
+		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  workerSequenceDDLCommands);
 
 		/* ddlCommandList contains TableDDLCommand information, need to materialize */
 		TableDDLCommand *tableDDLCommand = NULL;
@@ -406,13 +403,10 @@ MetadataCreateCommands(void)
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  tableOwnerResetCommand);
 
-		if (!PartitionTable(relationId))
-		{
-			List *sequenceDependencyCommandList = SequenceDependencyCommandList(
-				relationId);
-			metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-													  sequenceDependencyCommandList);
-		}
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(
+			relationId);
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  sequenceDependencyCommandList);
 	}
 
 	/* construct the foreign key constraints after all tables are created */
@@ -500,12 +494,9 @@ GetDistributedTableDDLEvents(Oid relationId)
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
 	if (!tableOwnedByExtension)
 	{
-		if (!PartitionTable(relationId))
-		{
-			/* commands to create sequences */
-			List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-			commandList = list_concat(commandList, sequenceDDLCommands);
-		}
+		/* commands to create sequences */
+		List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+		commandList = list_concat(commandList, sequenceDDLCommands);
 
 		/*
 		 * Commands to create the table, these commands are TableDDLCommands so lets
@@ -520,13 +511,10 @@ GetDistributedTableDDLEvents(Oid relationId)
 			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
 		}
 
-		if (!PartitionTable(relationId))
-		{
-			/* command to associate sequences with table */
-			List *sequenceDependencyCommandList = SequenceDependencyCommandList(
-				relationId);
-			commandList = list_concat(commandList, sequenceDependencyCommandList);
-		}
+		/* command to associate sequences with table */
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(
+			relationId);
+		commandList = list_concat(commandList, sequenceDependencyCommandList);
 	}
 
 	/* command to insert pg_dist_partition entry */
@@ -1171,6 +1159,7 @@ GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 	Assert(*attnumList == NIL && *dependentSequenceList == NIL);
 
 	List *attrdefResult = NIL;
+	List *attrdefAttnumResult = NIL;
 	ScanKeyData key[3];
 	HeapTuple tup;
 
@@ -1205,7 +1194,7 @@ GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 			deprec->deptype == DEPENDENCY_AUTO)
 		{
 			attrdefResult = lappend_oid(attrdefResult, deprec->objid);
-			*attnumList = lappend_int(*attnumList, deprec->refobjsubid);
+			attrdefAttnumResult = lappend_int(attrdefAttnumResult, deprec->refobjsubid);
 		}
 	}
 
@@ -1213,9 +1202,13 @@ GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 
 	table_close(depRel, AccessShareLock);
 
-	Oid attrdefOid = InvalidOid;
-	foreach_oid(attrdefOid, attrdefResult)
+	ListCell *attrdefOidCell = NULL;
+	ListCell *attrdefAttnumCell = NULL;
+	forboth(attrdefOidCell, attrdefResult, attrdefAttnumCell, attrdefAttnumResult)
 	{
+		Oid attrdefOid = lfirst_oid(attrdefOidCell);
+		AttrNumber attrdefAttnum = lfirst_int(attrdefAttnumCell);
+
 		List *sequencesFromAttrDef = GetSequencesFromAttrDef(attrdefOid);
 
 		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
@@ -1225,8 +1218,12 @@ GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 								   " is not supported for distribution")));
 		}
 
-		*dependentSequenceList = list_concat(*dependentSequenceList,
-											 GetSequencesFromAttrDef(attrdefOid));
+		if (list_length(sequencesFromAttrDef) == 1)
+		{
+			*dependentSequenceList = list_concat(*dependentSequenceList,
+												 sequencesFromAttrDef);
+			*attnumList = lappend_int(*attnumList, attrdefAttnum);
+		}
 	}
 }
 
@@ -1261,8 +1258,8 @@ GetSequencesFromAttrDef(Oid attrdefOid)
 		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
 
 		if (deprec->refclassid == RelationRelationId &&
-			deprec->deptype == DEPENDENCY_NORMAL && get_rel_relkind(
-				deprec->refobjid) == RELKIND_SEQUENCE)
+			deprec->deptype == DEPENDENCY_NORMAL &&
+			get_rel_relkind(deprec->refobjid) == RELKIND_SEQUENCE)
 		{
 			sequencesResult = lappend_oid(sequencesResult, deprec->refobjid);
 		}

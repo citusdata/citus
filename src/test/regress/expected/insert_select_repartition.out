@@ -1254,17 +1254,17 @@ NOTICE:  copying the data has completed
 
 (1 row)
 
-explain insert into table_with_sequences select y, x from table_with_sequences;
-                                                      QUERY PLAN
+explain (costs off) insert into table_with_sequences select y, x from table_with_sequences;
+                                   QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..250.00 rows=100000 width=16)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on table_with_sequences_4213648 table_with_sequences  (cost=0.00..28.50 rows=1850 width=8)
+               ->  Seq Scan on table_with_sequences_4213648 table_with_sequences
 (8 rows)
 
 -- verify that we don't report repartitioned insert/select for tables
@@ -1280,17 +1280,17 @@ NOTICE:  copying the data has completed
 
 (1 row)
 
-explain insert into table_with_user_sequences select y, x from table_with_user_sequences;
-                                                           QUERY PLAN
+explain (costs off) insert into table_with_user_sequences select y, x from table_with_user_sequences;
+                                        QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..250.00 rows=100000 width=16)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on table_with_user_sequences_4213652 table_with_user_sequences  (cost=0.00..28.50 rows=1850 width=8)
+               ->  Seq Scan on table_with_user_sequences_4213652 table_with_user_sequences
 (8 rows)
 
 -- clean-up

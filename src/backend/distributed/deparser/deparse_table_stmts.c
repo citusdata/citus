@@ -138,6 +138,15 @@ AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
 
 	ColumnDef *columnDefinition = (ColumnDef *) alterTableCmd->def;
 
+	/*
+	 * the way we use the deparser now, constraints are always NULL
+	 * adding this check for ColumnDef consistency
+	 */
+	if (columnDefinition->constraints != NULL)
+	{
+		ereport(ERROR, (errmsg("Constraints are not supported for AT_AddColumn")));
+	}
+
 	if (columnDefinition->colname)
 	{
 		appendStringInfo(buf, "%s ", quote_identifier(columnDefinition->colname));
@@ -154,6 +163,12 @@ AppendAlterTableCmdAddColumn(StringInfo buf, AlterTableCmd *alterTableCmd)
 		appendStringInfoString(buf, " NOT NULL");
 	}
 
+	/*
+	 * the way we use the deparser now, collation is never used
+	 * since the data type of columns that use sequences for default
+	 * are only int,smallint and bigint (never text, varchar, char)
+	 * Adding this part only for ColumnDef consistency
+	 */
 	Oid collationOid = GetColumnDefCollation(NULL, columnDefinition, typeOid);
 	if (OidIsValid(collationOid))
 	{

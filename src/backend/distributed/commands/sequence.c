@@ -340,7 +340,11 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
 	EnsureCoordinator();
 	QualifyTreeNode((Node *) stmt);
 
-	const char *sql = DeparseTreeNode((Node *) stmt);
+	/* this takes care of cases where not all workers have synced metadata */
+	RenameStmt *stmtCopy = copyObject(stmt);
+	stmtCopy->missing_ok = true;
+
+	const char *sql = DeparseTreeNode((Node *) stmtCopy);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
 								ENABLE_DDL_PROPAGATION);

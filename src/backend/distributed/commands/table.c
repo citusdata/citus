@@ -593,7 +593,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 *    of the foreign constraint in master. Validity will be checked in workers
 	 *    anyway.
 	 *  - an ADD COLUMN .. DEFAULT nextval('..') OR
-	 *    an ADD COLUMN .. serial_prototype OR
+	 *    an ADD COLUMN .. SERIAL pseudo-type OR
 	 *    an ALTER COLUMN .. SET DEFAULT nextval('..'). If there is we set
 	 *    deparseAT variable to true which means we will deparse the statement
 	 *    before we propagate the command to shards. For shards, all the defaults
@@ -718,8 +718,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 						{
 							deparseAT = true;
 
+							/* the new column definition will have no constraint */
 							ColumnDef *newColDef = copyObject(columnDefinition);
-							newColDef->is_not_null = false;
+							newColDef->constraints = NULL;
 
 							newCmd->def = (Node *) newColDef;
 						}
@@ -728,7 +729,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			}
 
 			/*
-			 * We check for ADD COLUMN .. serial_prototype
+			 * We check for ADD COLUMN .. SERIAL pseudo-type
 			 * if that's the case, we should deparse the statement
 			 * The structure of this check is copied from transformColumnDefinition.
 			 */
@@ -2026,7 +2027,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										ereport(ERROR, (errcode(
 															ERRCODE_FEATURE_NOT_SUPPORTED),
 														errmsg(
-															"Cannot add a column involving DEFAULT nextval('..') "
+															"cannot add a column involving DEFAULT nextval('..') "
 															"because the table is not empty"),
 														errhint(
 															"You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint\n"
