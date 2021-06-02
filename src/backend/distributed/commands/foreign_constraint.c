@@ -734,8 +734,8 @@ HasForeignKeyWithLocalTable(Oid relationId)
 
 
 /*
- * GetForeignKeysWithLocalTables returns a list foreign keys for foreign key
- * relationaships that relation has with local tables.
+ * GetForeignKeysWithLocalTables returns a list of foreign keys for foreign key
+ * relationships that relation has with local tables.
  */
 static List *
 GetForeignKeysWithLocalTables(Oid relationId)
@@ -750,6 +750,21 @@ GetForeignKeysWithLocalTables(Oid relationId)
 							  INCLUDE_LOCAL_TABLES;
 	List *referencedFKeyList = GetForeignKeyOids(relationId, referencedFKeysFlag);
 	return list_concat(referencingFKeyList, referencedFKeyList);
+}
+
+
+/*
+ * GetForeignKeysFromLocalTables returns a list of foreign keys where the referencing
+ * relation is a local table.
+ */
+List *
+GetForeignKeysFromLocalTables(Oid relationId)
+{
+	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
+							   INCLUDE_LOCAL_TABLES;
+	List *referencingFKeyList = GetForeignKeyOids(relationId, referencedFKeysFlag);
+
+	return referencingFKeyList;
 }
 
 
@@ -1099,6 +1114,30 @@ GetReferencedTableId(Oid foreignKeyId)
 	ReleaseSysCache(heapTuple);
 
 	return referencedTableId;
+}
+
+
+/*
+ * GetReferencingTableId returns OID of the referencing relation for the foreign
+ * key with foreignKeyId. If there is no such foreign key, then this function
+ * returns InvalidOid.
+ */
+Oid
+GetReferencingTableId(Oid foreignKeyId)
+{
+	HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyId));
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		/* no such foreign key */
+		return InvalidOid;
+	}
+
+	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+	Oid referencingTableId = constraintForm->conrelid;
+
+	ReleaseSysCache(heapTuple);
+
+	return referencingTableId;
 }
 
 

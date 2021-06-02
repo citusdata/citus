@@ -216,13 +216,13 @@ EnsureLocalTableCanBeTruncated(Oid relationId)
 								  "tables.")));
 	}
 
-	/* make sure there are no foreign key references from a local table */
-	SetForeignConstraintRelationshipGraphInvalid();
-	List *referencingRelationList = ReferencingRelationIdList(relationId);
-
-	Oid referencingRelation = InvalidOid;
-	foreach_oid(referencingRelation, referencingRelationList)
+	List *referencingForeignConstaintsFromLocalTables =
+		GetForeignKeysFromLocalTables(relationId);
+	Oid foreignKeyId = InvalidOid;
+	foreach_oid(foreignKeyId, referencingForeignConstaintsFromLocalTables)
 	{
+		Oid referencingRelation = GetReferencingTableId(foreignKeyId);
+
 		/* we do not truncate a table if there is a local table referencing it */
 		if (!IsCitusTable(referencingRelation))
 		{
