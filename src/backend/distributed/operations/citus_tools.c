@@ -71,13 +71,13 @@ static Tuplestorestate * CreateTupleStore(TupleDesc tupleDescriptor,
 Datum
 master_run_on_worker(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	bool parallelExecution = false;
 	StringInfo *nodeNameArray = NULL;
 	int *nodePortArray = NULL;
 	StringInfo *commandStringArray = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (!rsinfo || !(rsinfo->allowedModes & SFRM_Materialize))

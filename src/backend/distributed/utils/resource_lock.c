@@ -97,10 +97,10 @@ PG_FUNCTION_INFO_V1(lock_relation_if_exists);
 Datum
 lock_shard_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	LOCKMODE lockMode = IntToLockMode(PG_GETARG_INT32(0));
 	ArrayType *shardIdArrayObject = PG_GETARG_ARRAYTYPE_P(1);
-
-	CheckCitusVersion(ERROR);
 
 	if (ARR_NDIM(shardIdArrayObject) == 0)
 	{
@@ -134,10 +134,10 @@ lock_shard_metadata(PG_FUNCTION_ARGS)
 Datum
 lock_shard_resources(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	LOCKMODE lockMode = IntToLockMode(PG_GETARG_INT32(0));
 	ArrayType *shardIdArrayObject = PG_GETARG_ARRAYTYPE_P(1);
-
-	CheckCitusVersion(ERROR);
 
 	if (ARR_NDIM(shardIdArrayObject) == 0)
 	{

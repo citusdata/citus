@@ -901,12 +901,12 @@ AppendShardIdToName(char **name, uint64 shardId)
 Datum
 shard_name(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	int64 shardId = PG_GETARG_INT64(1);
 
 	char *qualifiedName = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	if (shardId <= 0)
 	{

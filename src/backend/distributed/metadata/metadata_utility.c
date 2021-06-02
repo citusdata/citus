@@ -270,12 +270,12 @@ citus_shard_sizes(PG_FUNCTION_ARGS)
 Datum
 citus_total_relation_size(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = PG_GETARG_BOOL(1);
 
 	SizeQueryType sizeQueryType = TOTAL_RELATION_SIZE;
-
-	CheckCitusVersion(ERROR);
 
 	if (CStoreTable(relationId))
 	{
@@ -301,11 +301,11 @@ citus_total_relation_size(PG_FUNCTION_ARGS)
 Datum
 citus_table_size(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
 	SizeQueryType sizeQueryType = TABLE_SIZE;
-
-	CheckCitusVersion(ERROR);
 
 	if (CStoreTable(relationId))
 	{
@@ -331,11 +331,11 @@ citus_table_size(PG_FUNCTION_ARGS)
 Datum
 citus_relation_size(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
 	SizeQueryType sizeQueryType = RELATION_SIZE;
-
-	CheckCitusVersion(ERROR);
 
 	if (CStoreTable(relationId))
 	{

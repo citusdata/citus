@@ -83,12 +83,12 @@ AllowNonIdleTransactionOnXactHandling(void)
 Datum
 start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	uint32 nodePort = PG_GETARG_UINT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
 	int connectionFlags = 0;
-
-	CheckCitusVersion(ERROR);
 
 	if (singleConnection != NULL && (strcmp(singleConnection->hostname,
 											nodeNameString) != 0 ||

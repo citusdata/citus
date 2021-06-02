@@ -70,6 +70,9 @@ PG_FUNCTION_INFO_V1(update_distributed_table_colocation);
 Datum
 mark_tables_colocated(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	Oid sourceRelationId = PG_GETARG_OID(0);
 	ArrayType *relationIdArrayObject = PG_GETARG_ARRAYTYPE_P(1);
 
@@ -80,8 +83,6 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 							   "operation")));
 	}
 
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 	EnsureTableOwner(sourceRelationId);
 
 	Datum *relationIdDatumArray = DeconstructArrayObject(relationIdArrayObject);
@@ -108,11 +109,12 @@ mark_tables_colocated(PG_FUNCTION_ARGS)
 Datum
 update_distributed_table_colocation(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	Oid targetRelationId = PG_GETARG_OID(0);
 	text *colocateWithTableNameText = PG_GETARG_TEXT_P(1);
 
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 	EnsureTableOwner(targetRelationId);
 
 	char *colocateWithTableName = text_to_cstring(colocateWithTableNameText);

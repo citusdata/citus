@@ -219,10 +219,10 @@ PG_FUNCTION_INFO_V1(worker_change_sequence_dependency);
 Datum
 undistribute_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool cascadeViaForeignKeys = PG_GETARG_BOOL(1);
-
-	CheckCitusVersion(ERROR);
 
 	TableConversionParameters params = {
 		.relationId = relationId,
@@ -243,6 +243,8 @@ undistribute_table(PG_FUNCTION_ARGS)
 Datum
 alter_distributed_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 
 	char *distributionColumn = NULL;
@@ -280,9 +282,6 @@ alter_distributed_table(PG_FUNCTION_ARGS)
 		}
 	}
 
-	CheckCitusVersion(ERROR);
-
-
 	TableConversionParameters params = {
 		.relationId = relationId,
 		.distributionColumn = distributionColumn,
@@ -305,12 +304,12 @@ alter_distributed_table(PG_FUNCTION_ARGS)
 Datum
 alter_table_set_access_method(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 
 	text *accessMethodText = PG_GETARG_TEXT_P(1);
 	char *accessMethod = text_to_cstring(accessMethodText);
-
-	CheckCitusVersion(ERROR);
 
 	TableConversionParameters params = {
 		.relationId = relationId,
