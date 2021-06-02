@@ -1091,12 +1091,6 @@ SequenceDDLCommandsForTable(Oid relationId)
 		Oid currentSequenceTypeOid = sequenceData->seqtypid;
 		if (currentSequenceTypeOid != sequenceTypeOid)
 		{
-			/*
-			 * Need to do this since ALTER SEQUENCE commands
-			 * are not allowed for a distributed sequence
-			 */
-			UnmarkObjectDistributed(&sequenceAddress);
-
 			AlterSeqStmt *alterSequenceStatement = makeNode(AlterSeqStmt);
 			char *seqNamespace = get_namespace_name(get_rel_namespace(sequenceOid));
 			char *seqName = get_rel_name(sequenceOid);

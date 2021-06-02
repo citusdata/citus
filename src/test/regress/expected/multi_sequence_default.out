@@ -20,6 +20,10 @@ ALTER TABLE seq_test_0 ADD COLUMN z int DEFAULT nextval('seq_0');
 ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
 HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
 Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ALTER TABLE seq_test_0 ADD COLUMN z serial;
+ERROR:  Cannot add a column involving serial pseudotypes because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
 -- follow hint
 ALTER TABLE seq_test_0 ADD COLUMN z int;
 ALTER TABLE seq_test_0 ALTER COLUMN z SET DEFAULT nextval('seq_0');
@@ -338,6 +342,10 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 -- Check that various ALTER SEQUENCE commands
 -- are not allowed for a distributed sequence for now
 CREATE SEQUENCE seq_8;
+CREATE SCHEMA sequence_default_8;
+-- can change schema in a sequence not yet distributed
+ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
+ALTER SEQUENCE sequence_default_8.seq_8 SET SCHEMA public;
 CREATE TABLE seq_test_8 (x int, y int DEFAULT nextval('seq_8'));
 SELECT create_distributed_table('seq_test_8', 'x');
  create_distributed_table
@@ -345,6 +353,7 @@ SELECT create_distributed_table('seq_test_8', 'x');
 
 (1 row)
 
+-- cannot change sequence specifications
 ALTER SEQUENCE seq_8 AS bigint;
 ERROR:  This operation is currently not allowed for a distributed sequence.
 ALTER SEQUENCE seq_8 INCREMENT BY 2;
@@ -359,13 +368,19 @@ ALTER SEQUENCE seq_8 NO CYCLE;
 ERROR:  This operation is currently not allowed for a distributed sequence.
 ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
 ERROR:  This operation is currently not allowed for a distributed sequence.
-CREATE SCHEMA sequence_default_8;
+-- cannot change schema in a distributed sequence
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
 ERROR:  This operation is currently not allowed for a distributed sequence.
 DROP SCHEMA sequence_default_8;
+-- cannot use more than one sequence in a column default
+CREATE SEQUENCE seq_9;
+CREATE SEQUENCE seq_10;
+CREATE TABLE seq_test_9 (x int, y int DEFAULT nextval('seq_9') - nextval('seq_10'));
+SELECT create_distributed_table('seq_test_9', 'x');
+ERROR:  More than one sequence in a column default is not supported for distribution
 -- clean up
-DROP TABLE seq_test_0, seq_test_1, seq_test_2, seq_test_3, seq_test_4, seq_test_5, seq_test_6, seq_test_7, seq_test_8;
-DROP SEQUENCE seq_0, seq_1, sequence_2, seq_4, seq_6, seq_7, seq_7_par, seq_8;
+DROP TABLE seq_test_0, seq_test_1, seq_test_2, seq_test_3, seq_test_4, seq_test_5, seq_test_6, seq_test_7, seq_test_8, seq_test_9;
+DROP SEQUENCE seq_0, seq_1, sequence_2, seq_4, seq_6, seq_7, seq_7_par, seq_8, seq_9, seq_10;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------

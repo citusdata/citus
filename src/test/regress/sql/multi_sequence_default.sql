@@ -15,6 +15,7 @@ CREATE TABLE seq_test_0 (x int, y int);
 SELECT create_distributed_table('seq_test_0','x');
 INSERT INTO seq_test_0 SELECT 1, s FROM generate_series(1, 50) s;
 ALTER TABLE seq_test_0 ADD COLUMN z int DEFAULT nextval('seq_0');
+ALTER TABLE seq_test_0 ADD COLUMN z serial;
 -- follow hint
 ALTER TABLE seq_test_0 ADD COLUMN z int;
 ALTER TABLE seq_test_0 ALTER COLUMN z SET DEFAULT nextval('seq_0');
@@ -182,8 +183,13 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 -- Check that various ALTER SEQUENCE commands
 -- are not allowed for a distributed sequence for now
 CREATE SEQUENCE seq_8;
+CREATE SCHEMA sequence_default_8;
+-- can change schema in a sequence not yet distributed
+ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
+ALTER SEQUENCE sequence_default_8.seq_8 SET SCHEMA public;
 CREATE TABLE seq_test_8 (x int, y int DEFAULT nextval('seq_8'));
 SELECT create_distributed_table('seq_test_8', 'x');
+-- cannot change sequence specifications
 ALTER SEQUENCE seq_8 AS bigint;
 ALTER SEQUENCE seq_8 INCREMENT BY 2;
 ALTER SEQUENCE seq_8 MINVALUE 5 MAXVALUE 5000;
@@ -191,12 +197,19 @@ ALTER SEQUENCE seq_8 START WITH 6;
 ALTER SEQUENCE seq_8 RESTART WITH 6;
 ALTER SEQUENCE seq_8 NO CYCLE;
 ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
-CREATE SCHEMA sequence_default_8;
+-- cannot change schema in a distributed sequence
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
 DROP SCHEMA sequence_default_8;
 
 
+-- cannot use more than one sequence in a column default
+CREATE SEQUENCE seq_9;
+CREATE SEQUENCE seq_10;
+CREATE TABLE seq_test_9 (x int, y int DEFAULT nextval('seq_9') - nextval('seq_10'));
+SELECT create_distributed_table('seq_test_9', 'x');
+
+
 -- clean up
-DROP TABLE seq_test_0, seq_test_1, seq_test_2, seq_test_3, seq_test_4, seq_test_5, seq_test_6, seq_test_7, seq_test_8;
-DROP SEQUENCE seq_0, seq_1, sequence_2, seq_4, seq_6, seq_7, seq_7_par, seq_8;
+DROP TABLE seq_test_0, seq_test_1, seq_test_2, seq_test_3, seq_test_4, seq_test_5, seq_test_6, seq_test_7, seq_test_8, seq_test_9;
+DROP SEQUENCE seq_0, seq_1, sequence_2, seq_4, seq_6, seq_7, seq_7_par, seq_8, seq_9, seq_10;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
