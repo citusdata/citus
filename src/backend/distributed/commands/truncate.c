@@ -32,6 +32,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/worker_shard_visibility.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -266,6 +267,9 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 	foreach_ptr(rangeVar, relationList)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+
+		ErrorIfIllegallyChangingKnownShard(relationId);
+
 		char relationKind = get_rel_relkind(relationId);
 		if (IsCitusTable(relationId) &&
 			relationKind == RELKIND_FOREIGN_TABLE)

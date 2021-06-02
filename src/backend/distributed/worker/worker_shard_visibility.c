@@ -14,6 +14,7 @@
 #include "catalog/pg_class.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/local_executor.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "nodes/nodeFuncs.h"
@@ -23,6 +24,7 @@
 
 /* Config variable managed via guc.c */
 bool OverrideTableVisibility = true;
+bool EnableManualChangesToShards = false;
 
 static bool ReplaceTableVisibleFunctionWalker(Node *inputNode);
 
@@ -112,7 +114,37 @@ ErrorIfRelationIsAKnownShard(Oid relationId)
 	}
 
 	const char *relationName = get_rel_name(relationId);
+
 	ereport(ERROR, (errmsg("relation \"%s\" is a shard relation ", relationName)));
+}
+
+
+/*
+ * ErrorIfIllegallyChangingKnownShard errors out if the relation with relationId is
+ * a known shard and manual changes on known shards are disabled. This is
+ * valid for only non-citus (external) connections.
+ */
+void
+ErrorIfIllegallyChangingKnownShard(Oid relationId)
+{
+	if (LocalExecutorLevel > 0 || IsCitusInitiatedRemoteBackend() ||
+		EnableManualChangesToShards)
+	{
+		return;
+	}
+
+	/* search the relation in all schemas */
+	bool onlySearchPath = true;
+	if (RelationIsAKnownShard(relationId, onlySearchPath))
+	{
+		const char *relationName = get_rel_name(relationId);
+		ereport(ERROR, (errmsg("cannot modify \"%s\" because it is a shard of "
+							   "a distributed table",
+							   relationName),
+						errhint("Use the distributed table or set "
+								"citus.enable_manual_changes_to_shards to on "
+								"to modify shards directly")));
+	}
 }
 
 
