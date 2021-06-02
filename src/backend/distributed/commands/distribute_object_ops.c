@@ -366,6 +366,20 @@ static DistributeObjectOps Routine_AlterObjectDepends = {
 	.postprocess = NULL,
 	.address = AlterFunctionDependsStmtObjectAddress,
 };
+static DistributeObjectOps Sequence_Alter = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterSequenceStmt,
+	.postprocess = NULL,
+	.address = AlterSequenceObjectAddress,
+};
+static DistributeObjectOps Sequence_AlterObjectSchema = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterSequenceSchemaStmt,
+	.postprocess = NULL,
+	.address = AlterSequenceSchemaStmtObjectAddress,
+};
 static DistributeObjectOps Sequence_Drop = {
 	.deparse = DeparseDropSequenceStmt,
 	.qualify = NULL,
@@ -642,6 +656,11 @@ GetDistributeObjectOps(Node *node)
 					return &Routine_AlterObjectSchema;
 				}
 
+				case OBJECT_SEQUENCE:
+				{
+					return &Sequence_AlterObjectSchema;
+				}
+
 				case OBJECT_STATISTIC_EXT:
 				{
 					return &Statistics_AlterObjectSchema;
@@ -729,6 +748,11 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterRoleSetStmt:
 		{
 			return &Any_AlterRoleSet;
+		}
+
+		case T_AlterSeqStmt:
+		{
+			return &Sequence_Alter;
 		}
 
 #if PG_VERSION_NUM >= PG_VERSION_13

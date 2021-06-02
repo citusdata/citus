@@ -404,3 +404,107 @@ ShouldPropagateAlterSequence(const ObjectAddress *address)
 
 	return true;
 }
+
+
+/*
+ * PreprocessAlterSequenceStmt gets called during the planning phase of an ALTER SEQUENCE statement
+ * of one of the following forms:
+ * ALTER SEQUENCE [ IF EXISTS ] name
+ *  [ AS data_type ]
+ *  [ INCREMENT [ BY ] increment ]
+ *  [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
+ *  [ START [ WITH ] start ]
+ *  [ RESTART [ [ WITH ] restart ] ]
+ *  [ CACHE cache ] [ [ NO ] CYCLE ]
+ *  [ OWNED BY { table_name.column_name | NONE } ]
+ *
+ * For distributed sequences, this operation will not be allowed for now.
+ * The reason is that we change sequence parameters when distributing it, so we don't want to
+ * touch those parameters for now.
+ */
+List *
+PreprocessAlterSequenceStmt(Node *node, const char *queryString,
+							ProcessUtilityContext processUtilityContext)
+{
+	AlterSeqStmt *stmt = castNode(AlterSeqStmt, node);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+
+	/* error out if the sequence is distributed */
+	if (IsObjectDistributed(&address))
+	{
+		ereport(ERROR, (errmsg(
+							"This operation is currently not allowed for a distributed sequence.")));
+	}
+	else
+	{
+		return NIL;
+	}
+}
+
+
+/*
+ * AlterSequenceOwnerObjectAddress returns the ObjectAddress of the sequence that is the
+ * subject of the AlterOwnerStmt.
+ */
+ObjectAddress
+AlterSequenceObjectAddress(Node *node, bool missing_ok)
+{
+	AlterSeqStmt *stmt = castNode(AlterSeqStmt, node);
+
+	RangeVar *sequence = stmt->sequence;
+	Oid seqOid = RangeVarGetRelid(sequence, NoLock, stmt->missing_ok);
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+
+	return sequenceAddress;
+}
+
+
+/*
+ * PreprocessAlterSequenceSchemaStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * For distributed sequences, this operation will not be allowed for now.
+ */
+List *
+PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
+								  ProcessUtilityContext processUtilityContext)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+
+	/* error out if the sequence is distributed */
+	if (IsObjectDistributed(&address))
+	{
+		ereport(ERROR, (errmsg(
+							"This operation is currently not allowed for a distributed sequence.")));
+	}
+	else
+	{
+		return NIL;
+	}
+}
+
+
+/*
+ * AlterSequenceSchemaStmtObjectAddress returns the ObjectAddress of the sequence that is
+ * the subject of the AlterObjectSchemaStmt.
+ */
+ObjectAddress
+AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+
+	RangeVar *sequence = stmt->relation;
+	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+
+	return sequenceAddress;
+}

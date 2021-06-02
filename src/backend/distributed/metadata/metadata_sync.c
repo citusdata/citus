@@ -1069,10 +1069,16 @@ SequenceDDLCommandsForTable(Oid relationId)
 		Oid sequenceTypeOid = GetAttributeTypeOid(relationId, attnum);
 		char *typeName = format_type_be(sequenceTypeOid);
 
+		/* get sequence address */
+		ObjectAddress sequenceAddress = { 0 };
+		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+		EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+
 		/* alter the sequence's data type in the coordinator if needed */
 		Oid currentSequenceTypeOid = sequenceData->seqtypid;
 		if (currentSequenceTypeOid != sequenceTypeOid)
 		{
+			UnmarkObjectDistributed(&sequenceAddress);
 			StringInfo sequenceAlterTypeStmt = makeStringInfo();
 			appendStringInfo(sequenceAlterTypeStmt, "ALTER SEQUENCE %s AS %s",
 							 sequenceName,
@@ -1093,9 +1099,6 @@ SequenceDDLCommandsForTable(Oid relationId)
 		sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
 		sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
 
-		ObjectAddress sequenceAddress = { 0 };
-		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-		EnsureDependenciesExistOnAllNodes(&sequenceAddress);
 		MarkObjectDistributed(&sequenceAddress);
 	}
 

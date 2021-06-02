@@ -335,9 +335,37 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 (1 row)
 
+-- Check that various ALTER SEQUENCE commands
+-- are not allowed for a distributed sequence for now
+CREATE SEQUENCE seq_8;
+CREATE TABLE seq_test_8 (x int, y int DEFAULT nextval('seq_8'));
+SELECT create_distributed_table('seq_test_8', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER SEQUENCE seq_8 AS bigint;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 INCREMENT BY 2;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 MINVALUE 5 MAXVALUE 5000;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 START WITH 6;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 RESTART WITH 6;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 NO CYCLE;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+CREATE SCHEMA sequence_default_8;
+ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+DROP SCHEMA sequence_default_8;
 -- clean up
-DROP TABLE seq_test_0, seq_test_1, seq_test_2, seq_test_3, seq_test_4, seq_test_5, seq_test_6, seq_test_7;
-DROP SEQUENCE seq_0, seq_1, sequence_2, seq_4, seq_6, seq_7, seq_7_par;
+DROP TABLE seq_test_0, seq_test_1, seq_test_2, seq_test_3, seq_test_4, seq_test_5, seq_test_6, seq_test_7, seq_test_8;
+DROP SEQUENCE seq_0, seq_1, sequence_2, seq_4, seq_6, seq_7, seq_7_par, seq_8;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------

@@ -179,7 +179,24 @@ SET citus.shard_replication_factor TO 1;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 
+-- Check that various ALTER SEQUENCE commands
+-- are not allowed for a distributed sequence for now
+CREATE SEQUENCE seq_8;
+CREATE TABLE seq_test_8 (x int, y int DEFAULT nextval('seq_8'));
+SELECT create_distributed_table('seq_test_8', 'x');
+ALTER SEQUENCE seq_8 AS bigint;
+ALTER SEQUENCE seq_8 INCREMENT BY 2;
+ALTER SEQUENCE seq_8 MINVALUE 5 MAXVALUE 5000;
+ALTER SEQUENCE seq_8 START WITH 6;
+ALTER SEQUENCE seq_8 RESTART WITH 6;
+ALTER SEQUENCE seq_8 NO CYCLE;
+ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
+CREATE SCHEMA sequence_default_8;
+ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
+DROP SCHEMA sequence_default_8;
+
+
 -- clean up
-DROP TABLE seq_test_0, seq_test_1, seq_test_2, seq_test_3, seq_test_4, seq_test_5, seq_test_6, seq_test_7;
-DROP SEQUENCE seq_0, seq_1, sequence_2, seq_4, seq_6, seq_7, seq_7_par;
+DROP TABLE seq_test_0, seq_test_1, seq_test_2, seq_test_3, seq_test_4, seq_test_5, seq_test_6, seq_test_7, seq_test_8;
+DROP SEQUENCE seq_0, seq_1, sequence_2, seq_4, seq_6, seq_7, seq_7_par, seq_8;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
