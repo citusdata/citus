@@ -43,6 +43,7 @@
 #include "distributed/repair_shards.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_protocol.h"
 #include "funcapi.h"
@@ -699,6 +700,8 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 						errmsg("the force_logical transfer mode is currently "
 							   "unsupported")));
 	}
+
+	DropMarkedShardsInDifferentTransaction();
 
 	foreach(placementUpdateCell, placementUpdateList)
 	{

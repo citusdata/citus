@@ -688,7 +688,26 @@ CALL citus_cleanup_orphaned_shards();
 -- Check that we can call this function without a crash
 SELECT * FROM get_rebalance_progress();
 
--- Confirm that the nodes are now there
+-- Confirm that the shards are now there
+SELECT * FROM public.table_placements_per_node;
+
+CALL citus_cleanup_orphaned_shards();
+select * from pg_dist_placement;
+
+
+-- Move all shards to worker1 again
+SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
+FROM pg_dist_shard NATURAL JOIN pg_dist_placement NATURAL JOIN pg_dist_node
+WHERE nodeport = :worker_2_port AND logicalrelid = 'colocated_rebalance_test'::regclass;
+
+-- Confirm that the shards are now all on worker1
+SELECT * FROM public.table_placements_per_node;
+
+-- Explicitly don't run citus_cleanup_orphaned_shards, rebalance_table_shards
+-- should do that for automatically.
+SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0, shard_transfer_mode := 'block_writes');
+
+-- Confirm that the shards are now moved
 SELECT * FROM public.table_placements_per_node;
 
 

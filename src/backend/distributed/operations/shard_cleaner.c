@@ -13,10 +13,12 @@
 #include "postgres.h"
 
 #include "access/xact.h"
+#include "postmaster/postmaster.h"
 
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/worker_transaction.h"
 
@@ -82,6 +84,22 @@ isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * DropMarkedShardsInDifferentTransaction cleans up orphaned shards by
+ * connecting to localhost. This is done, so that the locks that
+ * DropMarkedShards takes are only held for a short time.
+ */
+void
+DropMarkedShardsInDifferentTransaction(void)
+{
+	int connectionFlag = FORCE_NEW_CONNECTION;
+	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
+													PostPortNumber);
+	ExecuteCriticalRemoteCommand(connection, "CALL citus_cleanup_orphaned_shards();");
+	CloseConnection(connection);
 }
 
 
