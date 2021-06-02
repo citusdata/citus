@@ -26,12 +26,11 @@ setup
   SELECT citus_internal.replace_isolation_tester_func();
   SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
-CREATE OR REPLACE FUNCTION master_defer_delete_shards()
-    RETURNS int
-    LANGUAGE C STRICT
-    AS 'citus', $$master_defer_delete_shards$$;
-COMMENT ON FUNCTION master_defer_delete_shards()
-    IS 'remove orphaned shards';
+CREATE OR REPLACE PROCEDURE isolation_cleanup_orphaned_shards()
+    LANGUAGE C
+    AS 'citus', $$isolation_cleanup_orphaned_shards$$;
+COMMENT ON PROCEDURE isolation_cleanup_orphaned_shards()
+    IS 'cleanup orphaned shards';
 
     SET citus.next_shard_id to 120000;
 	SET citus.shard_count TO 8;
@@ -71,7 +70,8 @@ step "s1-move-placement-without-deferred" {
 
 step "s1-drop-marked-shards"
 {
-    SELECT public.master_defer_delete_shards();
+    SET client_min_messages to NOTICE;
+    CALL isolation_cleanup_orphaned_shards();
 }
 
 step "s1-lock-pg-dist-placement" {
@@ -116,7 +116,7 @@ step "s2-select" {
 step "s2-drop-marked-shards"
 {
     SET client_min_messages to DEBUG1;
-    SELECT public.master_defer_delete_shards();
+    CALL isolation_cleanup_orphaned_shards();
 }
 
 step "s2-commit" {

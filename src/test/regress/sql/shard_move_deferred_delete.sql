@@ -31,8 +31,13 @@ SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);
 
+-- Make sure this cannot be run in a transaction
+BEGIN;
+CALL citus_cleanup_orphaned_shards();
+COMMIT;
+
 -- execute delayed removal
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 -- we expect the shard to be on only the second worker
 SELECT run_command_on_workers($cmd$

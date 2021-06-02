@@ -12,6 +12,7 @@
 
 #include "postgres.h"
 
+#include "access/xact.h"
 
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
@@ -21,33 +22,66 @@
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(master_defer_delete_shards);
+PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_shards);
+PG_FUNCTION_INFO_V1(isolation_cleanup_orphaned_shards);
 
 static bool TryDropShard(GroupShardPlacement *placement);
 static bool TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode);
 
+
 /*
- * master_defer_delete_shards implements a user-facing UDF to deleter orphaned shards that
- * are still haning around in the system. These shards are orphaned by previous actions
- * that were not directly able to delete the placements eg. shard moving or dropping of a
- * distributed table while one of the data nodes was not online.
+ * citus_cleanup_orphaned_shards implements a user-facing UDF to delete
+ * orphaned shards that are still haning around in the system. These shards are
+ * orphaned by previous actions that were not directly able to delete the
+ * placements eg. shard moving or dropping of a distributed table while one of
+ * the data nodes was not online.
  *
- * This function iterates through placements where shardstate is SHARD_STATE_TO_DELETE
- * (shardstate = 4), drops the corresponding tables from the node and removes the
- * placement information from the catalog.
+ * This function iterates through placements where shardstate is
+ * SHARD_STATE_TO_DELETE (shardstate = 4), drops the corresponding tables from
+ * the node and removes the placement information from the catalog.
  *
- * The function takes no arguments and runs cluster wide
+ * The function takes no arguments and runs cluster wide. It cannot be run in a
+ * transaction, because holding the locks it takes for a long time is not good.
+ * While the locks are held, it is impossible for the background daemon to
+ * cleanup orphaned shards.
  */
 Datum
-master_defer_delete_shards(PG_FUNCTION_ARGS)
+citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	PreventInTransactionBlock(true, "citus_cleanup_orphaned_shards");
+
+	bool waitForLocks = true;
+	int droppedShardCount = DropMarkedShards(waitForLocks);
+	if (droppedShardCount > 0)
+	{
+		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
+	}
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * isolation_cleanup_orphaned_shards implements a test UDF that's the same as
+ * citus_cleanup_orphaned_shards. The only difference is that this command can
+ * be run in transactions, this is to test
+ */
+Datum
+isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 
 	bool waitForLocks = true;
 	int droppedShardCount = DropMarkedShards(waitForLocks);
+	if (droppedShardCount > 0)
+	{
+		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
+	}
 
-	PG_RETURN_INT32(droppedShardCount);
+	PG_RETURN_VOID();
 }
 
 
