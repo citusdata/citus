@@ -669,6 +669,46 @@ FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
 
 
 /*
+ * FindStripeWithHighestRowNumber returns StripeMetadata for the stripe that
+ * has the row with highest rowNumber by doing backward index scan on
+ * stripe_first_row_number_idx. If given relation is empty, then returns NULL.
+ */
+StripeMetadata *
+FindStripeWithHighestRowNumber(Relation relation, Snapshot snapshot)
+{
+	StripeMetadata *stripeWithHighestRowNumber = NULL;
+
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	ScanKeyData scanKey[1];
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+
+	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
+								AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
+															snapshot, 1, scanKey);
+
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, BackwardScanDirection);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
+		Datum datumArray[Natts_columnar_stripe];
+		bool isNullArray[Natts_columnar_stripe];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
+		stripeWithHighestRowNumber = BuildStripeMetadata(datumArray);
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
+
+	return stripeWithHighestRowNumber;
+}
+
+
+/*
  * ReadChunkGroupRowCounts returns an array of row counts of chunk groups for the
  * given stripe.
  */
@@ -876,7 +916,8 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
 	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
-	Relation index = index_open(ColumnarStripePKeyIndexRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
+								AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
 
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
