@@ -62,6 +62,13 @@ step "s1-move-placement"
     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
 }
 
+step "s1-move-placement-back"
+{
+    SET client_min_messages to NOTICE;
+    SHOW log_error_verbosity;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637);
+}
+
 step "s1-move-placement-without-deferred" {
     SET citus.defer_drop_after_shard_move TO OFF;
     SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
@@ -127,6 +134,8 @@ step "s2-commit" {
 permutation "s1-begin" "s1-move-placement" "s1-drop-marked-shards" "s2-drop-marked-shards" "s1-commit"
 permutation "s1-begin" "s1-move-placement" "s2-drop-marked-shards" "s1-drop-marked-shards" "s1-commit"
 permutation "s1-begin" "s1-move-placement" "s2-start-session-level-connection" "s2-lock-table-on-worker" "s1-drop-marked-shards" "s1-commit" "s2-stop-connection"
+// make sure we give a clear error when we try to replace an orphaned shard that is still in use
+permutation "s1-begin" "s1-move-placement" "s2-start-session-level-connection" "s2-lock-table-on-worker" "s1-commit" "s1-begin" "s1-move-placement-back" "s1-commit" "s2-stop-connection"
 // make sure we error if we cannot get the lock on pg_dist_placement
 permutation "s1-begin" "s1-lock-pg-dist-placement" "s2-drop-old-shards" "s1-commit"
 permutation "s1-begin" "s2-begin" "s2-select" "s1-move-placement-without-deferred" "s2-commit" "s1-commit"

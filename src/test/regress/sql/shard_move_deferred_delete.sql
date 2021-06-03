@@ -75,7 +75,8 @@ SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);
 
--- we expect to get an error since the old placement is still there
+-- master_move_shard_placement automatically cleans up orphaned shards if
+-- needed.
 SELECT master_move_shard_placement(20000000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 
 
