@@ -2,6 +2,8 @@
 -- MULTI_TABLE_DDL
 --
 -- Tests around changing the schema and dropping of a distributed table
+-- Test DEFAULTS coming from SERIAL pseudo-types, user-defined sequences
+--
 SET citus.next_shard_id TO 870000;
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);
 SELECT create_distributed_table('testtableddl', 'distributecol', 'append');
@@ -98,9 +100,8 @@ SELECT create_distributed_table('testserialtable', 'group_id', 'hash');
 
 (1 row)
 
--- should not be able to add additional serial columns
+-- can add additional serial columns
 ALTER TABLE testserialtable ADD COLUMN other_id serial;
-ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes
 -- and we shouldn't be able to change a distributed sequence's owner
 ALTER SEQUENCE testserialtable_id_seq OWNED BY NONE;
 ERROR:  cannot alter OWNED BY option of a sequence already owned by a distributed table
@@ -108,13 +109,16 @@ ERROR:  cannot alter OWNED BY option of a sequence already owned by a distribute
 CREATE SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
 ERROR:  cannot create sequences that specify a distributed table in their OWNED BY option
 HINT:  Use a sequence in a distributed table by specifying a serial column type before creating any shards.
+-- EDIT: this doesn't error out for now in order to allow adding
+-- new serial columns (they always come with owned_by command)
+-- should be fixed later in ALTER SEQUENCE preprocessing
 -- or even change a manual sequence to be owned by a distributed table
 CREATE SEQUENCE standalone_sequence;
 ALTER SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
-ERROR:  cannot associate an existing sequence with a distributed table
-HINT:  Use a sequence in a distributed table by specifying a serial column type before creating any shards.
 -- an edge case, but it's OK to change an owner to the same distributed table
+-- EDIT: this doesn't work for now for a distributed sequence
 ALTER SEQUENCE testserialtable_id_seq OWNED BY testserialtable.id;
+ERROR:  This operation is currently not allowed for a distributed sequence.
 -- drop distributed table
 \c - - - :master_port
 DROP TABLE testserialtable;
@@ -126,3 +130,38 @@ DROP TABLE testserialtable;
 ---------------------------------------------------------------------
 (0 rows)
 
+\c - - - :master_port
+-- test DEFAULT coming from SERIAL pseudo-types and user-defined sequences
+CREATE SEQUENCE test_sequence_0;
+CREATE SEQUENCE test_sequence_1;
+CREATE TABLE test_table (id1 int DEFAULT nextval('test_sequence_0'));
+SELECT create_distributed_table('test_table', 'id1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- shouldn't work since it's partition column
+ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('test_sequence_1');
+ERROR:  cannot execute ALTER TABLE command involving partition column
+-- test different plausible commands
+ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('test_sequence_1');
+ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
+ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('test_sequence_1');
+ALTER TABLE test_table ADD COLUMN id3 bigserial;
+-- shouldn't work since the above operations should be the only subcommands
+ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('test_sequence_1') CHECK (id4 > 0);
+ERROR:  cannot execute ADD COLUMN .. DEFAULT nextval('..') command with other subcommands/constraints
+HINT:  You can issue each subcommand separately
+ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('test_sequence_1');
+ERROR:  cannot execute ADD COLUMN .. DEFAULT nextval('..') command with other subcommands/constraints
+HINT:  You can issue each subcommand separately
+ALTER TABLE test_table ALTER COLUMN id3 SET DEFAULT nextval('test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
+ERROR:  cannot execute ALTER COLUMN COLUMN .. SET DEFAULT nextval('..') command with other subcommands
+HINT:  You can issue each subcommand separately
+ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes with other subcommands/constraints
+HINT:  You can issue each subcommand separately
+DROP TABLE test_table CASCADE;
+DROP SEQUENCE test_sequence_0;
+DROP SEQUENCE test_sequence_1;

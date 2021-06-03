@@ -51,8 +51,9 @@ CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name tex
     AS 'citus', $$master_create_worker_shards$$
     LANGUAGE C STRICT;
 
--- Create a test table with constraints and SERIAL
-CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL);
+-- Create a test table with constraints and SERIAL and default from user defined sequence
+CREATE SEQUENCE user_defined_seq;
+CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL, col_4 BIGINT DEFAULT nextval('user_defined_seq'));
 SELECT master_create_distributed_table('mx_test_table', 'col_1', 'hash');
 SELECT master_create_worker_shards('mx_test_table', 8, 1);
 
@@ -81,6 +82,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
 -- Show that range distributed tables are not included in the metadata snapshot
 UPDATE pg_dist_partition SET partmethod='r' WHERE logicalrelid='non_mx_test_table'::regclass;
 SELECT unnest(master_metadata_snapshot()) order by 1;
+
 
 -- Test start_metadata_sync_to_node UDF
 
@@ -759,6 +761,51 @@ ALTER SYSTEM SET citus.metadata_sync_retry_interval TO DEFAULT;
 SELECT pg_reload_conf();
 
 UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
+
+SELECT master_add_node('localhost', :worker_2_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+
+CREATE SEQUENCE mx_test_sequence_0;
+CREATE SEQUENCE mx_test_sequence_1;
+
+-- test create_distributed_table
+CREATE TABLE test_table (id int DEFAULT nextval('mx_test_sequence_0'));
+SELECT create_distributed_table('test_table', 'id');
+
+-- shouldn't work since it's partition column
+ALTER TABLE test_table ALTER COLUMN id SET DEFAULT nextval('mx_test_sequence_1');
+
+-- test different plausible commands
+ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('mx_test_sequence_1');
+ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
+ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('mx_test_sequence_1');
+
+SELECT unnest(master_metadata_snapshot()) order by 1;
+
+-- shouldn't work since test_table is MX
+ALTER TABLE test_table ADD COLUMN id3 bigserial;
+
+-- shouldn't work since the above operations should be the only subcommands
+ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('mx_test_sequence_1') CHECK (id4 > 0);
+ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('mx_test_sequence_1');
+ALTER TABLE test_table ALTER COLUMN id1 SET DEFAULT nextval('mx_test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
+ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
+
+\c - - - :worker_1_port
+\ds
+
+\c - - - :master_port
+CREATE SEQUENCE local_sequence;
+
+-- verify that DROP SEQUENCE will propagate the command to workers for
+-- the distributed sequences mx_test_sequence_0 and mx_test_sequence_1
+DROP SEQUENCE mx_test_sequence_0, mx_test_sequence_1, local_sequence CASCADE;
+
+\c - - - :worker_1_port
+\ds
+
+\c - - - :master_port
+DROP TABLE test_table CASCADE;
 
 -- Cleanup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
