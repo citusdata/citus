@@ -1292,7 +1292,7 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		}
 		if (NodeGroupHasLivePlacements(workerNode->groupId))
 		{
-			if (ClusterHasReferenceTable())
+			if (ActivePrimaryNodeCount() == 1 && ClusterHasReferenceTable())
 			{
 				ereport(ERROR, (errmsg(
 									"cannot remove the last worker node because there are reference "

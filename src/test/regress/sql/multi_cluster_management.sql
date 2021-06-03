@@ -54,6 +54,9 @@ CREATE TABLE test_reference_table (y int primary key, name text);
 SELECT create_reference_table('test_reference_table');
 INSERT INTO test_reference_table VALUES (1, '1');
 
+-- try to remove a node with active placements and reference tables
+SELECT citus_remove_node('localhost', :worker_2_port);
+
 -- try to disable a node with active placements see that node is removed
 -- observe that a notification is displayed
 SELECT master_disable_node('localhost', :worker_2_port);
