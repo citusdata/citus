@@ -114,9 +114,13 @@ static Datum * detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isn
 static ItemPointerData row_number_to_tid(uint64 rowNumber);
 static uint64 tid_to_row_number(ItemPointerData tid);
 static void ErrorIfInvalidRowNumber(uint64 rowNumber);
+static BlockNumber ColumnarGetNumberOfVirtualBlocks(Relation relation, Snapshot snapshot);
+static ItemPointerData ColumnarGetHighestItemPointer(Relation relation,
+													 Snapshot snapshot);
 static double ColumnarReadRowsIntoIndex(TableScanDesc scan,
 										Relation indexRelation,
 										IndexInfo *indexInfo,
+										bool progress,
 										IndexBuildCallback indexCallback,
 										void *indexCallbackState,
 										EState *estate, ExprState *predicate);
@@ -1077,11 +1081,6 @@ columnar_index_build_range_scan(Relation columnarRelation,
 								void *callback_state,
 								TableScanDesc scan)
 {
-	/*
-	 * TODO: Should this function call pgstat_progress_update_param in
-	 * somewhere as heapam_index_build_range_scan ?
-	 */
-
 	if (start_blockno != 0 || numblocks != InvalidBlockNumber)
 	{
 		/*
@@ -1150,6 +1149,24 @@ columnar_index_build_range_scan(Relation columnarRelation,
 								 allowAccessStrategy, allow_sync);
 
 	/*
+	 * Indeed, columnar tables might have gaps between row numbers, e.g
+	 * due to aborted transactions etc. Also, ItemPointer BlockNumber's
+	 * for columnar tables don't actually correspond to actual disk blocks
+	 * as in heapAM. For this reason, we call them as "virtual" blocks. At
+	 * the moment, we believe it is better to report our progress based on
+	 * this "virtual" block concept instead of doing nothing.
+	 *
+	 * Also, since we will report total number of blocks as "done" finally,
+	 * here we store total number of blocks as it is not free to compute.
+	 */
+	BlockNumber nvirtualBlocks = InvalidBlockNumber;
+	if (progress)
+	{
+		nvirtualBlocks = ColumnarGetNumberOfVirtualBlocks(columnarRelation, snapshot);
+		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_TOTAL, nvirtualBlocks);
+	}
+
+	/*
 	 * Set up execution state for predicate, if any.
 	 * Note that this is only useful for partial indexes.
 	 */
@@ -1159,9 +1176,15 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	ExprState *predicate = ExecPrepareQual(indexInfo->ii_Predicate, estate);
 
 	double reltuples = ColumnarReadRowsIntoIndex(scan, indexRelation, indexInfo,
-												 callback, callback_state, estate,
-												 predicate);
+												 progress, callback, callback_state,
+												 estate, predicate);
 	table_endscan(scan);
+
+	if (progress)
+	{
+		/* report the last "virtual" block as "done" */
+		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE, nvirtualBlocks);
+	}
 
 	/* we can now forget our snapshot, if set and registered by us */
 	if (need_unregister_snapshot)
@@ -1179,22 +1202,81 @@ columnar_index_build_range_scan(Relation columnarRelation,
 
 
 /*
+ * ColumnarGetNumberOfVirtualBlocks returns total number of "virtual" blocks
+ * that given columnar table has based on based on ItemPointer BlockNumber's.
+ */
+static BlockNumber
+ColumnarGetNumberOfVirtualBlocks(Relation relation, Snapshot snapshot)
+{
+	ItemPointerData highestItemPointer =
+		ColumnarGetHighestItemPointer(relation, snapshot);
+	if (!ItemPointerIsValid(&highestItemPointer))
+	{
+		/* table is empty according to our snapshot */
+		return 0;
+	}
+
+	/*
+	 * Since BlockNumber is 0-based, increment it by 1 to find the total
+	 * number of "virtual" blocks.
+	 */
+	return ItemPointerGetBlockNumber(&highestItemPointer) + 1;
+}
+
+
+/*
+ * ColumnarGetHighestItemPointer returns ItemPointerData for the tuple with
+ * highest tid for given relation.
+ * If given relation is empty, then returns invalid item pointer.
+ */
+static ItemPointerData
+ColumnarGetHighestItemPointer(Relation relation, Snapshot snapshot)
+{
+	StripeMetadata *stripeWithHighestRowNumber =
+		FindStripeWithHighestRowNumber(relation, snapshot);
+	if (stripeWithHighestRowNumber == NULL)
+	{
+		/* table is empty according to our snapshot */
+		ItemPointerData invalidItemPtr;
+		ItemPointerSetInvalid(&invalidItemPtr);
+		return invalidItemPtr;
+	}
+
+	uint64 highestRowNumber = stripeWithHighestRowNumber->firstRowNumber +
+							  stripeWithHighestRowNumber->rowCount - 1;
+	return row_number_to_tid(highestRowNumber);
+}
+
+
+/*
  * ColumnarReadRowsIntoIndex builds indexRelation tuples by reading the
  * actual relation based on given "scan" and returns number of tuples
  * scanned to build the indexRelation.
  */
 static double
 ColumnarReadRowsIntoIndex(TableScanDesc scan, Relation indexRelation,
-						  IndexInfo *indexInfo, IndexBuildCallback indexCallback,
-						  void *indexCallbackState, EState *estate, ExprState *predicate)
+						  IndexInfo *indexInfo, bool progress,
+						  IndexBuildCallback indexCallback,
+						  void *indexCallbackState, EState *estate,
+						  ExprState *predicate)
 {
 	double reltuples = 0;
+
+	BlockNumber lastReportedBlockNumber = InvalidBlockNumber;
 
 	ExprContext *econtext = GetPerTupleExprContext(estate);
 	TupleTableSlot *slot = econtext->ecxt_scantuple;
 	while (columnar_getnextslot(scan, ForwardScanDirection, slot))
 	{
 		CHECK_FOR_INTERRUPTS();
+
+		BlockNumber currentBlockNumber = ItemPointerGetBlockNumber(&slot->tts_tid);
+		if (progress && lastReportedBlockNumber != currentBlockNumber)
+		{
+			pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE,
+										 currentBlockNumber);
+			lastReportedBlockNumber = currentBlockNumber;
+		}
 
 		MemoryContextReset(econtext->ecxt_per_tuple_memory);
 

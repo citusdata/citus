@@ -256,6 +256,8 @@ extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 strip
 										   uint32 chunkCount);
 extern StripeMetadata * FindStripeByRowNumber(Relation relation, uint64 rowNumber,
 											  Snapshot snapshot);
+extern StripeMetadata * FindStripeWithHighestRowNumber(Relation relation,
+													   Snapshot snapshot);
 extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 
 
