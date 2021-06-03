@@ -761,7 +761,7 @@ List *
 GetForeignKeysFromLocalTables(Oid relationId)
 {
 	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
-							   INCLUDE_LOCAL_TABLES;
+							  INCLUDE_LOCAL_TABLES;
 	List *referencingFKeyList = GetForeignKeyOids(relationId, referencedFKeysFlag);
 
 	return referencingFKeyList;
