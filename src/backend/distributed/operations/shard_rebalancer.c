@@ -701,7 +701,7 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 							   "unsupported")));
 	}
 
-	DropMarkedShardsInDifferentTransaction();
+	DropMarkedShardsInSeparateTransaction();
 
 	foreach(placementUpdateCell, placementUpdateList)
 	{
@@ -913,17 +913,15 @@ citus_drain_node(PG_FUNCTION_ARGS)
 	};
 
 	char *nodeName = text_to_cstring(nodeNameText);
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
-													PostPortNumber);
 
 	/*
 	 * This is done in a separate session. This way it's not undone if the
 	 * draining fails midway through.
 	 */
-	ExecuteCriticalRemoteCommand(connection, psprintf(
-									 "SELECT master_set_node_property(%s, %i, 'shouldhaveshards', false)",
-									 quote_literal_cstr(nodeName), nodePort));
+	ExecuteCriticalCommandInSeparateTransaction(psprintf(
+													"SELECT master_set_node_property(%s, %i, 'shouldhaveshards', false)",
+													quote_literal_cstr(nodeName),
+													nodePort));
 
 	RebalanceTableShards(&options, shardTransferModeOid);
 
@@ -1695,20 +1693,32 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 										  REBALANCE_PROGRESS_MOVING);
 
 	ConflictShardPlacementUpdateOnlyWithIsolationTesting(shardId);
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
-													PostPortNumber);
 
 	/*
 	 * In case of failure, we throw an error such that rebalance_table_shards
 	 * fails early.
 	 */
-	ExecuteCriticalRemoteCommand(connection, placementUpdateCommand->data);
+	ExecuteCriticalCommandInSeparateTransaction(placementUpdateCommand->data);
 
 	UpdateColocatedShardPlacementProgress(shardId,
 										  sourceNode->workerName,
 										  sourceNode->workerPort,
 										  REBALANCE_PROGRESS_MOVED);
+}
+
+
+/*
+ * ExecuteCriticalCommandInSeparateTransaction runs a command in a separate
+ * transaction that is commited right away. This is useful for things that you
+ * don't want to rollback when the current transaction is rolled back.
+ */
+void
+ExecuteCriticalCommandInSeparateTransaction(char *command)
+{
+	int connectionFlag = FORCE_NEW_CONNECTION;
+	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
+													PostPortNumber);
+	ExecuteCriticalRemoteCommand(connection, command);
 	CloseConnection(connection);
 }
 

@@ -19,6 +19,6 @@ extern bool CheckAvailableSpaceBeforeMove;
 
 extern int TryDropMarkedShards(bool waitForLocks);
 extern int DropMarkedShards(bool waitForLocks);
-extern void DropMarkedShardsInDifferentTransaction(void);
+extern void DropMarkedShardsInSeparateTransaction(void);
 
 #endif /*CITUS_SHARD_CLEANER_H */
