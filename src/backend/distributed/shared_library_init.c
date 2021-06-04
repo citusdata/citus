@@ -691,6 +691,18 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.enable_manual_changes_to_shards",
+		gettext_noop("Enables dropping and truncating known shards."),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "dropping and truncating shards on the coordinator "
+					 "(or the workers with metadata)"),
+		&EnableManualChangesToShards,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomRealVariable(
 		"citus.distributed_deadlock_detection_factor",
 		gettext_noop("Sets the time to wait before checking for distributed "

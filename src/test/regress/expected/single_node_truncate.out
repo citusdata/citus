@@ -31,9 +31,9 @@ SELECT * FROM table_sizes;
         name        | has_data
 ---------------------------------------------------------------------
  citus_local        | f
- citus_local_102041 | t
+ citus_local_102045 | t
  ref                | t
- ref_102040         | t
+ ref_102044         | t
 (4 rows)
 
 -- verify that this UDF is noop on Citus local tables
@@ -47,9 +47,9 @@ SELECT * FROM table_sizes;
         name        | has_data
 ---------------------------------------------------------------------
  citus_local        | f
- citus_local_102041 | t
+ citus_local_102045 | t
  ref                | t
- ref_102040         | t
+ ref_102044         | t
 (4 rows)
 
 -- test that we allow cascading truncates to citus local tables
@@ -65,9 +65,9 @@ SELECT * FROM table_sizes;
         name        | has_data
 ---------------------------------------------------------------------
  citus_local        | f
- citus_local_102041 | t
+ citus_local_102045 | t
  ref                | f
- ref_102040         | t
+ ref_102044         | t
 (4 rows)
 
 ROLLBACK;
@@ -98,14 +98,14 @@ SELECT * FROM table_sizes;
         name        | has_data
 ---------------------------------------------------------------------
  citus_local        | f
- citus_local_102041 | t
+ citus_local_102045 | t
  dist               | f
- dist_102043        | t
- dist_102044        | t
- dist_102045        | t
- dist_102046        | t
+ dist_102047        | t
+ dist_102048        | t
+ dist_102049        | t
+ dist_102050        | t
  ref                | f
- ref_102040         | t
+ ref_102044         | t
 (9 rows)
 
 ROLLBACK;
@@ -121,14 +121,14 @@ SELECT * FROM table_sizes;
         name        | has_data
 ---------------------------------------------------------------------
  citus_local        | f
- citus_local_102041 | t
+ citus_local_102045 | t
  dist               | f
- dist_102043        | t
- dist_102044        | t
- dist_102045        | t
- dist_102046        | t
+ dist_102047        | t
+ dist_102048        | t
+ dist_102049        | t
+ dist_102050        | t
  ref                | t
- ref_102040         | t
+ ref_102044         | t
 (9 rows)
 
 ROLLBACK;
