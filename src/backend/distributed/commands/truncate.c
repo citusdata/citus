@@ -220,8 +220,7 @@ EnsureLocalTableCanBeTruncated(Oid relationId)
 		GetForeignKeysFromLocalTables(relationId);
 	if (list_length(referencingForeignConstaintsFromLocalTables) > 0)
 	{
-		Oid foreignKeyId = lfirst_oid(list_head(
-										  referencingForeignConstaintsFromLocalTables));
+		Oid foreignKeyId = linitial_oid(referencingForeignConstaintsFromLocalTables);
 		Oid referencingRelation = GetReferencingTableId(foreignKeyId);
 		char *referencedRelationName = get_rel_name(relationId);
 		char *referencingRelationName = get_rel_name(referencingRelation);
