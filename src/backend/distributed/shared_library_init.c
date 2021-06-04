@@ -645,7 +645,9 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.defer_drop_after_shard_move",
-		gettext_noop("When enabled a shard move will mark old shards for deletion"),
+		gettext_noop("When enabled a shard move will mark the original shards "
+					 "for deletion after a successful move, instead of deleting "
+					 "them right away."),
 		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
 					 "long running transactions on a the shard during the drop phase of "
 					 "the shard move. This causes some moves to be rolled back after "

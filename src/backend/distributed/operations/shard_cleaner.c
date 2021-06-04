@@ -56,7 +56,7 @@ citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 	PreventInTransactionBlock(true, "citus_cleanup_orphaned_shards");
 
 	bool waitForLocks = true;
-	int droppedShardCount = DropMarkedShards(waitForLocks);
+	int droppedShardCount = DropOrphanedShards(waitForLocks);
 	if (droppedShardCount > 0)
 	{
 		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
@@ -78,7 +78,7 @@ isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 	EnsureCoordinator();
 
 	bool waitForLocks = true;
-	int droppedShardCount = DropMarkedShards(waitForLocks);
+	int droppedShardCount = DropOrphanedShards(waitForLocks);
 	if (droppedShardCount > 0)
 	{
 		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
@@ -89,32 +89,32 @@ isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 
 
 /*
- * DropMarkedShardsInSeparateTransaction cleans up orphaned shards by
+ * DropOrphanedShardsInSeparateTransaction cleans up orphaned shards by
  * connecting to localhost. This is done, so that the locks that
- * DropMarkedShards takes are only held for a short time.
+ * DropOrphanedShards takes are only held for a short time.
  */
 void
-DropMarkedShardsInSeparateTransaction(void)
+DropOrphanedShardsInSeparateTransaction(void)
 {
 	ExecuteCriticalCommandInSeparateTransaction("CALL citus_cleanup_orphaned_shards()");
 }
 
 
 /*
- * TryDropMarkedShards is a wrapper around DropMarkedShards that catches
+ * TryDropOrphanedShards is a wrapper around DropOrphanedShards that catches
  * any errors to make it safe to use in the maintenance daemon.
  *
  * If dropping any of the shards failed this function returns -1, otherwise it
  * returns the number of dropped shards.
  */
 int
-TryDropMarkedShards(bool waitForLocks)
+TryDropOrphanedShards(bool waitForLocks)
 {
 	int droppedShardCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
 	PG_TRY();
 	{
-		droppedShardCount = DropMarkedShards(waitForLocks);
+		droppedShardCount = DropOrphanedShards(waitForLocks);
 	}
 	PG_CATCH();
 	{
@@ -133,7 +133,7 @@ TryDropMarkedShards(bool waitForLocks)
 
 
 /*
- * DropMarkedShards removes shards that were marked SHARD_STATE_TO_DELETE before.
+ * DropOrphanedShards removes shards that were marked SHARD_STATE_TO_DELETE before.
  *
  * It does so by trying to take an exclusive lock on the shard and its
  * colocated placements before removing. If the lock cannot be obtained it
@@ -152,7 +152,7 @@ TryDropMarkedShards(bool waitForLocks)
  *
  */
 int
-DropMarkedShards(bool waitForLocks)
+DropOrphanedShards(bool waitForLocks)
 {
 	int removedShardCount = 0;
 	ListCell *shardPlacementCell = NULL;
@@ -208,7 +208,7 @@ DropMarkedShards(bool waitForLocks)
 
 	if (failedShardDropCount > 0)
 	{
-		ereport(WARNING, (errmsg("Failed to drop %d old shards out of %d",
+		ereport(WARNING, (errmsg("Failed to drop %d orphaned shards out of %d",
 								 failedShardDropCount, list_length(shardPlacementList))));
 	}
 

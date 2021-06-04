@@ -79,7 +79,7 @@ step s1-drop-marked-shards:
  <waiting ...>
 s1: WARNING:  canceling statement due to lock timeout
 step s1-drop-marked-shards: <... completed>
-s1: WARNING:  Failed to drop 1 old shards out of 1
+s1: WARNING:  Failed to drop 1 orphaned shards out of 1
 step s1-commit:
     COMMIT;
 

@@ -1067,7 +1067,7 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 			 * Trigger deletion of orphaned shards and hope that this removes
 			 * the shard.
 			 */
-			DropMarkedShardsInSeparateTransaction();
+			DropOrphanedShardsInSeparateTransaction();
 			shardPlacementList = ShardPlacementList(shardId);
 			targetPlacement = SearchShardPlacementInList(shardPlacementList,
 														 targetNodeName,

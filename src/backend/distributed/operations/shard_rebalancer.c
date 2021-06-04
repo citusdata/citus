@@ -701,7 +701,7 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 							   "unsupported")));
 	}
 
-	DropMarkedShardsInSeparateTransaction();
+	DropOrphanedShardsInSeparateTransaction();
 
 	foreach(placementUpdateCell, placementUpdateList)
 	{
