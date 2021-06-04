@@ -190,6 +190,7 @@ extern List * RebalancePlacementUpdates(List *workerNodeList, List *shardPlaceme
 										RebalancePlanFunctions *rebalancePlanFunctions);
 extern List * ReplicationPlacementUpdates(List *workerNodeList, List *shardPlacementList,
 										  int shardReplicationFactor);
+extern void ExecuteCriticalCommandInSeparateTransaction(char *command);
 
 
 #endif   /* SHARD_REBALANCER_H */
