@@ -136,6 +136,10 @@ SELECT create_reference_table('test_reference_table');
 (1 row)
 
 INSERT INTO test_reference_table VALUES (1, '1');
+-- try to remove a node with active placements and reference tables
+SELECT citus_remove_node('localhost', :worker_2_port);
+ERROR:  cannot remove the primary node of a node group which has shard placements
+HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
 -- try to disable a node with active placements see that node is removed
 -- observe that a notification is displayed
 SELECT master_disable_node('localhost', :worker_2_port);

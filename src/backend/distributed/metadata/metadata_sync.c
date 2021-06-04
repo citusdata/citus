@@ -25,11 +25,13 @@
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_attrdef.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
+#include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
@@ -46,10 +48,13 @@
 #include "distributed/pg_dist_node.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
+#include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "miscadmin.h"
+#include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
@@ -67,7 +72,6 @@ static List * GetDistributedTableDDLEvents(Oid relationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
 static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
 								   int attrNum, bool value);
-static List * SequenceDDLCommandsForTable(Oid relationId);
 static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
@@ -374,11 +378,9 @@ MetadataCreateCommands(void)
 			continue;
 		}
 
-		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		List *ddlCommandList = GetFullTableCreationCommands(relationId,
 															includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
 
 		/*
 		 * Tables might have dependencies on different objects, since we create shards for
@@ -388,6 +390,7 @@ MetadataCreateCommands(void)
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 
+		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);
 
@@ -402,6 +405,9 @@ MetadataCreateCommands(void)
 
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  tableOwnerResetCommand);
+
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(
+			relationId);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  sequenceDependencyCommandList);
 	}
@@ -509,7 +515,8 @@ GetDistributedTableDDLEvents(Oid relationId)
 		}
 
 		/* command to associate sequences with table */
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(
+			relationId);
 		commandList = list_concat(commandList, sequenceDependencyCommandList);
 	}
 
@@ -1042,20 +1049,57 @@ List *
 SequenceDDLCommandsForTable(Oid relationId)
 {
 	List *sequenceDDLList = NIL;
-	List *ownedSequences = GetSequencesOwnedByRelation(relationId);
+
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
+	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+
 	char *ownerName = TableOwner(relationId);
 
-	Oid sequenceOid = InvalidOid;
-	foreach_oid(sequenceOid, ownedSequences)
+	ListCell *attnumCell = NULL;
+	ListCell *dependentSequenceCell = NULL;
+	forboth(attnumCell, attnumList, dependentSequenceCell, dependentSequenceList)
 	{
+		AttrNumber attnum = lfirst_int(attnumCell);
+		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
+
 		char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
 		char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
 		StringInfo wrappedSequenceDef = makeStringInfo();
 		StringInfo sequenceGrantStmt = makeStringInfo();
 		char *sequenceName = generate_qualified_relation_name(sequenceOid);
 		Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceOid);
-		Oid sequenceTypeOid = sequenceData->seqtypid;
+		Oid sequenceTypeOid = GetAttributeTypeOid(relationId, attnum);
 		char *typeName = format_type_be(sequenceTypeOid);
+
+		/* get sequence address */
+		ObjectAddress sequenceAddress = { 0 };
+		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+		EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+
+		/*
+		 * Alter the sequence's data type in the coordinator if needed.
+		 * A sequence's type is bigint by default and it doesn't change even if
+		 * it's used in an int column. However, when distributing the sequence,
+		 * we don't allow incompatible min/max ranges between the coordinator and
+		 * workers, so we determine the sequence type here based on its current usage
+		 * and propagate that same type to the workers as well.
+		 * TODO: move this command to the part where the sequence is
+		 * used in a distributed table: both in create_distributed_table
+		 * and ALTER TABLE commands that include a sequence default
+		 */
+		Oid currentSequenceTypeOid = sequenceData->seqtypid;
+		if (currentSequenceTypeOid != sequenceTypeOid)
+		{
+			AlterSeqStmt *alterSequenceStatement = makeNode(AlterSeqStmt);
+			char *seqNamespace = get_namespace_name(get_rel_namespace(sequenceOid));
+			char *seqName = get_rel_name(sequenceOid);
+			alterSequenceStatement->sequence = makeRangeVar(seqNamespace, seqName, -1);
+			Node *asTypeNode = (Node *) makeTypeNameFromOid(sequenceTypeOid, -1);
+			SetDefElemArg(alterSequenceStatement, "as", asTypeNode);
+			ParseState *pstate = make_parsestate(NULL);
+			AlterSequence(pstate, alterSequenceStatement);
+		}
 
 		/* create schema if needed */
 		appendStringInfo(wrappedSequenceDef,
@@ -1069,9 +1113,181 @@ SequenceDDLCommandsForTable(Oid relationId)
 
 		sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
 		sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
+
+		MarkObjectDistributed(&sequenceAddress);
 	}
 
 	return sequenceDDLList;
+}
+
+
+/*
+ * GetAttributeTypeOid returns the OID of the type of the attribute of
+ * provided relationId that has the provided attnum
+ */
+Oid
+GetAttributeTypeOid(Oid relationId, AttrNumber attnum)
+{
+	Oid resultOid = InvalidOid;
+
+	ScanKeyData key[2];
+
+	/* Grab an appropriate lock on the pg_attribute relation */
+	Relation attrel = table_open(AttributeRelationId, AccessShareLock);
+
+	/* Use the index to scan only system attributes of the target relation */
+	ScanKeyInit(&key[0],
+				Anum_pg_attribute_attrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_attribute_attnum,
+				BTLessEqualStrategyNumber, F_INT2LE,
+				Int16GetDatum(attnum));
+
+	SysScanDesc scan = systable_beginscan(attrel, AttributeRelidNumIndexId, true, NULL, 2,
+										  key);
+
+	HeapTuple attributeTuple;
+	while (HeapTupleIsValid(attributeTuple = systable_getnext(scan)))
+	{
+		Form_pg_attribute att = (Form_pg_attribute) GETSTRUCT(attributeTuple);
+		resultOid = att->atttypid;
+	}
+
+	systable_endscan(scan);
+	table_close(attrel, AccessShareLock);
+
+	return resultOid;
+}
+
+
+/*
+ * GetDependentSequencesWithRelation appends the attnum and id of sequences that
+ * have direct (owned sequences) or indirect dependency with the given relationId,
+ * to the lists passed as NIL initially.
+ * For both cases, we use the intermediate AttrDefault object from pg_depend.
+ * If attnum is specified, we only return the sequences related to that
+ * attribute of the relationId.
+ */
+void
+GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
+								  List **dependentSequenceList, AttrNumber attnum)
+{
+	Assert(*attnumList == NIL && *dependentSequenceList == NIL);
+
+	List *attrdefResult = NIL;
+	List *attrdefAttnumResult = NIL;
+	ScanKeyData key[3];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relationId));
+	if (attnum)
+	{
+		ScanKeyInit(&key[2],
+					Anum_pg_depend_refobjsubid,
+					BTEqualStrategyNumber, F_INT4EQ,
+					Int32GetDatum(attnum));
+	}
+
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, attnum ? 3 : 2, key);
+
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->classid == AttrDefaultRelationId &&
+			deprec->objsubid == 0 &&
+			deprec->refobjsubid != 0 &&
+			deprec->deptype == DEPENDENCY_AUTO)
+		{
+			attrdefResult = lappend_oid(attrdefResult, deprec->objid);
+			attrdefAttnumResult = lappend_int(attrdefAttnumResult, deprec->refobjsubid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	ListCell *attrdefOidCell = NULL;
+	ListCell *attrdefAttnumCell = NULL;
+	forboth(attrdefOidCell, attrdefResult, attrdefAttnumCell, attrdefAttnumResult)
+	{
+		Oid attrdefOid = lfirst_oid(attrdefOidCell);
+		AttrNumber attrdefAttnum = lfirst_int(attrdefAttnumCell);
+
+		List *sequencesFromAttrDef = GetSequencesFromAttrDef(attrdefOid);
+
+		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
+		if (list_length(sequencesFromAttrDef) > 1)
+		{
+			ereport(ERROR, (errmsg("More than one sequence in a column default"
+								   " is not supported for distribution")));
+		}
+
+		if (list_length(sequencesFromAttrDef) == 1)
+		{
+			*dependentSequenceList = list_concat(*dependentSequenceList,
+												 sequencesFromAttrDef);
+			*attnumList = lappend_int(*attnumList, attrdefAttnum);
+		}
+	}
+}
+
+
+/*
+ * GetSequencesFromAttrDef returns a list of sequence OIDs that have
+ * dependency with the given attrdefOid in pg_depend
+ */
+List *
+GetSequencesFromAttrDef(Oid attrdefOid)
+{
+	List *sequencesResult = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_classid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(AttrDefaultRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_objid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(attrdefOid));
+
+	SysScanDesc scan = systable_beginscan(depRel, DependDependerIndexId, true,
+										  NULL, 2, key);
+
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->refclassid == RelationRelationId &&
+			deprec->deptype == DEPENDENCY_NORMAL &&
+			get_rel_relkind(deprec->refobjid) == RELKIND_SEQUENCE)
+		{
+			sequencesResult = lappend_oid(sequencesResult, deprec->refobjid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	return sequencesResult;
 }
 
 

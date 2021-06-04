@@ -67,7 +67,6 @@ static void CitusDeleteFile(const char *filename);
 static bool check_log_statement(List *stmt_list);
 static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 								Oid sequenceTypeId);
-static void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
 
 
 /* exports for SQL callable functions */
@@ -738,12 +737,10 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 	if (sequenceTypeId == INT4OID)
 	{
 		valueBitLength = 28;
-		sequenceMaxValue = INT_MAX;
 	}
 	else if (sequenceTypeId == INT2OID)
 	{
 		valueBitLength = 12;
-		sequenceMaxValue = SHRT_MAX;
 	}
 
 	/* calculate min/max values that the sequence can generate in this worker */
@@ -793,7 +790,7 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
  * If a DefElem with the given defname does not exist it is created and
  * added to the AlterSeqStmt.
  */
-static void
+void
 SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 {
 	DefElem *defElem = NULL;

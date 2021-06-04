@@ -123,6 +123,7 @@ extern int32 ArrayObjectCount(ArrayType *arrayObject);
 extern FmgrInfo * GetFunctionInfo(Oid typeId, Oid accessMethodId, int16 procedureId);
 extern uint64 ExtractShardIdFromTableName(const char *tableName, bool missingOk);
 extern void RepartitionCleanupJobDirectories(void);
+extern void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
 
 
 /* Function declarations shared with the master planner */

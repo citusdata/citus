@@ -31,6 +31,7 @@ test: alter_database_owner
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_test_catalog_views
 test: multi_table_ddl
+test: multi_sequence_default
 test: multi_name_lengths
 test: multi_name_resolution
 test: multi_metadata_access

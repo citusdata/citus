@@ -17,6 +17,7 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
+#include "catalog/pg_type.h"
 #include "commands/tablecmds.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/colocation_utils.h"
@@ -28,6 +29,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/dependency.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/reference_table_utils.h"
@@ -36,6 +38,7 @@
 #include "distributed/version_compat.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
+#include "parser/parse_expr.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -165,6 +168,8 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 
 			SendCommandToWorkersWithMetadata(detachPartitionCommand);
 		}
+
+		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 
 	return NIL;
@@ -574,23 +579,49 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		ErrorIfUnsupportedAlterTableStmt(alterTableStatement);
 	}
 
+	EnsureCoordinator();
+
 	/* these will be set in below loop according to subcommands */
 	Oid rightRelationId = InvalidOid;
 	bool executeSequentially = false;
 
 	/*
-	 * We check if there is a ADD/DROP FOREIGN CONSTRAINT command in sub commands
-	 * list. If there is we assign referenced relation id to rightRelationId and
-	 * we also set skip_validation to true to prevent PostgreSQL to verify validity
-	 * of the foreign constraint in master. Validity will be checked in workers
-	 * anyway.
+	 * We check if there is:
+	 *  - an ADD/DROP FOREIGN CONSTRAINT command in sub commands
+	 *    list. If there is we assign referenced relation id to rightRelationId and
+	 *    we also set skip_validation to true to prevent PostgreSQL to verify validity
+	 *    of the foreign constraint in master. Validity will be checked in workers
+	 *    anyway.
+	 *  - an ADD COLUMN .. DEFAULT nextval('..') OR
+	 *    an ADD COLUMN .. SERIAL pseudo-type OR
+	 *    an ALTER COLUMN .. SET DEFAULT nextval('..'). If there is we set
+	 *    deparseAT variable to true which means we will deparse the statement
+	 *    before we propagate the command to shards. For shards, all the defaults
+	 *    coming from a user-defined sequence will be replaced by
+	 *    NOT NULL constraint.
 	 */
 	List *commandList = alterTableStatement->cmds;
+
+	/*
+	 * if deparsing is needed, we will use a different version of the original
+	 * alterTableStmt
+	 */
+	bool deparseAT = false;
+	bool propagateCommandToWorkers = true;
+	AlterTableStmt *newStmt = copyObject(alterTableStatement);
+
+	AlterTableCmd *newCmd = makeNode(AlterTableCmd);
 
 	AlterTableCmd *command = NULL;
 	foreach_ptr(command, commandList)
 	{
 		AlterTableType alterTableType = command->subtype;
+
+		/*
+		 * if deparsing is needed, we will use a different version of the original
+		 * AlterTableCmd
+		 */
+		newCmd = copyObject(command);
 
 		if (alterTableType == AT_AddConstraint)
 		{
@@ -666,6 +697,96 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 					break;
 				}
 			}
+
+			/*
+			 * We check for ADD COLUMN .. DEFAULT expr
+			 * if expr contains nextval('user_defined_seq')
+			 * we should deparse the statement
+			 */
+			constraint = NULL;
+			foreach_ptr(constraint, columnConstraints)
+			{
+				if (constraint->contype == CONSTR_DEFAULT)
+				{
+					if (constraint->raw_expr != NULL)
+					{
+						ParseState *pstate = make_parsestate(NULL);
+						Node *expr = transformExpr(pstate, constraint->raw_expr,
+												   EXPR_KIND_COLUMN_DEFAULT);
+
+						if (contain_nextval_expression_walker(expr, NULL))
+						{
+							deparseAT = true;
+
+							/* the new column definition will have no constraint */
+							ColumnDef *newColDef = copyObject(columnDefinition);
+							newColDef->constraints = NULL;
+
+							newCmd->def = (Node *) newColDef;
+						}
+					}
+				}
+			}
+
+			/*
+			 * We check for ADD COLUMN .. SERIAL pseudo-type
+			 * if that's the case, we should deparse the statement
+			 * The structure of this check is copied from transformColumnDefinition.
+			 */
+			if (columnDefinition->typeName && list_length(
+					columnDefinition->typeName->names) == 1 &&
+				!columnDefinition->typeName->pct_type)
+			{
+				char *typeName = strVal(linitial(columnDefinition->typeName->names));
+
+				if (strcmp(typeName, "smallserial") == 0 ||
+					strcmp(typeName, "serial2") == 0 ||
+					strcmp(typeName, "serial") == 0 ||
+					strcmp(typeName, "serial4") == 0 ||
+					strcmp(typeName, "bigserial") == 0 ||
+					strcmp(typeName, "serial8") == 0)
+				{
+					deparseAT = true;
+
+					ColumnDef *newColDef = copyObject(columnDefinition);
+					newColDef->is_not_null = false;
+
+					if (strcmp(typeName, "smallserial") == 0 ||
+						strcmp(typeName, "serial2") == 0)
+					{
+						newColDef->typeName->names = NIL;
+						newColDef->typeName->typeOid = INT2OID;
+					}
+					else if (strcmp(typeName, "serial") == 0 ||
+							 strcmp(typeName, "serial4") == 0)
+					{
+						newColDef->typeName->names = NIL;
+						newColDef->typeName->typeOid = INT4OID;
+					}
+					else if (strcmp(typeName, "bigserial") == 0 ||
+							 strcmp(typeName, "serial8") == 0)
+					{
+						newColDef->typeName->names = NIL;
+						newColDef->typeName->typeOid = INT8OID;
+					}
+					newCmd->def = (Node *) newColDef;
+				}
+			}
+		}
+		/*
+		 * We check for ALTER COLUMN .. SET/DROP DEFAULT
+		 * we should not propagate anything to shards
+		 */
+		else if (alterTableType == AT_ColumnDefault)
+		{
+			ParseState *pstate = make_parsestate(NULL);
+			Node *expr = transformExpr(pstate, command->def,
+									   EXPR_KIND_COLUMN_DEFAULT);
+
+			if (contain_nextval_expression_walker(expr, NULL))
+			{
+				propagateCommandToWorkers = false;
+			}
 		}
 		else if (alterTableType == AT_AttachPartition)
 		{
@@ -731,12 +852,20 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
 	ddlJob->concurrentIndexCmd = false;
+
+	const char *sqlForTaskList = alterTableCommand;
+	if (deparseAT)
+	{
+		newStmt->cmds = list_make1(newCmd);
+		sqlForTaskList = DeparseTreeNode((Node *) newStmt);
+	}
+
 	ddlJob->commandString = alterTableCommand;
 
 	if (OidIsValid(rightRelationId))
 	{
 		bool referencedIsLocalTable = !IsCitusTable(rightRelationId);
-		if (referencedIsLocalTable)
+		if (referencedIsLocalTable || !propagateCommandToWorkers)
 		{
 			ddlJob->taskList = NIL;
 		}
@@ -744,13 +873,17 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		{
 			/* if foreign key related, use specialized task list function ... */
 			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
-													 alterTableCommand);
+													 sqlForTaskList);
 		}
 	}
 	else
 	{
 		/* ... otherwise use standard DDL task list function */
-		ddlJob->taskList = DDLTaskList(leftRelationId, alterTableCommand);
+		ddlJob->taskList = DDLTaskList(leftRelationId, sqlForTaskList);
+		if (!propagateCommandToWorkers)
+		{
+			ddlJob->taskList = NIL;
+		}
 	}
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -1467,7 +1600,79 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 														constraint);
 				}
 			}
+
+			/*
+			 * We check for ADD COLUMN .. DEFAULT expr
+			 * if expr contains nextval('user_defined_seq')
+			 * we should make sure that the type of the column that uses
+			 * that sequence is supported
+			 */
+			constraint = NULL;
+			foreach_ptr(constraint, columnConstraints)
+			{
+				if (constraint->contype == CONSTR_DEFAULT)
+				{
+					if (constraint->raw_expr != NULL)
+					{
+						ParseState *pstate = make_parsestate(NULL);
+						Node *expr = transformExpr(pstate, constraint->raw_expr,
+												   EXPR_KIND_COLUMN_DEFAULT);
+
+						/*
+						 * We should make sure that the type of the column that uses
+						 * that sequence is supported
+						 */
+						if (contain_nextval_expression_walker(expr, NULL))
+						{
+							AttrNumber attnum = get_attnum(relationId,
+														   columnDefinition->colname);
+							Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
+							EnsureSequenceTypeSupported(relationId, attnum, seqTypId);
+						}
+					}
+				}
+			}
 		}
+		/*
+		 * We check for ALTER COLUMN .. SET DEFAULT nextval('user_defined_seq')
+		 * we should make sure that the type of the column that uses
+		 * that sequence is supported
+		 */
+		else if (alterTableType == AT_ColumnDefault)
+		{
+			ParseState *pstate = make_parsestate(NULL);
+			Node *expr = transformExpr(pstate, command->def,
+									   EXPR_KIND_COLUMN_DEFAULT);
+
+			if (contain_nextval_expression_walker(expr, NULL))
+			{
+				AttrNumber attnum = get_attnum(relationId, command->name);
+				Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
+				EnsureSequenceTypeSupported(relationId, attnum, seqTypId);
+			}
+		}
+	}
+
+	/* for the new sequences coming with this ALTER TABLE statement */
+	if (ShouldSyncTableMetadata(relationId) && ClusterHasKnownMetadataWorkers())
+	{
+		List *sequenceCommandList = NIL;
+
+		/* commands to create sequences */
+		List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+		sequenceCommandList = list_concat(sequenceCommandList, sequenceDDLCommands);
+
+		/* prevent recursive propagation */
+		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+		/* send the commands one by one */
+		const char *sequenceCommand = NULL;
+		foreach_ptr(sequenceCommand, sequenceCommandList)
+		{
+			SendCommandToWorkersWithMetadata(sequenceCommand);
+		}
+
+		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 }
 
@@ -1736,9 +1941,100 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 							strcmp(typeName, "bigserial") == 0 ||
 							strcmp(typeName, "serial8") == 0)
 						{
-							ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-											errmsg("cannot execute ADD COLUMN commands "
-												   "involving serial pseudotypes")));
+							/*
+							 * We currently don't support adding a serial column for an MX table
+							 * TODO: record the dependency in the workers
+							 */
+							if (ShouldSyncTableMetadata(relationId) &&
+								ClusterHasKnownMetadataWorkers())
+							{
+								ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+												errmsg(
+													"cannot execute ADD COLUMN commands involving serial"
+													" pseudotypes when metadata is synchronized to workers")));
+							}
+
+							/*
+							 * we only allow adding a serial column if it is the only subcommand
+							 * and it has no constraints
+							 */
+							if (commandList->length > 1 || column->constraints)
+							{
+								ereport(ERROR, (errcode(
+													ERRCODE_FEATURE_NOT_SUPPORTED),
+												errmsg(
+													"cannot execute ADD COLUMN commands involving "
+													"serial pseudotypes with other subcommands/constraints"),
+												errhint(
+													"You can issue each subcommand separately")));
+							}
+
+							/*
+							 * Currently we don't support backfilling the new column with default values
+							 * if the table is not empty
+							 */
+							if (!TableEmpty(relationId))
+							{
+								ereport(ERROR, (errcode(
+													ERRCODE_FEATURE_NOT_SUPPORTED),
+												errmsg(
+													"Cannot add a column involving serial pseudotypes "
+													"because the table is not empty"),
+												errhint(
+													"You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint\n"
+													"Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')")));
+							}
+						}
+					}
+
+					List *columnConstraints = column->constraints;
+
+					Constraint *constraint = NULL;
+					foreach_ptr(constraint, columnConstraints)
+					{
+						if (constraint->contype == CONSTR_DEFAULT)
+						{
+							if (constraint->raw_expr != NULL)
+							{
+								ParseState *pstate = make_parsestate(NULL);
+								Node *expr = transformExpr(pstate, constraint->raw_expr,
+														   EXPR_KIND_COLUMN_DEFAULT);
+
+								if (contain_nextval_expression_walker(expr, NULL))
+								{
+									/*
+									 * we only allow adding a column with non_const default
+									 * if its the only subcommand and has no other constraints
+									 */
+									if (commandList->length > 1 ||
+										columnConstraints->length > 1)
+									{
+										ereport(ERROR, (errcode(
+															ERRCODE_FEATURE_NOT_SUPPORTED),
+														errmsg(
+															"cannot execute ADD COLUMN .. DEFAULT nextval('..')"
+															" command with other subcommands/constraints"),
+														errhint(
+															"You can issue each subcommand separately")));
+									}
+
+									/*
+									 * Currently we don't support backfilling the new column with default values
+									 * if the table is not empty
+									 */
+									if (!TableEmpty(relationId))
+									{
+										ereport(ERROR, (errcode(
+															ERRCODE_FEATURE_NOT_SUPPORTED),
+														errmsg(
+															"cannot add a column involving DEFAULT nextval('..') "
+															"because the table is not empty"),
+														errhint(
+															"You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint\n"
+															"Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')")));
+									}
+								}
+							}
 						}
 					}
 				}
@@ -1746,9 +2042,67 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
-			case AT_DropColumn:
 			case AT_ColumnDefault:
+			{
+				if (AlterInvolvesPartitionColumn(alterTableStatement, command))
+				{
+					ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
+										   "involving partition column")));
+				}
+
+				ParseState *pstate = make_parsestate(NULL);
+				Node *expr = transformExpr(pstate, command->def,
+										   EXPR_KIND_COLUMN_DEFAULT);
+
+				if (contain_nextval_expression_walker(expr, NULL))
+				{
+					/*
+					 * we only allow altering a column's default to non_const expr
+					 * if its the only subcommand
+					 */
+					if (commandList->length > 1)
+					{
+						ereport(ERROR, (errcode(
+											ERRCODE_FEATURE_NOT_SUPPORTED),
+										errmsg(
+											"cannot execute ALTER COLUMN COLUMN .. SET DEFAULT "
+											"nextval('..') command with other subcommands"),
+										errhint(
+											"You can issue each subcommand separately")));
+					}
+				}
+
+				break;
+			}
+
 			case AT_AlterColumnType:
+			{
+				if (AlterInvolvesPartitionColumn(alterTableStatement, command))
+				{
+					ereport(ERROR, (errmsg("cannot execute ALTER TABLE command "
+										   "involving partition column")));
+				}
+
+				/*
+				 * We check for ALTER COLUMN TYPE ...
+				 * if the column has default coming from a user-defined sequence
+				 * changing the type of the column should not be allowed for now
+				 */
+				AttrNumber attnum = get_attnum(relationId, command->name);
+				List *attnumList = NIL;
+				List *dependentSequenceList = NIL;
+				GetDependentSequencesWithRelation(relationId, &attnumList,
+												  &dependentSequenceList, attnum);
+				if (dependentSequenceList != NIL)
+				{
+					ereport(ERROR, (errmsg("cannot execute ALTER COLUMN TYPE .. command "
+										   "because the column involves a default coming "
+										   "from a sequence")));
+				}
+				break;
+			}
+
+			case AT_DropColumn:
 			case AT_DropNotNull:
 			{
 				if (AlterInvolvesPartitionColumn(alterTableStatement, command))

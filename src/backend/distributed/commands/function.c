@@ -1429,7 +1429,7 @@ PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString,
 
 
 /*
- * PreprocessAlterTypeOwnerStmt is called for change of owner ship of functions before the owner
+ * PreprocessAlterFunctionOwnerStmt is called for change of owner ship of functions before the owner
  * ship is changed on the local instance.
  *
  * If the function for which the owner is changed is distributed we execute the change on
