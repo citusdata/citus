@@ -207,6 +207,7 @@ extern bool AnyForeignKeyDependsOnIndex(Oid indexId);
 extern bool HasForeignKeyWithLocalTable(Oid relationId);
 extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
+extern List * GetForeignKeysFromLocalTables(Oid relationId);
 extern bool TableReferenced(Oid relationOid);
 extern bool TableReferencing(Oid relationOid);
 extern bool ConstraintIsAUniquenessConstraint(char *inputConstaintName, Oid relationId);
@@ -217,6 +218,7 @@ extern bool ConstraintWithIdIsOfType(Oid constraintId, char targetConstraintType
 extern bool TableHasExternalForeignKeys(Oid relationId);
 extern List * GetForeignKeyOids(Oid relationId, int flags);
 extern Oid GetReferencedTableId(Oid foreignKeyId);
+extern Oid GetReferencingTableId(Oid foreignKeyId);
 extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
 

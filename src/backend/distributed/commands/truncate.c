@@ -217,25 +217,20 @@ EnsureLocalTableCanBeTruncated(Oid relationId)
 								  "tables.")));
 	}
 
-	/* make sure there are no foreign key references from a local table */
-	SetForeignConstraintRelationshipGraphInvalid();
-	List *referencingRelationList = ReferencingRelationIdList(relationId);
-
-	Oid referencingRelation = InvalidOid;
-	foreach_oid(referencingRelation, referencingRelationList)
+	List *referencingForeignConstaintsFromLocalTables =
+		GetForeignKeysFromLocalTables(relationId);
+	if (list_length(referencingForeignConstaintsFromLocalTables) > 0)
 	{
-		/* we do not truncate a table if there is a local table referencing it */
-		if (!IsCitusTable(referencingRelation))
-		{
-			char *referencedRelationName = get_rel_name(relationId);
-			char *referencingRelationName = get_rel_name(referencingRelation);
+		Oid foreignKeyId = linitial_oid(referencingForeignConstaintsFromLocalTables);
+		Oid referencingRelation = GetReferencingTableId(foreignKeyId);
+		char *referencedRelationName = get_rel_name(relationId);
+		char *referencingRelationName = get_rel_name(referencingRelation);
 
-			ereport(ERROR, (errmsg("cannot truncate a table referenced in a "
-								   "foreign key constraint by a local table"),
-							errdetail("Table \"%s\" references \"%s\"",
-									  referencingRelationName,
-									  referencedRelationName)));
-		}
+		ereport(ERROR, (errmsg("cannot truncate a table referenced in a "
+							   "foreign key constraint by a local table"),
+						errdetail("Table \"%s\" references \"%s\"",
+								  referencingRelationName,
+								  referencedRelationName)));
 	}
 }
 
