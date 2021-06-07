@@ -645,7 +645,9 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.defer_drop_after_shard_move",
-		gettext_noop("When enabled a shard move will mark old shards for deletion"),
+		gettext_noop("When enabled a shard move will mark the original shards "
+					 "for deletion after a successful move, instead of deleting "
+					 "them right away."),
 		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
 					 "long running transactions on a the shard during the drop phase of "
 					 "the shard move. This causes some moves to be rolled back after "
@@ -687,6 +689,18 @@ RegisterCitusConfigVariables(void)
 		10.0, 0.0, 100.0,
 		PGC_SIGHUP,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_manual_changes_to_shards",
+		gettext_noop("Enables dropping and truncating known shards."),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "dropping and truncating shards on the coordinator "
+					 "(or the workers with metadata)"),
+		&EnableManualChangesToShards,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(

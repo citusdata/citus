@@ -36,6 +36,7 @@
 #include "distributed/relation_access_tracking.h"
 #include "distributed/resource_lock.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_shard_visibility.h"
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_expr.h"
@@ -124,6 +125,8 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		bool missingOK = true;
 
 		Oid relationId = RangeVarGetRelid(tableRangeVar, AccessShareLock, missingOK);
+
+		ErrorIfIllegallyChangingKnownShard(relationId);
 
 		/* we're not interested in non-valid, non-distributed relations */
 		if (relationId == InvalidOid || !IsCitusTable(relationId))

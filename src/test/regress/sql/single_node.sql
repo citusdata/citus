@@ -905,6 +905,25 @@ WITH cte_1 AS
 (INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING key, z)
 SELECT count(DISTINCT key::text), count(DISTINCT z::text) FROM cte_1;
 
+-- test disabling drop and truncate for known shards
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE test_disabling_drop_and_truncate (a int);
+SELECT create_distributed_table('test_disabling_drop_and_truncate', 'a');
+SET citus.enable_manual_changes_to_shards TO off;
+
+-- these should error out
+DROP TABLE test_disabling_drop_and_truncate_102040;
+TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
+
+RESET citus.enable_manual_changes_to_shards ;
+
+-- these should work as expected
+TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
+DROP TABLE test_disabling_drop_and_truncate_102040;
+
+RESET citus.shard_replication_factor;
+DROP TABLE test_disabling_drop_and_truncate;
+
 -- lets flush the copy often to make sure everyhing is fine
 SET citus.local_copy_flush_threshold TO 1;
 TRUNCATE another_schema_table;

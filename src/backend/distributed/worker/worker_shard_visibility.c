@@ -14,6 +14,7 @@
 #include "catalog/pg_class.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/local_executor.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
 #include "nodes/nodeFuncs.h"
@@ -23,6 +24,7 @@
 
 /* Config variable managed via guc.c */
 bool OverrideTableVisibility = true;
+bool EnableManualChangesToShards = false;
 
 static bool ReplaceTableVisibleFunctionWalker(Node *inputNode);
 
@@ -41,9 +43,19 @@ relation_is_a_known_shard(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	Oid relationId = PG_GETARG_OID(0);
-	bool onlySearchPath = true;
 
-	PG_RETURN_BOOL(RelationIsAKnownShard(relationId, onlySearchPath));
+	if (!RelationIsVisible(relationId))
+	{
+		/*
+		 * Relation is not on the search path.
+		 *
+		 * TODO: it might be nicer to add a separate check in the
+		 * citus_shards_on_worker views where this UDF is used.
+		 */
+		PG_RETURN_BOOL(false);
+	}
+
+	PG_RETURN_BOOL(RelationIsAKnownShard(relationId));
 }
 
 
@@ -59,7 +71,6 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 
 	Oid relationId = PG_GETARG_OID(0);
 	char relKind = '\0';
-	bool onlySearchPath = true;
 
 	/*
 	 * We don't want to deal with not valid/existing relations
@@ -70,7 +81,13 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 		PG_RETURN_NULL();
 	}
 
-	if (RelationIsAKnownShard(relationId, onlySearchPath))
+	if (!RelationIsVisible(relationId))
+	{
+		/* relation is not on the search path */
+		PG_RETURN_BOOL(false);
+	}
+
+	if (RelationIsAKnownShard(relationId))
 	{
 		/*
 		 * If the input relation is an index we simply replace the
@@ -104,28 +121,53 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 void
 ErrorIfRelationIsAKnownShard(Oid relationId)
 {
-	/* search the relation in all schemas */
-	bool onlySearchPath = false;
-	if (!RelationIsAKnownShard(relationId, onlySearchPath))
+	if (!RelationIsAKnownShard(relationId))
 	{
 		return;
 	}
 
 	const char *relationName = get_rel_name(relationId);
+
 	ereport(ERROR, (errmsg("relation \"%s\" is a shard relation ", relationName)));
 }
 
 
 /*
+ * ErrorIfIllegallyChangingKnownShard errors out if the relation with relationId is
+ * a known shard and manual changes on known shards are disabled. This is
+ * valid for only non-citus (external) connections.
+ */
+void
+ErrorIfIllegallyChangingKnownShard(Oid relationId)
+{
+	if (LocalExecutorLevel > 0 || IsCitusInitiatedRemoteBackend() ||
+		EnableManualChangesToShards)
+	{
+		return;
+	}
+
+	if (RelationIsAKnownShard(relationId))
+	{
+		const char *relationName = get_rel_name(relationId);
+		ereport(ERROR, (errmsg("cannot modify \"%s\" because it is a shard of "
+							   "a distributed table",
+							   relationName),
+						errhint("Use the distributed table or set "
+								"citus.enable_manual_changes_to_shards to on "
+								"to modify shards directly")));
+	}
+}
+
+
+/*
  * RelationIsAKnownShard gets a relationId, check whether it's a shard of
- * any distributed table. If onlySearchPath is true, then it searches
- * the current search path.
+ * any distributed table.
  *
  * We can only do that in MX since both the metadata and tables are only
  * present there.
  */
 bool
-RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
+RelationIsAKnownShard(Oid shardRelationId)
 {
 	bool missingOk = true;
 	char relKind = '\0';
@@ -158,12 +200,6 @@ RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath)
 		return false;
 	}
 	relation_close(relation, NoLock);
-
-	/* we're not interested in the relations that are not in the search path */
-	if (!RelationIsVisible(shardRelationId) && onlySearchPath)
-	{
-		return false;
-	}
 
 	/*
 	 * If the input relation is an index we simply replace the

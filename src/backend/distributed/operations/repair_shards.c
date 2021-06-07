@@ -1063,12 +1063,29 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 	{
 		if (targetPlacement->shardState == SHARD_STATE_TO_DELETE)
 		{
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-							errmsg(
-								"shard " INT64_FORMAT " already exists in the target node",
-								shardId),
-							errdetail(
-								"The existing shard is marked for deletion, but could not be deleted because there are still active queries on it")));
+			/*
+			 * Trigger deletion of orphaned shards and hope that this removes
+			 * the shard.
+			 */
+			DropOrphanedShardsInSeparateTransaction();
+			shardPlacementList = ShardPlacementList(shardId);
+			targetPlacement = SearchShardPlacementInList(shardPlacementList,
+														 targetNodeName,
+														 targetNodePort);
+
+			/*
+			 * If it still doesn't remove the shard, then we error.
+			 */
+			if (targetPlacement != NULL)
+			{
+				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+								errmsg(
+									"shard " INT64_FORMAT
+									" still exists on the target node as an orphaned shard",
+									shardId),
+								errdetail(
+									"The existing shard is orphaned, but could not be deleted because there are still active queries on it")));
+			}
 		}
 		else
 		{

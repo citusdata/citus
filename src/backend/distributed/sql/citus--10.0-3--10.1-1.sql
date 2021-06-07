@@ -47,3 +47,5 @@ WHERE repmodel = 'c'
 
 DROP TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger ON pg_catalog.pg_dist_rebalance_strategy;
 DROP FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check();
+
+#include "udfs/citus_cleanup_orphaned_shards/10.1-1.sql"

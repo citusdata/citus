@@ -10,23 +10,19 @@ step s1-move-placement:
 master_move_shard_placement
 
 
+s1: NOTICE:  cleaned up 1 orphaned shards
 step s1-drop-marked-shards:
-    SELECT public.master_defer_delete_shards();
+    SET client_min_messages to NOTICE;
+    CALL isolation_cleanup_orphaned_shards();
 
-master_defer_delete_shards
-
-1
 step s2-drop-marked-shards:
     SET client_min_messages to DEBUG1;
-    SELECT public.master_defer_delete_shards();
+    CALL isolation_cleanup_orphaned_shards();
  <waiting ...>
 step s1-commit: 
     COMMIT;
 
 step s2-drop-marked-shards: <... completed>
-master_defer_delete_shards
-
-0
 
 starting permutation: s1-begin s1-move-placement s2-drop-marked-shards s1-drop-marked-shards s1-commit
 step s1-begin:
@@ -40,17 +36,13 @@ master_move_shard_placement
 
 step s2-drop-marked-shards:
     SET client_min_messages to DEBUG1;
-    SELECT public.master_defer_delete_shards();
+    CALL isolation_cleanup_orphaned_shards();
 
-master_defer_delete_shards
-
-0
+s1: NOTICE:  cleaned up 1 orphaned shards
 step s1-drop-marked-shards:
-    SELECT public.master_defer_delete_shards();
+    SET client_min_messages to NOTICE;
+    CALL isolation_cleanup_orphaned_shards();
 
-master_defer_delete_shards
-
-1
 step s1-commit:
     COMMIT;
 
@@ -82,14 +74,63 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-drop-marked-shards:
-    SELECT public.master_defer_delete_shards();
+    SET client_min_messages to NOTICE;
+    CALL isolation_cleanup_orphaned_shards();
  <waiting ...>
 s1: WARNING:  canceling statement due to lock timeout
-s1: WARNING:  Failed to drop 1 old shards out of 1
 step s1-drop-marked-shards: <... completed>
-master_defer_delete_shards
+s1: WARNING:  Failed to drop 1 orphaned shards out of 1
+step s1-commit:
+    COMMIT;
 
-0
+step s2-stop-connection:
+ SELECT stop_session_level_connection_to_node();
+
+stop_session_level_connection_to_node
+
+
+
+starting permutation: s1-begin s1-move-placement s2-start-session-level-connection s2-lock-table-on-worker s1-commit s1-begin s1-move-placement-back s1-commit s2-stop-connection
+step s1-begin:
+    BEGIN;
+
+step s1-move-placement:
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57637, 'localhost', 57638);
+
+master_move_shard_placement
+
+
+step s2-start-session-level-connection:
+        SELECT start_session_level_connection_to_node('localhost', 57637);
+
+start_session_level_connection_to_node
+
+
+step s2-lock-table-on-worker:
+    SELECT run_commands_on_session_level_connection_to_node('BEGIN;');
+    SELECT run_commands_on_session_level_connection_to_node('LOCK TABLE t1_120000');
+
+run_commands_on_session_level_connection_to_node
+
+
+run_commands_on_session_level_connection_to_node
+
+
+step s1-commit:
+    COMMIT;
+
+step s1-begin:
+    BEGIN;
+
+step s1-move-placement-back:
+    SET client_min_messages to NOTICE;
+    SHOW log_error_verbosity;
+    SELECT master_move_shard_placement((SELECT * FROM selected_shard), 'localhost', 57638, 'localhost', 57637);
+
+log_error_verbosity
+
+verbose
+ERROR:  shard xxxxx still exists on the target node as an orphaned shard
 step s1-commit:
     COMMIT;
 
