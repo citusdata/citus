@@ -1130,10 +1130,8 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	}
 
 	/*
-	 * Prepare for scan of the base relation. In a normal index build, we use
-	 * SnapshotAny because we must retrieve all tuples and do our own time
-	 * qual checks (because we have to index RECENTLY_DEAD tuples). In a
-	 * concurrent build, or during bootstrap, we take a regular MVCC snapshot
+	 * In a normal index build, we use SnapshotAny to retrieve all tuples. In
+	 * a concurrent build or during bootstrap, we take a regular MVCC snapshot
 	 * and index whatever's live according to that.
 	 */
 	TransactionId OldestXmin = InvalidTransactionId;
@@ -1148,28 +1146,41 @@ columnar_index_build_range_scan(Relation columnarRelation,
 		OldestXmin = GetOldestXmin(columnarRelation, PROCARRAY_FLAGS_VACUUM);
 	}
 
-	/*
-	 * For serial index build, we must begin our own heap scan in this case.
-	 * We may also need to register a snapshot whose lifetime is under our
-	 * direct control.
-	 */
 	Snapshot snapshot;
-	bool need_unregister_snapshot = false;
-	if (!TransactionIdIsValid(OldestXmin))
+	bool snapshotRegisteredByUs = false;
+	if (!scan)
 	{
-		snapshot = RegisterSnapshot(GetTransactionSnapshot());
-		need_unregister_snapshot = true;
+		/*
+		 * For serial index build, we begin our own scan. We may also need to
+		 * register a snapshot whose lifetime is under our direct control.
+		 */
+		if (!TransactionIdIsValid(OldestXmin))
+		{
+			snapshot = RegisterSnapshot(GetTransactionSnapshot());
+			snapshotRegisteredByUs = true;
+		}
+		else
+		{
+			snapshot = SnapshotAny;
+		}
+
+		int nkeys = 0;
+		ScanKeyData *scanKey = NULL;
+		bool allowAccessStrategy = true;
+		scan = table_beginscan_strat(columnarRelation, snapshot, nkeys, scanKey,
+									 allowAccessStrategy, allow_sync);
 	}
 	else
 	{
-		snapshot = SnapshotAny;
+		/*
+		 * For parallel index build, we don't register/unregister own snapshot
+		 * since snapshot is taken from parallel scan. Note that even if we
+		 * don't support parallel index builds, we still continue building the
+		 * index via the main backend and we should still rely on the snapshot
+		 * provided by parallel scan.
+		 */
+		snapshot = scan->rs_snapshot;
 	}
-
-	int nkeys = 0;
-	ScanKeyData *scanKey = NULL;
-	bool allowAccessStrategy = true;
-	scan = table_beginscan_strat(columnarRelation, snapshot, nkeys, scanKey,
-								 allowAccessStrategy, allow_sync);
 
 	/*
 	 * Indeed, columnar tables might have gaps between row numbers, e.g
@@ -1209,8 +1220,7 @@ columnar_index_build_range_scan(Relation columnarRelation,
 		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE, nvirtualBlocks);
 	}
 
-	/* we can now forget our snapshot, if set and registered by us */
-	if (need_unregister_snapshot)
+	if (snapshotRegisteredByUs)
 	{
 		UnregisterSnapshot(snapshot);
 	}
