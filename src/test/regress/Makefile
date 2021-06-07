@@ -134,7 +134,7 @@ check-multi: all
 
 check-multi-1: all
 	$(pg_regress_multi_check) --load-extension=citus \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule_1 $(EXTRA_TESTS)
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
 
 check-multi-hyperscale: all
 	$(pg_regress_multi_check) --conninfo="$(conninfo)" --load-extension=citus \
