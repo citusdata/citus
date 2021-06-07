@@ -1,4 +1,3 @@
-
 SET citus.next_shard_id TO 1200000;
 SET citus.next_placement_id TO 1200000;
 
@@ -1022,6 +1021,7 @@ CREATE TABLE itemgroups (
 );
 SELECT create_reference_table('itemgroups');
 
+DROP TABLE IF EXISTS users ;
 CREATE TABLE users (
     id int PRIMARY KEY,
     name text,
