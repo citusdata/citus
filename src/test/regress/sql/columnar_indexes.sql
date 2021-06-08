@@ -293,6 +293,8 @@ CREATE INDEX brin_summarize_idx ON brin_summarize USING brin (value) WITH (pages
 CREATE TABLE parallel_scan_test(a int) USING columnar;
 INSERT INTO parallel_scan_test SELECT i FROM generate_series(1,4000000) i;
 CREATE INDEX ON parallel_scan_test (a);
+VACUUM FULL parallel_scan_test;
+REINDEX TABLE parallel_scan_test;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;
