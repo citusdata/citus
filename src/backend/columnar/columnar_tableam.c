@@ -707,7 +707,8 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	if (OldIndex != NULL || use_sort)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("indexes not supported for columnar tables")));
+						errmsg("clustering columnar tables using indexes is "
+							   "not supported")));
 	}
 
 	/*

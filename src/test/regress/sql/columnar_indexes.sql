@@ -124,6 +124,13 @@ BEGIN;
 ROLLBACK;
 
 VACUUM FULL columnar_table;
+
+-- show that we don't support clustering columnar tables using indexes
+CLUSTER columnar_table USING columnar_table_pkey;
+
+ALTER TABLE columnar_table CLUSTER ON columnar_table_pkey;
+CLUSTER columnar_table;
+
 -- should error even after vacuum
 INSERT INTO columnar_table VALUES (16999);
 

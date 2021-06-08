@@ -192,6 +192,12 @@ ERROR:  duplicate key value violates unique constraint "columnar_table_pkey"
 DETAIL:  Key (a)=(16999) already exists.
 ROLLBACK;
 VACUUM FULL columnar_table;
+-- show that we don't support clustering columnar tables using indexes
+CLUSTER columnar_table USING columnar_table_pkey;
+ERROR:  clustering columnar tables using indexes is not supported
+ALTER TABLE columnar_table CLUSTER ON columnar_table_pkey;
+CLUSTER columnar_table;
+ERROR:  clustering columnar tables using indexes is not supported
 -- should error even after vacuum
 INSERT INTO columnar_table VALUES (16999);
 ERROR:  duplicate key value violates unique constraint "columnar_table_pkey"
