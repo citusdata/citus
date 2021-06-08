@@ -108,7 +108,7 @@ DROP TABLE test_toast_columnar;
 -- We support writing into zero column tables, but not reading from them.
 -- We test that metadata makes sense so we can fix the read path in future.
 CREATE TABLE zero_col() USING columnar;
-SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 10);
+SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 1000);
 
 INSERT INTO zero_col DEFAULT VALUES;
 INSERT INTO zero_col DEFAULT VALUES;

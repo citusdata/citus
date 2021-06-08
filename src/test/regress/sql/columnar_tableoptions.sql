@@ -24,14 +24,14 @@ SELECT * FROM columnar.options
 WHERE regclass = 'table_options'::regclass;
 
 -- test changing the chunk_group_row_limit
-SELECT alter_columnar_table_set('table_options', chunk_group_row_limit => 10);
+SELECT alter_columnar_table_set('table_options', chunk_group_row_limit => 2000);
 
 -- show table_options settings
 SELECT * FROM columnar.options
 WHERE regclass = 'table_options'::regclass;
 
 -- test changing the chunk_group_row_limit
-SELECT alter_columnar_table_set('table_options', stripe_row_limit => 100);
+SELECT alter_columnar_table_set('table_options', stripe_row_limit => 4000);
 
 -- show table_options settings
 SELECT * FROM columnar.options
@@ -45,7 +45,7 @@ SELECT * FROM columnar.options
 WHERE regclass = 'table_options'::regclass;
 
 -- set all settings at the same time
-SELECT alter_columnar_table_set('table_options', stripe_row_limit => 1000, chunk_group_row_limit => 100, compression => 'none', compression_level => 7);
+SELECT alter_columnar_table_set('table_options', stripe_row_limit => 8000, chunk_group_row_limit => 4000, compression => 'none', compression_level => 7);
 
 -- show table_options settings
 SELECT * FROM columnar.options
@@ -141,6 +141,14 @@ SELECT alter_columnar_table_set('table_options', compression => 'foobar');
 -- verify cannot set out of range compression levels
 SELECT alter_columnar_table_set('table_options', compression_level => 0);
 SELECT alter_columnar_table_set('table_options', compression_level => 20);
+
+-- verify cannot set out of range stripe_row_limit & chunk_group_row_limit options
+SELECT alter_columnar_table_set('table_options', stripe_row_limit => 999);
+SELECT alter_columnar_table_set('table_options', stripe_row_limit => 10000001);
+SELECT alter_columnar_table_set('table_options', chunk_group_row_limit => 999);
+SELECT alter_columnar_table_set('table_options', chunk_group_row_limit => 100001);
+SELECT alter_columnar_table_set('table_options', chunk_group_row_limit => 0);
+INSERT INTO table_options VALUES (1);
 
 -- verify options are removed when table is dropped
 DROP TABLE table_options;
