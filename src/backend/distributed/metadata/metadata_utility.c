@@ -1756,6 +1756,9 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 	/* set partkey column to NULL for reference tables */
 	if (distributionMethod != DISTRIBUTE_BY_NONE)
 	{
+		Assert(list_length(distributionColumnList) > 0);
+		Assert(linitial(distributionColumnList) != NULL);
+
 		Datum *distributionColumnDatumArray =
 			palloc0(list_length(distributionColumnList) * sizeof(Datum));
 
