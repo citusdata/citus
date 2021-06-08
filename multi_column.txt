@@ -1,0 +1,30 @@
+- [ ] DistPartitionKey()
+- [ ] PartitionColumn()
+- [ ] IsPartitionColumn()
+- [ ] PartitionColumnIndex(Var *targetVar, List *targetList)
+- [ ] PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
+- [ ] PartitionColumnIndexFromColumnList()
+- [ ] PartitionedOnColumn()
+- [ ] GroupedByPartitionColumn()
+- [ ] HasNonPartitionColumnDistinctAgg()
+- [ ] PruneShards()
+- [ ] PartitionColumnInTableList()
+- [ ] MakeJoinOrderNode()
+- [ ] CheckPartitionColumn()
+- [ ] InsertPartitionColumnMatchesSelect()
+- [ ] PartitionColumnIndexOrPartitionColumnName()
+- [ ] CreateDistributedTableLike()
+- [x] EnsureRelationCanBeDistributed()
+- [ ] ErrorIfUnsupportedConstraint()
+- [ ] ColocationIdForNewTable()
+- [ ] InsertMetadataForCitusLocalTable()
+- [ ] CreateDistributedTableLike()
+- [x] BuildCitusTableCacheEntry()
+- [ ] PostprocessCreateTableStmtPartitionOf()
+- [ ] PostprocessAlterTableStmtAttachPartition()
+
+
+- [ ] PartitionMethod()
+
+- [ ] better range distribution support
+- [ ] list distribution support
