@@ -99,7 +99,7 @@ static uint32 ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
 									  int shardCount, bool shardCountIsStrict,
 									  char *colocateWithTableName,
 									  bool viaDeprecatedAPI);
-static void EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
+static void EnsureRelationCanBeDistributed(Oid relationId, List *distributionColumnList,
 										   char distributionMethod, uint32 colocationId,
 										   char replicationModel, bool viaDeprecatedAPI);
 static void EnsureTableCanBeColocatedWith(Oid relationId, char replicationModel,
@@ -525,7 +525,7 @@ CreateDistributedTable(Oid relationId, List *distributionColumnList,
 												  colocateWithTableName,
 												  viaDeprecatedAPI);
 
-	EnsureRelationCanBeDistributed(relationId, linitial(distributionColumnList),
+	EnsureRelationCanBeDistributed(relationId, distributionColumnList,
 								   distributionMethod,
 								   colocationId, replicationModel, viaDeprecatedAPI);
 
@@ -1083,7 +1083,7 @@ ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
  * there will not be any change in the given relation.
  */
 static void
-EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
+EnsureRelationCanBeDistributed(Oid relationId, List *distributionColumnList,
 							   char distributionMethod, uint32 colocationId,
 							   char replicationModel, bool viaDeprecatedAPI)
 {
@@ -1109,53 +1109,60 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 								  "... AS IDENTITY.")));
 	}
 
-	/* verify target relation is not distributed by a generated columns */
-	if (distributionMethod != DISTRIBUTE_BY_NONE &&
-		DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn))
+	Var *distributionColumn = NULL;
+	foreach_ptr(distributionColumn, distributionColumnList)
 	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot distribute relation: %s", relationName),
-						errdetail("Distribution column must not use GENERATED ALWAYS "
-								  "AS (...) STORED.")));
-	}
-
-	/* check for support function needed by specified partition method */
-	if (distributionMethod == DISTRIBUTE_BY_HASH)
-	{
-		Oid hashSupportFunction = SupportFunctionForColumn(distributionColumn,
-														   HASH_AM_OID,
-														   HASHSTANDARD_PROC);
-		if (hashSupportFunction == InvalidOid)
-		{
-			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
-							errmsg("could not identify a hash function for type %s",
-								   format_type_be(distributionColumn->vartype)),
-							errdatatype(distributionColumn->vartype),
-							errdetail("Partition column types must have a hash function "
-									  "defined to use hash partitioning.")));
-		}
-
-		if (distributionColumn->varcollid != InvalidOid &&
-			!get_collation_isdeterministic(distributionColumn->varcollid))
+		/* verify target relation is not distributed by a generated columns */
+		if (distributionMethod != DISTRIBUTE_BY_NONE &&
+			DistributionColumnUsesGeneratedStoredColumn(relationDesc, distributionColumn))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("Hash distributed partition columns may not use "
-								   "a non deterministic collation")));
+							errmsg("cannot distribute relation: %s", relationName),
+							errdetail("Distribution column must not use GENERATED ALWAYS "
+									  "AS (...) STORED.")));
 		}
-	}
-	else if (distributionMethod == DISTRIBUTE_BY_RANGE)
-	{
-		Oid btreeSupportFunction = SupportFunctionForColumn(distributionColumn,
-															BTREE_AM_OID, BTORDER_PROC);
-		if (btreeSupportFunction == InvalidOid)
+
+		/* check for support function needed by specified partition method */
+		if (distributionMethod == DISTRIBUTE_BY_HASH)
 		{
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_FUNCTION),
-					 errmsg("could not identify a comparison function for type %s",
-							format_type_be(distributionColumn->vartype)),
-					 errdatatype(distributionColumn->vartype),
-					 errdetail("Partition column types must have a comparison function "
-							   "defined to use range partitioning.")));
+			Oid hashSupportFunction = SupportFunctionForColumn(distributionColumn,
+															   HASH_AM_OID,
+															   HASHSTANDARD_PROC);
+			if (hashSupportFunction == InvalidOid)
+			{
+				ereport(ERROR, (errcode(ERRCODE_UNDEFINED_FUNCTION),
+								errmsg("could not identify a hash function for type %s",
+									   format_type_be(distributionColumn->vartype)),
+								errdatatype(distributionColumn->vartype),
+								errdetail(
+									"Partition column types must have a hash function "
+									"defined to use hash partitioning.")));
+			}
+
+			if (distributionColumn->varcollid != InvalidOid &&
+				!get_collation_isdeterministic(distributionColumn->varcollid))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("Hash distributed partition columns may not use "
+									   "a non deterministic collation")));
+			}
+		}
+		else if (distributionMethod == DISTRIBUTE_BY_RANGE)
+		{
+			Oid btreeSupportFunction = SupportFunctionForColumn(distributionColumn,
+																BTREE_AM_OID,
+																BTORDER_PROC);
+			if (btreeSupportFunction == InvalidOid)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_UNDEFINED_FUNCTION),
+						 errmsg("could not identify a comparison function for type %s",
+								format_type_be(distributionColumn->vartype)),
+						 errdatatype(distributionColumn->vartype),
+						 errdetail(
+							 "Partition column types must have a comparison function "
+							 "defined to use range partitioning.")));
+			}
 		}
 	}
 
@@ -1216,7 +1223,7 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 	}
 
 	ErrorIfUnsupportedConstraint(relation, distributionMethod, replicationModel,
-								 distributionColumn, colocationId);
+								 linitial(distributionColumnList), colocationId);
 
 
 	ErrorIfUnsupportedPolicy(relation);
