@@ -723,35 +723,58 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	StringInfo insertDistributionCommand = makeStringInfo();
 	Oid relationId = cacheEntry->relationId;
 	char distributionMethod = cacheEntry->partitionMethod;
-	char *partitionKeyString = cacheEntry->partitionKeyString;
 	char *qualifiedRelationName =
 		generate_qualified_relation_name(relationId);
 	uint32 colocationId = cacheEntry->colocationId;
 	char replicationModel = cacheEntry->replicationModel;
 	StringInfo tablePartitionKeyString = makeStringInfo();
+	StringInfo tablePartitionKeyArrayString = makeStringInfo();
 
 	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		appendStringInfo(tablePartitionKeyString, "NULL");
+
+		/* TODO: Maybe use empty array instead */
+		appendStringInfo(tablePartitionKeyArrayString, "NULL");
 	}
 	else
 	{
-		char *partitionKeyColumnName = ColumnToColumnName(relationId, partitionKeyString);
+		char *partitionKeyColumnName = ColumnToColumnName(relationId,
+														  cacheEntry->partitionKeyString);
 		appendStringInfo(tablePartitionKeyString, "column_name_to_column(%s,%s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 quote_literal_cstr(partitionKeyColumnName));
+
+		appendStringInfo(tablePartitionKeyArrayString, "ARRAY[");
+		bool first = true;
+		char *partitionKeyString = NULL;
+		foreach_ptr(partitionKeyString, cacheEntry->partitionKeyStrings)
+		{
+			if (!first)
+			{
+				appendStringInfo(tablePartitionKeyArrayString, ", ");
+			}
+			partitionKeyColumnName = ColumnToColumnName(relationId, partitionKeyString);
+			appendStringInfo(tablePartitionKeyArrayString, "column_name_to_column(%s,%s)",
+							 quote_literal_cstr(qualifiedRelationName),
+							 quote_literal_cstr(partitionKeyColumnName));
+			first = false;
+		}
+		appendStringInfo(tablePartitionKeyArrayString, "]");
 	}
+
 
 	appendStringInfo(insertDistributionCommand,
 					 "INSERT INTO pg_dist_partition "
-					 "(logicalrelid, partmethod, partkey, colocationid, repmodel) "
+					 "(logicalrelid, partmethod, partkey, colocationid, repmodel, partkeys) "
 					 "VALUES "
-					 "(%s::regclass, '%c', %s, %d, '%c')",
+					 "(%s::regclass, '%c', %s, %d, '%c', %s)",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
 					 tablePartitionKeyString->data,
 					 colocationId,
-					 replicationModel);
+					 replicationModel,
+					 tablePartitionKeyArrayString->data);
 
 	return insertDistributionCommand->data;
 }

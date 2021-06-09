@@ -1247,6 +1247,7 @@ BuildCitusTableCacheEntry(Oid relationId)
 	if (!partitionKeyIsNull)
 	{
 		oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
+		Assert(!partitionKeysIsNull);
 		if (!partitionKeysIsNull)
 		{
 			ArrayType *partitionKeysArray = DatumGetArrayTypeP(partitionKeysDatum);
@@ -1268,7 +1269,8 @@ BuildCitusTableCacheEntry(Oid relationId)
 					lappend(cacheEntry->partitionColumns, partitionNode);
 			}
 
-			/* TODO: uncomment once fixed
+			/*
+			 * TODO: uncomment once fixed
 			 * cacheEntry->partitionColumn = linitial(cacheEntry->partitionColumns);
 			 * cacheEntry->partitionKeyString = linitial(cacheEntry->partitionKeyStrings);
 			 */
@@ -1288,6 +1290,7 @@ BuildCitusTableCacheEntry(Oid relationId)
 	}
 	else
 	{
+		Assert(partitionKeysIsNull);
 		cacheEntry->partitionKeyString = NULL;
 	}
 

@@ -193,9 +193,9 @@ CREATE TABLE customers (
 );
 -- now we'll distribute using function calls but verify metadata manually...
 -- partition on id and manually inspect partition row
-INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey)
+INSERT INTO pg_dist_partition (logicalrelid, partmethod, partkey, partkeys)
 VALUES
-	('customers'::regclass, 'h', column_name_to_column('customers'::regclass, 'id'));
+	('customers'::regclass, 'h', column_name_to_column('customers'::regclass, 'id'), ARRAY[column_name_to_column('customers'::regclass, 'id')]);
 SELECT partmethod, column_to_column_name(logicalrelid, partkey) FROM pg_dist_partition
 	WHERE logicalrelid = 'customers'::regclass;
  partmethod | column_to_column_name
