@@ -4376,6 +4376,25 @@ GroupTargetEntryList(List *groupClauseList, List *targetEntryList)
 bool
 IsPartitionColumn(Expr *columnExpression, Query *query)
 {
+	return IsFirstPartitionColumn(columnExpression, query);
+}
+
+
+/*
+ * IsFirstPartitionColumn returns true if the given column is the first
+ * partition column of a table. The function uses FindReferencedTableColumn to
+ * find the original relation id and column that the column expression refers
+ * to. It then checks whether that column is a partition column of the
+ * relation.
+ *
+ * Also, the function returns always false for reference tables given that
+ * reference tables do not have partition column. The function does not
+ * support queries with CTEs, it would return false if columnExpression
+ * refers to a column returned by a CTE.
+ */
+bool
+IsFirstPartitionColumn(Expr *columnExpression, Query *query)
+{
 	bool isPartitionColumn = false;
 	Oid relationId = InvalidOid;
 	Var *column = NULL;

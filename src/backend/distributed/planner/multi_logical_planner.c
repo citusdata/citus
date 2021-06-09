@@ -199,12 +199,75 @@ FindNodeMatchingCheckFunction(Node *node, CheckNodeFunc checker)
 }
 
 
+static bool
+TargetListOnPartitionColumnsOfRelation(Query *query, List *targetEntryList, Oid
+									   relationId)
+{
+	List *partitionColumnList = DistPartitionKeys(relationId);
+
+	/*
+	 * TODO: Rename function, make this configurable, or remove this
+	 */
+	bool skippedFirst = false;
+	Var *partitionColumn = NULL;
+	foreach_ptr(partitionColumn, partitionColumnList)
+	{
+		if (!skippedFirst)
+		{
+			skippedFirst = true;
+			continue;
+		}
+
+		TargetEntry *targetEntry = NULL;
+		bool foundColumn = false;
+		foreach_ptr(targetEntry, targetEntryList)
+		{
+			Var *column = NULL;
+			Expr *targetExpression = targetEntry->expr;
+			Oid expressionRelationId = InvalidOid;
+			FindReferencedTableColumn(targetExpression, NIL, query, &expressionRelationId,
+									  &column);
+
+			if (expressionRelationId != relationId || column == NULL)
+			{
+				continue;
+			}
+
+			if (column->varattno != partitionColumn->varattno)
+			{
+				continue;
+			}
+			FieldSelect *compositeField = CompositeFieldRecursive(
+				targetExpression,
+				query);
+			if (compositeField)
+			{
+				/*
+				 * TODO: Ensure that multi column distribution tables cannot be
+				 * created in create_distributed_table with composite fields as
+				 * secondary distribution columns.
+				 */
+				ereport(ERROR, (errmsg(
+									"composite fields are not supported as secondary distribution columns")));
+			}
+			foundColumn = true;
+			break;
+		}
+		if (!foundColumn)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+
 /*
- * TargetListOnPartitionColumn checks if at least one target list entry is on
- * partition column.
+ * TargetListOnPartitionColumn checks if each of the partition columns has at
+ * least one matching entry in the target list.
  */
 bool
-TargetListOnPartitionColumn(Query *query, List *targetEntryList)
+TargetListOnPartitionColumns(Query *query, List *targetEntryList)
 {
 	List *compositeFieldList = NIL;
 
@@ -212,8 +275,6 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 	foreach_ptr(targetEntry, targetEntryList)
 	{
 		Expr *targetExpression = targetEntry->expr;
-
-		bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
 		Oid relationId = InvalidOid;
 		Var *column = NULL;
 
@@ -228,18 +289,35 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 			continue;
 		}
 
-		if (isPartitionColumn)
+		/*
+		 * TODO: Maybe pass relationId to IsFirstPartitionColumn, so it doesn't
+		 * have to look it up again.
+		 */
+		if (!IsFirstPartitionColumn(targetExpression, query))
 		{
-			FieldSelect *compositeField = CompositeFieldRecursive(targetExpression,
-																  query);
-			if (compositeField)
-			{
-				compositeFieldList = lappend(compositeFieldList, compositeField);
-			}
-			else
-			{
-				return true;
-			}
+			continue;
+		}
+
+		/*
+		 * This is the first partition column of the table. Now we check if all
+		 * other partition colums of this table are referenced in the target
+		 * list.
+		 */
+
+		if (!TargetListOnPartitionColumnsOfRelation(query, targetEntryList, relationId))
+		{
+			continue;
+		}
+
+		FieldSelect *compositeField = CompositeFieldRecursive(targetExpression,
+															  query);
+		if (compositeField)
+		{
+			compositeFieldList = lappend(compositeFieldList, compositeField);
+		}
+		else
+		{
+			return true;
 		}
 	}
 

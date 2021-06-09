@@ -466,7 +466,7 @@ WindowPartitionOnDistributionColumn(Query *query)
 			GroupTargetEntryList(partitionClauseList, targetEntryList);
 
 		bool partitionOnDistributionColumn =
-			TargetListOnPartitionColumn(query, groupTargetEntryList);
+			TargetListOnPartitionColumns(query, groupTargetEntryList);
 
 		if (!partitionOnDistributionColumn)
 		{
@@ -1056,7 +1056,7 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree)
 		List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
 														  targetEntryList);
 		bool groupOnPartitionColumn =
-			TargetListOnPartitionColumn(subqueryTree, groupTargetEntryList);
+			TargetListOnPartitionColumns(subqueryTree, groupTargetEntryList);
 		if (!groupOnPartitionColumn)
 		{
 			preconditionsSatisfied = false;
@@ -1103,7 +1103,7 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree)
 		List *distinctTargetEntryList = GroupTargetEntryList(distinctClauseList,
 															 targetEntryList);
 		bool distinctOnPartitionColumn =
-			TargetListOnPartitionColumn(subqueryTree, distinctTargetEntryList);
+			TargetListOnPartitionColumns(subqueryTree, distinctTargetEntryList);
 		if (!distinctOnPartitionColumn)
 		{
 			preconditionsSatisfied = false;

@@ -172,6 +172,7 @@ extern List * SubqueryMultiTableList(MultiNode *multiNode);
 extern List * GroupTargetEntryList(List *groupClauseList, List *targetEntryList);
 extern bool ExtractQueryWalker(Node *node, List **queryList);
 extern bool IsPartitionColumn(Expr *columnExpression, Query *query);
+extern bool IsFirstPartitionColumn(Expr *columnExpression, Query *query);
 extern void FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList,
 									  Query *query, Oid *relationId, Var **column);
 extern char * WorkerColumnName(AttrNumber resno);

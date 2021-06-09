@@ -17,8 +17,8 @@ select * from pg_dist_partition WHERE NOT (logicalrelid::text LIKE '%.%');
  t            | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |     27905500 | s        | {"{VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}"}
 (1 row)
 
-create table t2(id int, a int);
-select create_distributed_table('t2', ARRAY['id', 'a'], colocate_with := 'none');
+create table t2(id int, id2 int, a int);
+select create_distributed_table('t2', ARRAY['id', 'id2'], colocate_with := 'none');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -30,6 +30,166 @@ select * from pg_dist_partition WHERE NOT (logicalrelid::text LIKE '%.%');
  t            | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |     27905500 | s        | {"{VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}"}
  t2           | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |     27905501 | s        | {"{VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}","{VAR :varno 1 :varattno 2 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 2 :location -1}"}
 (2 rows)
+
+INSERT INTO t2 VALUES
+(1, 1, 1),
+(1, 1, 2),
+(1, 1, 4),
+(2, 3, 4),
+(2, 3, 5),
+(2, 4, 5)
+;
+-- partitioning by both distribution columns pushes the window function down
+SELECT id, id2, a, rnk FROM
+(
+    SELECT
+      DISTINCT id, id2, a, rank() OVER (PARTITION BY id, id2 ORDER BY a) as rnk
+    FROM
+      t2
+) as foo
+ORDER BY
+  rnk, id, id2, a;
+ id | id2 | a | rnk
+---------------------------------------------------------------------
+  1 |   1 | 1 |   1
+  2 |   3 | 4 |   1
+  2 |   4 | 5 |   1
+  1 |   1 | 2 |   2
+  2 |   3 | 5 |   2
+  1 |   1 | 4 |   3
+(6 rows)
+
+EXPLAIN SELECT id, id2, a, rnk FROM
+(
+    SELECT
+      DISTINCT id, id2, a, rank() OVER (PARTITION BY id, id2 ORDER BY a) as rnk
+    FROM
+      t2
+) as foo
+ORDER BY
+  rnk, id, id2, a;
+                                              QUERY PLAN
+---------------------------------------------------------------------
+ Sort  (cost=10355.82..10605.82 rows=100000 width=20)
+   Sort Key: remote_scan.rnk, remote_scan.id, remote_scan.id2, remote_scan.a
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=20)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  HashAggregate  (cost=208.84..210.88 rows=204 width=20)
+                     Group Key: t2.id, t2.id2, t2.a, rank() OVER (?)
+                     ->  WindowAgg  (cost=142.54..188.44 rows=2040 width=20)
+                           ->  Sort  (cost=142.54..147.64 rows=2040 width=12)
+                                 Sort Key: t2.id, t2.id2, t2.a
+                                 ->  Seq Scan on t2_27905504 t2  (cost=0.00..30.40 rows=2040 width=12)
+(13 rows)
+
+-- partitioning by one of the distribution causes the window function not to be
+-- pushed down.
+SELECT id, id2, a, rnk FROM
+(
+    SELECT
+      DISTINCT id, id2, a, rank() OVER (PARTITION BY id ORDER BY a) as rnk
+    FROM
+      t2
+) as foo
+ORDER BY
+  rnk, id, id2, a;
+ id | id2 | a | rnk
+---------------------------------------------------------------------
+  1 |   1 | 1 |   1
+  2 |   3 | 4 |   1
+  1 |   1 | 2 |   2
+  2 |   3 | 5 |   2
+  2 |   4 | 5 |   2
+  1 |   1 | 4 |   3
+(6 rows)
+
+EXPLAIN SELECT id, id2, a, rnk FROM
+(
+    SELECT
+      DISTINCT id, id2, a, rank() OVER (PARTITION BY id ORDER BY a) as rnk
+    FROM
+      t2
+) as foo
+ORDER BY
+  rnk, id, id2, a;
+                                                       QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Distributed Subplan XXX_1
+         ->  HashAggregate  (cost=11304.82..11306.82 rows=200 width=20)
+               Group Key: remote_scan.id, remote_scan.id2, remote_scan.a, rank() OVER (?)
+               ->  WindowAgg  (cost=8304.82..10304.82 rows=100000 width=20)
+                     ->  Sort  (cost=8304.82..8554.82 rows=100000 width=12)
+                           Sort Key: remote_scan.id, remote_scan.a
+                           ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=12)
+                                 Task Count: 4
+                                 Tasks Shown: One of 4
+                                 ->  Task
+                                       Node: host=localhost port=xxxxx dbname=regression
+                                       ->  Seq Scan on t2_27905504 t2  (cost=0.00..30.40 rows=2040 width=12)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort  (cost=59.83..62.33 rows=1000 width=20)
+               Sort Key: intermediate_result.rnk, intermediate_result.id, intermediate_result.id2, intermediate_result.a
+               ->  Function Scan on read_intermediate_result intermediate_result  (cost=0.00..10.00 rows=1000 width=20)
+(20 rows)
+
+SELECT id, id2, a, rnk FROM
+(
+    SELECT
+      DISTINCT id, id2, a, rank() OVER (PARTITION BY id2 ORDER BY a) as rnk
+    FROM
+      t2
+) as foo
+ORDER BY
+  rnk, id, id2, a;
+ id | id2 | a | rnk
+---------------------------------------------------------------------
+  1 |   1 | 1 |   1
+  2 |   3 | 4 |   1
+  2 |   4 | 5 |   1
+  1 |   1 | 2 |   2
+  2 |   3 | 5 |   2
+  1 |   1 | 4 |   3
+(6 rows)
+
+EXPLAIN SELECT id, id2, a, rnk FROM
+(
+    SELECT
+      DISTINCT id, id2, a, rank() OVER (PARTITION BY id2 ORDER BY a) as rnk
+    FROM
+      t2
+) as foo
+ORDER BY
+  rnk, id, id2, a;
+                                                       QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Distributed Subplan XXX_1
+         ->  HashAggregate  (cost=11304.82..11306.82 rows=200 width=20)
+               Group Key: remote_scan.id, remote_scan.id2, remote_scan.a, rank() OVER (?)
+               ->  WindowAgg  (cost=8304.82..10304.82 rows=100000 width=20)
+                     ->  Sort  (cost=8304.82..8554.82 rows=100000 width=12)
+                           Sort Key: remote_scan.id2, remote_scan.a
+                           ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=12)
+                                 Task Count: 4
+                                 Tasks Shown: One of 4
+                                 ->  Task
+                                       Node: host=localhost port=xxxxx dbname=regression
+                                       ->  Seq Scan on t2_27905504 t2  (cost=0.00..30.40 rows=2040 width=12)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort  (cost=59.83..62.33 rows=1000 width=20)
+               Sort Key: intermediate_result.rnk, intermediate_result.id, intermediate_result.id2, intermediate_result.a
+               ->  Function Scan on read_intermediate_result intermediate_result  (cost=0.00..10.00 rows=1000 width=20)
+(20 rows)
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA multi_column_distribution CASCADE;

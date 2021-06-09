@@ -1054,8 +1054,8 @@ MultiTaskRouterSelectQuerySupported(Query *query)
 			List *targetEntryList = subquery->targetList;
 			List *groupTargetEntryList = GroupTargetEntryList(groupClauseList,
 															  targetEntryList);
-			bool groupOnPartitionColumn = TargetListOnPartitionColumn(subquery,
-																	  groupTargetEntryList);
+			bool groupOnPartitionColumn = TargetListOnPartitionColumns(subquery,
+																	   groupTargetEntryList);
 			if (!groupOnPartitionColumn)
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,

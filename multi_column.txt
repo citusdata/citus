@@ -29,6 +29,10 @@
 - [x] BuildCitusTableCacheEntry()
 - [ ] PostprocessCreateTableStmtPartitionOf()
 - [ ] PostprocessAlterTableStmtAttachPartition()
+- [x] TargetListOnPartitionColumn()
+- [ ] PartitionColumnForPushedDownSubquery()
+- [ ] RestrictionEquivalenceForPartitionKeys()
+- [ ] SafeToPushdownUnionSubquery()
 
 
 - [ ] PartitionMethod()
