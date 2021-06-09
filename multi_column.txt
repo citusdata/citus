@@ -31,8 +31,12 @@
 - [ ] PostprocessAlterTableStmtAttachPartition()
 - [x] TargetListOnPartitionColumn()
 - [ ] PartitionColumnForPushedDownSubquery()
-- [ ] RestrictionEquivalenceForPartitionKeys()
+
+# query pushdown planner
+- [x] RestrictionEquivalenceForPartitionKeys()
+- [x] EquivalenceListContainsRelationsEquality()
 - [ ] SafeToPushdownUnionSubquery()
+- [ ] RelationRestrictionPartitionKeyIndex()
 
 
 - [ ] PartitionMethod()

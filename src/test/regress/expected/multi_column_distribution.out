@@ -24,12 +24,20 @@ select create_distributed_table('t2', ARRAY['id', 'id2'], colocate_with := 'none
 
 (1 row)
 
+create table t3(id int, id2 int, b int);
+select create_distributed_table('t3', ARRAY['id', 'id2'], colocate_with := 't2');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 select * from pg_dist_partition WHERE NOT (logicalrelid::text LIKE '%.%');
  logicalrelid | partmethod |                                                        partkey                                                         | colocationid | repmodel |                                                                                                                      partkeys
 ---------------------------------------------------------------------
  t            | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |     27905500 | s        | {"{VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}"}
  t2           | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |     27905501 | s        | {"{VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}","{VAR :varno 1 :varattno 2 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 2 :location -1}"}
-(2 rows)
+ t3           | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |     27905501 | s        | {"{VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}","{VAR :varno 1 :varattno 2 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 2 :location -1}"}
+(3 rows)
 
 INSERT INTO t2 VALUES
 (1, 1, 1),
@@ -38,6 +46,11 @@ INSERT INTO t2 VALUES
 (2, 3, 4),
 (2, 3, 5),
 (2, 4, 5)
+;
+INSERT INTO t3 VALUES
+(1, 1, 1),
+(2, 2, 2),
+(2, 4, 4)
 ;
 -- partitioning by both distribution columns pushes the window function down
 SELECT id, id2, a, rnk FROM
@@ -191,5 +204,114 @@ ORDER BY
                ->  Function Scan on read_intermediate_result intermediate_result  (cost=0.00..10.00 rows=1000 width=20)
 (20 rows)
 
+-- Can pushdown if joining on both distribution columns
+SELECT * FROM (
+    SELECT t2.id, t2.id2, a, b
+    FROM t2 JOIN t3 ON t2.id = t3.id AND t2.id2 = t3.id2
+) foo
+ORDER BY 1, 2, 3, 4;
+ id | id2 | a | b
+---------------------------------------------------------------------
+  1 |   1 | 1 | 1
+  1 |   1 | 2 | 1
+  1 |   1 | 4 | 1
+  2 |   4 | 5 | 4
+(4 rows)
+
+EXPLAIN
+SELECT * FROM (
+    SELECT t2.id, t2.id2, a, b
+    FROM t2 JOIN t3 ON t2.id = t3.id AND t2.id2 = t3.id2
+) foo
+ORDER BY 1, 2, 3, 4;
+                                           QUERY PLAN
+---------------------------------------------------------------------
+ Sort  (cost=8304.82..8554.82 rows=100000 width=16)
+   Sort Key: remote_scan.id, remote_scan.id2, remote_scan.a, remote_scan.b
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=16)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Merge Join  (cost=285.08..316.72 rows=104 width=16)
+                     Merge Cond: ((t2.id = t3.id) AND (t2.id2 = t3.id2))
+                     ->  Sort  (cost=142.54..147.64 rows=2040 width=12)
+                           Sort Key: t2.id, t2.id2
+                           ->  Seq Scan on t2_27905504 t2  (cost=0.00..30.40 rows=2040 width=12)
+                     ->  Sort  (cost=142.54..147.64 rows=2040 width=12)
+                           Sort Key: t3.id, t3.id2
+                           ->  Seq Scan on t3_27905508 t3  (cost=0.00..30.40 rows=2040 width=12)
+(15 rows)
+
+-- Cannot pushdown if not joining on both distribution columns
+-- NOTE: This currently returns a result, because the logical planner will take
+-- over and that doesn't know about. In the EXPLAIN below you can see that it's
+-- not pushed down.
+SELECT * FROM (
+    SELECT t2.id, t2.id2, a, b
+    FROM t2 JOIN t3 ON t2.id = t3.id
+) foo
+ORDER BY 1, 2, 3, 4;
+ id | id2 | a | b
+---------------------------------------------------------------------
+  1 |   1 | 1 | 1
+  1 |   1 | 2 | 1
+  1 |   1 | 4 | 1
+  2 |   3 | 4 | 2
+  2 |   3 | 4 | 4
+  2 |   3 | 5 | 2
+  2 |   3 | 5 | 4
+  2 |   4 | 5 | 2
+  2 |   4 | 5 | 4
+(9 rows)
+
+EXPLAIN
+SELECT * FROM (
+    SELECT t2.id, t2.id2, a, b
+    FROM t2 JOIN t3 ON t2.id = t3.id
+) foo
+ORDER BY 1, 2, 3, 4;
+                                                       QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+   ->  Distributed Subplan XXX_1
+         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=16)
+               Task Count: 4
+               Tasks Shown: One of 4
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Merge Join  (cost=285.08..607.40 rows=20808 width=16)
+                           Merge Cond: (t2.id = t3.id)
+                           ->  Sort  (cost=142.54..147.64 rows=2040 width=12)
+                                 Sort Key: t2.id
+                                 ->  Seq Scan on t2_27905504 t2  (cost=0.00..30.40 rows=2040 width=12)
+                           ->  Sort  (cost=142.54..147.64 rows=2040 width=8)
+                                 Sort Key: t3.id
+                                 ->  Seq Scan on t3_27905508 t3  (cost=0.00..30.40 rows=2040 width=8)
+   Task Count: 1
+   Tasks Shown: All
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Sort  (cost=59.83..62.33 rows=1000 width=16)
+               Sort Key: intermediate_result.id, intermediate_result.id2, intermediate_result.a, intermediate_result.b
+               ->  Function Scan on read_intermediate_result intermediate_result  (cost=0.00..10.00 rows=1000 width=16)
+(22 rows)
+
+-- Cannot pushdown if not joining on both distribution columns
+SELECT * FROM (
+    SELECT t2.id, t2.id2, a, b
+    FROM t2 JOIN t3 ON t2.id2 = t3.id2
+) foo
+ORDER BY 1, 2, 3, 4;
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+EXPLAIN
+SELECT * FROM (
+    SELECT t2.id, t2.id2, a, b
+    FROM t2 JOIN t3 ON t2.id2 = t3.id2
+) foo
+ORDER BY 1, 2, 3, 4;
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 SET client_min_messages TO WARNING;
 DROP SCHEMA multi_column_distribution CASCADE;

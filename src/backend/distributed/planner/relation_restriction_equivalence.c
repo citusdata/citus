@@ -126,18 +126,19 @@ static bool AttributeClassContainsAttributeClassMember(AttributeEquivalenceClass
 static List * AddAttributeClassToAttributeClassList(List *attributeEquivalenceList,
 													AttributeEquivalenceClass *
 													attributeEquivalence);
-static bool AttributeEquivalencesAreEqual(AttributeEquivalenceClass *
-										  firstAttributeEquivalence,
-										  AttributeEquivalenceClass *
-										  secondAttributeEquivalence);
-static AttributeEquivalenceClass * GenerateCommonEquivalence(List *
-															 attributeEquivalenceList,
-															 RelationRestrictionContext *
-															 relationRestrictionContext);
-static AttributeEquivalenceClass * GenerateEquivalenceClassForRelationRestriction(
-	RelationRestrictionContext
-	*
-	relationRestrictionContext);
+static bool AttributeEquivalencesAreEqual(
+	AttributeEquivalenceClass *firstAttributeEquivalence,
+	AttributeEquivalenceClass *
+	secondAttributeEquivalence);
+static AttributeEquivalenceClass * GenerateCommonEquivalence(
+	List *attributeEquivalenceList,
+	RelationRestrictionContext *
+	relationRestrictionContext,
+	AttributeEquivalenceClass *
+	firstEquivalenceClass);
+static List * GenerateEquivalenceClassesForRelationRestriction(RelationRestrictionContext
+															   *
+															   relationRestrictionContext);
 static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass *
 													  firstClass,
 													  AttributeEquivalenceClass *
@@ -154,6 +155,7 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
 static Relids QueryRteIdentities(Query *queryTree);
+static bool HasVarattnoInVarList(List *varList, AttrNumber varattno);
 
 #if PG_VERSION_NUM >= PG_VERSION_13
 static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
@@ -653,46 +655,53 @@ bool
 EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 										 RelationRestrictionContext *restrictionContext)
 {
-	ListCell *commonEqClassCell = NULL;
-	ListCell *relationRestrictionCell = NULL;
-	Relids commonRteIdentities = NULL;
-
-	/*
-	 * In general we're trying to expand existing the equivalence classes to find a
-	 * common equivalence class. The main goal is to test whether this main class
-	 * contains all partition keys of the existing relations.
-	 */
-	AttributeEquivalenceClass *commonEquivalenceClass = GenerateCommonEquivalence(
-		attributeEquivalenceList,
+	List *firstEquivalenceClassList = GenerateEquivalenceClassesForRelationRestriction(
 		restrictionContext);
 
-	/* add the rte indexes of relations to a bitmap */
-	foreach(commonEqClassCell, commonEquivalenceClass->equivalentAttributes)
+
+	AttributeEquivalenceClass *firstEquivalenceClass = NULL;
+	foreach_ptr(firstEquivalenceClass, firstEquivalenceClassList)
 	{
-		AttributeEquivalenceClassMember *classMember =
-			(AttributeEquivalenceClassMember *) lfirst(commonEqClassCell);
-		int rteIdentity = classMember->rteIdentity;
+		/*
+		 * In general we're trying to expand existing the equivalence classes to find a
+		 * common equivalence class. The main goal is to test whether this main class
+		 * contains all partition keys of the existing relations.
+		 */
+		AttributeEquivalenceClass *commonEquivalenceClass = GenerateCommonEquivalence(
+			attributeEquivalenceList,
+			restrictionContext,
+			firstEquivalenceClass);
 
-		commonRteIdentities = bms_add_member(commonRteIdentities, rteIdentity);
-	}
+		Relids commonRteIdentities = NULL;
 
-	/* check whether all relations exists in the main restriction list */
-	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
-	{
-		RelationRestriction *relationRestriction =
-			(RelationRestriction *) lfirst(relationRestrictionCell);
-		int rteIdentity = GetRTEIdentity(relationRestriction->rte);
+		AttributeEquivalenceClassMember *classMember = NULL;
 
-		/* we shouldn't check for the equality of non-distributed tables */
-		if (IsCitusTableType(relationRestriction->relationId,
-							 CITUS_TABLE_WITH_NO_DIST_KEY))
+		/* add the rte indexes of relations to a bitmap */
+		foreach_ptr(classMember, commonEquivalenceClass->equivalentAttributes)
 		{
-			continue;
+			int rteIdentity = classMember->rteIdentity;
+
+			commonRteIdentities = bms_add_member(commonRteIdentities, rteIdentity);
 		}
 
-		if (!bms_is_member(rteIdentity, commonRteIdentities))
+		RelationRestriction *relationRestriction = NULL;
+
+		/* check whether all relations exists in the main restriction list */
+		foreach_ptr(relationRestriction, restrictionContext->relationRestrictionList)
 		{
-			return false;
+			int rteIdentity = GetRTEIdentity(relationRestriction->rte);
+
+			/* we shouldn't check for the equality of non-distributed tables */
+			if (IsCitusTableType(relationRestriction->relationId,
+								 CITUS_TABLE_WITH_NO_DIST_KEY))
+			{
+				continue;
+			}
+
+			if (!bms_is_member(rteIdentity, commonRteIdentities))
+			{
+				return false;
+			}
 		}
 	}
 
@@ -928,7 +937,8 @@ SearchPlannerParamList(List *plannerParamList, Param *plannerParam)
  */
 static AttributeEquivalenceClass *
 GenerateCommonEquivalence(List *attributeEquivalenceList,
-						  RelationRestrictionContext *relationRestrictionContext)
+						  RelationRestrictionContext *relationRestrictionContext,
+						  AttributeEquivalenceClass *firstEquivalenceClass)
 {
 	Bitmapset *addedEquivalenceIds = NULL;
 	uint32 equivalenceListSize = list_length(attributeEquivalenceList);
@@ -937,14 +947,6 @@ GenerateCommonEquivalence(List *attributeEquivalenceList,
 	AttributeEquivalenceClass *commonEquivalenceClass = palloc0(
 		sizeof(AttributeEquivalenceClass));
 	commonEquivalenceClass->equivalenceId = 0;
-
-	/*
-	 * We seed the common equivalence class with a the first distributed
-	 * table since we always want the input distributed relations to be
-	 * on the common class.
-	 */
-	AttributeEquivalenceClass *firstEquivalenceClass =
-		GenerateEquivalenceClassForRelationRestriction(relationRestrictionContext);
 
 	/* we skip the calculation if there are not enough information */
 	if (equivalenceListSize < 1 || firstEquivalenceClass == NULL)
@@ -989,9 +991,9 @@ GenerateCommonEquivalence(List *attributeEquivalenceList,
 				ListConcatUniqueAttributeClassMemberLists(commonEquivalenceClass,
 														  currentEquivalenceClass);
 
-				addedEquivalenceIds = bms_add_member(addedEquivalenceIds,
-													 currentEquivalenceClass->
-													 equivalenceId);
+				addedEquivalenceIds = bms_add_member(
+					addedEquivalenceIds,
+					currentEquivalenceClass->equivalenceId);
 
 				/*
 				 * It seems inefficient to start from the beginning.
@@ -1019,27 +1021,38 @@ GenerateCommonEquivalence(List *attributeEquivalenceList,
 
 
 /*
- * GenerateEquivalenceClassForRelationRestriction generates an AttributeEquivalenceClass
- * with a single AttributeEquivalenceClassMember.
+ * GenerateEquivalenceClassesForRelationRestriction generates a list of
+ * AttributeEquivalenceClasses that all have a single
+ * AttributeEquivalenceClassMember. The list contains one
+ * AttributeEquivalenceClass for of each of the distribution columns of the
+ * first distributed relation in the relationRestrictionContext.
  */
-static AttributeEquivalenceClass *
-GenerateEquivalenceClassForRelationRestriction(
+static List *
+GenerateEquivalenceClassesForRelationRestriction(
 	RelationRestrictionContext *relationRestrictionContext)
 {
 	ListCell *relationRestrictionCell = NULL;
-	AttributeEquivalenceClassMember *eqMember = NULL;
-	AttributeEquivalenceClass *eqClassForRelation = NULL;
 
 	foreach(relationRestrictionCell, relationRestrictionContext->relationRestrictionList)
 	{
 		RelationRestriction *relationRestriction =
 			(RelationRestriction *) lfirst(relationRestrictionCell);
-		Var *relationPartitionKey = DistPartitionKey(relationRestriction->relationId);
+		List *relationPartitionKeyList = DistPartitionKeys(
+			relationRestriction->relationId);
 
-		if (relationPartitionKey)
+		if (list_length(relationPartitionKeyList) == 0)
 		{
-			eqClassForRelation = palloc0(sizeof(AttributeEquivalenceClass));
-			eqMember = palloc0(sizeof(AttributeEquivalenceClassMember));
+			continue;
+		}
+
+		List *equivalenceClasses = NIL;
+		Var *relationPartitionKey = NULL;
+		foreach_ptr(relationPartitionKey, relationPartitionKeyList)
+		{
+			AttributeEquivalenceClass *eqClassForRelation = palloc0(
+				sizeof(AttributeEquivalenceClass));
+			AttributeEquivalenceClassMember *eqMember = palloc0(
+				sizeof(AttributeEquivalenceClassMember));
 			eqMember->relationId = relationRestriction->relationId;
 			eqMember->rteIdentity = GetRTEIdentity(relationRestriction->rte);
 			eqMember->varno = relationRestriction->index;
@@ -1047,12 +1060,12 @@ GenerateEquivalenceClassForRelationRestriction(
 
 			eqClassForRelation->equivalentAttributes =
 				lappend(eqClassForRelation->equivalentAttributes, eqMember);
-
-			break;
+			equivalenceClasses = lappend(equivalenceClasses, eqClassForRelation);
 		}
+		return equivalenceClasses;
 	}
 
-	return eqClassForRelation;
+	return NIL;
 }
 
 
@@ -1532,18 +1545,12 @@ AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass *
 		return;
 	}
 
-	Var *relationPartitionKey = DistPartitionKey(relationId);
+	List *relationPartitionKeyList = DistPartitionKeys(relationId);
 
 	Assert(rangeTableEntry->rtekind == RTE_RELATION);
 
-	/* we don't need reference tables in the equality on columns */
-	if (relationPartitionKey == NULL)
-	{
-		return;
-	}
-
 	/* we're only interested in distribution columns */
-	if (relationPartitionKey->varattno != varToBeAdded->varattno)
+	if (!HasVarattnoInVarList(relationPartitionKeyList, varToBeAdded->varattno))
 	{
 		return;
 	}
@@ -1559,6 +1566,21 @@ AddRteRelationToAttributeEquivalenceClass(AttributeEquivalenceClass *
 	attrEquivalenceClass->equivalentAttributes =
 		lappend(attrEquivalenceClass->equivalentAttributes,
 				attributeEqMember);
+}
+
+
+static bool
+HasVarattnoInVarList(List *varList, AttrNumber varattno)
+{
+	Var *var = NULL;
+	foreach_ptr(var, varList)
+	{
+		if (var->varattno == varattno)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
