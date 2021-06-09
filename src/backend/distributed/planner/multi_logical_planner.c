@@ -206,13 +206,11 @@ FindNodeMatchingCheckFunction(Node *node, CheckNodeFunc checker)
 bool
 TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 {
-	bool targetListOnPartitionColumn = false;
 	List *compositeFieldList = NIL;
 
-	ListCell *targetEntryCell = NULL;
-	foreach(targetEntryCell, targetEntryList)
+	TargetEntry *targetEntry = NULL;
+	foreach_ptr(targetEntry, targetEntryList)
 	{
-		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *targetExpression = targetEntry->expr;
 
 		bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
@@ -240,36 +238,29 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 			}
 			else
 			{
-				targetListOnPartitionColumn = true;
-				break;
+				return true;
 			}
 		}
 	}
 
 	/* check composite fields */
-	if (!targetListOnPartitionColumn)
+	bool fullCompositeFieldList = FullCompositeFieldList(compositeFieldList);
+	if (fullCompositeFieldList)
 	{
-		bool fullCompositeFieldList = FullCompositeFieldList(compositeFieldList);
-		if (fullCompositeFieldList)
-		{
-			targetListOnPartitionColumn = true;
-		}
+		return true;
 	}
 
 	/*
 	 * We could still behave as if the target list is on partition column if
 	 * range table entries don't contain a distributed table.
 	 */
-	if (!targetListOnPartitionColumn)
+	if (!FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
+													   IsDistributedTableRTE))
 	{
-		if (!FindNodeMatchingCheckFunctionInRangeTableList(query->rtable,
-														   IsDistributedTableRTE))
-		{
-			targetListOnPartitionColumn = true;
-		}
+		return true;
 	}
 
-	return targetListOnPartitionColumn;
+	return false;
 }
 
 
