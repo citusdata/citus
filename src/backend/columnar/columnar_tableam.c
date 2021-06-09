@@ -114,6 +114,8 @@ static Datum * detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isn
 static ItemPointerData row_number_to_tid(uint64 rowNumber);
 static uint64 tid_to_row_number(ItemPointerData tid);
 static void ErrorIfInvalidRowNumber(uint64 rowNumber);
+static void ColumnarReportTotalVirtualBlocks(Relation relation, Snapshot snapshot,
+											 int progressArrIndex);
 static BlockNumber ColumnarGetNumberOfVirtualBlocks(Relation relation, Snapshot snapshot);
 static ItemPointerData ColumnarGetHighestItemPointer(Relation relation,
 													 Snapshot snapshot);
@@ -1183,22 +1185,10 @@ columnar_index_build_range_scan(Relation columnarRelation,
 		snapshot = scan->rs_snapshot;
 	}
 
-	/*
-	 * Indeed, columnar tables might have gaps between row numbers, e.g
-	 * due to aborted transactions etc. Also, ItemPointer BlockNumber's
-	 * for columnar tables don't actually correspond to actual disk blocks
-	 * as in heapAM. For this reason, we call them as "virtual" blocks. At
-	 * the moment, we believe it is better to report our progress based on
-	 * this "virtual" block concept instead of doing nothing.
-	 *
-	 * Also, since we will report total number of blocks as "done" finally,
-	 * here we store total number of blocks as it is not free to compute.
-	 */
-	BlockNumber nvirtualBlocks = InvalidBlockNumber;
 	if (progress)
 	{
-		nvirtualBlocks = ColumnarGetNumberOfVirtualBlocks(columnarRelation, snapshot);
-		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_TOTAL, nvirtualBlocks);
+		ColumnarReportTotalVirtualBlocks(columnarRelation, snapshot,
+										 PROGRESS_SCAN_BLOCKS_TOTAL);
 	}
 
 	/*
@@ -1218,7 +1208,8 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	if (progress)
 	{
 		/* report the last "virtual" block as "done" */
-		pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE, nvirtualBlocks);
+		ColumnarReportTotalVirtualBlocks(columnarRelation, snapshot,
+										 PROGRESS_SCAN_BLOCKS_DONE);
 	}
 
 	if (snapshotRegisteredByUs)
@@ -1232,6 +1223,34 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	indexInfo->ii_PredicateState = NULL;
 
 	return reltuples;
+}
+
+
+/*
+ * ColumnarReportTotalVirtualBlocks reports progress for index build based on
+ * number of "virtual" blocks that given relation has.
+ * "progressArrIndex" argument determines which entry in st_progress_param
+ * array should be updated. In this case, we only expect PROGRESS_SCAN_BLOCKS_TOTAL
+ * or PROGRESS_SCAN_BLOCKS_DONE to specify whether we want to report calculated
+ * number of blocks as "done" or as "total" number of "virtual" blocks to scan.
+ */
+static void
+ColumnarReportTotalVirtualBlocks(Relation relation, Snapshot snapshot,
+								 int progressArrIndex)
+{
+	/*
+	 * Indeed, columnar tables might have gaps between row numbers, e.g
+	 * due to aborted transactions etc. Also, ItemPointer BlockNumber's
+	 * for columnar tables don't actually correspond to actual disk blocks
+	 * as in heapAM. For this reason, we call them as "virtual" blocks. At
+	 * the moment, we believe it is better to report our progress based on
+	 * this "virtual" block concept instead of doing nothing.
+	 */
+	Assert(progressArrIndex == PROGRESS_SCAN_BLOCKS_TOTAL ||
+		   progressArrIndex == PROGRESS_SCAN_BLOCKS_DONE);
+	BlockNumber nvirtualBlocks =
+		ColumnarGetNumberOfVirtualBlocks(relation, snapshot);
+	pgstat_progress_update_param(progressArrIndex, nvirtualBlocks);
 }
 
 
