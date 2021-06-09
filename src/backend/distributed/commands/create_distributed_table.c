@@ -348,7 +348,6 @@ create_reference_table(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	char *colocateWithTableName = NULL;
-	Var *distributionColumn = NULL;
 
 	bool viaDeprecatedAPI = false;
 
@@ -384,7 +383,8 @@ create_reference_table(PG_FUNCTION_ARGS)
 						errdetail("There are no active worker nodes.")));
 	}
 
-	CreateDistributedTable(relationId, list_make1(distributionColumn), DISTRIBUTE_BY_NONE,
+	List *distributionColumnList = NIL;
+	CreateDistributedTable(relationId, distributionColumnList, DISTRIBUTE_BY_NONE,
 						   ShardCount, false, colocateWithTableName, viaDeprecatedAPI);
 	PG_RETURN_VOID();
 }

@@ -1010,9 +1010,9 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId)
 	char replicationModel = REPLICATION_MODEL_STREAMING;
 
 	uint32 colocationId = INVALID_COLOCATION_ID;
-	Var *distributionColumn = NULL;
+	List *distributionColumnList = NIL;
 	InsertIntoPgDistPartition(citusLocalTableId, distributionMethod,
-							  list_make1(distributionColumn), colocationId,
+							  distributionColumnList, colocationId,
 							  replicationModel);
 
 	/* set shard storage type according to relation type */
