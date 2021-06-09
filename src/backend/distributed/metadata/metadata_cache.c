@@ -1238,59 +1238,43 @@ BuildCitusTableCacheEntry(Oid relationId)
 	cacheEntry->relationId = relationId;
 
 	cacheEntry->partitionMethod = datumArray[Anum_pg_dist_partition_partmethod - 1];
-	Datum partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
-	bool partitionKeyIsNull = isNullArray[Anum_pg_dist_partition_partkey - 1];
 	Datum partitionKeysDatum = datumArray[Anum_pg_dist_partition_partkeys - 1];
 	bool partitionKeysIsNull = isNullArray[Anum_pg_dist_partition_partkeys - 1];
 
 	/* note that for reference tables partitionKeyIsNull is true */
-	if (!partitionKeyIsNull)
+	if (!partitionKeysIsNull)
 	{
+		Assert(!isNullArray[Anum_pg_dist_partition_partkey - 1]);
+
 		oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
-		Assert(!partitionKeysIsNull);
-		if (!partitionKeysIsNull)
+
+		ArrayType *partitionKeysArray = DatumGetArrayTypeP(partitionKeysDatum);
+		int partitionKeysCount = ArrayObjectCount(partitionKeysArray);
+		Datum *partitionKeysArrayDatum = DeconstructArrayObject(partitionKeysArray);
+		for (int i = 0; i < partitionKeysCount; i++)
 		{
-			ArrayType *partitionKeysArray = DatumGetArrayTypeP(partitionKeysDatum);
-			int partitionKeysCount = ArrayObjectCount(partitionKeysArray);
-			Datum *partitionKeysArrayDatum = DeconstructArrayObject(partitionKeysArray);
-			for (int i = 0; i < partitionKeysCount; i++)
-			{
-				/* get the string representation of the partition column Var */
-				char *partitionKeyString = TextDatumGetCString(
-					partitionKeysArrayDatum[i]);
+			/* get the string representation of the partition column Var */
+			char *partitionKeyString = TextDatumGetCString(
+				partitionKeysArrayDatum[i]);
 
-				/* convert the string to a Node and ensure it is a Var */
-				Node *partitionNode = stringToNode(partitionKeyString);
-				Assert(IsA(partitionNode, Var));
+			/* convert the string to a Node and ensure it is a Var */
+			Node *partitionNode = stringToNode(partitionKeyString);
+			Assert(IsA(partitionNode, Var));
 
-				cacheEntry->partitionKeyStrings =
-					lappend(cacheEntry->partitionKeyStrings, partitionKeyString);
-				cacheEntry->partitionColumns =
-					lappend(cacheEntry->partitionColumns, partitionNode);
-			}
-
-			/*
-			 * TODO: uncomment once fixed
-			 * cacheEntry->partitionColumn = linitial(cacheEntry->partitionColumns);
-			 * cacheEntry->partitionKeyString = linitial(cacheEntry->partitionKeyStrings);
-			 */
+			cacheEntry->partitionKeyStrings =
+				lappend(cacheEntry->partitionKeyStrings, partitionKeyString);
+			cacheEntry->partitionColumns =
+				lappend(cacheEntry->partitionColumns, partitionNode);
 		}
 
-		/* get the string representation of the partition column Var */
-		cacheEntry->partitionKeyString = TextDatumGetCString(partitionKeyDatum);
-
-		/* convert the string to a Node and ensure it is a Var */
-		Node *partitionNode = stringToNode(cacheEntry->partitionKeyString);
-		Assert(IsA(partitionNode, Var));
-
-		cacheEntry->partitionColumn = (Var *) partitionNode;
-
+		cacheEntry->partitionColumn = linitial(cacheEntry->partitionColumns);
+		cacheEntry->partitionKeyString = linitial(cacheEntry->partitionKeyStrings);
 
 		MemoryContextSwitchTo(oldContext);
 	}
 	else
 	{
-		Assert(partitionKeysIsNull);
+		Assert(isNullArray[Anum_pg_dist_partition_partkey - 1]);
 		cacheEntry->partitionKeyString = NULL;
 	}
 
