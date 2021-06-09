@@ -1380,15 +1380,38 @@ PartitionColumn(Oid relationId, uint32 rangeTableId)
 Var *
 DistPartitionKey(Oid relationId)
 {
+	List *partitionKeys = DistPartitionKeys(relationId);
+	if (list_length(partitionKeys) == 0)
+	{
+		return NULL;
+	}
+
+	return linitial(partitionKeys);
+}
+
+
+/*
+ * DistPartitionKeys returns the list of partition key columns for the given
+ * relation. Note that in the context of distributed join and query planning,
+ * the callers of this function *must* set the partition key column's range
+ * table reference (varno) to match the table's location in the query range
+ * table list.
+ *
+ * Note that reference tables do not have partition columns. Thus, this function
+ * returns NIL when called for reference tables.
+ */
+List *
+DistPartitionKeys(Oid relationId)
+{
 	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
 
 	/* non-distributed tables do not have partition column */
 	if (IsCitusTableTypeCacheEntry(partitionEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
-		return NULL;
+		return NIL;
 	}
 
-	return copyObject(partitionEntry->partitionColumn);
+	return copyObject(partitionEntry->partitionColumns);
 }
 
 

@@ -105,6 +105,7 @@ extern Var * LeftColumnOrNULL(OpExpr *joinClause);
 extern Var * RightColumnOrNULL(OpExpr *joinClause);
 extern Var * PartitionColumn(Oid relationId, uint32 rangeTableId);
 extern Var * DistPartitionKey(Oid relationId);
+extern List * DistPartitionKeys(Oid relationId);
 extern Var * DistPartitionKeyOrError(Oid relationId);
 extern char PartitionMethod(Oid relationId);
 extern char TableReplicationModel(Oid relationId);

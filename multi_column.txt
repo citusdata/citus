@@ -1,5 +1,12 @@
 - [ ] DistPartitionKey()
+   - [x] Add DistPartitionKeys
+   - [ ] Remove DistPartitionKey
+- [ ] DistPartitionKeyOrError()
+   - [ ] Add DistPartitionKeysOrError
+   - [ ] Remove DistPartitionKeyOrError
 - [ ] PartitionColumn()
+   - [ ] Add PartitionColumns
+   - [ ] Remove PartitionColumn
 - [ ] IsPartitionColumn()
 - [ ] PartitionColumnIndex(Var *targetVar, List *targetList)
 - [ ] PartitionColumnIndex(List *insertTargetList, Var *partitionColumn);
