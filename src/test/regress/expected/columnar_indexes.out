@@ -85,11 +85,10 @@ EXPLAIN (COSTS OFF) SELECT * FROM columnar_table WHERE a=6456;
    Index Cond: (a = 6456)
 (2 rows)
 
--- should not use index-only scan even if index includes column "a"
 EXPLAIN (COSTS OFF) SELECT a FROM columnar_table WHERE a=6456;
-                       QUERY PLAN
+                          QUERY PLAN
 ---------------------------------------------------------------------
- Index Scan using columnar_table_a_idx on columnar_table
+ Index Only Scan using columnar_table_a_idx on columnar_table
    Index Cond: (a = 6456)
 (2 rows)
 
@@ -159,9 +158,9 @@ EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30000;
 
 -- can use index scan
 EXPLAIN (COSTS OFF) SELECT b FROM columnar_table WHERE b = 30001;
-                       QUERY PLAN
+                          QUERY PLAN
 ---------------------------------------------------------------------
- Index Scan using columnar_table_b_idx on columnar_table
+ Index Only Scan using columnar_table_b_idx on columnar_table
    Index Cond: (b = 30001)
 (2 rows)
 
@@ -295,26 +294,17 @@ SELECT pg_total_relation_size ('unique_a') * 1.5 <
 (1 row)
 
 DROP INDEX unique_a;
--- should NOT use index only scan even if unique_a_include_b_c_d includes column "b"
+-- should use index only scan since unique_a_include_b_c_d includes column "b" too
 EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
-                       QUERY PLAN
+                          QUERY PLAN
 ---------------------------------------------------------------------
- Index Scan using unique_a_include_b_c_d on include_test
+ Index Only Scan using unique_a_include_b_c_d on include_test
    Index Cond: (a = 500)
 (2 rows)
 
--- We temporarily set enable_indexonlyscan to off to prevent index-only
--- scan's on columnar tables.
--- Make sure that we rollback this change after finishing the query, so
--- this should print "on".
-SHOW enable_indexonlyscan;
- enable_indexonlyscan
----------------------------------------------------------------------
- on
-(1 row)
-
 BEGIN;
   SET enable_indexonlyscan = OFF;
+  -- show that we respect enable_indexonlyscan GUC
   EXPLAIN (COSTS OFF) SELECT b FROM include_test WHERE a = 500;
                        QUERY PLAN
 ---------------------------------------------------------------------
@@ -323,7 +313,7 @@ BEGIN;
 (2 rows)
 
 ROLLBACK;
--- make sure that we read the correct value for "b"
+-- make sure that we read the correct value for "b" when doing index only scan
 SELECT b=980 FROM include_test WHERE a = 980;
  ?column?
 ---------------------------------------------------------------------

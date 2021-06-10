@@ -15,11 +15,9 @@
 #include "postgres.h"
 
 #include "access/skey.h"
-#include "miscadmin.h"
 #include "nodes/extensible.h"
 #include "nodes/pg_list.h"
 #include "nodes/plannodes.h"
-#include "optimizer/cost.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
@@ -59,10 +57,7 @@ typedef bool (*PathPredicate)(Node *node);
 static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 									   RangeTblEntry *rte);
 static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
-static bool IsIndexPath(Node *node);
 static bool IsNotIndexPath(Node *node);
-static void CreateNonIndexOnlyIndexPaths(PlannerInfo *root, RelOptInfo *rel);
-static void CreateSyncSeqScanPath(PlannerInfo *root, RelOptInfo *rel);
 static Path * CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
 									 RangeTblEntry *rte);
 static Cost ColumnarScanCost(RangeTblEntry *rte);
@@ -181,22 +176,6 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		/* columnar doesn't support parallel paths */
 		rel->partial_pathlist = NIL;
 
-		/*
-		 * Remove index paths and recreate them by temporarily setting
-		 * enable_indexonlyscan to false to make sure that we don't use
-		 * index-only scan on columnar tables.
-		 *
-		 * Before creating index paths, create a sequential scan path as
-		 * set_plain_rel_pathlist does. This is because, it is not guaranteed
-		 * that postgres would generate an index path for regular index scan
-		 * and might already removed other scan path(s) when adding index-only
-		 * path(s). In that case, we should be able to safely fall-back to
-		 * sequential scan as postgres does.
-		 */
-		RemovePathsByPredicate(rel, IsIndexPath);
-		CreateSyncSeqScanPath(root, rel);
-		CreateNonIndexOnlyIndexPaths(root, rel);
-
 		if (EnableColumnarCustomScan)
 		{
 			Path *customPath = CreateColumnarScanPath(root, rel, rte);
@@ -240,50 +219,12 @@ RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate)
 
 
 /*
- * IsIndexPath returns true if given node is an IndexPath.
- */
-static bool
-IsIndexPath(Node *node)
-{
-	return IsA(node, IndexPath);
-}
-
-
-/*
  * IsNotIndexPath returns true if given node is not an IndexPath.
  */
 static bool
 IsNotIndexPath(Node *node)
 {
 	return !IsA(node, IndexPath);
-}
-
-
-/*
- * CreateSyncSeqScanPath populates sync sequential scan path for given rel.
- */
-static void
-CreateSyncSeqScanPath(PlannerInfo *root, RelOptInfo *rel)
-{
-	Relids required_outer = rel->lateral_relids;
-	int parallel_workers = 0;
-	add_path(rel, create_seqscan_path(root, rel, required_outer, parallel_workers));
-}
-
-
-/*
- * CreateNonIndexOnlyIndexPaths is a wrapper around create_index_paths
- * that populates non index-only IndexPath's for given rel.
- */
-static void
-CreateNonIndexOnlyIndexPaths(PlannerInfo *root, RelOptInfo *rel)
-{
-	int save_nestlevel = NewGUCNestLevel();
-	(void) set_config_option("enable_indexonlyscan", "off",
-							 PGC_USERSET, PGC_S_SESSION,
-							 GUC_ACTION_SAVE, true, 0, false);
-	create_index_paths(root, rel);
-	AtEOXact_GUC(true, save_nestlevel);
 }
 
 
