@@ -75,7 +75,7 @@ typedef struct JoinOrderNode
 	 * We keep track of all unique partition columns in the relation to correctly find
 	 * join clauses that can be applied locally.
 	 */
-	List *partitionColumnList;
+	List *partitionColumnListList;
 
 	char partitionMethod;
 	List *joinClauseList;       /* not relevant for the first table */
