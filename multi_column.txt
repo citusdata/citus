@@ -5,7 +5,7 @@
    - [ ] Add DistPartitionKeysOrError
    - [ ] Remove DistPartitionKeyOrError
 - [ ] PartitionColumn()
-   - [ ] Add PartitionColumns
+   - [x] Add PartitionColumns
    - [ ] Remove PartitionColumn
 - [ ] IsPartitionColumn()
 - [ ] PartitionColumnIndex(Var *targetVar, List *targetList)

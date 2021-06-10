@@ -1351,20 +1351,39 @@ RightColumnOrNULL(OpExpr *joinClause)
 Var *
 PartitionColumn(Oid relationId, uint32 rangeTableId)
 {
-	Var *partitionKey = DistPartitionKey(relationId);
-	Var *partitionColumn = NULL;
-
-	/* short circuit for reference tables */
-	if (partitionKey == NULL)
+	List *partitionColumnList = PartitionColumns(relationId, rangeTableId);
+	if (list_length(partitionColumnList) == 0)
 	{
-		return partitionColumn;
+		return NULL;
 	}
 
-	partitionColumn = partitionKey;
-	partitionColumn->varno = rangeTableId;
-	partitionColumn->varnosyn = rangeTableId;
+	return linitial(partitionColumnList);
+}
 
-	return partitionColumn;
+
+/*
+ * PartitionColumns builds the list of partition columns for the given
+ * relation, and sets the partition columns their range table references to the
+ * given table identifier.
+ *
+ * Note that reference tables do not have partition column. Thus, this function
+ * returns NIL when called for reference tables.
+ */
+List *
+PartitionColumns(Oid relationId, uint32 rangeTableId)
+{
+	List *partitionKeyList = DistPartitionKeys(relationId);
+	List *partitionColumnList = NULL;
+
+	Var *partitionKey = NULL;
+	foreach_ptr(partitionKey, partitionKeyList)
+	{
+		partitionKey->varno = rangeTableId;
+		partitionKey->varnosyn = rangeTableId;
+		partitionColumnList = lappend(partitionColumnList, partitionKey);
+	}
+
+	return partitionColumnList;
 }
 
 
