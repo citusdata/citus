@@ -54,7 +54,6 @@ typedef struct ListCellAndListWrapper
 		 (((var) = lfirst(var ## CellDoNotUse)) || true); \
 		 var ## CellDoNotUse = lnext_compat(l, var ## CellDoNotUse))
 
-
 /*
  * foreach_int -
  *	  a convenience macro which loops through an int list without needing a
@@ -79,6 +78,35 @@ typedef struct ListCellAndListWrapper
 		 (var ## CellDoNotUse) != NULL && \
 		 (((var) = lfirst_oid(var ## CellDoNotUse)) || true); \
 		 var ## CellDoNotUse = lnext_compat(l, var ## CellDoNotUse))
+
+/*
+ * forboth_ptr -
+ *	  a convenience macro which loops through a pointer list without needing a
+ *	  ListCell, just a declared pointer variable to store the pointer of the
+ *	  cell in.
+ *
+ *   How it works:
+ *	  - A ListCell is declared with the name {var}CellDoNotUse and used
+ *	    throughout the for loop using ## to concat.
+ *	  - To assign to var it needs to be done in the condition of the for loop,
+ *	    because we cannot use the initializer since a ListCell* variable is
+ *	    declared there.
+ *	  - || true is used to always enter the loop when cell is not null even if
+ *	    var is NULL.
+ */
+#define forboth_ptr(var1, l1, var2, l2) \
+	for (ListCell \
+		 *(var1 ## CellDoNotUse) = list_head(l1) \
+		 , *(var2 ## CellDoNotUse) = list_head(l2) \
+		 ; \
+		 (var1 ## CellDoNotUse) != NULL \
+		 && (((var1) = lfirst(var1 ## CellDoNotUse)) || true) \
+		 && (var2 ## CellDoNotUse) != NULL \
+		 && (((var2) = lfirst(var2 ## CellDoNotUse)) || true) \
+		 ; \
+		 var1 ## CellDoNotUse = lnext_compat(l1, var1 ## CellDoNotUse) \
+		 , var2 ## CellDoNotUse = lnext_compat(l2, var2 ## CellDoNotUse) \
+		 )
 
 /*
  * foreach_ptr_append -

@@ -252,51 +252,16 @@ SELECT * FROM (
     FROM t2 JOIN t3 ON t2.id = t3.id
 ) foo
 ORDER BY 1, 2, 3, 4;
- id | id2 | a | b
----------------------------------------------------------------------
-  1 |   1 | 1 | 1
-  1 |   1 | 2 | 1
-  1 |   1 | 4 | 1
-  2 |   3 | 4 | 2
-  2 |   3 | 4 | 4
-  2 |   3 | 5 | 2
-  2 |   3 | 5 | 4
-  2 |   4 | 5 | 2
-  2 |   4 | 5 | 4
-(9 rows)
-
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 EXPLAIN
 SELECT * FROM (
     SELECT t2.id, t2.id2, a, b
     FROM t2 JOIN t3 ON t2.id = t3.id
 ) foo
 ORDER BY 1, 2, 3, 4;
-                                                       QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
-   ->  Distributed Subplan XXX_1
-         ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=16)
-               Task Count: 4
-               Tasks Shown: One of 4
-               ->  Task
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Merge Join  (cost=285.08..607.40 rows=20808 width=16)
-                           Merge Cond: (t2.id = t3.id)
-                           ->  Sort  (cost=142.54..147.64 rows=2040 width=12)
-                                 Sort Key: t2.id
-                                 ->  Seq Scan on t2_27905504 t2  (cost=0.00..30.40 rows=2040 width=12)
-                           ->  Sort  (cost=142.54..147.64 rows=2040 width=8)
-                                 Sort Key: t3.id
-                                 ->  Seq Scan on t3_27905508 t3  (cost=0.00..30.40 rows=2040 width=8)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Sort  (cost=59.83..62.33 rows=1000 width=16)
-               Sort Key: intermediate_result.id, intermediate_result.id2, intermediate_result.a, intermediate_result.b
-               ->  Function Scan on read_intermediate_result intermediate_result  (cost=0.00..10.00 rows=1000 width=16)
-(22 rows)
-
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
 -- Cannot pushdown if not joining on both distribution columns
 SELECT * FROM (
     SELECT t2.id, t2.id2, a, b

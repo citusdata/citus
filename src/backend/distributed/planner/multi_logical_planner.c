@@ -62,7 +62,7 @@ typedef struct QualifierWalkerContext
 
 /* Function pointer type definition for apply join rule functions */
 typedef MultiNode *(*RuleApplyFunction) (MultiNode *leftNode, MultiNode *rightNode,
-										 List *partitionColumnList, JoinType joinType,
+										 List *partitionColumnListList, JoinType joinType,
 										 List *joinClauses);
 
 typedef bool (*CheckNodeFunc)(Node *);
@@ -94,38 +94,40 @@ static bool IsSelectClause(Node *clause);
 
 /* Local functions forward declarations for applying joins */
 static MultiNode * ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode,
-								 JoinRuleType ruleType, List *partitionColumnList,
+								 JoinRuleType ruleType, List *partitionColumnListList,
 								 JoinType joinType, List *joinClauseList);
 static RuleApplyFunction JoinRuleApplyFunction(JoinRuleType ruleType);
 static MultiNode * ApplyReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
-									  List *partitionColumnList, JoinType joinType,
+									  List *partitionColumnListList, JoinType joinType,
 									  List *joinClauses);
 static MultiNode * ApplyLocalJoin(MultiNode *leftNode, MultiNode *rightNode,
-								  List *partitionColumnList, JoinType joinType,
+								  List *partitionColumnListList, JoinType joinType,
 								  List *joinClauses);
 static MultiNode * ApplySingleRangePartitionJoin(MultiNode *leftNode,
 												 MultiNode *rightNode,
-												 List *partitionColumnList,
+												 List *partitionColumnListList,
 												 JoinType joinType,
 												 List *applicableJoinClauses);
 static MultiNode * ApplySingleHashPartitionJoin(MultiNode *leftNode,
 												MultiNode *rightNode,
-												List *partitionColumnList,
+												List *partitionColumnListList,
 												JoinType joinType,
 												List *applicableJoinClauses);
 static MultiJoin * ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
-											List *partitionColumnList, JoinType joinType,
+											List *partitionColumnListList, JoinType
+											joinType,
 											List *joinClauses);
 static MultiNode * ApplyDualPartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
-										  List *partitionColumnList, JoinType joinType,
+										  List *partitionColumnListList, JoinType
+										  joinType,
 										  List *joinClauses);
 static MultiNode * ApplyCartesianProductReferenceJoin(MultiNode *leftNode,
 													  MultiNode *rightNode,
-													  List *partitionColumnList,
+													  List *partitionColumnListList,
 													  JoinType joinType,
 													  List *joinClauses);
 static MultiNode * ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
-										 List *partitionColumnList, JoinType joinType,
+										 List *partitionColumnListList, JoinType joinType,
 										 List *joinClauses);
 
 
@@ -1663,16 +1665,18 @@ MultiJoinTree(List *joinOrderList, List *collectTableList, List *joinWhereClause
 		{
 			JoinRuleType joinRuleType = joinOrderNode->joinRuleType;
 			JoinType joinType = joinOrderNode->joinType;
-			List *partitionColumnList = joinOrderNode->partitionColumnList;
+			List *partitionColumnListList = joinOrderNode->partitionColumnListList;
 			List *joinClauseList = joinOrderNode->joinClauseList;
 
 			/*
 			 * Build a join node between the top of our join tree and the next
 			 * table in the join order.
+			 * TODO: Don't use linitial(partitionColumnListList)
 			 */
 			MultiNode *newJoinNode = ApplyJoinRule(currentTopNode,
 												   (MultiNode *) collectNode,
-												   joinRuleType, partitionColumnList,
+												   joinRuleType,
+												   partitionColumnListList,
 												   joinType,
 												   joinClauseList);
 
@@ -2025,7 +2029,7 @@ pull_var_clause_default(Node *node)
  */
 static MultiNode *
 ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
-			  List *partitionColumnList, JoinType joinType, List *joinClauseList)
+			  List *partitionColumnListList, JoinType joinType, List *joinClauseList)
 {
 	List *leftTableIdList = OutputTableIdList(leftNode);
 	List *rightTableIdList = OutputTableIdList(rightNode);
@@ -2041,7 +2045,8 @@ ApplyJoinRule(MultiNode *leftNode, MultiNode *rightNode, JoinRuleType ruleType,
 
 	/* call the join rule application function to create the new join node */
 	RuleApplyFunction ruleApplyFunction = JoinRuleApplyFunction(ruleType);
-	MultiNode *multiNode = (*ruleApplyFunction)(leftNode, rightNode, partitionColumnList,
+	MultiNode *multiNode = (*ruleApplyFunction)(leftNode, rightNode,
+												partitionColumnListList,
 												joinType, applicableJoinClauses);
 
 	if (joinType != JOIN_INNER && CitusIsA(multiNode, MultiJoin))
@@ -2096,7 +2101,7 @@ JoinRuleApplyFunction(JoinRuleType ruleType)
  */
 static MultiNode *
 ApplyReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
-				   List *partitionColumnList, JoinType joinType,
+				   List *partitionColumnListList, JoinType joinType,
 				   List *applicableJoinClauses)
 {
 	MultiJoin *joinNode = CitusMakeNode(MultiJoin);
@@ -2118,7 +2123,7 @@ ApplyReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
  */
 static MultiNode *
 ApplyCartesianProductReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
-								   List *partitionColumnList, JoinType joinType,
+								   List *partitionColumnListList, JoinType joinType,
 								   List *applicableJoinClauses)
 {
 	MultiJoin *joinNode = CitusMakeNode(MultiJoin);
@@ -2139,7 +2144,7 @@ ApplyCartesianProductReferenceJoin(MultiNode *leftNode, MultiNode *rightNode,
  */
 static MultiNode *
 ApplyLocalJoin(MultiNode *leftNode, MultiNode *rightNode,
-			   List *partitionColumnList, JoinType joinType,
+			   List *partitionColumnListList, JoinType joinType,
 			   List *applicableJoinClauses)
 {
 	MultiJoin *joinNode = CitusMakeNode(MultiJoin);
@@ -2160,11 +2165,11 @@ ApplyLocalJoin(MultiNode *leftNode, MultiNode *rightNode,
  */
 static MultiNode *
 ApplySingleRangePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
-							  List *partitionColumnList, JoinType joinType,
+							  List *partitionColumnListList, JoinType joinType,
 							  List *applicableJoinClauses)
 {
 	MultiJoin *joinNode =
-		ApplySinglePartitionJoin(leftNode, rightNode, partitionColumnList, joinType,
+		ApplySinglePartitionJoin(leftNode, rightNode, partitionColumnListList, joinType,
 								 applicableJoinClauses);
 
 	joinNode->joinRuleType = SINGLE_RANGE_PARTITION_JOIN;
@@ -2179,11 +2184,11 @@ ApplySingleRangePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
  */
 static MultiNode *
 ApplySingleHashPartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
-							 List *partitionColumnList, JoinType joinType,
+							 List *partitionColumnListList, JoinType joinType,
 							 List *applicableJoinClauses)
 {
 	MultiJoin *joinNode =
-		ApplySinglePartitionJoin(leftNode, rightNode, partitionColumnList, joinType,
+		ApplySinglePartitionJoin(leftNode, rightNode, partitionColumnListList, joinType,
 								 applicableJoinClauses);
 
 	joinNode->joinRuleType = SINGLE_HASH_PARTITION_JOIN;
@@ -2199,10 +2204,11 @@ ApplySingleHashPartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
  */
 static MultiJoin *
 ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
-						 List *partitionColumnList, JoinType joinType,
+						 List *partitionColumnListList, JoinType joinType,
 						 List *applicableJoinClauses)
 {
-	Var *partitionColumn = linitial(partitionColumnList);
+	Assert(list_length(partitionColumnListList) == 1);
+	Var *partitionColumn = linitial(linitial(partitionColumnListList));
 	uint32 partitionTableId = partitionColumn->varno;
 
 	/* create all operator structures up front */
@@ -2215,7 +2221,7 @@ ApplySinglePartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 	 * column against the join clause's columns. If one of the columns matches,
 	 * we introduce a (re-)partition operator for the other column.
 	 */
-	OpExpr *joinClause = SinglePartitionJoinClause(partitionColumnList,
+	OpExpr *joinClause = SinglePartitionJoinClause(partitionColumnListList,
 												   applicableJoinClauses);
 	Assert(joinClause != NULL);
 
@@ -2339,7 +2345,7 @@ ApplyDualPartitionJoin(MultiNode *leftNode, MultiNode *rightNode,
 /* Creates a cartesian product node that joins the left and the right node. */
 static MultiNode *
 ApplyCartesianProduct(MultiNode *leftNode, MultiNode *rightNode,
-					  List *partitionColumnList, JoinType joinType,
+					  List *partitionColumnListList, JoinType joinType,
 					  List *applicableJoinClauses)
 {
 	MultiCartesianProduct *cartesianNode = CitusMakeNode(MultiCartesianProduct);
