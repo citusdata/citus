@@ -1,3 +1,151 @@
+### citus v10.1.0 (June 14, 2021) ###
+
+* Improve performance of citus_shards
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* `alter_columnar_table_set` enforces table option constraints for columnar tables
+
+* Prevents users from dropping&truncating known shards
+
+* Do smarter cleanup of orphaned shards
+
+* Fixes column default coming from a sequence
+
+* Fix possible segfaults when using Citus in the middle of an upgrad
+
+* Fix relname null bug when parallel execution
+
+* Fixes a bug that can cause a crash when DEBUG4 logging is enabled
+
+* Fix data race in get_rebalance_progress
+
+* Ignores old placements when disabling or removing a node
+
+* Deprecates the `citus.replication_model` GUC
+
+* Fixes using 2PC when it might be necessary
+
+* Enables citus.defer_drop_after_shard_move by default
+
+* fix shared dependencies that are not resident in a database
+
+* Fetch shard size on the fly for the rebalance monitor
+
+* Add support for ALTER DATABASE OWNER
+
+* Make sure that target node in shard moves is eligible for shard move
+
+* Prevent connection errors by properly terminating connections
+
+* Executor refrains from opening extra connections
+
+* Reduces memory usage for multi-row inserts
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug causing stale hostnames in prep. statements after master_update_node
+
+* introduce `citus.local_hostname` GUC for connections to the current node
+
+* Implement an improvement threshold for shard rebalancer moves
+
+* Closes connection after each shard move
+
+* Fixes matview access method change issue
+
+* Checks free disk space before moving a shard
+
+* Fixes nested select query with union bug
+
+* Continues to remove shards after failure in DropMarkedShards
+
+* Reduces memory usage while rebalancing
+
+* Fixes FROM ONLY queries on partitioned tables
+
+* Pushes down VALUES clause as long as not in outer part of a JOIN
+
+* Fixes problems with concurrent calls of DropMarkedShards
+
+* Optimizes partitioned disk size calculation for shard rebalancer
+
+* When DEBUG4 enabled, Citus now prints per connection establishment times
+
+* When DEBUG4 enabled, Citus prints per task execution times
+
+* Removes limits around long partition names
+
+* Introduces three new UDFs for partitioned size calculation
+
+* Refactors size queries with new enum SizeQueryTyp
+
+* PR description that will go into the change log, up to 78 characters
+
+* Updates the function comment for PostprocessCreateTableStmt
+
+* Errors out if inheriting a distributed table
+
+* Fixes error message for local table joins
+
+* Fixes issues caused by public schema being omitted in queries
+
+* Adds a parameter for shard count to create_distributed_table function
+
+* Drops postgres 11 support
+
+* Makes sure that local execution starts coordinated transactio
+
+* Introduces new UDF citus_get_active_worker_nodes
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Introduce citus.remote_copy_flush_threshold GUC that controls per-shard memory usages by COPY
+
+* Add GUC to set maximum connection lifetime
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Remove open temporary file warning when cancelling a query with an open tuple store
+
+* Adds support for temporary columnar tables
+
+* Fixes a bug that causes SELECT queries to use 2PC unnecessarily
+
+* Fixes upgrade and downgrade paths for citus_update_table_statistics
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* corrects the README.md syntax highlighting of Docker commands to run Citus on Docke
+
+* Fixes a crash in queries with a modifying CTE and a SELECT without FROM
+
+* Relaxes the locks when adding an existing node
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that might cause self-deadlocks with `CREATE INDEX` / `REINDEX CONCURRENTLY` command
+
+* Prevent infinite recursion for queries that involve UNION ALL below JOIN
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Improves citus_update_table_statistics and provides distributed deadlock detection
+
+* Enforces compiler and linker flags by default
+
+* Fixes a bug with UNION ALL on PG 13
+
+* Grants SELECT permission on citus_tables view to public.
+
+* Fixes a bug due to cross join without target list
+
+* Grants read access for columnar metadata tables to unprivileged user
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Prevents using `alter_columnar_table_set` and `alter_columnar_table_reset` on a columnar table not owned by the user
+
+* Preserve colocation with procedures in alter_distributed_table
+
+* Uses PROCESS_UTILITY_QUERY in utility calls 
+
+* Fixes compatibility with pg_audit
+
+* Fixes an issue in creation of time_partitions vie
+
 ### citus v8.3.3 (March 23, 2021) ###
 
 * Fixes a bug that leads to various issues when a connection is lost
