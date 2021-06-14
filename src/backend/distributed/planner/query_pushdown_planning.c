@@ -983,12 +983,6 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 		errorDetail = "Recursive queries are currently unsupported";
 	}
 
-	if (subqueryTree->cteList)
-	{
-		preconditionsSatisfied = false;
-		errorDetail = "Common Table Expressions are currently unsupported";
-	}
-
 	if (subqueryTree->hasForUpdate)
 	{
 		preconditionsSatisfied = false;
@@ -1215,12 +1209,6 @@ DeferErrorIfUnsupportedTableCombination(Query *queryTree)
 			{
 				/* immutable function RTEs are treated as reference tables */
 			}
-		}
-		else if (rangeTableEntry->rtekind == RTE_CTE)
-		{
-			unsupportedTableCombination = true;
-			errorDetail = "CTEs in subqueries are currently unsupported";
-			break;
 		}
 		else
 		{

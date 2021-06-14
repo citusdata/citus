@@ -41,7 +41,6 @@ static bool contain_dml_walker(Node *node, void *context);
 
 /* the following utility functions are related to Citus' logic */
 static bool RecursivelyInlineCteWalker(Node *node, void *context);
-static void InlineCTEsInQueryTree(Query *query);
 static bool QueryTreeContainsInlinableCteWalker(Node *node);
 
 

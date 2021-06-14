@@ -57,6 +57,7 @@
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands/multi_copy.h"
+#include "distributed/cte_inline.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/errormessage.h"
 #include "distributed/local_distributed_join_planner.h"
@@ -268,6 +269,8 @@ GenerateSubplansForSubqueriesAndCTEs(uint64 planId, Query *originalQuery,
 static DeferredErrorMessage *
 RecursivelyPlanSubqueriesAndCTEs(Query *query, RecursivePlanningContext *context)
 {
+	InlineCTEsInQueryTree(query);
+
 	DeferredErrorMessage *error = RecursivelyPlanCTEs(query, context);
 	if (error != NULL)
 	{
