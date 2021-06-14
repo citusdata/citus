@@ -962,7 +962,7 @@ AppendShardSizeMinMaxQuery(StringInfo selectQuery, uint64 shardId,
 												partitionColumn->varattno, false);
 		appendStringInfo(selectQuery,
 						 "SELECT " UINT64_FORMAT
-						 " AS shard_id, min(%s)::text AS shard_minvalue, max(%s)::text AS shard_maxvalue, pg_relation_size(%s) AS shard_size FROM %s ",
+						 " AS shard_id, min(%s)::text AS shard_minvalue, max(%s)::text AS shard_maxvalue, pg_total_relation_size(%s) AS shard_size FROM %s ",
 						 shardId, partitionColumnName,
 						 partitionColumnName,
 						 quotedShardName, shardName);
@@ -972,7 +972,7 @@ AppendShardSizeMinMaxQuery(StringInfo selectQuery, uint64 shardId,
 		/* we don't need to update min/max for non-append distributed tables because they don't change */
 		appendStringInfo(selectQuery,
 						 "SELECT " UINT64_FORMAT
-						 " AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size(%s) AS shard_size ",
+						 " AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_total_relation_size(%s) AS shard_size ",
 						 shardId, quotedShardName);
 	}
 }
