@@ -644,7 +644,14 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 	StringInfo tableSizeStringInfo = (StringInfo) linitial(sizeList);
 	char *tableSizeString = tableSizeStringInfo->data;
 
-	*tableSize = SafeStringToUint64(tableSizeString);
+	if (strlen(tableSizeString) > 0)
+	{
+		*tableSize = SafeStringToUint64(tableSizeString);
+	}
+	else
+	{
+		*tableSize = 0;
+	}
 
 	PQclear(result);
 	ClearResults(connection, failOnError);
