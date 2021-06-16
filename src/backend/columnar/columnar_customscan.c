@@ -395,12 +395,15 @@ ColumnarAttrNeeded(ScanState *ss)
 			elog(DEBUG1, "Need attribute: all");
 
 			/* all attributes are required, we don't need to add more so break*/
-			attr_needed = bms_add_range(attr_needed, 0, natts - 1);
+			attr_needed = bms_add_range(attr_needed,
+										1 - FirstLowInvalidHeapAttributeNumber,
+										natts - FirstLowInvalidHeapAttributeNumber);
 			break;
 		}
 
 		elog(DEBUG1, "Need attribute: %d", var->varattno);
-		attr_needed = bms_add_member(attr_needed, var->varattno - 1);
+		attr_needed = bms_add_member(attr_needed,
+									 var->varattno - FirstLowInvalidHeapAttributeNumber);
 	}
 
 	return attr_needed;

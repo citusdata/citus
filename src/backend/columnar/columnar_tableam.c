@@ -146,7 +146,8 @@ columnar_beginscan(Relation relation, Snapshot snapshot,
 	int natts = relation->rd_att->natts;
 
 	/* attr_needed represents 0-indexed attribute numbers */
-	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
+	Bitmapset *attr_needed = bms_add_range(NULL, 1 - FirstLowInvalidHeapAttributeNumber,
+										   natts - FirstLowInvalidHeapAttributeNumber);
 
 	/* the columnar access method does not use the flags, they are specific to heap */
 	flags = 0;
@@ -436,7 +437,10 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *scan,
 
 	/* we need all columns */
 	int natts = scan->rel->rd_att->natts;
-	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
+	Bitmapset *attr_needed = bms_add_range(NULL, 1 - FirstLowInvalidHeapAttributeNumber,
+										   natts - FirstLowInvalidHeapAttributeNumber);
+
+
 	TupleDesc relationTupleDesc = RelationGetDescr(scan->rel);
 	List *relationColumnList = NeededColumnsList(relationTupleDesc, attr_needed);
 	uint64 rowNumber = tid_to_row_number(*tid);
@@ -728,7 +732,8 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	/* we need all columns */
 	int natts = OldHeap->rd_att->natts;
-	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
+	Bitmapset *attr_needed = bms_add_range(NULL, 1 - FirstLowInvalidHeapAttributeNumber,
+										   natts - FirstLowInvalidHeapAttributeNumber);
 	List *projectedColumnList = NeededColumnsList(sourceDesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
 													 projectedColumnList,
@@ -770,9 +775,9 @@ NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
 		}
 
 		/* attr_needed is 0-indexed but columnList is 1-indexed */
-		if (bms_is_member(i, attr_needed))
+		AttrNumber varattno = tupdesc->attrs[i].attnum;
+		if (bms_is_member(varattno - FirstLowInvalidHeapAttributeNumber, attr_needed))
 		{
-			AttrNumber varattno = i + 1;
 			columnList = lappend_int(columnList, varattno);
 		}
 	}
