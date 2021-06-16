@@ -1075,7 +1075,6 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	List *segmentList = NIL;
-	ListCell *rebalanceMonitorCell = NULL;
 	TupleDesc tupdesc;
 	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupdesc);
 
@@ -1083,10 +1082,9 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 	List *rebalanceMonitorList = ProgressMonitorList(REBALANCE_ACTIVITY_MAGIC_NUMBER,
 													 &segmentList);
 
-
-	foreach(rebalanceMonitorCell, rebalanceMonitorList)
+	ProgressMonitorData *monitor = NULL;
+	foreach_ptr(monitor, rebalanceMonitorList)
 	{
-		ProgressMonitorData *monitor = lfirst(rebalanceMonitorCell);
 		PlacementUpdateEventProgress *placementUpdateEvents = monitor->steps;
 		HTAB *shardStatistics = BuildWorkerShardStatisticsHash(monitor->steps,
 															   monitor->stepCount);

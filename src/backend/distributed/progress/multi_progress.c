@@ -204,19 +204,21 @@ ProgressMonitorData *
 MonitorDataFromDSMHandle(dsm_handle dsmHandle, dsm_segment **attachedSegment)
 {
 	dsm_segment *dsmSegment = dsm_find_mapping(dsmHandle);
-	ProgressMonitorData *monitor = NULL;
 
 	if (dsmSegment == NULL)
 	{
 		dsmSegment = dsm_attach(dsmHandle);
 	}
 
-	if (dsmSegment != NULL)
+	if (dsmSegment == NULL)
 	{
-		monitor = (ProgressMonitorData *) dsm_segment_address(dsmSegment);
-		monitor->steps = (void *) (monitor + 1);
-		*attachedSegment = dsmSegment;
+		return NULL;
 	}
+
+	ProgressMonitorData *monitor = (ProgressMonitorData *) dsm_segment_address(
+		dsmSegment);
+	monitor->steps = (void *) (monitor + 1);
+	*attachedSegment = dsmSegment;
 
 	return monitor;
 }

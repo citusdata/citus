@@ -13,8 +13,11 @@
 #define MULTI_PROGRESS_H
 
 
+#include "postgres.h"
+
 #include "fmgr.h"
 #include "nodes/pg_list.h"
+#include "storage/dsm.h"
 
 
 typedef struct ProgressMonitorData
