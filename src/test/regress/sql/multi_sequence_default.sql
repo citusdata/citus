@@ -7,6 +7,8 @@
 SET citus.next_shard_id TO 890000;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
+CREATE SCHEMA sequence_default;
+SET search_path = sequence_default, public;
 
 
 -- Cannot add a column involving DEFAULT nextval('..') because the table is not empty
@@ -52,9 +54,10 @@ CREATE SEQUENCE seq_4;
 ALTER TABLE seq_test_4 ADD COLUMN b int DEFAULT nextval('seq_4');
 -- on worker it should generate high sequence number
 \c - - - :worker_1_port
-INSERT INTO seq_test_4 VALUES (1,2) RETURNING *;
+INSERT INTO sequence_default.seq_test_4 VALUES (1,2) RETURNING *;
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 
@@ -69,9 +72,10 @@ ALTER TABLE seq_test_1 ADD COLUMN z int DEFAULT nextval('seq_1');
 \d seq_1
 -- check insertion is within int bounds in the worker
 \c - - - :worker_1_port
-INSERT INTO seq_test_1 values (1, 2) RETURNING *;
+INSERT INTO sequence_default.seq_test_1 values (1, 2) RETURNING *;
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 
@@ -107,16 +111,16 @@ SELECT create_distributed_table('seq_test_2','x');
 ALTER SEQUENCE seq_2 RENAME TO sequence_2;
 -- check in the worker
 \c - - - :worker_1_port
-\d sequence_2
+\d sequence_default.sequence_2
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 -- check rename with another schema
 -- we notice that schema is also propagated as one of the sequence's dependencies
 CREATE SCHEMA sequence_default_0;
-SET search_path TO 	public, sequence_default_0;
 CREATE SEQUENCE sequence_default_0.seq_3;
-CREATE TABLE seq_test_3 (x int, y bigint DEFAULT nextval('seq_3'));
+CREATE TABLE seq_test_3 (x int, y bigint DEFAULT nextval('sequence_default_0.seq_3'));
 SELECT create_distributed_table('seq_test_3', 'x');
 ALTER SEQUENCE sequence_default_0.seq_3 RENAME TO sequence_3;
 -- check in the worker
@@ -124,6 +128,7 @@ ALTER SEQUENCE sequence_default_0.seq_3 RENAME TO sequence_3;
 \d sequence_default_0.sequence_3
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SEQUENCE sequence_default_0.sequence_3 CASCADE;
 DROP SCHEMA sequence_default_0;
@@ -140,17 +145,19 @@ DROP SCHEMA sequence_default_1 CASCADE;
 INSERT INTO seq_test_5 VALUES (1, 2) RETURNING *;
 -- but is still present on worker
 \c - - - :worker_1_port
-INSERT INTO seq_test_5 VALUES (1, 2) RETURNING *;
+INSERT INTO sequence_default.seq_test_5 VALUES (1, 2) RETURNING *;
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 -- apply workaround
 SELECT run_command_on_workers('DROP SCHEMA sequence_default_1 CASCADE');
 -- now the sequence is gone from the worker as well
 \c - - - :worker_1_port
-INSERT INTO seq_test_5 VALUES (1, 2) RETURNING *;
+INSERT INTO sequence_default.seq_test_5 VALUES (1, 2) RETURNING *;
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 
@@ -173,10 +180,11 @@ CREATE TABLE seq_test_7_par (x text, s bigint DEFAULT nextval('seq_7_par'), t ti
 ALTER TABLE seq_test_7 ATTACH PARTITION seq_test_7_par FOR VALUES FROM ('2021-05-31') TO ('2021-06-01');
 -- check that both sequences are in worker
 \c - - - :worker_1_port
-\d seq_7
-\d seq_7_par
+\d sequence_default.seq_7
+\d sequence_default.seq_7_par
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 
@@ -186,7 +194,7 @@ CREATE SEQUENCE seq_8;
 CREATE SCHEMA sequence_default_8;
 -- can change schema in a sequence not yet distributed
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
-ALTER SEQUENCE sequence_default_8.seq_8 SET SCHEMA public;
+ALTER SEQUENCE sequence_default_8.seq_8 SET SCHEMA sequence_default;
 CREATE TABLE seq_test_8 (x int, y int DEFAULT nextval('seq_8'));
 SELECT create_distributed_table('seq_test_8', 'x');
 -- cannot change sequence specifications
@@ -209,7 +217,26 @@ CREATE TABLE seq_test_9 (x int, y int DEFAULT nextval('seq_9') - nextval('seq_10
 SELECT create_distributed_table('seq_test_9', 'x');
 
 
--- clean up
-DROP TABLE seq_test_0, seq_test_1, seq_test_2, seq_test_3, seq_test_4, seq_test_5, seq_test_6, seq_test_7, seq_test_8, seq_test_9;
-DROP SEQUENCE seq_0, seq_1, sequence_2, seq_4, seq_6, seq_7, seq_7_par, seq_8, seq_9, seq_10;
+-- Check some cases when default is defined by
+-- DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+CREATE SEQUENCE seq_11;
+CREATE TABLE seq_test_10 (col0 int, col1 int DEFAULT nextval('seq_11'::text));
+SELECT create_reference_table('seq_test_10');
+INSERT INTO seq_test_10 VALUES (0);
+CREATE TABLE seq_test_11 (col0 int, col1 bigint DEFAULT nextval('seq_11'::text));
+-- works but doesn't create seq_11 in the workers
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+-- works because there is no dependency created between seq_11 and seq_test_10
+SELECT create_distributed_table('seq_test_11', 'col1');
+-- insertion from workers fails
+\c - - - :worker_1_port
+INSERT INTO sequence_default.seq_test_10 VALUES (1);
+\c - - - :master_port
+
+-- clean up
+DROP TABLE sequence_default.seq_test_7_par;
+DROP SCHEMA sequence_default CASCADE;
+SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SET search_path TO public;
