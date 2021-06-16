@@ -27,18 +27,16 @@ static ProgressMonitorData * MonitorDataFromDSMHandle(dsm_handle dsmHandle,
 
 
 /*
- * CreateProgressMonitor is used to create a place to store progress information related
- * to long running processes. The function creates a dynamic shared memory segment
- * consisting of a header regarding to the process and an array of "steps" that the long
- * running "operations" consists of. The handle of the dynamic shared memory is stored in
- * pg_stat_get_progress_info output, to be parsed by a progress retrieval command
- * later on. This behavior may cause unrelated (but hopefully harmless) rows in
- * pg_stat_progress_vacuum output. The caller of this function should provide a magic
- * number, a unique 64 bit unsigned integer, to distinguish different types of commands.
+ * CreateProgressMonitor is used to create a place to store progress
+ * information related to long running processes. The function creates a
+ * dynamic shared memory segment consisting of a header regarding to the
+ * process and an array of "steps" that the long running "operations" consists
+ * of. After initializing the data in the array of steps, the shared memory
+ * segment can be shared with other processes using RegisterProgressMonitor, by
+ * giving it the value that's written to the dsmHandle argument.
  */
 ProgressMonitorData *
-CreateProgressMonitor(uint64 progressTypeMagicNumber, int stepCount, Size stepSize,
-					  Oid relationId)
+CreateProgressMonitor(int stepCount, Size stepSize, dsm_handle *dsmHandle)
 {
 	if (stepSize <= 0 || stepCount <= 0)
 	{
@@ -58,20 +56,33 @@ CreateProgressMonitor(uint64 progressTypeMagicNumber, int stepCount, Size stepSi
 		return NULL;
 	}
 
-	dsm_handle dsmHandle = dsm_segment_handle(dsmSegment);
+	*dsmHandle = dsm_segment_handle(dsmSegment);
 
-	ProgressMonitorData *monitor = MonitorDataFromDSMHandle(dsmHandle, &dsmSegment);
+	ProgressMonitorData *monitor = MonitorDataFromDSMHandle(*dsmHandle, &dsmSegment);
 
 	monitor->stepCount = stepCount;
 	monitor->processId = MyProcPid;
+	return monitor;
+}
 
+
+/*
+ * RegisterProgressMonitor shares dsmHandle with other postgres process by
+ * storing it in pg_stat_get_progress_info output, to be parsed by a
+ * progress retrieval command later on. This behavior may cause unrelated (but
+ * hopefully harmless) rows in pg_stat_progress_vacuum output. The caller of
+ * this function should provide a magic number, a unique 64 bit unsigned
+ * integer, to distinguish different types of commands.
+ */
+void
+RegisterProgressMonitor(uint64 progressTypeMagicNumber, Oid relationId,
+						dsm_handle dsmHandle)
+{
 	pgstat_progress_start_command(PROGRESS_COMMAND_VACUUM, relationId);
 	pgstat_progress_update_param(1, dsmHandle);
 	pgstat_progress_update_param(0, progressTypeMagicNumber);
 
 	currentProgressDSMHandle = dsmHandle;
-
-	return monitor;
 }
 
 
@@ -217,10 +228,22 @@ MonitorDataFromDSMHandle(dsm_handle dsmHandle, dsm_segment **attachedSegment)
 
 	ProgressMonitorData *monitor = (ProgressMonitorData *) dsm_segment_address(
 		dsmSegment);
-	monitor->steps = (void *) (monitor + 1);
+
 	*attachedSegment = dsmSegment;
 
 	return monitor;
+}
+
+
+/*
+ * ProgressMonitorSteps returns a pointer to the array of steps that are stored
+ * in a progress monitor. This is simply the data right after the header, so
+ * this function is trivial.
+ */
+void *
+ProgressMonitorSteps(ProgressMonitorData *monitor)
+{
+	return monitor + 1;
 }
 
 
