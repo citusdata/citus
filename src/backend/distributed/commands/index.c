@@ -62,7 +62,6 @@ static List * GenerateIndexParameters(IndexStmt *createIndexStatement);
 static DDLJob * GenerateCreateIndexDDLJob(IndexStmt *createIndexStatement,
 										  const char *createIndexCommand);
 static Oid CreateIndexStmtGetRelationId(IndexStmt *createIndexStatement);
-static LOCKMODE GetCreateIndexRelationLockMode(IndexStmt *createIndexStatement);
 static List * CreateIndexTaskList(IndexStmt *indexStmt);
 static List * CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
@@ -502,7 +501,7 @@ CreateIndexStmtGetRelationId(IndexStmt *createIndexStatement)
  * GetCreateIndexRelationLockMode returns required lock mode to open the
  * relation that given CREATE INDEX command operates on.
  */
-static LOCKMODE
+LOCKMODE
 GetCreateIndexRelationLockMode(IndexStmt *createIndexStatement)
 {
 	if (createIndexStatement->concurrent)

@@ -9,7 +9,6 @@ CREATE TABLE contestant (handle TEXT, birthdate DATE, rating INT,
 	USING columnar;
 SELECT alter_columnar_table_set('contestant', compression => 'none');
 
--- should fail
 CREATE INDEX contestant_idx on contestant(handle);
 
 -- Create zstd compressed table

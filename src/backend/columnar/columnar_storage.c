@@ -615,7 +615,7 @@ ColumnarMetapageRead(Relation rel, bool force)
 	if (nblocks == 0)
 	{
 		/*
-		 * We only expect this to happen during binary ugrades. This is because,
+		 * We only expect this to happen when upgrading citus.so. This is because,
 		 * in current version of columnar, we immediately create the metapage
 		 * for columnar tables, i.e right after creating the table.
 		 * However in older versions, we were creating metapages lazily, i.e
