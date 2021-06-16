@@ -30,8 +30,8 @@ setup
           false)
   FROM pg_dist_node;
 
-  SET citus.replication_model to streaming;
 	SET citus.shard_replication_factor TO 1;
+
 
 	SET citus.shard_count TO 8;
 	CREATE TABLE logical_replicate_placement (x int PRIMARY KEY, y int);
@@ -78,7 +78,7 @@ step "s1-insert"
 
 step "s1-get-shard-distribution"
 {
-  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardid in (SELECT * FROM selected_shard) order by nodeport;
+  select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 }
 
 session "s2"

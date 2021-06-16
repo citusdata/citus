@@ -202,5 +202,9 @@ SELECT worker_hash('(1, 2)'::test_composite_type);
 
 SELECT citus_truncate_trigger();
 
+-- make sure worker_create_or_alter_role does not crash with NULL input
+SELECT worker_create_or_alter_role(NULL, NULL, NULL);
+SELECT worker_create_or_alter_role(NULL, 'create role dontcrash', NULL);
+
 -- confirm that citus_create_restore_point works
 SELECT 1 FROM citus_create_restore_point('regression-test');

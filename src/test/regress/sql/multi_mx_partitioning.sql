@@ -8,7 +8,6 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 
 -- make sure wen can create partitioning tables in MX
-SET citus.replication_model TO 'streaming';
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- 1-) Distributing partitioned table
@@ -56,7 +55,6 @@ ORDER BY
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
 -- 2-) Creating partition of a distributed table
@@ -86,7 +84,6 @@ ORDER BY
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
 -- 3-) Attaching non distributed table to a distributed table
@@ -125,7 +122,6 @@ SELECT * FROM partitioning_test ORDER BY 1;
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
 -- 4-) Attaching distributed table to distributed table
@@ -175,7 +171,6 @@ DROP TABLE partitioning_test;
 DROP TABLE IF EXISTS partitioning_test_2013;
 
 -- test schema drop with partitioned tables
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA partition_test;
 SET SEARCH_PATH TO partition_test;

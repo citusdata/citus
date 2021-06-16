@@ -5,7 +5,6 @@ SET citus.log_local_commands TO TRUE;
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 1580000;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 CREATE TABLE table_1 (key int, value text);
 SELECT create_distributed_table('table_1', 'key');
  create_distributed_table

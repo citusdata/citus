@@ -4,7 +4,6 @@ SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 8;
 SET citus.next_shard_id TO 7000000;
 SET citus.next_placement_id TO 7000000;
-SET citus.replication_model TO streaming;
 SET client_min_messages TO WARNING;
 CREATE USER reprefuser WITH LOGIN;
 SELECT run_command_on_workers('CREATE USER reprefuser WITH LOGIN');

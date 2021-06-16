@@ -148,7 +148,7 @@ SELECT table_name::text, shard_count, access_method FROM public.citus_tables WHE
 
 
 -- test with metadata sync
-SET citus.replication_model TO 'streaming';
+SET citus.shard_replication_factor TO 1;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 CREATE TABLE metadata_sync_table (a BIGSERIAL);
@@ -159,7 +159,6 @@ SELECT alter_distributed_table('metadata_sync_table', shard_count:=8);
 
 SELECT table_name, shard_count FROM public.citus_tables WHERE table_name::text = 'metadata_sync_table';
 
-SET citus.replication_model TO DEFAULT;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- test complex cascade operations

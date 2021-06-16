@@ -846,6 +846,18 @@ ConnectionModifiedPlacement(MultiConnection *connection)
 		return false;
 	}
 
+	if (dlist_is_empty(&connection->referencedPlacements))
+	{
+		/*
+		 * When referencesPlacements are empty, it means that we come here
+		 * from an API that uses a node connection (e.g., not placement connection),
+		 * which doesn't set placements.
+		 * In that case, the command sent could be either write or read, so we assume
+		 * it is write to be on the safe side.
+		 */
+		return true;
+	}
+
 	dlist_foreach(placementIter, &connection->referencedPlacements)
 	{
 		ConnectionReference *connectionReference =

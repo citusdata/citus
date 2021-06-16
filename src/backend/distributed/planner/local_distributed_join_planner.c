@@ -94,6 +94,7 @@
 #include "distributed/multi_physical_planner.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/multi_router_planner.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/query_colocation_checker.h"
 #include "distributed/query_pushdown_planning.h"
 #include "distributed/recursive_planning.h"
@@ -179,7 +180,8 @@ static ConversionCandidates * CreateConversionCandidates(PlannerRestrictionConte
 														 plannerRestrictionContext,
 														 List *rangeTableList,
 														 int resultRTEIdentity);
-static void AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexes);
+static void AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexes,
+										   int flags);
 static ConversionChoice GetConversionChoice(ConversionCandidates *
 											conversionCandidates,
 											PlannerRestrictionContext *
@@ -403,7 +405,8 @@ HasConstantFilterOnUniqueColumn(RangeTblEntry *rangeTableEntry,
 		FetchEqualityAttrNumsForRTE((Node *) restrictClauseList);
 
 	List *uniqueIndexColumnsList = ExecuteFunctionOnEachTableIndex(rangeTableEntry->relid,
-																   AppendUniqueIndexColumnsToList);
+																   AppendUniqueIndexColumnsToList,
+																   INCLUDE_INDEX_ALL_STATEMENTS);
 	IndexColumns *indexColumns = NULL;
 	foreach_ptr(indexColumns, uniqueIndexColumnsList)
 	{
@@ -442,7 +445,8 @@ FirstIsSuperSetOfSecond(List *firstIntList, List *secondIntList)
  * unique index.
  */
 static void
-AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexGroups)
+AppendUniqueIndexColumnsToList(Form_pg_index indexForm, List **uniqueIndexGroups,
+							   int flags)
 {
 	if (indexForm->indisunique || indexForm->indisprimary)
 	{

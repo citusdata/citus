@@ -189,6 +189,12 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	{
 		CitusBeginModifyScan(node, estate, eflags);
 	}
+
+	/*
+	 * In case of a prepared statement, we will see this distributed plan again
+	 * on the next execution with a higher usage counter.
+	 */
+	distributedPlan->numberOfTimesExecuted++;
 }
 
 
@@ -315,6 +321,11 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 	PlanState *planState = &(scanState->customScanState.ss.ps);
 	DistributedPlan *originalDistributedPlan = scanState->distributedPlan;
 
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "CitusBeginModifyScan",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
 	DistributedPlan *currentPlan =
 		CopyDistributedPlanWithoutCache(originalDistributedPlan);
 	scanState->distributedPlan = currentPlan;
@@ -405,6 +416,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		 */
 		CacheLocalPlanForShardQuery(task, originalDistributedPlan);
 	}
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 

@@ -61,9 +61,9 @@ isolate_tenant_to_new_shard(PG_FUNCTION_ARGS)
 Datum
 worker_hash(PG_FUNCTION_ARGS)
 {
-	Datum valueDatum = PG_GETARG_DATUM(0);
-
 	CheckCitusVersion(ERROR);
+
+	Datum valueDatum = PG_GETARG_DATUM(0);
 
 	/* figure out hash function from the data type */
 	Oid valueDataType = get_fn_expr_argtype(fcinfo->flinfo, 0);

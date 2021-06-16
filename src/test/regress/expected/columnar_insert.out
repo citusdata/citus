@@ -169,7 +169,7 @@ DROP TABLE test_toast_columnar;
 -- We support writing into zero column tables, but not reading from them.
 -- We test that metadata makes sense so we can fix the read path in future.
 CREATE TABLE zero_col() USING columnar;
-SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 10);
+SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 1000);
  alter_columnar_table_set
 ---------------------------------------------------------------------
 
@@ -206,7 +206,7 @@ ORDER BY 1,2,3,4;
  zero_col |          2 |                 1 |         1
  zero_col |          3 |                 1 |         1
  zero_col |          4 |                 1 |         1
- zero_col |          5 |                 7 |        64
+ zero_col |          5 |                 1 |        64
 (5 rows)
 
 SELECT relname, stripe_num, value_count FROM columnar.chunk a, pg_class b
@@ -225,13 +225,7 @@ ORDER BY 1,2,3,4;
  zero_col |          2 |               0 |         1
  zero_col |          3 |               0 |         1
  zero_col |          4 |               0 |         1
- zero_col |          5 |               0 |        10
- zero_col |          5 |               1 |        10
- zero_col |          5 |               2 |        10
- zero_col |          5 |               3 |        10
- zero_col |          5 |               4 |        10
- zero_col |          5 |               5 |        10
- zero_col |          5 |               6 |         4
-(11 rows)
+ zero_col |          5 |               0 |        64
+(5 rows)
 
 DROP TABLE zero_col;

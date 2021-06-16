@@ -2076,6 +2076,15 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 	if (!PG_ARGISNULL(1))
 	{
 		options.chunkRowCount = PG_GETARG_INT32(1);
+		if (options.chunkRowCount < CHUNK_ROW_COUNT_MINIMUM ||
+			options.chunkRowCount > CHUNK_ROW_COUNT_MAXIMUM)
+		{
+			ereport(ERROR, (errmsg("chunk group row count limit out of range"),
+							errhint("chunk group row count limit must be between "
+									UINT64_FORMAT " and " UINT64_FORMAT,
+									(uint64) CHUNK_ROW_COUNT_MINIMUM,
+									(uint64) CHUNK_ROW_COUNT_MAXIMUM)));
+		}
 		ereport(DEBUG1,
 				(errmsg("updating chunk row count to %d", options.chunkRowCount)));
 	}
@@ -2084,6 +2093,15 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 	if (!PG_ARGISNULL(2))
 	{
 		options.stripeRowCount = PG_GETARG_INT32(2);
+		if (options.stripeRowCount < STRIPE_ROW_COUNT_MINIMUM ||
+			options.stripeRowCount > STRIPE_ROW_COUNT_MAXIMUM)
+		{
+			ereport(ERROR, (errmsg("stripe row count limit out of range"),
+							errhint("stripe row count limit must be between "
+									UINT64_FORMAT " and " UINT64_FORMAT,
+									(uint64) STRIPE_ROW_COUNT_MINIMUM,
+									(uint64) STRIPE_ROW_COUNT_MAXIMUM)));
+		}
 		ereport(DEBUG1, (errmsg(
 							 "updating stripe row count to " UINT64_FORMAT,
 							 options.stripeRowCount)));

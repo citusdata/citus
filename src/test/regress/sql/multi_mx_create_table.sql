@@ -153,7 +153,6 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 \c - - - :master_port
 
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 SET search_path TO public;
 
 CREATE TABLE nation_hash(

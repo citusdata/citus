@@ -55,6 +55,13 @@ extern void SyncMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
 
+extern List * SequenceDDLCommandsForTable(Oid relationId);
+extern List * GetSequencesFromAttrDef(Oid attrdefOid);
+extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
+											  List **dependentSequenceList, AttrNumber
+											  attnum);
+extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
+
 #define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"
 #define REMOVE_ALL_CLUSTERED_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"

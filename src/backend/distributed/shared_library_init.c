@@ -68,6 +68,7 @@
 #include "distributed/time_constants.h"
 #include "distributed/query_stats.h"
 #include "distributed/remote_commands.h"
+#include "distributed/shard_rebalancer.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/statistics_collection.h"
 #include "distributed/subplan_execution.h"
@@ -98,6 +99,9 @@ PG_MODULE_MAGIC;
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
 
+/* deprecated GUC value that should not be used anywhere outside this file */
+static int ReplicationModel = REPLICATION_MODEL_STREAMING;
+
 
 void _PG_init(void);
 void _PG_fini(void);
@@ -114,6 +118,7 @@ static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
+static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
@@ -575,6 +580,17 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.check_available_space_before_move",
+		gettext_noop("When enabled will check free disk space before a shard move"),
+		gettext_noop(
+			"Free disk space will be checked when this setting is enabled before each shard move."),
+		&CheckAvailableSpaceBeforeMove,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomStringVariable(
 		"citus.cluster_name",
 		gettext_noop("Which cluster this node is a part of"),
@@ -629,7 +645,9 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.defer_drop_after_shard_move",
-		gettext_noop("When enabled a shard move will mark old shards for deletion"),
+		gettext_noop("When enabled a shard move will mark the original shards "
+					 "for deletion after a successful move, instead of deleting "
+					 "them right away."),
 		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
 					 "long running transactions on a the shard during the drop phase of "
 					 "the shard move. This causes some moves to be rolled back after "
@@ -639,7 +657,7 @@ RegisterCitusConfigVariables(void)
 					 "citus.defer_shard_delete_interval to make sure defered deletions "
 					 "will be executed"),
 		&DeferShardDeleteOnMove,
-		false,
+		true,
 		PGC_USERSET,
 		0,
 		NULL, NULL, NULL);
@@ -654,9 +672,35 @@ RegisterCitusConfigVariables(void)
 					 "the background worker moves on. When set to -1 this background "
 					 "process is skipped."),
 		&DeferShardDeleteInterval,
-		-1, -1, 7 * 24 * 3600 * 1000,
+		15000, -1, 7 * 24 * 3600 * 1000,
 		PGC_SIGHUP,
 		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
+	DefineCustomRealVariable(
+		"citus.desired_percent_disk_available_after_move",
+		gettext_noop(
+			"Sets how many percentage of free disk space should be after a shard move"),
+		gettext_noop(
+			"This setting controls how much free space should be available after a shard move."
+			"If the free disk space will be lower than this parameter, then shard move will result in"
+			"an error."),
+		&DesiredPercentFreeAfterMove,
+		10.0, 0.0, 100.0,
+		PGC_SIGHUP,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_manual_changes_to_shards",
+		gettext_noop("Enables dropping and truncating known shards."),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "dropping and truncating shards on the coordinator "
+					 "(or the workers with metadata)"),
+		&EnableManualChangesToShards,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
@@ -689,6 +733,17 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&EnableAlterRoleSetPropagation,
 		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_alter_database_owner",
+		gettext_noop("Enables propagating ALTER DATABASE ... OWNER TO ... statements to "
+					 "workers"),
+		NULL,
+		&EnableAlterDatabaseOwner,
+		false,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
@@ -940,28 +995,15 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.check_available_space_before_move",
-		gettext_noop("When enabled will check free disk space before a shard move"),
-		gettext_noop(
-			"Free disk space will be checked when this setting is enabled before each shard move."),
-		&CheckAvailableSpaceBeforeMove,
+		"citus.enable_cost_based_connection_establishment",
+		gettext_noop("When enabled the connection establishment times "
+					 "and task execution times into account for deciding "
+					 "whether or not to establish new connections."),
+		NULL,
+		&EnableCostBasedConnectionEstablishment,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomRealVariable(
-		"citus.desired_percent_disk_available_after_move",
-		gettext_noop(
-			"Sets how many percentage of free disk space should be after a shard move"),
-		gettext_noop(
-			"This setting controls how much free space should be available after a shard move."
-			"If the free disk space will be lower than this parameter, then shard move will result in"
-			"an error."),
-		&DesiredPercentFreeAfterMove,
-		10.0, 0.0, 100.0,
-		PGC_SIGHUP,
-		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1049,6 +1091,19 @@ RegisterCitusConfigVariables(void)
 		512 * 1024, 1, INT_MAX,
 		PGC_USERSET,
 		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.local_hostname",
+		gettext_noop("Sets the hostname when connecting back to itself."),
+		gettext_noop("For some operations nodes, mostly the coordinator, connect back to "
+					 "itself. When configuring SSL certificates it sometimes is required "
+					 "to use a specific hostname to match the CN of the certificate when "
+					 "verify-full is used."),
+		&LocalHostName,
+		"localhost",
+		PGC_SUSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1188,6 +1243,16 @@ RegisterCitusConfigVariables(void)
 		1048576, -1, MAX_KILOBYTES,
 		PGC_USERSET,
 		GUC_UNIT_KB | GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.max_rebalancer_logged_ignored_moves",
+		gettext_noop("Sets the maximum number of ignored moves the rebalance logs"),
+		NULL,
+		&MaxRebalancerLoggedIgnoredMoves,
+		5, -1, INT_MAX,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1364,6 +1429,21 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_KB | GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.prevent_incomplete_connection_establishment",
+		gettext_noop("When enabled, the executor waits until all the connections "
+					 "are successfully established."),
+		gettext_noop("Under some load, the executor may decide to establish some "
+					 "extra connections to further parallelize the execution. However,"
+					 "before the connection establishment is done, the execution might "
+					 "have already finished. When this GUC is set to true, the execution "
+					 "waits for such connections to be established."),
+		&PreventIncompleteConnectionEstablishment,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.propagate_set_commands",
 		gettext_noop("Sets which SET commands are propagated to workers."),
@@ -1438,16 +1518,28 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomEnumVariable(
 		"citus.replication_model",
-		gettext_noop("Sets the replication model to be used for distributed tables."),
-		gettext_noop("Depending upon the execution environment, statement- or streaming-"
-					 "based replication modes may be employed. Though most Citus deploy-"
-					 "ments will simply use statement replication, hosted and MX-style"
-					 "deployments should set this parameter to 'streaming'."),
+		gettext_noop("Deprecated. Please use citus.shard_replication_factor instead"),
+		gettext_noop(
+			"Shard replication model is determined by the shard replication factor."
+			"'statement' replication is used only when the replication factor is one."),
 		&ReplicationModel,
-		REPLICATION_MODEL_COORDINATOR,
+		REPLICATION_MODEL_STREAMING,
 		replication_model_options,
 		PGC_SUSET,
-		GUC_SUPERUSER_ONLY,
+		GUC_NO_SHOW_ALL,
+		WarnIfReplicationModelIsSet, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.running_under_isolation_test",
+		gettext_noop(
+			"Only useful for testing purposes, when set to true, Citus does some "
+			"tricks to implement useful isolation tests with rebalancing. Should "
+			"never be set to true on production systems "),
+		gettext_noop("for details of the tricks implemented, refer to the source code"),
+		&RunningUnderIsolationTest,
+		false,
+		PGC_SUSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1735,6 +1827,32 @@ NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source)
 							 "compatibility, no new users are supposed to use it. The planner "
 							 "is capable of pushing down as much computation as possible to the "
 							 "shards depending on the query.")));
+	}
+
+	return true;
+}
+
+
+/*
+ * WarnIfReplicationModelIsSet prints a warning when a user sets
+ * citus.replication_model.
+ */
+static bool
+WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source)
+{
+	/* print a warning only when user sets the guc */
+	if (source == PGC_S_SESSION)
+	{
+		ereport(NOTICE, (errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+						 errmsg(
+							 "Setting citus.replication_model has no effect. Please use "
+							 "citus.shard_replication_factor instead."),
+						 errdetail(
+							 "Citus determines the replication model based on the "
+							 "replication factor and the replication models of the colocated "
+							 "shards. If a colocated table is present, the replication model "
+							 "is inherited. Otherwise 'streaming' replication is preferred if "
+							 "supported by the replication factor.")));
 	}
 
 	return true;

@@ -21,6 +21,7 @@
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
 #include "funcapi.h"
 #include "miscadmin.h"
@@ -50,6 +51,7 @@ static ShardCost GetShardCost(uint64 shardId, void *context);
 PG_FUNCTION_INFO_V1(shard_placement_rebalance_array);
 PG_FUNCTION_INFO_V1(shard_placement_replication_array);
 PG_FUNCTION_INFO_V1(worker_node_responsive);
+PG_FUNCTION_INFO_V1(run_try_drop_marked_shards);
 
 typedef struct ShardPlacementTestInfo
 {
@@ -71,6 +73,17 @@ typedef struct RebalancePlanContext
 	List *shardPlacementTestInfoList;
 } RebalancePlacementContext;
 
+/*
+ * run_try_drop_marked_shards is a wrapper to run TryDropOrphanedShards.
+ */
+Datum
+run_try_drop_marked_shards(PG_FUNCTION_ARGS)
+{
+	bool waitForLocks = false;
+	TryDropOrphanedShards(waitForLocks);
+	PG_RETURN_VOID();
+}
+
 
 /*
  * shard_placement_rebalance_array returns a list of operations which can make a
@@ -89,6 +102,7 @@ shard_placement_rebalance_array(PG_FUNCTION_ARGS)
 	float threshold = PG_GETARG_FLOAT4(2);
 	int32 maxShardMoves = PG_GETARG_INT32(3);
 	bool drainOnly = PG_GETARG_BOOL(4);
+	float utilizationImproventThreshold = PG_GETARG_FLOAT4(5);
 
 	List *workerNodeList = NIL;
 	List *shardPlacementListList = NIL;
@@ -143,6 +157,7 @@ shard_placement_rebalance_array(PG_FUNCTION_ARGS)
 														  threshold,
 														  maxShardMoves,
 														  drainOnly,
+														  utilizationImproventThreshold,
 														  &rebalancePlanFunctions);
 	ArrayType *placementUpdateJsonArray = PlacementUpdateListToJsonArray(
 		placementUpdateList);

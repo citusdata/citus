@@ -8,7 +8,6 @@ SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gse
 SELECT nextval('pg_catalog.pg_dist_shardid_seq') AS last_shard_id \gset
 
 
-SET citus.replication_model TO streaming;
 SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 1;
 SET citus.replicate_reference_tables_on_activate TO off;
@@ -61,6 +60,10 @@ SELECT create_reference_table('ref_table');
 
 CREATE TABLE dist_table_1(a int primary key, b int references ref_table(a));
 SELECT create_distributed_table('dist_table_1', 'a');
+
+CREATE SEQUENCE sequence;
+CREATE TABLE reference_table (a int default nextval('sequence'));
+SELECT create_reference_table('reference_table');
 
 -- update the node
 SELECT 1 FROM master_update_node((SELECT nodeid FROM pg_dist_node),
@@ -355,7 +358,9 @@ DROP DATABASE db_to_drop;
 SELECT datname FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
 
 -- cleanup
+DROP SEQUENCE sequence CASCADE;
 DROP TABLE ref_table;
+DROP TABLE reference_table;
 TRUNCATE pg_dist_colocation;
 SELECT count(*) FROM (SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node) t;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
@@ -366,4 +371,3 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART :last_shard_id;
 
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
-RESET citus.replication_model;

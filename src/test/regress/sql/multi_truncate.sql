@@ -11,7 +11,7 @@ SET search_path TO multi_truncate;
 CREATE VIEW table_sizes AS
 SELECT
   c.relname as name,
-  pg_catalog.pg_size_pretty(pg_catalog.pg_table_size(c.oid)) as size
+  pg_catalog.pg_table_size(c.oid) > 0 as has_data
 FROM pg_catalog.pg_class c
      LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 WHERE c.relkind = 'r'
@@ -292,7 +292,12 @@ INSERT INTO dist SELECT x,x FROM generate_series(1,10000) x;
 -- test that we do not cascade truncates to local referencing tables
 SELECT truncate_local_data_after_distributing_table('ref');
 
--- distribute the table and start testing allowed truncation queries
+-- test that we do not allow distributing tables that have foreign keys to reference tables
+SELECT create_distributed_table('dist','id');
+SHOW citus.multi_shard_modify_mode;
+
+-- distribute the table after a truncate
+TRUNCATE dist;
 SELECT create_distributed_table('dist','id');
 
 -- the following should truncate ref and dist

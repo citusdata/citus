@@ -17,10 +17,10 @@
 
 #include "access/xact.h"
 #include "distributed/connection_management.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/function_utils.h"
 #include "distributed/intermediate_result_pruning.h"
 #include "distributed/lock_graph.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/run_from_same_connection.h"
@@ -83,12 +83,12 @@ AllowNonIdleTransactionOnXactHandling(void)
 Datum
 start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	uint32 nodePort = PG_GETARG_UINT32(1);
 	char *nodeNameString = text_to_cstring(nodeName);
 	int connectionFlags = 0;
-
-	CheckCitusVersion(ERROR);
 
 	if (singleConnection != NULL && (strcmp(singleConnection->hostname,
 											nodeNameString) != 0 ||

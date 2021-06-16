@@ -1,6 +1,5 @@
 CREATE SCHEMA upgrade_distributed_function_before;
 SET search_path TO upgrade_distributed_function_before, public;
-SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor TO 1;
 
 CREATE TABLE t1 (a int PRIMARY KEY, b int);

@@ -35,10 +35,10 @@ PG_FUNCTION_INFO_V1(worker_create_truncate_trigger);
 Datum
 worker_create_truncate_trigger(PG_FUNCTION_ARGS)
 {
-	Oid relationId = PG_GETARG_OID(0);
-
-	EnsureSuperUser();
 	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	Oid relationId = PG_GETARG_OID(0);
 
 	/* Create the truncate trigger */
 	CreateTruncateTrigger(relationId);

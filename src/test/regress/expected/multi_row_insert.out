@@ -18,7 +18,7 @@ SELECT * FROM pg_dist_shard WHERE logicalrelid='source_table_xyz'::regclass::oid
  source_table_xyz | 4213582 | t            | (25,z)        | (49,z)
 (2 rows)
 
-SELECT shardid, nodename, nodeport FROM pg_dist_shard_placement WHERE EXISTS(SELECT shardid FROM pg_dist_shard WHERE shardid=pg_dist_shard_placement.shardid AND logicalrelid='source_table_xyz'::regclass::oid);
+SELECT shardid, nodename, nodeport FROM pg_dist_shard_placement WHERE EXISTS(SELECT shardid FROM pg_dist_shard WHERE shardid=pg_dist_shard_placement.shardid AND logicalrelid='source_table_xyz'::regclass::oid) ORDER BY 1, 2, 3;
  shardid | nodename  | nodeport
 ---------------------------------------------------------------------
  4213581 | localhost |    57637

@@ -31,8 +31,13 @@ SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);
 
+-- Make sure this cannot be run in a transaction
+BEGIN;
+CALL citus_cleanup_orphaned_shards();
+COMMIT;
+
 -- execute delayed removal
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 -- we expect the shard to be on only the second worker
 SELECT run_command_on_workers($cmd$
@@ -70,6 +75,10 @@ SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);
 
+-- master_move_shard_placement automatically cleans up orphaned shards if
+-- needed.
+SELECT master_move_shard_placement(20000000, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+
 
 SELECT run_command_on_workers($cmd$
     -- override the function for testing purpose
@@ -95,8 +104,6 @@ set citus.check_available_space_before_move to false;
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
 ROLLBACK;
 
-
--- we expect shard 0 to be on both of the workers
 SELECT run_command_on_workers($cmd$
     SELECT count(*) FROM pg_class WHERE relname = 't1_20000000';
 $cmd$);

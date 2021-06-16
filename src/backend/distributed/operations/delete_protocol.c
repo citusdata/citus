@@ -109,15 +109,15 @@ PG_FUNCTION_INFO_V1(master_drop_sequences);
 Datum
 master_apply_delete_command(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	text *queryText = PG_GETARG_TEXT_P(0);
 	char *queryString = text_to_cstring(queryText);
 	List *deletableShardIntervalList = NIL;
 	bool failOK = false;
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	Node *queryTreeNode = rawStmt->stmt;
-
-	EnsureCoordinator();
-	CheckCitusVersion(ERROR);
 
 	if (!IsA(queryTreeNode, DeleteStmt))
 	{
@@ -208,14 +208,14 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 Datum
 citus_drop_all_shards(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *relationNameText = PG_GETARG_TEXT_P(2);
 
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *relationName = text_to_cstring(relationNameText);
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * The SQL_DROP trigger calls this function even for tables that are
@@ -325,7 +325,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 	 */
 	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
 	{
-		CoordinatedTransactionShouldUse2PC();
+		Use2PCForCoordinatedTransaction();
 	}
 
 	List *dropTaskList = DropTaskList(relationId, schemaName, relationName,

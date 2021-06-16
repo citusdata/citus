@@ -15,7 +15,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 150000;
 
 -- Prepare the environment
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 SET citus.shard_count TO 5;
 
 -- Create test tables
@@ -238,4 +237,3 @@ SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 
 RESET citus.shard_replication_factor;
-RESET citus.replication_model;

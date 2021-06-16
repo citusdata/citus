@@ -108,7 +108,6 @@ GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
 GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
 GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 \c - - - :master_port
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 -- create prepare tests
 PREPARE prepare_insert AS INSERT INTO test VALUES ($1);
@@ -273,7 +272,7 @@ IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
     -- create columnar table
     CREATE TABLE columnar_table (a int) USING columnar;
     -- alter a columnar table that is created by that unprivileged user
-    SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 100);
+    SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
     -- and drop it
     DROP TABLE columnar_table;
   $$;

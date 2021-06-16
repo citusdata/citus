@@ -107,7 +107,6 @@ DROP INDEX ddl_test_index;
 -- show that sequences owned by mx tables result in unique values
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 4;
-SET citus.replication_model TO streaming;
 CREATE TABLE mx_sequence(key INT, value BIGSERIAL);
 SELECT create_distributed_table('mx_sequence', 'key');
 
@@ -154,7 +153,6 @@ ALTER EXTENSION seg ADD TABLE seg_test;
 -- sync table metadata, but skip CREATE TABLE
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 4;
-SET citus.replication_model TO streaming;
 SELECT create_distributed_table('seg_test', 'x');
 
 \c - - - :worker_1_port

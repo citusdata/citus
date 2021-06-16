@@ -86,13 +86,9 @@
  */
 #define LOG_PER_TUPLE_AMOUNT 1000000
 
-
-/* Replication model to use when creating distributed tables */
-int ReplicationModel = REPLICATION_MODEL_COORDINATOR;
-
-
 /* local function forward declarations */
-static char DecideReplicationModel(char distributionMethod, bool viaDeprecatedAPI);
+static char DecideReplicationModel(char distributionMethod, char *colocateWithTableName,
+								   bool viaDeprecatedAPI);
 static void CreateHashDistributedTableShards(Oid relationId, int shardCount,
 											 Oid colocatedTableId, bool localTableEmpty);
 static uint32 ColocationIdForNewTable(Oid relationId, Var *distributionColumn,
@@ -119,7 +115,6 @@ static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationI
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
 static void DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag);
-static bool LocalTableEmpty(Oid tableId);
 static void CopyLocalDataIntoShards(Oid relationId);
 static List * TupleDescColumnNameList(TupleDesc tupleDescriptor);
 static bool DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
@@ -146,11 +141,10 @@ PG_FUNCTION_INFO_V1(create_reference_table);
 Datum
 master_create_distributed_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	Oid relationId = PG_GETARG_OID(0);
 	text *distributionColumnText = PG_GETARG_TEXT_P(1);
 	Oid distributionMethodOid = PG_GETARG_OID(2);
-
-	CheckCitusVersion(ERROR);
 
 	EnsureCitusTableCanBeCreated(relationId);
 
@@ -193,6 +187,8 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 Datum
 create_distributed_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2) || PG_ARGISNULL(3))
 	{
 		PG_RETURN_VOID();
@@ -224,8 +220,6 @@ create_distributed_table(PG_FUNCTION_ARGS)
 		 */
 		shardCountIsStrict = true;
 	}
-
-	CheckCitusVersion(ERROR);
 
 	EnsureCitusTableCanBeCreated(relationId);
 
@@ -275,14 +269,13 @@ create_distributed_table(PG_FUNCTION_ARGS)
 Datum
 create_reference_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	Oid relationId = PG_GETARG_OID(0);
 
 	char *colocateWithTableName = NULL;
 	Var *distributionColumn = NULL;
 
 	bool viaDeprecatedAPI = false;
-
-	CheckCitusVersion(ERROR);
 
 	EnsureCitusTableCanBeCreated(relationId);
 
@@ -442,6 +435,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	char replicationModel = DecideReplicationModel(distributionMethod,
+												   colocateWithTableName,
 												   viaDeprecatedAPI);
 
 	/*
@@ -464,7 +458,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	EnsureReferenceTablesExistOnAllNodes();
 
 	/* we need to calculate these variables before creating distributed metadata */
-	bool localTableEmpty = LocalTableEmpty(relationId);
+	bool localTableEmpty = TableEmpty(relationId);
 	Oid colocatedTableId = ColocatedTableId(colocationId);
 
 	/* create an entry for distributed table in pg_dist_partition */
@@ -631,44 +625,38 @@ DropFKeysRelationInvolvedWithTableType(Oid relationId, int tableTypeFlag)
 
 /*
  * DecideReplicationModel function decides which replication model should be
- * used depending on given distribution configuration and global ReplicationModel
- * variable. If ReplicationModel conflicts with distribution configuration, this
- * function errors out.
+ * used depending on given distribution configuration.
  */
 static char
-DecideReplicationModel(char distributionMethod, bool viaDeprecatedAPI)
+DecideReplicationModel(char distributionMethod, char *colocateWithTableName, bool
+					   viaDeprecatedAPI)
 {
 	if (viaDeprecatedAPI)
 	{
-		if (ReplicationModel != REPLICATION_MODEL_COORDINATOR)
-		{
-			ereport(NOTICE, (errmsg("using statement-based replication"),
-							 errdetail("The current replication_model setting is "
-									   "'streaming', which is not supported by "
-									   "master_create_distributed_table."),
-							 errhint("Use create_distributed_table to use the streaming "
-									 "replication model.")));
-		}
-
 		return REPLICATION_MODEL_COORDINATOR;
 	}
 	else if (distributionMethod == DISTRIBUTE_BY_NONE)
 	{
 		return REPLICATION_MODEL_2PC;
 	}
-	else if (distributionMethod == DISTRIBUTE_BY_HASH)
+	else if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0 &&
+			 !IsColocateWithNone(colocateWithTableName))
 	{
-		return ReplicationModel;
+		text *colocateWithTableNameText = cstring_to_text(colocateWithTableName);
+		Oid colocatedRelationId = ResolveRelationId(colocateWithTableNameText, false);
+		CitusTableCacheEntry *targetTableEntry = GetCitusTableCacheEntry(
+			colocatedRelationId);
+		char replicationModel = targetTableEntry->replicationModel;
+
+		return replicationModel;
+	}
+	else if (distributionMethod == DISTRIBUTE_BY_HASH &&
+			 !DistributedTableReplicationIsEnabled())
+	{
+		return REPLICATION_MODEL_STREAMING;
 	}
 	else
 	{
-		if (ReplicationModel != REPLICATION_MODEL_COORDINATOR)
-		{
-			ereport(NOTICE, (errmsg("using statement-based replication"),
-							 errdetail("Streaming replication is supported only for "
-									   "hash-distributed tables.")));
-		}
-
 		return REPLICATION_MODEL_COORDINATOR;
 	}
 
@@ -863,7 +851,6 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	EnsureTableNotDistributed(relationId);
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod, viaDeprecatedAPI);
-	EnsureReplicationSettings(InvalidOid, replicationModel);
 	EnsureRelationHasNoTriggers(relationId);
 
 	/* we assume callers took necessary locks */
@@ -1125,7 +1112,7 @@ static void
 EnsureLocalTableEmpty(Oid relationId)
 {
 	char *relationName = get_rel_name(relationId);
-	bool localTableEmpty = LocalTableEmpty(relationId);
+	bool localTableEmpty = TableEmpty(relationId);
 
 	if (!localTableEmpty)
 	{
@@ -1152,36 +1139,6 @@ EnsureTableNotDistributed(Oid relationId)
 		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 						errmsg("table \"%s\" is already distributed",
 							   relationName)));
-	}
-}
-
-
-/*
- * EnsureReplicationSettings checks whether the current replication factor
- * setting is compatible with the replication model. This function errors
- * out if caller tries to use streaming replication with more than one
- * replication factor.
- */
-void
-EnsureReplicationSettings(Oid relationId, char replicationModel)
-{
-	char *msgSuffix = "the streaming replication model";
-	char *extraHint = " or setting \"citus.replication_model\" to \"statement\"";
-
-	if (relationId != InvalidOid)
-	{
-		msgSuffix = "tables which use the streaming replication model";
-		extraHint = "";
-	}
-
-	if (replicationModel == REPLICATION_MODEL_STREAMING &&
-		DistributedTableReplicationIsEnabled())
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("replication factors above one are incompatible with %s",
-							   msgSuffix),
-						errhint("Try again after reducing \"citus.shard_replication_"
-								"factor\" to one%s.", extraHint)));
 	}
 }
 
@@ -1291,27 +1248,20 @@ SupportFunctionForColumn(Var *partitionColumn, Oid accessMethodId,
 
 
 /*
- * LocalTableEmpty function checks whether given local table contains any row and
- * returns false if there is any data. This function is only for local tables and
- * should not be called for distributed tables.
+ * TableEmpty function checks whether given table contains any row and
+ * returns false if there is any data.
  */
-static bool
-LocalTableEmpty(Oid tableId)
+bool
+TableEmpty(Oid tableId)
 {
 	Oid schemaId = get_rel_namespace(tableId);
 	char *schemaName = get_namespace_name(schemaId);
 	char *tableName = get_rel_name(tableId);
 	char *tableQualifiedName = quote_qualified_identifier(schemaName, tableName);
 
-	StringInfo selectExistQueryString = makeStringInfo();
+	StringInfo selectTrueQueryString = makeStringInfo();
 
-	bool columnNull = false;
 	bool readOnly = true;
-
-	int rowId = 0;
-	int attributeId = 1;
-
-	AssertArg(!IsCitusTable(tableId));
 
 	int spiConnectionResult = SPI_connect();
 	if (spiConnectionResult != SPI_OK_CONNECT)
@@ -1319,22 +1269,19 @@ LocalTableEmpty(Oid tableId)
 		ereport(ERROR, (errmsg("could not connect to SPI manager")));
 	}
 
-	appendStringInfo(selectExistQueryString, SELECT_EXIST_QUERY, tableQualifiedName);
+	appendStringInfo(selectTrueQueryString, SELECT_TRUE_QUERY, tableQualifiedName);
 
-	int spiQueryResult = SPI_execute(selectExistQueryString->data, readOnly, 0);
+	int spiQueryResult = SPI_execute(selectTrueQueryString->data, readOnly, 0);
 	if (spiQueryResult != SPI_OK_SELECT)
 	{
 		ereport(ERROR, (errmsg("execution was not successful \"%s\"",
-							   selectExistQueryString->data)));
+							   selectTrueQueryString->data)));
 	}
 
-	/* we expect that SELECT EXISTS query will return single value in a single row */
-	Assert(SPI_processed == 1);
+	/* we expect that SELECT TRUE query will return single value in a single row OR empty set */
+	Assert(SPI_processed == 1 || SPI_processed == 0);
 
-	HeapTuple tuple = SPI_tuptable->vals[rowId];
-	Datum hasDataDatum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, attributeId,
-									   &columnNull);
-	bool localTableEmpty = !DatumGetBool(hasDataDatum);
+	bool localTableEmpty = !SPI_processed;
 
 	SPI_finish();
 

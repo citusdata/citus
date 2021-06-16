@@ -94,6 +94,21 @@ typedef enum TableDDLCommandType
 } TableDDLCommandType;
 
 
+/*
+ * IndexDefinitionDeparseFlags helps to control which parts of the
+ * index creation commands are deparsed.
+ */
+typedef enum IndexDefinitionDeparseFlags
+{
+	INCLUDE_CREATE_INDEX_STATEMENTS = 1 << 0,
+	INCLUDE_INDEX_CLUSTERED_STATEMENTS = 1 << 1,
+	INCLUDE_INDEX_STATISTICS_STATEMENTTS = 1 << 2,
+	INCLUDE_INDEX_ALL_STATEMENTS = INCLUDE_CREATE_INDEX_STATEMENTS |
+								   INCLUDE_INDEX_CLUSTERED_STATEMENTS |
+								   INCLUDE_INDEX_STATISTICS_STATEMENTTS
+} IndexDefinitionDeparseFlags;
+
+
 struct TableDDLCommand;
 typedef struct TableDDLCommand TableDDLCommand;
 typedef char *(*TableDDLFunction)(void *context);
@@ -177,12 +192,20 @@ extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults);
-extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes);
+extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes,
+											   bool includeReplicaIdentity);
 extern List * GetPreLoadTableCreationCommands(Oid relationId,
 											  bool includeSequenceDefaults,
 											  char *accessMethod);
-extern List * GetTableIndexAndConstraintCommands(Oid relationId);
+extern List * GetTableIndexAndConstraintCommands(Oid relationId, int indexFlags);
+extern List * GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(Oid relationId,
+																		 int indexFlags);
+extern Oid GetRelationIdentityOrPK(Relation rel);
+extern void GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm,
+												   List **indexDDLEventList,
+												   int indexFlags);
 extern bool IndexImpliedByAConstraint(Form_pg_index indexForm);
+extern List * GetTableReplicaIdentityCommand(Oid relationId);
 extern char ShardStorageType(Oid relationId);
 extern bool DistributedTableReplicationIsEnabled(void);
 extern void CheckDistributedTable(Oid relationId);
@@ -255,6 +278,8 @@ extern ShardPlacement * SearchShardPlacementInList(List *shardPlacementList,
 extern ShardPlacement * SearchShardPlacementInListOrError(List *shardPlacementList,
 														  const char *nodeName,
 														  uint32 nodePort);
+extern void ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int
+											 targetNodePort);
 extern void ErrorIfMoveCitusLocalTable(Oid relationId);
 extern char LookupShardTransferMode(Oid shardReplicationModeOid);
 extern void BlockWritesToShardList(List *shardList);

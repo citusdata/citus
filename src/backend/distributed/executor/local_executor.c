@@ -108,8 +108,15 @@
 bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
+int LocalExecutorLevel = 0;
+
 static LocalExecutionStatus CurrentLocalExecutionStatus = LOCAL_EXECUTION_OPTIONAL;
 
+static uint64 ExecuteLocalTaskListInternal(List *taskList,
+										   ParamListInfo paramListInfo,
+										   DistributedPlan *distributedPlan,
+										   TupleDestination *defaultTupleDest,
+										   bool isUtilityCommand);
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
 										  List **remoteTaskPlacementList);
@@ -200,10 +207,8 @@ ExecuteLocalTaskListExtended(List *taskList,
 							 TupleDestination *defaultTupleDest,
 							 bool isUtilityCommand)
 {
-	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
-	int numParams = 0;
-	Oid *parameterTypes = NULL;
 	uint64 totalRowsProcessed = 0;
+	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
 
 	/*
 	 * Even if we are executing local tasks, we still enable
@@ -218,6 +223,38 @@ ExecuteLocalTaskListExtended(List *taskList,
 	 */
 	UseCoordinatedTransaction();
 
+	LocalExecutorLevel++;
+	PG_TRY();
+	{
+		totalRowsProcessed = ExecuteLocalTaskListInternal(taskList, paramListInfo,
+														  distributedPlan,
+														  defaultTupleDest,
+														  isUtilityCommand);
+	}
+	PG_CATCH();
+	{
+		LocalExecutorLevel--;
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	LocalExecutorLevel--;
+
+	return totalRowsProcessed;
+}
+
+
+static uint64
+ExecuteLocalTaskListInternal(List *taskList,
+							 ParamListInfo paramListInfo,
+							 DistributedPlan *distributedPlan,
+							 TupleDestination *defaultTupleDest,
+							 bool isUtilityCommand)
+{
+	uint64 totalRowsProcessed = 0;
+	int numParams = 0;
+	Oid *parameterTypes = NULL;
+
 	if (paramListInfo != NULL)
 	{
 		/* not used anywhere, so declare here */
@@ -229,9 +266,19 @@ ExecuteLocalTaskListExtended(List *taskList,
 		numParams = paramListInfo->numParams;
 	}
 
+	/*
+	 * Use a new memory context that gets reset after every task to free
+	 * the deparsed query string and query plan.
+	 */
+	MemoryContext loopContext = AllocSetContextCreate(CurrentMemoryContext,
+													  "ExecuteLocalTaskListExtended",
+													  ALLOCSET_DEFAULT_SIZES);
+
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
+		MemoryContext oldContext = MemoryContextSwitchTo(loopContext);
+
 		TupleDestination *tupleDest = task->tupleDest ?
 									  task->tupleDest :
 									  defaultTupleDest;
@@ -253,7 +300,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			 * queries are also ReadOnly, our 2PC logic is smart enough to skip sending
 			 * PREPARE to those connections.
 			 */
-			CoordinatedTransactionShouldUse2PC();
+			Use2PCForCoordinatedTransaction();
 		}
 
 		LogLocalCommand(task);
@@ -261,6 +308,9 @@ ExecuteLocalTaskListExtended(List *taskList,
 		if (isUtilityCommand)
 		{
 			ExecuteUtilityCommand(TaskQueryString(task));
+
+			MemoryContextSwitchTo(oldContext);
+			MemoryContextReset(loopContext);
 			continue;
 		}
 
@@ -308,6 +358,9 @@ ExecuteLocalTaskListExtended(List *taskList,
 				totalRowsProcessed +=
 					LocallyPlanAndExecuteMultipleQueries(queryStringList, tupleDest,
 														 task);
+
+				MemoryContextSwitchTo(oldContext);
+				MemoryContextReset(loopContext);
 				continue;
 			}
 
@@ -343,6 +396,9 @@ ExecuteLocalTaskListExtended(List *taskList,
 		totalRowsProcessed +=
 			ExecuteLocalTaskPlan(localPlan, shardQueryString,
 								 tupleDest, task, paramListInfo);
+
+		MemoryContextSwitchTo(oldContext);
+		MemoryContextReset(loopContext);
 	}
 
 	return totalRowsProcessed;
@@ -582,6 +638,12 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 
 	RecordNonDistTableAccessesForTask(task);
 
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "ExecuteLocalTaskPlan",
+													   ALLOCSET_DEFAULT_SIZES);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
 	/*
 	 * Some tuple destinations look at task->taskPlacementList to determine
 	 * where the result came from using the placement index. Since a local
@@ -624,6 +686,9 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	ExecutorEnd(queryDesc);
 
 	FreeQueryDesc(queryDesc);
+
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextDelete(localContext);
 
 	return totalRowsProcessed;
 }

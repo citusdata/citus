@@ -6,7 +6,6 @@ set search_path to multi_mx_call, public;
 -- Create worker-local tables to test procedure calls were routed
 
 set citus.shard_replication_factor to 2;
-set citus.replication_model to 'statement';
 
 -- This table requires specific settings, create before getting into things
 create table mx_call_dist_table_replica(id int, val int);
@@ -14,7 +13,6 @@ select create_distributed_table('mx_call_dist_table_replica', 'id');
 insert into mx_call_dist_table_replica values (9,1),(8,2),(7,3),(6,4),(5,5);
 
 set citus.shard_replication_factor to 1;
-set citus.replication_model to 'streaming';
 
 --
 -- Create tables and procedures we want to use in tests

@@ -52,7 +52,9 @@ BEGIN
 	TRUNCATE TABLE extension_diff;
 
 	CREATE TABLE current_objects AS
-	SELECT pg_catalog.pg_describe_object(classid, objid, 0) AS description
+	SELECT pg_catalog.pg_describe_object(classid, objid, 0)
+           || ' ' ||
+           coalesce(pg_catalog.pg_get_function_result(objid), '') AS description
 	FROM pg_catalog.pg_depend, pg_catalog.pg_extension e
 	WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
 		AND refobjid = e.oid
@@ -226,6 +228,16 @@ SELECT * FROM print_extension_changes();
 
 -- Snapshot of state at 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
+SELECT * FROM print_extension_changes();
+
+-- Test downgrade to 10.1-1 from 10.2-1
+ALTER EXTENSION citus UPDATE TO '10.2-1';
+ALTER EXTENSION citus UPDATE TO '10.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM print_extension_changes();
+
+-- Snapshot of state at 10.2-1
+ALTER EXTENSION citus UPDATE TO '10.2-1';
 SELECT * FROM print_extension_changes();
 
 DROP TABLE prev_objects, extension_diff;

@@ -3,7 +3,6 @@ SET search_path TO single_node;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 90630500;
-SET citus.replication_model TO 'streaming';
 
 -- adding the coordinator as inactive is disallowed
 SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
@@ -42,6 +41,23 @@ DROP TABLE loc;
 
 -- remove the coordinator to try again with create_distributed_table
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+
+-- verify the coordinator gets auto added with the localhost guc
+ALTER SYSTEM SET citus.local_hostname TO '127.0.0.1'; --although not a hostname, should work for connecting locally
+SELECT pg_reload_conf();
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
+
+CREATE TABLE test(x int, y int);
+SELECT create_distributed_table('test','x');
+
+SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
+DROP TABLE test;
+-- remove the coordinator to try again
+SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+
+ALTER SYSTEM RESET citus.local_hostname;
+SELECT pg_reload_conf();
+SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 CREATE TABLE test(x int, y int);
 SELECT create_distributed_table('test','x');
@@ -888,6 +904,25 @@ SELECT bool_and(z is null) FROM cte_1;
 WITH cte_1 AS
 (INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING key, z)
 SELECT count(DISTINCT key::text), count(DISTINCT z::text) FROM cte_1;
+
+-- test disabling drop and truncate for known shards
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE test_disabling_drop_and_truncate (a int);
+SELECT create_distributed_table('test_disabling_drop_and_truncate', 'a');
+SET citus.enable_manual_changes_to_shards TO off;
+
+-- these should error out
+DROP TABLE test_disabling_drop_and_truncate_102040;
+TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
+
+RESET citus.enable_manual_changes_to_shards ;
+
+-- these should work as expected
+TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
+DROP TABLE test_disabling_drop_and_truncate_102040;
+
+RESET citus.shard_replication_factor;
+DROP TABLE test_disabling_drop_and_truncate;
 
 -- lets flush the copy often to make sure everyhing is fine
 SET citus.local_copy_flush_threshold TO 1;

@@ -30,7 +30,7 @@
 
 /* total number of hash tokens (2^32) */
 #define HASH_TOKEN_COUNT INT64CONST(4294967296)
-#define SELECT_EXIST_QUERY "SELECT EXISTS (SELECT 1 FROM %s)"
+#define SELECT_TRUE_QUERY "SELECT TRUE FROM %s LIMIT 1"
 #define PG_TABLE_SIZE_FUNCTION "pg_table_size(%s)"
 #define PG_RELATION_SIZE_FUNCTION "pg_relation_size(%s)"
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
@@ -196,9 +196,6 @@ typedef enum SizeQueryType
 } SizeQueryType;
 
 
-/* Config variable managed via guc.c */
-extern int ReplicationModel;
-
 /* Size functions */
 extern Datum citus_table_size(PG_FUNCTION_ARGS);
 extern Datum citus_total_relation_size(PG_FUNCTION_ARGS);
@@ -212,6 +209,7 @@ extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
+extern bool NodeGroupHasLivePlacements(int32 groupId);
 extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
 extern List * ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId);
@@ -267,9 +265,9 @@ extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);
 extern void ErrorIfTableIsACatalogTable(Relation relation);
 extern void EnsureTableNotDistributed(Oid relationId);
-extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern void EnsureRelationExists(Oid relationId);
 extern bool RegularTable(Oid relationId);
+extern bool TableEmpty(Oid tableId);
 extern bool RelationUsesIdentityColumns(TupleDesc relationDesc);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern uint64 GetFirstShardId(Oid relationId);
@@ -291,4 +289,5 @@ extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds, bool
 extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
 											   uint64 *availableBytes,
 											   uint64 *totalBytes);
+extern void ExecuteQueryViaSPI(char *query, int SPIOK);
 #endif   /* METADATA_UTILITY_H */

@@ -1,0 +1,301 @@
+CREATE SCHEMA alter_database_owner;
+SET search_path TO alter_database_owner, public;
+CREATE USER database_owner_1;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+CREATE USER database_owner_2;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT run_command_on_workers('CREATE USER database_owner_1');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+SELECT run_command_on_workers('CREATE USER database_owner_2');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+-- make sure the propagation of ALTER DATABASE ... OWNER TO ... is on
+SET citus.enable_alter_database_owner TO on;
+-- list the owners of the current database on all nodes
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,postgres)
+ (localhost,57638,t,postgres)
+(2 rows)
+
+-- remove a node to verify addition later
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- verify we can change the owner of a database
+ALTER DATABASE regression OWNER TO database_owner_1;
+-- list the owner of the current database on the coordinator
+SELECT u.rolname
+  FROM pg_database d
+  JOIN pg_roles u
+    ON (d.datdba = u.oid)
+ WHERE d.datname = current_database();
+     rolname
+---------------------------------------------------------------------
+ database_owner_1
+(1 row)
+
+-- list the owners of the current database on all nodes
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_1)
+(1 row)
+
+-- turn off propagation to verify it does _not_ propagate to new nodes when turned off
+SET citus.enable_alter_database_owner TO off;
+-- add back second node to verify the owner of the database was set accordingly
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- list the owners of the current database on all nodes, should reflect on newly added node
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_1)
+ (localhost,57638,t,postgres)
+(2 rows)
+
+-- turn on propagation to verify it does propagate to new nodes when enabled
+SET citus.enable_alter_database_owner TO on;
+SELECT master_remove_node('localhost', :worker_2_port); -- remove so we can re add with propagation on
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- add back second node to verify the owner of the database was set accordingly
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+-- list the owners of the current database on all nodes, should reflect on newly added node
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_1)
+ (localhost,57638,t,database_owner_1)
+(2 rows)
+
+-- test changing the owner in a transaction and rollback to cancel
+BEGIN;
+ALTER DATABASE regression OWNER TO database_owner_2;
+ROLLBACK;
+-- list the owners of the current database on all nodes
+SELECT u.rolname
+  FROM pg_database d
+  JOIN pg_roles u
+    ON (d.datdba = u.oid)
+ WHERE d.datname = current_database();
+     rolname
+---------------------------------------------------------------------
+ database_owner_1
+(1 row)
+
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_1)
+ (localhost,57638,t,database_owner_1)
+(2 rows)
+
+CREATE TABLE t (a int PRIMARY KEY);
+SELECT create_distributed_table('t', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test changing the owner in a xact that already had parallel execution
+BEGIN;
+SELECT count(*) FROM t; -- parallel execution;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ALTER DATABASE regression OWNER TO database_owner_2; -- should ERROR
+ERROR:  cannot create or modify database because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When creating or altering a database, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+-- list the owners of the current database on all nodes
+SELECT u.rolname
+  FROM pg_database d
+  JOIN pg_roles u
+    ON (d.datdba = u.oid)
+ WHERE d.datname = current_database();
+     rolname
+---------------------------------------------------------------------
+ database_owner_1
+(1 row)
+
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_1)
+ (localhost,57638,t,database_owner_1)
+(2 rows)
+
+BEGIN;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+SELECT count(*) FROM t; -- parallel execution;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ALTER DATABASE regression OWNER TO database_owner_2;
+COMMIT;
+-- list the owners of the current database on all nodes
+SELECT u.rolname
+  FROM pg_database d
+  JOIN pg_roles u
+    ON (d.datdba = u.oid)
+ WHERE d.datname = current_database();
+     rolname
+---------------------------------------------------------------------
+ database_owner_2
+(1 row)
+
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_2)
+ (localhost,57638,t,database_owner_2)
+(2 rows)
+
+-- turn propagation off and verify it does not propagate interactively when turned off
+SET citus.enable_alter_database_owner TO off;
+ALTER DATABASE regression OWNER TO database_owner_1;
+-- list the owners of the current database on all nodes
+SELECT u.rolname
+  FROM pg_database d
+  JOIN pg_roles u
+    ON (d.datdba = u.oid)
+ WHERE d.datname = current_database();
+     rolname
+---------------------------------------------------------------------
+ database_owner_1
+(1 row)
+
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,database_owner_2)
+ (localhost,57638,t,database_owner_2)
+(2 rows)
+
+-- reset state of cluster
+SET citus.enable_alter_database_owner TO on;
+ALTER DATABASE regression OWNER TO current_user;
+-- list the owners of the current database on all nodes
+SELECT u.rolname
+  FROM pg_database d
+  JOIN pg_roles u
+    ON (d.datdba = u.oid)
+ WHERE d.datname = current_database();
+ rolname
+---------------------------------------------------------------------
+ postgres
+(1 row)
+
+SELECT run_command_on_workers($$
+    SELECT u.rolname
+      FROM pg_database d
+      JOIN pg_roles u
+        ON (d.datdba = u.oid)
+     WHERE d.datname = current_database();
+$$);
+    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,postgres)
+ (localhost,57638,t,postgres)
+(2 rows)
+
+DROP USER database_owner_1;
+DROP USER database_owner_2;
+SELECT run_command_on_workers('DROP USER database_owner_1');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP ROLE")
+ (localhost,57638,t,"DROP ROLE")
+(2 rows)
+
+SELECT run_command_on_workers('DROP USER database_owner_2');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP ROLE")
+ (localhost,57638,t,"DROP ROLE")
+(2 rows)
+
+SET client_min_messages TO warning;
+DROP SCHEMA alter_database_owner CASCADE;

@@ -32,6 +32,7 @@
 #if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
 #endif
+#include "utils/inval.h"
 #include "utils/memutils.h"
 
 
@@ -82,6 +83,7 @@ static ForeignConstraintRelationshipNode * GetRelationshipNodeForRelationId(Oid
 																			relationId,
 																			bool *isFound);
 static void CreateForeignConstraintRelationshipGraph(void);
+static bool IsForeignConstraintRelationshipGraphValid(void);
 static List * GetNeighbourList(ForeignConstraintRelationshipNode *relationshipNode,
 							   bool isReferencing);
 static List * GetRelationIdsFromRelationshipNodeList(List *fKeyRelationshipNodeList);
@@ -348,9 +350,15 @@ CreateForeignConstraintRelationshipGraph()
 /*
  * IsForeignConstraintGraphValid check whether there is a valid graph.
  */
-bool
+static bool
 IsForeignConstraintRelationshipGraphValid()
 {
+	/*
+	 * We might have some concurrent metadata changes. In order to get the changes,
+	 * we first need to accept the cache invalidation messages.
+	 */
+	AcceptInvalidationMessages();
+
 	if (fConstraintRelationshipGraph != NULL && fConstraintRelationshipGraph->isValid)
 	{
 		return true;

@@ -3,7 +3,8 @@ CREATE OR REPLACE FUNCTION shard_placement_rebalance_array(
     shard_placement_list json[],
     threshold float4 DEFAULT 0,
     max_shard_moves int DEFAULT 1000000,
-    drain_only bool DEFAULT false
+    drain_only bool DEFAULT false,
+    improvement_threshold float4 DEFAULT 0.5
 )
 RETURNS json[]
 AS 'citus'
@@ -380,4 +381,152 @@ SELECT unnest(shard_placement_rebalance_array(
           '{"shardid":12, "nodename":"hostname2"}'
         ]::json[],
     max_shard_moves := 5
+));
+
+
+-- Don't move a big shards if it doesn't improve the utilization balance much.
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}']::json[],
+    ARRAY['{"shardid":1, "cost":20,  "nodename":"a"}',
+          '{"shardid":2, "cost":20,  "nodename":"a"}',
+          '{"shardid":3, "cost":100, "nodename":"b"}',
+          '{"shardid":4, "cost":50,  "nodename":"b"}'
+        ]::json[]
+));
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}']::json[],
+    ARRAY['{"shardid":1, "cost":40,  "nodename":"a"}',
+          '{"shardid":2, "cost":40,  "nodename":"a"}',
+          '{"shardid":3, "cost":100, "nodename":"b"}',
+          '{"shardid":4, "cost":100,  "nodename":"b"}'
+        ]::json[]
+));
+
+-- improvement_threshold can be used to force a move of big shards
+-- if needed.
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}']::json[],
+    ARRAY['{"shardid":1, "cost":20,  "nodename":"a"}',
+          '{"shardid":2, "cost":20,  "nodename":"a"}',
+          '{"shardid":3, "cost":100, "nodename":"b"}',
+          '{"shardid":4, "cost":50,  "nodename":"b"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}']::json[],
+    ARRAY['{"shardid":1, "cost":40,  "nodename":"a"}',
+          '{"shardid":2, "cost":40,  "nodename":"a"}',
+          '{"shardid":3, "cost":100, "nodename":"b"}',
+          '{"shardid":4, "cost":100,  "nodename":"b"}'
+        ]::json[],
+    improvement_threshold := 0.2
+));
+
+-- limits notices about ignored moves
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}',
+          '{"node_name": "c"}',
+          '{"node_name": "d"}',
+          '{"node_name": "e"}',
+          '{"node_name": "f"}',
+          '{"node_name": "g"}'
+        ]::json[],
+    ARRAY['{"shardid":1, "cost":39,  "nodename":"a"}',
+          '{"shardid":2, "cost":39,  "nodename":"b"}',
+          '{"shardid":3, "cost":39,  "nodename":"c"}',
+          '{"shardid":4, "cost":39,  "nodename":"d"}',
+          '{"shardid":5, "cost":39,  "nodename":"e"}',
+          '{"shardid":6, "cost":39,  "nodename":"f"}',
+          '{"shardid":7, "cost":40,  "nodename":"g"}',
+          '{"shardid":8, "cost":39,  "nodename":"g"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+
+
+
+-- limits notices based on GUC
+set citus.max_rebalancer_logged_ignored_moves = 1;
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}',
+          '{"node_name": "c"}',
+          '{"node_name": "d"}',
+          '{"node_name": "e"}',
+          '{"node_name": "f"}',
+          '{"node_name": "g"}'
+        ]::json[],
+    ARRAY['{"shardid":1, "cost":39,  "nodename":"a"}',
+          '{"shardid":2, "cost":39,  "nodename":"b"}',
+          '{"shardid":3, "cost":39,  "nodename":"c"}',
+          '{"shardid":4, "cost":39,  "nodename":"d"}',
+          '{"shardid":5, "cost":39,  "nodename":"e"}',
+          '{"shardid":6, "cost":39,  "nodename":"f"}',
+          '{"shardid":7, "cost":40,  "nodename":"g"}',
+          '{"shardid":8, "cost":39,  "nodename":"g"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+set citus.max_rebalancer_logged_ignored_moves = 10;
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}',
+          '{"node_name": "c"}',
+          '{"node_name": "d"}',
+          '{"node_name": "e"}',
+          '{"node_name": "f"}',
+          '{"node_name": "g"}'
+        ]::json[],
+    ARRAY['{"shardid":1, "cost":39,  "nodename":"a"}',
+          '{"shardid":2, "cost":39,  "nodename":"b"}',
+          '{"shardid":3, "cost":39,  "nodename":"c"}',
+          '{"shardid":4, "cost":39,  "nodename":"d"}',
+          '{"shardid":5, "cost":39,  "nodename":"e"}',
+          '{"shardid":6, "cost":39,  "nodename":"f"}',
+          '{"shardid":7, "cost":40,  "nodename":"g"}',
+          '{"shardid":8, "cost":39,  "nodename":"g"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+set citus.max_rebalancer_logged_ignored_moves = -1;
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b"}',
+          '{"node_name": "c"}',
+          '{"node_name": "d"}',
+          '{"node_name": "e"}',
+          '{"node_name": "f"}',
+          '{"node_name": "g"}'
+        ]::json[],
+    ARRAY['{"shardid":1, "cost":39,  "nodename":"a"}',
+          '{"shardid":2, "cost":39,  "nodename":"b"}',
+          '{"shardid":3, "cost":39,  "nodename":"c"}',
+          '{"shardid":4, "cost":39,  "nodename":"d"}',
+          '{"shardid":5, "cost":39,  "nodename":"e"}',
+          '{"shardid":6, "cost":39,  "nodename":"f"}',
+          '{"shardid":7, "cost":40,  "nodename":"g"}',
+          '{"shardid":8, "cost":39,  "nodename":"g"}'
+        ]::json[],
+    improvement_threshold := 0.1
+));
+
+
+-- Combining improvement_threshold and capacity works as expected.
+SELECT unnest(shard_placement_rebalance_array(
+    ARRAY['{"node_name": "a"}',
+          '{"node_name": "b", "capacity": 2}']::json[],
+    ARRAY['{"shardid":1, "cost":20,  "nodename":"a"}',
+          '{"shardid":2, "cost":10,  "nodename":"a"}',
+          '{"shardid":3, "cost":10,  "nodename":"a"}',
+          '{"shardid":4, "cost":100, "nodename":"b"}',
+          '{"shardid":5, "cost":50,  "nodename":"b"}',
+          '{"shardid":6, "cost":50,  "nodename":"b"}'
+        ]::json[],
+    improvement_threshold := 0.6
 ));

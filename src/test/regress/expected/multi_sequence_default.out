@@ -1,0 +1,466 @@
+--
+-- MULTI_SEQUENCE_DEFAULT
+--
+-- Tests related to column defaults coming from a sequence
+--
+SET citus.next_shard_id TO 890000;
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+CREATE SCHEMA sequence_default;
+SET search_path = sequence_default, public;
+-- Cannot add a column involving DEFAULT nextval('..') because the table is not empty
+CREATE SEQUENCE seq_0;
+CREATE TABLE seq_test_0 (x int, y int);
+SELECT create_distributed_table('seq_test_0','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO seq_test_0 SELECT 1, s FROM generate_series(1, 50) s;
+ALTER TABLE seq_test_0 ADD COLUMN z int DEFAULT nextval('seq_0');
+ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ALTER TABLE seq_test_0 ADD COLUMN z serial;
+ERROR:  Cannot add a column involving serial pseudotypes because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+-- follow hint
+ALTER TABLE seq_test_0 ADD COLUMN z int;
+ALTER TABLE seq_test_0 ALTER COLUMN z SET DEFAULT nextval('seq_0');
+SELECT * FROM seq_test_0 ORDER BY 1, 2 LIMIT 5;
+ x | y | z
+---------------------------------------------------------------------
+ 1 | 1 |
+ 1 | 2 |
+ 1 | 3 |
+ 1 | 4 |
+ 1 | 5 |
+(5 rows)
+
+\d seq_test_0
+                 Table "sequence_default.seq_test_0"
+ Column |  Type   | Collation | Nullable |          Default
+---------------------------------------------------------------------
+ x      | integer |           |          |
+ y      | integer |           |          |
+ z      | integer |           |          | nextval('seq_0'::regclass)
+
+-- check that we can add serial pseudo-type columns
+-- when metadata is not yet synced to workers
+TRUNCATE seq_test_0;
+ALTER TABLE seq_test_0 ADD COLUMN w00 smallserial;
+ALTER TABLE seq_test_0 ADD COLUMN w01 serial2;
+ALTER TABLE seq_test_0 ADD COLUMN w10 serial;
+ALTER TABLE seq_test_0 ADD COLUMN w11 serial4;
+ALTER TABLE seq_test_0 ADD COLUMN w20 bigserial;
+ALTER TABLE seq_test_0 ADD COLUMN w21 serial8;
+-- check alter column type precaution
+ALTER TABLE seq_test_0 ALTER COLUMN z TYPE bigint;
+ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
+ALTER TABLE seq_test_0 ALTER COLUMN z TYPE smallint;
+ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
+-- MX tests
+-- check that there's not problem with group ID cache
+CREATE TABLE seq_test_4 (x int, y int);
+SELECT create_distributed_table('seq_test_4','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SEQUENCE seq_4;
+ALTER TABLE seq_test_4 ADD COLUMN a int DEFAULT nextval('seq_4');
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP SEQUENCE seq_4 CASCADE;
+NOTICE:  drop cascades to default value for column a of table seq_test_4
+TRUNCATE seq_test_4;
+CREATE SEQUENCE seq_4;
+ALTER TABLE seq_test_4 ADD COLUMN b int DEFAULT nextval('seq_4');
+-- on worker it should generate high sequence number
+\c - - - :worker_1_port
+INSERT INTO sequence_default.seq_test_4 VALUES (1,2) RETURNING *;
+ x | y | a |     b
+---------------------------------------------------------------------
+ 1 | 2 |   | 268435457
+(1 row)
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check sequence type consistency in all nodes
+CREATE SEQUENCE seq_1;
+-- type is bigint by default
+\d seq_1
+                      Sequence "sequence_default.seq_1"
+  Type  | Start | Minimum |       Maximum       | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint |     1 |       1 | 9223372036854775807 |         1 | no      |     1
+
+CREATE TABLE seq_test_1 (x int, y int);
+SELECT create_distributed_table('seq_test_1','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE seq_test_1 ADD COLUMN z int DEFAULT nextval('seq_1');
+-- type is changed to int
+\d seq_1
+                  Sequence "sequence_default.seq_1"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+
+-- check insertion is within int bounds in the worker
+\c - - - :worker_1_port
+INSERT INTO sequence_default.seq_test_1 values (1, 2) RETURNING *;
+ x | y |     z
+---------------------------------------------------------------------
+ 1 | 2 | 268435457
+(1 row)
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check that we cannot add serial pseudo-type columns
+-- when metadata is synced to workers
+ALTER TABLE seq_test_1 ADD COLUMN w bigserial;
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
+-- check for sequence type clashes
+CREATE SEQUENCE seq_2;
+CREATE TABLE seq_test_2 (x int, y bigint DEFAULT nextval('seq_2'));
+-- should work
+SELECT create_distributed_table('seq_test_2','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE seq_test_2;
+CREATE TABLE seq_test_2 (x int, y int DEFAULT nextval('seq_2'));
+-- should work
+SELECT create_distributed_table('seq_test_2','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE seq_test_2_0(x int, y smallint DEFAULT nextval('seq_2'));
+-- shouldn't work
+SELECT create_distributed_table('seq_test_2_0','x');
+ERROR:  The sequence sequence_default.seq_2 is already used for a different type in column 2 of the table sequence_default.seq_test_2
+DROP TABLE seq_test_2;
+DROP TABLE seq_test_2_0;
+-- should work
+CREATE TABLE seq_test_2 (x int, y bigint DEFAULT nextval('seq_2'));
+SELECT create_distributed_table('seq_test_2','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE seq_test_2;
+CREATE TABLE seq_test_2 (x int, y int DEFAULT nextval('seq_2'), z bigint DEFAULT nextval('seq_2'));
+-- shouldn't work
+SELECT create_distributed_table('seq_test_2','x');
+ERROR:  The sequence sequence_default.seq_2 is already used for a different type in column 3 of the table sequence_default.seq_test_2
+-- check rename is propagated properly
+ALTER SEQUENCE seq_2 RENAME TO sequence_2;
+-- check in the worker
+\c - - - :worker_1_port
+\d sequence_default.sequence_2
+                           Sequence "sequence_default.sequence_2"
+  Type  |      Start      |     Minimum     |     Maximum     | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint | 281474976710657 | 281474976710657 | 562949953421313 |         1 | no      |     1
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check rename with another schema
+-- we notice that schema is also propagated as one of the sequence's dependencies
+CREATE SCHEMA sequence_default_0;
+CREATE SEQUENCE sequence_default_0.seq_3;
+CREATE TABLE seq_test_3 (x int, y bigint DEFAULT nextval('sequence_default_0.seq_3'));
+SELECT create_distributed_table('seq_test_3', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER SEQUENCE sequence_default_0.seq_3 RENAME TO sequence_3;
+-- check in the worker
+\c - - - :worker_1_port
+\d sequence_default_0.sequence_3
+                          Sequence "sequence_default_0.sequence_3"
+  Type  |      Start      |     Minimum     |     Maximum     | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint | 281474976710657 | 281474976710657 | 562949953421313 |         1 | no      |     1
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP SEQUENCE sequence_default_0.sequence_3 CASCADE;
+NOTICE:  drop cascades to default value for column y of table seq_test_3
+DROP SCHEMA sequence_default_0;
+-- DROP SCHEMA problem: expected since we don't propagate DROP SCHEMA
+CREATE TABLE seq_test_5 (x int, y int);
+SELECT create_distributed_table('seq_test_5','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SCHEMA sequence_default_1;
+CREATE SEQUENCE sequence_default_1.seq_5;
+ALTER TABLE seq_test_5 ADD COLUMN a int DEFAULT nextval('sequence_default_1.seq_5');
+DROP SCHEMA sequence_default_1 CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to sequence sequence_default_1.seq_5
+drop cascades to default value for column a of table seq_test_5
+-- sequence is gone from coordinator
+INSERT INTO seq_test_5 VALUES (1, 2) RETURNING *;
+ x | y | a
+---------------------------------------------------------------------
+ 1 | 2 |
+(1 row)
+
+-- but is still present on worker
+\c - - - :worker_1_port
+INSERT INTO sequence_default.seq_test_5 VALUES (1, 2) RETURNING *;
+ x | y |     a
+---------------------------------------------------------------------
+ 1 | 2 | 268435457
+(1 row)
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- apply workaround
+SELECT run_command_on_workers('DROP SCHEMA sequence_default_1 CASCADE');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP SCHEMA")
+ (localhost,57638,t,"DROP SCHEMA")
+(2 rows)
+
+-- now the sequence is gone from the worker as well
+\c - - - :worker_1_port
+INSERT INTO sequence_default.seq_test_5 VALUES (1, 2) RETURNING *;
+ x | y | a
+---------------------------------------------------------------------
+ 1 | 2 |
+(1 row)
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check some more complex cases
+CREATE SEQUENCE seq_6;
+CREATE TABLE seq_test_6 (x int, t timestamptz DEFAULT now(), s int DEFAULT nextval('seq_6'), m int) PARTITION BY RANGE (t);
+SELECT create_distributed_table('seq_test_6','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- shouldn't work since x is the partition column
+ALTER TABLE seq_test_6 ALTER COLUMN x SET DEFAULT nextval('seq_6');
+ERROR:  cannot execute ALTER TABLE command involving partition column
+-- should work since both s and m have int type
+ALTER TABLE seq_test_6 ALTER COLUMN m SET DEFAULT nextval('seq_6');
+-- It is possible for a partition to have a different DEFAULT than its parent
+CREATE SEQUENCE seq_7;
+CREATE TABLE seq_test_7 (x text, s bigint DEFAULT nextval('seq_7'), t timestamptz DEFAULT now()) PARTITION BY RANGE (t);
+SELECT create_distributed_table('seq_test_7','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SEQUENCE seq_7_par;
+CREATE TABLE seq_test_7_par (x text, s bigint DEFAULT nextval('seq_7_par'), t timestamptz DEFAULT now());
+ALTER TABLE seq_test_7 ATTACH PARTITION seq_test_7_par FOR VALUES FROM ('2021-05-31') TO ('2021-06-01');
+-- check that both sequences are in worker
+\c - - - :worker_1_port
+\d sequence_default.seq_7
+                             Sequence "sequence_default.seq_7"
+  Type  |      Start      |     Minimum     |     Maximum     | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint | 281474976710657 | 281474976710657 | 562949953421313 |         1 | no      |     1
+
+\d sequence_default.seq_7_par
+                           Sequence "sequence_default.seq_7_par"
+  Type  |      Start      |     Minimum     |     Maximum     | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint | 281474976710657 | 281474976710657 | 562949953421313 |         1 | no      |     1
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Check that various ALTER SEQUENCE commands
+-- are not allowed for a distributed sequence for now
+CREATE SEQUENCE seq_8;
+CREATE SCHEMA sequence_default_8;
+-- can change schema in a sequence not yet distributed
+ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
+ALTER SEQUENCE sequence_default_8.seq_8 SET SCHEMA sequence_default;
+CREATE TABLE seq_test_8 (x int, y int DEFAULT nextval('seq_8'));
+SELECT create_distributed_table('seq_test_8', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- cannot change sequence specifications
+ALTER SEQUENCE seq_8 AS bigint;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 INCREMENT BY 2;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 MINVALUE 5 MAXVALUE 5000;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 START WITH 6;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 RESTART WITH 6;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 NO CYCLE;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+-- cannot change schema in a distributed sequence
+ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
+ERROR:  This operation is currently not allowed for a distributed sequence.
+DROP SCHEMA sequence_default_8;
+-- cannot use more than one sequence in a column default
+CREATE SEQUENCE seq_9;
+CREATE SEQUENCE seq_10;
+CREATE TABLE seq_test_9 (x int, y int DEFAULT nextval('seq_9') - nextval('seq_10'));
+SELECT create_distributed_table('seq_test_9', 'x');
+ERROR:  More than one sequence in a column default is not supported for distribution
+-- Check some cases when default is defined by
+-- DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SEQUENCE seq_11;
+CREATE TABLE seq_test_10 (col0 int, col1 int DEFAULT nextval('seq_11'::text));
+SELECT create_reference_table('seq_test_10');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO seq_test_10 VALUES (0);
+CREATE TABLE seq_test_11 (col0 int, col1 bigint DEFAULT nextval('seq_11'::text));
+-- works but doesn't create seq_11 in the workers
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- works because there is no dependency created between seq_11 and seq_test_10
+SELECT create_distributed_table('seq_test_11', 'col1');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- insertion from workers fails
+\c - - - :worker_1_port
+INSERT INTO sequence_default.seq_test_10 VALUES (1);
+ERROR:  relation "seq_11" does not exist
+\c - - - :master_port
+-- clean up
+DROP TABLE sequence_default.seq_test_7_par;
+DROP SCHEMA sequence_default CASCADE;
+NOTICE:  drop cascades to 23 other objects
+DETAIL:  drop cascades to sequence sequence_default.seq_0
+drop cascades to table sequence_default.seq_test_0
+drop cascades to table sequence_default.seq_test_4
+drop cascades to sequence sequence_default.seq_4
+drop cascades to sequence sequence_default.seq_1
+drop cascades to table sequence_default.seq_test_1
+drop cascades to sequence sequence_default.sequence_2
+drop cascades to table sequence_default.seq_test_2
+drop cascades to table sequence_default.seq_test_3
+drop cascades to table sequence_default.seq_test_5
+drop cascades to sequence sequence_default.seq_6
+drop cascades to table sequence_default.seq_test_6
+drop cascades to sequence sequence_default.seq_7
+drop cascades to table sequence_default.seq_test_7
+drop cascades to sequence sequence_default.seq_7_par
+drop cascades to sequence sequence_default.seq_8
+drop cascades to table sequence_default.seq_test_8
+drop cascades to sequence sequence_default.seq_9
+drop cascades to sequence sequence_default.seq_10
+drop cascades to table sequence_default.seq_test_9
+drop cascades to sequence sequence_default.seq_11
+drop cascades to table sequence_default.seq_test_10
+drop cascades to table sequence_default.seq_test_11
+SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP SCHEMA")
+ (localhost,57638,t,"DROP SCHEMA")
+(2 rows)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SET search_path TO public;

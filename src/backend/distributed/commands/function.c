@@ -461,15 +461,6 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 			EnsureFunctionCanBeColocatedWithTable(functionOid, distributionArgumentOid,
 												  colocatedTableId);
 		}
-		else if (ReplicationModel == REPLICATION_MODEL_COORDINATOR)
-		{
-			/* streaming replication model is required for metadata syncing */
-			ereport(ERROR, (errmsg("cannot create a function with a distribution "
-								   "argument when citus.replication_model is "
-								   "'statement'"),
-							errhint("Set citus.replication_model to 'streaming' "
-									"before creating distributed tables")));
-		}
 	}
 	else
 	{
@@ -537,7 +528,7 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 								  "with distributed tables that are created using "
 								  "streaming replication model."),
 						errhint("When distributing tables make sure that "
-								"citus.replication_model = 'streaming'")));
+								"citus.shard_replication_factor = 1")));
 	}
 
 	/*
@@ -1438,7 +1429,7 @@ PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString,
 
 
 /*
- * PreprocessAlterTypeOwnerStmt is called for change of owner ship of functions before the owner
+ * PreprocessAlterFunctionOwnerStmt is called for change of owner ship of functions before the owner
  * ship is changed on the local instance.
  *
  * If the function for which the owner is changed is distributed we execute the change on

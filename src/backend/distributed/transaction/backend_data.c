@@ -106,14 +106,14 @@ PG_FUNCTION_INFO_V1(get_all_active_transactions);
 Datum
 assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid userId = GetUserId();
 
 	/* prepare data before acquiring spinlock to protect against errors */
 	int32 initiatorNodeIdentifier = PG_GETARG_INT32(0);
 	uint64 transactionNumber = PG_GETARG_INT64(1);
 	TimestampTz timestamp = PG_GETARG_TIMESTAMPTZ(2);
-
-	CheckCitusVersion(ERROR);
 
 	/* MyBackendData should always be avaliable, just out of paranoia */
 	if (!MyBackendData)
@@ -166,13 +166,13 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 Datum
 get_current_transaction_id(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	TupleDesc tupleDescriptor = NULL;
 
 	Datum values[5];
 	bool isNulls[5];
 
-
-	CheckCitusVersion(ERROR);
 
 	/* build a tuple descriptor for our result type */
 	if (get_call_result_type(fcinfo, NULL, &tupleDescriptor) != TYPEFUNC_COMPOSITE)
@@ -225,12 +225,13 @@ get_current_transaction_id(PG_FUNCTION_ARGS)
 Datum
 get_global_active_transactions(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	TupleDesc tupleDescriptor = NULL;
 	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	List *connectionList = NIL;
 	StringInfo queryToSend = makeStringInfo();
 
-	CheckCitusVersion(ERROR);
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	appendStringInfo(queryToSend, GET_ACTIVE_TRANSACTION_QUERY);
@@ -336,9 +337,9 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 Datum
 get_all_active_transactions(PG_FUNCTION_ARGS)
 {
-	TupleDesc tupleDescriptor = NULL;
-
 	CheckCitusVersion(ERROR);
+
+	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	StoreAllActiveTransactions(tupleStore, tupleDescriptor);

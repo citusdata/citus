@@ -59,14 +59,14 @@ master_drop_distributed_table_metadata(PG_FUNCTION_ARGS)
 Datum
 master_remove_partition_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *tableNameText = PG_GETARG_TEXT_P(2);
 
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *tableName = text_to_cstring(tableNameText);
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * The SQL_DROP trigger calls this function even for tables that are
@@ -97,14 +97,14 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 Datum
 master_remove_distributed_table_metadata_from_workers(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *tableNameText = PG_GETARG_TEXT_P(2);
 
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *tableName = text_to_cstring(tableNameText);
-
-	CheckCitusVersion(ERROR);
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
 

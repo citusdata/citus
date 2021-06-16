@@ -302,7 +302,8 @@ CreateIndexStmtGetSchemaId(IndexStmt *createIndexStatement)
  * It returns a list that is filled by the pgIndexProcessor.
  */
 List *
-ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcessor)
+ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcessor,
+								int indexFlags)
 {
 	List *result = NIL;
 	ScanKeyData scanKey[1];
@@ -324,7 +325,7 @@ ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcesso
 	while (HeapTupleIsValid(heapTuple))
 	{
 		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
-		pgIndexProcessor(indexForm, &result);
+		pgIndexProcessor(indexForm, &result, indexFlags);
 
 		heapTuple = systable_getnext(scanDescriptor);
 	}

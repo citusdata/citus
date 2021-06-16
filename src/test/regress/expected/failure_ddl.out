@@ -128,41 +128,13 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
  {key,value}
 (1 row)
 
--- kill as soon as the coordinator sends COMMIT
-SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER TABLE test_table ADD COLUMN new_column INT;
+-- manually drop & re-create the table for the next tests
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
--- since we've killed the connection just after
--- the coordinator sends the COMMIT, the command should be applied
--- to the distributed table and the shards on the other worker
--- however, there is no way to recover the failure on the shards
--- that live in the failed worker, since we're running 1PC
-SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
-       array_agg
----------------------------------------------------------------------
- {key,new_column,value}
-(1 row)
-
-SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
-              run_command_on_placements
----------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,value}")
- (localhost,9060,100802,t,"{key,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
-(4 rows)
-
--- manually drop & re-create the table for the next tests
 DROP TABLE test_table;
 SET citus.next_shard_id TO 100800;
 SET citus.multi_shard_commit_protocol TO '1pc';
@@ -229,8 +201,6 @@ CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  failed to commit transaction on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  could not commit transaction for shard xxxxx on any active node
-WARNING:  could not commit transaction for shard xxxxx on any active node
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------

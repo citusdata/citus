@@ -270,12 +270,12 @@ citus_shard_sizes(PG_FUNCTION_ARGS)
 Datum
 citus_total_relation_size(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = PG_GETARG_BOOL(1);
 
 	SizeQueryType sizeQueryType = TOTAL_RELATION_SIZE;
-
-	CheckCitusVersion(ERROR);
 
 	if (CStoreTable(relationId))
 	{
@@ -301,11 +301,11 @@ citus_total_relation_size(PG_FUNCTION_ARGS)
 Datum
 citus_table_size(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
 	SizeQueryType sizeQueryType = TABLE_SIZE;
-
-	CheckCitusVersion(ERROR);
 
 	if (CStoreTable(relationId))
 	{
@@ -331,11 +331,11 @@ citus_table_size(PG_FUNCTION_ARGS)
 Datum
 citus_relation_size(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
 	SizeQueryType sizeQueryType = RELATION_SIZE;
-
-	CheckCitusVersion(ERROR);
 
 	if (CStoreTable(relationId))
 	{
@@ -644,7 +644,19 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 	StringInfo tableSizeStringInfo = (StringInfo) linitial(sizeList);
 	char *tableSizeString = tableSizeStringInfo->data;
 
-	*tableSize = SafeStringToUint64(tableSizeString);
+	if (strlen(tableSizeString) > 0)
+	{
+		*tableSize = SafeStringToUint64(tableSizeString);
+	}
+	else
+	{
+		/*
+		 * This means the shard is moved or dropped while citus_total_relation_size is
+		 * being executed. For this case we get an empty string as table size.
+		 * We can take that as zero to prevent any unnecessary errors.
+		 */
+		*tableSize = 0;
+	}
 
 	PQclear(result);
 	ClearResults(connection, failOnError);
@@ -1285,6 +1297,26 @@ ShardLength(uint64 shardId)
 	}
 
 	return shardLength;
+}
+
+
+/*
+ * NodeGroupHasLivePlacements returns true if there is any placement
+ * on the given node group which is not a SHARD_STATE_TO_DELETE placement.
+ */
+bool
+NodeGroupHasLivePlacements(int32 groupId)
+{
+	List *shardPlacements = AllShardPlacementsOnNodeGroup(groupId);
+	GroupShardPlacement *placement = NULL;
+	foreach_ptr(placement, shardPlacements)
+	{
+		if (placement->shardState != SHARD_STATE_TO_DELETE)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 

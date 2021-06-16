@@ -1,0 +1,127 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s2-lock-1 s2-lock-2 s1-rebalance-c1 s3-progress s2-unlock-1 s3-progress s2-unlock-2 s3-progress s1-commit s3-progress
+master_set_node_property
+
+
+step s2-lock-1:
+ SELECT pg_advisory_lock(29279, 1);
+
+pg_advisory_lock
+
+
+step s2-lock-2:
+ SELECT pg_advisory_lock(29279, 2);
+
+pg_advisory_lock
+
+
+step s1-rebalance-c1:
+ BEGIN;
+ SELECT * FROM get_rebalance_table_shards_plan('colocated1');
+ SELECT rebalance_table_shards('colocated1', shard_transfer_mode:='block_writes');
+ <waiting ...>
+step s3-progress: 
+ set client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name     shardid        shard_size     sourcename     sourceport     source_shard_sizetargetname     targetport     target_shard_sizeprogress
+
+colocated1     1500001        49152          localhost      57637          49152          localhost      57638          0              1
+colocated2     1500005        376832         localhost      57637          376832         localhost      57638          0              1
+colocated1     1500002        196608         localhost      57637          196608         localhost      57638          0              0
+colocated2     1500006        8192           localhost      57637          8192           localhost      57638          0              0
+step s2-unlock-1:
+ SELECT pg_advisory_unlock(29279, 1);
+
+pg_advisory_unlock
+
+t
+step s3-progress:
+ set client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name     shardid        shard_size     sourcename     sourceport     source_shard_sizetargetname     targetport     target_shard_sizeprogress
+
+colocated1     1500001        49152          localhost      57637          49152          localhost      57638          49152          2
+colocated2     1500005        376832         localhost      57637          376832         localhost      57638          376832         2
+colocated1     1500002        196608         localhost      57637          196608         localhost      57638          0              1
+colocated2     1500006        8192           localhost      57637          8192           localhost      57638          0              1
+step s2-unlock-2:
+ SELECT pg_advisory_unlock(29279, 2);
+
+pg_advisory_unlock
+
+t
+step s1-rebalance-c1: <... completed>
+table_name     shardid        shard_size     sourcename     sourceport     targetname     targetport
+
+colocated1     1500001        0              localhost      57637          localhost      57638
+colocated2     1500005        0              localhost      57637          localhost      57638
+colocated1     1500002        0              localhost      57637          localhost      57638
+colocated2     1500006        0              localhost      57637          localhost      57638
+rebalance_table_shards
+
+
+step s3-progress:
+ set client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name     shardid        shard_size     sourcename     sourceport     source_shard_sizetargetname     targetport     target_shard_sizeprogress
+
+step s1-commit:
+ COMMIT;
+
+step s3-progress:
+ set client_min_messages=NOTICE;
+ SELECT
+  table_name,
+  shardid,
+  shard_size,
+  sourcename,
+  sourceport,
+  source_shard_size,
+  targetname,
+  targetport,
+  target_shard_size,
+  progress
+ FROM get_rebalance_progress();
+
+table_name     shardid        shard_size     sourcename     sourceport     source_shard_sizetargetname     targetport     target_shard_sizeprogress
+
+restore_isolation_tester_func
+
+

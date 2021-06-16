@@ -74,10 +74,13 @@ int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
 int NextShardId = 0;
 int NextPlacementId = 0;
 
-static List * GetTableReplicaIdentityCommand(Oid relationId);
+static void GatherIndexAndConstraintDefinitionListExcludingReplicaIdentity(Form_pg_index
+																		   indexForm,
+																		   List **
+																		   indexDDLEventList,
+																		   int indexFlags);
 static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor);
-static void GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm,
-												   List **indexDDLEventList);
+
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_get_table_metadata);
@@ -100,6 +103,8 @@ PG_FUNCTION_INFO_V1(master_stage_shard_placement_row);
 Datum
 master_get_table_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *relationName = PG_GETARG_TEXT_P(0);
 	Oid relationId = ResolveRelationId(relationName, false);
 
@@ -108,8 +113,6 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	TupleDesc metadataDescriptor = NULL;
 	Datum values[TABLE_METADATA_FIELDS];
 	bool isNulls[TABLE_METADATA_FIELDS];
-
-	CheckCitusVersion(ERROR);
 
 	/* find partition tuple for partitioned relation */
 	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
@@ -198,10 +201,10 @@ CStoreTable(Oid relationId)
 Datum
 master_get_table_ddl_events(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	FuncCallContext *functionContext = NULL;
 	ListCell *tableDDLEventCell = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * On the very first call to this function, we first use the given relation
@@ -273,8 +276,8 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 Datum
 master_get_new_shardid(PG_FUNCTION_ARGS)
 {
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
 
 	uint64 shardId = GetNextShardId();
 	Datum shardIdDatum = Int64GetDatum(shardId);
@@ -343,8 +346,8 @@ GetNextShardId()
 Datum
 master_get_new_placementid(PG_FUNCTION_ARGS)
 {
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
 
 	uint64 placementId = GetNextPlacementId();
 	Datum placementIdDatum = Int64GetDatum(placementId);
@@ -450,10 +453,10 @@ master_stage_shard_placement_row(PG_FUNCTION_ARGS)
 Datum
 citus_get_active_worker_nodes(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	FuncCallContext *functionContext = NULL;
 	uint32 workerNodeCount = 0;
-
-	CheckCitusVersion(ERROR);
 
 	if (SRF_IS_FIRSTCALL())
 	{
@@ -549,7 +552,7 @@ GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
 	tableDDLEventList = list_concat(tableDDLEventList, preLoadCreationCommandList);
 
 	List *postLoadCreationCommandList =
-		GetPostLoadTableCreationCommands(relationId, true);
+		GetPostLoadTableCreationCommands(relationId, true, true);
 
 	tableDDLEventList = list_concat(tableDDLEventList, postLoadCreationCommandList);
 
@@ -562,19 +565,43 @@ GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
  * of DDL commands that should be applied after loading the data.
  */
 List *
-GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes)
+GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes,
+								 bool includeReplicaIdentity)
 {
 	List *tableDDLEventList = NIL;
 
-	if (includeIndexes)
+	/*
+	 * Include all the commands (e.g., create index, set index clustered
+	 * and set index statistics) regarding the indexes. Note that
+	 * running all these commands in parallel might fail as the
+	 * latter two depends on the first one. So, the caller should
+	 * execute the commands sequentially.
+	 */
+	int indexFlags = INCLUDE_INDEX_ALL_STATEMENTS;
+
+	if (includeIndexes && includeReplicaIdentity)
 	{
 		List *indexAndConstraintCommandList =
-			GetTableIndexAndConstraintCommands(relationId);
+			GetTableIndexAndConstraintCommands(relationId, indexFlags);
+		tableDDLEventList = list_concat(tableDDLEventList, indexAndConstraintCommandList);
+	}
+	else if (includeIndexes && !includeReplicaIdentity)
+	{
+		/*
+		 * Do not include the indexes/constraints that backs
+		 * replica identity, if any.
+		 */
+		List *indexAndConstraintCommandList =
+			GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(relationId,
+																	   indexFlags);
 		tableDDLEventList = list_concat(tableDDLEventList, indexAndConstraintCommandList);
 	}
 
-	List *replicaIdentityEvents = GetTableReplicaIdentityCommand(relationId);
-	tableDDLEventList = list_concat(tableDDLEventList, replicaIdentityEvents);
+	if (includeReplicaIdentity)
+	{
+		List *replicaIdentityEvents = GetTableReplicaIdentityCommand(relationId);
+		tableDDLEventList = list_concat(tableDDLEventList, replicaIdentityEvents);
+	}
 
 	List *triggerCommands = GetExplicitTriggerCommandList(relationId);
 	tableDDLEventList = list_concat(tableDDLEventList, triggerCommands);
@@ -590,7 +617,7 @@ GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes)
  * GetTableReplicaIdentityCommand returns the list of DDL commands to
  * (re)define the replica identity choice for a given table.
  */
-static List *
+List *
 GetTableReplicaIdentityCommand(Oid relationId)
 {
 	List *replicaIdentityCreateCommandList = NIL;
@@ -694,18 +721,82 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
  * (re)create indexes and constraints for a given table.
  */
 List *
-GetTableIndexAndConstraintCommands(Oid relationId)
+GetTableIndexAndConstraintCommands(Oid relationId, int indexFlags)
 {
 	return ExecuteFunctionOnEachTableIndex(relationId,
-										   GatherIndexAndConstraintDefinitionList);
+										   GatherIndexAndConstraintDefinitionList,
+										   indexFlags);
+}
+
+
+/*
+ * GetTableIndexAndConstraintCommands returns the list of DDL commands to
+ * (re)create indexes and constraints for a given table.
+ */
+List *
+GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(Oid relationId, int indexFlags)
+{
+	return ExecuteFunctionOnEachTableIndex(relationId,
+										   GatherIndexAndConstraintDefinitionListExcludingReplicaIdentity,
+										   indexFlags);
+}
+
+
+/*
+ * GatherIndexAndConstraintDefinitionListExcludingReplicaIdentity is a wrapper around
+ * GatherIndexAndConstraintDefinitionList(), which only excludes the indexes or
+ * constraints that back the replica identity.
+ */
+static void
+GatherIndexAndConstraintDefinitionListExcludingReplicaIdentity(Form_pg_index indexForm,
+															   List **indexDDLEventList,
+															   int indexFlags)
+{
+	Oid relationId = indexForm->indrelid;
+	Relation relation = table_open(relationId, AccessShareLock);
+
+	Oid replicaIdentityIndex = GetRelationIdentityOrPK(relation);
+
+	if (replicaIdentityIndex == indexForm->indexrelid)
+	{
+		/* this index is backing the replica identity, so skip */
+		table_close(relation, NoLock);
+		return;
+	}
+
+	GatherIndexAndConstraintDefinitionList(indexForm, indexDDLEventList, indexFlags);
+
+	table_close(relation, NoLock);
+}
+
+
+/*
+ * Get replica identity index or if it is not defined a primary key.
+ *
+ * If neither is defined, returns InvalidOid.
+ *
+ * Inspired from postgres/src/backend/replication/logical/worker.c
+ */
+Oid
+GetRelationIdentityOrPK(Relation rel)
+{
+	Oid idxoid = RelationGetReplicaIndex(rel);
+
+	if (!OidIsValid(idxoid))
+	{
+		idxoid = RelationGetPrimaryKeyIndex(rel);
+	}
+
+	return idxoid;
 }
 
 
 /*
  * GatherIndexAndConstraintDefinitionList adds the DDL command for the given index.
  */
-static void
-GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLEventList)
+void
+GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLEventList,
+									   int indexFlags)
 {
 	Oid indexId = indexForm->indexrelid;
 	char *statementDef = NULL;
@@ -726,11 +817,15 @@ GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLE
 	}
 
 	/* append found constraint or index definition to the list */
-	*indexDDLEventList = lappend(*indexDDLEventList, makeTableDDLCommandString(
-									 statementDef));
+	if (indexFlags & INCLUDE_CREATE_INDEX_STATEMENTS)
+	{
+		*indexDDLEventList = lappend(*indexDDLEventList, makeTableDDLCommandString(
+										 statementDef));
+	}
 
 	/* if table is clustered on this index, append definition to the list */
-	if (indexForm->indisclustered)
+	if ((indexFlags & INCLUDE_INDEX_CLUSTERED_STATEMENTS) &&
+		indexForm->indisclustered)
 	{
 		char *clusteredDef = pg_get_indexclusterdef_string(indexId);
 		Assert(clusteredDef != NULL);
@@ -740,8 +835,12 @@ GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLE
 	}
 
 	/* we need alter index commands for altered targets on expression indexes */
-	List *alterIndexStatisticsCommands = GetAlterIndexStatisticsCommands(indexId);
-	*indexDDLEventList = list_concat(*indexDDLEventList, alterIndexStatisticsCommands);
+	if (indexFlags & INCLUDE_INDEX_STATISTICS_STATEMENTTS)
+	{
+		List *alterIndexStatisticsCommands = GetAlterIndexStatisticsCommands(indexId);
+		*indexDDLEventList = list_concat(*indexDDLEventList,
+										 alterIndexStatisticsCommands);
+	}
 }
 
 

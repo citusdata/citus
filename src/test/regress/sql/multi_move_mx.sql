@@ -8,7 +8,6 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 -- Create mx test tables
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 
 CREATE TABLE mx_table_1 (a int);
 SELECT create_distributed_table('mx_table_1', 'a');
@@ -87,9 +86,10 @@ SELECT
 FROM
 	pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE
-	logicalrelid = 'mx_table_1'::regclass
+	(logicalrelid = 'mx_table_1'::regclass
 	OR logicalrelid = 'mx_table_2'::regclass
-	OR logicalrelid = 'mx_table_3'::regclass
+	OR logicalrelid = 'mx_table_3'::regclass)
+	AND shardstate != 4
 ORDER BY
 	logicalrelid, shardid;
 
@@ -140,5 +140,3 @@ DELETE FROM pg_dist_node;
 DELETE FROM pg_dist_partition;
 DELETE FROM pg_dist_shard;
 DELETE FROM pg_dist_shard_placement;
-\c - - - :master_port
-RESET citus.replication_model;

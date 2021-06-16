@@ -35,6 +35,7 @@ extern bool EnableDependencyCreation;
 extern bool EnableCreateTypePropagation;
 extern bool EnableAlterRolePropagation;
 extern bool EnableAlterRoleSetPropagation;
+extern bool EnableAlterDatabaseOwner;
 extern int UtilityHookLevel;
 
 

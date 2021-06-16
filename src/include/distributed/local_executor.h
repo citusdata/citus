@@ -19,6 +19,8 @@
 extern bool EnableLocalExecution;
 extern bool LogLocalCommands;
 
+extern int LocalExecutorLevel;
+
 typedef enum LocalExecutionStatus
 {
 	LOCAL_EXECUTION_REQUIRED,

@@ -15,7 +15,7 @@ RESET client_min_messages;
 
 -- start metadata sync to worker 1
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-SET citus.replication_model TO streaming;
+SET citus.shard_replication_factor TO 1;
 
 CREATE TABLE dummy_reference_table(a int unique, b int);
 SELECT create_reference_table('dummy_reference_table');
@@ -545,7 +545,7 @@ TRUNCATE reference_table, citus_local_table, distributed_table;
 
 \c - - - :master_port
 SET search_path TO citus_local_table_queries_mx;
-SET citus.replication_model TO streaming;
+SET citus.shard_replication_factor TO 1;
 
 ALTER TABLE reference_table ADD CONSTRAINT pkey_ref PRIMARY KEY (a);
 ALTER TABLE citus_local_table ADD CONSTRAINT pkey_c PRIMARY KEY (a);
@@ -588,7 +588,7 @@ ROLLBACK;
 
 \c - - - :master_port
 SET search_path TO citus_local_table_queries_mx;
-SET citus.replication_model TO streaming;
+SET citus.shard_replication_factor TO 1;
 
 ALTER TABLE distributed_table DROP CONSTRAINT fkey_dist_to_ref;
 
@@ -602,7 +602,7 @@ ROLLBACK;
 
 \c - - - :master_port
 SET search_path TO citus_local_table_queries_mx;
-SET citus.replication_model TO streaming;
+SET citus.shard_replication_factor TO 1;
 
 -- remove uniqueness constraint and dependent foreign key constraint for next tests
 ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;

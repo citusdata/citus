@@ -96,7 +96,7 @@ SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort, const char *node
 	uint32 connectionFlags = 0;
 
 	UseCoordinatedTransaction();
-	CoordinatedTransactionShouldUse2PC();
+	Use2PCForCoordinatedTransaction();
 
 	MultiConnection *transactionConnection = GetNodeUserDatabaseConnection(
 		connectionFlags, nodeName,
@@ -404,7 +404,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 
 	UseCoordinatedTransaction();
-	CoordinatedTransactionShouldUse2PC();
+	Use2PCForCoordinatedTransaction();
 
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;

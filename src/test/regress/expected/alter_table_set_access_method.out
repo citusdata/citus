@@ -393,7 +393,7 @@ SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO '
 SELECT alter_table_set_access_method('table_type_dist', 'fake_am');
 NOTICE:  creating a new table for alter_table_set_access_method.table_type_dist
 WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM alter_table_set_access_method.table_type_dist_1533505599)"
+CONTEXT:  SQL statement "SELECT TRUE FROM alter_table_set_access_method.table_type_dist_1533505599 LIMIT 1"
 WARNING:  fake_scan_getnextslot
 NOTICE:  moving the data of alter_table_set_access_method.table_type_dist
 NOTICE:  dropping the old alter_table_set_access_method.table_type_dist
@@ -406,7 +406,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.table_type_dist
 SELECT alter_table_set_access_method('table_type_ref', 'fake_am');
 NOTICE:  creating a new table for alter_table_set_access_method.table_type_ref
 WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM alter_table_set_access_method.table_type_ref_1037855087)"
+CONTEXT:  SQL statement "SELECT TRUE FROM alter_table_set_access_method.table_type_ref_1037855087 LIMIT 1"
 WARNING:  fake_scan_getnextslot
 NOTICE:  moving the data of alter_table_set_access_method.table_type_ref
 NOTICE:  dropping the old alter_table_set_access_method.table_type_ref
@@ -695,7 +695,7 @@ SELECT alter_table_set_access_method('abcde_012345678901234567890123456789012345
 DEBUG:  the name of the shard (abcde_01234567890123456789012345678901234567890_f7ff6612_xxxxxx) for relation (abcde_012345678901234567890123456789012345678901234567890123456) is too long, switching to sequential and local execution mode to prevent self deadlocks
 NOTICE:  creating a new table for alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
 DEBUG:  pathlist hook for columnar table am
-CONTEXT:  SQL statement "SELECT EXISTS (SELECT 1 FROM alter_table_set_access_method.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162)"
+CONTEXT:  SQL statement "SELECT TRUE FROM alter_table_set_access_method.abcde_0123456789012345678901234567890123456_f7ff6612_4160710162 LIMIT 1"
 NOTICE:  moving the data of alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
 NOTICE:  dropping the old alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456
 CONTEXT:  SQL statement "DROP TABLE alter_table_set_access_method.abcde_012345678901234567890123456789012345678901234567890123456 CASCADE"

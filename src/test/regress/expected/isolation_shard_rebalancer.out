@@ -286,7 +286,7 @@ rebalance_table_shards
 step s2-rebalance-all:
  select rebalance_table_shards();
 
-ERROR:  could not acquire the lock required to rebalance public.distributed_transaction_id_table
+ERROR:  could not acquire the lock required to rebalance public.colocated1
 step s1-commit:
  COMMIT;
 
@@ -308,7 +308,7 @@ replicate_table_shards
 step s2-rebalance-all:
  select rebalance_table_shards();
 
-ERROR:  could not acquire the lock required to rebalance public.distributed_transaction_id_table
+ERROR:  could not acquire the lock required to rebalance public.colocated1
 step s1-commit:
  COMMIT;
 
@@ -374,7 +374,7 @@ rebalance_table_shards
 step s2-drain:
  select master_drain_node('localhost', 57638);
 
-ERROR:  could not acquire the lock required to move public.distributed_transaction_id_table
+ERROR:  could not acquire the lock required to move public.colocated1
 step s1-commit:
  COMMIT;
 
@@ -396,7 +396,7 @@ replicate_table_shards
 step s2-drain:
  select master_drain_node('localhost', 57638);
 
-ERROR:  could not acquire the lock required to move public.distributed_transaction_id_table
+ERROR:  could not acquire the lock required to move public.colocated1
 step s1-commit:
  COMMIT;
 

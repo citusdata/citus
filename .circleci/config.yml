@@ -65,6 +65,12 @@ jobs:
           name: 'Check if changed'
           command: git diff --exit-code
       - run:
+          name: 'Check for gitignore entries .for source files'
+          command: ci/fix_gitignore.sh
+      - run:
+          name: 'Check if changed'
+          command: git diff --exit-code
+      - run:
           name: 'Check for lengths of changelog entries'
           command: ci/disallow_long_changelog_entries.sh
       - run:
@@ -446,6 +452,12 @@ workflows:
           make: check-multi
           requires: [build-12]
       - test-citus:
+          name: 'test-12_check-multi-1'
+          pg_major: 12
+          image_tag: '12.6'
+          make: check-multi-1
+          requires: [build-12]
+      - test-citus:
           name: 'test-12_check-mx'
           pg_major: 12
           image_tag: '12.6'
@@ -512,6 +524,12 @@ workflows:
           pg_major: 13
           image_tag: '13.2'
           make: check-multi
+          requires: [build-13]
+      - test-citus:
+          name: 'test-13_check-multi-1'
+          pg_major: 13
+          image_tag: '13.2'
+          make: check-multi-1
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-mx'

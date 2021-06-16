@@ -107,6 +107,8 @@ PG_FUNCTION_INFO_V1(worker_partition_query_result);
 Datum
 worker_partition_query_result(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	ReturnSetInfo *resultInfo = (ReturnSetInfo *) fcinfo->resultinfo;
 
 	text *resultIdPrefixText = PG_GETARG_TEXT_P(0);
@@ -135,8 +137,6 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 	int32 maxValuesCount = ArrayObjectCount(maxValuesArray);
 
 	bool binaryCopy = PG_GETARG_BOOL(6);
-
-	CheckCitusVersion(ERROR);
 
 	if (!IsMultiStatementTransaction())
 	{

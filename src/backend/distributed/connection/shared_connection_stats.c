@@ -136,9 +136,9 @@ PG_FUNCTION_INFO_V1(citus_remote_connection_stats);
 Datum
 citus_remote_connection_stats(PG_FUNCTION_ARGS)
 {
-	TupleDesc tupleDescriptor = NULL;
-
 	CheckCitusVersion(ERROR);
+
+	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	StoreAllRemoteConnectionStats(tupleStore, tupleDescriptor);

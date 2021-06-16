@@ -33,6 +33,11 @@ SELECT master_get_active_worker_nodes();
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 
+-- test warnings on setting the deprecated guc for replication model
+BEGIN;
+SET citus.replication_model to 'statement';
+ROLLBACK;
+
 SELECT * FROM citus_activate_node('localhost', :worker_2_port);
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
@@ -48,6 +53,9 @@ SELECT master_get_active_worker_nodes();
 CREATE TABLE test_reference_table (y int primary key, name text);
 SELECT create_reference_table('test_reference_table');
 INSERT INTO test_reference_table VALUES (1, '1');
+
+-- try to remove a node with active placements and reference tables
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 -- try to disable a node with active placements see that node is removed
 -- observe that a notification is displayed
@@ -102,6 +110,7 @@ ABORT;
 \c - postgres - :master_port
 SET citus.next_shard_id TO 1220016;
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
+SET citus.shard_replication_factor TO 1;
 SELECT master_get_active_worker_nodes();
 
 -- restore the node for next tests
@@ -123,14 +132,20 @@ SELECT master_get_active_worker_nodes();
 UPDATE pg_dist_placement SET shardstate=4 WHERE groupid=:worker_2_group;
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
 CREATE TABLE cluster_management_test_colocated (col_1 text, col_2 int);
-SELECT create_distributed_table('cluster_management_test_colocated', 'col_1', 'hash', colocate_with=>'cluster_management_test');
+-- Check that we warn the user about colocated shards that will not get created for shards that do not have active placements
+SELECT create_distributed_table('cluster_management_test_colocated', 'col_1', 'hash', colocate_with => 'cluster_management_test');
 
 -- Check that colocated shards don't get created for shards that are to be deleted
 SELECT logicalrelid, shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard ORDER BY shardstate, shardid;
 
--- try to remove a node with only to be deleted placements and see that removal still fails
+SELECT * INTO removed_placements FROM pg_dist_placement WHERE shardstate = 4;
+-- try to remove a node with only to be deleted placements and see that removal succeeds
 SELECT master_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
+
+SELECT master_add_node('localhost', :worker_2_port, groupId := :worker_2_group);
+-- put removed placements back for testing purposes(in practice we wouldn't have only old placements for a shard)
+INSERT INTO pg_dist_placement SELECT * FROM removed_placements;
 
 -- clean-up
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);

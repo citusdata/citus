@@ -68,7 +68,7 @@ SELECT master_create_distributed_table('table_to_distribute', 'name', 'hash');
 
 SELECT partmethod, partkey FROM pg_dist_partition
 	WHERE logicalrelid = 'table_to_distribute'::regclass;
- partmethod |                                                         partkey
+ partmethod |                                                          partkey
 ---------------------------------------------------------------------
  h          | {VAR :varno 1 :varattno 1 :vartype 25 :vartypmod -1 :varcollid 100 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}
 (1 row)
@@ -159,6 +159,7 @@ SERVER fake_fdw_server;
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('foreign_table_to_distribute', 'id', 'hash');
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------

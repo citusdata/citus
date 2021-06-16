@@ -4,7 +4,6 @@ CREATE SCHEMA multi_mx_insert_select_repartition;
 SET search_path TO multi_mx_insert_select_repartition;
 
 SET citus.next_shard_id TO 4213581;
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
 SET citus.shard_count TO 4;

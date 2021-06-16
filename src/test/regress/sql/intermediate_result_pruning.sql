@@ -497,8 +497,6 @@ INSERT INTO table_1
 
 
 -- append partitioned/heap-type
-SET citus.replication_model TO statement;
-
 -- do not print out 'building index pg_toast_xxxxx_index' messages
 SET client_min_messages TO DEFAULT;
 CREATE TABLE range_partitioned(range_column text, data int);

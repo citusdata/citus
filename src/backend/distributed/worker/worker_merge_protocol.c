@@ -68,14 +68,14 @@ PG_FUNCTION_INFO_V1(worker_repartition_cleanup);
 Datum
 worker_create_schema(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	text *ownerText = PG_GETARG_TEXT_P(1);
 	char *ownerString = TextDatumGetCString(ownerText);
 
 
 	StringInfo jobSchemaName = JobSchemaName(jobId);
-	CheckCitusVersion(ERROR);
-
 	bool schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
@@ -144,11 +144,11 @@ CreateJobSchema(StringInfo schemaName, char *schemaOwner)
 Datum
 worker_repartition_cleanup(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	StringInfo jobDirectoryName = JobDirectoryName(jobId);
 	StringInfo jobSchemaName = JobSchemaName(jobId);
-
-	CheckCitusVersion(ERROR);
 
 	Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
 
@@ -173,6 +173,8 @@ worker_repartition_cleanup(PG_FUNCTION_ARGS)
 Datum
 worker_merge_files_into_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 taskId = PG_GETARG_UINT32(1);
 	ArrayType *columnNameObject = PG_GETARG_ARRAYTYPE_P(2);
@@ -188,8 +190,6 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	/* we should have the same number of column names and types */
 	int32 columnNameCount = ArrayObjectCount(columnNameObject);
 	int32 columnTypeCount = ArrayObjectCount(columnTypeObject);
-
-	CheckCitusVersion(ERROR);
 
 	if (columnNameCount != columnTypeCount)
 	{
@@ -264,10 +264,10 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 Datum
 worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	ScanKey scanKey = NULL;
 	int scanKeyCount = 0;
-
-	CheckCitusVersion(ERROR);
 
 	Relation pgNamespace = table_open(NamespaceRelationId, AccessExclusiveLock);
 	TableScanDesc scanDescriptor = table_beginscan_catalog(pgNamespace, scanKeyCount,

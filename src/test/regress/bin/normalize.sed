@@ -221,3 +221,6 @@ s/^(DEBUG:  the name of the shard \(abcde_01234567890123456789012345678901234567
 # normalize long index name errors for multi_index_statements
 s/^(ERROR:  The index name \(test_index_creation1_p2020_09_26)_([0-9])+_(tenant_id_timeperiod_idx)/\1_xxxxxx_\3/g
 s/^(DEBUG:  the index name on the shards of the partition is too long, switching to sequential and local execution mode to prevent self deadlocks: test_index_creation1_p2020_09_26)_([0-9])+_(tenant_id_timeperiod_idx)/\1_xxxxxx_\3/g
+
+# normalize errors for not being able to connect to a non-existing host
+s/could not translate host name "foobar" to address: .*$/could not translate host name "foobar" to address: <system specific error>/g

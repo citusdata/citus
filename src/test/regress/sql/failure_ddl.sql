@@ -64,20 +64,8 @@ ALTER TABLE test_table ADD COLUMN new_column INT;
 -- show that we've never commited the changes
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
--- kill as soon as the coordinator sends COMMIT
-SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
-ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
-
--- since we've killed the connection just after
--- the coordinator sends the COMMIT, the command should be applied
--- to the distributed table and the shards on the other worker
--- however, there is no way to recover the failure on the shards
--- that live in the failed worker, since we're running 1PC
-SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
-SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
-
 -- manually drop & re-create the table for the next tests
+SELECT citus.mitmproxy('conn.allow()');
 DROP TABLE test_table;
 SET citus.next_shard_id TO 100800;
 SET citus.multi_shard_commit_protocol TO '1pc';

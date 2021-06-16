@@ -124,6 +124,7 @@
 #include "miscadmin.h"
 #include "pgstat.h"
 
+#include <math.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -142,6 +143,7 @@
 #include "distributed/deparse_shard_query.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/distributed_execution_locks.h"
+#include "distributed/intermediate_result_pruning.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/multi_client_executor.h"
@@ -413,6 +415,10 @@ typedef struct WorkerPool
 	 * use it anymore.
 	 */
 	WorkerPoolFailureState failureState;
+
+	/* execution statistics per pool, in microseconds */
+	uint64 totalTaskExecutionTime;
+	int totalExecutedTasks;
 } WorkerPool;
 
 struct TaskPlacementExecution;
@@ -472,6 +478,8 @@ bool EnableBinaryProtocol = false;
 
 /* GUC, number of ms to wait between opening connections to the same worker */
 int ExecutorSlowStartInterval = 10;
+bool EnableCostBasedConnectionEstablishment = true;
+bool PreventIncompleteConnectionEstablishment = true;
 
 
 /*
@@ -634,6 +642,12 @@ static WorkerSession * FindOrCreateWorkerSession(WorkerPool *workerPool,
 static void ManageWorkerPool(WorkerPool *workerPool);
 static bool ShouldWaitForSlowStart(WorkerPool *workerPool);
 static int CalculateNewConnectionCount(WorkerPool *workerPool);
+static bool UsingExistingSessionsCheaperThanEstablishingNewConnections(int
+																	   readyTaskCount,
+																	   WorkerPool *
+																	   workerPool);
+static double AvgTaskExecutionTimeApproximation(WorkerPool *workerPool);
+static double AvgConnectionEstablishmentTime(WorkerPool *workerPool);
 static void OpenNewConnections(WorkerPool *workerPool, int newConnectionCount,
 							   TransactionProperties *transactionProperties);
 static void CheckConnectionTimeout(WorkerPool *workerPool);
@@ -650,6 +664,7 @@ static bool StartPlacementExecutionOnSession(TaskPlacementExecution *placementEx
 static bool SendNextQuery(TaskPlacementExecution *placementExecution,
 						  WorkerSession *session);
 static void ConnectionStateMachine(WorkerSession *session);
+static bool HasUnfinishedTaskForSession(WorkerSession *session);
 static void HandleMultiConnectionSuccess(WorkerSession *session);
 static bool HasAnyConnectionFailure(WorkerPool *workerPool);
 static void Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session);
@@ -675,15 +690,20 @@ static void ExtractParametersForRemoteExecution(ParamListInfo paramListInfo,
 												Oid **parameterTypes,
 												const char ***parameterValues);
 static int GetEventSetSize(List *sessionList);
+static bool HasIncompleteConnectionEstablishment(DistributedExecution *execution);
 static int RebuildWaitEventSet(DistributedExecution *execution);
 static void ProcessWaitEvents(DistributedExecution *execution, WaitEvent *events, int
 							  eventCount, bool *cancellationReceived);
 static long MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
+static uint64 MicrosecondsBetweenTimestamps(instr_time startTime, instr_time endTime);
 static HeapTuple BuildTupleFromBytes(AttInMetadata *attinmeta, fmStringInfo *values);
 static AttInMetadata * TupleDescGetAttBinaryInMetadata(TupleDesc tupdesc);
 static int WorkerPoolCompare(const void *lhsKey, const void *rhsKey);
 static void SetAttributeInputMetadata(DistributedExecution *execution,
 									  ShardCommandExecution *shardCommandExecution);
+static void LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
+										   int *nodePort);
+static bool IsDummyPlacement(ShardPlacement *taskPlacement);
 
 /*
  * AdaptiveExecutorPreExecutorRun gets called right before postgres starts its executor
@@ -741,6 +761,12 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	/* we should only call this once before the scan finished */
 	Assert(!scanState->finishedRemoteScan);
+
+	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
+													   "AdaptiveExecutor",
+													   ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
+
 
 	/* Reset Task fields that are only valid for a single execution */
 	ResetExplainAnalyzeData(taskList);
@@ -829,6 +855,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 	{
 		SortTupleStore(scanState);
 	}
+
+	MemoryContextSwitchTo(oldContext);
 
 	return resultSlot;
 }
@@ -1227,7 +1255,7 @@ StartDistributedExecution(DistributedExecution *execution)
 
 	if (xactProperties->requires2PC)
 	{
-		CoordinatedTransactionShouldUse2PC();
+		Use2PCForCoordinatedTransaction();
 	}
 
 	/*
@@ -1630,8 +1658,10 @@ CleanUpSessions(DistributedExecution *execution)
 	{
 		MultiConnection *connection = session->connection;
 
-		ereport(DEBUG4, (errmsg("Total number of commands sent over the session %ld: %ld",
-								session->sessionId, session->commandsSent)));
+		ereport(DEBUG4, (errmsg("Total number of commands sent over the session %ld: %ld "
+								"to node %s:%d", session->sessionId,
+								session->commandsSent,
+								connection->hostname, connection->port)));
 
 		UnclaimConnection(connection);
 
@@ -1751,8 +1781,10 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 		foreach_ptr(taskPlacement, task->taskPlacementList)
 		{
 			int connectionFlags = 0;
-			char *nodeName = taskPlacement->nodeName;
-			int nodePort = taskPlacement->nodePort;
+			char *nodeName = NULL;
+			int nodePort = 0;
+			LookupTaskPlacementHostAndPort(taskPlacement, &nodeName, &nodePort);
+
 			WorkerPool *workerPool = FindOrCreateWorkerPool(execution, nodeName,
 															nodePort);
 
@@ -1897,6 +1929,48 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 
 		ClaimConnectionExclusively(connection);
 	}
+}
+
+
+/*
+ * LookupTaskPlacementHostAndPort sets the nodename and nodeport for the given task placement
+ * with a lookup.
+ */
+static void
+LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
+							   int *nodePort)
+{
+	if (IsDummyPlacement(taskPlacement))
+	{
+		/*
+		 * If we create a dummy placement for the local node, it is possible
+		 * that the entry doesn't exist in pg_dist_node, hence a lookup will fail.
+		 * In that case we want to use the dummy placements values.
+		 */
+		*nodeName = taskPlacement->nodeName;
+		*nodePort = taskPlacement->nodePort;
+	}
+	else
+	{
+		/*
+		 * We want to lookup the node information again since it is possible that
+		 * there were changes in pg_dist_node and we will get those invalidations
+		 * in LookupNodeForGroup.
+		 */
+		WorkerNode *workerNode = LookupNodeForGroup(taskPlacement->groupId);
+		*nodeName = workerNode->workerName;
+		*nodePort = workerNode->workerPort;
+	}
+}
+
+
+/*
+ * IsDummyPlacement returns true if the given placement is a dummy placement.
+ */
+static bool
+IsDummyPlacement(ShardPlacement *taskPlacement)
+{
+	return taskPlacement->nodeId == LOCAL_NODE_ID;
 }
 
 
@@ -2217,7 +2291,26 @@ RunDistributedExecution(DistributedExecution *execution)
 		/* always (re)build the wait event set the first time */
 		execution->rebuildWaitEventSet = true;
 
-		while (execution->unfinishedTaskCount > 0 && !cancellationReceived)
+		/*
+		 * Iterate until all the tasks are finished. Once all the tasks
+		 * are finished, ensure that that all the connection initializations
+		 * are also finished. Otherwise, those connections are terminated
+		 * abruptly before they are established (or failed). Instead, we let
+		 * the ConnectionStateMachine() to properly handle them.
+		 *
+		 * Note that we could have the connections that are not established
+		 * as a side effect of slow-start algorithm. At the time the algorithm
+		 * decides to establish new connections, the execution might have tasks
+		 * to finish. But, the execution might finish before the new connections
+		 * are established.
+		 *
+		 * Note that the rules explained above could be overriden by any
+		 * cancellation to the query. In that case, we terminate the execution
+		 * irrespective of the current status of the tasks or the connections.
+		 */
+		while (!cancellationReceived &&
+			   (execution->unfinishedTaskCount > 0 ||
+				HasIncompleteConnectionEstablishment(execution)))
 		{
 			WorkerPool *workerPool = NULL;
 			foreach_ptr(workerPool, execution->workerList)
@@ -2296,6 +2389,33 @@ RunDistributedExecution(DistributedExecution *execution)
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
+}
+
+
+/*
+ * HasIncompleteConnectionEstablishment returns true if any of the connections
+ * that has been initiated by the executor is in initilization stage.
+ */
+static bool
+HasIncompleteConnectionEstablishment(DistributedExecution *execution)
+{
+	if (!PreventIncompleteConnectionEstablishment)
+	{
+		return false;
+	}
+
+	WorkerSession *session = NULL;
+	foreach_ptr(session, execution->sessionList)
+	{
+		MultiConnection *connection = session->connection;
+		if (connection->connectionState == MULTI_CONNECTION_INITIAL ||
+			connection->connectionState == MULTI_CONNECTION_CONNECTING)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -2397,6 +2517,9 @@ ManageWorkerPool(WorkerPool *workerPool)
 	{
 		return;
 	}
+
+	/* increase the open rate every cycle (like TCP slow start) */
+	workerPool->maxNewConnectionsPerCycle += 1;
 
 	OpenNewConnections(workerPool, newConnectionCount, execution->transactionProperties);
 
@@ -2584,13 +2707,173 @@ CalculateNewConnectionCount(WorkerPool *workerPool)
 		 * than the target pool size.
 		 */
 		newConnectionCount = Min(newConnectionsForReadyTasks, maxNewConnectionCount);
-		if (newConnectionCount > 0)
+		if (EnableCostBasedConnectionEstablishment && newConnectionCount > 0 &&
+			initiatedConnectionCount <= MaxCachedConnectionsPerWorker &&
+			UsingExistingSessionsCheaperThanEstablishingNewConnections(
+				readyTaskCount, workerPool))
 		{
-			/* increase the open rate every cycle (like TCP slow start) */
-			workerPool->maxNewConnectionsPerCycle += 1;
+			/*
+			 * Before giving the decision, we do one more check. If the cost of
+			 * executing the remaining tasks over the existing sessions in the
+			 * pool is cheaper than establishing new connections and executing
+			 * the tasks over the new connections, we prefer the former.
+			 *
+			 * For cached connections we should ignore any optimizations as
+			 * cached connections are almost free to get. In other words,
+			 * as long as there are cached connections that the pool has
+			 * not used yet, aggressively use these already established
+			 * connections.
+			 *
+			 * Note that until MaxCachedConnectionsPerWorker has already been
+			 * established within the session, we still need to establish
+			 * the connections right now.
+			 *
+			 * Also remember that we are not trying to find the optimal number
+			 * of connections for the remaining tasks here. Our goal is to prevent
+			 * connection establishments that are absolutely unnecessary. In the
+			 * future, we may improve the calculations below to find the optimal
+			 * number of new connections required.
+			 */
+			return 0;
 		}
 	}
+
 	return newConnectionCount;
+}
+
+
+/*
+ * UsingExistingSessionsCheaperThanEstablishingNewConnections returns true if
+ * using the already established connections takes less time compared to opening
+ * new connections based on the current execution's stats.
+ *
+ * The function returns false if the current execution has not established any connections
+ * or finished any tasks (e.g., no stats to act on).
+ */
+static bool
+UsingExistingSessionsCheaperThanEstablishingNewConnections(int readyTaskCount,
+														   WorkerPool *workerPool)
+{
+	int activeConnectionCount = workerPool->activeConnectionCount;
+	if (workerPool->totalExecutedTasks < 1 || activeConnectionCount < 1)
+	{
+		/*
+		 * The pool has not finished any connection establishment or
+		 * task yet. So, we refrain from optimizing the execution.
+		 */
+		return false;
+	}
+
+	double avgTaskExecutionTime = AvgTaskExecutionTimeApproximation(workerPool);
+	double avgConnectionEstablishmentTime = AvgConnectionEstablishmentTime(workerPool);
+
+	/* we assume that we are halfway through the execution */
+	double remainingTimeForActiveTaskExecutionsToFinish = avgTaskExecutionTime / 2;
+
+	/*
+	 * We use "newConnectionCount" as if it is the task count as
+	 * we are only interested in this iteration of CalculateNewConnectionCount().
+	 */
+	double totalTimeToExecuteNewTasks = avgTaskExecutionTime * readyTaskCount;
+
+	double estimatedExecutionTimeForNewTasks =
+		floor(totalTimeToExecuteNewTasks / activeConnectionCount);
+
+	/*
+	 * First finish the already running tasks, and then use the connections
+	 * to execute the new tasks.
+	 */
+	double costOfExecutingTheTasksOverExistingConnections =
+		remainingTimeForActiveTaskExecutionsToFinish +
+		estimatedExecutionTimeForNewTasks;
+
+	/*
+	 * For every task, the executor is supposed to establish one
+	 * connection and then execute the task over the connection.
+	 */
+	double costOfExecutingTheTasksOverNewConnection =
+		(avgTaskExecutionTime + avgConnectionEstablishmentTime);
+
+	return (costOfExecutingTheTasksOverExistingConnections <=
+			costOfExecutingTheTasksOverNewConnection);
+}
+
+
+/*
+ * AvgTaskExecutionTimeApproximation returns the approximation of the average task
+ * execution times on the workerPool.
+ */
+static double
+AvgTaskExecutionTimeApproximation(WorkerPool *workerPool)
+{
+	uint64 totalTaskExecutionTime = workerPool->totalTaskExecutionTime;
+	int taskCount = workerPool->totalExecutedTasks;
+
+	instr_time now;
+	INSTR_TIME_SET_CURRENT(now);
+
+	WorkerSession *session = NULL;
+	foreach_ptr(session, workerPool->sessionList)
+	{
+		/*
+		 * Involve the tasks that are currently running. We do this to
+		 * make sure that the execution responds with new connections
+		 * quickly if the actively running tasks
+		 */
+		TaskPlacementExecution *placementExecution = session->currentTask;
+		if (placementExecution != NULL &&
+			placementExecution->executionState == PLACEMENT_EXECUTION_RUNNING)
+		{
+			uint64 durationInMicroSecs =
+				MicrosecondsBetweenTimestamps(placementExecution->startTime, now);
+
+			/*
+			 * Our approximation is that we assume that the task execution is
+			 * just in the halfway through.
+			 */
+			totalTaskExecutionTime += (2 * durationInMicroSecs);
+			taskCount += 1;
+		}
+	}
+
+	return taskCount == 0 ? 0 : ((double) totalTaskExecutionTime / taskCount);
+}
+
+
+/*
+ * AvgConnectionEstablishmentTime calculates the average connection establishment times
+ * for the input workerPool.
+ */
+static double
+AvgConnectionEstablishmentTime(WorkerPool *workerPool)
+{
+	double totalTimeMicrosec = 0;
+	int sessionCount = 0;
+
+	WorkerSession *session = NULL;
+	foreach_ptr(session, workerPool->sessionList)
+	{
+		MultiConnection *connection = session->connection;
+
+		/*
+		 * There could be MaxCachedConnectionsPerWorker connections that are
+		 * already connected. Those connections might skew the average
+		 * connection establishment times for the current execution. The reason
+		 * is that they are established earlier and the connection establishment
+		 * times might be different at the moment those connections are established.
+		 */
+		if (connection->connectionState == MULTI_CONNECTION_CONNECTED)
+		{
+			long connectionEstablishmentTime =
+				MicrosecondsBetweenTimestamps(connection->connectionEstablishmentStart,
+											  connection->connectionEstablishmentEnd);
+
+			totalTimeMicrosec += connectionEstablishmentTime;
+			++sessionCount;
+		}
+	}
+
+	return (sessionCount == 0) ? 0 : (totalTimeMicrosec / sessionCount);
 }
 
 
@@ -2899,6 +3182,18 @@ MillisecondsBetweenTimestamps(instr_time startTime, instr_time endTime)
 
 
 /*
+ * MicrosecondsBetweenTimestamps is a helper to get the number of microseconds
+ * between timestamps.
+ */
+static uint64
+MicrosecondsBetweenTimestamps(instr_time startTime, instr_time endTime)
+{
+	INSTR_TIME_SUBTRACT(endTime, startTime);
+	return INSTR_TIME_GET_MICROSEC(endTime);
+}
+
+
+/*
  * ConnectionStateMachine opens a connection and descends into the transaction
  * state machine when ready.
  */
@@ -2995,8 +3290,32 @@ ConnectionStateMachine(WorkerSession *session)
 
 			case MULTI_CONNECTION_CONNECTED:
 			{
-				/* connection is ready, run the transaction state machine */
-				TransactionStateMachine(session);
+				if (HasUnfinishedTaskForSession(session))
+				{
+					/*
+					 * Connection is ready, and we have unfinished tasks.
+					 * So, run the transaction state machine.
+					 */
+					TransactionStateMachine(session);
+				}
+				else
+				{
+					/*
+					 * Connection is ready, but we don't have any unfinished
+					 * tasks that this session can execute.
+					 *
+					 * Note that we can be in a situation where the executor
+					 * decides to establish a connection, but not need to
+					 * use it at the time the connection is established. This could
+					 * happen when the earlier connections manages to finish all the
+					 * tasks after this connection
+					 *
+					 * As no tasks are ready to be executed at the moment, we
+					 * mark the socket readable to get any notices if exists.
+					 */
+					UpdateConnectionWaitFlags(session, WL_SOCKET_READABLE);
+				}
+
 				break;
 			}
 
@@ -3112,6 +3431,41 @@ ConnectionStateMachine(WorkerSession *session)
 
 
 /*
+ * HasUnfinishedTaskForSession gets a session and returns true if there
+ * are any tasks that this session can execute.
+ */
+static bool
+HasUnfinishedTaskForSession(WorkerSession *session)
+{
+	if (session->currentTask != NULL)
+	{
+		/* the session is executing a command right now */
+		return true;
+	}
+
+	dlist_head *sessionReadyTaskQueue = &(session->readyTaskQueue);
+	if (!dlist_is_empty(sessionReadyTaskQueue))
+	{
+		/* session has an assigned task, which is ready for execution */
+		return true;
+	}
+
+	WorkerPool *workerPool = session->workerPool;
+	dlist_head *poolReadyTaskQueue = &(workerPool->readyTaskQueue);
+	if (!dlist_is_empty(poolReadyTaskQueue))
+	{
+		/*
+		 * Pool has unassigned tasks that can be executed
+		 * by the input session.
+		 */
+		return true;
+	}
+
+	return false;
+}
+
+
+/*
  * HandleMultiConnectionSuccess logs the established connection and updates
  * connection's state.
  */
@@ -3124,10 +3478,10 @@ HandleMultiConnectionSuccess(WorkerSession *session)
 	MarkConnectionConnected(connection);
 
 	ereport(DEBUG4, (errmsg("established connection to %s:%d for "
-							"session %ld in %ld msecs",
+							"session %ld in %ld microseconds",
 							connection->hostname, connection->port,
 							session->sessionId,
-							MillisecondsBetweenTimestamps(
+							MicrosecondsBetweenTimestamps(
 								connection->connectionEstablishmentStart,
 								connection->connectionEstablishmentEnd))));
 
@@ -3188,7 +3542,7 @@ Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session)
 		 * just opened, which means we're now going to make modifications
 		 * over multiple connections. Activate 2PC!
 		 */
-		CoordinatedTransactionShouldUse2PC();
+		Use2PCForCoordinatedTransaction();
 	}
 }
 
@@ -4270,19 +4624,20 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 
 		Assert(INSTR_TIME_IS_ZERO(placementExecution->endTime));
 		INSTR_TIME_SET_CURRENT(placementExecution->endTime);
+		uint64 durationMicrosecs =
+			MicrosecondsBetweenTimestamps(placementExecution->startTime,
+										  placementExecution->endTime);
+		workerPool->totalTaskExecutionTime += durationMicrosecs;
+		workerPool->totalExecutedTasks += 1;
 
 		if (IsLoggableLevel(DEBUG4))
 		{
-			long durationMillisecs =
-				MillisecondsBetweenTimestamps(placementExecution->startTime,
-											  placementExecution->endTime);
-
 			ereport(DEBUG4, (errmsg("task execution (%d) for placement (%ld) on anchor "
-									"shard (%ld) finished in %ld msecs on worker "
+									"shard (%ld) finished in %ld microseconds on worker "
 									"node %s:%d", shardCommandExecution->task->taskId,
 									placementExecution->shardPlacement->placementId,
 									shardCommandExecution->task->anchorShardId,
-									durationMillisecs, workerPool->nodeName,
+									durationMicrosecs, workerPool->nodeName,
 									workerPool->nodePort)));
 		}
 	}
@@ -4457,8 +4812,6 @@ ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution, bool 
 		executionOrder == EXECUTION_ORDER_SEQUENTIAL)
 	{
 		TaskPlacementExecution *nextPlacementExecution = NULL;
-		int placementExecutionCount PG_USED_FOR_ASSERTS_ONLY =
-			shardCommandExecution->placementExecutionCount;
 
 		/* find a placement execution that is not yet marked as failed */
 		do {
@@ -4469,6 +4822,7 @@ ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution, bool 
 			 * If all tasks failed then we should already have errored out.
 			 * Still, be defensive and throw error instead of crashes.
 			 */
+			int placementExecutionCount = shardCommandExecution->placementExecutionCount;
 			if (nextPlacementExecutionIndex >= placementExecutionCount)
 			{
 				WorkerPool *workerPool = placementExecution->workerPool;

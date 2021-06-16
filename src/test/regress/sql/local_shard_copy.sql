@@ -9,8 +9,6 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupid := 0);
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
-
 
 CREATE TABLE reference_table (key int PRIMARY KEY);
 SELECT create_reference_table('reference_table');
