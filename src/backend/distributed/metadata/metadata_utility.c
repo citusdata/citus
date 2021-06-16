@@ -644,7 +644,19 @@ DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 	StringInfo tableSizeStringInfo = (StringInfo) linitial(sizeList);
 	char *tableSizeString = tableSizeStringInfo->data;
 
-	*tableSize = SafeStringToUint64(tableSizeString);
+	if (strlen(tableSizeString) > 0)
+	{
+		*tableSize = SafeStringToUint64(tableSizeString);
+	}
+	else
+	{
+		/*
+		 * This means the shard is moved or dropped while citus_total_relation_size is
+		 * being executed. For this case we get an empty string as table size.
+		 * We can take that as zero to prevent any unnecessary errors.
+		 */
+		*tableSize = 0;
+	}
 
 	PQclear(result);
 	ClearResults(connection, failOnError);
