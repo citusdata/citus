@@ -46,5 +46,8 @@ extern bool TaskAccessesLocalNode(Task *task);
 extern void ErrorIfTransactionAccessedPlacementsLocally(void);
 extern void DisableLocalExecution(void);
 extern void SetLocalExecutionStatus(LocalExecutionStatus newStatus);
+extern void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
+											   Oid **parameterTypes,
+											   const char ***parameterValues);
 
 #endif /* LOCAL_EXECUTION_H */
