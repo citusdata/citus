@@ -259,7 +259,7 @@ ABORT;
 -- all below 5 commands should throw no permission errors
 -- read columnar metadata table
 SELECT * FROM columnar.stripe;
- storage_id | stripe_num | file_offset | data_length | column_count | chunk_row_count | row_count | chunk_group_count
+ storage_id | stripe_num | file_offset | data_length | column_count | chunk_row_count | row_count | chunk_group_count | first_row_number
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -272,7 +272,7 @@ IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
     -- create columnar table
     CREATE TABLE columnar_table (a int) USING columnar;
     -- alter a columnar table that is created by that unprivileged user
-    SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 100);
+    SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
     -- and drop it
     DROP TABLE columnar_table;
   $$;

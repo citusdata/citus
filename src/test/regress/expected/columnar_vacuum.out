@@ -25,6 +25,14 @@ SELECT count(*) FROM t_stripes;
      3
 (1 row)
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('t');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  4 |              450001 |           32756
+(1 row)
+
 -- vacuum full should merge stripes together
 VACUUM FULL t;
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
@@ -43,6 +51,14 @@ SELECT count(*) FROM t_stripes;
  count
 ---------------------------------------------------------------------
      1
+(1 row)
+
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('t');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  2 |              150001 |           16584
 (1 row)
 
 -- test the case when all data cannot fit into a single stripe
@@ -66,6 +82,14 @@ SELECT count(*) FROM t_stripes;
 (1 row)
 
 VACUUM FULL t;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('t');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  4 |                3001 |           53382
+(1 row)
+
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
@@ -214,6 +238,14 @@ total file size: 57344, total data size: 18808
 compression rate: 1.25x
 total row count: 5530, stripe count: 5, average rows per stripe: 1106
 chunk count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
+
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('t');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                 16 |               21001 |           50686
+(1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent

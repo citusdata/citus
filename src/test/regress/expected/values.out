@@ -589,7 +589,7 @@ CREATE OR REPLACE FUNCTION fixed_volatile_value() RETURNS integer VOLATILE AS $$
 $$ LANGUAGE plpgsql;
 EXECUTE test_values_pushdown(fixed_volatile_value(),2,3);
 NOTICE:  evaluated on the coordinator
-CONTEXT:  PL/pgSQL function fixed_volatile_value() line 3 at RAISE
+CONTEXT:  PL/pgSQL function fixed_volatile_value() line XX at RAISE
 DEBUG:  CTE cte_1 is going to be inlined via distributed planning
  count
 ---------------------------------------------------------------------

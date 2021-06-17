@@ -1,5 +1,4 @@
 CREATE OR REPLACE VIEW pg_catalog.citus_shards AS
-WITH shard_sizes AS (SELECT * FROM pg_catalog.citus_shard_sizes())
 SELECT
      pg_dist_shard.logicalrelid AS table_name,
      pg_dist_shard.shardid,
@@ -8,11 +7,7 @@ SELECT
      colocationid AS colocation_id,
      pg_dist_node.nodename,
      pg_dist_node.nodeport,
-     (SELECT size FROM shard_sizes WHERE
-       shard_name(pg_dist_shard.logicalrelid, pg_dist_shard.shardid) = table_name
-       OR
-       'public.' || shard_name(pg_dist_shard.logicalrelid, pg_dist_shard.shardid) = table_name
-      LIMIT 1) as shard_size
+     size as shard_size
 FROM
    pg_dist_shard
 JOIN
@@ -27,6 +22,10 @@ JOIN
    pg_dist_partition
 ON
    pg_dist_partition.logicalrelid = pg_dist_shard.logicalrelid
+LEFT JOIN
+   (SELECT (regexp_matches(table_name,'_(\d+)$'))[1]::int as shard_id, max(size) as size from citus_shard_sizes() GROUP BY shard_id) as shard_sizes
+ON
+    pg_dist_shard.shardid = shard_sizes.shard_id
 WHERE
    pg_dist_placement.shardstate = 1
 ORDER BY

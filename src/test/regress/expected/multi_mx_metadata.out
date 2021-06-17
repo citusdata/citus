@@ -314,22 +314,22 @@ SELECT raise_failed_aclcheck($$
     DROP TABLE distributed_mx_table;
 $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
  $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT citus_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 -- make sure that we can drop unrelated tables/sequences
 CREATE TABLE unrelated_table(key serial);
 DROP TABLE unrelated_table;
@@ -358,12 +358,12 @@ SELECT raise_failed_aclcheck($$
     DROP TABLE distributed_mx_table;
 $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
  $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
 $$);

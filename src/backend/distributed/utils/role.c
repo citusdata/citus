@@ -73,6 +73,11 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
 Datum
 worker_create_or_alter_role(PG_FUNCTION_ARGS)
 {
+	if (PG_ARGISNULL(0))
+	{
+		ereport(ERROR, (errmsg("role name cannot be NULL")));
+	}
+
 	text *rolenameText = PG_GETARG_TEXT_P(0);
 	const char *rolename = text_to_cstring(rolenameText);
 

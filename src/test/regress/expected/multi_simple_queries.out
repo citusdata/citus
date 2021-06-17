@@ -308,7 +308,7 @@ DO $sharded_sql$
 $sharded_sql$;
 ERROR:  query has no destination for result data
 HINT:  If you want to discard the results of a SELECT, use PERFORM instead.
-CONTEXT:  PL/pgSQL function inline_code_block line 3 at SQL statement
+CONTEXT:  PL/pgSQL function inline_code_block line XX at SQL statement
 -- test cross-shard queries
 SELECT COUNT(*) FROM articles;
  count
