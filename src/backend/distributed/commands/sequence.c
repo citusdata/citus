@@ -27,7 +27,8 @@
 
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
-static bool ShouldPropagateAlterSequence(const ObjectAddress *address);
+static bool ShouldPropagateAlterSequence(const ObjectAddress *sequenceAddress);
+static bool UsedInDistributedTable(const ObjectAddress *sequenceAddress);
 
 
 /*
@@ -377,7 +378,7 @@ RenameSequenceStmtObjectAddress(Node *node, bool missing_ok)
  * statements targeting the function should be propagated.
  */
 static bool
-ShouldPropagateAlterSequence(const ObjectAddress *address)
+ShouldPropagateAlterSequence(const ObjectAddress *sequenceAddress)
 {
 	if (creating_extension)
 	{
@@ -396,7 +397,7 @@ ShouldPropagateAlterSequence(const ObjectAddress *address)
 		return false;
 	}
 
-	if (!IsObjectDistributed(address))
+	if (!IsObjectDistributed(sequenceAddress))
 	{
 		/* do not propagate alter sequence for non-distributed sequences */
 		return false;
@@ -437,10 +438,59 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 		ereport(ERROR, (errmsg(
 							"This operation is currently not allowed for a distributed sequence.")));
 	}
-	else
+
+	/*
+	 * error out if the sequence is used in a distributed table
+	 * and this is an ALTER SEQUENCE .. AS .. statement
+	 */
+	if (UsedInDistributedTable(&address))
 	{
-		return NIL;
+		List *options = stmt->options;
+		DefElem *defel = NULL;
+		foreach_ptr(defel, options)
+		{
+			if (strcmp(defel->defname, "as") == 0)
+			{
+				ereport(ERROR, (errmsg(
+									"This operation is currently not allowed "
+									"for a sequence used in a distributed table.")));
+			}
+		}
 	}
+
+	return NIL;
+}
+
+
+/*
+ * UsedInDistributedTable returns true if the argument sequence
+ * is used as the default value of a column in a distributed table.
+ * Returns false otherwise
+ */
+static bool
+UsedInDistributedTable(const ObjectAddress *sequenceAddress)
+{
+	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
+	Oid citusTableId = InvalidOid;
+	foreach_oid(citusTableId, citusTableIdList)
+	{
+		List *attnumList = NIL;
+		List *dependentSequenceList = NIL;
+		GetDependentSequencesWithRelation(citusTableId, &attnumList,
+										  &dependentSequenceList, 0);
+		Oid currentSeqOid = InvalidOid;
+		foreach_oid(currentSeqOid, dependentSequenceList)
+		{
+			/*
+			 * This sequence is used in a distributed table
+			 */
+			if (currentSeqOid == sequenceAddress->objectId)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 
