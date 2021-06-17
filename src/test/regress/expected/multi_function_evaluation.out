@@ -131,9 +131,9 @@ END;
 $function$;
 INSERT INTO example VALUES (44, (ARRAY[stable_fn(),stable_fn()])[1]);
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function stable_fn() line 3 at RAISE
+CONTEXT:  PL/pgSQL function stable_fn() line XX at RAISE
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function stable_fn() line 3 at RAISE
+CONTEXT:  PL/pgSQL function stable_fn() line XX at RAISE
 SELECT * FROM example WHERE key = 44;
  key |            value
 ---------------------------------------------------------------------
@@ -143,7 +143,7 @@ SELECT * FROM example WHERE key = 44;
 -- unnest is a set-returning function, which should not be evaluated
 UPDATE example SET value = stable_fn() + interval '2 hours' FROM UNNEST(ARRAY[44, 4]) AS k (key) WHERE example.key = k.key;
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function stable_fn() line 3 at RAISE
+CONTEXT:  PL/pgSQL function stable_fn() line XX at RAISE
 SELECT * FROM example WHERE key = 44;
  key |            value
 ---------------------------------------------------------------------
