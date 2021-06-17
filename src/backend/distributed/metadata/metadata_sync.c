@@ -75,6 +75,7 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
 static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
+static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
@@ -194,6 +195,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
+	bool clearMetadata = PG_GETARG_BOOL(2);
 	char *nodeNameString = text_to_cstring(nodeName);
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
@@ -203,6 +205,11 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("node (%s,%d) does not exist", nodeNameString, nodePort)));
+	}
+
+	if (clearMetadata)
+	{
+		DropMetadataSnapshotOnNode(workerNode);
 	}
 
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
@@ -319,6 +326,25 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 														 recreateMetadataSnapshotCommandList);
 		return success;
 	}
+}
+
+
+/*
+ * DropMetadataSnapshotOnNode creates the queries which drop the metadata and sends them
+ * to the worker given as parameter.
+ */
+static void
+DropMetadataSnapshotOnNode(WorkerNode *workerNode)
+{
+	char *extensionOwner = CitusExtensionOwnerName();
+
+	/* generate the queries which drop the metadata */
+	List *dropMetadataCommandList = MetadataDropCommands();
+
+	SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
+											   workerNode->workerPort,
+											   extensionOwner,
+											   dropMetadataCommandList);
 }
 
 
