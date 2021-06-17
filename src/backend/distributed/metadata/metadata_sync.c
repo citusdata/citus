@@ -31,7 +31,6 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
-#include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
@@ -48,13 +47,11 @@
 #include "distributed/pg_dist_node.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
-#include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
 #include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "miscadmin.h"
-#include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
@@ -1068,38 +1065,8 @@ SequenceDDLCommandsForTable(Oid relationId)
 		StringInfo wrappedSequenceDef = makeStringInfo();
 		StringInfo sequenceGrantStmt = makeStringInfo();
 		char *sequenceName = generate_qualified_relation_name(sequenceOid);
-		Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceOid);
 		Oid sequenceTypeOid = GetAttributeTypeOid(relationId, attnum);
 		char *typeName = format_type_be(sequenceTypeOid);
-
-		/* get sequence address */
-		ObjectAddress sequenceAddress = { 0 };
-		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-		EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-
-		/*
-		 * Alter the sequence's data type in the coordinator if needed.
-		 * A sequence's type is bigint by default and it doesn't change even if
-		 * it's used in an int column. However, when distributing the sequence,
-		 * we don't allow incompatible min/max ranges between the coordinator and
-		 * workers, so we determine the sequence type here based on its current usage
-		 * and propagate that same type to the workers as well.
-		 * TODO: move this command to the part where the sequence is
-		 * used in a distributed table: both in create_distributed_table
-		 * and ALTER TABLE commands that include a sequence default
-		 */
-		Oid currentSequenceTypeOid = sequenceData->seqtypid;
-		if (currentSequenceTypeOid != sequenceTypeOid)
-		{
-			AlterSeqStmt *alterSequenceStatement = makeNode(AlterSeqStmt);
-			char *seqNamespace = get_namespace_name(get_rel_namespace(sequenceOid));
-			char *seqName = get_rel_name(sequenceOid);
-			alterSequenceStatement->sequence = makeRangeVar(seqNamespace, seqName, -1);
-			Node *asTypeNode = (Node *) makeTypeNameFromOid(sequenceTypeOid, -1);
-			SetDefElemArg(alterSequenceStatement, "as", asTypeNode);
-			ParseState *pstate = make_parsestate(NULL);
-			AlterSequence(pstate, alterSequenceStatement);
-		}
 
 		/* create schema if needed */
 		appendStringInfo(wrappedSequenceDef,
@@ -1113,6 +1080,11 @@ SequenceDDLCommandsForTable(Oid relationId)
 
 		sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
 		sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
+
+		/* get sequence address */
+		ObjectAddress sequenceAddress = { 0 };
+		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+		EnsureDependenciesExistOnAllNodes(&sequenceAddress);
 
 		MarkObjectDistributed(&sequenceAddress);
 	}

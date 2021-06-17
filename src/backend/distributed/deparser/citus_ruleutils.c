@@ -39,6 +39,7 @@
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
+#include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -47,8 +48,10 @@
 #include "distributed/metadata_utility.h"
 #include "distributed/relay_utility.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
+#include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
@@ -505,6 +508,7 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
  * id from it, and if any other distributed table uses that same sequence, it checks whether
  * the types of the columns using the sequence match. If they don't, it errors out.
  * Otherwise, the condition is ensured.
+ * After condition is ensured, we alter the sequence's data type in the coordinator if needed.
  */
 void
 EnsureSequenceTypeSupported(Oid relationId, AttrNumber attnum, Oid seqTypId)
@@ -576,6 +580,27 @@ EnsureSequenceTypeSupported(Oid relationId, AttrNumber attnum, Oid seqTypId)
 				}
 			}
 		}
+	}
+
+	/*
+	 * Alter the sequence's data type in the coordinator if needed.
+	 * A sequence's type is bigint by default and it doesn't change even if
+	 * it's used in an int column. We should change the type if needed,
+	 * and not allow future ALTER SEQUENCE ... TYPE ... commands for
+	 * sequences used as defaults in distributed tables
+	 */
+	Form_pg_sequence sequenceData = pg_get_sequencedef(seqOid);
+	Oid currentSequenceTypeOid = sequenceData->seqtypid;
+	if (currentSequenceTypeOid != seqTypId)
+	{
+		AlterSeqStmt *alterSequenceStatement = makeNode(AlterSeqStmt);
+		char *seqNamespace = get_namespace_name(get_rel_namespace(seqOid));
+		char *seqName = get_rel_name(seqOid);
+		alterSequenceStatement->sequence = makeRangeVar(seqNamespace, seqName, -1);
+		Node *asTypeNode = (Node *) makeTypeNameFromOid(seqTypId, -1);
+		SetDefElemArg(alterSequenceStatement, "as", asTypeNode);
+		ParseState *pstate = make_parsestate(NULL);
+		AlterSequence(pstate, alterSequenceStatement);
 	}
 }
 
