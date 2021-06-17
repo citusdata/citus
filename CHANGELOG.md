@@ -1,3 +1,87 @@
+### citus v10.1.0 (June 15, 2021) ###
+
+* Drops support for PostgreSQL 11
+
+* Adds `shard_count` parameter to `create_distributed_table` function
+
+* Adds support for `ALTER DATABASE OWNER`
+
+* Adds support for temporary columnar tables
+
+* Adds support for using sequences as column default values when syncing
+  metadata
+
+* `alter_columnar_table_set` enforces columnar table option constraints
+
+* Continues to remove shards after failure in `DropMarkedShards`
+
+* Deprecates the `citus.replication_model` GUC
+
+* Enables `citus.defer_drop_after_shard_move` by default
+
+* Ensures free disk space before moving a shard
+
+* Fetches shard size on the fly for the rebalance monitor
+
+* Ignores old placements when disabling or removing a node
+
+* Implements `improvement_threshold` at shard rebalancer moves
+
+* Improves orphaned shard cleanup logic
+
+* Improves performance of `citus_shards`
+
+* Introduces `citus.local_hostname` GUC for connections to the current node
+
+* Makes sure connection is closed after each shard move
+
+* Makes sure that target node in shard moves is eligible for shard move
+
+* Optimizes partitioned disk size calculation for shard rebalancer
+
+* Prevents connection errors by properly terminating connections
+
+* Prevents inheriting a distributed table
+
+* Prevents users from dropping & truncating known shards
+
+* Pushes down `VALUES` clause as long as not in outer part of a `JOIN`
+
+* Reduces memory usage for multi-row inserts
+
+* Reduces memory usage while rebalancing shards
+
+* Removes length limits around partition names
+
+* Executor avoids opening extra connections
+
+* Fixes a bug that can cause a crash when DEBUG4 logging is enabled
+
+* Fixes data race in `get_rebalance_progress`
+
+* Fixes error message for local table joins
+
+* Fixes `FROM ONLY` queries on partitioned tables
+
+* Fixes issues caused by omitting public schema in queries
+
+* Fixes nested `SELECT` query with `UNION` bug
+
+* Fixes null relationName bug at parallel execution
+
+* Fixes possible segfaults when using Citus in the middle of an upgrade
+
+* Fixes problems with concurrent calls of `DropMarkedShards`
+
+* Fixes shared dependencies that are not resident in a database
+
+* Fixes stale hostnames bug in prepared statements after `master_update_node`
+
+* Fixes using 2PC when it might be necessary
+
+* Preserves access method of materialized views when undistributing
+  or altering distributed tables
+
 ### citus v8.3.3 (March 23, 2021) ###
 
 * Fixes a bug that leads to various issues when a connection is lost
