@@ -300,7 +300,8 @@ CitusBeginReadOnlyScan(CustomScanState *node, EState *estate, int eflags)
 		 * The plan will be cached across executions when originalDistributedPlan
 		 * represents a prepared statement.
 		 */
-		CacheLocalPlanForShardQuery(task, originalDistributedPlan);
+		CacheLocalPlanForShardQuery(task, originalDistributedPlan,
+									estate->es_param_list_info);
 	}
 }
 
@@ -399,7 +400,8 @@ CitusBeginModifyScan(CustomScanState *node, EState *estate, int eflags)
 		 * The plan will be cached across executions when originalDistributedPlan
 		 * represents a prepared statement.
 		 */
-		CacheLocalPlanForShardQuery(task, originalDistributedPlan);
+		CacheLocalPlanForShardQuery(task, originalDistributedPlan,
+									estate->es_param_list_info);
 	}
 }
 
