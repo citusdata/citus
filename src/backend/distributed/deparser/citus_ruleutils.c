@@ -515,9 +515,21 @@ EnsureSequenceTypeSupported(Oid relationId, AttrNumber attnum, Oid seqTypId)
 	/* retrieve the sequence id of the sequence found in nextval('seq') */
 	List *sequencesFromAttrDef = GetSequencesFromAttrDef(attrdefOid);
 
-	/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
+	if (list_length(sequencesFromAttrDef) == 0)
+	{
+		/*
+		 * We need this check because sometimes there are cases where the
+		 * dependency between the table and the sequence is not formed
+		 * One example is when the default is defined by
+		 * DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
+		 * In these cases, sequencesFromAttrDef with be empty.
+		 */
+		return;
+	}
+
 	if (list_length(sequencesFromAttrDef) > 1)
 	{
+		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
 		ereport(ERROR, (errmsg(
 							"More than one sequence in a column default"
 							" is not supported for distribution")));
