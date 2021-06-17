@@ -211,13 +211,13 @@ extern MemoryContext ColumnarWritePerTupleContext(ColumnarWriteState *state);
 /* Function declarations for reading from columnar table */
 extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 TupleDesc tupleDescriptor,
-											 List *projectedColumnList,
+											 Bitmapset *projectedColumnList,
 											 List *qualConditions);
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls, uint64 *rowNumber);
 extern void ColumnarRescan(ColumnarReadState *readState);
 extern bool ColumnarReadRowByRowNumber(Relation relation, uint64 rowNumber,
-									   List *neededColumnList, Datum *columnValues,
+									   Bitmapset *neededColumnList, Datum *columnValues,
 									   bool *columnNulls, Snapshot snapshot);
 extern void ColumnarEndRead(ColumnarReadState *state);
 extern int64 ColumnarReadChunkGroupsFiltered(ColumnarReadState *state);
@@ -225,7 +225,7 @@ extern int64 ColumnarReadChunkGroupsFiltered(ColumnarReadState *state);
 /* Function declarations for common functions */
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,
 										int16 procedureId);
-extern ChunkData * CreateEmptyChunkData(uint32 columnCount, bool *columnMask,
+extern ChunkData * CreateEmptyChunkData(uint32 columnCount, Bitmapset *columnMask,
 										uint32 chunkGroupRowCount);
 extern void FreeChunkData(ChunkData *chunkData);
 extern uint64 ColumnarTableRowCount(Relation relation);

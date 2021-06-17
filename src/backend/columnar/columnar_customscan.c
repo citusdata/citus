@@ -383,13 +383,6 @@ ColumnarAttrNeeded(ScanState *ss)
 	{
 		Var *var = lfirst(lc);
 
-		if (var->varattno < 0)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg(
-								"UPDATE and CTID scans not supported for ColumnarScan")));
-		}
-
 		if (var->varattno == 0)
 		{
 			elog(DEBUG1, "Need attribute: all");

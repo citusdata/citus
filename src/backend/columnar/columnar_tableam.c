@@ -105,7 +105,7 @@ static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   QueryCompletionCompat *completionTag);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
-static List * NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed);
+static void ErrorOnUnsupportedColumns(TupleDesc tupdesc, Bitmapset *attr_needed);
 static void LogRelationStats(Relation rel, int elevel);
 static void TruncateColumnar(Relation rel, int elevel);
 static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
@@ -225,8 +225,8 @@ static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
 						 List *scanQual)
 {
-	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
-	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
+	ErrorOnUnsupportedColumns(tupdesc, attr_needed);
+	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, attr_needed,
 													 scanQual);
 
 	return readState;
@@ -442,9 +442,9 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *scan,
 
 
 	TupleDesc relationTupleDesc = RelationGetDescr(scan->rel);
-	List *relationColumnList = NeededColumnsList(relationTupleDesc, attr_needed);
+	ErrorOnUnsupportedColumns(relationTupleDesc, attr_needed);
 	uint64 rowNumber = tid_to_row_number(*tid);
-	if (!ColumnarReadRowByRowNumber(scan->rel, rowNumber, relationColumnList,
+	if (!ColumnarReadRowByRowNumber(scan->rel, rowNumber, attr_needed,
 									slot->tts_values, slot->tts_isnull, snapshot))
 	{
 		return false;
@@ -734,9 +734,9 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	int natts = OldHeap->rd_att->natts;
 	Bitmapset *attr_needed = bms_add_range(NULL, 1 - FirstLowInvalidHeapAttributeNumber,
 										   natts - FirstLowInvalidHeapAttributeNumber);
-	List *projectedColumnList = NeededColumnsList(sourceDesc, attr_needed);
+	ErrorOnUnsupportedColumns(sourceDesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
-													 projectedColumnList,
+													 attr_needed,
 													 NULL);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
@@ -762,27 +762,26 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
  * NeededColumnsList returns a list of AttrNumber's for the columns that
  * are not dropped and specified by attr_needed.
  */
-static List *
-NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed)
+static void
+ErrorOnUnsupportedColumns(TupleDesc tupdesc, Bitmapset *attr_needed)
 {
-	List *columnList = NIL;
-
-	for (int i = 0; i < tupdesc->natts; i++)
+	int i = -1;
+	while ((i = bms_next_member(attr_needed, i)) >= 0)
 	{
-		if (tupdesc->attrs[i].attisdropped)
+		AttrNumber varattno = i + FirstLowInvalidHeapAttributeNumber;
+		if (varattno < 0)
 		{
-			continue;
-		}
+			if (varattno != SelfItemPointerAttributeNumber)
+			{
+				/* TODO: give error messages specific to the system columns we dont support*/
 
-		/* attr_needed is 0-indexed but columnList is 1-indexed */
-		AttrNumber varattno = tupdesc->attrs[i].attnum;
-		if (bms_is_member(varattno - FirstLowInvalidHeapAttributeNumber, attr_needed))
-		{
-			columnList = lappend_int(columnList, varattno);
+				/*
+				 * ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 *              errmsg("system column not supported by columnar")));
+				 */
+			}
 		}
 	}
-
-	return columnList;
 }
 
 

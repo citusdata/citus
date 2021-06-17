@@ -43,7 +43,7 @@ typedef struct ChunkGroupReadState
 	int64 currentRow;
 	int64 rowCount;
 	int columnCount;
-	List *projectedColumnList;  /* borrowed reference */
+	Bitmapset *projectedColumnList;  /* borrowed reference */
 	ChunkData *chunkGroupData;
 } ChunkGroupReadState;
 
@@ -58,7 +58,7 @@ typedef struct StripeReadState
 	int64 chunkGroupsFiltered;
 	MemoryContext stripeReadContext;
 	StripeBuffers *stripeBuffers;   /* allocated in stripeReadContext */
-	List *projectedColumnList;      /* borrowed reference */
+	Bitmapset *projectedColumnList;      /* borrowed reference */
 	ChunkGroupReadState *chunkGroupReadState; /* owned */
 } StripeReadState;
 
@@ -75,7 +75,7 @@ struct ColumnarReadState
 	 * Integer list of attribute numbers (1-indexed) for columns needed by the
 	 * query.
 	 */
-	List *projectedColumnList;
+	Bitmapset *projectedColumnList;
 
 	List *whereClauseList;
 	List *whereClauseVars;
@@ -97,7 +97,8 @@ static void ReadChunkGroupRowByRowOffset(ChunkGroupReadState *chunkGroupReadStat
 static bool StripeReadInProgress(ColumnarReadState *readState);
 static bool HasUnreadStripe(ColumnarReadState *readState);
 static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel,
-										 TupleDesc tupleDesc, List *projectedColumnList,
+										 TupleDesc tupleDesc,
+										 Bitmapset *projectedColumnList,
 										 List *whereClauseList, List *whereClauseVars,
 										 MemoryContext stripeReadContext);
 static void EndStripeRead(StripeReadState *stripeReadState);
@@ -107,7 +108,7 @@ static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnVal
 static ChunkGroupReadState * BeginChunkGroupRead(StripeBuffers *stripeBuffers, int
 												 chunkIndex,
 												 TupleDesc tupleDesc,
-												 List *projectedColumnList,
+												 Bitmapset *projectedColumnList,
 												 MemoryContext cxt);
 static void EndChunkGroupRead(ChunkGroupReadState *chunkGroupReadState);
 static bool ReadChunkGroupNextRow(ChunkGroupReadState *chunkGroupReadState,
@@ -116,7 +117,7 @@ static bool ReadChunkGroupNextRow(ChunkGroupReadState *chunkGroupReadState,
 static StripeBuffers * LoadFilteredStripeBuffers(Relation relation,
 												 StripeMetadata *stripeMetadata,
 												 TupleDesc tupleDescriptor,
-												 List *projectedColumnList,
+												 Bitmapset *projectedColumnList,
 												 List *whereClauseList,
 												 List *whereClauseVars,
 												 int64 *chunkGroupsFiltered);
@@ -133,10 +134,9 @@ static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
 static void UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue);
 static StripeSkipList * SelectedChunkSkipList(StripeSkipList *stripeSkipList,
-											  bool *projectedColumnMask,
+											  Bitmapset *projectedColumnMask,
 											  bool *selectedChunkMask);
 static uint32 StripeSkipListRowCount(StripeSkipList *stripeSkipList);
-static bool * ProjectedColumnMask(uint32 columnCount, List *projectedColumnList);
 static void DeserializeBoolArray(StringInfo boolArrayBuffer, bool *boolArray,
 								 uint32 boolArrayLength);
 static void DeserializeDatumArray(StringInfo datumBuffer, bool *existsArray,
@@ -145,7 +145,7 @@ static void DeserializeDatumArray(StringInfo datumBuffer, bool *existsArray,
 								  Datum *datumArray);
 static ChunkData * DeserializeChunkData(StripeBuffers *stripeBuffers, uint64 chunkIndex,
 										uint32 rowCount, TupleDesc tupleDescriptor,
-										List *projectedColumnList);
+										Bitmapset *projectedColumnList);
 static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 								Form_pg_attribute attributeForm);
 
@@ -157,7 +157,7 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
  */
 ColumnarReadState *
 ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
-				  List *projectedColumnList, List *whereClauseList)
+				  Bitmapset *projectedColumnList, List *whereClauseList)
 {
 	List *stripeList = StripesForRelfilenode(relation->rd_node);
 	StripeMetadata *stripeMetadata = NULL;
@@ -259,7 +259,7 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
  */
 bool
 ColumnarReadRowByRowNumber(Relation relation, uint64 rowNumber,
-						   List *neededColumnList, Datum *columnValues,
+						   Bitmapset *neededColumnList, Datum *columnValues,
 						   bool *columnNulls, Snapshot snapshot)
 {
 	StripeMetadata *stripeMetadata = FindStripeByRowNumber(relation, rowNumber, snapshot);
@@ -402,7 +402,8 @@ ColumnarEndRead(ColumnarReadState *readState)
  */
 static StripeReadState *
 BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDesc,
-				List *projectedColumnList, List *whereClauseList, List *whereClauseVars,
+				Bitmapset *projectedColumnList, List *whereClauseList,
+				List *whereClauseVars,
 				MemoryContext stripeReadContext)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(stripeReadContext);
@@ -519,7 +520,7 @@ ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
  */
 static ChunkGroupReadState *
 BeginChunkGroupRead(StripeBuffers *stripeBuffers, int chunkIndex, TupleDesc tupleDesc,
-					List *projectedColumnList, MemoryContext cxt)
+					Bitmapset *projectedColumnList, MemoryContext cxt)
 {
 	uint32 chunkGroupRowCount =
 		stripeBuffers->selectedChunkGroupRowCounts[chunkIndex];
@@ -577,14 +578,22 @@ ReadChunkGroupNextRow(ChunkGroupReadState *chunkGroupReadState, Datum *columnVal
 	 */
 	memset(columnNulls, true, sizeof(bool) * chunkGroupReadState->columnCount);
 
-	int attno;
-	foreach_int(attno, chunkGroupReadState->projectedColumnList)
+	int i = -1;
+	while ((i = bms_next_member(chunkGroupReadState->projectedColumnList, i)) >= 0)
 	{
+		int attno = i + FirstLowInvalidHeapAttributeNumber;
+
 		const ChunkData *chunkGroupData = chunkGroupReadState->chunkGroupData;
 		const int rowIndex = chunkGroupReadState->currentRow;
 
 		/* attno is 1-indexed; existsArray is 0-indexed */
 		const uint32 columnIndex = attno - 1;
+
+		/* skip system columns */
+		if (attno < 0)
+		{
+			continue;
+		}
 
 		if (chunkGroupData->existsArray[columnIndex][rowIndex])
 		{
@@ -615,9 +624,9 @@ ColumnarReadChunkGroupsFiltered(ColumnarReadState *state)
  * value arrays for requested columns in columnMask.
  */
 ChunkData *
-CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkGroupRowCount)
+CreateEmptyChunkData(uint32 columnCount, Bitmapset *columnMask, uint32 chunkGroupRowCount)
 {
-	uint32 columnIndex = 0;
+	int columnIndex = 0;
 
 	ChunkData *chunkData = palloc0(sizeof(ChunkData));
 	chunkData->existsArray = palloc0(columnCount * sizeof(bool *));
@@ -629,7 +638,8 @@ CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkGroupRowC
 	/* allocate chunk memory for deserialized data */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)
 	{
-		if (columnMask[columnIndex])
+		if (bms_is_member(columnIndex + 1 - FirstLowInvalidHeapAttributeNumber,
+						  columnMask))
 		{
 			chunkData->existsArray[columnIndex] = palloc0(chunkGroupRowCount *
 														  sizeof(bool));
@@ -703,14 +713,12 @@ ColumnarTableRowCount(Relation relation)
  */
 static StripeBuffers *
 LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
-						  TupleDesc tupleDescriptor, List *projectedColumnList,
+						  TupleDesc tupleDescriptor, Bitmapset *projectedColumnList,
 						  List *whereClauseList, List *whereClauseVars,
 						  int64 *chunkGroupsFiltered)
 {
 	uint32 columnIndex = 0;
 	uint32 columnCount = tupleDescriptor->natts;
-
-	bool *projectedColumnMask = ProjectedColumnMask(columnCount, projectedColumnList);
 
 	StripeSkipList *stripeSkipList = ReadStripeSkipList(relation->rd_node,
 														stripeMetadata->id,
@@ -721,15 +729,15 @@ LoadFilteredStripeBuffers(Relation relation, StripeMetadata *stripeMetadata,
 												whereClauseVars, chunkGroupsFiltered);
 
 	StripeSkipList *selectedChunkSkipList =
-		SelectedChunkSkipList(stripeSkipList, projectedColumnMask,
-							  selectedChunkMask);
+		SelectedChunkSkipList(stripeSkipList, projectedColumnList, selectedChunkMask);
 
 	/* load column data for projected columns */
 	ColumnBuffers **columnBuffersArray = palloc0(columnCount * sizeof(ColumnBuffers *));
 
 	for (columnIndex = 0; columnIndex < stripeMetadata->columnCount; columnIndex++)
 	{
-		if (projectedColumnMask[columnIndex])
+		if (bms_is_member(columnIndex + 1 - FirstLowInvalidHeapAttributeNumber,
+						  projectedColumnList))
 		{
 			ColumnChunkSkipNode *chunkSkipNode =
 				selectedChunkSkipList->chunkSkipNodeArray[columnIndex];
@@ -1083,7 +1091,7 @@ UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue)
  * non-selected chunks are removed from the given stripeSkipList.
  */
 static StripeSkipList *
-SelectedChunkSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
+SelectedChunkSkipList(StripeSkipList *stripeSkipList, Bitmapset *projectedColumnMask,
 					  bool *selectedChunkMask)
 {
 	uint32 selectedChunkCount = 0;
@@ -1109,7 +1117,8 @@ SelectedChunkSkipList(StripeSkipList *stripeSkipList, bool *projectedColumnMask,
 		selectedChunkIndex = 0;
 
 		/* first column's chunk skip node is always read */
-		if (!projectedColumnMask[columnIndex] && !firstColumn)
+		if (!bms_is_member(columnIndex + 1 - FirstLowInvalidHeapAttributeNumber,
+						   projectedColumnMask) && !firstColumn)
 		{
 			selectedChunkSkipNodeArray[columnIndex] = NULL;
 			continue;
@@ -1171,27 +1180,6 @@ StripeSkipListRowCount(StripeSkipList *stripeSkipList)
 	}
 
 	return stripeSkipListRowCount;
-}
-
-
-/*
- * ProjectedColumnMask returns a boolean array in which the projected columns
- * from the projected column list are marked as true.
- */
-static bool *
-ProjectedColumnMask(uint32 columnCount, List *projectedColumnList)
-{
-	bool *projectedColumnMask = palloc0(columnCount * sizeof(bool));
-	int attno;
-
-	foreach_int(attno, projectedColumnList)
-	{
-		/* attno is 1-indexed; projectedColumnMask is 0-indexed */
-		int columnIndex = attno - 1;
-		projectedColumnMask[columnIndex] = true;
-	}
-
-	return projectedColumnMask;
 }
 
 
@@ -1279,11 +1267,11 @@ DeserializeDatumArray(StringInfo datumBuffer, bool *existsArray, uint32 datumCou
 static ChunkData *
 DeserializeChunkData(StripeBuffers *stripeBuffers, uint64 chunkIndex,
 					 uint32 rowCount, TupleDesc tupleDescriptor,
-					 List *projectedColumnList)
+					 Bitmapset *projectedColumnList)
 {
 	int columnIndex = 0;
-	bool *columnMask = ProjectedColumnMask(tupleDescriptor->natts, projectedColumnList);
-	ChunkData *chunkData = CreateEmptyChunkData(tupleDescriptor->natts, columnMask,
+	ChunkData *chunkData = CreateEmptyChunkData(tupleDescriptor->natts,
+												projectedColumnList,
 												rowCount);
 
 	for (columnIndex = 0; columnIndex < stripeBuffers->columnCount; columnIndex++)
@@ -1292,7 +1280,9 @@ DeserializeChunkData(StripeBuffers *stripeBuffers, uint64 chunkIndex,
 		ColumnBuffers *columnBuffers = stripeBuffers->columnBuffersArray[columnIndex];
 		bool columnAdded = false;
 
-		if (columnBuffers == NULL && columnMask[columnIndex])
+		if (columnBuffers == NULL &&
+			bms_is_member(columnIndex + 1 - FirstLowInvalidHeapAttributeNumber,
+						  projectedColumnList))
 		{
 			columnAdded = true;
 		}

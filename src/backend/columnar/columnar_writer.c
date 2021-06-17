@@ -117,8 +117,9 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 															 "Stripe Write Memory Context",
 															 ALLOCSET_DEFAULT_SIZES);
 
-	bool *columnMaskArray = palloc(columnCount * sizeof(bool));
-	memset(columnMaskArray, true, columnCount);
+	Bitmapset *columnMaskArray = NULL;
+	bms_add_range(columnMaskArray, 1 - FirstLowInvalidHeapAttributeNumber,
+				  columnCount - FirstLowInvalidHeapAttributeNumber);
 
 	ChunkData *chunkData = CreateEmptyChunkData(columnCount, columnMaskArray,
 												options.chunkRowCount);
