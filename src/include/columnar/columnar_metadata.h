@@ -25,8 +25,10 @@ typedef struct StripeMetadata
 	uint32 chunkGroupRowCount;
 	uint64 rowCount;
 	uint64 id;
+	uint64 firstRowNumber;
 } StripeMetadata;
 
 extern List * StripesForRelfilenode(RelFileNode relfilenode);
+extern void ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade);
 
 #endif /* COLUMNAR_METADATA_H */

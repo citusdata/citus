@@ -595,9 +595,11 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.2-1
 ALTER EXTENSION citus UPDATE TO '10.2-1';
 SELECT * FROM print_extension_changes();
- previous_object | current_object
+ previous_object |                          current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function citus_internal.downgrade_columnar_storage(regclass) void
+                 | function citus_internal.upgrade_columnar_storage(regclass) void
+(2 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version

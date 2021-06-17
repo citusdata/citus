@@ -45,6 +45,14 @@ select count(*) from test_insert_command;
      3
 (1 row)
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_insert_command');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  4 |              450001 |           32686
+(1 row)
+
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
@@ -141,6 +149,14 @@ FROM test_toast_columnar;
            5004 |           5004 |           5004 |           5004
 (1 row)
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_toast_columnar');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  2 |              150001 |           16428
+(1 row)
+
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
@@ -173,6 +189,14 @@ INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('zero_col');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+---------------------------------------------------------------------
+             2 |             0 |                  6 |              750001 |           16336
+(1 row)
+
 SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b
 WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;

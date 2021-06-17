@@ -17,6 +17,10 @@ INSERT INTO test_alter_table SELECT * FROM sample_data;
 -- drop a column
 ALTER TABLE test_alter_table DROP COLUMN a;
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_alter_table');
+
 -- test analyze
 ANALYZE test_alter_table;
 
@@ -36,12 +40,20 @@ SELECT * FROM test_alter_table;
 INSERT INTO test_alter_table (SELECT 3, 5, 8);
 SELECT * FROM test_alter_table;
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_alter_table');
+
 
 -- add a fixed-length column with default value
 ALTER TABLE test_alter_table ADD COLUMN e int default 3;
 SELECT * from test_alter_table;
 INSERT INTO test_alter_table (SELECT 1, 2, 4, 8);
 SELECT * from test_alter_table;
+
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  from columnar_test_helpers.columnar_storage_info('test_alter_table');
 
 
 -- add a variable-length column with default value
@@ -203,21 +215,25 @@ ALTER TABLE products DROP CONSTRAINT dummy_constraint;
 INSERT INTO products VALUES (3, 'pen', 2);
 SELECT * FROM products ORDER BY 1;
 
--- Add a UNIQUE constraint (should fail)
-CREATE TABLE products_fail (
+-- Add a UNIQUE constraint
+CREATE TABLE products_unique (
     product_no integer UNIQUE,
     name text,
     price numeric
 ) USING columnar;
 ALTER TABLE products ADD COLUMN store_id text UNIQUE;
 
--- Add a PRIMARY KEY constraint (should fail)
-CREATE TABLE products_fail (
+-- Add a PRIMARY KEY constraint
+CREATE TABLE products_primary (
     product_no integer PRIMARY KEY,
     name text,
     price numeric
 ) USING columnar;
-ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
+
+BEGIN;
+  ALTER TABLE products DROP COLUMN store_id;
+  ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
+ROLLBACK;
 
 -- Add an EXCLUSION constraint (should fail)
 CREATE TABLE circles (
