@@ -122,6 +122,9 @@ bool CheckAvailableSpaceBeforeMove = true;
 Datum
 citus_copy_shard_placement(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	int64 shardId = PG_GETARG_INT64(0);
 	text *sourceNodeNameText = PG_GETARG_TEXT_P(1);
 	int32 sourceNodePort = PG_GETARG_INT32(2);
@@ -132,9 +135,6 @@ citus_copy_shard_placement(PG_FUNCTION_ARGS)
 
 	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
 	char *targetNodeName = text_to_cstring(targetNodeNameText);
-
-	EnsureCoordinator();
-	CheckCitusVersion(ERROR);
 
 	char shardReplicationMode = LookupShardTransferMode(shardReplicationModeOid);
 	if (shardReplicationMode == TRANSFER_MODE_FORCE_LOGICAL)
@@ -283,6 +283,9 @@ CheckSpaceConstraints(MultiConnection *connection, uint64 colocationSizeInBytes)
 Datum
 citus_move_shard_placement(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	int64 shardId = PG_GETARG_INT64(0);
 	char *sourceNodeName = text_to_cstring(PG_GETARG_TEXT_P(1));
 	int32 sourceNodePort = PG_GETARG_INT32(2);
@@ -293,10 +296,6 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 
 	ListCell *colocatedTableCell = NULL;
 	ListCell *colocatedShardCell = NULL;
-
-
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
 
 	Oid relationId = RelationIdForShard(shardId);
 	ErrorIfMoveCitusLocalTable(relationId);
@@ -1064,12 +1063,29 @@ EnsureShardCanBeCopied(int64 shardId, const char *sourceNodeName, int32 sourceNo
 	{
 		if (targetPlacement->shardState == SHARD_STATE_TO_DELETE)
 		{
-			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-							errmsg(
-								"shard " INT64_FORMAT " already exists in the target node",
-								shardId),
-							errdetail(
-								"The existing shard is marked for deletion, but could not be deleted because there are still active queries on it")));
+			/*
+			 * Trigger deletion of orphaned shards and hope that this removes
+			 * the shard.
+			 */
+			DropOrphanedShardsInSeparateTransaction();
+			shardPlacementList = ShardPlacementList(shardId);
+			targetPlacement = SearchShardPlacementInList(shardPlacementList,
+														 targetNodeName,
+														 targetNodePort);
+
+			/*
+			 * If it still doesn't remove the shard, then we error.
+			 */
+			if (targetPlacement != NULL)
+			{
+				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+								errmsg(
+									"shard " INT64_FORMAT
+									" still exists on the target node as an orphaned shard",
+									shardId),
+								errdetail(
+									"The existing shard is orphaned, but could not be deleted because there are still active queries on it")));
+			}
 		}
 		else
 		{

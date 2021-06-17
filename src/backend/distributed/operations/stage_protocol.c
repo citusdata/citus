@@ -94,6 +94,8 @@ PG_FUNCTION_INFO_V1(citus_update_table_statistics);
 Datum
 master_create_empty_shard(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *relationNameText = PG_GETARG_TEXT_P(0);
 	char *relationName = text_to_cstring(relationNameText);
 	uint32 attemptableNodeCount = 0;
@@ -107,8 +109,6 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 
 	Oid relationId = ResolveRelationId(relationNameText, false);
 	char relationKind = get_rel_relkind(relationId);
-
-	CheckCitusVersion(ERROR);
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
@@ -239,6 +239,8 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 Datum
 master_append_table_to_shard(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 shardId = PG_GETARG_INT64(0);
 	text *sourceTableNameText = PG_GETARG_TEXT_P(1);
 	text *sourceNodeNameText = PG_GETARG_TEXT_P(2);
@@ -248,8 +250,6 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
 
 	float4 shardFillLevel = 0.0;
-
-	CheckCitusVersion(ERROR);
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid relationId = shardInterval->relationId;
@@ -359,9 +359,9 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 Datum
 citus_update_shard_statistics(PG_FUNCTION_ARGS)
 {
-	int64 shardId = PG_GETARG_INT64(0);
-
 	CheckCitusVersion(ERROR);
+
+	int64 shardId = PG_GETARG_INT64(0);
 
 	uint64 shardSize = UpdateShardStatistics(shardId);
 
@@ -376,9 +376,9 @@ citus_update_shard_statistics(PG_FUNCTION_ARGS)
 Datum
 citus_update_table_statistics(PG_FUNCTION_ARGS)
 {
-	Oid distributedTableId = PG_GETARG_OID(0);
-
 	CheckCitusVersion(ERROR);
+
+	Oid distributedTableId = PG_GETARG_OID(0);
 
 	UpdateTableStatistics(distributedTableId);
 

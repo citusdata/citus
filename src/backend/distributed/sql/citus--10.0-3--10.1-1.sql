@@ -43,3 +43,9 @@ SET repmodel = 's'
 WHERE repmodel = 'c'
     AND partmethod = 'h'
     AND logicalrelid NOT IN (SELECT * FROM replicated_relations);
+#include "udfs/citus_shards/10.1-1.sql"
+
+DROP TRIGGER pg_dist_rebalance_strategy_enterprise_check_trigger ON pg_catalog.pg_dist_rebalance_strategy;
+DROP FUNCTION citus_internal.pg_dist_rebalance_strategy_enterprise_check();
+
+#include "udfs/citus_cleanup_orphaned_shards/10.1-1.sql"

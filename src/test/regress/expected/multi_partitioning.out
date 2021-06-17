@@ -1947,6 +1947,7 @@ ORDER BY
  "schema-test_2009" |     4
 (2 rows)
 
+SET citus.next_shard_id TO 1660300;
 -- test we don't deadlock when attaching and detaching partitions from partitioned
 -- tables with foreign keys
 CREATE TABLE reference_table(id int PRIMARY KEY);
@@ -2001,8 +2002,8 @@ INSERT INTO partitioning_test_2010 VALUES (1, '2010-02-01');
 -- This should fail because of foreign key constraint violation
 ALTER TABLE partitioning_test ATTACH PARTITION partitioning_test_2010
       FOR VALUES FROM ('2010-01-01') TO ('2011-01-01');
-ERROR:  insert or update on table "partitioning_test_2010_1660191" violates foreign key constraint "partitioning_reference_fkey_1660179"
-DETAIL:  Key (id)=(X) is not present in table "reference_table_1660177".
+ERROR:  insert or update on table "partitioning_test_2010_1660314" violates foreign key constraint "partitioning_reference_fkey_1660302"
+DETAIL:  Key (id)=(X) is not present in table "reference_table_1660300".
 CONTEXT:  while executing command on localhost:xxxxx
 -- Truncate, so attaching again won't fail
 TRUNCATE partitioning_test_2010;
@@ -2083,9 +2084,28 @@ ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2009;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2010;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2011;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2013;
-DROP TABLE partitioning_test, partitioning_test_2008, partitioning_test_2009,
-           partitioning_test_2010, partitioning_test_2011, partitioning_test_2013,
-           reference_table, reference_table_2;
+DROP TABLE partitioning_test_2008, partitioning_test_2009, partitioning_test_2010,
+           partitioning_test_2011, partitioning_test_2013, reference_table_2;
+-- verify this doesn't crash and gives a debug message for dropped table
+SET client_min_messages TO DEBUG1;
+DROP TABLE partitioning_test, reference_table;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  Table "<dropped>" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed tables due to foreign keys. Any parallel modification to those hash distributed tables in the same transaction can only be executed in sequential query execution mode
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line 16 at PERFORM
+DEBUG:  drop cascades to 2 other objects
+DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660302 on table partitioning_schema.partitioning_test_1660302
+drop cascades to constraint partitioning_reference_fkey_1660304 on table partitioning_schema.partitioning_test_1660304
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line 16 at PERFORM
+DEBUG:  drop cascades to 2 other objects
+DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660303 on table partitioning_schema.partitioning_test_1660303
+drop cascades to constraint partitioning_reference_fkey_1660305 on table partitioning_schema.partitioning_test_1660305
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line 16 at PERFORM
+RESET client_min_messages;
 RESET SEARCH_PATH;
 -- not timestamp partitioned
 CREATE TABLE not_time_partitioned (x int, y int) PARTITION BY RANGE (x);

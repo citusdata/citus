@@ -49,11 +49,11 @@ PG_FUNCTION_INFO_V1(citus_create_restore_point);
 Datum
 citus_create_restore_point(PG_FUNCTION_ARGS)
 {
-	text *restoreNameText = PG_GETARG_TEXT_P(0);
-
 	CheckCitusVersion(ERROR);
 	EnsureSuperUser();
 	EnsureCoordinator();
+
+	text *restoreNameText = PG_GETARG_TEXT_P(0);
 
 	if (RecoveryInProgress())
 	{

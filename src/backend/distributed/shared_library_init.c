@@ -580,6 +580,17 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.check_available_space_before_move",
+		gettext_noop("When enabled will check free disk space before a shard move"),
+		gettext_noop(
+			"Free disk space will be checked when this setting is enabled before each shard move."),
+		&CheckAvailableSpaceBeforeMove,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomStringVariable(
 		"citus.cluster_name",
 		gettext_noop("Which cluster this node is a part of"),
@@ -634,7 +645,9 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.defer_drop_after_shard_move",
-		gettext_noop("When enabled a shard move will mark old shards for deletion"),
+		gettext_noop("When enabled a shard move will mark the original shards "
+					 "for deletion after a successful move, instead of deleting "
+					 "them right away."),
 		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
 					 "long running transactions on a the shard during the drop phase of "
 					 "the shard move. This causes some moves to be rolled back after "
@@ -662,6 +675,32 @@ RegisterCitusConfigVariables(void)
 		15000, -1, 7 * 24 * 3600 * 1000,
 		PGC_SIGHUP,
 		GUC_UNIT_MS,
+		NULL, NULL, NULL);
+
+	DefineCustomRealVariable(
+		"citus.desired_percent_disk_available_after_move",
+		gettext_noop(
+			"Sets how many percentage of free disk space should be after a shard move"),
+		gettext_noop(
+			"This setting controls how much free space should be available after a shard move."
+			"If the free disk space will be lower than this parameter, then shard move will result in"
+			"an error."),
+		&DesiredPercentFreeAfterMove,
+		10.0, 0.0, 100.0,
+		PGC_SIGHUP,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_manual_changes_to_shards",
+		gettext_noop("Enables dropping and truncating known shards."),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "dropping and truncating shards on the coordinator "
+					 "(or the workers with metadata)"),
+		&EnableManualChangesToShards,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
@@ -956,31 +995,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.check_available_space_before_move",
-		gettext_noop("When enabled will check free disk space before a shard move"),
-		gettext_noop(
-			"Free disk space will be checked when this setting is enabled before each shard move."),
-		&CheckAvailableSpaceBeforeMove,
-		true,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomRealVariable(
-		"citus.desired_percent_disk_available_after_move",
-		gettext_noop(
-			"Sets how many percentage of free disk space should be after a shard move"),
-		gettext_noop(
-			"This setting controls how much free space should be available after a shard move."
-			"If the free disk space will be lower than this parameter, then shard move will result in"
-			"an error."),
-		&DesiredPercentFreeAfterMove,
-		10.0, 0.0, 100.0,
-		PGC_SIGHUP,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.enable_cost_based_connection_establishment",
 		gettext_noop("When enabled the connection establishment times "
 					 "and task execution times into account for deciding "
@@ -1077,6 +1091,19 @@ RegisterCitusConfigVariables(void)
 		512 * 1024, 1, INT_MAX,
 		PGC_USERSET,
 		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.local_hostname",
+		gettext_noop("Sets the hostname when connecting back to itself."),
+		gettext_noop("For some operations nodes, mostly the coordinator, connect back to "
+					 "itself. When configuring SSL certificates it sometimes is required "
+					 "to use a specific hostname to match the CN of the certificate when "
+					 "verify-full is used."),
+		&LocalHostName,
+		"localhost",
+		PGC_SUSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1715,19 +1742,6 @@ RegisterCitusConfigVariables(void)
 		NOTICE,
 		log_level_options,
 		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomStringVariable(
-		"citus.local_hostname",
-		gettext_noop("Sets the hostname when connecting back to itself."),
-		gettext_noop("For some operations nodes, mostly the coordinator, connect back to "
-					 "itself. When configuring SSL certificates it sometimes is required "
-					 "to use a specific hostname to match the CN of the certificate when "
-					 "verify-full is used."),
-		&LocalHostName,
-		"localhost",
-		PGC_SUSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 

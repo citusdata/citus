@@ -11,13 +11,13 @@ SELECT alter_columnar_table_set('t_compressed', compression => 'pglz');
 
 (1 row)
 
-SELECT alter_columnar_table_set('t_compressed', stripe_row_limit => 100);
+SELECT alter_columnar_table_set('t_compressed', stripe_row_limit => 2000);
  alter_columnar_table_set
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT alter_columnar_table_set('t_compressed', chunk_group_row_limit => 100);
+SELECT alter_columnar_table_set('t_compressed', chunk_group_row_limit => 1000);
  alter_columnar_table_set
 ---------------------------------------------------------------------
 
@@ -26,7 +26,7 @@ SELECT alter_columnar_table_set('t_compressed', chunk_group_row_limit => 100);
 SELECT * FROM columnar.options WHERE regclass = 't_compressed'::regclass;
    regclass   | chunk_group_row_limit | stripe_row_limit | compression_level | compression
 ---------------------------------------------------------------------
- t_compressed |             100 |              100 |                 3 | pglz
+ t_compressed |                  1000 |             2000 |                 3 | pglz
 (1 row)
 
 -- select

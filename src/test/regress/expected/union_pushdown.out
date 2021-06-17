@@ -859,10 +859,123 @@ $$);
  t
 (1 row)
 
+-- #4781
+CREATE TABLE test_a (id int, k int);
+CREATE TABLE test_b (id int, k int);
+SELECT create_distributed_table('test_a','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('test_b','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE VIEW v AS SELECT * from test_a where k>1 UNION ALL SELECT * from test_b where k<1;
+-- the followings can be pushed down since dist_key is used in the aggregation
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(id) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(id) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(id) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(id) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- cannot pushed down because postgres optimizes fields, needs to be fixed with #4781
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- order by prevents postgres from optimizing fields so can be pushed down
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT id, COUNT(*) FROM v GROUP BY id ORDER BY id;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- order by is not on dist_key so can't pushed down, needs to be fixed with #4781
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT k, COUNT(*) FROM v GROUP BY k ORDER BY k;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ t
+(1 row)
+
 RESET client_min_messages;
 DROP SCHEMA union_pushdown CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 7 other objects
 DETAIL:  drop cascades to table users_table_part
 drop cascades to table events_table_part
 drop cascades to table events_table_ref
 drop cascades to table events_table_local
+drop cascades to table test_a
+drop cascades to table test_b
+drop cascades to view v

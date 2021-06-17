@@ -1842,6 +1842,33 @@ NOTICE:  executing the command locally: SELECT count(DISTINCT (key)::text) AS co
   1001 |     0
 (1 row)
 
+-- test disabling drop and truncate for known shards
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE test_disabling_drop_and_truncate (a int);
+SELECT create_distributed_table('test_disabling_drop_and_truncate', 'a');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102040, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) ');SELECT worker_apply_shard_ddl_command (102040, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102041, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) ');SELECT worker_apply_shard_ddl_command (102041, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102042, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) ');SELECT worker_apply_shard_ddl_command (102042, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102043, 'single_node', 'CREATE TABLE single_node.test_disabling_drop_and_truncate (a integer) ');SELECT worker_apply_shard_ddl_command (102043, 'single_node', 'ALTER TABLE single_node.test_disabling_drop_and_truncate OWNER TO postgres')
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.enable_manual_changes_to_shards TO off;
+-- these should error out
+DROP TABLE test_disabling_drop_and_truncate_102040;
+ERROR:  cannot modify "test_disabling_drop_and_truncate_102040" because it is a shard of a distributed table
+HINT:  Use the distributed table or set citus.enable_manual_changes_to_shards to on to modify shards directly
+TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
+ERROR:  cannot modify "test_disabling_drop_and_truncate_102040" because it is a shard of a distributed table
+HINT:  Use the distributed table or set citus.enable_manual_changes_to_shards to on to modify shards directly
+RESET citus.enable_manual_changes_to_shards ;
+-- these should work as expected
+TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
+DROP TABLE test_disabling_drop_and_truncate_102040;
+RESET citus.shard_replication_factor;
+DROP TABLE test_disabling_drop_and_truncate;
 -- lets flush the copy often to make sure everyhing is fine
 SET citus.local_copy_flush_threshold TO 1;
 TRUNCATE another_schema_table;

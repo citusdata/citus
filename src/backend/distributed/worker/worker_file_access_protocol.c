@@ -35,12 +35,12 @@ PG_FUNCTION_INFO_V1(worker_find_block_local_path);
 Datum
 worker_foreign_file_path(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *foreignTableName = PG_GETARG_TEXT_P(0);
 	text *foreignFilePath = NULL;
 	Oid relationId = ResolveRelationId(foreignTableName, false);
 	ForeignTable *foreignTable = GetForeignTable(relationId);
-
-	CheckCitusVersion(ERROR);
 
 	DefElem *option = NULL;
 	foreach_ptr(option, foreignTable->options)
@@ -75,14 +75,14 @@ worker_foreign_file_path(PG_FUNCTION_ARGS)
 Datum
 worker_find_block_local_path(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	int64 blockId = PG_GETARG_INT64(0);
 	ArrayType *dataDirectoryObject = PG_GETARG_ARRAYTYPE_P(1);
 
 	/* keep the compiler silent */
 	(void) blockId;
 	(void) dataDirectoryObject;
-
-	CheckCitusVersion(ERROR);
 
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("called function is currently unsupported")));

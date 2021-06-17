@@ -103,6 +103,8 @@ PG_FUNCTION_INFO_V1(master_stage_shard_placement_row);
 Datum
 master_get_table_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *relationName = PG_GETARG_TEXT_P(0);
 	Oid relationId = ResolveRelationId(relationName, false);
 
@@ -111,8 +113,6 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 	TupleDesc metadataDescriptor = NULL;
 	Datum values[TABLE_METADATA_FIELDS];
 	bool isNulls[TABLE_METADATA_FIELDS];
-
-	CheckCitusVersion(ERROR);
 
 	/* find partition tuple for partitioned relation */
 	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
@@ -201,10 +201,10 @@ CStoreTable(Oid relationId)
 Datum
 master_get_table_ddl_events(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	FuncCallContext *functionContext = NULL;
 	ListCell *tableDDLEventCell = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * On the very first call to this function, we first use the given relation
@@ -276,8 +276,8 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 Datum
 master_get_new_shardid(PG_FUNCTION_ARGS)
 {
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
 
 	uint64 shardId = GetNextShardId();
 	Datum shardIdDatum = Int64GetDatum(shardId);
@@ -346,8 +346,8 @@ GetNextShardId()
 Datum
 master_get_new_placementid(PG_FUNCTION_ARGS)
 {
-	EnsureCoordinator();
 	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
 
 	uint64 placementId = GetNextPlacementId();
 	Datum placementIdDatum = Int64GetDatum(placementId);
@@ -453,10 +453,10 @@ master_stage_shard_placement_row(PG_FUNCTION_ARGS)
 Datum
 citus_get_active_worker_nodes(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	FuncCallContext *functionContext = NULL;
 	uint32 workerNodeCount = 0;
-
-	CheckCitusVersion(ERROR);
 
 	if (SRF_IS_FIRSTCALL())
 	{
@@ -799,28 +799,32 @@ GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLE
 									   int indexFlags)
 {
 	Oid indexId = indexForm->indexrelid;
-	char *statementDef = NULL;
-
 	bool indexImpliedByConstraint = IndexImpliedByAConstraint(indexForm);
 
 	/* get the corresponding constraint or index statement */
 	if (indexImpliedByConstraint)
 	{
-		Oid constraintId = get_index_constraint(indexId);
-		Assert(constraintId != InvalidOid);
+		if (indexFlags & INCLUDE_CREATE_CONSTRAINT_STATEMENTS)
+		{
+			Oid constraintId = get_index_constraint(indexId);
+			Assert(constraintId != InvalidOid);
 
-		statementDef = pg_get_constraintdef_command(constraintId);
+			/* include constraints backed by indexes only when explicitly asked */
+			char *statementDef = pg_get_constraintdef_command(constraintId);
+			*indexDDLEventList =
+				lappend(*indexDDLEventList,
+						makeTableDDLCommandString(statementDef));
+		}
 	}
-	else
+	else if (indexFlags & INCLUDE_CREATE_INDEX_STATEMENTS)
 	{
-		statementDef = pg_get_indexdef_string(indexId);
-	}
-
-	/* append found constraint or index definition to the list */
-	if (indexFlags & INCLUDE_CREATE_INDEX_STATEMENTS)
-	{
-		*indexDDLEventList = lappend(*indexDDLEventList, makeTableDDLCommandString(
-										 statementDef));
+		/*
+		 * Include indexes that are not backing constraints only when
+		 * explicitly asked.
+		 */
+		char *statementDef = pg_get_indexdef_string(indexId);
+		*indexDDLEventList = lappend(*indexDDLEventList,
+									 makeTableDDLCommandString(statementDef));
 	}
 
 	/* if table is clustered on this index, append definition to the list */

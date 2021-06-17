@@ -35,9 +35,9 @@ PG_FUNCTION_INFO_V1(time_partition_range);
 Datum
 time_partition_range(PG_FUNCTION_ARGS)
 {
-	Oid relationId = PG_GETARG_OID(0);
-
 	CheckCitusVersion(ERROR);
+
+	Oid relationId = PG_GETARG_OID(0);
 
 	/* create tuple descriptor for return value */
 	TupleDesc metadataDescriptor = NULL;

@@ -1729,7 +1729,7 @@ FROM
 GROUP BY
   store_id, first_name, last_name;
 
--- Volatile function in default should be disallowed
+-- Volatile function in default should be disallowed - SERIAL pseudo-types
 CREATE TABLE table_with_serial (
   store_id int,
   s bigserial
@@ -1737,6 +1737,22 @@ CREATE TABLE table_with_serial (
 SELECT create_distributed_table('table_with_serial', 'store_id');
 
 INSERT INTO table_with_serial (store_id)
+SELECT
+  store_id
+FROM
+  table_with_defaults
+GROUP BY
+  store_id;
+
+-- Volatile function in default should be disallowed - user-defined sequence
+CREATE SEQUENCE user_defined_sequence;
+CREATE TABLE table_with_user_sequence (
+  store_id int,
+  s bigint default nextval('user_defined_sequence')
+);
+SELECT create_distributed_table('table_with_user_sequence', 'store_id');
+
+INSERT INTO table_with_user_sequence (store_id)
 SELECT
   store_id
 FROM
@@ -2018,6 +2034,48 @@ SELECT * FROM dist_table_with_sequence ORDER BY user_id, value_1;
 
 DROP TABLE dist_table_with_sequence;
 
+-- Select into distributed table with a user-defined sequence
+CREATE SEQUENCE seq1;
+CREATE SEQUENCE seq2;
+CREATE TABLE dist_table_with_user_sequence (user_id int default nextval('seq1'), value_1 bigint default nextval('seq2'));
+SELECT create_distributed_table('dist_table_with_user_sequence', 'user_id');
+
+-- from local query
+INSERT INTO dist_table_with_user_sequence (value_1)
+SELECT s FROM generate_series(1,5) s;
+
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+
+-- from a distributed query
+INSERT INTO dist_table_with_user_sequence (value_1)
+SELECT value_1 FROM dist_table_with_user_sequence ORDER BY value_1;
+
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+
+TRUNCATE dist_table_with_user_sequence;
+
+INSERT INTO dist_table_with_user_sequence (user_id)
+SELECT user_id FROM raw_events_second ORDER BY user_id;
+
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+
+WITH top10 AS (
+  SELECT user_id FROM raw_events_second WHERE value_1 IS NOT NULL ORDER BY value_1 LIMIT 10
+)
+INSERT INTO dist_table_with_user_sequence (value_1)
+SELECT * FROM top10;
+
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+
+-- router queries become logical planner queries when there is a nextval call
+INSERT INTO dist_table_with_user_sequence (user_id)
+SELECT user_id FROM dist_table_with_user_sequence WHERE user_id = 1;
+
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+
+DROP TABLE dist_table_with_user_sequence;
+DROP SEQUENCE seq1, seq2;
+
 -- Select from distributed table into reference table
 CREATE TABLE ref_table (user_id serial, value_1 int);
 SELECT create_reference_table('ref_table');
@@ -2036,6 +2094,27 @@ INSERT INTO ref_table SELECT * FROM ref_table;
 SELECT * FROM ref_table ORDER BY user_id, value_1;
 
 DROP TABLE ref_table;
+
+-- Select from distributed table into reference table with user-defined sequence
+CREATE SEQUENCE seq1;
+CREATE TABLE ref_table_with_user_sequence (user_id int default nextval('seq1'), value_1 int);
+SELECT create_reference_table('ref_table_with_user_sequence');
+
+INSERT INTO ref_table_with_user_sequence
+SELECT user_id, value_1 FROM raw_events_second;
+
+SELECT * FROM ref_table_with_user_sequence ORDER BY user_id, value_1;
+
+INSERT INTO ref_table_with_user_sequence (value_1)
+SELECT value_1 FROM raw_events_second ORDER BY value_1;
+
+SELECT * FROM ref_table_with_user_sequence ORDER BY user_id, value_1;
+
+INSERT INTO ref_table_with_user_sequence SELECT * FROM ref_table_with_user_sequence;
+SELECT * FROM ref_table_with_user_sequence ORDER BY user_id, value_1;
+
+DROP TABLE ref_table_with_user_sequence;
+DROP SEQUENCE seq1;
 
 -- Select from reference table into reference table
 CREATE TABLE ref1 (d timestamptz);
@@ -2269,6 +2348,8 @@ DROP TABLE reference_table;
 DROP TABLE agg_events;
 DROP TABLE table_with_defaults;
 DROP TABLE table_with_serial;
+DROP TABLE table_with_user_sequence;
+DROP SEQUENCE user_defined_sequence;
 DROP TABLE text_table;
 DROP TABLE char_table;
 DROP TABLE table_with_starts_with_defaults;

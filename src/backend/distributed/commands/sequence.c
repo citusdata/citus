@@ -14,14 +14,20 @@
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
+#include "commands/extension.h"
 #include "distributed/commands.h"
 #include "distributed/commands/sequence.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/deparser.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "nodes/parsenodes.h"
 
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
+static bool ShouldPropagateAlterSequence(const ObjectAddress *address);
 
 
 /*
@@ -91,15 +97,6 @@ ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt)
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot alter OWNED BY option of a sequence "
 								   "already owned by a distributed table")));
-		}
-		else if (!hasDistributedOwner && IsCitusTable(newOwnedByTableId))
-		{
-			/* and don't let local sequences get a distributed OWNED BY */
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot associate an existing sequence with a "
-								   "distributed table"),
-							errhint("Use a sequence in a distributed table by specifying "
-									"a serial column type before creating any shards.")));
 		}
 	}
 }
@@ -208,4 +205,306 @@ ExtractDefaultColumnsAndOwnedSequences(Oid relationId, List **columnNameList,
 	}
 
 	relation_close(relation, NoLock);
+}
+
+
+/*
+ * PreprocessDropSequenceStmt gets called during the planning phase of a DROP SEQUENCE statement
+ * and returns a list of DDLJob's that will drop any distributed sequences from the
+ * workers.
+ *
+ * The DropStmt could have multiple objects to drop, the list of objects will be filtered
+ * to only keep the distributed sequences for deletion on the workers. Non-distributed
+ * sequences will still be dropped locally but not on the workers.
+ */
+List *
+PreprocessDropSequenceStmt(Node *node, const char *queryString,
+						   ProcessUtilityContext processUtilityContext)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+	List *deletingSequencesList = stmt->objects;
+	List *distributedSequencesList = NIL;
+	List *distributedSequenceAddresses = NIL;
+
+	Assert(stmt->removeType == OBJECT_SEQUENCE);
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, sequences cascading
+		 * from an extension should therefor not be propagated here.
+		 */
+		return NIL;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return NIL;
+	}
+
+	/*
+	 * Our statements need to be fully qualified so we can drop them from the right schema
+	 * on the workers
+	 */
+	QualifyTreeNode((Node *) stmt);
+
+	/*
+	 * iterate over all sequences to be dropped and filter to keep only distributed
+	 * sequences.
+	 */
+	List *objectNameList = NULL;
+	foreach_ptr(objectNameList, deletingSequencesList)
+	{
+		RangeVar *seq = makeRangeVarFromNameList(objectNameList);
+
+		Oid seqOid = RangeVarGetRelid(seq, NoLock, stmt->missing_ok);
+
+		ObjectAddress sequenceAddress = { 0 };
+		ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+
+		if (!IsObjectDistributed(&sequenceAddress))
+		{
+			continue;
+		}
+
+		/* collect information for all distributed sequences */
+		ObjectAddress *addressp = palloc(sizeof(ObjectAddress));
+		*addressp = sequenceAddress;
+		distributedSequenceAddresses = lappend(distributedSequenceAddresses, addressp);
+		distributedSequencesList = lappend(distributedSequencesList, objectNameList);
+	}
+
+	if (list_length(distributedSequencesList) <= 0)
+	{
+		/* no distributed functions to drop */
+		return NIL;
+	}
+
+	/*
+	 * managing types can only be done on the coordinator if ddl propagation is on. when
+	 * it is off we will never get here. MX workers don't have a notion of distributed
+	 * types, so we block the call.
+	 */
+	EnsureCoordinator();
+
+	/* remove the entries for the distributed objects on dropping */
+	ObjectAddress *address = NULL;
+	foreach_ptr(address, distributedSequenceAddresses)
+	{
+		UnmarkObjectDistributed(address);
+	}
+
+	/*
+	 * Swap the list of objects before deparsing and restore the old list after. This
+	 * ensures we only have distributed sequences in the deparsed drop statement.
+	 */
+	DropStmt *stmtCopy = copyObject(stmt);
+	stmtCopy->objects = distributedSequencesList;
+	stmtCopy->missing_ok = true;
+	const char *dropStmtSql = DeparseTreeNode((Node *) stmtCopy);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) dropStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * PreprocessRenameSequenceStmt is called when the user is renaming a sequence. The invocation
+ * happens before the statement is applied locally.
+ *
+ * As the sequence already exists we have access to the ObjectAddress, this is used to
+ * check if it is distributed. If so the rename is executed on all the workers to keep the
+ * types in sync across the cluster.
+ */
+List *
+PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtilityContext
+							 processUtilityContext)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_SEQUENCE);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+
+	if (!ShouldPropagateAlterSequence(&address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	QualifyTreeNode((Node *) stmt);
+
+	/* this takes care of cases where not all workers have synced metadata */
+	RenameStmt *stmtCopy = copyObject(stmt);
+	stmtCopy->missing_ok = true;
+
+	const char *sql = DeparseTreeNode((Node *) stmtCopy);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * RenameSequenceStmtObjectAddress returns the ObjectAddress of the sequence that is the
+ * subject of the RenameStmt.
+ */
+ObjectAddress
+RenameSequenceStmtObjectAddress(Node *node, bool missing_ok)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_SEQUENCE);
+
+	RangeVar *sequence = stmt->relation;
+	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+
+	return sequenceAddress;
+}
+
+
+/*
+ * ShouldPropagateAlterSequence returns, based on the address of a sequence, if alter
+ * statements targeting the function should be propagated.
+ */
+static bool
+ShouldPropagateAlterSequence(const ObjectAddress *address)
+{
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, sequences cascading
+		 * from an extension should therefore not be propagated.
+		 */
+		return false;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return false;
+	}
+
+	if (!IsObjectDistributed(address))
+	{
+		/* do not propagate alter sequence for non-distributed sequences */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * PreprocessAlterSequenceStmt gets called during the planning phase of an ALTER SEQUENCE statement
+ * of one of the following forms:
+ * ALTER SEQUENCE [ IF EXISTS ] name
+ *  [ AS data_type ]
+ *  [ INCREMENT [ BY ] increment ]
+ *  [ MINVALUE minvalue | NO MINVALUE ] [ MAXVALUE maxvalue | NO MAXVALUE ]
+ *  [ START [ WITH ] start ]
+ *  [ RESTART [ [ WITH ] restart ] ]
+ *  [ CACHE cache ] [ [ NO ] CYCLE ]
+ *  [ OWNED BY { table_name.column_name | NONE } ]
+ *
+ * For distributed sequences, this operation will not be allowed for now.
+ * The reason is that we change sequence parameters when distributing it, so we don't want to
+ * touch those parameters for now.
+ */
+List *
+PreprocessAlterSequenceStmt(Node *node, const char *queryString,
+							ProcessUtilityContext processUtilityContext)
+{
+	AlterSeqStmt *stmt = castNode(AlterSeqStmt, node);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+
+	/* error out if the sequence is distributed */
+	if (IsObjectDistributed(&address))
+	{
+		ereport(ERROR, (errmsg(
+							"This operation is currently not allowed for a distributed sequence.")));
+	}
+	else
+	{
+		return NIL;
+	}
+}
+
+
+/*
+ * AlterSequenceOwnerObjectAddress returns the ObjectAddress of the sequence that is the
+ * subject of the AlterOwnerStmt.
+ */
+ObjectAddress
+AlterSequenceObjectAddress(Node *node, bool missing_ok)
+{
+	AlterSeqStmt *stmt = castNode(AlterSeqStmt, node);
+
+	RangeVar *sequence = stmt->sequence;
+	Oid seqOid = RangeVarGetRelid(sequence, NoLock, stmt->missing_ok);
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+
+	return sequenceAddress;
+}
+
+
+/*
+ * PreprocessAlterSequenceSchemaStmt is executed before the statement is applied to the local
+ * postgres instance.
+ *
+ * For distributed sequences, this operation will not be allowed for now.
+ */
+List *
+PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
+								  ProcessUtilityContext processUtilityContext)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+
+	/* error out if the sequence is distributed */
+	if (IsObjectDistributed(&address))
+	{
+		ereport(ERROR, (errmsg(
+							"This operation is currently not allowed for a distributed sequence.")));
+	}
+	else
+	{
+		return NIL;
+	}
+}
+
+
+/*
+ * AlterSequenceSchemaStmtObjectAddress returns the ObjectAddress of the sequence that is
+ * the subject of the AlterObjectSchemaStmt.
+ */
+ObjectAddress
+AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+
+	RangeVar *sequence = stmt->relation;
+	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+
+	return sequenceAddress;
 }

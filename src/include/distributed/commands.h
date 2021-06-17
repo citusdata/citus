@@ -207,6 +207,7 @@ extern bool AnyForeignKeyDependsOnIndex(Oid indexId);
 extern bool HasForeignKeyWithLocalTable(Oid relationId);
 extern bool HasForeignKeyToCitusLocalTable(Oid relationId);
 extern bool HasForeignKeyToReferenceTable(Oid relationOid);
+extern List * GetForeignKeysFromLocalTables(Oid relationId);
 extern bool TableReferenced(Oid relationOid);
 extern bool TableReferencing(Oid relationOid);
 extern bool ConstraintIsAUniquenessConstraint(char *inputConstaintName, Oid relationId);
@@ -217,6 +218,7 @@ extern bool ConstraintWithIdIsOfType(Oid constraintId, char targetConstraintType
 extern bool TableHasExternalForeignKeys(Oid relationId);
 extern List * GetForeignKeyOids(Oid relationId, int flags);
 extern Oid GetReferencedTableId(Oid foreignKeyId);
+extern Oid GetReferencingTableId(Oid foreignKeyId);
 extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
 
@@ -342,6 +344,18 @@ extern List * PreprocessAlterSchemaRenameStmt(Node *node, const char *queryStrin
 extern ObjectAddress AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok);
 
 /* sequence.c - forward declarations */
+extern List * PreprocessAlterSequenceStmt(Node *stmt, const char *queryString,
+										  ProcessUtilityContext processUtilityContext);
+extern List * PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
+												ProcessUtilityContext
+												processUtilityContext);
+extern List * PreprocessDropSequenceStmt(Node *stmt, const char *queryString,
+										 ProcessUtilityContext processUtilityContext);
+extern List * PreprocessRenameSequenceStmt(Node *stmt, const char *queryString,
+										   ProcessUtilityContext processUtilityContext);
+extern ObjectAddress AlterSequenceObjectAddress(Node *stmt, bool missing_ok);
+extern ObjectAddress AlterSequenceSchemaStmtObjectAddress(Node *stmt, bool missing_ok);
+extern ObjectAddress RenameSequenceStmtObjectAddress(Node *stmt, bool missing_ok);
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 

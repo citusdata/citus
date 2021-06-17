@@ -64,6 +64,9 @@ PG_FUNCTION_INFO_V1(master_create_worker_shards);
 Datum
 master_create_worker_shards(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	text *tableNameText = PG_GETARG_TEXT_P(0);
 	int32 shardCount = PG_GETARG_INT32(1);
 	int32 replicationFactor = PG_GETARG_INT32(2);
@@ -73,9 +76,6 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 
 	/* do not add any data */
 	bool useExclusiveConnections = false;
-
-	EnsureCoordinator();
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create

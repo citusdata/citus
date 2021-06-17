@@ -241,7 +241,9 @@ SELECT :worker_1_lastval = :worker_2_lastval;
 
 -- the type of sequences can't be changed
 ALTER TABLE mx_sequence ALTER value TYPE BIGINT;
+ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
 ALTER TABLE mx_sequence ALTER value TYPE INT;
+ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
 -- test distributed tables owned by extension
 CREATE TABLE seg_test (x int);
 INSERT INTO seg_test VALUES (42);

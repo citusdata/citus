@@ -74,13 +74,13 @@ typedef struct RebalancePlanContext
 } RebalancePlacementContext;
 
 /*
- * run_try_drop_marked_shards is a wrapper to run TryDropMarkedShards.
+ * run_try_drop_marked_shards is a wrapper to run TryDropOrphanedShards.
  */
 Datum
 run_try_drop_marked_shards(PG_FUNCTION_ARGS)
 {
 	bool waitForLocks = false;
-	TryDropMarkedShards(waitForLocks);
+	TryDropOrphanedShards(waitForLocks);
 	PG_RETURN_VOID();
 }
 

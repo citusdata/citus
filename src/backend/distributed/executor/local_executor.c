@@ -108,8 +108,15 @@
 bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
+int LocalExecutorLevel = 0;
+
 static LocalExecutionStatus CurrentLocalExecutionStatus = LOCAL_EXECUTION_OPTIONAL;
 
+static uint64 ExecuteLocalTaskListInternal(List *taskList,
+										   ParamListInfo paramListInfo,
+										   DistributedPlan *distributedPlan,
+										   TupleDestination *defaultTupleDest,
+										   bool isUtilityCommand);
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
 										  List **remoteTaskPlacementList);
@@ -200,10 +207,8 @@ ExecuteLocalTaskListExtended(List *taskList,
 							 TupleDestination *defaultTupleDest,
 							 bool isUtilityCommand)
 {
-	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
-	int numParams = 0;
-	Oid *parameterTypes = NULL;
 	uint64 totalRowsProcessed = 0;
+	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
 
 	/*
 	 * Even if we are executing local tasks, we still enable
@@ -217,6 +222,38 @@ ExecuteLocalTaskListExtended(List *taskList,
 	 * we only deal with local tasks in the transaction.
 	 */
 	UseCoordinatedTransaction();
+
+	LocalExecutorLevel++;
+	PG_TRY();
+	{
+		totalRowsProcessed = ExecuteLocalTaskListInternal(taskList, paramListInfo,
+														  distributedPlan,
+														  defaultTupleDest,
+														  isUtilityCommand);
+	}
+	PG_CATCH();
+	{
+		LocalExecutorLevel--;
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	LocalExecutorLevel--;
+
+	return totalRowsProcessed;
+}
+
+
+static uint64
+ExecuteLocalTaskListInternal(List *taskList,
+							 ParamListInfo paramListInfo,
+							 DistributedPlan *distributedPlan,
+							 TupleDestination *defaultTupleDest,
+							 bool isUtilityCommand)
+{
+	uint64 totalRowsProcessed = 0;
+	int numParams = 0;
+	Oid *parameterTypes = NULL;
 
 	if (paramListInfo != NULL)
 	{

@@ -1359,6 +1359,7 @@ SELECT create_reference_table('itemgroups');
 
 (1 row)
 
+DROP TABLE IF EXISTS users ;
 CREATE TABLE users (
     id int PRIMARY KEY,
     name text,
