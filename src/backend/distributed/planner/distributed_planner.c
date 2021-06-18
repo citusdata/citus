@@ -156,7 +156,7 @@ distributed_planner(Query *parse,
 		}
 	}
 
-	int rteIdCounter = 1;
+	int rteIdCounter = 0;
 
 	DistributedPlanningContext planContext = {
 		.query = parse,
