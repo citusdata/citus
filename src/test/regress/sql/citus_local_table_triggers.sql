@@ -161,12 +161,11 @@ BEFORE INSERT ON "interesting!schema"."citus_local!_table"
 FOR EACH STATEMENT EXECUTE FUNCTION dummy_function();
 
 CREATE EXTENSION seg;
+-- ALTER TRIGGER DEPENDS ON
+ALTER TRIGGER "trigger\'name" ON "interesting!schema"."citus_local!_table" DEPENDS ON EXTENSION seg;
 
 BEGIN;
-    -- ALTER TRIGGER DEPENDS ON
-    ALTER TRIGGER "trigger\'name" ON "interesting!schema"."citus_local!_table" DEPENDS ON EXTENSION seg;
-
-    -- show that triggers on both shell relation and shard relation are depending on seg
+    -- show that triggers on both shell relation and shard relation are not depending on seg
     SELECT tgname FROM pg_depend, pg_trigger, pg_extension
     WHERE deptype = 'x' and classid='pg_trigger'::regclass and
         pg_trigger.oid=pg_depend.objid and extname='seg'
@@ -174,7 +173,7 @@ BEGIN;
 
     DROP EXTENSION seg;
 
-    -- show that dropping extension drops the triggers automatically
+    -- show that dropping extension doesn't drop the triggers automatically
     SELECT * FROM citus_local_table_triggers
     WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
 ROLLBACK;

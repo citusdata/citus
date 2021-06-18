@@ -16,13 +16,16 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_trigger.h"
+#include "commands/extension.h"
 #include "commands/trigger.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/shard_utils.h"
 #include "distributed/worker_protocol.h"
@@ -50,6 +53,10 @@ static void ExtractDropStmtTriggerAndRelationName(DropStmt *dropTriggerStmt,
 												  char **relationName);
 static void ErrorIfDropStmtDropsMultipleTriggers(DropStmt *dropTriggerStmt);
 static int16 GetTriggerTypeById(Oid triggerId);
+
+
+/* GUC that overrides trigger checks for distributed tables and reference tables */
+bool EnableUnsafeTriggers = false;
 
 
 /*
@@ -215,20 +222,14 @@ PostprocessCreateTriggerStmt(Node *node, const char *queryString)
 	}
 
 	EnsureCoordinator();
+	ErrorOutForTriggerIfNotSupported(relationId);
 
-	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
+	ObjectAddress objectAddress = GetObjectAddressFromParseTree(node, missingOk);
+	EnsureDependenciesExistOnAllNodes(&objectAddress);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-	{
-		ObjectAddress objectAddress = GetObjectAddressFromParseTree(node, missingOk);
-		EnsureDependenciesExistOnAllNodes(&objectAddress);
-
-		char *triggerName = createTriggerStmt->trigname;
-		return CitusLocalTableTriggerCommandDDLJob(relationId, triggerName,
-												   queryString);
-	}
-
-	return NIL;
+	char *triggerName = createTriggerStmt->trigname;
+	return CitusCreateTriggerCommandDDLJob(relationId, triggerName,
+										   queryString);
 }
 
 
@@ -328,17 +329,12 @@ PostprocessAlterTriggerRenameStmt(Node *node, const char *queryString)
 	}
 
 	EnsureCoordinator();
-	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
+	ErrorOutForTriggerIfNotSupported(relationId);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-	{
-		/* use newname as standard process utility already renamed it */
-		char *triggerName = renameTriggerStmt->newname;
-		return CitusLocalTableTriggerCommandDDLJob(relationId, triggerName,
-												   queryString);
-	}
-
-	return NIL;
+	/* use newname as standard process utility already renamed it */
+	char *triggerName = renameTriggerStmt->newname;
+	return CitusCreateTriggerCommandDDLJob(relationId, triggerName,
+										   queryString);
 }
 
 
@@ -369,6 +365,70 @@ AlterTriggerRenameEventExtendNames(RenameStmt *renameTriggerStmt, char *schemaNa
 
 
 /*
+ * PreprocessAlterTriggerDependsStmt is called during the planning phase of an
+ * ALTER TRIGGER ... DEPENDS ON EXTENSION ... statement. Since triggers depending on
+ * extensions are assumed to be Owned by an extension we assume the extension to keep
+ * the trigger in sync.
+ *
+ * If we would allow users to create a dependency between a distributed trigger and an
+ * extension, our pruning logic for which objects to distribute as dependencies of other
+ * objects will change significantly, which could cause issues adding new workers. Hence
+ * we don't allow this dependency to be created.
+ */
+List *
+PreprocessAlterTriggerDependsStmt(Node *node, const char *queryString,
+								  ProcessUtilityContext processUtilityContext)
+{
+	AlterObjectDependsStmt *alterTriggerDependsStmt =
+		castNode(AlterObjectDependsStmt, node);
+	Assert(alterTriggerDependsStmt->objectType == OBJECT_TRIGGER);
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, triggers cascading
+		 * from an extension should therefore not be propagated here.
+		 */
+		return NIL;
+	}
+
+	if (!EnableMetadataSync)
+	{
+		/*
+		 * we are configured to disable object propagation, should not propagate anything
+		 */
+		return NIL;
+	}
+
+	RangeVar *relation = alterTriggerDependsStmt->relation;
+
+	bool missingOk = false;
+	Oid relationId = RangeVarGetRelid(relation, ALTER_TRIGGER_LOCK_MODE, missingOk);
+
+	if (!IsCitusTable(relationId))
+	{
+		return NIL;
+	}
+
+	/*
+	 * Distributed objects should not start depending on an extension, this will break
+	 * the dependency resolving mechanism we use to replicate distributed objects to new
+	 * workers
+	 */
+
+	Value *triggerNameValue =
+		GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
+	ereport(ERROR, (errmsg(
+						"Triggers \"%s\" on distributed tables and local tables added to metadata "
+						"are not allowed to depend on an extension", strVal(
+							triggerNameValue)),
+					errdetail(
+						"Triggers from extensions are expected to be created on the workers "
+						"by the extension they depend on.")));
+}
+
+
+/*
  * PostprocessAlterTriggerDependsStmt is called after a ALTER TRIGGER DEPENDS ON
  * command has been executed by standard process utility. This function errors out
  * for unsupported commands or creates ddl job for supported ALTER TRIGGER DEPENDS
@@ -392,17 +452,12 @@ PostprocessAlterTriggerDependsStmt(Node *node, const char *queryString)
 	}
 
 	EnsureCoordinator();
-	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
+	ErrorOutForTriggerIfNotSupported(relationId);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-	{
-		Value *triggerNameValue =
-			GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
-		return CitusLocalTableTriggerCommandDDLJob(relationId, strVal(triggerNameValue),
-												   queryString);
-	}
-
-	return NIL;
+	Value *triggerNameValue =
+		GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
+	return CitusCreateTriggerCommandDDLJob(relationId, strVal(triggerNameValue),
+										   queryString);
 }
 
 
@@ -459,7 +514,7 @@ GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *alterTriggerDepen
  * unsupported commands or creates ddl job for supported DROP TRIGGER commands.
  * The reason we process drop trigger commands before standard process utility
  * (unlike the other type of trigger commands) is that we act according to trigger
- * type in CitusLocalTableTriggerCommandDDLJob but trigger wouldn't exist after
+ * type in CitusCreateTriggerCommandDDLJob but trigger wouldn't exist after
  * standard process utility.
  */
 List *
@@ -487,15 +542,10 @@ PreprocessDropTriggerStmt(Node *node, const char *queryString,
 
 	ErrorIfUnsupportedDropTriggerCommand(dropTriggerStmt);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-	{
-		char *triggerName = NULL;
-		ExtractDropStmtTriggerAndRelationName(dropTriggerStmt, &triggerName, NULL);
-		return CitusLocalTableTriggerCommandDDLJob(relationId, triggerName,
-												   queryString);
-	}
-
-	return NIL;
+	char *triggerName = NULL;
+	ExtractDropStmtTriggerAndRelationName(dropTriggerStmt, &triggerName, NULL);
+	return CitusCreateTriggerCommandDDLJob(relationId, triggerName,
+										   queryString);
 }
 
 
@@ -517,24 +567,34 @@ ErrorIfUnsupportedDropTriggerCommand(DropStmt *dropTriggerStmt)
 	}
 
 	EnsureCoordinator();
-	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
+	ErrorOutForTriggerIfNotSupported(relationId);
 }
 
 
 /*
- * ErrorOutForTriggerIfNotCitusLocalTable is a helper function to error
+ * ErrorOutForTriggerIfNotSupported is a helper function to error
  * out for unsupported trigger commands depending on the citus table type.
  */
 void
-ErrorOutForTriggerIfNotCitusLocalTable(Oid relationId)
+ErrorOutForTriggerIfNotSupported(Oid relationId)
 {
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	if (EnableUnsafeTriggers)
 	{
+		/* user really wants triggers */
 		return;
 	}
+	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
+	{
+		ereport(ERROR, (errmsg("triggers are not supported on reference tables")));
+	}
+	else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
+	{
+		ereport(ERROR, (errmsg("triggers are not supported on distributed tables "
+							   "when \"citus.enable_unsafe_triggers\" is set to "
+							   "\"false\"")));
+	}
 
-	ereport(ERROR, (errmsg("triggers are only supported for local tables added "
-						   "to metadata")));
+	/* we always support triggers on citus local tables */
 }
 
 
@@ -643,13 +703,13 @@ ErrorIfDropStmtDropsMultipleTriggers(DropStmt *dropTriggerStmt)
 
 
 /*
- * CitusLocalTableTriggerCommandDDLJob creates a ddl job to execute given
+ * CitusCreateTriggerCommandDDLJob creates a ddl job to execute given
  * queryString trigger command on shell relation(s) in mx worker(s) and to
  * execute necessary ddl task on citus local table shard (if needed).
  */
 List *
-CitusLocalTableTriggerCommandDDLJob(Oid relationId, char *triggerName,
-									const char *queryString)
+CitusCreateTriggerCommandDDLJob(Oid relationId, char *triggerName,
+								const char *queryString)
 {
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = relationId;
