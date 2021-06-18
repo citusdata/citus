@@ -60,6 +60,8 @@ typedef struct StripeReadState
 	StripeBuffers *stripeBuffers;   /* allocated in stripeReadContext */
 	List *projectedColumnList;      /* borrowed reference */
 	ChunkGroupReadState *chunkGroupReadState; /* owned */
+
+	Bitmapset *deletedTuples;
 } StripeReadState;
 
 struct ColumnarReadState
@@ -428,6 +430,9 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 
 	stripeReadState->rowCount = stripeReadState->stripeBuffers->rowCount;
 
+	stripeReadState->deletedTuples = ReadDeletedTuplesForStripe(rel->rd_node,
+																stripeMetadata->id, NULL);
+
 	MemoryContextSwitchTo(oldContext);
 
 
@@ -503,6 +508,13 @@ ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
 			EndChunkGroupRead(stripeReadState->chunkGroupReadState);
 			stripeReadState->chunkGroupReadState = NULL;
 			stripeReadState->chunkGroupIndex++;
+			continue;
+		}
+
+		/* check if tuple has been removed earlier, read next if that has happened */
+		if (bms_is_member(stripeReadState->currentRow, stripeReadState->deletedTuples))
+		{
+			stripeReadState->currentRow++;
 			continue;
 		}
 

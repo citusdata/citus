@@ -262,6 +262,8 @@ extern StripeMetadata * FindStripeByRowNumber(RelFileNode relfilenode, uint64 ro
 											  Snapshot snapshot);
 extern StripeMetadata * FindStripeWithHighestRowNumber(Relation relation,
 													   Snapshot snapshot);
+extern Bitmapset * ReadDeletedTuplesForStripe(RelFileNode relfilenode, uint64 stripenum,
+											  Snapshot snapshot);
 extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 
 
