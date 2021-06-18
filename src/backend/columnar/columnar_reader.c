@@ -262,7 +262,8 @@ ColumnarReadRowByRowNumber(Relation relation, uint64 rowNumber,
 						   List *neededColumnList, Datum *columnValues,
 						   bool *columnNulls, Snapshot snapshot)
 {
-	StripeMetadata *stripeMetadata = FindStripeByRowNumber(relation, rowNumber, snapshot);
+	StripeMetadata *stripeMetadata = FindStripeByRowNumber(relation->rd_node, rowNumber,
+														   snapshot);
 	if (stripeMetadata == NULL)
 	{
 		/* no such row exists */

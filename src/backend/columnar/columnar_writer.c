@@ -33,6 +33,8 @@
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
 
+#include "distributed/listutils.h"
+
 struct ColumnarWriteState
 {
 	TupleDesc tupleDescriptor;
@@ -40,6 +42,7 @@ struct ColumnarWriteState
 	RelFileNode relfilenode;
 
 	MemoryContext stripeWriteContext;
+	MemoryContext stripeRemoveContext;
 	MemoryContext perTupleContext;
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
@@ -48,6 +51,8 @@ struct ColumnarWriteState
 	ChunkData *chunkData;
 
 	List *chunkGroupRowCounts;
+
+	List *removedRows;
 
 	/*
 	 * compressionBuffer buffer is used as temporary storage during
@@ -65,6 +70,7 @@ static StripeSkipList * CreateEmptyStripeSkipList(uint32 stripeMaxRowCount,
 												  uint32 chunkRowCount,
 												  uint32 columnCount);
 static void FlushStripe(ColumnarWriteState *writeState);
+static void FlushDeletes(ColumnarWriteState *writeState);
 static StringInfo SerializeBoolArray(bool *boolArray, uint32 boolArrayLength);
 static void SerializeSingleDatum(StringInfo datumBuffer, Datum datum,
 								 bool datumTypeByValue, int datumTypeLength,
@@ -117,6 +123,10 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 															 "Stripe Write Memory Context",
 															 ALLOCSET_DEFAULT_SIZES);
 
+	MemoryContext stripeRemoveContext = AllocSetContextCreate(CurrentMemoryContext,
+															  "Stripe Delete Memory Context",
+															  ALLOCSET_DEFAULT_SIZES);
+
 	bool *columnMaskArray = palloc(columnCount * sizeof(bool));
 	memset(columnMaskArray, true, columnCount);
 
@@ -132,11 +142,14 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 	writeState->stripeSkipList = NULL;
 	writeState->stripeFirstRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
 	writeState->stripeWriteContext = stripeWriteContext;
+	writeState->stripeRemoveContext = stripeRemoveContext;
 	writeState->chunkData = chunkData;
 	writeState->compressionBuffer = NULL;
 	writeState->perTupleContext = AllocSetContextCreate(CurrentMemoryContext,
 														"Columnar per tuple context",
 														ALLOCSET_DEFAULT_SIZES);
+
+	writeState->removedRows = NIL;
 
 	return writeState;
 }
@@ -251,6 +264,23 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 }
 
 
+void
+ColumnarWriteDeleteRow(ColumnarWriteState *writeState, uint64 rowNumber)
+{
+	MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeRemoveContext);
+	uint64 *rowNumberCopy = palloc0(sizeof(uint64));
+	*rowNumberCopy = rowNumber;
+	writeState->removedRows = lappend(writeState->removedRows, rowNumberCopy);
+
+	if (list_length(writeState->removedRows) >= writeState->options.stripeRowCount)
+	{
+		ColumnarFlushPendingDeletes(writeState);
+	}
+
+	MemoryContextSwitchTo(oldContext);
+}
+
+
 /*
  * ColumnarEndWrite finishes a columnar data load operation. If we have an unflushed
  * stripe, we flush it.
@@ -259,6 +289,7 @@ void
 ColumnarEndWrite(ColumnarWriteState *writeState)
 {
 	ColumnarFlushPendingWrites(writeState);
+	ColumnarFlushPendingDeletes(writeState);
 
 	MemoryContextDelete(writeState->stripeWriteContext);
 	pfree(writeState->comparisonFunctionArray);
@@ -281,6 +312,26 @@ ColumnarFlushPendingWrites(ColumnarWriteState *writeState)
 		/* set stripe data and skip list to NULL so they are recreated next time */
 		writeState->stripeBuffers = NULL;
 		writeState->stripeSkipList = NULL;
+
+		MemoryContextSwitchTo(oldContext);
+	}
+}
+
+
+void
+ColumnarFlushPendingDeletes(ColumnarWriteState *writeState)
+{
+	if (list_length(writeState->removedRows) >= 0)
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(writeState->stripeRemoveContext);
+
+		/* flush deletes to visibility table */
+		FlushDeletes(writeState);
+		MemoryContextReset(writeState->stripeRemoveContext);
+
+		/* remove cached data for deleted rows */
+		/* TODO: this is modelled based on ColumnarFlushPendingWrites, might need pfree */
+		writeState->removedRows = NIL;
 
 		MemoryContextSwitchTo(oldContext);
 	}
@@ -496,6 +547,20 @@ FlushStripe(ColumnarWriteState *writeState)
 	writeState->chunkGroupRowCounts = NIL;
 
 	relation_close(relation, NoLock);
+}
+
+
+static void
+FlushDeletes(ColumnarWriteState *writeState)
+{
+	uint64 *rownum = NULL;
+	foreach_ptr(rownum, writeState->removedRows)
+	{
+		StripeMetadata *metadata = FindStripeByRowNumber(writeState->relfilenode, *rownum,
+														 NULL);
+		InsertRemovedRowInformation(writeState->relfilenode, metadata->id,
+									(*rownum) - metadata->firstRowNumber);
+	}
 }
 
 
@@ -748,5 +813,6 @@ CopyStringInfo(StringInfo sourceString)
 bool
 ContainsPendingWrites(ColumnarWriteState *state)
 {
-	return state->stripeBuffers != NULL && state->stripeBuffers->rowCount != 0;
+	return state->stripeBuffers != NULL && state->stripeBuffers->rowCount != 0 &&
+		   list_length(state->removedRows) == 0;
 }

@@ -584,7 +584,26 @@ columnar_tuple_delete(Relation relation, ItemPointer tid, CommandId cid,
 					  Snapshot snapshot, Snapshot crosscheck, bool wait,
 					  TM_FailureData *tmfd, bool changingPart)
 {
-	elog(ERROR, "columnar_tuple_delete not implemented");
+	/*
+	 * columnar_init_write_state allocates the write state in a longer
+	 * lasting context, so no need to worry about it.
+	 */
+	ColumnarWriteState *writeState = columnar_init_write_state(relation,
+															   RelationGetDescr(relation),
+															   GetCurrentSubTransactionId());
+
+	MemoryContext oldContext = MemoryContextSwitchTo(
+		ColumnarWritePerTupleContext(writeState));
+
+	ColumnarCheckLogicalReplication(relation);
+
+	uint64 rowNumber = tid_to_row_number(*tid);
+	ColumnarWriteDeleteRow(writeState, rowNumber);
+
+	MemoryContextSwitchTo(oldContext);
+	MemoryContextReset(ColumnarWritePerTupleContext(writeState));
+
+	return TM_Ok;
 }
 
 
@@ -594,7 +613,8 @@ columnar_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot,
 					  bool wait, TM_FailureData *tmfd,
 					  LockTupleMode *lockmode, bool *update_indexes)
 {
-	elog(ERROR, "columnar_tuple_update not implemented");
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("UPDATE not supported for ColumnarScan")));
 }
 
 
@@ -1916,7 +1936,7 @@ ColumnarCheckLogicalReplication(Relation rel)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg(
-							"cannot insert into columnar table that is a part of a publication")));
+							"cannot modify columnar table that is a part of a publication")));
 	}
 }
 

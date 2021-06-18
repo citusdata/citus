@@ -215,6 +215,7 @@ FlushWriteStateForRelfilenode(Oid relfilenode, SubTransactionId currentSubXid)
 		if (stackEntry->subXid == currentSubXid)
 		{
 			ColumnarFlushPendingWrites(stackEntry->writeState);
+			ColumnarFlushPendingDeletes(stackEntry->writeState);
 		}
 	}
 }

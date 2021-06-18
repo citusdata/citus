@@ -84,6 +84,8 @@ static Oid ColumnarChunkRelationId(void);
 static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
+static Oid ColumnarVisibilityRelationId(void);
+static Oid ColumnarVisibilityIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
 static uint64 LookupStorageId(RelFileNode relfilenode);
 static uint64 GetHighestUsedFirstRowNumber(uint64 storageId);
@@ -165,6 +167,11 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_chunk_value_decompressed_size 13
 #define Anum_columnar_chunk_value_count 14
 
+/* constants for columnar.visibility */
+#define Natts_columnar_visibility 3
+#define Anum_columnar_visibility_storage_id 1
+#define Anum_columnar_visibility_stripe_num 2
+#define Anum_columnar_visibility_row_num 3
 
 /*
  * InitColumnarOptions initialized the columnar table options. Meaning it writes the
@@ -627,11 +634,11 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
  * stripe_first_row_number_idx. If no such row exists, then returns NULL.
  */
 StripeMetadata *
-FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
+FindStripeByRowNumber(RelFileNode relfilenode, uint64 rowNumber, Snapshot snapshot)
 {
 	StripeMetadata *foundStripeMetadata = NULL;
 
-	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 	ScanKeyData scanKey[2];
 	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
@@ -899,6 +906,34 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 }
 
 
+void
+InsertRemovedRowInformation(RelFileNode relfilenode, uint64 stripenum, uint64 rownum)
+{
+	uint64 storageId = LookupStorageId(relfilenode);
+
+	bool nulls[Natts_columnar_visibility] = { 0 };
+	Datum values[Natts_columnar_visibility] = {
+		UInt64GetDatum(storageId),
+		Int64GetDatum(stripenum), /* TODO: find the stripe number per row number */
+		Int64GetDatum(rownum)
+	};
+
+	Oid columnarVisibilityRelationId = ColumnarVisibilityRelationId();
+	Relation columnarVisibility = table_open(columnarVisibilityRelationId,
+											 RowExclusiveLock);
+
+	ModifyState *modifyState = StartModifyRelation(columnarVisibility);
+
+	InsertTupleAndEnforceConstraints(modifyState, values, nulls);
+
+	FinishModifyRelation(modifyState);
+
+	CommandCounterIncrement();
+
+	table_close(columnarVisibility, RowExclusiveLock);
+}
+
+
 /*
  * ReadDataFileStripeList reads the stripe list for a given storageId
  * in the given snapshot.
@@ -997,6 +1032,10 @@ DeleteMetadataRows(RelFileNode relfilenode)
 	DeleteStorageFromColumnarMetadataTable(ColumnarChunkRelationId(),
 										   Anum_columnar_chunk_storageid,
 										   ColumnarChunkIndexRelationId(),
+										   storageId);
+	DeleteStorageFromColumnarMetadataTable(ColumnarVisibilityRelationId(),
+										   Anum_columnar_visibility_storage_id,
+										   ColumnarVisibilityIndexRelationId(),
 										   storageId);
 }
 
@@ -1315,6 +1354,26 @@ static Oid
 ColumnarChunkGroupIndexRelationId(void)
 {
 	return get_relname_relid("chunk_group_pkey", ColumnarNamespaceId());
+}
+
+
+/*
+ * ColumnarVisibilityRelationId returns relation id of columnar.visibility.
+ */
+static Oid
+ColumnarVisibilityRelationId(void)
+{
+	return get_relname_relid("visibility", ColumnarNamespaceId());
+}
+
+
+/*
+ * ColumnarVisibilityIndexRelationId returns relation id of columnar.visibility_pkey.
+ */
+static Oid
+ColumnarVisibilityIndexRelationId()
+{
+	return get_relname_relid("visibility_pkey", ColumnarNamespaceId());
 }
 
 

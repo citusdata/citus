@@ -203,7 +203,9 @@ extern ColumnarWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
 											   TupleDesc tupleDescriptor);
 extern uint64 ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
 							   bool *columnNulls);
+extern void ColumnarWriteDeleteRow(ColumnarWriteState *writeState, uint64 rowNumber);
 extern void ColumnarFlushPendingWrites(ColumnarWriteState *state);
+extern void ColumnarFlushPendingDeletes(ColumnarWriteState *writeState);
 extern void ColumnarEndWrite(ColumnarWriteState *state);
 extern bool ContainsPendingWrites(ColumnarWriteState *state);
 extern MemoryContext ColumnarWritePerTupleContext(ColumnarWriteState *state);
@@ -246,6 +248,8 @@ extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
 									uint64 rowCount, uint64 columnCount,
 									uint64 chunkCount, uint64 chunkGroupRowCount,
 									uint64 stripeFirstRowNumber);
+extern void InsertRemovedRowInformation(RelFileNode relfilenode, uint64 stripenum,
+										uint64 rownum);
 extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
@@ -254,7 +258,7 @@ extern void SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 chunkCount);
-extern StripeMetadata * FindStripeByRowNumber(Relation relation, uint64 rowNumber,
+extern StripeMetadata * FindStripeByRowNumber(RelFileNode relfilenode, uint64 rowNumber,
 											  Snapshot snapshot);
 extern StripeMetadata * FindStripeWithHighestRowNumber(Relation relation,
 													   Snapshot snapshot);

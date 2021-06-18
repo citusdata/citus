@@ -30,3 +30,10 @@ $$;
 -- upgrade storage for all columnar relations
 SELECT citus_internal.upgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a
   WHERE c.relam = a.oid AND amname = 'columnar';
+
+CREATE TABLE columnar.visibility (
+    storage_id bigint NOT NULL,
+    stripe_num bigint NOT NULL,
+    row_num bigint NOT NULL,
+    PRIMARY KEY (storage_id, stripe_num, row_num)
+) WITH (user_catalog_table = true);
