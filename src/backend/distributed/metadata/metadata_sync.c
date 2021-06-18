@@ -341,10 +341,10 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	/* generate the queries which drop the metadata */
 	List *dropMetadataCommandList = MetadataDropCommands();
 
-	SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
-											   workerNode->workerPort,
-											   extensionOwner,
-											   dropMetadataCommandList);
+	SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
+												 workerNode->workerPort,
+												 extensionOwner,
+												 dropMetadataCommandList);
 }
 
 

@@ -1,4 +1,4 @@
-CREATE FUNCTION pg_catalog.stop_metadata_sync_to_node(nodename text, nodeport integer, clear bool DEFAULT false)
+CREATE FUNCTION pg_catalog.stop_metadata_sync_to_node(nodename text, nodeport integer, clear bool DEFAULT true)
 	RETURNS VOID
 	LANGUAGE C STRICT
 	AS 'MODULE_PATHNAME', $$stop_metadata_sync_to_node$$;

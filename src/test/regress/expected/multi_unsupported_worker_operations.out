@@ -280,9 +280,7 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
  worker_drop_distributed_table
 ---------------------------------------------------------------------
-
-
-(2 rows)
+(0 rows)
 
 DELETE FROM pg_dist_node;
 \c - - - :worker_1_port
