@@ -282,7 +282,18 @@ SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_
 ---------------------------------------------------------------------
 (0 rows)
 
-DELETE FROM pg_dist_node;
+SELECT count(*) FROM pg_dist_partition;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT count(*) FROM pg_dist_node;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 \c - - - :worker_1_port
 -- DROP TABLE
 -- terse verbosity because pg10 has slightly different output
