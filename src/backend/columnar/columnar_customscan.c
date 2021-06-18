@@ -385,9 +385,20 @@ ColumnarAttrNeeded(ScanState *ss)
 
 		if (var->varattno < 0)
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg(
-								"UPDATE and CTID scans not supported for ColumnarScan")));
+			switch (var->varattno)
+			{
+				case SelfItemPointerAttributeNumber:
+				{
+					ereport(DEBUG5, (errmsg("querying ctid")));
+					continue;
+				}
+
+				default:
+				{
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+									errmsg("unsupported system column")));
+				}
+			}
 		}
 
 		if (var->varattno == 0)
