@@ -582,7 +582,7 @@ DeferErrorIfUnsupportedSubqueryPushdown(Query *originalQuery,
 	 */
 	if (ContainsUnionSubquery(originalQuery))
 	{
-		if (!SafeToPushdownUnionSubquery(plannerRestrictionContext))
+		if (!SafeToPushdownUnionSubquery(originalQuery, plannerRestrictionContext))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "cannot pushdown the subquery since not all subqueries "
