@@ -463,6 +463,14 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	 */
 	ObjectAddress tableAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
 
+	/* check whether we are dealing with a sequence here */
+	if (get_rel_relkind(tableAddress.objectId) == RELKIND_SEQUENCE)
+	{
+		AlterObjectSchemaStmt *stmtCopy = copyObject(stmt);
+		stmtCopy->objectType = OBJECT_SEQUENCE;
+		return PostprocessAlterSequenceSchemaStmt((Node *) stmtCopy, queryString);
+	}
+
 	if (!ShouldPropagate() || !IsCitusTable(tableAddress.objectId))
 	{
 		return NIL;
@@ -501,6 +509,20 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	if (!OidIsValid(leftRelationId))
 	{
 		return NIL;
+	}
+
+	/*
+	 * check whether we are dealing with a sequence here
+	 * if yes, it must be ALTER TABLE .. OWNER TO .. command
+	 * since this is the only ALTER command of a sequence that
+	 * passes through an AlterTableStmt
+	 */
+	if (get_rel_relkind(leftRelationId) == RELKIND_SEQUENCE)
+	{
+		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
+		stmtCopy->relkind = OBJECT_SEQUENCE;
+		return PreprocessAlterSequenceOwnerStmt((Node *) stmtCopy, alterTableCommand,
+												processUtilityContext);
 	}
 
 	/*
@@ -1385,6 +1407,15 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 														  stmt->missing_ok);
 	Oid relationId = address.objectId;
 
+	/* check whether we are dealing with a sequence here */
+	if (get_rel_relkind(relationId) == RELKIND_SEQUENCE)
+	{
+		AlterObjectSchemaStmt *stmtCopy = copyObject(stmt);
+		stmtCopy->objectType = OBJECT_SEQUENCE;
+		return PreprocessAlterSequenceSchemaStmt((Node *) stmtCopy, queryString,
+												 processUtilityContext);
+	}
+
 	/* first check whether a distributed relation is affected */
 	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
 	{
@@ -1547,6 +1578,20 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 	if (relationId != InvalidOid)
 	{
+		/*
+		 * check whether we are dealing with a sequence here
+		 * if yes, it must be ALTER TABLE .. OWNER TO .. command
+		 * since this is the only ALTER command of a sequence that
+		 * passes through an AlterTableStmt
+		 */
+		if (get_rel_relkind(relationId) == RELKIND_SEQUENCE)
+		{
+			AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
+			stmtCopy->relkind = OBJECT_SEQUENCE;
+			PostprocessAlterSequenceOwnerStmt((Node *) stmtCopy, NULL);
+			return;
+		}
+
 		/* changing a relation could introduce new dependencies */
 		ObjectAddress tableAddress = { 0 };
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
