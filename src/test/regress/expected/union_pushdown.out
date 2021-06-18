@@ -912,14 +912,13 @@ $$);
  f
 (1 row)
 
--- cannot pushed down because postgres optimizes fields, needs to be fixed with #4781
 SELECT public.explain_has_distributed_subplan($$
 EXPLAIN
 SELECT COUNT(k) FROM v;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 SELECT public.explain_has_distributed_subplan($$
@@ -928,7 +927,7 @@ SELECT AVG(k) FROM v;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 SELECT public.explain_has_distributed_subplan($$
@@ -937,7 +936,7 @@ SELECT SUM(k) FROM v;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 SELECT public.explain_has_distributed_subplan($$
@@ -946,7 +945,81 @@ SELECT MAX(k) FROM v;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
+(1 row)
+
+CREATE OR REPLACE VIEW v AS (SELECT * from (SELECT * from test_a)a1 where k>1) UNION ALL SELECT * from (SELECT * from test_b)b1 where k<1;
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+CREATE OR REPLACE VIEW v AS SELECT * from test_a where k<1 UNION ALL SELECT * from test_b where k<1;
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
 (1 row)
 
 -- order by prevents postgres from optimizing fields so can be pushed down
@@ -966,7 +1039,7 @@ SELECT k, COUNT(*) FROM v GROUP BY k ORDER BY k;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 RESET client_min_messages;

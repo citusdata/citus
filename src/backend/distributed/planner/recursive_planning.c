@@ -1013,7 +1013,7 @@ ShouldRecursivelyPlanSetOperation(Query *query, RecursivePlanningContext *contex
 
 	PlannerRestrictionContext *filteredRestrictionContext =
 		FilterPlannerRestrictionForQuery(context->plannerRestrictionContext, query);
-	if (!SafeToPushdownUnionSubquery(filteredRestrictionContext))
+	if (!SafeToPushdownUnionSubquery(query, filteredRestrictionContext))
 	{
 		/*
 		 * The distribution column is not in the same place in all sides

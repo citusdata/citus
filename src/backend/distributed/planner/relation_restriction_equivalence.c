@@ -59,6 +59,13 @@ typedef struct AttributeEquivalenceClass
 	Index unionQueryPartitionKeyIndex;
 } AttributeEquivalenceClass;
 
+typedef struct FindQueryContainingRteIdentityContext
+{
+	int targetRTEIdentity;
+	Query *query;
+	Query *tempQuery;
+}FindQueryContainingRteIdentityContext;
+
 /*
  *  AttributeEquivalenceClassMember - one member expression of an
  *  AttributeEquivalenceClass. The important thing to consider is that
@@ -142,8 +149,9 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  firstClass,
 													  AttributeEquivalenceClass *
 													  secondClass);
-static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
-												  relationRestriction);
+static Var * RelationRestrictionPartitionKeyIndex(Query *query, RelationRestriction *
+												  relationRestriction,
+												  Index *partitionKeyIndex);
 static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
 													  restrictionContext);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
@@ -154,6 +162,11 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
 static Relids QueryRteIdentities(Query *queryTree);
+
+static bool FindQueryContainingRTEIdentityInternal(Node *node,
+												   FindQueryContainingRteIdentityContext *
+												   context);
+static Query * FindQueryContainingRTEIdentity(Query *mainQuery, int rteIndex);
 
 #if PG_VERSION_NUM >= PG_VERSION_13
 static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
@@ -194,7 +207,7 @@ AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 
 	if (originalQuery->setOperations || ContainsUnionSubquery(originalQuery))
 	{
-		return SafeToPushdownUnionSubquery(plannerRestrictionContext);
+		return SafeToPushdownUnionSubquery(originalQuery, plannerRestrictionContext);
 	}
 
 	return false;
@@ -244,7 +257,8 @@ ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext)
  * safe to push down, the function would fail to return true.
  */
 bool
-SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext)
+SafeToPushdownUnionSubquery(Query *originalQuery,
+							PlannerRestrictionContext *plannerRestrictionContext)
 {
 	RelationRestrictionContext *restrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
@@ -267,10 +281,8 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
 		Index partitionKeyIndex = InvalidAttrNumber;
 		PlannerInfo *relationPlannerRoot = relationRestriction->plannerInfo;
-		List *targetList = relationPlannerRoot->parse->targetList;
 		List *appendRelList = relationPlannerRoot->append_rel_list;
 		Var *varToBeAdded = NULL;
-		TargetEntry *targetEntryToAdd = NULL;
 
 		/*
 		 * We first check whether UNION ALLs are pulled up or not. Note that Postgres
@@ -294,8 +306,9 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 		}
 		else
 		{
-			partitionKeyIndex =
-				RelationRestrictionPartitionKeyIndex(relationRestriction);
+			varToBeAdded =
+				RelationRestrictionPartitionKeyIndex(originalQuery, relationRestriction,
+													 &partitionKeyIndex);
 
 			/* union does not have partition key in the target list */
 			if (partitionKeyIndex == 0)
@@ -303,13 +316,12 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 				continue;
 			}
 
-			targetEntryToAdd = list_nth(targetList, partitionKeyIndex - 1);
-			if (!IsA(targetEntryToAdd->expr, Var))
-			{
-				continue;
-			}
-
-			varToBeAdded = (Var *) targetEntryToAdd->expr;
+			/*
+			 * we update the varno because we use the original parse tree for finding the
+			 * var. However the rest of the code relies on a query tree that might be different
+			 * than the original parse tree because of postgres optimizations.
+			 */
+			varToBeAdded->varno = relationRestriction->index;
 		}
 
 		/*
@@ -1760,16 +1772,29 @@ ContainsUnionSubquery(Query *queryTree)
  * index that the partition key of the relation exists in the query. The query is
  * found in the planner info of the relation restriction.
  */
-static Index
-RelationRestrictionPartitionKeyIndex(RelationRestriction *relationRestriction)
+static Var *
+RelationRestrictionPartitionKeyIndex(Query *originalQuery,
+									 RelationRestriction *relationRestriction,
+									 Index *partitionKeyIndex)
 {
+	int targetRTEIndex = GetRTEIdentity(relationRestriction->rte);
+	Query *originalQueryContainingRTEIdentity =
+		FindQueryContainingRTEIdentity(originalQuery, targetRTEIndex);
+	if (!originalQueryContainingRTEIdentity)
+	{
+		/*
+		 * We should always find the query but we have this check for sanity.
+		 * This check makes sure that if there is a bug while finding the query,
+		 * we don't get a crash etc. and the only downside will be we might be recursively
+		 * planning a query that could be pushed down.
+		 */
+		return NULL;
+	}
+
+	List *relationTargetList = originalQueryContainingRTEIdentity->targetList;
+
 	ListCell *targetEntryCell = NULL;
 	Index partitionKeyTargetAttrIndex = 0;
-
-	PlannerInfo *relationPlannerRoot = relationRestriction->plannerInfo;
-	Query *relationPlannerParseQuery = relationPlannerRoot->parse;
-	List *relationTargetList = relationPlannerParseQuery->targetList;
-
 	foreach(targetEntryCell, relationTargetList)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
@@ -1779,18 +1804,86 @@ RelationRestrictionPartitionKeyIndex(RelationRestriction *relationRestriction)
 
 		if (!targetEntry->resjunk &&
 			IsA(targetExpression, Var) &&
-			IsPartitionColumn(targetExpression, relationPlannerParseQuery))
+			IsPartitionColumn(targetExpression, originalQueryContainingRTEIdentity))
 		{
 			Var *targetColumn = (Var *) targetExpression;
 
-			if (targetColumn->varno == relationRestriction->index)
+			Oid relationId = InvalidOid;
+			Var *column = NULL;
+			FindReferencedTableColumn(targetExpression, NIL,
+									  originalQueryContainingRTEIdentity, &relationId,
+									  &column);
+
+			targetColumn = column;
+			RangeTblEntry *resRTE =
+				(RangeTblEntry *) list_nth(originalQueryContainingRTEIdentity->rtable,
+										   targetColumn->varno - 1);
+			if (resRTE->rtekind == RTE_RELATION && GetRTEIdentity(resRTE) ==
+				targetRTEIndex)
 			{
-				return partitionKeyTargetAttrIndex;
+				*partitionKeyIndex = partitionKeyTargetAttrIndex;
+				return (Var *) copyObject(targetColumn);
 			}
 		}
 	}
 
-	return InvalidAttrNumber;
+	return NULL;
+}
+
+
+/*
+ * FindQueryContainingRTEIdentity finds the query/subquery that has an RTE
+ * with rteIndex in its rtable.
+ */
+static Query *
+FindQueryContainingRTEIdentity(Query *mainQuery, int rteIndex)
+{
+	FindQueryContainingRteIdentityContext *findRteIdentityContext =
+		palloc0(sizeof(FindQueryContainingRteIdentityContext));
+	findRteIdentityContext->targetRTEIdentity = rteIndex;
+	FindQueryContainingRTEIdentityInternal((Node *) mainQuery, findRteIdentityContext);
+	return findRteIdentityContext->query;
+}
+
+
+/*
+ * FindQueryContainingRTEIdentityInternal walks on the given node to find a query
+ * which has an RTE that has a given rteIdentity.
+ */
+static bool
+FindQueryContainingRTEIdentityInternal(Node *node,
+									   FindQueryContainingRteIdentityContext *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		Query *prevQuery = context->tempQuery;
+		context->tempQuery = query;
+		query_tree_walker(query, FindQueryContainingRTEIdentityInternal, context,
+						  QTW_EXAMINE_RTES_BEFORE);
+		context->tempQuery = prevQuery;
+		return false;
+	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return expression_tree_walker(node, FindQueryContainingRTEIdentityInternal,
+									  context);
+	}
+	RangeTblEntry *rte = (RangeTblEntry *) node;
+	if (rte->rtekind == RTE_RELATION)
+	{
+		if (GetRTEIdentity(rte) == context->targetRTEIdentity)
+		{
+			context->query = context->tempQuery;
+			return true;
+		}
+	}
+	return false;
 }
 
 
