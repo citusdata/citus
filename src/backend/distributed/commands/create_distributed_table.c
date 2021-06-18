@@ -1151,6 +1151,12 @@ EnsureTableNotDistributed(Oid relationId)
 static void
 EnsureRelationHasNoTriggers(Oid relationId)
 {
+	if (EnableUnsafeTriggers)
+	{
+		/* user really wants triggers */
+		return;
+	}
+
 	List *explicitTriggerIds = GetExplicitTriggerIdList(relationId);
 
 	if (list_length(explicitTriggerIds) > 0)
