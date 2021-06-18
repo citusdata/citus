@@ -26,6 +26,9 @@ extern bool AddAllLocalTablesToMetadata;
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;
 
+extern bool EnableUnsafeTriggers;
+
+
 extern void SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(Oid relationId,
 																	 char *
 																	 finalRelationName);
@@ -580,16 +583,19 @@ extern List * PostprocessAlterTriggerRenameStmt(Node *node, const char *queryStr
 extern void AlterTriggerRenameEventExtendNames(RenameStmt *renameTriggerStmt,
 											   char *schemaName, uint64 shardId);
 extern List * PostprocessAlterTriggerDependsStmt(Node *node, const char *queryString);
+extern List * PreprocessAlterTriggerDependsStmt(Node *node, const char *queryString,
+												ProcessUtilityContext
+												processUtilityContext);
 extern void AlterTriggerDependsEventExtendNames(
 	AlterObjectDependsStmt *alterTriggerDependsStmt,
 	char *schemaName, uint64 shardId);
+extern void ErrorOutForTriggerIfNotSupported(Oid relationId);
 extern List * PreprocessDropTriggerStmt(Node *node, const char *queryString,
 										ProcessUtilityContext processUtilityContext);
-extern void ErrorOutForTriggerIfNotCitusLocalTable(Oid relationId);
 extern void DropTriggerEventExtendNames(DropStmt *dropTriggerStmt, char *schemaName,
 										uint64 shardId);
-extern List * CitusLocalTableTriggerCommandDDLJob(Oid relationId, char *triggerName,
-												  const char *queryString);
+extern List * CitusCreateTriggerCommandDDLJob(Oid relationId, char *triggerName,
+											  const char *queryString);
 extern Oid GetTriggerFunctionId(Oid triggerId);
 
 /* cascade_table_operation_for_connected_relations.c */
