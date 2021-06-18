@@ -236,12 +236,8 @@ FROM
       UNION ALL SELECT user_id AS user_id FROM users_table_part JOIN events_table_part USING (user_id) WHERE users_table_part.value_1 = 8  GROUP BY user_id)) AS bar
       WHERE user_id < 2000 ) as level_1 ) as level_2 ) as level_3
 ORDER BY 1 DESC LIMIT 10;
-DEBUG:  push down of limit count: 10
- count
----------------------------------------------------------------------
-    78
-(1 row)
-
+DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM union_pushdown.users_table_part WHERE (value_2 OPERATOR(pg_catalog.=) 3)
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
 -- safe to pushdown
 SELECT DISTINCT user_id FROM (
     SELECT * FROM
@@ -912,14 +908,13 @@ $$);
  f
 (1 row)
 
--- cannot pushed down because postgres optimizes fields, needs to be fixed with #4781
 SELECT public.explain_has_distributed_subplan($$
 EXPLAIN
 SELECT COUNT(k) FROM v;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 SELECT public.explain_has_distributed_subplan($$
@@ -928,7 +923,7 @@ SELECT AVG(k) FROM v;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 SELECT public.explain_has_distributed_subplan($$
@@ -937,7 +932,7 @@ SELECT SUM(k) FROM v;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 SELECT public.explain_has_distributed_subplan($$
@@ -946,7 +941,81 @@ SELECT MAX(k) FROM v;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
+(1 row)
+
+CREATE OR REPLACE VIEW v AS (SELECT * from (SELECT * from test_a)a1 where k>1) UNION ALL SELECT * from (SELECT * from test_b)b1 where k<1;
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+CREATE OR REPLACE VIEW v AS SELECT * from test_a where k<1 UNION ALL SELECT * from test_b where k<1;
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
 (1 row)
 
 -- order by prevents postgres from optimizing fields so can be pushed down
@@ -966,7 +1035,7 @@ SELECT k, COUNT(*) FROM v GROUP BY k ORDER BY k;
 $$);
  explain_has_distributed_subplan
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 RESET client_min_messages;

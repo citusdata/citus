@@ -373,8 +373,7 @@ AssignRTEIdentities(List *rangeTableList, int rteIdCounter)
 		 * Note that we're only interested in RTE_RELATIONs and thus assigning
 		 * identifiers to those RTEs only.
 		 */
-		if (rangeTableEntry->rtekind == RTE_RELATION &&
-			rangeTableEntry->values_lists == NIL)
+		if (rangeTableEntry->rtekind == RTE_RELATION && rangeTableEntry->values_lists == NIL)
 		{
 			AssignRTEIdentity(rangeTableEntry, rteIdCounter++);
 		}
