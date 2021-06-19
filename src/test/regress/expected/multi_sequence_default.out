@@ -10,6 +10,21 @@ CREATE SCHEMA sequence_default;
 SET search_path = sequence_default, public;
 -- Cannot add a column involving DEFAULT nextval('..') because the table is not empty
 CREATE SEQUENCE seq_0;
+-- check sequence type & other things
+\d seq_0
+                      Sequence "sequence_default.seq_0"
+  Type  | Start | Minimum |       Maximum       | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint |     1 |       1 | 9223372036854775807 |         1 | no      |     1
+
+-- we can change the type of the sequence before using it in distributed tables
+ALTER SEQUENCE seq_0 AS smallint;
+\d seq_0
+                 Sequence "sequence_default.seq_0"
+   Type   | Start | Minimum | Maximum | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ smallint |     1 |       1 |   32767 |         1 | no      |     1
+
 CREATE TABLE seq_test_0 (x int, y int);
 SELECT create_distributed_table('seq_test_0','x');
  create_distributed_table
@@ -46,6 +61,28 @@ SELECT * FROM seq_test_0 ORDER BY 1, 2 LIMIT 5;
  x      | integer |           |          |
  y      | integer |           |          |
  z      | integer |           |          | nextval('seq_0'::regclass)
+
+-- check sequence type -> since it was used in a distributed table
+-- type has changed to the type of the column it was used
+-- in this case column z is of type int
+\d seq_0
+                  Sequence "sequence_default.seq_0"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+
+-- cannot change the type of a sequence used in a distributed table
+-- even if metadata is not synced to workers
+ALTER SEQUENCE seq_0 AS bigint;
+ERROR:  This operation is currently not allowed for a sequence used in a distributed table.
+-- we can change other things like increment
+-- if metadata is not synced to workers
+ALTER SEQUENCE seq_0 INCREMENT BY 2;
+\d seq_0
+                  Sequence "sequence_default.seq_0"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ integer |     1 |       1 | 2147483647 |         2 | no      |     1
 
 -- check that we can add serial pseudo-type columns
 -- when metadata is not yet synced to workers
@@ -189,6 +226,25 @@ ALTER SEQUENCE seq_2 RENAME TO sequence_2;
 \c - - - :worker_1_port
 \d sequence_default.sequence_2
                            Sequence "sequence_default.sequence_2"
+  Type  |      Start      |     Minimum     |     Maximum     | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint | 281474976710657 | 281474976710657 | 562949953421313 |         1 | no      |     1
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check rename is propagated properly when we use ALTER TABLE
+ALTER TABLE sequence_2 RENAME TO seq_2;
+-- check in the worker
+\c - - - :worker_1_port
+\d sequence_default.seq_2
+                             Sequence "sequence_default.seq_2"
   Type  |      Start      |     Minimum     |     Maximum     | Increment | Cycles? | Cache
 ---------------------------------------------------------------------
  bigint | 281474976710657 | 281474976710657 | 562949953421313 |         1 | no      |     1
@@ -376,16 +432,150 @@ ALTER SEQUENCE seq_8 NO CYCLE;
 ERROR:  This operation is currently not allowed for a distributed sequence.
 ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
 ERROR:  This operation is currently not allowed for a distributed sequence.
--- cannot change schema in a distributed sequence
+-- can change schema in a distributed sequence
+-- sequence_default_8 will be created in workers as part of dependencies
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
-ERROR:  This operation is currently not allowed for a distributed sequence.
+\c - - - :worker_1_port
+\d sequence_default_8.seq_8
+                   Sequence "sequence_default_8.seq_8"
+  Type  |   Start   |  Minimum  |  Maximum  | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint | 268435457 | 268435457 | 536870913 |         1 | no      |     1
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check we can change the schema when we use ALTER TABLE
+ALTER TABLE sequence_default_8.seq_8 SET SCHEMA sequence_default;
+\c - - - :worker_1_port
+\d sequence_default.seq_8
+                    Sequence "sequence_default.seq_8"
+  Type  |   Start   |  Minimum  |  Maximum  | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint | 268435457 | 268435457 | 536870913 |         1 | no      |     1
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 DROP SCHEMA sequence_default_8;
+SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default_8 CASCADE');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP SCHEMA")
+ (localhost,57638,t,"DROP SCHEMA")
+(2 rows)
+
 -- cannot use more than one sequence in a column default
 CREATE SEQUENCE seq_9;
 CREATE SEQUENCE seq_10;
 CREATE TABLE seq_test_9 (x int, y int DEFAULT nextval('seq_9') - nextval('seq_10'));
 SELECT create_distributed_table('seq_test_9', 'x');
 ERROR:  More than one sequence in a column default is not supported for distribution
+ALTER TABLE seq_test_9 ALTER COLUMN y SET DEFAULT nextval('seq_9');
+SELECT create_distributed_table('seq_test_9', 'x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- we can change the owner role of a sequence
+CREATE ROLE seq_role_0;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+CREATE ROLE seq_role_1;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+ALTER SEQUENCE seq_10 OWNER TO seq_role_0;
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+ sequencename | sequenceowner
+---------------------------------------------------------------------
+ seq_10       | seq_role_0
+(1 row)
+
+SELECT run_command_on_workers('CREATE ROLE seq_role_0');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+SELECT run_command_on_workers('CREATE ROLE seq_role_1');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+ALTER TABLE seq_test_9 ALTER COLUMN y SET DEFAULT nextval('seq_10');
+ALTER SEQUENCE seq_10 OWNER TO seq_role_1;
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+ sequencename | sequenceowner
+---------------------------------------------------------------------
+ seq_10       | seq_role_1
+(1 row)
+
+\c - - - :worker_1_port
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+ sequencename | sequenceowner
+---------------------------------------------------------------------
+ seq_10       | seq_role_1
+(1 row)
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- check we can change the owner role of a sequence when we use ALTER TABLE
+ALTER TABLE seq_10 OWNER TO seq_role_0;
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+ sequencename | sequenceowner
+---------------------------------------------------------------------
+ seq_10       | seq_role_0
+(1 row)
+
+\c - - - :worker_1_port
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+ sequencename | sequenceowner
+---------------------------------------------------------------------
+ seq_10       | seq_role_0
+(1 row)
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP SEQUENCE seq_10 CASCADE;
+NOTICE:  drop cascades to default value for column y of table seq_test_9
+DROP ROLE seq_role_0, seq_role_1;
+SELECT run_command_on_workers('DROP ROLE IF EXISTS seq_role_0, seq_role_1');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DROP ROLE")
+ (localhost,57638,t,"DROP ROLE")
+(2 rows)
+
 -- Check some cases when default is defined by
 -- DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
@@ -426,14 +616,14 @@ ERROR:  relation "seq_11" does not exist
 -- clean up
 DROP TABLE sequence_default.seq_test_7_par;
 DROP SCHEMA sequence_default CASCADE;
-NOTICE:  drop cascades to 23 other objects
+NOTICE:  drop cascades to 22 other objects
 DETAIL:  drop cascades to sequence sequence_default.seq_0
 drop cascades to table sequence_default.seq_test_0
 drop cascades to table sequence_default.seq_test_4
 drop cascades to sequence sequence_default.seq_4
 drop cascades to sequence sequence_default.seq_1
 drop cascades to table sequence_default.seq_test_1
-drop cascades to sequence sequence_default.sequence_2
+drop cascades to sequence sequence_default.seq_2
 drop cascades to table sequence_default.seq_test_2
 drop cascades to table sequence_default.seq_test_3
 drop cascades to table sequence_default.seq_test_5
@@ -445,7 +635,6 @@ drop cascades to sequence sequence_default.seq_7_par
 drop cascades to sequence sequence_default.seq_8
 drop cascades to table sequence_default.seq_test_8
 drop cascades to sequence sequence_default.seq_9
-drop cascades to sequence sequence_default.seq_10
 drop cascades to table sequence_default.seq_test_9
 drop cascades to sequence sequence_default.seq_11
 drop cascades to table sequence_default.seq_test_10

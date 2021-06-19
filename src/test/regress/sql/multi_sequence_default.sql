@@ -13,6 +13,11 @@ SET search_path = sequence_default, public;
 
 -- Cannot add a column involving DEFAULT nextval('..') because the table is not empty
 CREATE SEQUENCE seq_0;
+-- check sequence type & other things
+\d seq_0
+-- we can change the type of the sequence before using it in distributed tables
+ALTER SEQUENCE seq_0 AS smallint;
+\d seq_0
 CREATE TABLE seq_test_0 (x int, y int);
 SELECT create_distributed_table('seq_test_0','x');
 INSERT INTO seq_test_0 SELECT 1, s FROM generate_series(1, 50) s;
@@ -23,6 +28,18 @@ ALTER TABLE seq_test_0 ADD COLUMN z int;
 ALTER TABLE seq_test_0 ALTER COLUMN z SET DEFAULT nextval('seq_0');
 SELECT * FROM seq_test_0 ORDER BY 1, 2 LIMIT 5;
 \d seq_test_0
+-- check sequence type -> since it was used in a distributed table
+-- type has changed to the type of the column it was used
+-- in this case column z is of type int
+\d seq_0
+-- cannot change the type of a sequence used in a distributed table
+-- even if metadata is not synced to workers
+ALTER SEQUENCE seq_0 AS bigint;
+-- we can change other things like increment
+-- if metadata is not synced to workers
+ALTER SEQUENCE seq_0 INCREMENT BY 2;
+\d seq_0
+
 
 
 -- check that we can add serial pseudo-type columns
@@ -116,6 +133,15 @@ ALTER SEQUENCE seq_2 RENAME TO sequence_2;
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+-- check rename is propagated properly when we use ALTER TABLE
+ALTER TABLE sequence_2 RENAME TO seq_2;
+-- check in the worker
+\c - - - :worker_1_port
+\d sequence_default.seq_2
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 -- check rename with another schema
 -- we notice that schema is also propagated as one of the sequence's dependencies
 CREATE SCHEMA sequence_default_0;
@@ -205,9 +231,25 @@ ALTER SEQUENCE seq_8 START WITH 6;
 ALTER SEQUENCE seq_8 RESTART WITH 6;
 ALTER SEQUENCE seq_8 NO CYCLE;
 ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
--- cannot change schema in a distributed sequence
+-- can change schema in a distributed sequence
+-- sequence_default_8 will be created in workers as part of dependencies
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
+\c - - - :worker_1_port
+\d sequence_default_8.seq_8
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+-- check we can change the schema when we use ALTER TABLE
+ALTER TABLE sequence_default_8.seq_8 SET SCHEMA sequence_default;
+\c - - - :worker_1_port
+\d sequence_default.seq_8
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SCHEMA sequence_default_8;
+SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default_8 CASCADE');
 
 
 -- cannot use more than one sequence in a column default
@@ -215,7 +257,38 @@ CREATE SEQUENCE seq_9;
 CREATE SEQUENCE seq_10;
 CREATE TABLE seq_test_9 (x int, y int DEFAULT nextval('seq_9') - nextval('seq_10'));
 SELECT create_distributed_table('seq_test_9', 'x');
+ALTER TABLE seq_test_9 ALTER COLUMN y SET DEFAULT nextval('seq_9');
+SELECT create_distributed_table('seq_test_9', 'x');
 
+
+-- we can change the owner role of a sequence
+CREATE ROLE seq_role_0;
+CREATE ROLE seq_role_1;
+ALTER SEQUENCE seq_10 OWNER TO seq_role_0;
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+SELECT run_command_on_workers('CREATE ROLE seq_role_0');
+SELECT run_command_on_workers('CREATE ROLE seq_role_1');
+ALTER TABLE seq_test_9 ALTER COLUMN y SET DEFAULT nextval('seq_10');
+ALTER SEQUENCE seq_10 OWNER TO seq_role_1;
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+\c - - - :worker_1_port
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+-- check we can change the owner role of a sequence when we use ALTER TABLE
+ALTER TABLE seq_10 OWNER TO seq_role_0;
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+\c - - - :worker_1_port
+SELECT sequencename, sequenceowner FROM pg_sequences WHERE sequencename = 'seq_10' ORDER BY 1, 2;
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+DROP SEQUENCE seq_10 CASCADE;
+DROP ROLE seq_role_0, seq_role_1;
+SELECT run_command_on_workers('DROP ROLE IF EXISTS seq_role_0, seq_role_1');
 
 -- Check some cases when default is defined by
 -- DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
