@@ -81,7 +81,8 @@ EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
 EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
 EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
 EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
-
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(1);
 
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 1 AND u_data = ('name1', 21)::user_data;
 
@@ -165,6 +166,7 @@ execute router_with_param_and_func(8);
 PREPARE router_with_param_and_func_on_non_dist_key(int) AS
 	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 1 AND user_id = 1 AND user_index = $1;
 
+EXECUTE router_with_param_and_func_on_non_dist_key(1);
 EXECUTE router_with_param_and_func_on_non_dist_key(1);
 EXECUTE router_with_param_and_func_on_non_dist_key(1);
 EXECUTE router_with_param_and_func_on_non_dist_key(1);
@@ -274,6 +276,8 @@ EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
 EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
 EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
 EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
+EXECUTE fast_path_router_with_param_and_func_on_non_dist_key(3);
 
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 3 AND u_data  = ('name3', 23)::user_data;
 
@@ -303,6 +307,8 @@ EXECUTE fast_path_router_with_param_on_non_dist_key(('name3', 23)::user_data);
 EXECUTE fast_path_router_with_param_on_non_dist_key(('name3', 23)::user_data);
 
 PREPARE fast_path_router_with_only_function AS SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id = 3;
+EXECUTE fast_path_router_with_only_function;
+EXECUTE fast_path_router_with_only_function;
 EXECUTE fast_path_router_with_only_function;
 EXECUTE fast_path_router_with_only_function;
 EXECUTE fast_path_router_with_only_function;
@@ -344,6 +350,7 @@ execute router_with_param_and_func(3);
 PREPARE router_with_param_and_func_on_non_dist_key(int) AS
 	SELECT get_local_node_id_volatile() > 0 FROM user_info_data WHERE user_id  = 3 AND user_id = 3 AND user_index = $1;
 
+EXECUTE router_with_param_and_func_on_non_dist_key(3);
 EXECUTE router_with_param_and_func_on_non_dist_key(3);
 EXECUTE router_with_param_and_func_on_non_dist_key(3);
 EXECUTE router_with_param_and_func_on_non_dist_key(3);
@@ -402,6 +409,7 @@ EXECUTE router_with_two_params(('name3', 23)::user_data, 3);
 SELECT get_local_node_id_volatile() > 0 FROM user_info_data u1 JOIN user_info_data u2 USING(user_id) WHERE user_id = 3;
 
 PREPARE router_with_only_function AS SELECT get_local_node_id_volatile() > 0 FROM user_info_data u1 JOIN user_info_data u2 USING(user_id) WHERE user_id = 3;
+EXECUTE router_with_only_function;
 EXECUTE router_with_only_function;
 EXECUTE router_with_only_function;
 EXECUTE router_with_only_function;

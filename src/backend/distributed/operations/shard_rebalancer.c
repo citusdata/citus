@@ -744,12 +744,12 @@ SetupRebalanceMonitor(List *placementUpdateList, Oid relationId)
 	List *colocatedUpdateList = GetColocatedRebalanceSteps(placementUpdateList);
 	ListCell *colocatedUpdateCell = NULL;
 
-	ProgressMonitorData *monitor = CreateProgressMonitor(REBALANCE_ACTIVITY_MAGIC_NUMBER,
-														 list_length(colocatedUpdateList),
-														 sizeof(
-															 PlacementUpdateEventProgress),
-														 relationId);
-	PlacementUpdateEventProgress *rebalanceSteps = monitor->steps;
+	dsm_handle dsmHandle;
+	ProgressMonitorData *monitor = CreateProgressMonitor(
+		list_length(colocatedUpdateList),
+		sizeof(PlacementUpdateEventProgress),
+		&dsmHandle);
+	PlacementUpdateEventProgress *rebalanceSteps = ProgressMonitorSteps(monitor);
 
 	int32 eventIndex = 0;
 	foreach(colocatedUpdateCell, colocatedUpdateList)
@@ -767,6 +767,7 @@ SetupRebalanceMonitor(List *placementUpdateList, Oid relationId)
 
 		eventIndex++;
 	}
+	RegisterProgressMonitor(REBALANCE_ACTIVITY_MAGIC_NUMBER, relationId, dsmHandle);
 }
 
 
@@ -1075,7 +1076,6 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	List *segmentList = NIL;
-	ListCell *rebalanceMonitorCell = NULL;
 	TupleDesc tupdesc;
 	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupdesc);
 
@@ -1083,12 +1083,12 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 	List *rebalanceMonitorList = ProgressMonitorList(REBALANCE_ACTIVITY_MAGIC_NUMBER,
 													 &segmentList);
 
-
-	foreach(rebalanceMonitorCell, rebalanceMonitorList)
+	ProgressMonitorData *monitor = NULL;
+	foreach_ptr(monitor, rebalanceMonitorList)
 	{
-		ProgressMonitorData *monitor = lfirst(rebalanceMonitorCell);
-		PlacementUpdateEventProgress *placementUpdateEvents = monitor->steps;
-		HTAB *shardStatistics = BuildWorkerShardStatisticsHash(monitor->steps,
+		PlacementUpdateEventProgress *placementUpdateEvents = ProgressMonitorSteps(
+			monitor);
+		HTAB *shardStatistics = BuildWorkerShardStatisticsHash(placementUpdateEvents,
 															   monitor->stepCount);
 		HTAB *shardSizes = BuildShardSizesHash(monitor, shardStatistics);
 		for (int eventIndex = 0; eventIndex < monitor->stepCount; eventIndex++)
@@ -1158,10 +1158,12 @@ BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics)
 	HTAB *shardSizes = hash_create(
 		"ShardSizeHash", 32, &info,
 		HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
-	PlacementUpdateEventProgress *placementUpdateEvents = monitor->steps;
+	PlacementUpdateEventProgress *placementUpdateEvents = ProgressMonitorSteps(monitor);
+
 	for (int eventIndex = 0; eventIndex < monitor->stepCount; eventIndex++)
 	{
 		PlacementUpdateEventProgress *step = placementUpdateEvents + eventIndex;
+
 		uint64 shardId = step->shardId;
 		uint64 shardSize = 0;
 		uint64 backupShardSize = 0;
@@ -2769,9 +2771,9 @@ UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName, int sour
 {
 	ProgressMonitorData *header = GetCurrentProgressMonitor();
 
-	if (header != NULL && header->steps != NULL)
+	if (header != NULL)
 	{
-		PlacementUpdateEventProgress *steps = header->steps;
+		PlacementUpdateEventProgress *steps = ProgressMonitorSteps(header);
 		ListCell *colocatedShardIntervalCell = NULL;
 
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
