@@ -36,12 +36,13 @@ create_progress(PG_FUNCTION_ARGS)
 {
 	uint64 magicNumber = PG_GETARG_INT64(0);
 	int stepCount = PG_GETARG_INT32(1);
-	ProgressMonitorData *monitor = CreateProgressMonitor(magicNumber, stepCount,
-														 sizeof(uint64), 0);
+	dsm_handle dsmHandle;
+	ProgressMonitorData *monitor = CreateProgressMonitor(stepCount,
+														 sizeof(uint64), &dsmHandle);
 
 	if (monitor != NULL)
 	{
-		uint64 *steps = (uint64 *) monitor->steps;
+		uint64 *steps = (uint64 *) ProgressMonitorSteps(monitor);
 
 		int i = 0;
 		for (; i < stepCount; i++)
@@ -50,6 +51,7 @@ create_progress(PG_FUNCTION_ARGS)
 		}
 	}
 
+	RegisterProgressMonitor(magicNumber, 0, dsmHandle);
 	PG_RETURN_VOID();
 }
 
@@ -64,7 +66,7 @@ update_progress(PG_FUNCTION_ARGS)
 
 	if (monitor != NULL && step < monitor->stepCount)
 	{
-		uint64 *steps = (uint64 *) monitor->steps;
+		uint64 *steps = (uint64 *) ProgressMonitorSteps(monitor);
 		steps[step] = newValue;
 	}
 
@@ -93,7 +95,7 @@ show_progress(PG_FUNCTION_ARGS)
 	ProgressMonitorData *monitor = NULL;
 	foreach_ptr(monitor, monitorList)
 	{
-		uint64 *steps = monitor->steps;
+		uint64 *steps = ProgressMonitorSteps(monitor);
 
 		for (int stepIndex = 0; stepIndex < monitor->stepCount; stepIndex++)
 		{
