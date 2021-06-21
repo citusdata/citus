@@ -73,6 +73,10 @@ CreateProgressMonitor(int stepCount, Size stepSize, dsm_handle *dsmHandle)
  * hopefully harmless) rows in pg_stat_progress_vacuum output. The caller of
  * this function should provide a magic number, a unique 64 bit unsigned
  * integer, to distinguish different types of commands.
+ *
+ * IMPORTANT: After registering the progress monitor, all modification to the
+ * data should be done using concurrency safe operations (i.e. locks and
+ * atomics)
  */
 void
 RegisterProgressMonitor(uint64 progressTypeMagicNumber, Oid relationId,
@@ -238,7 +242,15 @@ MonitorDataFromDSMHandle(dsm_handle dsmHandle, dsm_segment **attachedSegment)
 /*
  * ProgressMonitorSteps returns a pointer to the array of steps that are stored
  * in a progress monitor. This is simply the data right after the header, so
- * this function is trivial.
+ * this function is trivial. The main purpose of this function is to make the
+ * intent clear to readers of the code.
+ *
+ * NOTE: The pointer this function returns is explicitly not stored in the
+ * header, because the header is shared between processes. The absolute pointer
+ * to the steps can have a different value between processes though, because
+ * the same piece of shared memory often has a different address in different
+ * processes. So we calculate this pointer over and over to make sure we use
+ * the right value for each process.
  */
 void *
 ProgressMonitorSteps(ProgressMonitorData *monitor)
