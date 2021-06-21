@@ -409,7 +409,7 @@ NOTICE:  create_citus_local_table is deprecated in favour of citus_add_local_tab
   ALTER EXTENSION citus UPDATE TO '9.4-1';
 ERROR:  citus local tables are introduced in Citus 9.5
 HINT:  To downgrade Citus to an older version, you should first convert each citus local table to a postgres table by executing SELECT undistribute_table("%s")
-CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 ROLLBACK;
 -- now we can downgrade as there is no citus local table
 ALTER EXTENSION citus UPDATE TO '9.4-1';
@@ -595,9 +595,11 @@ SELECT * FROM print_extension_changes();
 -- Snapshot of state at 10.2-1
 ALTER EXTENSION citus UPDATE TO '10.2-1';
 SELECT * FROM print_extension_changes();
- previous_object | current_object
+ previous_object |                          current_object
 ---------------------------------------------------------------------
-(0 rows)
+                 | function citus_internal.downgrade_columnar_storage(regclass) void
+                 | function citus_internal.upgrade_columnar_storage(regclass) void
+(2 rows)
 
 DROP TABLE prev_objects, extension_diff;
 -- show running version
@@ -870,7 +872,7 @@ BEGIN
 END;
 $$;
 ERROR:  create distributed table failed
-CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 \c regression
 \c - - - :master_port
 DROP DATABASE another;

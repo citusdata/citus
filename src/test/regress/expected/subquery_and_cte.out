@@ -717,7 +717,7 @@ RAISE '(%/3) failed to execute one of the tasks', errors_received;
 END;
 $$;
 ERROR:  (3/3) failed to execute one of the tasks
-CONTEXT:  PL/pgSQL function inline_code_block line 31 at RAISE
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 SET client_min_messages TO DEFAULT;
 DROP SCHEMA subquery_and_ctes CASCADE;
 NOTICE:  drop cascades to 8 other objects

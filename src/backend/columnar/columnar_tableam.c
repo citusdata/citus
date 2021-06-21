@@ -51,10 +51,12 @@
 
 #include "columnar/columnar.h"
 #include "columnar/columnar_customscan.h"
+#include "columnar/columnar_storage.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 
 /*
@@ -81,12 +83,6 @@ typedef struct ColumnarScanDescData
 	MemoryContext scanContext;
 	Bitmapset *attr_needed;
 	List *scanQual;
-
-	/*
-	 * ANALYZE requires an item pointer for sorting. We keep track of row
-	 * number so we can construct an item pointer based on that.
-	 */
-	uint64 rowNumber;
 } ColumnarScanDescData;
 
 typedef struct ColumnarScanDescData *ColumnarScanDesc;
@@ -115,6 +111,21 @@ static void TruncateColumnar(Relation rel, int elevel);
 static HeapTuple ColumnarSlotCopyHeapTuple(TupleTableSlot *slot);
 static void ColumnarCheckLogicalReplication(Relation rel);
 static Datum * detoast_values(TupleDesc tupleDesc, Datum *orig_values, bool *isnull);
+static ItemPointerData row_number_to_tid(uint64 rowNumber);
+static uint64 tid_to_row_number(ItemPointerData tid);
+static void ErrorIfInvalidRowNumber(uint64 rowNumber);
+static void ColumnarReportTotalVirtualBlocks(Relation relation, Snapshot snapshot,
+											 int progressArrIndex);
+static BlockNumber ColumnarGetNumberOfVirtualBlocks(Relation relation, Snapshot snapshot);
+static ItemPointerData ColumnarGetHighestItemPointer(Relation relation,
+													 Snapshot snapshot);
+static double ColumnarReadRowsIntoIndex(TableScanDesc scan,
+										Relation indexRelation,
+										IndexInfo *indexInfo,
+										bool progress,
+										IndexBuildCallback indexCallback,
+										void *indexCallbackState,
+										EState *estate, ExprState *predicate);
 
 /* Custom tuple slot ops used for columnar. Initialized in columnar_tableam_init(). */
 static TupleTableSlotOps TTSOpsColumnar;
@@ -264,8 +275,9 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 
 	ExecClearTuple(slot);
 
+	uint64 rowNumber;
 	bool nextRowFound = ColumnarReadNextRow(scan->cs_readState, slot->tts_values,
-											slot->tts_isnull);
+											slot->tts_isnull, &rowNumber);
 
 	if (!nextRowFound)
 	{
@@ -274,65 +286,130 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 
 	ExecStoreVirtualTuple(slot);
 
-	/*
-	 * Set slot's item pointer block & offset to non-zero. These are
-	 * used just for sorting in acquire_sample_rows(), so rowNumber
-	 * is good enough. See ColumnarSlotCopyHeapTuple for more info.
-	 *
-	 * offset is 16-bits, so use the first 15 bits for offset and
-	 * rest as block number.
-	 */
-	ItemPointerSetBlockNumber(&(slot->tts_tid), scan->rowNumber / (32 * 1024) + 1);
-	ItemPointerSetOffsetNumber(&(slot->tts_tid), scan->rowNumber % (32 * 1024) + 1);
-
-	scan->rowNumber++;
+	slot->tts_tid = row_number_to_tid(rowNumber);
 
 	return true;
+}
+
+
+/*
+ * row_number_to_tid maps given rowNumber to ItemPointerData.
+ */
+static ItemPointerData
+row_number_to_tid(uint64 rowNumber)
+{
+	ErrorIfInvalidRowNumber(rowNumber);
+
+	ItemPointerData tid = { 0 };
+	ItemPointerSetBlockNumber(&tid, rowNumber / VALID_ITEMPOINTER_OFFSETS);
+	ItemPointerSetOffsetNumber(&tid, rowNumber % VALID_ITEMPOINTER_OFFSETS +
+							   FirstOffsetNumber);
+	return tid;
+}
+
+
+/*
+ * tid_to_row_number maps given ItemPointerData to rowNumber.
+ */
+static uint64
+tid_to_row_number(ItemPointerData tid)
+{
+	uint64 rowNumber = ItemPointerGetBlockNumber(&tid) * VALID_ITEMPOINTER_OFFSETS +
+					   ItemPointerGetOffsetNumber(&tid) - FirstOffsetNumber;
+
+	ErrorIfInvalidRowNumber(rowNumber);
+
+	return rowNumber;
+}
+
+
+/*
+ * ErrorIfInvalidRowNumber errors out if given rowNumber is invalid.
+ */
+static void
+ErrorIfInvalidRowNumber(uint64 rowNumber)
+{
+	if (rowNumber == COLUMNAR_INVALID_ROW_NUMBER)
+	{
+		/* not expected but be on the safe side */
+		ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+						errmsg("unexpected row number for columnar table")));
+	}
+	else if (rowNumber > COLUMNAR_MAX_ROW_NUMBER)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("columnar tables can't have row numbers "
+							   "greater than " UINT64_FORMAT,
+							   (uint64) COLUMNAR_MAX_ROW_NUMBER),
+						errhint("Consider using VACUUM FULL for your table")));
+	}
 }
 
 
 static Size
 columnar_parallelscan_estimate(Relation rel)
 {
-	elog(ERROR, "columnar_parallelscan_estimate not implemented");
+	return sizeof(ParallelBlockTableScanDescData);
 }
 
 
 static Size
 columnar_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "columnar_parallelscan_initialize not implemented");
+	ParallelBlockTableScanDesc bpscan = (ParallelBlockTableScanDesc) pscan;
+
+	bpscan->base.phs_relid = RelationGetRelid(rel);
+	bpscan->phs_nblocks = RelationGetNumberOfBlocks(rel);
+	bpscan->base.phs_syncscan = synchronize_seqscans &&
+								!RelationUsesLocalBuffers(rel) &&
+								bpscan->phs_nblocks > NBuffers / 4;
+	SpinLockInit(&bpscan->phs_mutex);
+	bpscan->phs_startblock = InvalidBlockNumber;
+	pg_atomic_init_u64(&bpscan->phs_nallocated, 0);
+
+	return sizeof(ParallelBlockTableScanDescData);
 }
 
 
 static void
 columnar_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	elog(ERROR, "columnar_parallelscan_reinitialize not implemented");
+	ParallelBlockTableScanDesc bpscan = (ParallelBlockTableScanDesc) pscan;
+	pg_atomic_write_u64(&bpscan->phs_nallocated, 0);
 }
 
 
 static IndexFetchTableData *
 columnar_index_fetch_begin(Relation rel)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("indexes not supported for columnar tables")));
+	Oid relfilenode = rel->rd_node.relNode;
+	if (PendingWritesInUpperTransactions(relfilenode, GetCurrentSubTransactionId()))
+	{
+		/* XXX: maybe we can just flush the data and continue */
+		elog(ERROR, "cannot read from index when there is unflushed data in "
+					"upper transactions");
+	}
+
+	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
+
+	IndexFetchTableData *scan = palloc0(sizeof(IndexFetchTableData));
+	scan->rel = rel;
+	return scan;
 }
 
 
 static void
 columnar_index_fetch_reset(IndexFetchTableData *scan)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("indexes not supported for columnar tables")));
+	/* no-op */
 }
 
 
 static void
 columnar_index_fetch_end(IndexFetchTableData *scan)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("indexes not supported for columnar tables")));
+	columnar_index_fetch_reset(scan);
+	pfree(scan);
 }
 
 
@@ -343,8 +420,37 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *scan,
 						   TupleTableSlot *slot,
 						   bool *call_again, bool *all_dead)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("indexes not supported for columnar tables")));
+	/* no HOT chains are possible in columnar, directly set it to false */
+	*call_again = false;
+
+	/*
+	 * No dead tuples are possible in columnar, set it to false if it's
+	 * passed to be non-NULL.
+	 */
+	if (all_dead)
+	{
+		*all_dead = false;
+	}
+
+	ExecClearTuple(slot);
+
+	/* we need all columns */
+	int natts = scan->rel->rd_att->natts;
+	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
+	TupleDesc relationTupleDesc = RelationGetDescr(scan->rel);
+	List *relationColumnList = NeededColumnsList(relationTupleDesc, attr_needed);
+	uint64 rowNumber = tid_to_row_number(*tid);
+	if (!ColumnarReadRowByRowNumber(scan->rel, rowNumber, relationColumnList,
+									slot->tts_values, slot->tts_isnull, snapshot))
+	{
+		return false;
+	}
+
+	slot->tts_tableOid = RelationGetRelid(scan->rel);
+	slot->tts_tid = *tid;
+	ExecStoreVirtualTuple(slot);
+
+	return true;
 }
 
 
@@ -411,7 +517,8 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	Datum *values = detoast_values(slot->tts_tupleDescriptor,
 								   slot->tts_values, slot->tts_isnull);
 
-	ColumnarWriteRow(writeState, values, slot->tts_isnull);
+	uint64 writtenRowNumber = ColumnarWriteRow(writeState, values, slot->tts_isnull);
+	slot->tts_tid = row_number_to_tid(writtenRowNumber);
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextReset(ColumnarWritePerTupleContext(writeState));
@@ -457,7 +564,10 @@ columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 		Datum *values = detoast_values(tupleSlot->tts_tupleDescriptor,
 									   tupleSlot->tts_values, tupleSlot->tts_isnull);
 
-		ColumnarWriteRow(writeState, values, tupleSlot->tts_isnull);
+		uint64 writtenRowNumber = ColumnarWriteRow(writeState, values,
+												   tupleSlot->tts_isnull);
+		tupleSlot->tts_tid = row_number_to_tid(writtenRowNumber);
+
 		MemoryContextReset(ColumnarWritePerTupleContext(writeState));
 	}
 
@@ -516,17 +626,24 @@ columnar_relation_set_new_filenode(Relation rel,
 						errmsg("unlogged columnar tables are not supported")));
 	}
 
-	Oid oldRelfilenode = rel->rd_node.relNode;
+	/*
+	 * If existing and new relfilenode are different, that means the existing
+	 * storage was dropped and we also need to clean up the metadata and
+	 * state. If they are equal, this is a new relation object and we don't
+	 * need to clean anything.
+	 */
+	if (rel->rd_node.relNode != newrnode->relNode)
+	{
+		MarkRelfilenodeDropped(rel->rd_node.relNode, GetCurrentSubTransactionId());
 
-	MarkRelfilenodeDropped(oldRelfilenode, GetCurrentSubTransactionId());
-
-	/* delete old relfilenode metadata */
-	DeleteMetadataRows(rel->rd_node);
+		DeleteMetadataRows(rel->rd_node);
+	}
 
 	*freezeXid = RecentXmin;
 	*minmulti = GetOldestMultiXactId();
 	SMgrRelation srel = RelationCreateStorage(*newrnode, persistence);
 
+	ColumnarStorageInit(srel, ColumnarMetadataNewStorageId());
 	InitColumnarOptions(rel->rd_id);
 
 	smgrclose(srel);
@@ -554,7 +671,9 @@ columnar_relation_nontransactional_truncate(Relation rel)
 	 */
 	RelationTruncate(rel, 0);
 
-	/* we will lazily initialize new metadata in first stripe reservation */
+	uint64 storageId = ColumnarMetadataNewStorageId();
+	RelationOpenSmgr(rel);
+	ColumnarStorageInit(rel->rd_smgr, storageId);
 }
 
 
@@ -588,7 +707,8 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	if (OldIndex != NULL || use_sort)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("indexes not supported for columnar tables")));
+						errmsg("clustering columnar tables using indexes is "
+							   "not supported")));
 	}
 
 	/*
@@ -619,7 +739,8 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	*num_tuples = 0;
 
-	while (ColumnarReadNextRow(readState, values, nulls))
+	/* we don't need to know rowNumber here */
+	while (ColumnarReadNextRow(readState, values, nulls, NULL))
 	{
 		ColumnarWriteRow(writeState, values, nulls);
 		(*num_tuples)++;
@@ -667,6 +788,14 @@ static void
 columnar_vacuum_rel(Relation rel, VacuumParams *params,
 					BufferAccessStrategy bstrategy)
 {
+	/*
+	 * If metapage version of relation is older, then we hint users to VACUUM
+	 * the relation in ColumnarMetapageCheckVersion. So if needed, upgrade
+	 * the metapage before doing anything.
+	 */
+	bool isUpgrade = true;
+	ColumnarStorageUpdateIfNeeded(rel, isUpgrade);
+
 	int elevel = (params->options & VACOPT_VERBOSE) ? INFO : DEBUG2;
 
 	/* this should have been resolved by vacuum.c until now */
@@ -840,34 +969,25 @@ TruncateColumnar(Relation rel, int elevel)
 		return;
 	}
 
-	RelationOpenSmgr(rel);
-	BlockNumber old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-	RelationCloseSmgr(rel);
-
 	/*
 	 * Due to the AccessExclusive lock there's no danger that
 	 * new stripes be added beyond highestPhysicalAddress while
 	 * we're truncating.
 	 */
-	SmgrAddr highestPhysicalAddress =
-		logical_to_smgr(GetHighestUsedAddress(rel->rd_node));
+	uint64 newDataReservation = Max(GetHighestUsedAddress(rel->rd_node) + 1,
+									ColumnarFirstLogicalOffset);
 
-	/*
-	 * Unlock and return if truncation won't reduce data file's size.
-	 */
-	BlockNumber new_rel_pages = Min(old_rel_pages,
-									highestPhysicalAddress.blockno + 1);
-	if (new_rel_pages == old_rel_pages)
+	RelationOpenSmgr(rel);
+	BlockNumber old_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+
+	if (!ColumnarStorageTruncate(rel, newDataReservation))
 	{
 		UnlockRelation(rel, AccessExclusiveLock);
 		return;
 	}
 
-	/*
-	 * Truncate the storage. Note that RelationTruncate() takes care of
-	 * Write Ahead Logging.
-	 */
-	RelationTruncate(rel, new_rel_pages);
+	RelationOpenSmgr(rel);
+	BlockNumber new_rel_pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 
 	/*
 	 * We can release the exclusive lock as soon as we have truncated.
@@ -964,7 +1084,7 @@ columnar_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin,
 
 
 static double
-columnar_index_build_range_scan(Relation heapRelation,
+columnar_index_build_range_scan(Relation columnarRelation,
 								Relation indexRelation,
 								IndexInfo *indexInfo,
 								bool allow_sync,
@@ -976,8 +1096,278 @@ columnar_index_build_range_scan(Relation heapRelation,
 								void *callback_state,
 								TableScanDesc scan)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("indexes not supported for columnar tables")));
+	if (start_blockno != 0 || numblocks != InvalidBlockNumber)
+	{
+		/*
+		 * Columnar utility hook already errors out for BRIN indexes on columnar
+		 * tables, but be on the safe side.
+		 */
+		ereport(ERROR, (errmsg("BRIN indexes on columnar tables are not supported")));
+	}
+
+	if (indexInfo->ii_Concurrent)
+	{
+		/* we already don't allow CONCURRENTLY syntax but be on the safe side */
+		ereport(ERROR, (errmsg("concurrent index builds are not supported "
+							   "for columnar tables")));
+	}
+
+	if (scan)
+	{
+		/*
+		 * Scan is initialized iff postgres decided to build the index using
+		 * parallel workers. In this case, we simply return for parallel
+		 * workers since we don't support parallel scan on columnar tables.
+		 */
+		if (IsBackgroundWorker)
+		{
+			ereport(DEBUG4, (errmsg("ignoring parallel worker when building "
+									"index since parallel scan on columnar "
+									"tables is not supported")));
+			return 0;
+		}
+
+		ereport(NOTICE, (errmsg("falling back to serial index build since "
+								"parallel scan on columnar tables is not "
+								"supported")));
+	}
+
+	/*
+	 * In a normal index build, we use SnapshotAny to retrieve all tuples. In
+	 * a concurrent build or during bootstrap, we take a regular MVCC snapshot
+	 * and index whatever's live according to that.
+	 */
+	TransactionId OldestXmin = InvalidTransactionId;
+
+	/*
+	 * We already don't allow concurrent index builds so ii_Concurrent
+	 * will always be false, but let's keep the code close to heapAM.
+	 */
+	if (!IsBootstrapProcessingMode() && !indexInfo->ii_Concurrent)
+	{
+		/* ignore lazy VACUUM's */
+		OldestXmin = GetOldestXmin(columnarRelation, PROCARRAY_FLAGS_VACUUM);
+	}
+
+	Snapshot snapshot = { 0 };
+	bool snapshotRegisteredByUs = false;
+	if (!scan)
+	{
+		/*
+		 * For serial index build, we begin our own scan. We may also need to
+		 * register a snapshot whose lifetime is under our direct control.
+		 */
+		if (!TransactionIdIsValid(OldestXmin))
+		{
+			snapshot = RegisterSnapshot(GetTransactionSnapshot());
+			snapshotRegisteredByUs = true;
+		}
+		else
+		{
+			snapshot = SnapshotAny;
+		}
+
+		int nkeys = 0;
+		ScanKeyData *scanKey = NULL;
+		bool allowAccessStrategy = true;
+		scan = table_beginscan_strat(columnarRelation, snapshot, nkeys, scanKey,
+									 allowAccessStrategy, allow_sync);
+	}
+	else
+	{
+		/*
+		 * For parallel index build, we don't register/unregister own snapshot
+		 * since snapshot is taken from parallel scan. Note that even if we
+		 * don't support parallel index builds, we still continue building the
+		 * index via the main backend and we should still rely on the snapshot
+		 * provided by parallel scan.
+		 */
+		snapshot = scan->rs_snapshot;
+	}
+
+	if (progress)
+	{
+		ColumnarReportTotalVirtualBlocks(columnarRelation, snapshot,
+										 PROGRESS_SCAN_BLOCKS_TOTAL);
+	}
+
+	/*
+	 * Set up execution state for predicate, if any.
+	 * Note that this is only useful for partial indexes.
+	 */
+	EState *estate = CreateExecutorState();
+	ExprContext *econtext = GetPerTupleExprContext(estate);
+	econtext->ecxt_scantuple = table_slot_create(columnarRelation, NULL);
+	ExprState *predicate = ExecPrepareQual(indexInfo->ii_Predicate, estate);
+
+	double reltuples = ColumnarReadRowsIntoIndex(scan, indexRelation, indexInfo,
+												 progress, callback, callback_state,
+												 estate, predicate);
+	table_endscan(scan);
+
+	if (progress)
+	{
+		/* report the last "virtual" block as "done" */
+		ColumnarReportTotalVirtualBlocks(columnarRelation, snapshot,
+										 PROGRESS_SCAN_BLOCKS_DONE);
+	}
+
+	if (snapshotRegisteredByUs)
+	{
+		UnregisterSnapshot(snapshot);
+	}
+
+	ExecDropSingleTupleTableSlot(econtext->ecxt_scantuple);
+	FreeExecutorState(estate);
+	indexInfo->ii_ExpressionsState = NIL;
+	indexInfo->ii_PredicateState = NULL;
+
+	return reltuples;
+}
+
+
+/*
+ * ColumnarReportTotalVirtualBlocks reports progress for index build based on
+ * number of "virtual" blocks that given relation has.
+ * "progressArrIndex" argument determines which entry in st_progress_param
+ * array should be updated. In this case, we only expect PROGRESS_SCAN_BLOCKS_TOTAL
+ * or PROGRESS_SCAN_BLOCKS_DONE to specify whether we want to report calculated
+ * number of blocks as "done" or as "total" number of "virtual" blocks to scan.
+ */
+static void
+ColumnarReportTotalVirtualBlocks(Relation relation, Snapshot snapshot,
+								 int progressArrIndex)
+{
+	/*
+	 * Indeed, columnar tables might have gaps between row numbers, e.g
+	 * due to aborted transactions etc. Also, ItemPointer BlockNumber's
+	 * for columnar tables don't actually correspond to actual disk blocks
+	 * as in heapAM. For this reason, we call them as "virtual" blocks. At
+	 * the moment, we believe it is better to report our progress based on
+	 * this "virtual" block concept instead of doing nothing.
+	 */
+	Assert(progressArrIndex == PROGRESS_SCAN_BLOCKS_TOTAL ||
+		   progressArrIndex == PROGRESS_SCAN_BLOCKS_DONE);
+	BlockNumber nvirtualBlocks =
+		ColumnarGetNumberOfVirtualBlocks(relation, snapshot);
+	pgstat_progress_update_param(progressArrIndex, nvirtualBlocks);
+}
+
+
+/*
+ * ColumnarGetNumberOfVirtualBlocks returns total number of "virtual" blocks
+ * that given columnar table has based on based on ItemPointer BlockNumber's.
+ */
+static BlockNumber
+ColumnarGetNumberOfVirtualBlocks(Relation relation, Snapshot snapshot)
+{
+	ItemPointerData highestItemPointer =
+		ColumnarGetHighestItemPointer(relation, snapshot);
+	if (!ItemPointerIsValid(&highestItemPointer))
+	{
+		/* table is empty according to our snapshot */
+		return 0;
+	}
+
+	/*
+	 * Since BlockNumber is 0-based, increment it by 1 to find the total
+	 * number of "virtual" blocks.
+	 */
+	return ItemPointerGetBlockNumber(&highestItemPointer) + 1;
+}
+
+
+/*
+ * ColumnarGetHighestItemPointer returns ItemPointerData for the tuple with
+ * highest tid for given relation.
+ * If given relation is empty, then returns invalid item pointer.
+ */
+static ItemPointerData
+ColumnarGetHighestItemPointer(Relation relation, Snapshot snapshot)
+{
+	StripeMetadata *stripeWithHighestRowNumber =
+		FindStripeWithHighestRowNumber(relation, snapshot);
+	if (stripeWithHighestRowNumber == NULL)
+	{
+		/* table is empty according to our snapshot */
+		ItemPointerData invalidItemPtr;
+		ItemPointerSetInvalid(&invalidItemPtr);
+		return invalidItemPtr;
+	}
+
+	uint64 highestRowNumber = stripeWithHighestRowNumber->firstRowNumber +
+							  stripeWithHighestRowNumber->rowCount - 1;
+	return row_number_to_tid(highestRowNumber);
+}
+
+
+/*
+ * ColumnarReadRowsIntoIndex builds indexRelation tuples by reading the
+ * actual relation based on given "scan" and returns number of tuples
+ * scanned to build the indexRelation.
+ */
+static double
+ColumnarReadRowsIntoIndex(TableScanDesc scan, Relation indexRelation,
+						  IndexInfo *indexInfo, bool progress,
+						  IndexBuildCallback indexCallback,
+						  void *indexCallbackState, EState *estate,
+						  ExprState *predicate)
+{
+	double reltuples = 0;
+
+	BlockNumber lastReportedBlockNumber = InvalidBlockNumber;
+
+	ExprContext *econtext = GetPerTupleExprContext(estate);
+	TupleTableSlot *slot = econtext->ecxt_scantuple;
+	while (columnar_getnextslot(scan, ForwardScanDirection, slot))
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		BlockNumber currentBlockNumber = ItemPointerGetBlockNumber(&slot->tts_tid);
+		if (progress && lastReportedBlockNumber != currentBlockNumber)
+		{
+			/*
+			 * columnar_getnextslot guarantees that returned tuple will
+			 * always have a greater ItemPointer than the ones we fetched
+			 * before, so we directly use BlockNumber to report our progress.
+			 */
+			Assert(lastReportedBlockNumber == InvalidBlockNumber ||
+				   currentBlockNumber >= lastReportedBlockNumber);
+			pgstat_progress_update_param(PROGRESS_SCAN_BLOCKS_DONE,
+										 currentBlockNumber);
+			lastReportedBlockNumber = currentBlockNumber;
+		}
+
+		MemoryContextReset(econtext->ecxt_per_tuple_memory);
+
+		if (predicate != NULL && !ExecQual(predicate, econtext))
+		{
+			/* for partial indexes, discard tuples that don't satisfy the predicate */
+			continue;
+		}
+
+		Datum indexValues[INDEX_MAX_KEYS];
+		bool indexNulls[INDEX_MAX_KEYS];
+		FormIndexDatum(indexInfo, slot, estate, indexValues, indexNulls);
+
+		ItemPointerData itemPointerData = slot->tts_tid;
+
+		/* currently, columnar tables can't have dead tuples */
+		bool tupleIsAlive = true;
+#if PG_VERSION_NUM >= PG_VERSION_13
+		indexCallback(indexRelation, &itemPointerData, indexValues, indexNulls,
+					  tupleIsAlive, indexCallbackState);
+#else
+		HeapTuple scanTuple = ExecCopySlotHeapTuple(slot);
+		scanTuple->t_self = itemPointerData;
+		indexCallback(indexRelation, scanTuple, indexValues, indexNulls,
+					  tupleIsAlive, indexCallbackState);
+#endif
+
+		reltuples++;
+	}
+
+	return reltuples;
 }
 
 
@@ -988,8 +1378,15 @@ columnar_index_validate_scan(Relation heapRelation,
 							 Snapshot snapshot,
 							 ValidateIndexState *state)
 {
+	/*
+	 * This is only called for concurrent index builds,
+	 * see table_index_validate_scan.
+	 * Note that we already error out for concurrent index
+	 * builds in utility hook but be on the safe side.
+	 */
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("indexes not supported for columnar tables")));
+					errmsg("concurrent index builds are not supported for "
+						   "columnar tables")));
 }
 
 
@@ -1179,13 +1576,7 @@ ColumnarSlotCopyHeapTuple(TupleTableSlot *slot)
 									  slot->tts_values,
 									  slot->tts_isnull);
 
-	/*
-	 * We need to set item pointer, since implementation of ANALYZE
-	 * requires it. See the qsort in acquire_sample_rows() and
-	 * also compare_rows in backend/commands/analyze.c.
-	 *
-	 * slot->tts_tid is filled in columnar_getnextslot.
-	 */
+	/* slot->tts_tid is filled in columnar_getnextslot */
 	tuple->t_self = slot->tts_tid;
 
 	return tuple;
@@ -1315,24 +1706,34 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 	{
 		IndexStmt *indexStmt = (IndexStmt *) parsetree;
 
-		/*
-		 * We should reject CREATE INDEX CONCURRENTLY before DefineIndex() is
-		 * called. Erroring in callbacks called from DefineIndex() will create
-		 * the index and mark it as INVALID, which will cause segfault during
-		 * inserts.
-		 */
-		if (indexStmt->concurrent)
+		Relation rel = relation_openrv(indexStmt->relation,
+									   GetCreateIndexRelationLockMode(indexStmt));
+		if (rel->rd_tableam == GetColumnarTableAmRoutine())
 		{
-			Relation rel = relation_openrv(indexStmt->relation,
-										   ShareUpdateExclusiveLock);
-			if (rel->rd_tableam == GetColumnarTableAmRoutine())
+			/*
+			 * We should reject CREATE INDEX CONCURRENTLY before DefineIndex() is
+			 * called. Erroring in callbacks called from DefineIndex() will create
+			 * the index and mark it as INVALID, which will cause segfault during
+			 * inserts.
+			 */
+			if (indexStmt->concurrent)
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("indexes not supported for columnar tables")));
+								errmsg("concurrent index commands are not "
+									   "supported for columnar tables")));
 			}
 
-			RelationClose(rel);
+			/* for now, we don't support index access methods other than btree & hash */
+			if (strncmp(indexStmt->accessMethod, "btree", NAMEDATALEN) != 0 &&
+				strncmp(indexStmt->accessMethod, "hash", NAMEDATALEN) != 0)
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("only btree and hash indexes are supported on "
+									   "columnar tables ")));
+			}
 		}
+
+		RelationClose(rel);
 	}
 
 	PrevProcessUtilityHook(pstmt, queryString, context,
@@ -1374,6 +1775,17 @@ static const TableAmRoutine columnar_am_methods = {
 	.scan_rescan = columnar_rescan,
 	.scan_getnextslot = columnar_getnextslot,
 
+	/*
+	 * Postgres calls following three callbacks during index builds, if it
+	 * decides to use parallel workers when building the index. On the other
+	 * hand, we don't support parallel scans on columnar tables but we also
+	 * want to fallback to serial index build. For this reason, we both skip
+	 * parallel workers in columnar_index_build_range_scan and also provide
+	 * basic implementations for those callbacks based on their corresponding
+	 * implementations in heapAM.
+	 * Note that for regular query plans, we already ignore parallel paths via
+	 * ColumnarSetRelPathlistHook.
+	 */
 	.parallelscan_estimate = columnar_parallelscan_estimate,
 	.parallelscan_initialize = columnar_parallelscan_initialize,
 	.parallelscan_reinitialize = columnar_parallelscan_reinitialize,
@@ -1838,5 +2250,77 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 
 	table_close(rel, NoLock);
 
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * upgrade_columnar_storage - upgrade columnar storage to the current
+ * version.
+ *
+ * DDL:
+ *   CREATE OR REPLACE FUNCTION upgrade_columnar_storage(rel regclass)
+ *     RETURNS VOID
+ *     STRICT
+ *     LANGUAGE c AS 'MODULE_PATHNAME', 'upgrade_columnar_storage';
+ */
+PG_FUNCTION_INFO_V1(upgrade_columnar_storage);
+Datum
+upgrade_columnar_storage(PG_FUNCTION_ARGS)
+{
+	Oid relid = PG_GETARG_OID(0);
+
+	/*
+	 * ACCESS EXCLUSIVE LOCK is not required by the low-level routines, so we
+	 * can take only an ACCESS SHARE LOCK. But all access to non-current
+	 * columnar tables will fail anyway, so it's better to take ACCESS
+	 * EXLUSIVE LOCK now.
+	 */
+	Relation rel = table_open(relid, AccessExclusiveLock);
+	if (!IsColumnarTableAmTable(relid))
+	{
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
+							   quote_identifier(RelationGetRelationName(rel)))));
+	}
+
+	ColumnarStorageUpdateIfNeeded(rel, true);
+
+	table_close(rel, AccessExclusiveLock);
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * downgrade_columnar_storage - downgrade columnar storage to the
+ * current version.
+ *
+ * DDL:
+ *   CREATE OR REPLACE FUNCTION downgrade_columnar_storage(rel regclass)
+ *     RETURNS VOID
+ *     STRICT
+ *     LANGUAGE c AS 'MODULE_PATHNAME', 'downgrade_columnar_storage';
+ */
+PG_FUNCTION_INFO_V1(downgrade_columnar_storage);
+Datum
+downgrade_columnar_storage(PG_FUNCTION_ARGS)
+{
+	Oid relid = PG_GETARG_OID(0);
+
+	/*
+	 * ACCESS EXCLUSIVE LOCK is not required by the low-level routines, so we
+	 * can take only an ACCESS SHARE LOCK. But all access to non-current
+	 * columnar tables will fail anyway, so it's better to take ACCESS
+	 * EXLUSIVE LOCK now.
+	 */
+	Relation rel = table_open(relid, AccessExclusiveLock);
+	if (!IsColumnarTableAmTable(relid))
+	{
+		ereport(ERROR, (errmsg("table %s is not a columnar table",
+							   quote_identifier(RelationGetRelationName(rel)))));
+	}
+
+	ColumnarStorageUpdateIfNeeded(rel, false);
+
+	table_close(rel, AccessExclusiveLock);
 	PG_RETURN_VOID();
 }

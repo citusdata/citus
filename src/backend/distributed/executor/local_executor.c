@@ -128,9 +128,6 @@ static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 												   TupleDestination *tupleDest,
 												   Task *task);
-static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
-											   Oid **parameterTypes,
-											   const char ***parameterValues);
 static void ExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 static void EnsureTransitionPossible(LocalExecutionStatus from,
 									 LocalExecutionStatus to);
@@ -438,7 +435,7 @@ LocallyPlanAndExecuteMultipleQueries(List *queryStrings, TupleDestination *tuple
  * value arrays. It does not change the oid of custom types, because the
  * query will be run locally.
  */
-static void
+void
 ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
 								   const char ***parameterValues)
 {

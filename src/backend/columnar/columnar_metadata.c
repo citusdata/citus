@@ -1,8 +1,19 @@
 /*-------------------------------------------------------------------------
  *
- * columnar_metadata_tables.c
+ * columnar_metadata.c
  *
- * Copyright (c), Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
+ *
+ * Manages metadata for columnar relations in separate, shared metadata tables
+ * in the "columnar" schema.
+ *
+ *   * holds basic stripe information including data size and row counts
+ *   * holds basic chunk and chunk group information like data offsets and
+ *     min/max values (used for Chunk Group Filtering)
+ *   * useful for fast VACUUM operations (e.g. reporting with VACUUM VERBOSE)
+ *   * useful for stats/costing
+ *   * maps logical row numbers to stripe IDs
+ *   * TODO: visibility information
  *
  *-------------------------------------------------------------------------
  */
@@ -14,7 +25,9 @@
 
 #include "citus_version.h"
 #include "columnar/columnar.h"
+#include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
+#include "distributed/listutils.h"
 
 #include <sys/stat.h>
 #include "access/heapam.h"
@@ -30,7 +43,6 @@
 #include "commands/sequence.h"
 #include "commands/trigger.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/resource_lock.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -48,28 +60,6 @@
 #include "utils/relfilenodemap.h"
 
 
-/*
- * Content of the first page in main fork, which stores metadata at file
- * level.
- */
-typedef struct ColumnarMetapage
-{
-	/*
-	 * Store version of file format used, so we can detect files from
-	 * previous versions if we change file format.
-	 */
-	int versionMajor;
-	int versionMinor;
-
-	/*
-	 * Each of the metadata table rows are identified by a storageId.
-	 * We store it also in the main fork so we can link metadata rows
-	 * with data files.
-	 */
-	uint64 storageId;
-} ColumnarMetapage;
-
-
 typedef struct
 {
 	Relation rel;
@@ -80,14 +70,14 @@ static void InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe);
 static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
-static void LockForStripeReservation(Relation rel, LOCKMODE mode);
-static void UnlockForStripeReservation(Relation rel, LOCKMODE mode);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
+static StripeMetadata * BuildStripeMetadata(Datum *datumArray);
 static uint32 * ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32
 										chunkGroupCount);
 static Oid ColumnarStorageIdSequenceRelationId(void);
 static Oid ColumnarStripeRelationId(void);
-static Oid ColumnarStripeIndexRelationId(void);
+static Oid ColumnarStripePKeyIndexRelationId(void);
+static Oid ColumnarStripeFirstRowNumberIndexRelationId(void);
 static Oid ColumnarOptionsRelationId(void);
 static Oid ColumnarOptionsIndexRegclass(void);
 static Oid ColumnarChunkRelationId(void);
@@ -95,6 +85,8 @@ static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
+static uint64 LookupStorageId(RelFileNode relfilenode);
+static uint64 GetHighestUsedFirstRowNumber(uint64 storageId);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
 												   Oid storageIdIndexId,
@@ -107,8 +99,6 @@ static void FinishModifyRelation(ModifyState *state);
 static EState * create_estate_for_relation(Relation rel);
 static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
-static ColumnarMetapage * InitMetapage(Relation relation);
-static ColumnarMetapage * ReadMetapage(RelFileNode relfilenode, bool missingOk);
 static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
@@ -140,7 +130,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 
 
 /* constants for columnar.stripe */
-#define Natts_columnar_stripe 8
+#define Natts_columnar_stripe 9
 #define Anum_columnar_stripe_storageid 1
 #define Anum_columnar_stripe_stripe 2
 #define Anum_columnar_stripe_file_offset 3
@@ -149,6 +139,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_stripe_chunk_row_count 6
 #define Anum_columnar_stripe_row_count 7
 #define Anum_columnar_stripe_chunk_count 8
+#define Anum_columnar_stripe_first_row_number 9
 
 /* constants for columnar.chunk_group */
 #define Natts_columnar_chunkgroup 4
@@ -423,7 +414,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 	uint32 chunkIndex = 0;
 	uint32 columnCount = chunkList->columnCount;
 
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunk);
@@ -436,7 +427,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 				&chunkList->chunkSkipNodeArray[columnIndex][chunkIndex];
 
 			Datum values[Natts_columnar_chunk] = {
-				UInt64GetDatum(metapage->storageId),
+				UInt64GetDatum(storageId),
 				Int64GetDatum(stripe),
 				Int32GetDatum(columnIndex + 1),
 				Int32GetDatum(chunkIndex),
@@ -487,7 +478,7 @@ void
 SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 				List *chunkGroupRowCounts)
 {
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
 	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunkGroup);
@@ -499,7 +490,7 @@ SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 	{
 		int64 rowCount = lfirst_int(lc);
 		Datum values[Natts_columnar_chunkgroup] = {
-			UInt64GetDatum(metapage->storageId),
+			UInt64GetDatum(storageId),
 			Int64GetDatum(stripe),
 			Int32GetDatum(chunkId),
 			Int64GetDatum(rowCount)
@@ -530,14 +521,14 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	uint32 columnCount = tupleDescriptor->natts;
 	ScanKeyData scanKey[2];
 
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, AccessShareLock);
 	Relation index = index_open(ColumnarChunkIndexRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_columnar_chunk_storageid,
-				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(metapage->storageId));
+				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(storageId));
 	ScanKeyInit(&scanKey[1], Anum_columnar_chunk_stripe,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
@@ -624,9 +615,96 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	table_close(columnarChunk, AccessShareLock);
 
 	chunkList->chunkGroupRowCounts =
-		ReadChunkGroupRowCounts(metapage->storageId, stripe, chunkCount);
+		ReadChunkGroupRowCounts(storageId, stripe, chunkCount);
 
 	return chunkList;
+}
+
+
+/*
+ * FindStripeByRowNumber returns StripeMetadata for the stripe that has the
+ * row with rowNumber by doing backward index scan on
+ * stripe_first_row_number_idx. If no such row exists, then returns NULL.
+ */
+StripeMetadata *
+FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
+{
+	StripeMetadata *foundStripeMetadata = NULL;
+
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	ScanKeyData scanKey[2];
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_first_row_number,
+				BTLessEqualStrategyNumber, F_INT8LE, UInt64GetDatum(rowNumber));
+
+	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
+								AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
+															snapshot, 2,
+															scanKey);
+
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, BackwardScanDirection);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
+		Datum datumArray[Natts_columnar_stripe];
+		bool isNullArray[Natts_columnar_stripe];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
+		StripeMetadata *stripeMetadata = BuildStripeMetadata(datumArray);
+		if (rowNumber < stripeMetadata->firstRowNumber + stripeMetadata->rowCount)
+		{
+			foundStripeMetadata = stripeMetadata;
+		}
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
+
+	return foundStripeMetadata;
+}
+
+
+/*
+ * FindStripeWithHighestRowNumber returns StripeMetadata for the stripe that
+ * has the row with highest rowNumber by doing backward index scan on
+ * stripe_first_row_number_idx. If given relation is empty, then returns NULL.
+ */
+StripeMetadata *
+FindStripeWithHighestRowNumber(Relation relation, Snapshot snapshot)
+{
+	StripeMetadata *stripeWithHighestRowNumber = NULL;
+
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	ScanKeyData scanKey[1];
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+
+	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
+								AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
+															snapshot, 1, scanKey);
+
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, BackwardScanDirection);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
+		Datum datumArray[Natts_columnar_stripe];
+		bool isNullArray[Natts_columnar_stripe];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+
+		stripeWithHighestRowNumber = BuildStripeMetadata(datumArray);
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
+
+	return stripeWithHighestRowNumber;
 }
 
 
@@ -704,7 +782,8 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 		Int32GetDatum(stripe->columnCount),
 		Int32GetDatum(stripe->chunkGroupRowCount),
 		Int64GetDatum(stripe->rowCount),
-		Int32GetDatum(stripe->chunkCount)
+		Int32GetDatum(stripe->chunkCount),
+		UInt64GetDatum(stripe->firstRowNumber)
 	};
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
@@ -729,15 +808,9 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 List *
 StripesForRelfilenode(RelFileNode relfilenode)
 {
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-	if (metapage == NULL)
-	{
-		/* empty relation */
-		return NIL;
-	}
+	uint64 storageId = LookupStorageId(relfilenode);
 
-
-	return ReadDataFileStripeList(metapage->storageId, GetTransactionSnapshot());
+	return ReadDataFileStripeList(storageId, GetTransactionSnapshot());
 }
 
 
@@ -752,17 +825,11 @@ StripesForRelfilenode(RelFileNode relfilenode)
 uint64
 GetHighestUsedAddress(RelFileNode relfilenode)
 {
+	uint64 storageId = LookupStorageId(relfilenode);
+
 	uint64 highestUsedAddress = 0;
 	uint64 highestUsedId = 0;
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-
-	/* empty data file? */
-	if (metapage == NULL)
-	{
-		return 0;
-	}
-
-	GetHighestUsedAddressAndId(metapage->storageId, &highestUsedAddress, &highestUsedId);
+	GetHighestUsedAddressAndId(storageId, &highestUsedAddress, &highestUsedId);
 
 	return highestUsedAddress;
 }
@@ -800,35 +867,6 @@ GetHighestUsedAddressAndId(uint64 storageId,
 
 
 /*
- * LockForStripeReservation acquires a lock for stripe reservation.
- */
-static void
-LockForStripeReservation(Relation rel, LOCKMODE mode)
-{
-	/*
-	 * We use an advisory lock here so we can easily detect these kind of
-	 * locks in IsProcessWaitingForSafeOperations() and don't include them
-	 * in the lock graph.
-	 */
-	LOCKTAG tag;
-	SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, rel);
-	LockAcquire(&tag, mode, false, false);
-}
-
-
-/*
- * UnlockForStripeReservation releases the stripe reservation lock.
- */
-static void
-UnlockForStripeReservation(Relation rel, LOCKMODE mode)
-{
-	LOCKTAG tag;
-	SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, rel);
-	LockRelease(&tag, mode, false);
-}
-
-
-/*
  * ReserveStripe reserves and stripe of given size for the given relation,
  * and inserts it into columnar.stripe. It is guaranteed that concurrent
  * writes won't overwrite the returned stripe.
@@ -836,50 +874,15 @@ UnlockForStripeReservation(Relation rel, LOCKMODE mode)
 StripeMetadata
 ReserveStripe(Relation rel, uint64 sizeBytes,
 			  uint64 rowCount, uint64 columnCount,
-			  uint64 chunkCount, uint64 chunkGroupRowCount)
+			  uint64 chunkCount, uint64 chunkGroupRowCount,
+			  uint64 stripeFirstRowNumber)
 {
 	StripeMetadata stripe = { 0 };
-	uint64 currLogicalHigh = 0;
-	uint64 highestId = 0;
 
-	/*
-	 * We take ExclusiveLock here, so two space reservations conflict.
-	 */
-	LOCKMODE lockMode = ExclusiveLock;
-	LockForStripeReservation(rel, lockMode);
+	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
 
-	RelFileNode relfilenode = rel->rd_node;
-
-	/*
-	 * If this is the first stripe for this relation, initialize the
-	 * metapage, otherwise use the previously initialized metapage.
-	 */
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-	if (metapage == NULL)
-	{
-		metapage = InitMetapage(rel);
-	}
-
-	GetHighestUsedAddressAndId(metapage->storageId, &currLogicalHigh, &highestId);
-	SmgrAddr currSmgrHigh = logical_to_smgr(currLogicalHigh);
-
-	SmgrAddr resSmgrStart = next_block_start(currSmgrHigh);
-	uint64 resLogicalStart = smgr_to_logical(resSmgrStart);
-
-	uint64 resLogicalEnd = resLogicalStart + sizeBytes - 1;
-	SmgrAddr resSmgrEnd = logical_to_smgr(resLogicalEnd);
-
-	RelationOpenSmgr(rel);
-	uint64 nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-
-	while (resSmgrEnd.blockno >= nblocks)
-	{
-		Buffer newBuffer = ReadBuffer(rel, P_NEW);
-		ReleaseBuffer(newBuffer);
-		nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-	}
-
-	RelationCloseSmgr(rel);
+	uint64 stripeId = ColumnarStorageReserveStripe(rel);
+	uint64 resLogicalStart = ColumnarStorageReserveData(rel, sizeBytes);
 
 	stripe.fileOffset = resLogicalStart;
 	stripe.dataLength = sizeBytes;
@@ -887,11 +890,10 @@ ReserveStripe(Relation rel, uint64 sizeBytes,
 	stripe.chunkGroupRowCount = chunkGroupRowCount;
 	stripe.columnCount = columnCount;
 	stripe.rowCount = rowCount;
-	stripe.id = highestId + 1;
+	stripe.id = stripeId;
+	stripe.firstRowNumber = stripeFirstRowNumber;
 
-	InsertStripeMetadataRow(metapage->storageId, &stripe);
-
-	UnlockForStripeReservation(rel, lockMode);
+	InsertStripeMetadataRow(storageId, &stripe);
 
 	return stripe;
 }
@@ -914,7 +916,8 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
 	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
-	Relation index = index_open(ColumnarStripeIndexRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
+								AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
 
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
@@ -927,22 +930,7 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 		bool isNullArray[Natts_columnar_stripe];
 
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
-
-		StripeMetadata *stripeMetadata = palloc0(sizeof(StripeMetadata));
-		stripeMetadata->id = DatumGetInt64(datumArray[Anum_columnar_stripe_stripe - 1]);
-		stripeMetadata->fileOffset = DatumGetInt64(
-			datumArray[Anum_columnar_stripe_file_offset - 1]);
-		stripeMetadata->dataLength = DatumGetInt64(
-			datumArray[Anum_columnar_stripe_data_length - 1]);
-		stripeMetadata->columnCount = DatumGetInt32(
-			datumArray[Anum_columnar_stripe_column_count - 1]);
-		stripeMetadata->chunkCount = DatumGetInt32(
-			datumArray[Anum_columnar_stripe_chunk_count - 1]);
-		stripeMetadata->chunkGroupRowCount = DatumGetInt32(
-			datumArray[Anum_columnar_stripe_chunk_row_count - 1]);
-		stripeMetadata->rowCount = DatumGetInt64(
-			datumArray[Anum_columnar_stripe_row_count - 1]);
-
+		StripeMetadata *stripeMetadata = BuildStripeMetadata(datumArray);
 		stripeMetadataList = lappend(stripeMetadataList, stripeMetadata);
 	}
 
@@ -951,6 +939,32 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	table_close(columnarStripes, AccessShareLock);
 
 	return stripeMetadataList;
+}
+
+
+/*
+ * BuildStripeMetadata builds a StripeMetadata object from given datumArray.
+ */
+static StripeMetadata *
+BuildStripeMetadata(Datum *datumArray)
+{
+	StripeMetadata *stripeMetadata = palloc0(sizeof(StripeMetadata));
+	stripeMetadata->id = DatumGetInt64(datumArray[Anum_columnar_stripe_stripe - 1]);
+	stripeMetadata->fileOffset = DatumGetInt64(
+		datumArray[Anum_columnar_stripe_file_offset - 1]);
+	stripeMetadata->dataLength = DatumGetInt64(
+		datumArray[Anum_columnar_stripe_data_length - 1]);
+	stripeMetadata->columnCount = DatumGetInt32(
+		datumArray[Anum_columnar_stripe_column_count - 1]);
+	stripeMetadata->chunkCount = DatumGetInt32(
+		datumArray[Anum_columnar_stripe_chunk_count - 1]);
+	stripeMetadata->chunkGroupRowCount = DatumGetInt32(
+		datumArray[Anum_columnar_stripe_chunk_row_count - 1]);
+	stripeMetadata->rowCount = DatumGetInt64(
+		datumArray[Anum_columnar_stripe_row_count - 1]);
+	stripeMetadata->firstRowNumber = DatumGetUInt64(
+		datumArray[Anum_columnar_stripe_first_row_number - 1]);
+	return stripeMetadata;
 }
 
 
@@ -970,28 +984,20 @@ DeleteMetadataRows(RelFileNode relfilenode)
 		return;
 	}
 
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-	if (metapage == NULL)
-	{
-		/*
-		 * No data has been written to this storage yet, so there is no
-		 * associated metadata yet.
-		 */
-		return;
-	}
+	uint64 storageId = LookupStorageId(relfilenode);
 
 	DeleteStorageFromColumnarMetadataTable(ColumnarStripeRelationId(),
 										   Anum_columnar_stripe_storageid,
-										   ColumnarStripeIndexRelationId(),
-										   metapage->storageId);
+										   ColumnarStripePKeyIndexRelationId(),
+										   storageId);
 	DeleteStorageFromColumnarMetadataTable(ColumnarChunkGroupRelationId(),
 										   Anum_columnar_chunkgroup_storageid,
 										   ColumnarChunkGroupIndexRelationId(),
-										   metapage->storageId);
+										   storageId);
 	DeleteStorageFromColumnarMetadataTable(ColumnarChunkRelationId(),
 										   Anum_columnar_chunk_storageid,
 										   ColumnarChunkIndexRelationId(),
-										   metapage->storageId);
+										   storageId);
 }
 
 
@@ -1226,13 +1232,25 @@ ColumnarStripeRelationId(void)
 
 
 /*
- * ColumnarStripeIndexRelationId returns relation id of columnar.stripe_pkey.
+ * ColumnarStripePKeyIndexRelationId returns relation id of columnar.stripe_pkey.
  * TODO: should we cache this similar to citus?
  */
 static Oid
-ColumnarStripeIndexRelationId(void)
+ColumnarStripePKeyIndexRelationId(void)
 {
 	return get_relname_relid("stripe_pkey", ColumnarNamespaceId());
+}
+
+
+/*
+ * ColumnarStripeFirstRowNumberIndexRelationId returns relation id of
+ * columnar.stripe_first_row_number_idx.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+ColumnarStripeFirstRowNumberIndexRelationId(void)
+{
+	return get_relname_relid("stripe_first_row_number_idx", ColumnarNamespaceId());
 }
 
 
@@ -1312,75 +1330,31 @@ ColumnarNamespaceId(void)
 
 
 /*
- * ReadMetapage reads metapage for the given relfilenode. It returns
+ * LookupStorageId reads storage metapage to find the storage ID for the given relfilenode. It returns
  * false if the relation doesn't have a meta page yet.
  */
-static ColumnarMetapage *
-ReadMetapage(RelFileNode relfilenode, bool missingOk)
+static uint64
+LookupStorageId(RelFileNode relfilenode)
 {
-	StringInfo metapageBuffer = NULL;
 	Oid relationId = RelidByRelfilenode(relfilenode.spcNode,
 										relfilenode.relNode);
-	if (OidIsValid(relationId))
-	{
-		Relation relation = relation_open(relationId, NoLock);
 
-		RelationOpenSmgr(relation);
-		int nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
-		RelationCloseSmgr(relation);
+	Relation relation = relation_open(relationId, AccessShareLock);
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	table_close(relation, AccessShareLock);
 
-		if (nblocks != 0)
-		{
-			metapageBuffer = ReadFromSmgr(relation, 0, sizeof(ColumnarMetapage));
-		}
-
-		relation_close(relation, NoLock);
-	}
-
-	if (metapageBuffer == NULL)
-	{
-		if (!missingOk)
-		{
-			elog(ERROR, "columnar metapage was not found");
-		}
-
-		return NULL;
-	}
-
-	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
-	memcpy_s((void *) metapage, sizeof(ColumnarMetapage),
-			 metapageBuffer->data, sizeof(ColumnarMetapage));
-
-	return metapage;
+	return storageId;
 }
 
 
 /*
- * InitMetapage initializes metapage for the given relation.
+ * ColumnarMetadataNewStorageId - create a new, unique storage id and return
+ * it.
  */
-static ColumnarMetapage *
-InitMetapage(Relation relation)
+uint64
+ColumnarMetadataNewStorageId()
 {
-	/*
-	 * If we init metapage during upgrade, we might override the
-	 * pre-upgrade storage id which will render pre-upgrade data
-	 * invisible.
-	 */
-	Assert(!IsBinaryUpgrade);
-	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
-
-	metapage->storageId = nextval_internal(ColumnarStorageIdSequenceRelationId(), false);
-	metapage->versionMajor = COLUMNAR_VERSION_MAJOR;
-	metapage->versionMinor = COLUMNAR_VERSION_MINOR;
-
-	/* create the first block */
-	Buffer newBuffer = ReadBuffer(relation, P_NEW);
-	ReleaseBuffer(newBuffer);
-
-	Assert(sizeof(ColumnarMetapage) <= BLCKSZ - SizeOfPageHeaderData);
-	WriteToSmgr(relation, 0, (char *) metapage, sizeof(ColumnarMetapage));
-
-	return metapage;
+	return nextval_internal(ColumnarStorageIdSequenceRelationId(), false);
 }
 
 
@@ -1391,20 +1365,85 @@ InitMetapage(Relation relation)
 Datum
 columnar_relation_storageid(PG_FUNCTION_ARGS)
 {
-	uint64 storageId = -1;
-
 	Oid relationId = PG_GETARG_OID(0);
 	Relation relation = relation_open(relationId, AccessShareLock);
-	if (IsColumnarTableAmTable(relationId))
+	if (!IsColumnarTableAmTable(relationId))
 	{
-		ColumnarMetapage *metadata = ReadMetapage(relation->rd_node, true);
-		if (metadata != NULL)
-		{
-			storageId = metadata->storageId;
-		}
+		elog(ERROR, "relation \"%s\" is not a columnar table",
+			 RelationGetRelationName(relation));
 	}
+
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
 
 	relation_close(relation, AccessShareLock);
 
 	PG_RETURN_INT64(storageId);
+}
+
+
+/*
+ * ColumnarStorageUpdateIfNeeded - upgrade columnar storage to the current version by
+ * using information from the metadata tables.
+ */
+void
+ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
+{
+	if (ColumnarStorageIsCurrent(rel))
+	{
+		return;
+	}
+
+	RelationOpenSmgr(rel);
+	BlockNumber nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	if (nblocks < 2)
+	{
+		ColumnarStorageInit(rel->rd_smgr, ColumnarMetadataNewStorageId());
+		return;
+	}
+
+	uint64 storageId = ColumnarStorageGetStorageId(rel, true);
+
+	uint64 highestId;
+	uint64 highestOffset;
+	GetHighestUsedAddressAndId(storageId, &highestOffset, &highestId);
+
+	uint64 reservedStripeId = highestId + 1;
+	uint64 reservedOffset = highestOffset + 1;
+	uint64 reservedRowNumber = GetHighestUsedFirstRowNumber(storageId) + 1;
+	ColumnarStorageUpdateCurrent(rel, isUpgrade, reservedStripeId,
+								 reservedRowNumber, reservedOffset);
+}
+
+
+/*
+ * GetHighestUsedFirstRowNumber returns the highest used first_row_number
+ * for given storageId. Returns COLUMNAR_INVALID_ROW_NUMBER if storage with
+ * storageId has no stripes.
+ * Note that normally we would use ColumnarStorageGetReservedRowNumber
+ * to decide that. However, this function is designed to be used when
+ * building the metapage itself during upgrades.
+ */
+static uint64
+GetHighestUsedFirstRowNumber(uint64 storageId)
+{
+	List *stripeMetadataList = ReadDataFileStripeList(storageId,
+													  GetTransactionSnapshot());
+	if (list_length(stripeMetadataList) == 0)
+	{
+		return COLUMNAR_INVALID_ROW_NUMBER;
+	}
+
+	/* XXX: Better to have an invalid value for StripeMetadata.rowCount too */
+	uint64 stripeRowCount = -1;
+	uint64 highestFirstRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
+
+	StripeMetadata *stripeMetadata = NULL;
+	foreach_ptr(stripeMetadata, stripeMetadataList)
+	{
+		highestFirstRowNumber = Max(highestFirstRowNumber,
+									stripeMetadata->firstRowNumber);
+		stripeRowCount = stripeMetadata->rowCount;
+	}
+
+	return highestFirstRowNumber + stripeRowCount - 1;
 }

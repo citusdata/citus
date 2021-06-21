@@ -259,8 +259,10 @@ select mx_call_func(2, 0), mx_call_func(0, 2);
 DO $$ BEGIN perform mx_call_func_tbl(40); END; $$;
 SELECT * FROM mx_call_dist_table_1 WHERE id >= 40 ORDER BY id, val;
 
--- Prepared statements. Repeat six times to test for generic plans
+-- Prepared statements. Repeat 8 times to test for generic plans
 PREPARE call_plan (int, int) AS SELECT mx_call_func($1, $2);
+EXECUTE call_plan(2, 0);
+EXECUTE call_plan(2, 0);
 EXECUTE call_plan(2, 0);
 EXECUTE call_plan(2, 0);
 EXECUTE call_plan(2, 0);

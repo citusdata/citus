@@ -41,8 +41,6 @@
 
 static void AddInsertAliasIfNeeded(Query *query);
 static void UpdateTaskQueryString(Query *query, Task *task);
-static bool ReplaceRelationConstraintByShardConstraint(List *relationShardList,
-													   OnConflictExpr *onConflict);
 static RelationShard * FindRelationShard(Oid inputRelationId, List *relationShardList);
 static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
 static bool ShouldLazyDeparseQuery(Task *task);
@@ -266,124 +264,6 @@ UpdateRelationToShardNames(Node *node, List *relationShardList)
 	ModifyRangeTblExtraData(newRte, CITUS_RTE_SHARD, schemaName, relationName, NIL);
 
 	return false;
-}
-
-
-/*
- * UpdateRelationsToLocalShardTables walks over the query tree and appends shard ids to
- * relations. The caller is responsible for ensuring that the resulting Query can
- * be executed locally.
- */
-bool
-UpdateRelationsToLocalShardTables(Node *node, List *relationShardList)
-{
-	if (node == NULL)
-	{
-		return false;
-	}
-
-	/* want to look at all RTEs, even in subqueries, CTEs and such */
-	if (IsA(node, Query))
-	{
-		return query_tree_walker((Query *) node, UpdateRelationsToLocalShardTables,
-								 relationShardList, QTW_EXAMINE_RTES_BEFORE);
-	}
-
-	if (IsA(node, OnConflictExpr))
-	{
-		OnConflictExpr *onConflict = (OnConflictExpr *) node;
-
-		return ReplaceRelationConstraintByShardConstraint(relationShardList, onConflict);
-	}
-
-	if (!IsA(node, RangeTblEntry))
-	{
-		return expression_tree_walker(node, UpdateRelationsToLocalShardTables,
-									  relationShardList);
-	}
-
-	RangeTblEntry *newRte = (RangeTblEntry *) node;
-
-	if (newRte->rtekind != RTE_RELATION)
-	{
-		return false;
-	}
-
-	RelationShard *relationShard = FindRelationShard(newRte->relid,
-													 relationShardList);
-
-	/* the function should only be called with local shards */
-	if (relationShard == NULL)
-	{
-		return true;
-	}
-
-	Oid shardOid = GetTableLocalShardOid(relationShard->relationId,
-										 relationShard->shardId);
-
-	newRte->relid = shardOid;
-
-	return false;
-}
-
-
-/*
- * ReplaceRelationConstraintByShardConstraint replaces given OnConflictExpr's
- * constraint id with constraint id of the corresponding shard.
- */
-static bool
-ReplaceRelationConstraintByShardConstraint(List *relationShardList,
-										   OnConflictExpr *onConflict)
-{
-	Oid constraintId = onConflict->constraint;
-
-	if (!OidIsValid(constraintId))
-	{
-		return false;
-	}
-
-	Oid constraintRelationId = InvalidOid;
-
-	HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(constraintId));
-	if (HeapTupleIsValid(heapTuple))
-	{
-		Form_pg_constraint contup = (Form_pg_constraint) GETSTRUCT(heapTuple);
-
-		constraintRelationId = contup->conrelid;
-		ReleaseSysCache(heapTuple);
-	}
-
-	/*
-	 * We can return here without calling the walker function, since we know there
-	 * will be no possible tables or constraints after this point, by the syntax.
-	 */
-	if (!OidIsValid(constraintRelationId))
-	{
-		ereport(ERROR, (errmsg("Invalid relation id (%u) for constraint: %s",
-							   constraintRelationId, get_constraint_name(constraintId))));
-	}
-
-	RelationShard *relationShard = FindRelationShard(constraintRelationId,
-													 relationShardList);
-
-	if (relationShard != NULL)
-	{
-		char *constraintName = get_constraint_name(constraintId);
-
-		AppendShardIdToName(&constraintName, relationShard->shardId);
-
-		Oid shardOid = GetTableLocalShardOid(relationShard->relationId,
-											 relationShard->shardId);
-
-		Oid shardConstraintId = get_relation_constraint_oid(shardOid, constraintName,
-															false);
-
-		onConflict->constraint = shardConstraintId;
-
-		return false;
-	}
-
-	return true;
 }
 
 

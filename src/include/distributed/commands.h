@@ -275,6 +275,7 @@ extern char * ChooseIndexName(const char *tabname, Oid namespaceId,
 							  bool primary, bool isconstraint);
 extern char * ChooseIndexNameAddition(List *colnames);
 extern List * ChooseIndexColumnNames(List *indexElems);
+extern LOCKMODE GetCreateIndexRelationLockMode(IndexStmt *createIndexStatement);
 extern List * PreprocessReindexStmt(Node *ReindexStatement,
 									const char *ReindexCommand,
 									ProcessUtilityContext processUtilityContext);

@@ -454,6 +454,12 @@ EXECUTE insert_with_function_and_param(('test', 1)::user_data);
        1
 (1 row)
 
+EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+ user_id
+---------------------------------------------------------------------
+       1
+(1 row)
+
 TRUNCATE user_info_data;
 INSERT INTO user_info_data SELECT i, ('test', i)::user_data FROM generate_series(0,7)i;
 -- make sure that it is also true for non fast-path router queries with paramaters
@@ -816,6 +822,13 @@ EXECUTE router_with_only_function;
        1 | (test,1)
 (1 row)
 
+INSERT INTO user_info_data VALUES(1, ('test', 1)::user_data);
+EXECUTE router_with_only_function;
+ user_id |  u_data
+---------------------------------------------------------------------
+       1 | (test,1)
+(1 row)
+
 \c - - - :worker_2_port
 SET citus.log_local_commands TO ON;
 SET search_path TO coordinator_evaluation_combinations_modify;
@@ -1077,7 +1090,25 @@ NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combi
        3 | ('test',2)
 (1 row)
 
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)');
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, '(''test'',2)'::coordinator_evaluation_combinations_modify.user_data)
+EXECUTE fast_path_router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
+NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) '(''test'',2)'::coordinator_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
+ user_id |   u_data
+---------------------------------------------------------------------
+       3 | ('test',2)
+(1 row)
+
 PREPARE fast_path_router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 RETURNING user_id, u_data;
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 1)::coordinator_evaluation_combinations_modify.user_data)
+EXECUTE fast_path_router_with_param_on_non_dist_key(('test', 1)::user_data);
+NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) '(test,1)'::coordinator_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
+ user_id |  u_data
+---------------------------------------------------------------------
+       3 | (test,1)
+(1 row)
+
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
 NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 1)::coordinator_evaluation_combinations_modify.user_data)
 EXECUTE fast_path_router_with_param_on_non_dist_key(('test', 1)::user_data);
@@ -1268,7 +1299,23 @@ NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combi
        3 | (test,2)
 (1 row)
 
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 2)::coordinator_evaluation_combinations_modify.user_data)
+EXECUTE fast_path_router_with_only_function;
+NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE (true AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
+ user_id |  u_data
+---------------------------------------------------------------------
+       3 | (test,2)
+(1 row)
+
 PREPARE insert_with_function_and_param(user_data) AS INSERT INTO user_info_data VALUES (3, $1, (get_local_node_id_stable() > 0)::int) RETURNING user_id;
+EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data, user_index) VALUES (3, '(test,1)'::coordinator_evaluation_combinations_modify.user_data, 1) RETURNING user_id
+ user_id
+---------------------------------------------------------------------
+       3
+(1 row)
+
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data, user_index) VALUES (3, '(test,1)'::coordinator_evaluation_combinations_modify.user_data, 1) RETURNING user_id
  user_id
@@ -1571,7 +1618,25 @@ NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combi
        3 | ('test',2)
 (1 row)
 
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)');
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, '(''test'',2)'::coordinator_evaluation_combinations_modify.user_data)
+EXECUTE router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
+NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) $1::coordinator_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
+ user_id |   u_data
+---------------------------------------------------------------------
+       3 | ('test',2)
+(1 row)
+
 PREPARE router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 AND user_id  = 3 RETURNING user_id, u_data;
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 1)::coordinator_evaluation_combinations_modify.user_data)
+EXECUTE router_with_param_on_non_dist_key(('test', 1)::user_data);
+NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE ((u_data OPERATOR(pg_catalog.=) $1::coordinator_evaluation_combinations_modify.user_data) AND (user_id OPERATOR(pg_catalog.=) 3) AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
+ user_id |  u_data
+---------------------------------------------------------------------
+       3 | (test,1)
+(1 row)
+
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
 NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 1)::coordinator_evaluation_combinations_modify.user_data)
 EXECUTE router_with_param_on_non_dist_key(('test', 1)::user_data);
@@ -1699,6 +1764,15 @@ NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combi
 (1 row)
 
 PREPARE router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2AND user_id = 3 RETURNING user_id, u_data;
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
+NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 2)::coordinator_evaluation_combinations_modify.user_data)
+EXECUTE router_with_only_function;
+NOTICE:  executing the command locally: DELETE FROM coordinator_evaluation_combinations_modify.user_info_data_1180001 user_info_data WHERE (true AND (user_id OPERATOR(pg_catalog.=) 3)) RETURNING user_id, u_data
+ user_id |  u_data
+---------------------------------------------------------------------
+       3 | (test,2)
+(1 row)
+
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
 NOTICE:  executing the command locally: INSERT INTO coordinator_evaluation_combinations_modify.user_info_data_1180001 (user_id, u_data) VALUES (3, ROW('test'::text, 2)::coordinator_evaluation_combinations_modify.user_data)
 EXECUTE router_with_only_function;

@@ -30,6 +30,7 @@
 #include "utils/relfilenodemap.h"
 
 #include "columnar/columnar.h"
+#include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
 
 struct ColumnarWriteState
@@ -42,6 +43,7 @@ struct ColumnarWriteState
 	MemoryContext perTupleContext;
 	StripeBuffers *stripeBuffers;
 	StripeSkipList *stripeSkipList;
+	uint64 stripeFirstRowNumber;
 	ColumnarOptions options;
 	ChunkData *chunkData;
 
@@ -128,6 +130,7 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 	writeState->comparisonFunctionArray = comparisonFunctionArray;
 	writeState->stripeBuffers = NULL;
 	writeState->stripeSkipList = NULL;
+	writeState->stripeFirstRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
 	writeState->stripeWriteContext = stripeWriteContext;
 	writeState->chunkData = chunkData;
 	writeState->compressionBuffer = NULL;
@@ -146,8 +149,10 @@ ColumnarBeginWrite(RelFileNode relfilenode,
  * corresponding skip nodes. Then, whole chunk data is compressed at every
  * rowChunkCount insertion. Then, if row count exceeds stripeMaxRowCount, we flush
  * the stripe, and add its metadata to the table footer.
+ *
+ * Returns the "row number" assigned to written row.
  */
-void
+uint64
 ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *columnNulls)
 {
 	uint32 columnIndex = 0;
@@ -168,6 +173,14 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		writeState->stripeBuffers = stripeBuffers;
 		writeState->stripeSkipList = stripeSkipList;
 		writeState->compressionBuffer = makeStringInfo();
+
+		Oid relationId = RelidByRelfilenode(writeState->relfilenode.spcNode,
+											writeState->relfilenode.relNode);
+		Relation relation = relation_open(relationId, NoLock);
+		writeState->stripeFirstRowNumber =
+			ColumnarStorageReserveRowNumber(relation,
+											options->stripeRowCount);
+		relation_close(relation, NoLock);
 
 		/*
 		 * serializedValueBuffer lives in stripe write memory context so it needs to be
@@ -225,6 +238,7 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		SerializeChunkData(writeState, chunkIndex, chunkRowCount);
 	}
 
+	uint64 writtenRowNumber = writeState->stripeFirstRowNumber + stripeBuffers->rowCount;
 	stripeBuffers->rowCount++;
 	if (stripeBuffers->rowCount >= options->stripeRowCount)
 	{
@@ -232,6 +246,8 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 	}
 
 	MemoryContextSwitchTo(oldContext);
+
+	return writtenRowNumber;
 }
 
 
@@ -351,80 +367,6 @@ CreateEmptyStripeSkipList(uint32 stripeMaxRowCount, uint32 chunkRowCount,
 }
 
 
-void
-WriteToSmgr(Relation rel, uint64 logicalOffset, char *data, uint32 dataLength)
-{
-	uint64 remaining = dataLength;
-	Buffer buffer;
-
-	while (remaining > 0)
-	{
-		SmgrAddr addr = logical_to_smgr(logicalOffset);
-
-		RelationOpenSmgr(rel);
-		BlockNumber nblocks PG_USED_FOR_ASSERTS_ONLY =
-			smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-		Assert(addr.blockno < nblocks);
-		RelationCloseSmgr(rel);
-
-		buffer = ReadBuffer(rel, addr.blockno);
-		LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
-
-		Page page = BufferGetPage(buffer);
-		PageHeader phdr = (PageHeader) page;
-		if (PageIsNew(page))
-		{
-			PageInit(page, BLCKSZ, 0);
-		}
-
-		/*
-		 * After a transaction has been rolled-back, we might be
-		 * over-writing the rolledback write, so phdr->pd_lower can be
-		 * different from addr.offset.
-		 *
-		 * We reset pd_lower to reset the rolledback write.
-		 */
-		if (phdr->pd_lower > addr.offset)
-		{
-			ereport(DEBUG1, (errmsg("over-writing page %u", addr.blockno),
-							 errdetail("This can happen after a roll-back.")));
-			phdr->pd_lower = addr.offset;
-		}
-		Assert(phdr->pd_lower == addr.offset);
-
-		START_CRIT_SECTION();
-
-		uint64 to_write = Min(phdr->pd_upper - phdr->pd_lower, remaining);
-		memcpy_s(page + phdr->pd_lower, phdr->pd_upper - phdr->pd_lower, data, to_write);
-		phdr->pd_lower += to_write;
-
-		MarkBufferDirty(buffer);
-
-		if (RelationNeedsWAL(rel))
-		{
-			XLogBeginInsert();
-
-			/*
-			 * Since columnar will mostly write whole pages we force the transmission of the
-			 * whole image in the buffer
-			 */
-			XLogRegisterBuffer(0, buffer, REGBUF_FORCE_IMAGE);
-
-			XLogRecPtr recptr = XLogInsert(RM_GENERIC_ID, 0);
-			PageSetLSN(page, recptr);
-		}
-
-		END_CRIT_SECTION();
-
-		UnlockReleaseBuffer(buffer);
-
-		data += to_write;
-		remaining -= to_write;
-		logicalOffset += to_write;
-	}
-}
-
-
 /*
  * FlushStripe flushes current stripe data into the file. The function first ensures
  * the last data chunk for each column is properly serialized and compressed. Then,
@@ -502,7 +444,7 @@ FlushStripe(ColumnarWriteState *writeState)
 
 	stripeMetadata = ReserveStripe(relation, stripeSize,
 								   stripeRowCount, columnCount, chunkCount,
-								   chunkRowCount);
+								   chunkRowCount, writeState->stripeFirstRowNumber);
 
 	uint64 currentFileOffset = stripeMetadata.fileOffset;
 
@@ -527,8 +469,8 @@ FlushStripe(ColumnarWriteState *writeState)
 				columnBuffers->chunkBuffersArray[chunkIndex];
 			StringInfo existsBuffer = chunkBuffers->existsBuffer;
 
-			WriteToSmgr(relation, currentFileOffset,
-						existsBuffer->data, existsBuffer->len);
+			ColumnarStorageWrite(relation, currentFileOffset,
+								 existsBuffer->data, existsBuffer->len);
 			currentFileOffset += existsBuffer->len;
 		}
 
@@ -538,8 +480,8 @@ FlushStripe(ColumnarWriteState *writeState)
 				columnBuffers->chunkBuffersArray[chunkIndex];
 			StringInfo valueBuffer = chunkBuffers->valueBuffer;
 
-			WriteToSmgr(relation, currentFileOffset,
-						valueBuffer->data, valueBuffer->len);
+			ColumnarStorageWrite(relation, currentFileOffset,
+								 valueBuffer->data, valueBuffer->len);
 			currentFileOffset += valueBuffer->len;
 		}
 	}

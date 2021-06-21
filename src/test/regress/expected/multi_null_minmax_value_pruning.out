@@ -29,9 +29,9 @@ EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
 $Q$);
 DEBUG:  Router planner does not support append-partitioned tables.
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -78,9 +78,9 @@ EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
 DEBUG:  Router planner does not support append-partitioned tables.
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -143,9 +143,9 @@ EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
 DEBUG:  Router planner does not support append-partitioned tables.
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -208,9 +208,9 @@ EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
 DEBUG:  Router planner does not support append-partitioned tables.
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
 LOG:  join order: [ "lineitem" ]
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line 3 at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
