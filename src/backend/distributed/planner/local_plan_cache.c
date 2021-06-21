@@ -16,11 +16,20 @@
 #include "distributed/local_plan_cache.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/insert_select_planner.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_executor.h"
 #include "distributed/version_compat.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/clauses.h"
 
+
+static Query * GetLocalShardQueryForCache(Query *jobQuery, Task *task,
+										  ParamListInfo paramListInfo);
+static char * DeparseLocalShardQuery(Query *jobQuery, List *relationShardList,
+									 Oid anchorDistributedTableId, int64 anchorShardId);
+static int ExtractParameterTypesForParamListInfo(ParamListInfo originalParamListInfo,
+												 Oid **parameterTypes);
 
 /*
  * CacheLocalPlanForShardQuery replaces the relation OIDs in the job query
@@ -28,7 +37,8 @@
  * in the originalDistributedPlan (which may be preserved across executions).
  */
 void
-CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan)
+CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan,
+							ParamListInfo paramListInfo)
 {
 	PlannedStmt *localPlan = GetCachedLocalPlan(task, originalDistributedPlan);
 	if (localPlan != NULL)
@@ -54,14 +64,14 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 	 * We prefer to use jobQuery (over task->query) because we don't want any
 	 * functions/params to have been evaluated in the cached plan.
 	 */
-	Query *shardQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
+	Query *jobQuery = copyObject(originalDistributedPlan->workerJob->jobQuery);
 
-	UpdateRelationsToLocalShardTables((Node *) shardQuery, task->relationShardList);
+	Query *localShardQuery = GetLocalShardQueryForCache(jobQuery, task, paramListInfo);
 
-	LOCKMODE lockMode = GetQueryLockMode(shardQuery);
+	LOCKMODE lockMode = GetQueryLockMode(localShardQuery);
 
 	/* fast path queries can only have a single RTE by definition */
-	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(shardQuery->rtable);
+	RangeTblEntry *rangeTableEntry = (RangeTblEntry *) linitial(localShardQuery->rtable);
 
 	/*
 	 * If the shard has been created in this transction, we wouldn't see the relationId
@@ -69,24 +79,16 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 	 */
 	if (rangeTableEntry->relid == InvalidOid)
 	{
-		pfree(shardQuery);
+		pfree(jobQuery);
+		pfree(localShardQuery);
 		MemoryContextSwitchTo(oldContext);
 		return;
-	}
-
-	if (IsLoggableLevel(DEBUG5))
-	{
-		StringInfo queryString = makeStringInfo();
-		pg_get_query_def(shardQuery, queryString);
-
-		ereport(DEBUG5, (errmsg("caching plan for query: %s",
-								queryString->data)));
 	}
 
 	LockRelationOid(rangeTableEntry->relid, lockMode);
 
 	LocalPlannedStatement *localPlannedStatement = CitusMakeNode(LocalPlannedStatement);
-	localPlan = planner_compat(shardQuery, 0, NULL);
+	localPlan = planner_compat(localShardQuery, 0, NULL);
 	localPlannedStatement->localPlan = localPlan;
 	localPlannedStatement->shardId = task->anchorShardId;
 	localPlannedStatement->localGroupId = GetLocalGroupId();
@@ -96,6 +98,128 @@ CacheLocalPlanForShardQuery(Task *task, DistributedPlan *originalDistributedPlan
 				localPlannedStatement);
 
 	MemoryContextSwitchTo(oldContext);
+}
+
+
+/*
+ * GetLocalShardQueryForCache is a helper function which generates
+ * the local shard query based on the jobQuery. The function should
+ * not be used for generic purposes, it is specialized for local cached
+ * queries.
+ *
+ * It is not guaranteed to have consistent attribute numbers on the shards
+ * and on the shell (e.g., distributed/reference tables) due to DROP COLUMN
+ * commands.
+ *
+ * To avoid any edge cases due to such discrepancies, we first deparse the
+ * jobQuery with the tables replaced to shards, and parse the query string
+ * back. This is normally a very expensive operation, however we only do it
+ * once per cached local plan, which is acceptable.
+ */
+static Query *
+GetLocalShardQueryForCache(Query *jobQuery, Task *task, ParamListInfo orig_paramListInfo)
+{
+	char *shardQueryString =
+		DeparseLocalShardQuery(jobQuery, task->relationShardList,
+							   task->anchorDistributedTableId,
+							   task->anchorShardId);
+	ereport(DEBUG5, (errmsg("Local shard query that is going to be cached: %s",
+							shardQueryString)));
+
+	Oid *parameterTypes = NULL;
+	int numberOfParameters =
+		ExtractParameterTypesForParamListInfo(orig_paramListInfo, &parameterTypes);
+
+	Query *localShardQuery =
+		ParseQueryString(shardQueryString, parameterTypes, numberOfParameters);
+
+	return localShardQuery;
+}
+
+
+/*
+ * DeparseLocalShardQuery is a helper function to deparse given jobQuery for the shard(s)
+ * identified by the relationShardList, anchorDistributedTableId and anchorShardId.
+ *
+ * For the details and comparison with TaskQueryString(), see the comments in the function.
+ */
+static char *
+DeparseLocalShardQuery(Query *jobQuery, List *relationShardList, Oid
+					   anchorDistributedTableId, int64 anchorShardId)
+{
+	StringInfo queryString = makeStringInfo();
+
+	/*
+	 * We imitate what TaskQueryString() does, but we cannot rely on that function
+	 * as the parameters might have been already resolved on the QueryTree in the
+	 * task. Instead, we operate on the jobQuery where are sure that the
+	 * coordination evaluation has not happened.
+	 *
+	 * Local shard queries are only applicable for local cached query execution.
+	 * In the local cached query execution mode, we can use a query structure
+	 * (or query string) with unevaluated expressions as we allow function calls
+	 * to be evaluated when the query on the shard is executed (e.g., do no have
+	 * coordinator evaluation, instead let Postgres executor evaluate values).
+	 *
+	 * Additionally, we can allow them to be evaluated again because they are stable,
+	 * and we do not cache plans / use unevaluated query strings for queries containing
+	 * volatile functions.
+	 */
+	if (jobQuery->commandType == CMD_INSERT)
+	{
+		/*
+		 * We currently do not support INSERT .. SELECT here. To support INSERT..SELECT
+		 * queries, we should update the relation names to shard names in the SELECT
+		 * clause (e.g., UpdateRelationToShardNames()).
+		 */
+		Assert(!CheckInsertSelectQuery(jobQuery));
+
+		/*
+		 * For INSERT queries we cannot use pg_get_query_def. Mainly because we
+		 * cannot run UpdateRelationToShardNames on an INSERT query. This is
+		 * because the PG deparsing logic fails when trying to insert into a
+		 * RTE_FUNCTION (which is what will happen if you call
+		 * UpdateRelationToShardNames).
+		 */
+		deparse_shard_query(jobQuery, anchorDistributedTableId, anchorShardId,
+							queryString);
+	}
+	else
+	{
+		UpdateRelationToShardNames((Node *) jobQuery, relationShardList);
+
+		pg_get_query_def(jobQuery, queryString);
+	}
+
+	return queryString->data;
+}
+
+
+/*
+ * ExtractParameterTypesForParamListInfo is a helper function which helps to
+ * extract the parameter types of the given ParamListInfo via the second
+ * parameter of the function.
+ *
+ * The function also returns the number of parameters. If no parameter exists,
+ * the function returns 0.
+ */
+static int
+ExtractParameterTypesForParamListInfo(ParamListInfo originalParamListInfo,
+									  Oid **parameterTypes)
+{
+	*parameterTypes = NULL;
+
+	int numberOfParameters = 0;
+	if (originalParamListInfo != NULL)
+	{
+		const char **parameterValues = NULL;
+		ParamListInfo paramListInfo = copyParamList(originalParamListInfo);
+		ExtractParametersForLocalExecution(paramListInfo, parameterTypes,
+										   &parameterValues);
+		numberOfParameters = paramListInfo->numParams;
+	}
+
+	return numberOfParameters;
 }
 
 
