@@ -91,6 +91,7 @@ static object_access_hook_type PrevObjectAccessHook = NULL;
 static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 
 /* forward declaration for static functions */
+static MemoryContext CreateColumnarScanMemoryContext(void);
 static void ColumnarTableDropHook(Oid tgid);
 static void ColumnarTriggerCreateHook(Oid tgid);
 static void ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId,
@@ -178,12 +179,7 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 	 * initialized read state. We assume that beginscan is called in a
 	 * context that will last until end of scan.
 	 */
-	MemoryContext scanContext =
-		AllocSetContextCreate(
-			CurrentMemoryContext,
-			"Column Store Scan Context",
-			ALLOCSET_DEFAULT_SIZES);
-
+	MemoryContext scanContext = CreateColumnarScanMemoryContext();
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
 
 	ColumnarScanDesc scan = palloc0(sizeof(ColumnarScanDescData));
@@ -217,6 +213,18 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 	MemoryContextSwitchTo(oldContext);
 
 	return ((TableScanDesc) scan);
+}
+
+
+/*
+ * CreateColumnarScanMemoryContext creates a memory context to store
+ * ColumnarReadStare in it.
+ */
+static MemoryContext
+CreateColumnarScanMemoryContext(void)
+{
+	return AllocSetContextCreate(CurrentMemoryContext, "Columnar Scan Context",
+								 ALLOCSET_DEFAULT_SIZES);
 }
 
 
