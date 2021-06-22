@@ -196,7 +196,7 @@ NOTICE:  executing the command locally: UPDATE local_shard_execution_dropped_col
 -- has a dropped column but not the shard, via rebalance operation
 SET search_path TO local_shard_execution_dropped_column;
 ALTER TABLE t1 DROP COLUMN a;
-SELECT citus_move_shard_placement(2460000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_move_shard_placement(2460000, 'localhost', :worker_1_port, 'localhost', :worker_2_port, 'block_writes');
  citus_move_shard_placement
 ---------------------------------------------------------------------
 
