@@ -94,3 +94,6 @@ test: ensure_no_intermediate_data_leak
 # in the shared memory
 # --------
 test: ensure_no_shared_connection_leak
+
+# test start/stop metadata syncing to nodes
+test: start_stop_metadata_sync

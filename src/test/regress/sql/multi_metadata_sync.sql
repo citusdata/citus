@@ -805,49 +805,7 @@ DROP SEQUENCE mx_test_sequence_0, mx_test_sequence_1, local_sequence CASCADE;
 \ds
 
 \c - - - :master_port
-CREATE TABLE distributed_table_1(col int unique);
-CREATE TABLE distributed_table_2(col int unique);
-CREATE TABLE reference_table_1(col int unique);
-CREATE TABLE reference_table_2(col int unique);
-CREATE TABLE local_table(col int unique);
-
-SET citus.shard_replication_factor TO 1;
-
-ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES distributed_table_2(col);
-ALTER TABLE distributed_table_2 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES reference_table_1(col);
-ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES reference_table_2(col);
-ALTER TABLE local_table ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES reference_table_1(col);
-
-SELECT create_reference_table('reference_table_2');
-SELECT create_reference_table('reference_table_1');
-SELECT create_distributed_table('distributed_table_2', 'col');
-SELECT create_distributed_table('distributed_table_1', 'col');
-
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-
-\c - - - :worker_1_port
-SELECT count(*) FROM pg_dist_node;
-SELECT count(*) FROM pg_dist_shard;
-SELECT count(*) FROM pg_class WHERE relname LIKE 'distributed_table__';
-SELECT count(*) FROM pg_class WHERE relname LIKE 'reference_table__';
-\c - - - :master_port
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT count(*) FROM pg_dist_node;
-SELECT count(*) FROM pg_dist_shard;
-SELECT count(*) FROM pg_class WHERE relname LIKE 'distributed_table__';
-SELECT count(*) FROM pg_class WHERE relname LIKE 'reference_table__';
-\c - - - :worker_1_port
-SELECT count(*) FROM pg_dist_node;
-SELECT count(*) FROM pg_dist_shard;
-SELECT count(*) FROM pg_class WHERE relname LIKE 'distributed_table__';
-SELECT count(*) FROM pg_class WHERE relname LIKE 'reference_table__';
-\c - - - :master_port
 DROP TABLE test_table CASCADE;
-DROP TABLE distributed_table_1 CASCADE;
-DROP TABLE distributed_table_2 CASCADE;
-DROP TABLE reference_table_1 CASCADE;
-DROP TABLE reference_table_2 CASCADE;
-DROP TABLE local_table CASCADE;
 
 -- Cleanup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
