@@ -87,7 +87,7 @@ inserts AS (
 \c - - - :master_port
 
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
-
+SET client_min_messages TO ERROR;
 DROP SCHEMA mx_coordinator_shouldhaveshards CASCADE;
 
 SELECT master_remove_node('localhost', :master_port);
