@@ -192,6 +192,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureSuperUser();
+	PreventInTransactionBlock(true, "stop_metadata_sync_to_node");
 
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
