@@ -2,10 +2,12 @@
 -- MUTLI_SHARD_REBALANCER
 --
 
-CREATE TABLE dist_table_test(a int primary key);
-SELECT create_distributed_table('dist_table_test', 'a');
+SET citus.next_shard_id TO 433000;
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
+CREATE TABLE dist_table_test(a int primary key);
+SELECT create_distributed_table('dist_table_test', 'a');
+CREATE TABLE postgres_table_test(a int primary key);
 
 -- make sure that all rebalance operations works fine when
 -- reference tables are replicated to the coordinator
@@ -20,12 +22,27 @@ CALL citus_cleanup_orphaned_shards();
 
 -- test that calling rebalance_table_shards without specifying relation
 -- wouldn't move shard of the citus local table.
+SET citus.next_shard_id TO 433100;
 CREATE TABLE citus_local_table(a int, b int);
 SELECT citus_add_local_table_to_metadata('citus_local_table');
 INSERT INTO citus_local_table VALUES (1, 2);
 
 SELECT rebalance_table_shards();
 CALL citus_cleanup_orphaned_shards();
+
+-- Check that rebalance_table_shards and get_rebalance_table_shards_plan fail
+-- for any type of table, but distributed tables.
+SELECT rebalance_table_shards('ref_table_test');
+SELECT rebalance_table_shards('postgres_table_test');
+SELECT rebalance_table_shards('citus_local_table');
+SELECT get_rebalance_table_shards_plan('ref_table_test');
+SELECT get_rebalance_table_shards_plan('postgres_table_test');
+SELECT get_rebalance_table_shards_plan('citus_local_table');
+
+-- Check that citus_move_shard_placement fails for shards belonging reference
+-- tables or citus local tables
+SELECT citus_move_shard_placement(433000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_move_shard_placement(433100, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
 -- show that citus local table shard is still on the coordinator
 SELECT tablename FROM pg_catalog.pg_tables where tablename like 'citus_local_table_%';
@@ -83,7 +100,7 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 SET citus.shard_replication_factor TO 2;
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 
-DROP TABLE dist_table_test, dist_table_test_2, ref_table_test;
+DROP TABLE dist_table_test, dist_table_test_2, ref_table_test, postgres_table_test;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 
