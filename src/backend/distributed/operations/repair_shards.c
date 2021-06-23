@@ -298,7 +298,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	ListCell *colocatedShardCell = NULL;
 
 	Oid relationId = RelationIdForShard(shardId);
-	ErrorIfMoveCitusLocalTable(relationId);
+	ErrorIfMoveUnsupportedTableType(relationId);
 	ErrorIfTargetNodeIsNotSafeToMove(targetNodeName, targetNodePort);
 
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
@@ -478,23 +478,40 @@ master_move_shard_placement(PG_FUNCTION_ARGS)
 
 
 /*
- * ErrorIfMoveCitusLocalTable is a helper function for rebalance_table_shards
+ * ErrorIfMoveUnsupportedTableType is a helper function for rebalance_table_shards
  * and citus_move_shard_placement udf's to error out if relation with relationId
  * is a citus local table.
  */
 void
-ErrorIfMoveCitusLocalTable(Oid relationId)
+ErrorIfMoveUnsupportedTableType(Oid relationId)
 {
-	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
 	{
 		return;
 	}
 
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("table %s is a local table, moving shard of "
-						   "a local table added to metadata is currently "
-						   "not supported", qualifiedRelationName)));
+	if (!IsCitusTable(relationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("table %s is a regular postgres table, you can "
+							   "only move shards of a citus table",
+							   qualifiedRelationName)));
+	}
+	else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("table %s is a local table, moving shard of "
+							   "a local table added to metadata is currently "
+							   "not supported", qualifiedRelationName)));
+	}
+	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("table %s is a reference table, moving shard of "
+							   "a reference table is not supported",
+							   qualifiedRelationName)));
+	}
 }
 
 
