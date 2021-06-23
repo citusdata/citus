@@ -221,7 +221,7 @@ CREATE SCHEMA sequence_default_8;
 -- can change schema in a sequence not yet distributed
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
 ALTER SEQUENCE sequence_default_8.seq_8 SET SCHEMA sequence_default;
-CREATE TABLE seq_test_8 (x int, y int DEFAULT nextval('seq_8'));
+CREATE TABLE seq_test_8 (x int, y int DEFAULT nextval('seq_8'), z bigserial);
 SELECT create_distributed_table('seq_test_8', 'x');
 -- cannot change sequence specifications
 ALTER SEQUENCE seq_8 AS bigint;
@@ -231,6 +231,13 @@ ALTER SEQUENCE seq_8 START WITH 6;
 ALTER SEQUENCE seq_8 RESTART WITH 6;
 ALTER SEQUENCE seq_8 NO CYCLE;
 ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
+ALTER SEQUENCE seq_test_8_z_seq AS smallint;
+ALTER SEQUENCE seq_test_8_z_seq INCREMENT BY 2;
+ALTER SEQUENCE seq_test_8_z_seq MINVALUE 5 MAXVALUE 5000;
+ALTER SEQUENCE seq_test_8_z_seq START WITH 6;
+ALTER SEQUENCE seq_test_8_z_seq RESTART WITH 6;
+ALTER SEQUENCE seq_test_8_z_seq NO CYCLE;
+ALTER SEQUENCE seq_test_8_z_seq OWNED BY seq_test_7;
 -- can change schema in a distributed sequence
 -- sequence_default_8 will be created in workers as part of dependencies
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
@@ -290,6 +297,7 @@ DROP SEQUENCE seq_10 CASCADE;
 DROP ROLE seq_role_0, seq_role_1;
 SELECT run_command_on_workers('DROP ROLE IF EXISTS seq_role_0, seq_role_1');
 
+
 -- Check some cases when default is defined by
 -- DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
@@ -306,6 +314,7 @@ SELECT create_distributed_table('seq_test_11', 'col1');
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_10 VALUES (1);
 \c - - - :master_port
+
 
 -- clean up
 DROP TABLE sequence_default.seq_test_7_par;

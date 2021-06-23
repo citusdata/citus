@@ -387,6 +387,23 @@ MetadataCreateCommands(void)
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 
+		/*
+		 * Ensure sequence dependencies and mark them as distributed
+		 */
+		List *attnumList = NIL;
+		List *dependentSequenceList = NIL;
+		GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList,
+										  0);
+		Oid sequenceOid = InvalidOid;
+		foreach_oid(sequenceOid, dependentSequenceList)
+		{
+			/* get sequence address */
+			ObjectAddress sequenceAddress = { 0 };
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+			EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+			MarkObjectDistributed(&sequenceAddress);
+		}
+
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);
@@ -1053,19 +1070,16 @@ SequenceDDLCommandsForTable(Oid relationId)
 
 	char *ownerName = TableOwner(relationId);
 
-	ListCell *attnumCell = NULL;
-	ListCell *dependentSequenceCell = NULL;
-	forboth(attnumCell, attnumList, dependentSequenceCell, dependentSequenceList)
+	Oid sequenceOid = InvalidOid;
+	foreach_oid(sequenceOid, dependentSequenceList)
 	{
-		AttrNumber attnum = lfirst_int(attnumCell);
-		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
-
 		char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
 		char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
 		StringInfo wrappedSequenceDef = makeStringInfo();
 		StringInfo sequenceGrantStmt = makeStringInfo();
 		char *sequenceName = generate_qualified_relation_name(sequenceOid);
-		Oid sequenceTypeOid = GetAttributeTypeOid(relationId, attnum);
+		Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceOid);
+		Oid sequenceTypeOid = sequenceData->seqtypid;
 		char *typeName = format_type_be(sequenceTypeOid);
 
 		/* create schema if needed */
@@ -1080,13 +1094,6 @@ SequenceDDLCommandsForTable(Oid relationId)
 
 		sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
 		sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
-
-		/* get sequence address */
-		ObjectAddress sequenceAddress = { 0 };
-		ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-		EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-
-		MarkObjectDistributed(&sequenceAddress);
 	}
 
 	return sequenceDDLList;

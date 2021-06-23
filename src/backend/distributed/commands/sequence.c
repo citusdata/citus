@@ -29,7 +29,6 @@
 
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
-static bool ShouldPropagateAlterSequence(const ObjectAddress *sequenceAddress);
 static bool UsedInDistributedTable(const ObjectAddress *sequenceAddress);
 
 
@@ -287,9 +286,9 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 	}
 
 	/*
-	 * managing types can only be done on the coordinator if ddl propagation is on. when
+	 * managing sequences can only be done on the coordinator if ddl propagation is on. when
 	 * it is off we will never get here. MX workers don't have a notion of distributed
-	 * types, so we block the call.
+	 * sequences, so we block the call.
 	 */
 	EnsureCoordinator();
 
@@ -306,14 +305,13 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 	 */
 	DropStmt *stmtCopy = copyObject(stmt);
 	stmtCopy->objects = distributedSequencesList;
-	stmtCopy->missing_ok = true;
 	const char *dropStmtSql = DeparseTreeNode((Node *) stmtCopy);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
 }
 
 
@@ -335,7 +333,7 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
 														  stmt->missing_ok);
 
-	if (!ShouldPropagateAlterSequence(&address))
+	if (!ShouldPropagateObject(&address))
 	{
 		return NIL;
 	}
@@ -343,16 +341,12 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
 	EnsureCoordinator();
 	QualifyTreeNode((Node *) stmt);
 
-	/* this takes care of cases where not all workers have synced metadata */
-	RenameStmt *stmtCopy = copyObject(stmt);
-	stmtCopy->missing_ok = true;
-
-	const char *sql = DeparseTreeNode((Node *) stmtCopy);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
 }
 
 
@@ -372,40 +366,6 @@ RenameSequenceStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
 
 	return sequenceAddress;
-}
-
-
-/*
- * ShouldPropagateAlterSequence returns, based on the address of a sequence, if alter
- * statements targeting the function should be propagated.
- */
-static bool
-ShouldPropagateAlterSequence(const ObjectAddress *sequenceAddress)
-{
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, sequences cascading
-		 * from an extension should therefore not be propagated.
-		 */
-		return false;
-	}
-
-	if (!EnableDependencyCreation)
-	{
-		/*
-		 * we are configured to disable object propagation, should not propagate anything
-		 */
-		return false;
-	}
-
-	if (!IsObjectDistributed(sequenceAddress))
-	{
-		/* do not propagate alter sequence for non-distributed sequences */
-		return false;
-	}
-
-	return true;
 }
 
 
@@ -438,7 +398,7 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 	if (IsObjectDistributed(&address))
 	{
 		ereport(ERROR, (errmsg(
-							"This operation is currently not allowed for a distributed sequence.")));
+							"Altering a distributed sequence is currently not supported.")));
 	}
 
 	/*
@@ -454,8 +414,8 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 			if (strcmp(defel->defname, "as") == 0)
 			{
 				ereport(ERROR, (errmsg(
-									"This operation is currently not allowed "
-									"for a sequence used in a distributed table.")));
+									"Altering a sequence used in a distributed"
+									" table is currently not supported.")));
 			}
 		}
 	}
@@ -529,7 +489,7 @@ PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
 
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
 														  stmt->missing_ok);
-	if (!ShouldPropagateAlterSequence(&address))
+	if (!ShouldPropagateObject(&address))
 	{
 		return NIL;
 	}
@@ -537,16 +497,12 @@ PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
 	EnsureCoordinator();
 	QualifyTreeNode((Node *) stmt);
 
-	/* this takes care of cases where not all workers have synced metadata */
-	AlterObjectSchemaStmt *stmtCopy = copyObject(stmt);
-	stmtCopy->missing_ok = true;
-
-	const char *sql = DeparseTreeNode((Node *) stmtCopy);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
 }
 
 
@@ -608,7 +564,7 @@ PostprocessAlterSequenceSchemaStmt(Node *node, const char *queryString)
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
 														  stmt->missing_ok);
 
-	if (!ShouldPropagateAlterSequence(&address))
+	if (!ShouldPropagateObject(&address))
 	{
 		return NIL;
 	}
@@ -635,7 +591,7 @@ PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
 	Assert(stmt->relkind == OBJECT_SEQUENCE);
 
 	ObjectAddress sequenceAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterSequence(&sequenceAddress))
+	if (!ShouldPropagateObject(&sequenceAddress))
 	{
 		return NIL;
 	}
@@ -643,16 +599,12 @@ PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
 	EnsureCoordinator();
 	QualifyTreeNode((Node *) stmt);
 
-	/* this takes care of cases where not all workers have synced metadata */
-	AlterTableStmt *stmtCopy = copyObject(stmt);
-	stmtCopy->missing_ok = true;
-
-	const char *sql = DeparseTreeNode((Node *) stmtCopy);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
 }
 
 
@@ -687,7 +639,7 @@ PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 	Assert(stmt->relkind == OBJECT_SEQUENCE);
 
 	ObjectAddress sequenceAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!ShouldPropagateAlterSequence(&sequenceAddress))
+	if (!ShouldPropagateObject(&sequenceAddress))
 	{
 		return NIL;
 	}

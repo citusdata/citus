@@ -33,6 +33,7 @@
 #include "catalog/pg_trigger.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
+#include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/trigger.h"
 #include "distributed/commands/multi_copy.h"
@@ -64,6 +65,7 @@
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "nodes/execnodes.h"
+#include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "parser/parse_expr.h"
@@ -465,6 +467,37 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
 							  colocationId, replicationModel);
 
+	/*
+	 * Ensure that the sequences used in column defaults of the table
+	 * have proper types
+	 */
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
+	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+	ListCell *attnumCell = NULL;
+	ListCell *dependentSequenceCell = NULL;
+	forboth(attnumCell, attnumList, dependentSequenceCell, dependentSequenceList)
+	{
+		AttrNumber attnum = lfirst_int(attnumCell);
+		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
+
+		/*
+		 * We should make sure that the type of the column that uses
+		 * that sequence is supported
+		 */
+		Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
+		EnsureSequenceTypeSupported(sequenceOid, seqTypId);
+
+		/*
+		 * Alter the sequence's data type in the coordinator if needed.
+		 * A sequence's type is bigint by default and it doesn't change even if
+		 * it's used in an int column. We should change the type if needed,
+		 * and not allow future ALTER SEQUENCE ... TYPE ... commands for
+		 * sequences used as defaults in distributed tables
+		 */
+		AlterSequenceType(sequenceOid, seqTypId);
+	}
+
 	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
 	{
@@ -498,6 +531,23 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
+		if (ClusterHasKnownMetadataWorkers())
+		{
+			/*
+			 * Ensure sequence dependencies and mark them as distributed
+			 * before creating table metadata on workers
+			 */
+			Oid sequenceOid = InvalidOid;
+			foreach_oid(sequenceOid, dependentSequenceList)
+			{
+				/* get sequence address */
+				ObjectAddress sequenceAddress = { 0 };
+				ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+				EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+				MarkObjectDistributed(&sequenceAddress);
+			}
+		}
+
 		CreateTableMetadataOnWorkers(relationId);
 	}
 
@@ -541,6 +591,82 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	bool skip_validation = true;
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
+}
+
+
+/*
+ * EnsureSequenceTypeSupported ensures that the type of the column that uses
+ * a sequence on its DEFAULT is consistent with previous uses (if any) of the
+ * sequence in distributed tables.
+ * If any other distributed table uses the input sequence, it checks whether
+ * the types of the columns using the sequence match. If they don't, it errors out.
+ * Otherwise, the condition is ensured.
+ */
+void
+EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId)
+{
+	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
+	Oid citusTableId = InvalidOid;
+	foreach_oid(citusTableId, citusTableIdList)
+	{
+		List *attnumList = NIL;
+		List *dependentSequenceList = NIL;
+		GetDependentSequencesWithRelation(citusTableId, &attnumList,
+										  &dependentSequenceList, 0);
+		ListCell *attnumCell = NULL;
+		ListCell *dependentSequenceCell = NULL;
+		forboth(attnumCell, attnumList, dependentSequenceCell,
+				dependentSequenceList)
+		{
+			AttrNumber currentAttnum = lfirst_int(attnumCell);
+			Oid currentSeqOid = lfirst_oid(dependentSequenceCell);
+
+			/*
+			 * If another distributed table is using the same sequence
+			 * in one of its column defaults, make sure the types of the
+			 * columns match
+			 */
+			if (currentSeqOid == seqOid)
+			{
+				Oid currentSeqTypId = GetAttributeTypeOid(citusTableId,
+														  currentAttnum);
+				if (seqTypId != currentSeqTypId)
+				{
+					char *sequenceName = generate_qualified_relation_name(
+						seqOid);
+					char *citusTableName =
+						generate_qualified_relation_name(citusTableId);
+					ereport(ERROR, (errmsg(
+										"The sequence %s is already used for a different"
+										" type in column %d of the table %s",
+										sequenceName, currentAttnum,
+										citusTableName)));
+				}
+			}
+		}
+	}
+}
+
+
+/*
+ * AlterSequenceType alters the given sequence's type to the given type.
+ */
+void
+AlterSequenceType(Oid seqOid, Oid typeOid)
+{
+	Form_pg_sequence sequenceData = pg_get_sequencedef(seqOid);
+	Oid currentSequenceTypeOid = sequenceData->seqtypid;
+	if (currentSequenceTypeOid != typeOid)
+	{
+		AlterSeqStmt *alterSequenceStatement = makeNode(AlterSeqStmt);
+		char *seqNamespace = get_namespace_name(get_rel_namespace(seqOid));
+		char *seqName = get_rel_name(seqOid);
+		alterSequenceStatement->sequence = makeRangeVar(seqNamespace, seqName, -1);
+		Node *asTypeNode = (Node *) makeTypeNameFromOid(typeOid, -1);
+		SetDefElemArg(alterSequenceStatement, "as", asTypeNode);
+		ParseState *pstate = make_parsestate(NULL);
+		AlterSequence(pstate, alterSequenceStatement);
+	}
 }
 
 
