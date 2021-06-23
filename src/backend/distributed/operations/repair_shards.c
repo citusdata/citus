@@ -480,7 +480,7 @@ master_move_shard_placement(PG_FUNCTION_ARGS)
 /*
  * ErrorIfMoveUnsupportedTableType is a helper function for rebalance_table_shards
  * and citus_move_shard_placement udf's to error out if relation with relationId
- * is a citus local table.
+ * is not a distributed table.
  */
 void
 ErrorIfMoveUnsupportedTableType(Oid relationId)
