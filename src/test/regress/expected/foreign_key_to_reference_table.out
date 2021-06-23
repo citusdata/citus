@@ -77,13 +77,13 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation when distribution key included in the foreign constraint.
 DROP TABLE referencing_table;
 BEGIN;
   CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(ref_id) REFERENCES referenced_table(id) ON UPDATE SET NULL);
   SELECT create_distributed_table('referencing_table', 'ref_id');
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation when distribution key included in the foreign constraint.
 ROLLBACK;
 -- try with multiple columns including the distribution column
 DROP TABLE referenced_table;
@@ -103,12 +103,12 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column) ON UPDATE SET DEFAULT;
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation when distribution key included in the foreign constraint.
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column) ON UPDATE SET DEFAULT);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation when distribution key included in the foreign constraint.
 DROP TABLE referencing_table;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
@@ -119,13 +119,13 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column) ON UPDATE CASCADE;
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation when distribution key included in the foreign constraint.
 DROP TABLE referencing_table;
 BEGIN;
   CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id, ref_id) REFERENCES referenced_table(id, test_column) ON UPDATE CASCADE);
   SELECT create_distributed_table('referencing_table', 'ref_id');
 ERROR:  cannot create foreign key constraint
-DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation  when distribution key included in the foreign constraint.
+DETAIL:  SET NULL, SET DEFAULT or CASCADE is not supported in ON UPDATE operation when distribution key included in the foreign constraint.
 ROLLBACK;
 -- all of the above is supported if the foreign key does not include distribution column
 DROP TABLE referenced_table;
@@ -349,8 +349,9 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'append');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(id);
-ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
-DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+ERROR:  cannot create foreign key constraint
+DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 SELECT * FROM table_fkeys_in_workers WHERE name LIKE 'fkey_ref%' ORDER BY 1,2,3;
  name | relid | refd_relid
 ---------------------------------------------------------------------
@@ -365,8 +366,9 @@ SELECT create_distributed_table('referencing_table', 'ref_id', 'range');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(id);
-ERROR:  cannot create foreign key constraint since relations are not colocated or not referencing a reference table
-DETAIL:  A distributed table can only have foreign keys if it is referencing another colocated hash distributed table or a reference table
+ERROR:  cannot create foreign key constraint
+DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
+HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
 SELECT * FROM table_fkeys_in_workers WHERE name LIKE 'fkey_ref%' ORDER BY 1,2,3;
  name | relid | refd_relid
 ---------------------------------------------------------------------
