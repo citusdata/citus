@@ -498,34 +498,20 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT test.x, r.cou
 (0 rows)
 
 -- Test that we don't propagate to non-metadata worker nodes
+SET client_min_messages TO WARNING;
 select stop_metadata_sync_to_node('localhost', :worker_1_port);
-DEBUG:  relation 20567 does not exist, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  relation 20577 does not exist, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  relation 20587 does not exist, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  relation 20597 does not exist, skipping
-DETAIL:  from localhost:xxxxx
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 select stop_metadata_sync_to_node('localhost', :worker_2_port);
-DEBUG:  relation 18151 does not exist, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  relation 18161 does not exist, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  relation 18171 does not exist, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  relation 18181 does not exist, skipping
-DETAIL:  from localhost:xxxxx
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
+SET client_min_messages TO DEBUG1;
 select mx_call_func(2, 0);
 DEBUG:  the worker node does not have metadata
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum((t1.val OPERATOR(pg_catalog.+) t2.val)) AS sum FROM (multi_mx_function_call_delegation.mx_call_dist_table_1 t1 JOIN multi_mx_function_call_delegation.mx_call_dist_table_2 t2 ON ((t1.id OPERATOR(pg_catalog.=) t2.id)))
