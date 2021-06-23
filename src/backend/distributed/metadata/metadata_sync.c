@@ -220,6 +220,13 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
 	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
 
+	char *extensionOwner = CitusExtensionOwnerName();
+	List *localGroupIdUpdateCommand = list_make1(LocalGroupIdUpdateCommand(0));
+
+	SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
+												 workerNode->workerPort,
+												 extensionOwner,
+												 localGroupIdUpdateCommand);
 	PG_RETURN_VOID();
 }
 
