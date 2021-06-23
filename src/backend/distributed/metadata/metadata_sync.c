@@ -207,8 +207,12 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 						errmsg("node (%s,%d) does not exist", nodeNameString, nodePort)));
 	}
 
-	if (clearMetadata)
+	if (clearMetadata && NodeIsPrimary(workerNode))
 	{
+		/*
+		 * If this is a secondary node we can't actually clear metadata from it,
+		 * we assume the primary node is cleared.
+		 */
 		DropMetadataSnapshotOnNode(workerNode);
 	}
 
@@ -614,6 +618,12 @@ MetadataDropCommands(void)
 									  REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
 
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList, DELETE_ALL_NODES);
+
+	char *str = NULL;
+	foreach_ptr(str, dropSnapshotCommandList)
+	{
+		elog(DEBUG4, "command: %s", str);
+	}
 
 	return dropSnapshotCommandList;
 }
