@@ -794,7 +794,7 @@ rebalance_table_shards(PG_FUNCTION_ARGS)
 	if (!PG_ARGISNULL(0))
 	{
 		Oid relationId = PG_GETARG_OID(0);
-		ErrorIfMoveCitusLocalTable(relationId);
+		ErrorIfMoveUnsupportedTableType(relationId);
 
 		relationIdList = list_make1_oid(relationId);
 	}
@@ -997,7 +997,7 @@ get_rebalance_table_shards_plan(PG_FUNCTION_ARGS)
 	if (!PG_ARGISNULL(0))
 	{
 		Oid relationId = PG_GETARG_OID(0);
-		ErrorIfMoveCitusLocalTable(relationId);
+		ErrorIfMoveUnsupportedTableType(relationId);
 
 		relationIdList = list_make1_oid(relationId);
 	}
