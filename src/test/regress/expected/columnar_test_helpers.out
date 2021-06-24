@@ -77,3 +77,30 @@ CREATE FUNCTION top_memory_context_usage()
 	RETURNS BIGINT AS $$
 		SELECT TopMemoryContext FROM columnar_test_helpers.columnar_store_memory_stats();
 	$$ LANGUAGE SQL VOLATILE;
+CREATE OR REPLACE FUNCTION uses_index_scan(command text)
+RETURNS BOOLEAN AS $$
+DECLARE
+  query_plan text;
+BEGIN
+  FOR query_plan IN EXECUTE 'EXPLAIN' || command LOOP
+    IF query_plan ILIKE '%Index Only Scan using%' OR
+       query_plan ILIKE '%Index Scan using%'
+    THEN
+        RETURN true;
+    END IF;
+  END LOOP;
+  RETURN false;
+END; $$ language plpgsql;
+CREATE OR REPLACE FUNCTION uses_custom_scan(command text)
+RETURNS BOOLEAN AS $$
+DECLARE
+  query_plan text;
+BEGIN
+  FOR query_plan IN EXECUTE 'EXPLAIN' || command LOOP
+    IF query_plan ILIKE '%Custom Scan (ColumnarScan)%'
+    THEN
+        RETURN true;
+    END IF;
+  END LOOP;
+  RETURN false;
+END; $$ language plpgsql;
