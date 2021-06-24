@@ -174,7 +174,7 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														List *placementList);
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
-static bool IsTableLocallyAccessible(Oid relationId);
+static bool IsLocallyAccessibleCitusLocalTable(Oid relationId);
 
 
 /*
@@ -794,7 +794,7 @@ ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
 		}
 		if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE))
 		{
-			if (!IsTableLocallyAccessible(rangeTableEntry->relid))
+			if (!IsLocallyAccessibleCitusLocalTable(rangeTableEntry->relid))
 			{
 				containsRemoteCitusLocalTable = true;
 			}
@@ -809,19 +809,23 @@ ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
 
 
 /*
- * IsTableLocallyAccessible returns true if the given table
- * can be accessed in local.
+ * IsLocallyAccessibleCitusLocalTable returns true if the given table
+ * is a citus local table that can be accessed using local execution.
  */
 static bool
-IsTableLocallyAccessible(Oid relationId)
+IsLocallyAccessibleCitusLocalTable(Oid relationId)
 {
-	if (!IsCitusTable(relationId))
+	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
-		/* local tables are locally accessible */
-		return true;
+		return false;
 	}
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);
+
+	/*
+	 * Citus local tables should always have exactly one shard, but we have
+	 * this check for safety.
+	 */
 	if (list_length(shardIntervalList) != 1)
 	{
 		return false;
@@ -831,12 +835,7 @@ IsTableLocallyAccessible(Oid relationId)
 	uint64 shardId = shardInterval->shardId;
 	ShardPlacement *localShardPlacement =
 		ShardPlacementOnGroup(shardId, GetLocalGroupId());
-	if (localShardPlacement != NULL)
-	{
-		/* the table has a placement on this node */
-		return true;
-	}
-	return false;
+	return localShardPlacement != NULL;
 }
 
 
