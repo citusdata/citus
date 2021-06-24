@@ -392,13 +392,9 @@ MetadataCreateCommands(void)
 		 */
 		List *attnumList = NIL;
 		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList,
-										  0);
-		Oid sequenceOid = InvalidOid;
-		foreach_oid(sequenceOid, dependentSequenceList)
-		{
-			EnsureSequenceDependenciesAndMarkDist(sequenceOid);
-		}
+		GetDependentSequencesWithRelation(relationId, &attnumList,
+										  &dependentSequenceList, 0);
+		MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,

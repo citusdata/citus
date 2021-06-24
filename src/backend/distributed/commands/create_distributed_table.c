@@ -474,7 +474,8 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	List *attnumList = NIL;
 	List *dependentSequenceList = NIL;
 	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	HandleSequencesTypes(relationId, dependentSequenceList, attnumList);
+	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
+										  attnumList);
 
 	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
@@ -515,11 +516,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 			 * Ensure sequence dependencies and mark them as distributed
 			 * before creating table metadata on workers
 			 */
-			Oid sequenceOid = InvalidOid;
-			foreach_oid(sequenceOid, dependentSequenceList)
-			{
-				EnsureSequenceDependenciesAndMarkDist(sequenceOid);
-			}
+			MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
 		}
 
 		CreateTableMetadataOnWorkers(relationId);
@@ -645,12 +642,28 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 
 
 /*
- * EnsureSequenceDependenciesAndMarkDist ensures dependencies
+ * MarkSequenceListDistributedAndPropagateDependencies ensures dependencies
+ * for the given sequence list exist on all nodes and marks the sequences
+ * as distributed.
+ */
+void
+MarkSequenceListDistributedAndPropagateDependencies(List *sequenceList)
+{
+	Oid sequenceOid = InvalidOid;
+	foreach_oid(sequenceOid, sequenceList)
+	{
+		MarkSequenceDistributedAndPropagateDependencies(sequenceOid);
+	}
+}
+
+
+/*
+ * MarkSequenceDistributedAndPropagateDependencies ensures dependencies
  * for the given sequence exist on all nodes and marks the sequence
  * as distributed.
  */
 void
-EnsureSequenceDependenciesAndMarkDist(Oid sequenceOid)
+MarkSequenceDistributedAndPropagateDependencies(Oid sequenceOid)
 {
 	/* get sequence address */
 	ObjectAddress sequenceAddress = { 0 };
@@ -661,12 +674,13 @@ EnsureSequenceDependenciesAndMarkDist(Oid sequenceOid)
 
 
 /*
- * HandleSequencesTypes first ensures that the type of the column in which the sequence is
- * used as default is supported for each sequence in input dependentSequenceList, and then
- * alters the sequence type if not the same with the column type.
+ * EnsureDistributedSequencesHaveOneType first ensures that the type of the column
+ * in which the sequence is used as default is supported for each sequence in input
+ * dependentSequenceList, and then alters the sequence type if not the same with the column type.
  */
 void
-HandleSequencesTypes(Oid relationId, List *dependentSequenceList, List *attnumList)
+EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceList,
+									  List *attnumList)
 {
 	ListCell *attnumCell = NULL;
 	ListCell *dependentSequenceCell = NULL;

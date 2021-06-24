@@ -1679,13 +1679,17 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 							Oid seqOid = GetSequenceOid(relationId, attnum);
 							if (seqOid != InvalidOid)
 							{
-								HandleSequencesTypes(relationId, list_make1_oid(seqOid),
-													 list_make1_int(attnum));
+								EnsureDistributedSequencesHaveOneType(relationId,
+																	  list_make1_oid(
+																		  seqOid),
+																	  list_make1_int(
+																		  attnum));
 
 								if (ShouldSyncTableMetadata(relationId) &&
 									ClusterHasKnownMetadataWorkers())
 								{
-									EnsureSequenceDependenciesAndMarkDist(seqOid);
+									MarkSequenceDistributedAndPropagateDependencies(
+										seqOid);
 								}
 							}
 						}
@@ -1710,13 +1714,14 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				Oid seqOid = GetSequenceOid(relationId, attnum);
 				if (seqOid != InvalidOid)
 				{
-					HandleSequencesTypes(relationId, list_make1_oid(seqOid),
-										 list_make1_int(attnum));
+					EnsureDistributedSequencesHaveOneType(relationId,
+														  list_make1_oid(seqOid),
+														  list_make1_int(attnum));
 
 					if (ShouldSyncTableMetadata(relationId) &&
 						ClusterHasKnownMetadataWorkers())
 					{
-						EnsureSequenceDependenciesAndMarkDist(seqOid);
+						MarkSequenceDistributedAndPropagateDependencies(seqOid);
 					}
 				}
 			}

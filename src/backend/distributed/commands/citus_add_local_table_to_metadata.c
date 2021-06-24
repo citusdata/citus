@@ -323,7 +323,8 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	List *dependentSequenceList = NIL;
 	GetDependentSequencesWithRelation(shellRelationId, &attnumList,
 									  &dependentSequenceList, 0);
-	HandleSequencesTypes(shellRelationId, dependentSequenceList, attnumList);
+	EnsureDistributedSequencesHaveOneType(shellRelationId, dependentSequenceList,
+										  attnumList);
 
 	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
 }
@@ -1035,6 +1036,8 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId)
  * FinalizeCitusLocalTableCreation completes creation of the citus local table
  * with relationId by performing operations that should be done after creating
  * the shard and inserting the metadata.
+ * If the cluster has metadata workers, we ensure proper propagation of the
+ * sequences dependent with the table.
  */
 static void
 FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
@@ -1056,11 +1059,7 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 			 * Ensure sequence dependencies and mark them as distributed
 			 * before creating table metadata on workers
 			 */
-			Oid sequenceOid = InvalidOid;
-			foreach_oid(sequenceOid, dependentSequenceList)
-			{
-				EnsureSequenceDependenciesAndMarkDist(sequenceOid);
-			}
+			MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
 		}
 		CreateTableMetadataOnWorkers(relationId);
 	}
