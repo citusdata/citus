@@ -397,11 +397,7 @@ MetadataCreateCommands(void)
 		Oid sequenceOid = InvalidOid;
 		foreach_oid(sequenceOid, dependentSequenceList)
 		{
-			/* get sequence address */
-			ObjectAddress sequenceAddress = { 0 };
-			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-			EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-			MarkObjectDistributed(&sequenceAddress);
+			EnsureSequenceDependenciesAndMarkDist(sequenceOid);
 		}
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
@@ -1211,6 +1207,12 @@ GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
 		if (list_length(sequencesFromAttrDef) > 1)
 		{
+			if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+			{
+				ereport(ERROR, (errmsg(
+									"More than one sequence in a column default"
+									" is not supported for adding local tables to metadata")));
+			}
 			ereport(ERROR, (errmsg("More than one sequence in a column default"
 								   " is not supported for distribution")));
 		}

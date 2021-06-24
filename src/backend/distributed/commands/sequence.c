@@ -29,7 +29,7 @@
 
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
-static bool UsedInDistributedTable(const ObjectAddress *sequenceAddress);
+static Oid SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress);
 
 
 /*
@@ -405,7 +405,8 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 	 * error out if the sequence is used in a distributed table
 	 * and this is an ALTER SEQUENCE .. AS .. statement
 	 */
-	if (UsedInDistributedTable(&address))
+	Oid citusTableId = SequenceUsedInDistributedTable(&address);
+	if (citusTableId != InvalidOid)
 	{
 		List *options = stmt->options;
 		DefElem *defel = NULL;
@@ -413,6 +414,12 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 		{
 			if (strcmp(defel->defname, "as") == 0)
 			{
+				if (IsCitusTableType(citusTableId, CITUS_LOCAL_TABLE))
+				{
+					ereport(ERROR, (errmsg(
+										"Altering a sequence used in a local table that"
+										" is added to metadata is currently not supported.")));
+				}
 				ereport(ERROR, (errmsg(
 									"Altering a sequence used in a distributed"
 									" table is currently not supported.")));
@@ -425,12 +432,12 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 
 
 /*
- * UsedInDistributedTable returns true if the argument sequence
+ * SequenceUsedInDistributedTable returns true if the argument sequence
  * is used as the default value of a column in a distributed table.
  * Returns false otherwise
  */
-static bool
-UsedInDistributedTable(const ObjectAddress *sequenceAddress)
+static Oid
+SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 	Oid citusTableId = InvalidOid;
@@ -448,11 +455,11 @@ UsedInDistributedTable(const ObjectAddress *sequenceAddress)
 			 */
 			if (currentSeqOid == sequenceAddress->objectId)
 			{
-				return true;
+				return citusTableId;
 			}
 		}
 	}
-	return false;
+	return InvalidOid;
 }
 
 

@@ -1679,31 +1679,13 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 							Oid seqOid = GetSequenceOid(relationId, attnum);
 							if (seqOid != InvalidOid)
 							{
-								/*
-								 * We should make sure that the type of the column that uses
-								 * that sequence is supported
-								 */
-								Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
-								EnsureSequenceTypeSupported(relationId, seqTypId);
-
-								/*
-								 * Alter the sequence's data type in the coordinator if needed.
-								 * A sequence's type is bigint by default and it doesn't change even if
-								 * it's used in an int column. We should change the type if needed,
-								 * and not allow future ALTER SEQUENCE ... TYPE ... commands for
-								 * sequences used as defaults in distributed tables
-								 */
-								AlterSequenceType(seqOid, seqTypId);
+								HandleSequencesTypes(relationId, list_make1_oid(seqOid),
+													 list_make1_int(attnum));
 
 								if (ShouldSyncTableMetadata(relationId) &&
 									ClusterHasKnownMetadataWorkers())
 								{
-									/* get sequence address */
-									ObjectAddress sequenceAddress = { 0 };
-									ObjectAddressSet(sequenceAddress, RelationRelationId,
-													 seqOid);
-									EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-									MarkObjectDistributed(&sequenceAddress);
+									EnsureSequenceDependenciesAndMarkDist(seqOid);
 								}
 							}
 						}
@@ -1728,31 +1710,13 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				Oid seqOid = GetSequenceOid(relationId, attnum);
 				if (seqOid != InvalidOid)
 				{
-					/*
-					 * We should make sure that the type of the column that uses
-					 * that sequence is supported
-					 */
-					Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
-					EnsureSequenceTypeSupported(relationId, seqTypId);
-
-					/*
-					 * Alter the sequence's data type in the coordinator if needed.
-					 * A sequence's type is bigint by default and it doesn't change even if
-					 * it's used in an int column. We should change the type if needed,
-					 * and not allow future ALTER SEQUENCE ... TYPE ... commands for
-					 * sequences used as defaults in distributed tables
-					 */
-					AlterSequenceType(seqOid, seqTypId);
+					HandleSequencesTypes(relationId, list_make1_oid(seqOid),
+										 list_make1_int(attnum));
 
 					if (ShouldSyncTableMetadata(relationId) &&
 						ClusterHasKnownMetadataWorkers())
 					{
-						/* get sequence address */
-						ObjectAddress sequenceAddress = { 0 };
-						ObjectAddressSet(sequenceAddress, RelationRelationId,
-										 seqOid);
-						EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-						MarkObjectDistributed(&sequenceAddress);
+						EnsureSequenceDependenciesAndMarkDist(seqOid);
 					}
 				}
 			}
@@ -1812,6 +1776,12 @@ GetSequenceOid(Oid relationId, AttrNumber attnum)
 	if (list_length(sequencesFromAttrDef) > 1)
 	{
 		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
+		if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		{
+			ereport(ERROR, (errmsg(
+								"More than one sequence in a column default"
+								" is not supported for adding local tables to metadata")));
+		}
 		ereport(ERROR, (errmsg(
 							"More than one sequence in a column default"
 							" is not supported for distribution")));

@@ -474,29 +474,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	List *attnumList = NIL;
 	List *dependentSequenceList = NIL;
 	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	ListCell *attnumCell = NULL;
-	ListCell *dependentSequenceCell = NULL;
-	forboth(attnumCell, attnumList, dependentSequenceCell, dependentSequenceList)
-	{
-		AttrNumber attnum = lfirst_int(attnumCell);
-		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
-
-		/*
-		 * We should make sure that the type of the column that uses
-		 * that sequence is supported
-		 */
-		Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
-		EnsureSequenceTypeSupported(sequenceOid, seqTypId);
-
-		/*
-		 * Alter the sequence's data type in the coordinator if needed.
-		 * A sequence's type is bigint by default and it doesn't change even if
-		 * it's used in an int column. We should change the type if needed,
-		 * and not allow future ALTER SEQUENCE ... TYPE ... commands for
-		 * sequences used as defaults in distributed tables
-		 */
-		AlterSequenceType(sequenceOid, seqTypId);
-	}
+	HandleSequencesTypes(relationId, dependentSequenceList, attnumList);
 
 	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
@@ -540,11 +518,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 			Oid sequenceOid = InvalidOid;
 			foreach_oid(sequenceOid, dependentSequenceList)
 			{
-				/* get sequence address */
-				ObjectAddress sequenceAddress = { 0 };
-				ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-				EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-				MarkObjectDistributed(&sequenceAddress);
+				EnsureSequenceDependenciesAndMarkDist(sequenceOid);
 			}
 		}
 
@@ -666,6 +640,56 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 		SetDefElemArg(alterSequenceStatement, "as", asTypeNode);
 		ParseState *pstate = make_parsestate(NULL);
 		AlterSequence(pstate, alterSequenceStatement);
+	}
+}
+
+
+/*
+ * EnsureSequenceDependenciesAndMarkDist ensures dependencies
+ * for the given sequence exist on all nodes and marks the sequence
+ * as distributed.
+ */
+void
+EnsureSequenceDependenciesAndMarkDist(Oid sequenceOid)
+{
+	/* get sequence address */
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+	MarkObjectDistributed(&sequenceAddress);
+}
+
+
+/*
+ * HandleSequencesTypes first ensures that the type of the column in which the sequence is
+ * used as default is supported for each sequence in input dependentSequenceList, and then
+ * alters the sequence type if not the same with the column type.
+ */
+void
+HandleSequencesTypes(Oid relationId, List *dependentSequenceList, List *attnumList)
+{
+	ListCell *attnumCell = NULL;
+	ListCell *dependentSequenceCell = NULL;
+	forboth(attnumCell, attnumList, dependentSequenceCell, dependentSequenceList)
+	{
+		AttrNumber attnum = lfirst_int(attnumCell);
+		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
+
+		/*
+		 * We should make sure that the type of the column that uses
+		 * that sequence is supported
+		 */
+		Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
+		EnsureSequenceTypeSupported(sequenceOid, seqTypId);
+
+		/*
+		 * Alter the sequence's data type in the coordinator if needed.
+		 * A sequence's type is bigint by default and it doesn't change even if
+		 * it's used in an int column. We should change the type if needed,
+		 * and not allow future ALTER SEQUENCE ... TYPE ... commands for
+		 * sequences used as defaults in distributed tables
+		 */
+		AlterSequenceType(sequenceOid, seqTypId);
 	}
 }
 

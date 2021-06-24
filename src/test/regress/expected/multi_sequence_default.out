@@ -8,11 +8,25 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA sequence_default;
 SET search_path = sequence_default, public;
+-- test both distributed and citus local tables
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 -- Cannot add a column involving DEFAULT nextval('..') because the table is not empty
 CREATE SEQUENCE seq_0;
+CREATE SEQUENCE seq_0_local_table;
 -- check sequence type & other things
 \d seq_0
                       Sequence "sequence_default.seq_0"
+  Type  | Start | Minimum |       Maximum       | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint |     1 |       1 | 9223372036854775807 |         1 | no      |     1
+
+\d seq_0_local_table
+                Sequence "sequence_default.seq_0_local_table"
   Type  | Start | Minimum |       Maximum       | Increment | Cycles? | Cache
 ---------------------------------------------------------------------
  bigint |     1 |       1 | 9223372036854775807 |         1 | no      |     1
@@ -26,18 +40,34 @@ ALTER SEQUENCE seq_0 AS smallint;
  smallint |     1 |       1 |   32767 |         1 | no      |     1
 
 CREATE TABLE seq_test_0 (x int, y int);
+CREATE TABLE seq_test_0_local_table (x int, y int);
 SELECT create_distributed_table('seq_test_0','x');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+SELECT citus_add_local_table_to_metadata('seq_test_0_local_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
 INSERT INTO seq_test_0 SELECT 1, s FROM generate_series(1, 50) s;
+INSERT INTO seq_test_0_local_table SELECT 1, s FROM generate_series(1, 50) s;
 ALTER TABLE seq_test_0 ADD COLUMN z int DEFAULT nextval('seq_0');
 ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
 HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
 Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ALTER TABLE seq_test_0_local_table ADD COLUMN z int DEFAULT nextval('seq_0_local_table');
+ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
 ALTER TABLE seq_test_0 ADD COLUMN z serial;
+ERROR:  Cannot add a column involving serial pseudotypes because the table is not empty
+HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
+Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ALTER TABLE seq_test_0_local_table ADD COLUMN z serial;
 ERROR:  Cannot add a column involving serial pseudotypes because the table is not empty
 HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
 Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
@@ -62,6 +92,26 @@ SELECT * FROM seq_test_0 ORDER BY 1, 2 LIMIT 5;
  y      | integer |           |          |
  z      | integer |           |          | nextval('seq_0'::regclass)
 
+ALTER TABLE seq_test_0_local_table ADD COLUMN z int;
+ALTER TABLE seq_test_0_local_table ALTER COLUMN z SET DEFAULT nextval('seq_0_local_table');
+SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
+ x | y | z
+---------------------------------------------------------------------
+ 1 | 1 |
+ 1 | 2 |
+ 1 | 3 |
+ 1 | 4 |
+ 1 | 5 |
+(5 rows)
+
+\d seq_test_0_local_table
+                 Table "sequence_default.seq_test_0_local_table"
+ Column |  Type   | Collation | Nullable |                Default
+---------------------------------------------------------------------
+ x      | integer |           |          |
+ y      | integer |           |          |
+ z      | integer |           |          | nextval('seq_0_local_table'::regclass)
+
 -- check sequence type -> since it was used in a distributed table
 -- type has changed to the type of the column it was used
 -- in this case column z is of type int
@@ -71,15 +121,30 @@ SELECT * FROM seq_test_0 ORDER BY 1, 2 LIMIT 5;
 ---------------------------------------------------------------------
  integer |     1 |       1 | 2147483647 |         1 | no      |     1
 
+\d seq_0_local_table
+            Sequence "sequence_default.seq_0_local_table"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+
 -- cannot change the type of a sequence used in a distributed table
 -- even if metadata is not synced to workers
 ALTER SEQUENCE seq_0 AS bigint;
 ERROR:  Altering a sequence used in a distributed table is currently not supported.
+ALTER SEQUENCE seq_0_local_table AS bigint;
+ERROR:  Altering a sequence used in a local table that is added to metadata is currently not supported.
 -- we can change other things like increment
 -- if metadata is not synced to workers
 ALTER SEQUENCE seq_0 INCREMENT BY 2;
+ALTER SEQUENCE seq_0_local_table INCREMENT BY 2;
 \d seq_0
                   Sequence "sequence_default.seq_0"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ integer |     1 |       1 | 2147483647 |         2 | no      |     1
+
+\d seq_0_local_table
+            Sequence "sequence_default.seq_0_local_table"
   Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
 ---------------------------------------------------------------------
  integer |     1 |       1 | 2147483647 |         2 | no      |     1
@@ -93,10 +158,21 @@ ALTER TABLE seq_test_0 ADD COLUMN w10 serial;
 ALTER TABLE seq_test_0 ADD COLUMN w11 serial4;
 ALTER TABLE seq_test_0 ADD COLUMN w20 bigserial;
 ALTER TABLE seq_test_0 ADD COLUMN w21 serial8;
+TRUNCATE seq_test_0_local_table;
+ALTER TABLE seq_test_0_local_table ADD COLUMN w00 smallserial;
+ALTER TABLE seq_test_0_local_table ADD COLUMN w01 serial2;
+ALTER TABLE seq_test_0_local_table ADD COLUMN w10 serial;
+ALTER TABLE seq_test_0_local_table ADD COLUMN w11 serial4;
+ALTER TABLE seq_test_0_local_table ADD COLUMN w20 bigserial;
+ALTER TABLE seq_test_0_local_table ADD COLUMN w21 serial8;
 -- check alter column type precaution
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE bigint;
 ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE smallint;
+ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
+ALTER TABLE seq_test_0_local_table ALTER COLUMN z TYPE bigint;
+ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
+ALTER TABLE seq_test_0_local_table ALTER COLUMN z TYPE smallint;
 ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
 -- MX tests
 -- check that there's not problem with group ID cache
@@ -128,6 +204,19 @@ INSERT INTO sequence_default.seq_test_4 VALUES (1,2) RETURNING *;
  1 | 2 |   | 268435457
 (1 row)
 
+-- check that we have can properly insert to tables from before metadata sync
+INSERT INTO sequence_default.seq_test_0 VALUES (1,2) RETURNING *;
+ x | y |     z     | w00  | w01  |    w10    |    w11    |       w20       |       w21
+---------------------------------------------------------------------
+ 1 | 2 | 268435457 | 4097 | 4097 | 268435457 | 268435457 | 281474976710657 | 281474976710657
+(1 row)
+
+INSERT INTO sequence_default.seq_test_0_local_table VALUES (1,2) RETURNING *;
+ x | y |     z     | w00  | w01  |    w10    |    w11    |       w20       |       w21
+---------------------------------------------------------------------
+ 1 | 2 | 268435457 | 4097 | 4097 | 268435457 | 268435457 | 281474976710657 | 281474976710657
+(1 row)
+
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
@@ -137,7 +226,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 (1 row)
 
--- check sequence type consistency in all nodes
+-- check sequence type consistency in all nodes for distributed tables
 CREATE SEQUENCE seq_1;
 -- type is bigint by default
 \d seq_1
@@ -178,9 +267,52 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 (1 row)
 
+-- check sequence type consistency in all nodes for citus local tables
+CREATE SEQUENCE seq_1_local_table;
+-- type is bigint by default
+\d seq_1_local_table
+                Sequence "sequence_default.seq_1_local_table"
+  Type  | Start | Minimum |       Maximum       | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ bigint |     1 |       1 | 9223372036854775807 |         1 | no      |     1
+
+CREATE TABLE seq_test_1_local_table (x int, y int);
+SELECT citus_add_local_table_to_metadata('seq_test_1_local_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE seq_test_1_local_table ADD COLUMN z int DEFAULT nextval('seq_1_local_table');
+-- type is changed to int
+\d seq_1_local_table
+            Sequence "sequence_default.seq_1_local_table"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
+---------------------------------------------------------------------
+ integer |     1 |       1 | 2147483647 |         1 | no      |     1
+
+-- check insertion is within int bounds in the worker
+\c - - - :worker_1_port
+INSERT INTO sequence_default.seq_test_1_local_table values (1, 2) RETURNING *;
+ x | y |     z
+---------------------------------------------------------------------
+ 1 | 2 | 268435457
+(1 row)
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- check that we cannot add serial pseudo-type columns
 -- when metadata is synced to workers
 ALTER TABLE seq_test_1 ADD COLUMN w bigserial;
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
+ALTER TABLE seq_test_1_local_table ADD COLUMN w bigserial;
 ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
 -- check for sequence type clashes
 CREATE SEQUENCE seq_2;
@@ -205,6 +337,8 @@ CREATE TABLE seq_test_2_0(x int, y smallint DEFAULT nextval('seq_2'));
 -- shouldn't work
 SELECT create_distributed_table('seq_test_2_0','x');
 ERROR:  The sequence sequence_default.seq_2 is already used for a different type in column 2 of the table sequence_default.seq_test_2
+SELECT citus_add_local_table_to_metadata('seq_test_2_0');
+ERROR:  The sequence sequence_default.seq_2 is already used for a different type in column 2 of the table sequence_default.seq_test_2
 DROP TABLE seq_test_2;
 DROP TABLE seq_test_2_0;
 -- should work
@@ -219,6 +353,8 @@ DROP TABLE seq_test_2;
 CREATE TABLE seq_test_2 (x int, y int DEFAULT nextval('seq_2'), z bigint DEFAULT nextval('seq_2'));
 -- shouldn't work
 SELECT create_distributed_table('seq_test_2','x');
+ERROR:  The sequence sequence_default.seq_2 is already used for a different type in column 3 of the table sequence_default.seq_test_2
+SELECT citus_add_local_table_to_metadata('seq_test_2');
 ERROR:  The sequence sequence_default.seq_2 is already used for a different type in column 3 of the table sequence_default.seq_test_2
 -- check rename is propagated properly
 ALTER SEQUENCE seq_2 RENAME TO sequence_2;
@@ -497,6 +633,8 @@ CREATE SEQUENCE seq_10;
 CREATE TABLE seq_test_9 (x int, y int DEFAULT nextval('seq_9') - nextval('seq_10'));
 SELECT create_distributed_table('seq_test_9', 'x');
 ERROR:  More than one sequence in a column default is not supported for distribution
+SELECT citus_add_local_table_to_metadata('seq_test_9');
+ERROR:  More than one sequence in a column default is not supported for adding local tables to metadata
 ALTER TABLE seq_test_9 ALTER COLUMN y SET DEFAULT nextval('seq_9');
 SELECT create_distributed_table('seq_test_9', 'x');
  create_distributed_table
@@ -630,13 +768,19 @@ ERROR:  relation "seq_11" does not exist
 -- clean up
 DROP TABLE sequence_default.seq_test_7_par;
 DROP SCHEMA sequence_default CASCADE;
-NOTICE:  drop cascades to 22 other objects
+NOTICE:  drop cascades to 29 other objects
 DETAIL:  drop cascades to sequence sequence_default.seq_0
+drop cascades to sequence sequence_default.seq_0_local_table
 drop cascades to table sequence_default.seq_test_0
+drop cascades to table sequence_default.seq_test_0_local_table_890004
+drop cascades to table sequence_default.seq_test_0_local_table
 drop cascades to table sequence_default.seq_test_4
 drop cascades to sequence sequence_default.seq_4
 drop cascades to sequence sequence_default.seq_1
 drop cascades to table sequence_default.seq_test_1
+drop cascades to sequence sequence_default.seq_1_local_table
+drop cascades to table sequence_default.seq_test_1_local_table_102016
+drop cascades to table sequence_default.seq_test_1_local_table
 drop cascades to sequence sequence_default.seq_2
 drop cascades to table sequence_default.seq_test_2
 drop cascades to table sequence_default.seq_test_3
@@ -652,6 +796,7 @@ drop cascades to sequence sequence_default.seq_9
 drop cascades to table sequence_default.seq_test_9
 drop cascades to sequence sequence_default.seq_11
 drop cascades to table sequence_default.seq_test_10
+drop cascades to table sequence_default.seq_test_10_102060
 drop cascades to table sequence_default.seq_test_11
 SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
       run_command_on_workers
@@ -662,6 +807,12 @@ SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_remove_node('localhost', :master_port);
+ master_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
