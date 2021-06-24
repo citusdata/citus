@@ -12,7 +12,7 @@ CREATE TYPE tt2 AS ENUM ('a', 'b');
 CREATE TABLE distributed_table_1(col int unique, b tt2);
 CREATE TABLE "distributed_table_2'! ?._"(col int unique);
 CREATE TABLE distributed_table_3(col int);
-CREATE TABLE distributed_table_4(a int UNIQUE NOT NULL, b int);
+CREATE TABLE distributed_table_4(a int UNIQUE NOT NULL, b int, c int);
 CREATE TABLE reference_table_1(col int unique);
 CREATE TABLE reference_table_2(col int unique);
 CREATE TABLE local_table(col int unique);
@@ -41,6 +41,8 @@ INSERT INTO distributed_table_3 VALUES (1);
 CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
 CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_3;
 
+ALTER TABLE distributed_table_4 DROP COLUMN c;
+
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
@@ -58,6 +60,7 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
 SELECT * FROM distributed_table_1;
+ALTER TABLE distributed_table_4 DROP COLUMN b;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 \d+ distributed_table_4
 SELECT * FROM test_view;
