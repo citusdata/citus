@@ -12,6 +12,7 @@ CREATE TYPE tt2 AS ENUM ('a', 'b');
 CREATE TABLE distributed_table_1(col int unique, b tt2);
 CREATE TABLE "distributed_table_2'! ?._"(col int unique);
 CREATE TABLE distributed_table_3(col int);
+CREATE TABLE distributed_table_4(a int UNIQUE NOT NULL, b int);
 CREATE TABLE reference_table_1(col int unique);
 CREATE TABLE reference_table_2(col int unique);
 CREATE TABLE local_table(col int unique);
@@ -27,6 +28,13 @@ SELECT create_reference_table('reference_table_1');
 SELECT create_distributed_table('"distributed_table_2''! ?._"', 'col');
 SELECT create_distributed_table('distributed_table_1', 'col');
 SELECT create_distributed_table('distributed_table_3', 'col');
+SELECT create_distributed_table('distributed_table_4', 'a');
+
+CREATE INDEX ind1 ON distributed_table_4(a);
+CREATE INDEX ind2 ON distributed_table_4(b);
+CREATE INDEX ind3 ON distributed_table_4(a, b);
+
+CREATE STATISTICS stat ON a,b FROM distributed_table_4;
 
 -- create views to make sure that they'll continue working after stop_sync
 CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
@@ -37,6 +45,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
 SET search_path TO "start_stop_metadata_sync";
+\d+ distributed_table_4
 SELECT * FROM distributed_table_1;
 CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
 CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_3;
@@ -50,6 +59,7 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 SET search_path TO "start_stop_metadata_sync";
 SELECT * FROM distributed_table_1;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+\d+ distributed_table_4
 SELECT * FROM test_view;
 SELECT * FROM test_matview;
 SELECT count(*) > 0 FROM pg_dist_node;
@@ -58,10 +68,12 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND r
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
 \c - - - :worker_1_port
 SET search_path TO "start_stop_metadata_sync";
--- this shouldn't find the given table
+-- these should not be found because of stop_metadata_sync_to_node
 SELECT * FROM distributed_table_1;
+\d+ distributed_table_4
 SELECT * FROM test_view;
 SELECT * FROM test_matview;
+
 SELECT count(*) > 0 FROM pg_dist_node;
 SELECT count(*) > 0 FROM pg_dist_shard;
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
