@@ -27,7 +27,6 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_am.h"
-#include "catalog/pg_attrdef.h"
 #include "catalog/pg_attribute.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_class.h"
@@ -47,6 +46,7 @@
 #include "distributed/metadata_utility.h"
 #include "distributed/relay_utility.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
@@ -77,7 +77,6 @@ static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
 static void simple_quote_literal(StringInfo buf, const char *val);
 static char * flatten_reloptions(Oid relid);
-static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
 
 
 /*
@@ -370,16 +369,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 						appendStringInfo(&buffer, " DEFAULT %s", defaultString);
 					}
 				}
-
-				/*
-				 * We should make sure that the type of the column that uses
-				 * that sequence is supported
-				 */
-				if (contain_nextval_expression_walker(defaultNode, NULL))
-				{
-					EnsureSequenceTypeSupported(tableRelationId, defaultValue->adnum,
-												attributeForm->atttypid);
-				}
 			}
 
 			/* if this column has a not null constraint, append the constraint */
@@ -495,138 +484,6 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 	relation_close(relation, AccessShareLock);
 
 	return (buffer.data);
-}
-
-
-/*
- * EnsureSequenceTypeSupported ensures that the type of the column that uses
- * a sequence on its DEFAULT is consistent with previous uses of the sequence (if any)
- * It gets the AttrDefault OID from the given relationId and attnum, extracts the sequence
- * id from it, and if any other distributed table uses that same sequence, it checks whether
- * the types of the columns using the sequence match. If they don't, it errors out.
- * Otherwise, the condition is ensured.
- */
-void
-EnsureSequenceTypeSupported(Oid relationId, AttrNumber attnum, Oid seqTypId)
-{
-	/* get attrdefoid from the given relationId and attnum */
-	Oid attrdefOid = get_attrdef_oid(relationId, attnum);
-
-	/* retrieve the sequence id of the sequence found in nextval('seq') */
-	List *sequencesFromAttrDef = GetSequencesFromAttrDef(attrdefOid);
-
-	if (list_length(sequencesFromAttrDef) == 0)
-	{
-		/*
-		 * We need this check because sometimes there are cases where the
-		 * dependency between the table and the sequence is not formed
-		 * One example is when the default is defined by
-		 * DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
-		 * In these cases, sequencesFromAttrDef with be empty.
-		 */
-		return;
-	}
-
-	if (list_length(sequencesFromAttrDef) > 1)
-	{
-		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
-		ereport(ERROR, (errmsg(
-							"More than one sequence in a column default"
-							" is not supported for distribution")));
-	}
-
-	Oid seqOid = lfirst_oid(list_head(sequencesFromAttrDef));
-
-	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
-	Oid citusTableId = InvalidOid;
-	foreach_oid(citusTableId, citusTableIdList)
-	{
-		List *attnumList = NIL;
-		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(citusTableId, &attnumList,
-										  &dependentSequenceList, 0);
-		ListCell *attnumCell = NULL;
-		ListCell *dependentSequenceCell = NULL;
-		forboth(attnumCell, attnumList, dependentSequenceCell,
-				dependentSequenceList)
-		{
-			AttrNumber currentAttnum = lfirst_int(attnumCell);
-			Oid currentSeqOid = lfirst_oid(dependentSequenceCell);
-
-			/*
-			 * If another distributed table is using the same sequence
-			 * in one of its column defaults, make sure the types of the
-			 * columns match
-			 */
-			if (currentSeqOid == seqOid)
-			{
-				Oid currentSeqTypId = GetAttributeTypeOid(citusTableId,
-														  currentAttnum);
-				if (seqTypId != currentSeqTypId)
-				{
-					char *sequenceName = generate_qualified_relation_name(
-						seqOid);
-					char *citusTableName =
-						generate_qualified_relation_name(citusTableId);
-					ereport(ERROR, (errmsg(
-										"The sequence %s is already used for a different"
-										" type in column %d of the table %s",
-										sequenceName, currentAttnum,
-										citusTableName)));
-				}
-			}
-		}
-	}
-}
-
-
-/*
- * get_attrdef_oid gets the oid of the attrdef that has dependency with
- * the given relationId (refobjid) and attnum (refobjsubid).
- * If there is no such attrdef it returns InvalidOid.
- * NOTE: we are iterating pg_depend here since this function is used together
- * with other functions that iterate pg_depend. Normally, a look at pg_attrdef
- * would make more sense.
- */
-static Oid
-get_attrdef_oid(Oid relationId, AttrNumber attnum)
-{
-	Oid resultAttrdefOid = InvalidOid;
-
-	ScanKeyData key[3];
-
-	Relation depRel = table_open(DependRelationId, AccessShareLock);
-
-	ScanKeyInit(&key[0],
-				Anum_pg_depend_refclassid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(RelationRelationId));
-	ScanKeyInit(&key[1],
-				Anum_pg_depend_refobjid,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(relationId));
-	ScanKeyInit(&key[2],
-				Anum_pg_depend_refobjsubid,
-				BTEqualStrategyNumber, F_INT4EQ,
-				Int32GetDatum(attnum));
-
-	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
-										  NULL, attnum ? 3 : 2, key);
-
-	HeapTuple tup;
-	while (HeapTupleIsValid(tup = systable_getnext(scan)))
-	{
-		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
-
-		if (deprec->classid == AttrDefaultRelationId)
-		{
-			resultAttrdefOid = deprec->objid;
-		}
-	}
-
-	systable_endscan(scan);
-	table_close(depRel, AccessShareLock);
-	return resultAttrdefOid;
 }
 
 

@@ -14,6 +14,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/index.h"
+#include "catalog/pg_attrdef.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
@@ -42,6 +43,7 @@
 #include "parser/parse_expr.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -92,6 +94,8 @@ static void SetInterShardDDLTaskPlacementList(Task *task,
 static void SetInterShardDDLTaskRelationShardList(Task *task,
 												  ShardInterval *leftShardInterval,
 												  ShardInterval *rightShardInterval);
+static Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
+static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
 
 
 /*
@@ -463,6 +467,13 @@ PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 	 */
 	ObjectAddress tableAddress = GetObjectAddressFromParseTree((Node *) stmt, true);
 
+	/* check whether we are dealing with a sequence here */
+	if (get_rel_relkind(tableAddress.objectId) == RELKIND_SEQUENCE)
+	{
+		stmt->objectType = OBJECT_SEQUENCE;
+		return PostprocessAlterSequenceSchemaStmt((Node *) stmt, queryString);
+	}
+
 	if (!ShouldPropagate() || !IsCitusTable(tableAddress.objectId))
 	{
 		return NIL;
@@ -501,6 +512,20 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	if (!OidIsValid(leftRelationId))
 	{
 		return NIL;
+	}
+
+	/*
+	 * check whether we are dealing with a sequence here
+	 * if yes, it must be ALTER TABLE .. OWNER TO .. command
+	 * since this is the only ALTER command of a sequence that
+	 * passes through an AlterTableStmt
+	 */
+	if (get_rel_relkind(leftRelationId) == RELKIND_SEQUENCE)
+	{
+		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
+		stmtCopy->relkind = OBJECT_SEQUENCE;
+		return PreprocessAlterSequenceOwnerStmt((Node *) stmtCopy, alterTableCommand,
+												processUtilityContext);
 	}
 
 	/*
@@ -1385,6 +1410,15 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 														  stmt->missing_ok);
 	Oid relationId = address.objectId;
 
+	/* check whether we are dealing with a sequence here */
+	if (get_rel_relkind(relationId) == RELKIND_SEQUENCE)
+	{
+		AlterObjectSchemaStmt *stmtCopy = copyObject(stmt);
+		stmtCopy->objectType = OBJECT_SEQUENCE;
+		return PreprocessAlterSequenceSchemaStmt((Node *) stmtCopy, queryString,
+												 processUtilityContext);
+	}
+
 	/* first check whether a distributed relation is affected */
 	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
 	{
@@ -1547,6 +1581,19 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 	if (relationId != InvalidOid)
 	{
+		/*
+		 * check whether we are dealing with a sequence here
+		 * if yes, it must be ALTER TABLE .. OWNER TO .. command
+		 * since this is the only ALTER command of a sequence that
+		 * passes through an AlterTableStmt
+		 */
+		if (get_rel_relkind(relationId) == RELKIND_SEQUENCE)
+		{
+			alterTableStatement->relkind = OBJECT_SEQUENCE;
+			PostprocessAlterSequenceOwnerStmt((Node *) alterTableStatement, NULL);
+			return;
+		}
+
 		/* changing a relation could introduce new dependencies */
 		ObjectAddress tableAddress = { 0 };
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
@@ -1629,8 +1676,22 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 						{
 							AttrNumber attnum = get_attnum(relationId,
 														   columnDefinition->colname);
-							Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
-							EnsureSequenceTypeSupported(relationId, attnum, seqTypId);
+							Oid seqOid = GetSequenceOid(relationId, attnum);
+							if (seqOid != InvalidOid)
+							{
+								EnsureDistributedSequencesHaveOneType(relationId,
+																	  list_make1_oid(
+																		  seqOid),
+																	  list_make1_int(
+																		  attnum));
+
+								if (ShouldSyncTableMetadata(relationId) &&
+									ClusterHasKnownMetadataWorkers())
+								{
+									MarkSequenceDistributedAndPropagateDependencies(
+										seqOid);
+								}
+							}
 						}
 					}
 				}
@@ -1650,8 +1711,19 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 			if (contain_nextval_expression_walker(expr, NULL))
 			{
 				AttrNumber attnum = get_attnum(relationId, command->name);
-				Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
-				EnsureSequenceTypeSupported(relationId, attnum, seqTypId);
+				Oid seqOid = GetSequenceOid(relationId, attnum);
+				if (seqOid != InvalidOid)
+				{
+					EnsureDistributedSequencesHaveOneType(relationId,
+														  list_make1_oid(seqOid),
+														  list_make1_int(attnum));
+
+					if (ShouldSyncTableMetadata(relationId) &&
+						ClusterHasKnownMetadataWorkers())
+					{
+						MarkSequenceDistributedAndPropagateDependencies(seqOid);
+					}
+				}
 			}
 		}
 	}
@@ -1677,6 +1749,100 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
+}
+
+
+/*
+ * GetSequenceOid returns the oid of the sequence used as default value
+ * of the attribute with given attnum of the given table relationId
+ * If there is no sequence used it returns InvalidOid.
+ */
+static Oid
+GetSequenceOid(Oid relationId, AttrNumber attnum)
+{
+	/* get attrdefoid from the given relationId and attnum */
+	Oid attrdefOid = get_attrdef_oid(relationId, attnum);
+
+	/* retrieve the sequence id of the sequence found in nextval('seq') */
+	List *sequencesFromAttrDef = GetSequencesFromAttrDef(attrdefOid);
+
+	if (list_length(sequencesFromAttrDef) == 0)
+	{
+		/*
+		 * We need this check because sometimes there are cases where the
+		 * dependency between the table and the sequence is not formed
+		 * One example is when the default is defined by
+		 * DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
+		 * In these cases, sequencesFromAttrDef with be empty.
+		 */
+		return InvalidOid;
+	}
+
+	if (list_length(sequencesFromAttrDef) > 1)
+	{
+		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
+		if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		{
+			ereport(ERROR, (errmsg(
+								"More than one sequence in a column default"
+								" is not supported for adding local tables to metadata")));
+		}
+		ereport(ERROR, (errmsg(
+							"More than one sequence in a column default"
+							" is not supported for distribution")));
+	}
+
+	return lfirst_oid(list_head(sequencesFromAttrDef));
+}
+
+
+/*
+ * get_attrdef_oid gets the oid of the attrdef that has dependency with
+ * the given relationId (refobjid) and attnum (refobjsubid).
+ * If there is no such attrdef it returns InvalidOid.
+ * NOTE: we are iterating pg_depend here since this function is used together
+ * with other functions that iterate pg_depend. Normally, a look at pg_attrdef
+ * would make more sense.
+ */
+static Oid
+get_attrdef_oid(Oid relationId, AttrNumber attnum)
+{
+	Oid resultAttrdefOid = InvalidOid;
+
+	ScanKeyData key[3];
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relationId));
+	ScanKeyInit(&key[2],
+				Anum_pg_depend_refobjsubid,
+				BTEqualStrategyNumber, F_INT4EQ,
+				Int32GetDatum(attnum));
+
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, attnum ? 3 : 2, key);
+
+	HeapTuple tup;
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->classid == AttrDefaultRelationId)
+		{
+			resultAttrdefOid = deprec->objid;
+		}
+	}
+
+	systable_endscan(scan);
+	table_close(depRel, AccessShareLock);
+	return resultAttrdefOid;
 }
 
 

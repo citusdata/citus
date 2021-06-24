@@ -371,14 +371,21 @@ static DistributeObjectOps Sequence_Alter = {
 	.qualify = NULL,
 	.preprocess = PreprocessAlterSequenceStmt,
 	.postprocess = NULL,
-	.address = AlterSequenceObjectAddress,
+	.address = AlterSequenceStmtObjectAddress,
 };
 static DistributeObjectOps Sequence_AlterObjectSchema = {
-	.deparse = NULL,
-	.qualify = NULL,
+	.deparse = DeparseAlterSequenceSchemaStmt,
+	.qualify = QualifyAlterSequenceSchemaStmt,
 	.preprocess = PreprocessAlterSequenceSchemaStmt,
-	.postprocess = NULL,
+	.postprocess = PostprocessAlterSequenceSchemaStmt,
 	.address = AlterSequenceSchemaStmtObjectAddress,
+};
+static DistributeObjectOps Sequence_AlterOwner = {
+	.deparse = DeparseAlterSequenceOwnerStmt,
+	.qualify = QualifyAlterSequenceOwnerStmt,
+	.preprocess = PreprocessAlterSequenceOwnerStmt,
+	.postprocess = PostprocessAlterSequenceOwnerStmt,
+	.address = AlterSequenceOwnerStmtObjectAddress,
 };
 static DistributeObjectOps Sequence_Drop = {
 	.deparse = DeparseDropSequenceStmt,
@@ -785,6 +792,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_INDEX:
 				{
 					return &Index_AlterTable;
+				}
+
+				case OBJECT_SEQUENCE:
+				{
+					return &Sequence_AlterOwner;
 				}
 
 				default:

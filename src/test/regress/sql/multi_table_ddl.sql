@@ -86,7 +86,6 @@ CREATE SEQUENCE standalone_sequence;
 ALTER SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
 
 -- an edge case, but it's OK to change an owner to the same distributed table
--- EDIT: this doesn't work for now for a distributed sequence
 ALTER SEQUENCE testserialtable_id_seq OWNED BY testserialtable.id;
 
 -- drop distributed table

@@ -345,18 +345,23 @@ extern List * PreprocessAlterSchemaRenameStmt(Node *node, const char *queryStrin
 extern ObjectAddress AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok);
 
 /* sequence.c - forward declarations */
-extern List * PreprocessAlterSequenceStmt(Node *stmt, const char *queryString,
+extern List * PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 										  ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
 												ProcessUtilityContext
 												processUtilityContext);
-extern List * PreprocessDropSequenceStmt(Node *stmt, const char *queryString,
+extern List * PostprocessAlterSequenceSchemaStmt(Node *node, const char *queryString);
+extern List * PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
+											   ProcessUtilityContext processUtilityContext);
+extern List * PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString);
+extern List * PreprocessDropSequenceStmt(Node *node, const char *queryString,
 										 ProcessUtilityContext processUtilityContext);
-extern List * PreprocessRenameSequenceStmt(Node *stmt, const char *queryString,
+extern List * PreprocessRenameSequenceStmt(Node *node, const char *queryString,
 										   ProcessUtilityContext processUtilityContext);
-extern ObjectAddress AlterSequenceObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress AlterSequenceSchemaStmtObjectAddress(Node *stmt, bool missing_ok);
-extern ObjectAddress RenameSequenceStmtObjectAddress(Node *stmt, bool missing_ok);
+extern ObjectAddress AlterSequenceStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress RenameSequenceStmtObjectAddress(Node *node, bool missing_ok);
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
 
