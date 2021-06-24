@@ -13,3 +13,4 @@
 
 extern uint64 ShardListSizeInBytes(List *colocatedShardList,
 								   char *workerNodeName, uint32 workerNodePort);
+extern void ErrorIfMoveUnsupportedTableType(Oid relationId);
