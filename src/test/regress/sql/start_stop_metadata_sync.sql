@@ -7,6 +7,7 @@ SET citus.shard_replication_factor TO 1;
 
 CREATE TABLE distributed_table_1(col int unique);
 CREATE TABLE "distributed_table_2'! ?._"(col int unique);
+CREATE TABLE distributed_table_3(col int);
 CREATE TABLE reference_table_1(col int unique);
 CREATE TABLE reference_table_2(col int unique);
 CREATE TABLE local_table(col int unique);
@@ -20,21 +21,37 @@ SELECT create_reference_table('reference_table_2');
 SELECT create_reference_table('reference_table_1');
 SELECT create_distributed_table('"distributed_table_2''! ?._"', 'col');
 SELECT create_distributed_table('distributed_table_1', 'col');
+SELECT create_distributed_table('distributed_table_3', 'col');
+
+CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
+CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_3;
+INSERT INTO distributed_table_3 VALUES (1);
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
+SET search_path TO "start_stop_metadata_sync";
+CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
+CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_3;
+SELECT * FROM test_view;
+SELECT * FROM test_matview;
 SELECT count(*) > 0 FROM pg_dist_node;
 SELECT count(*) > 0 FROM pg_dist_shard;
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
 \c - - - :master_port
+SET search_path TO "start_stop_metadata_sync";
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT * FROM test_view;
+SELECT * FROM test_matview;
 SELECT count(*) > 0 FROM pg_dist_node;
 SELECT count(*) > 0 FROM pg_dist_shard;
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
 \c - - - :worker_1_port
+SET search_path TO "start_stop_metadata_sync";
+SELECT * FROM test_view;
+SELECT * FROM test_matview;
 SELECT count(*) > 0 FROM pg_dist_node;
 SELECT count(*) > 0 FROM pg_dist_shard;
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
