@@ -282,7 +282,6 @@ extern ShardPlacement * SearchShardPlacementInListOrError(List *shardPlacementLi
 														  uint32 nodePort);
 extern void ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int
 											 targetNodePort);
-extern void ErrorIfMoveCitusLocalTable(Oid relationId);
 extern char LookupShardTransferMode(Oid shardReplicationModeOid);
 extern void BlockWritesToShardList(List *shardList);
 extern List * WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId);

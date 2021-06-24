@@ -1,13 +1,7 @@
 --
 -- MUTLI_SHARD_REBALANCER
 --
-CREATE TABLE dist_table_test(a int primary key);
-SELECT create_distributed_table('dist_table_test', 'a');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
+SET citus.next_shard_id TO 433000;
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
  create_reference_table
@@ -15,6 +9,14 @@ SELECT create_reference_table('ref_table_test');
 
 (1 row)
 
+CREATE TABLE dist_table_test(a int primary key);
+SELECT create_distributed_table('dist_table_test', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE postgres_table_test(a int primary key);
 -- make sure that all rebalance operations works fine when
 -- reference tables are replicated to the coordinator
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
@@ -41,6 +43,7 @@ SELECT rebalance_table_shards();
 CALL citus_cleanup_orphaned_shards();
 -- test that calling rebalance_table_shards without specifying relation
 -- wouldn't move shard of the citus local table.
+SET citus.next_shard_id TO 433100;
 CREATE TABLE citus_local_table(a int, b int);
 SELECT citus_add_local_table_to_metadata('citus_local_table');
  citus_add_local_table_to_metadata
@@ -56,11 +59,31 @@ SELECT rebalance_table_shards();
 (1 row)
 
 CALL citus_cleanup_orphaned_shards();
+-- Check that rebalance_table_shards and get_rebalance_table_shards_plan fail
+-- for any type of table, but distributed tables.
+SELECT rebalance_table_shards('ref_table_test');
+ERROR:  table public.ref_table_test is a reference table, moving shard of a reference table is not supported
+SELECT rebalance_table_shards('postgres_table_test');
+ERROR:  table public.postgres_table_test is a regular postgres table, you can only move shards of a citus table
+SELECT rebalance_table_shards('citus_local_table');
+ERROR:  table public.citus_local_table is a local table, moving shard of a local table added to metadata is currently not supported
+SELECT get_rebalance_table_shards_plan('ref_table_test');
+ERROR:  table public.ref_table_test is a reference table, moving shard of a reference table is not supported
+SELECT get_rebalance_table_shards_plan('postgres_table_test');
+ERROR:  table public.postgres_table_test is a regular postgres table, you can only move shards of a citus table
+SELECT get_rebalance_table_shards_plan('citus_local_table');
+ERROR:  table public.citus_local_table is a local table, moving shard of a local table added to metadata is currently not supported
+-- Check that citus_move_shard_placement fails for shards belonging reference
+-- tables or citus local tables
+SELECT citus_move_shard_placement(433000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ERROR:  table public.ref_table_test is a reference table, moving shard of a reference table is not supported
+SELECT citus_move_shard_placement(433100, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+ERROR:  table public.citus_local_table is a local table, moving shard of a local table added to metadata is currently not supported
 -- show that citus local table shard is still on the coordinator
 SELECT tablename FROM pg_catalog.pg_tables where tablename like 'citus_local_table_%';
         tablename
 ---------------------------------------------------------------------
- citus_local_table_102047
+ citus_local_table_433100
 (1 row)
 
 -- also check that we still can access shard relation, not the shell table
@@ -111,7 +134,7 @@ CALL citus_cleanup_orphaned_shards();
 SELECT tablename FROM pg_catalog.pg_tables where tablename like 'citus_local_table_%';
         tablename
 ---------------------------------------------------------------------
- citus_local_table_102047
+ citus_local_table_433100
 (1 row)
 
 -- also check that we still can access shard relation, not the shell table
@@ -182,7 +205,7 @@ NOTICE:  Copying shard xxxxx from localhost:xxxxx to localhost:xxxxx ...
 
 (1 row)
 
-DROP TABLE dist_table_test, dist_table_test_2, ref_table_test;
+DROP TABLE dist_table_test, dist_table_test_2, ref_table_test, postgres_table_test;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 -- Create a user to test multiuser usage of rebalancer functions
