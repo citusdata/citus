@@ -234,9 +234,9 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		 */
 		bool referencedIsReferenceTable =
 			(referencedReplicationModel == REPLICATION_MODEL_2PC);
-		if (referencingColocationId == INVALID_COLOCATION_ID ||
-			(referencingColocationId != referencedColocationId &&
-			 !referencedIsReferenceTable))
+		if (!referencedIsReferenceTable && (
+				referencingColocationId == INVALID_COLOCATION_ID ||
+				referencingColocationId != referencedColocationId))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint since "
