@@ -37,9 +37,9 @@ CREATE INDEX ind3 ON distributed_table_4(a, b);
 CREATE STATISTICS stat ON a,b FROM distributed_table_4;
 
 -- create views to make sure that they'll continue working after stop_sync
+INSERT INTO distributed_table_3 VALUES (1);
 CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
 CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_3;
-INSERT INTO distributed_table_3 VALUES (1);
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
