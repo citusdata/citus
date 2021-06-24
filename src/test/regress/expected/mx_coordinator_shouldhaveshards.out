@@ -168,14 +168,8 @@ SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhavesha
         1
 (1 row)
 
+SET client_min_messages TO ERROR;
 DROP SCHEMA mx_coordinator_shouldhaveshards CASCADE;
-NOTICE:  drop cascades to 6 other objects
-DETAIL:  drop cascades to table mx_coordinator_shouldhaveshards.table_1
-drop cascades to table mx_coordinator_shouldhaveshards.table_1_1130052
-drop cascades to table mx_coordinator_shouldhaveshards.table_1_1130055
-drop cascades to table mx_coordinator_shouldhaveshards.table_2
-drop cascades to table mx_coordinator_shouldhaveshards.table_2_1130056
-drop cascades to table mx_coordinator_shouldhaveshards.table_2_1130059
 SELECT master_remove_node('localhost', :master_port);
  master_remove_node
 ---------------------------------------------------------------------
