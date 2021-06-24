@@ -4,7 +4,8 @@ SET citus.next_shard_id TO 980000;
 SET client_min_messages TO WARNING;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-CREATE TABLE distributed_table_1(col int unique);
+CREATE TYPE tt2 AS ENUM ('a', 'b');
+CREATE TABLE distributed_table_1(col int unique, b tt2);
 CREATE TABLE "distributed_table_2'! ?._"(col int unique);
 CREATE TABLE distributed_table_3(col int);
 CREATE TABLE reference_table_1(col int unique);
@@ -55,6 +56,11 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
 SET search_path TO "start_stop_metadata_sync";
+SELECT * FROM distributed_table_1;
+ col | b
+---------------------------------------------------------------------
+(0 rows)
+
 CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
 CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_3;
 SELECT * FROM test_view;
@@ -95,6 +101,11 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
+SELECT * FROM distributed_table_1;
+ col | b
+---------------------------------------------------------------------
+(0 rows)
+
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -139,6 +150,8 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 
 \c - - - :worker_1_port
 SET search_path TO "start_stop_metadata_sync";
+SELECT * FROM distributed_table_1;
+ERROR:  relation "distributed_table_1" does not exist
 SELECT * FROM test_view;
 ERROR:  relation "test_view" does not exist
 SELECT * FROM test_matview;
@@ -168,14 +181,21 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 (1 row)
 
 \c - - - :master_port
+SET search_path TO "start_stop_metadata_sync";
+SELECT * FROM distributed_table_1;
+ col | b
+---------------------------------------------------------------------
+(0 rows)
+
 --cleanup
 DROP SCHEMA start_stop_metadata_sync CASCADE;
-NOTICE:  drop cascades to 8 other objects
-DETAIL:  drop cascades to table start_stop_metadata_sync.distributed_table_1
-drop cascades to table start_stop_metadata_sync."distributed_table_2'! ?._"
-drop cascades to table start_stop_metadata_sync.distributed_table_3
-drop cascades to table start_stop_metadata_sync.reference_table_1
-drop cascades to table start_stop_metadata_sync.reference_table_2
-drop cascades to table start_stop_metadata_sync.local_table
-drop cascades to view start_stop_metadata_sync.test_view
-drop cascades to materialized view start_stop_metadata_sync.test_matview
+NOTICE:  drop cascades to 9 other objects
+DETAIL:  drop cascades to type tt2
+drop cascades to table distributed_table_1
+drop cascades to table "distributed_table_2'! ?._"
+drop cascades to table distributed_table_3
+drop cascades to table reference_table_1
+drop cascades to table reference_table_2
+drop cascades to table local_table
+drop cascades to view test_view
+drop cascades to materialized view test_matview
