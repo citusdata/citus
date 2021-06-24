@@ -5,12 +5,12 @@ SET client_min_messages TO WARNING;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE distributed_table_1(col int unique);
-CREATE TABLE distributed_table_2(col int unique);
+CREATE TABLE "distributed_table_2'! ?._"(col int unique);
 CREATE TABLE reference_table_1(col int unique);
 CREATE TABLE reference_table_2(col int unique);
 CREATE TABLE local_table(col int unique);
-ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES distributed_table_2(col);
-ALTER TABLE distributed_table_2 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES reference_table_1(col);
+ALTER TABLE distributed_table_1 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES "distributed_table_2'! ?._"(col);
+ALTER TABLE "distributed_table_2'! ?._" ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES reference_table_1(col);
 ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES reference_table_2(col);
 ALTER TABLE local_table ADD CONSTRAINT fkey_1 FOREIGN KEY (col) REFERENCES reference_table_1(col);
 SELECT create_reference_table('reference_table_2');
@@ -25,7 +25,7 @@ SELECT create_reference_table('reference_table_1');
 
 (1 row)
 
-SELECT create_distributed_table('distributed_table_2', 'col');
+SELECT create_distributed_table('"distributed_table_2''! ?._"', 'col');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -129,7 +129,7 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 DROP SCHEMA start_stop_metadata_sync CASCADE;
 NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table start_stop_metadata_sync.distributed_table_1
-drop cascades to table start_stop_metadata_sync.distributed_table_2
+drop cascades to table start_stop_metadata_sync."distributed_table_2'! ?._"
 drop cascades to table start_stop_metadata_sync.reference_table_1
 drop cascades to table start_stop_metadata_sync.reference_table_2
 drop cascades to table start_stop_metadata_sync.local_table
