@@ -248,9 +248,20 @@ SELECT * FROM print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '10.0-3';
 SELECT * FROM print_extension_changes();
 
--- Test downgrade to 10.0-3 from 10.1-1
-ALTER EXTENSION citus UPDATE TO '10.1-1';
+-- Test downgrade to 10.0-3 from 10.0-4
+ALTER EXTENSION citus UPDATE TO '10.0-4';
 ALTER EXTENSION citus UPDATE TO '10.0-3';
+-- Should be empty result, even though the downgrade doesn't undo the upgrade, the
+-- function signature doesn't change, which is reflected here.
+SELECT * FROM print_extension_changes();
+
+-- Snapshot of state at 10.0-4
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+SELECT * FROM print_extension_changes();
+
+-- Test downgrade to 10.0-4 from 10.1-1
+ALTER EXTENSION citus UPDATE TO '10.1-1';
+ALTER EXTENSION citus UPDATE TO '10.0-4';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM print_extension_changes();
 
