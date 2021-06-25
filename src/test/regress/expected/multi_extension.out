@@ -476,6 +476,29 @@ SELECT * FROM print_extension_changes();
                                                                      | function worker_record_sequence_dependency(regclass,regclass,name)
 (10 rows)
 
+-- Test upgrade paths for backported citus_pg_upgrade functions
+ALTER EXTENSION citus UPDATE TO '9.5-2';
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+-- Should be empty result, even though the downgrade doesn't undo the upgrade, the
+-- function signature doesn't change, which is reflected here.
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+ALTER EXTENSION citus UPDATE TO '9.5-2';
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 9.5-1
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 DROP TABLE prev_objects, extension_diff;
 -- show running version
 SHOW citus.version;
