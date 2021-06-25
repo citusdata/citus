@@ -45,8 +45,14 @@ BEGIN
     FROM pg_catalog.pg_dist_rebalance_strategy;
 
     -- store upgrade stable identifiers on pg_dist_object catalog
-    UPDATE citus.pg_dist_object
-       SET (type, object_names, object_args) = (SELECT * FROM pg_identify_object_as_address(classid, objid, objsubid));
+    CREATE TABLE public.pg_dist_object AS SELECT
+       address.type,
+       address.object_names,
+       address.object_args,
+       objects.distribution_argument_index,
+       objects.colocationid
+    FROM citus.pg_dist_object objects,
+         pg_catalog.pg_identify_object_as_address(objects.classid, objects.objid, objects.objsubid) address;
 END;
 $cppu$;
 
