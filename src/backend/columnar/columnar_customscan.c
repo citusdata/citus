@@ -60,7 +60,10 @@ static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPred
 static bool IsNotIndexPath(Path *path);
 static Path * CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
 									 RangeTblEntry *rte);
-static Cost ColumnarScanCost(RangeTblEntry *rte);
+static Cost ColumnarScanCost(Oid relationId, int numberOfColumnsRead);
+static Cost ColumnarPerStripeScanCost(Oid relationId,
+									  int numberOfColumnsRead);
+static uint64 ColumnarTableStripeCount(Oid relationId);
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
 											  struct CustomPath *best_path,
@@ -265,7 +268,9 @@ CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 */
 	path->rows = rel->rows;
 	path->startup_cost = 0;
-	path->total_cost = path->startup_cost + ColumnarScanCost(rte);
+	int numberOfColumnsRead = bms_num_members(rte->selectedCols);
+	path->total_cost = path->startup_cost +
+					   ColumnarScanCost(rte->relid, numberOfColumnsRead);
 
 	return (Path *) cspath;
 }
@@ -277,42 +282,65 @@ CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * need to be read.
  */
 static Cost
-ColumnarScanCost(RangeTblEntry *rte)
+ColumnarScanCost(Oid relationId, int numberOfColumnsRead)
 {
-	Relation rel = RelationIdGetRelation(rte->relid);
-	List *stripeList = StripesForRelfilenode(rel->rd_node);
-	RelationClose(rel);
+	return ColumnarTableStripeCount(relationId) *
+		   ColumnarPerStripeScanCost(relationId, numberOfColumnsRead);
+}
+
+
+/*
+ * ColumnarPerStripeScanCost calculates the cost to scan a single stripe
+ * of given columnar table based on number of columns that needs to be
+ * read during scan operation.
+ */
+static Cost
+ColumnarPerStripeScanCost(Oid relationId, int numberOfColumnsRead)
+{
+	Relation relation = RelationIdGetRelation(relationId);
+	List *stripeList = StripesForRelfilenode(relation->rd_node);
+	RelationClose(relation);
 
 	uint32 maxColumnCount = 0;
 	uint64 totalStripeSize = 0;
-	ListCell *stripeMetadataCell = NULL;
-	rel = NULL;
-
-	foreach(stripeMetadataCell, stripeList)
+	StripeMetadata *stripeMetadata = NULL;
+	foreach_ptr(stripeMetadata, stripeList)
 	{
-		StripeMetadata *stripeMetadata = (StripeMetadata *) lfirst(stripeMetadataCell);
 		totalStripeSize += stripeMetadata->dataLength;
 		maxColumnCount = Max(maxColumnCount, stripeMetadata->columnCount);
 	}
 
+	/*
+	 * When no stripes are in the table we don't have a count in maxColumnCount. To
+	 * prevent a division by zero turning into a NaN we keep the ratio on zero.
+	 * This will result in a cost of 0 for scanning the table which is a reasonable
+	 * cost on an empty table.
+	 */
+	if (maxColumnCount == 0)
 	{
-		Bitmapset *attr_needed = rte->selectedCols;
-		double numberOfColumnsRead = bms_num_members(attr_needed);
-		double selectionRatio = 0;
-
-		/*
-		 * When no stripes are in the table we don't have a count in maxColumnCount. To
-		 * prevent a division by zero turning into a NaN we keep the ratio on zero.
-		 * This will result in a cost of 0 for scanning the table which is a reasonable
-		 * cost on an empty table.
-		 */
-		if (maxColumnCount != 0)
-		{
-			selectionRatio = numberOfColumnsRead / (double) maxColumnCount;
-		}
-		Cost scanCost = (double) totalStripeSize / BLCKSZ * selectionRatio;
-		return scanCost;
+		return 0;
 	}
+
+	double columnSelectionRatio = numberOfColumnsRead / (double) maxColumnCount;
+	Cost tableScanCost = (double) totalStripeSize / BLCKSZ * columnSelectionRatio;
+	Cost perStripeScanCost = tableScanCost / list_length(stripeList);
+	return perStripeScanCost;
+}
+
+
+/*
+ * ColumnarTableStripeCount returns the number of stripes that columnar
+ * table with relationId has by using stripe metadata.
+ */
+static uint64
+ColumnarTableStripeCount(Oid relationId)
+{
+	Relation relation = RelationIdGetRelation(relationId);
+	List *stripeList = StripesForRelfilenode(relation->rd_node);
+	int stripeCount = list_length(stripeList);
+	RelationClose(relation);
+
+	return stripeCount;
 }
 
 
