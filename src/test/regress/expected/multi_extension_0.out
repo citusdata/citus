@@ -590,6 +590,23 @@ SELECT * FROM print_extension_changes();
                  | function citus_get_active_worker_nodes()
 (1 row)
 
+-- Test downgrade to 10.0-3 from 10.0-4
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+ALTER EXTENSION citus UPDATE TO '10.0-3';
+-- Should be empty result, even though the downgrade doesn't undo the upgrade, the
+-- function signature doesn't change, which is reflected here.
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.0-4
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+SELECT * FROM print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 DROP TABLE prev_objects, extension_diff;
 -- show running version
 SHOW citus.version;
