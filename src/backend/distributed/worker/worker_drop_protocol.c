@@ -120,7 +120,7 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	{
 		uint64 shardId = *shardIdPointer;
 
-		List *shardPlacementList = ShardPlacementList(shardId);
+		List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 		ShardPlacement *placement = NULL;
 		foreach_ptr(placement, shardPlacementList)
 		{

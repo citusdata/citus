@@ -132,7 +132,7 @@ load_shard_placement_array(PG_FUNCTION_ARGS)
 	}
 	else
 	{
-		placementList = ShardPlacementList(shardId);
+		placementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 	}
 
 	placementList = SortList(placementList, CompareShardPlacementsByWorker);
