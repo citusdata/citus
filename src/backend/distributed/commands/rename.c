@@ -16,6 +16,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
 #include "nodes/parsenodes.h"
+#include "utils/lsyscache.h"
 
 
 /*
@@ -60,6 +61,15 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 	if (!OidIsValid(objectRelationId))
 	{
 		return NIL;
+	}
+
+	/* check whether we are dealing with a sequence here */
+	if (get_rel_relkind(objectRelationId) == RELKIND_SEQUENCE)
+	{
+		RenameStmt *stmtCopy = copyObject(renameStmt);
+		stmtCopy->renameType = OBJECT_SEQUENCE;
+		return PreprocessRenameSequenceStmt((Node *) stmtCopy, renameCommand,
+											processUtilityContext);
 	}
 
 	/* we have no planning to do unless the table is distributed */
