@@ -731,6 +731,8 @@ SELECT run_command_on_workers('DROP ROLE IF EXISTS seq_role_0, seq_role_1');
 -- Check some cases when default is defined by
 -- DEFAULT nextval('seq_name'::text) (not by DEFAULT nextval('seq_name'))
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -806,6 +808,8 @@ SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
 (2 rows)
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

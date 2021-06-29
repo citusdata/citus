@@ -208,14 +208,28 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 						errmsg("node (%s,%d) does not exist", nodeNameString, nodePort)));
 	}
 
-	if (clearMetadata && NodeIsPrimary(workerNode))
+	if (clearMetadata)
 	{
-		/*
-		 * If this is a secondary node we can't actually clear metadata from it,
-		 * we assume the primary node is cleared.
-		 */
-		DropMetadataSnapshotOnNode(workerNode);
+		if (NodeIsPrimary(workerNode))
+		{
+			ereport(NOTICE, (errmsg("dropping metadata on the node (%s,%d)",
+									nodeNameString, nodePort)));
+			DropMetadataSnapshotOnNode(workerNode);
+		}
+		else
+		{
+			/*
+			 * If this is a secondary node we can't actually clear metadata from it,
+			 * we assume the primary node is cleared.
+			 */
+			ereport(NOTICE, (errmsg("(%s,%d) is a secondary node: to clear the metadata"
+									" you should clear it from the primary node",
+									nodeNameString, nodePort)));
+		}
 	}
+
+	ereport(NOTICE, (errmsg("unsynchronizing metadata on the node (%s,%d)",
+							nodeNameString, nodePort)));
 
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
 	MarkNodeMetadataSynced(nodeNameString, nodePort, false);

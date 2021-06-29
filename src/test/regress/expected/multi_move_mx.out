@@ -221,6 +221,8 @@ DROP TABLE mx_table_1;
 DROP TABLE mx_table_2;
 DROP TABLE mx_table_3;
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+NOTICE:  dropping metadata on the node (localhost,57638)
+NOTICE:  unsynchronizing metadata on the node (localhost,57638)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

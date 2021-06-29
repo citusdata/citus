@@ -223,6 +223,8 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
 (1 row)
 
 SELECT stop_metadata_sync_to_node('localhost', 8888);
+NOTICE:  (localhost,8888) is a secondary node: to clear the metadata you should clear it from the primary node
+NOTICE:  unsynchronizing metadata on the node (localhost,8888)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -550,6 +552,8 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
 (1 row)
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -948,12 +952,16 @@ DROP TABLE mx_temp_drop_test;
 SET citus.shard_count TO 3;
 SET citus.shard_replication_factor TO 1;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+NOTICE:  dropping metadata on the node (localhost,57638)
+NOTICE:  unsynchronizing metadata on the node (localhost,57638)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -1282,6 +1290,8 @@ UPDATE pg_dist_placement
   WHERE groupid = :old_worker_2_group;
 \c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+NOTICE:  dropping metadata on the node (localhost,57638)
+NOTICE:  unsynchronizing metadata on the node (localhost,57638)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -1750,12 +1760,16 @@ drop cascades to default value for column id of table test_table
 DROP TABLE test_table CASCADE;
 -- Cleanup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+NOTICE:  dropping metadata on the node (localhost,57638)
+NOTICE:  unsynchronizing metadata on the node (localhost,57638)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

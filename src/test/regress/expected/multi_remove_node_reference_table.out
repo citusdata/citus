@@ -1037,6 +1037,8 @@ DROP TABLE remove_node_reference_table;
 DROP TABLE remove_node_reference_table_schema.table1;
 DROP SCHEMA remove_node_reference_table_schema CASCADE;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
