@@ -55,6 +55,7 @@ set citus.explain_distributed_queries to on;
 EXPLAIN SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
                                  QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate  (cost=750.01..750.02 rows=1 width=40)
@@ -68,8 +69,11 @@ set client_min_messages to debug3;
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
 DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  no sharding pruning constraints on lineitem found
-DEBUG:  shard count after pruning for lineitem: 0
+DEBUG:  constraint (gt) value: '6000'::bigint
+DEBUG:  shard count after pruning for lineitem: 1
+DEBUG:  constraint (lt) value: '6000'::bigint
+DEBUG:  shard count after pruning for orders: 1
+DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
  sum | avg
 ---------------------------------------------------------------------
      |

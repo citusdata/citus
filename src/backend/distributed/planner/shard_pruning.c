@@ -1627,7 +1627,7 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	}
 
 	/* value falls inbetween intervals */
-	return lowerBoundIndex + 1;
+	return lowerBoundIndex;
 }
 
 

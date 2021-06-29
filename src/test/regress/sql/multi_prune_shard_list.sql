@@ -218,5 +218,92 @@ SELECT * FROM numeric_test WHERE id = 21;
 SELECT * FROM numeric_test WHERE id = 21::numeric;
 SELECT * FROM numeric_test WHERE id = 21.1::numeric;
 
+CREATE TABLE range_dist_table_1 (dist_col BIGINT);
+SELECT create_distributed_table('range_dist_table_1', 'dist_col', 'range');
+
+select master_create_empty_shard('range_dist_table_1') as sid \gset
+update pg_dist_shard set shardminvalue = 1000 where shardid=:sid;
+update pg_dist_shard set shardmaxvalue = 2000 where shardid=:sid;
+
+select master_create_empty_shard('range_dist_table_1') as sid \gset
+update pg_dist_shard set shardminvalue = 3000 where shardid=:sid;
+update pg_dist_shard set shardmaxvalue = 4000 where shardid=:sid;
+
+select master_create_empty_shard('range_dist_table_1') as sid \gset
+update pg_dist_shard set shardminvalue = 6000 where shardid=:sid;
+update pg_dist_shard set shardmaxvalue = 7000 where shardid=:sid;
+
+INSERT INTO range_dist_table_1 VALUES (1001);
+INSERT INTO range_dist_table_1 VALUES (3800);
+INSERT INTO range_dist_table_1 VALUES (6500);
+
+-- all were returning false before fixing #5077
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col >= 2999;
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2999;
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col >= 2500;
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2000;
+
+-- now test with composite type and more shards
+CREATE TYPE comp_type AS (
+    int_field_1 BIGINT,
+    int_field_2 BIGINT
+);
+
+CREATE TYPE comp_type_range AS RANGE (
+    subtype = comp_type);
+
+CREATE TABLE range_dist_table_2 (dist_col comp_type);
+SELECT create_distributed_table('range_dist_table_2', 'dist_col', 'range');
+
+select master_create_empty_shard('range_dist_table_2') as sid \gset
+update pg_dist_shard set shardminvalue = '(1000024218,2439449798159018)'::comp_type where shardid=:sid;
+update pg_dist_shard set shardmaxvalue = '(1000024218,2533274790395903)'::comp_type where shardid=:sid;
+
+INSERT INTO range_dist_table_2 VALUES ((1000024218, 2439449798159018));
+
+select master_create_empty_shard('range_dist_table_2') as sid \gset
+update pg_dist_shard set shardminvalue = '(1000024218,5817149518686890)'::comp_type where shardid=:sid;
+update pg_dist_shard set shardmaxvalue = '(1000024218,5910974510923775)'::comp_type where shardid=:sid;
+
+INSERT INTO range_dist_table_2 VALUES ((1000024218, 5817149518686890));
+
+select master_create_empty_shard('range_dist_table_2') as sid \gset
+update pg_dist_shard set shardminvalue = '(1000024218,9017149518686890)'::comp_type where shardid=:sid;
+update pg_dist_shard set shardmaxvalue = '(1000024218,9080974510923775)'::comp_type where shardid=:sid;
+
+INSERT INTO range_dist_table_2 VALUES ((1000024218, 9047149518686890));
+
+select master_create_empty_shard('range_dist_table_2') as sid \gset
+update pg_dist_shard set shardminvalue = '(2000024300,1000000000000000)'::comp_type where shardid=:sid;
+update pg_dist_shard set shardmaxvalue = '(2000024300,1000000000000000)'::comp_type where shardid=:sid;
+
+INSERT INTO range_dist_table_2 VALUES ((2000024300, 1000000000000000));
+
+SELECT dist_col='(1000024218, 5817149518686890)'::comp_type FROM range_dist_table_2
+WHERE dist_col >= '(1000024218,2533274790395904)'::comp_type AND
+      dist_col <= '(1000024218,7007199254740991)'::comp_type;
+
+-- should print following values:
+-- (1000024218, 5817149518686890)
+-- (1000024218, 9047149518686890)
+SELECT * FROM range_dist_table_2
+WHERE dist_col >= '(1000024218,5700000000000000)'::comp_type AND
+      dist_col <= '(1000024218,9090974510923775)'::comp_type
+ORDER BY dist_col;
+
+-- should print following values:
+-- (1000024218, 5817149518686890)
+-- (1000024218, 9047149518686890)
+-- (2000024300,1000000000000000)
+SELECT * FROM range_dist_table_2
+WHERE dist_col >= '(1000024218,5700000000000000)'::comp_type
+ORDER BY dist_col;
+
+SELECT dist_col='(2000024300,1000000000000000)'::comp_type FROM range_dist_table_2
+WHERE dist_col > '(2000024300,999999999999999)'::comp_type;
+
+DROP TABLE range_dist_table_1, range_dist_table_2;
+DROP TYPE comp_type CASCADE;
+
 SET search_path TO public;
 DROP SCHEMA prune_shard_list CASCADE;
