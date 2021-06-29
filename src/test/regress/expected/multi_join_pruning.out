@@ -38,14 +38,44 @@ DEBUG:  Router planner does not support append-partitioned tables.
 -- Partition pruning left three shards for the lineitem and one shard for the
 -- orders table. These shard sets don't overlap, so join pruning should prune
 -- out all the shards, and leave us with an empty task list.
+select * from pg_dist_shard
+where logicalrelid='lineitem'::regclass or
+	  logicalrelid='orders'::regclass
+order by shardid;
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ lineitem     |  290000 | t            | 1             | 5986
+ lineitem     |  290001 | t            | 8997          | 14947
+ orders       |  290002 | t            | 1             | 5986
+ orders       |  290003 | t            | 8997          | 14947
+(4 rows)
+
+set citus.explain_distributed_queries to on;
+-- explain the query before actually executing it
+EXPLAIN SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
+	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
+DEBUG:  Router planner does not support append-partitioned tables.
+                                 QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate  (cost=750.01..750.02 rows=1 width=40)
+   ->  Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=100000 width=24)
+         Task Count: 0
+         Tasks Shown: All
+(4 rows)
+
+set citus.explain_distributed_queries to off;
+set client_min_messages to debug3;
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
 DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no sharding pruning constraints on lineitem found
+DEBUG:  shard count after pruning for lineitem: 0
  sum | avg
 ---------------------------------------------------------------------
      |
 (1 row)
 
+set client_min_messages to debug2;
 -- Make sure that we can handle filters without a column
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND false;
