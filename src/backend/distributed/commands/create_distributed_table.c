@@ -520,6 +520,29 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		}
 
 		CreateTableMetadataOnWorkers(relationId);
+
+		/* TODO: should probably be in CreateTableMetadataOnWorkers() */
+		if (ClusterHasKnownMetadataWorkers())
+		{
+			/*
+			 * Ensure that the views are also propagated to the metadata workers
+			 */
+			List *viewList = GetDependingViews(relationId);
+			PropagateDependenciesOfViewList(viewList);
+
+			/* prevent recursive propagation */
+			SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+			/* send the commands one by one */
+			Oid viewId;
+			List *viewCommandList = NIL;
+			foreach_oid(viewId, viewList)
+			{
+				char *viewDef = GetViewCreationCommand(viewId);
+				viewCommandList = lappend(viewCommandList, viewDef);
+				SendCommandToWorkersWithMetadata(viewDef);
+			}
+		}
 	}
 
 	/*
@@ -562,6 +585,43 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	bool skip_validation = true;
 	ExecuteForeignKeyCreateCommandList(originalForeignKeyRecreationCommands,
 									   skip_validation);
+}
+
+
+char *
+GetViewCreationCommand(Oid viewOid)
+{
+	Datum viewDefinitionDatum = DirectFunctionCall1(pg_get_viewdef,
+													ObjectIdGetDatum(viewOid));
+	char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
+	StringInfo query = makeStringInfo();
+	char *viewName = get_rel_name(viewOid);
+	char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
+	char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+	bool isMatView = get_rel_relkind(viewOid) == RELKIND_MATVIEW;
+
+	/* here we need to get the access method of the view to recreate it */
+	/*char *accessMethodName = GetAccessMethodForMatViewIfExists(viewOid); */
+
+	/*appendStringInfo(query, "DROP VIEW IF EXISTS %s CASCADE;", qualifiedViewName); */
+
+	appendStringInfoString(query, "CREATE ");
+
+	if (isMatView)
+	{
+		appendStringInfoString(query, "MATERIALIZED ");
+	}
+
+	appendStringInfo(query, "VIEW %s ", qualifiedViewName);
+
+/*	if (accessMethodName) */
+	{
+/*		appendStringInfo(query, "USING %s ", accessMethodName); */
+	}
+
+	appendStringInfo(query, "AS %s", viewDefinition);
+
+	return query->data;
 }
 
 
@@ -638,6 +698,28 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 		ParseState *pstate = make_parsestate(NULL);
 		AlterSequence(pstate, alterSequenceStatement);
 	}
+}
+
+
+void
+PropagateDependenciesOfViewList(List *viewList)
+{
+	Oid viewOid = InvalidOid;
+	foreach_oid(viewOid, viewList)
+	{
+		PropagateDependenciesOfView(viewOid);
+	}
+}
+
+
+void
+PropagateDependenciesOfView(Oid viewId)
+{
+	/* get sequence address */
+	ObjectAddress viewAddress = { 0 };
+	ObjectAddressSet(viewAddress, RelationRelationId, viewId);
+	EnsureDependenciesExistOnAllNodes(&viewAddress);
+	MarkObjectDistributed(&viewAddress);
 }
 
 

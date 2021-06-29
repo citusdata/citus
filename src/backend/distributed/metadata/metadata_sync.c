@@ -321,6 +321,7 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	}
 }
 
+#include "distributed/metadata/dependency.h"
 
 /*
  * MetadataCreateCommands returns list of queries that are
@@ -479,6 +480,35 @@ MetadataCreateCommands(void)
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  shardCreateCommandList);
+	}
+
+
+	/* after all tables are created, create the metadata */
+	foreach_ptr(cacheEntry, propagatedTableList)
+	{
+		/* TODO: should probably be in CreateTableMetadataOnWorkers() */
+
+		/*
+		 * Ensure that the views are also propagated to the metadata workers
+		 */
+		List *viewList = GetDependingViews(cacheEntry->relationId);
+		PropagateDependenciesOfViewList(viewList);
+
+		/* prevent recursive propagation */
+		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+		/* send the commands one by one */
+		Oid viewId;
+		List *viewCommandList = NIL;
+		foreach_oid(viewId, viewList)
+		{
+			char *viewDef = GetViewCreationCommand(viewId);
+			viewCommandList = lappend(viewCommandList, viewDef);
+		}
+
+
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  viewCommandList);
 	}
 
 	return metadataSnapshotCommandList;

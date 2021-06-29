@@ -246,6 +246,7 @@ extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   char distributionMethod, int shardCount,
 								   bool shardCountIsStrict, char *colocateWithTableName,
 								   bool viaDeprecatedAPI);
+extern char * GetViewCreationCommand(Oid viewOid);
 extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 
@@ -297,4 +298,7 @@ extern void MarkSequenceDistributedAndPropagateDependencies(Oid sequenceOid);
 extern void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *dependentSequenceList,
 												  List *attnumList);
+
+void PropagateDependenciesOfView(Oid viewId);
+void PropagateDependenciesOfViewList(List *viewList);
 #endif   /* METADATA_UTILITY_H */

@@ -602,6 +602,38 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 							 errhint("Connect to worker nodes directly to manually "
 									 "rename the role")));
 		}
+
+
+		if (IsA(parsetree, ViewStmt))
+		{
+			CommandCounterIncrement();
+			elog(INFO, "create view");
+			ViewStmt *v = (ViewStmt *)parsetree;
+
+			Oid viewOid = RangeVarGetRelid(v->view, NoLock, false);
+elog(INFO, "viewOid: %d", viewOid);
+			/* TODO: check the view depends on a distributed table that we should sync */
+			if (ClusterHasKnownMetadataWorkers())
+			{
+				/*
+				 * Ensure that the views are also propagated to the metadata workers
+				 */
+				PropagateDependenciesOfViewList(list_make1_oid(viewOid));
+
+				/* prevent recursive propagation */
+				SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+				/* send the commands one by one */
+				{
+					char *viewDef = GetViewCreationCommand(viewOid);
+					elog(INFO, "viewDef: %s", viewDef);
+
+					SendCommandToWorkersWithMetadata(viewDef);
+				}
+			}
+
+
+		}
 	}
 
 	if (IsA(parsetree, CreateStmt))
