@@ -69,6 +69,43 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 			dependenciesWithCommands = lappend(dependenciesWithCommands, dependency);
 		}
 	}
+
+	List *metadataSyncedDependenciesWithCommands = NIL;
+
+	if (target->classId == RelationRelationId)
+	{
+		/* don't forget partitioned/foreign tables */
+		if (get_rel_relkind(target->objectId) == RELKIND_RELATION)
+		{
+			List *viewIds = GetDependingViews(target->objectId);
+			Oid viewOid = InvalidOid;
+			foreach_oid(viewOid, viewIds)
+			{
+				ObjectAddress viewAddress = { 0 };
+				ObjectAddressSet(viewAddress, RelationRelationId, viewOid);
+
+				dependencies = GetDependenciesForObject(&viewAddress);
+				foreach_ptr(dependency, dependencies)
+				{
+					List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
+					metadataSyncedDependenciesWithCommands = list_concat(
+						metadataSyncedDependenciesWithCommands, dependencyCommands);
+
+					char *viewDefinition = GetViewCreationCommand(viewOid);
+					metadataSyncedDependenciesWithCommands = lappend(
+						metadataSyncedDependenciesWithCommands, viewDefinition);
+
+					/* create a new list with dependencies that actually created commands */
+					if (list_length(dependencyCommands) > 0)
+					{
+						metadataSyncedDependenciesWithCommands = lappend(
+							metadataSyncedDependenciesWithCommands, dependency);
+					}
+				}
+			}
+		}
+	}
+
 	if (list_length(ddlCommands) <= 0)
 	{
 		/* no ddl commands to be executed */
@@ -77,6 +114,9 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
+	metadataSyncedDependenciesWithCommands = list_concat(list_make1(
+															 DISABLE_DDL_PROPAGATION),
+														 metadataSyncedDependenciesWithCommands);
 
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
@@ -112,7 +152,6 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		return;
 	}
 
-
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
@@ -122,6 +161,20 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
 												   CitusExtensionOwnerName(),
 												   ddlCommands);
+	}
+
+
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		const char *nodeName = workerNode->workerName;
+		uint32 nodePort = workerNode->workerPort;
+
+		if (workerNode->hasMetadata)
+		{
+			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
+													   CitusExtensionOwnerName(),
+													   metadataSyncedDependenciesWithCommands);
+		}
 	}
 }
 
@@ -181,6 +234,13 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			if (get_rel_relkind(dependency->objectId) == RELKIND_COMPOSITE_TYPE)
 			{
 				return NIL;
+			}
+			else if (get_rel_relkind(dependency->objectId) == RELKIND_VIEW ||
+					 get_rel_relkind(dependency->objectId) == RELKIND_MATVIEW)
+			{
+				char *viewDef = GetViewCreationCommand(dependency->objectId);
+
+				return list_make1(viewDef);
 			}
 
 			/* if this relation is not supported, break to the error at the end */

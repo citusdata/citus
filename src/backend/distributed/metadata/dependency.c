@@ -648,7 +648,11 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			{
 				return true;
 			}
-
+			else if (get_rel_relkind(address->objectId) == RELKIND_VIEW ||
+					 get_rel_relkind(address->objectId) == RELKIND_MATVIEW)
+			{
+				return true;
+			}
 			return false;
 		}
 

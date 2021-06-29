@@ -248,7 +248,7 @@ extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   bool viaDeprecatedAPI);
 extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
-
+extern char * GetViewCreationCommand(Oid viewOid);
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
 extern bool ShouldPropagate(void);

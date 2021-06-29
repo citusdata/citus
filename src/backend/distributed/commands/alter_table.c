@@ -1120,38 +1120,48 @@ GetViewCreationCommandsOfTable(Oid relationId)
 	Oid viewOid = InvalidOid;
 	foreach_oid(viewOid, views)
 	{
-		Datum viewDefinitionDatum = DirectFunctionCall1(pg_get_viewdef,
-														ObjectIdGetDatum(viewOid));
-		char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
-		StringInfo query = makeStringInfo();
-		char *viewName = get_rel_name(viewOid);
-		char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
-		char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
-		bool isMatView = get_rel_relkind(viewOid) == RELKIND_MATVIEW;
-
-		/* here we need to get the access method of the view to recreate it */
-		char *accessMethodName = GetAccessMethodForMatViewIfExists(viewOid);
-
-		appendStringInfoString(query, "CREATE ");
-
-		if (isMatView)
-		{
-			appendStringInfoString(query, "MATERIALIZED ");
-		}
-
-		appendStringInfo(query, "VIEW %s ", qualifiedViewName);
-
-		if (accessMethodName)
-		{
-			appendStringInfo(query, "USING %s ", accessMethodName);
-		}
-
-		appendStringInfo(query, "AS %s", viewDefinition);
-
-		commands = lappend(commands, makeTableDDLCommandString(query->data));
+		commands = lappend(commands, makeTableDDLCommandString(GetViewCreationCommand(
+																   viewOid)));
 	}
 
 	return commands;
+}
+
+
+char *
+GetViewCreationCommand(Oid viewOid)
+{
+	Datum viewDefinitionDatum = DirectFunctionCall1(pg_get_viewdef,
+													ObjectIdGetDatum(viewOid));
+	char *viewDefinition = TextDatumGetCString(viewDefinitionDatum);
+	StringInfo query = makeStringInfo();
+	char *viewName = get_rel_name(viewOid);
+	char *schemaName = get_namespace_name(get_rel_namespace(viewOid));
+	char *qualifiedViewName = quote_qualified_identifier(schemaName, viewName);
+	bool isMatView = get_rel_relkind(viewOid) == RELKIND_MATVIEW;
+
+	/* here we need to get the access method of the view to recreate it */
+	char *accessMethodName = GetAccessMethodForMatViewIfExists(viewOid);
+
+	appendStringInfo(query, "DROP VIEW IF EXISTS %s CASCADE;", qualifiedViewName);
+
+	appendStringInfoString(query, "CREATE ");
+
+	if (isMatView)
+	{
+		appendStringInfoString(query, "MATERIALIZED ");
+	}
+
+	appendStringInfo(query, "VIEW %s ", qualifiedViewName);
+
+	if (accessMethodName)
+	{
+		appendStringInfo(query, "USING %s ", accessMethodName);
+	}
+
+	appendStringInfo(query, "AS %s", viewDefinition);
+
+	return query->data;
 }
 
 
