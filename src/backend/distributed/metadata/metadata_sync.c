@@ -481,6 +481,21 @@ MetadataCreateCommands(void)
 												  shardCreateCommandList);
 	}
 
+	/* after all tables are created, create the metadata */
+	foreach_ptr(cacheEntry, propagatedTableList)
+	{
+		Oid relationId = cacheEntry->relationId;
+
+		List *viewDefinitionList = GetViewCreationCommandsOfTable(relationId);
+
+		TableDDLCommand *command = NULL;
+		foreach_ptr(command,viewDefinitionList)
+		{
+		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+				command->commandStr);
+		}
+	}
+
 	return metadataSnapshotCommandList;
 }
 
