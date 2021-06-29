@@ -208,6 +208,14 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 						errmsg("node (%s,%d) does not exist", nodeNameString, nodePort)));
 	}
 
+	if (NodeIsCoordinator(workerNode))
+	{
+		ereport(NOTICE, (errmsg("node (%s,%d) is the coordinator and should have "
+								"metadata, skipping stopping the metadata sync",
+								nodeNameString, nodePort)));
+		return;
+	}
+
 	if (clearMetadata)
 	{
 		if (NodeIsPrimary(workerNode))
