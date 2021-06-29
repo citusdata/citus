@@ -1835,6 +1835,12 @@ findRteIdentityWalker(Node *node, FindRteIdentityContext* context)
 
 		return false;
 	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return expression_tree_walker(node, findRteIdentityWalker,
+									  context);
+	}
 	return false;
 }
 
