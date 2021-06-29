@@ -210,10 +210,9 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	if (NodeIsCoordinator(workerNode))
 	{
-		ereport(NOTICE, (errmsg("node (%s,%d) is the coordinator and should have "
-								"metadata, skipping stopping the metadata sync",
-								nodeNameString, nodePort)));
-		return;
+		ereport(ERROR, (errmsg("node (%s,%d) is the coordinator and should have "
+							   "metadata, skipping stopping the metadata sync",
+							   nodeNameString, nodePort)));
 	}
 
 	if (clearMetadata)
@@ -242,13 +241,6 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
 	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
 
-	char *extensionOwner = CitusExtensionOwnerName();
-	List *localGroupIdUpdateCommand = list_make1(LocalGroupIdUpdateCommand(0));
-
-	SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
-												 workerNode->workerPort,
-												 extensionOwner,
-												 localGroupIdUpdateCommand);
 	PG_RETURN_VOID();
 }
 
@@ -374,6 +366,9 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 
 	/* generate the queries which drop the metadata */
 	List *dropMetadataCommandList = MetadataDropCommands();
+
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  LocalGroupIdUpdateCommand(0));
 
 	SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
 												 workerNode->workerPort,
