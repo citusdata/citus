@@ -47,7 +47,6 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
 SET search_path TO "start_stop_metadata_sync";
-\d+ distributed_table_4
 SELECT * FROM distributed_table_1;
 CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
 CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_3;
@@ -62,7 +61,6 @@ SET search_path TO "start_stop_metadata_sync";
 SELECT * FROM distributed_table_1;
 ALTER TABLE distributed_table_4 DROP COLUMN b;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-\d+ distributed_table_4
 SELECT * FROM test_view;
 SELECT * FROM test_matview;
 SELECT count(*) > 0 FROM pg_dist_node;
@@ -73,7 +71,6 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 SET search_path TO "start_stop_metadata_sync";
 -- these should not be found because of stop_metadata_sync_to_node
 SELECT * FROM distributed_table_1;
-\d+ distributed_table_4
 SELECT * FROM test_view;
 SELECT * FROM test_matview;
 

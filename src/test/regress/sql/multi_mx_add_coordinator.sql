@@ -98,6 +98,9 @@ SELECT r.a FROM ref r JOIN local_table lt on r.a = lt.a;
 
 \c - - - :master_port
 SET search_path TO mx_add_coordinator,public;
+
+SELECT stop_metadata_sync_to_node('localhost', :master_port);
+
 SELECT * FROM ref ORDER BY a;
 
 -- Clear pg_dist_transaction before removing the node. This is to keep the output
