@@ -81,9 +81,20 @@ SELECT count(*) > 0 FROM pg_dist_node;
 SELECT count(*) > 0 FROM pg_dist_shard;
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
+
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
 SELECT * FROM distributed_table_1;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+\c - - - :worker_1_port
+SELECT count(*) > 0 FROM pg_dist_node;
+SELECT count(*) > 0 FROM pg_dist_shard;
+SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
+SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
+
+\c - - - :master_port
+SET search_path TO "start_stop_metadata_sync";
 
 --cleanup
 DROP SCHEMA start_stop_metadata_sync CASCADE;

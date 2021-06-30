@@ -231,6 +231,39 @@ SELECT * FROM distributed_table_1;
 ---------------------------------------------------------------------
 (0 rows)
 
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SELECT count(*) > 0 FROM pg_dist_node;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) > 0 FROM pg_dist_shard;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\c - - - :master_port
+SET search_path TO "start_stop_metadata_sync";
 --cleanup
 DROP SCHEMA start_stop_metadata_sync CASCADE;
 NOTICE:  drop cascades to 10 other objects
