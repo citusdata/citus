@@ -1615,12 +1615,7 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	 * whether there's possibly any interval containing a value that's bigger
 	 * than the partition key one.
 	 */
-	if (lowerBoundIndex == 0)
-	{
-		/* all intervals are bigger, thus return 0 */
-		return 0;
-	}
-	else if (lowerBoundIndex == shardCount)
+	if (lowerBoundIndex == shardCount)
 	{
 		/* partition value is bigger than all partition values */
 		return INVALID_SHARD_INDEX;
@@ -1691,12 +1686,7 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	 * whether there's possibly any interval containing a value that's smaller
 	 * than the partition key one.
 	 */
-	if (upperBoundIndex == shardCount)
-	{
-		/* all intervals are smaller, thus return 0 */
-		return shardCount - 1;
-	}
-	else if (upperBoundIndex == 0)
+	if (upperBoundIndex == 0)
 	{
 		/* partition value is smaller than all partition values */
 		return INVALID_SHARD_INDEX;
