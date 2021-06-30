@@ -43,6 +43,32 @@ CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_
 
 ALTER TABLE distributed_table_4 DROP COLUMN c;
 
+-- test for hybrid partitioned table (columnar+heap)
+CREATE TABLE events(ts timestamptz, i int, n numeric, s text)
+  PARTITION BY RANGE (ts);
+
+CREATE TABLE events_2021_jan PARTITION OF events
+  FOR VALUES FROM ('2021-01-01') TO ('2021-02-01');
+
+CREATE TABLE events_2021_feb PARTITION OF events
+  FOR VALUES FROM ('2021-02-01') TO ('2021-03-01');
+
+INSERT INTO events SELECT
+    '2021-01-01'::timestamptz + '0.45 seconds'::interval * g,
+    g,
+    g*pi(),
+    'number: ' || g::text
+    FROM generate_series(1,1000) g;
+
+VACUUM (FREEZE, ANALYZE) events_2021_feb;
+
+SELECT create_distributed_table('events', 'ts');
+
+SELECT alter_table_set_access_method('events_2021_jan', 'columnar');
+
+VACUUM (FREEZE, ANALYZE) events_2021_jan;
+
+-- sync metadata
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
@@ -52,6 +78,7 @@ CREATE VIEW test_view AS SELECT COUNT(*) FROM distributed_table_3;
 CREATE MATERIALIZED VIEW test_matview AS SELECT COUNT(*) FROM distributed_table_3;
 SELECT * FROM test_view;
 SELECT * FROM test_matview;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'events%' ORDER BY logicalrelid::text;
 SELECT count(*) > 0 FROM pg_dist_node;
 SELECT count(*) > 0 FROM pg_dist_shard;
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');

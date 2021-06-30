@@ -19,10 +19,10 @@ test: multi_mx_node_metadata
 test: multi_cluster_management
 test: multi_mx_function_table_reference
 test: multi_test_catalog_views
-test: start_stop_metadata_sync
 
 # the following test has to be run sequentially
 test: multi_mx_create_table
+test: start_stop_metadata_sync
 test: multi_mx_hide_shard_names
 test: multi_mx_add_coordinator
 test: multi_mx_modifications_to_reference_tables
