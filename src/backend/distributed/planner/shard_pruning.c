@@ -1614,14 +1614,24 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	 * (we'd have hit the return middleIndex; case otherwise). Figure out
 	 * whether there's possibly any interval containing a value that's bigger
 	 * than the partition key one.
+	 *
+	 * Also note that we initialized lowerBoundIndex with 0. Similarly,
+	 * we always set it to the index of the  shard that we consider as our
+	 * lower boundary during binary search.
 	 */
 	if (lowerBoundIndex == shardCount)
 	{
-		/* partition value is bigger than all partition values */
+		/*
+		 * Since lowerBoundIndex is an inclusive index, INVALID_SHARD_INDEX
+		 * means all the shards have smaller values than our filter (> or >=).
+		 */
 		return INVALID_SHARD_INDEX;
 	}
 
-	/* value falls inbetween intervals */
+	/*
+	 * Since lowerBoundIndex is an inclusive index, we directly return it as
+	 * the index for the lower bound shard here.
+	 */
 	return lowerBoundIndex;
 }
 
@@ -1685,14 +1695,24 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	 * (we'd have hit the return middleIndex; case otherwise). Figure out
 	 * whether there's possibly any interval containing a value that's smaller
 	 * than the partition key one.
+	 *
+	 * Also note that we initialized upperBoundIndex with shardCount. Similarly,
+	 * we always set it to the index of the next shard that we consider as our
+	 * upper boundary during binary search.
 	 */
 	if (upperBoundIndex == 0)
 	{
-		/* partition value is smaller than all partition values */
+		/*
+		 * Since upperBoundIndex is an exclusive index, 0 means all the shards
+		 * have greater values than our filter (< or <=).
+		 */
 		return INVALID_SHARD_INDEX;
 	}
 
-	/* value falls inbetween intervals, return the inverval one smaller as bound */
+	/*
+	 * Since upperBoundIndex is an exclusive index, we return the index for
+	 * the previous shard here.
+	 */
 	return upperBoundIndex - 1;
 }
 
