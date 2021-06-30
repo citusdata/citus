@@ -690,6 +690,13 @@ GetDistributeObjectOps(Node *node)
 			}
 		}
 
+		case T_ViewStmt:
+		{
+			ViewStmt *stmt = castNode(ViewStmt, node);
+
+			return &NoDistributeOps;
+		}
+
 		case T_AlterOwnerStmt:
 		{
 			AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);

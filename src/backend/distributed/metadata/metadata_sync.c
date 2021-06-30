@@ -321,6 +321,7 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	}
 }
 
+
 #include "distributed/metadata/dependency.h"
 
 /*
@@ -493,9 +494,6 @@ MetadataCreateCommands(void)
 		 */
 		List *viewList = GetDependingViews(cacheEntry->relationId);
 		PropagateDependenciesOfViewList(viewList);
-
-		/* prevent recursive propagation */
-		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
 		/* send the commands one by one */
 		Oid viewId;
