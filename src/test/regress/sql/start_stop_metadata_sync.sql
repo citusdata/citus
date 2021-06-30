@@ -97,4 +97,5 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 SET search_path TO "start_stop_metadata_sync";
 
 --cleanup
+SET client_min_messages TO WARNING;
 DROP SCHEMA start_stop_metadata_sync CASCADE;
