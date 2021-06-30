@@ -62,6 +62,8 @@ typedef struct AttributeEquivalenceClass
 typedef struct FindRteIdentityContext {
 	uint32 rteIdentity;
 	Query* query;
+	Query* temp;
+	bool found;
 }FindRteIdentityContext;
 
 /*
@@ -1775,7 +1777,7 @@ RelationRestrictionPartitionKeyIndex(Query* originalQuery, RelationRestriction *
 	FindRteIdentityContext* findRteIdentityContext = palloc0(sizeof(FindRteIdentityContext));
 	findRteIdentityContext->rteIdentity = GetRTEIdentity(relationRestriction->rte);
 	findRteIdentityWalker((Node*) originalQuery, findRteIdentityContext);
-	if (findRteIdentityContext->query == NULL) {
+	if (!findRteIdentityContext->found) {
 		return NULL;
 	}
 	List *relationTargetList = findRteIdentityContext->query->targetList;
@@ -1821,25 +1823,26 @@ findRteIdentityWalker(Node *node, FindRteIdentityContext* context)
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		RangeTblEntry* rte = NULL;
-		foreach_ptr(rte, query->rtable) {
-			if (rte->rtekind == RTE_RELATION) {
-				if (GetRTEIdentity(rte) == context->rteIdentity) {
-					context->query = query;
-					return true;
-				}
-			}
-		}
+		Query* prev = context->temp;
+		context->temp = query;
 		query_tree_walker(query, findRteIdentityWalker, context,
 						  QTW_EXAMINE_RTES_BEFORE);
-
-		return false;
+		context->temp = prev;
+		return false;				  
 	}
 
 	if (!IsA(node, RangeTblEntry))
 	{
 		return expression_tree_walker(node, findRteIdentityWalker,
 									  context);
+	}
+	RangeTblEntry* rte = (RangeTblEntry*) node;
+	if (rte->rtekind == RTE_RELATION) {
+		if (GetRTEIdentity(rte) == context->rteIdentity) {
+			context->found = true;
+			context->query = context->temp;
+			return true;
+		}
 	}
 	return false;
 }

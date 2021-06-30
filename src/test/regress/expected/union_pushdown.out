@@ -236,8 +236,12 @@ FROM
       UNION ALL SELECT user_id AS user_id FROM users_table_part JOIN events_table_part USING (user_id) WHERE users_table_part.value_1 = 8  GROUP BY user_id)) AS bar
       WHERE user_id < 2000 ) as level_1 ) as level_2 ) as level_3
 ORDER BY 1 DESC LIMIT 10;
-DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM union_pushdown.users_table_part WHERE (value_2 OPERATOR(pg_catalog.=) 3)
-ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+DEBUG:  push down of limit count: 10
+ count
+---------------------------------------------------------------------
+    78
+(1 row)
+
 -- safe to pushdown
 SELECT DISTINCT user_id FROM (
     SELECT * FROM
