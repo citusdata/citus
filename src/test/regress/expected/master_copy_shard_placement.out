@@ -138,7 +138,6 @@ SELECT master_copy_shard_placement(
 ERROR:  Table 'mx_table' is streaming replicated. Shards of streaming replicated tables cannot be copied
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
-NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

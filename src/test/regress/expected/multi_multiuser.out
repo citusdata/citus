@@ -560,7 +560,6 @@ SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE pron
 -- that might change the test outputs, so we're just trying to be careful
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
-NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -568,7 +567,6 @@ NOTICE:  unsynchronizing metadata on the node (localhost,57637)
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 NOTICE:  dropping metadata on the node (localhost,57638)
-NOTICE:  unsynchronizing metadata on the node (localhost,57638)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

@@ -215,6 +215,9 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 							   nodeNameString, nodePort)));
 	}
 
+	MarkNodeHasMetadata(nodeNameString, nodePort, false);
+	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
+
 	if (clearMetadata)
 	{
 		if (NodeIsPrimary(workerNode))
@@ -234,12 +237,6 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 									nodeNameString, nodePort)));
 		}
 	}
-
-	ereport(NOTICE, (errmsg("unsynchronizing metadata on the node (%s,%d)",
-							nodeNameString, nodePort)));
-
-	MarkNodeHasMetadata(nodeNameString, nodePort, false);
-	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
 
 	PG_RETURN_VOID();
 }

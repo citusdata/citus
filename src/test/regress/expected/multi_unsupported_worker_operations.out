@@ -266,7 +266,6 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 NOTICE:  dropping metadata on the node (localhost,57638)
-NOTICE:  unsynchronizing metadata on the node (localhost,57638)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -383,7 +382,6 @@ DROP TABLE mx_table;
 DROP TABLE mx_table_2;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
-NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

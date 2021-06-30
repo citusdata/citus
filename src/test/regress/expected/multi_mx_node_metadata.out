@@ -659,7 +659,6 @@ ERROR:  Disabling localhost:xxxxx failed
 -- try again after stopping metadata sync
 SELECT stop_metadata_sync_to_node('localhost', 1);
 NOTICE:  dropping metadata on the node (localhost,1)
-NOTICE:  unsynchronizing metadata on the node (localhost,1)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -725,7 +724,6 @@ ERROR:  Disabling localhost:xxxxx failed
 -- try again after stopping metadata sync
 SELECT stop_metadata_sync_to_node('localhost', 1);
 NOTICE:  dropping metadata on the node (localhost,1)
-NOTICE:  unsynchronizing metadata on the node (localhost,1)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

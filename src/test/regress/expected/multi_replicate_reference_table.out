@@ -1029,7 +1029,6 @@ WHERE ref_table.a = dist_table.a;
 SET search_path TO replicate_reference_table;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
-NOTICE:  unsynchronizing metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
