@@ -4148,35 +4148,51 @@ ShardIntervalsOverlap(ShardInterval *firstInterval, ShardInterval *secondInterva
 
 	Assert(IsCitusTableTypeCacheEntry(intervalRelation, DISTRIBUTED_TABLE));
 
-	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
-	Oid collation = intervalRelation->partitionColumn->varcollid;
-
+	if (!(firstInterval->minValueExists && firstInterval->maxValueExists &&
+		  secondInterval->minValueExists && secondInterval->maxValueExists))
+	{
+		return true;
+	}
 
 	Datum firstMin = firstInterval->minValue;
 	Datum firstMax = firstInterval->maxValue;
 	Datum secondMin = secondInterval->minValue;
 	Datum secondMax = secondInterval->maxValue;
 
+	FmgrInfo *comparisonFunction = intervalRelation->shardIntervalCompareFunction;
+	Oid collation = intervalRelation->partitionColumn->varcollid;
+
+	return ShardIntervalsOverlapWithParams(firstMin, firstMax, secondMin, secondMax,
+										   comparisonFunction, collation);
+}
+
+
+/*
+ * ShardIntervalsOverlapWithParams is a helper function which compares the input
+ * shard min/max values, and returns true if the shards overlap.
+ * The caller is responsible to ensure the input shard min/max values are not NULL.
+ */
+bool
+ShardIntervalsOverlapWithParams(Datum firstMin, Datum firstMax, Datum secondMin,
+								Datum secondMax, FmgrInfo *comparisonFunction,
+								Oid collation)
+{
 	/*
 	 * We need to have min/max values for both intervals first. Then, we assume
 	 * two intervals i1 = [min1, max1] and i2 = [min2, max2] do not overlap if
 	 * (max1 < min2) or (max2 < min1). For details, please see the explanation
 	 * on overlapping intervals at http://www.rgrjr.com/emacs/overlap.html.
 	 */
-	if (firstInterval->minValueExists && firstInterval->maxValueExists &&
-		secondInterval->minValueExists && secondInterval->maxValueExists)
-	{
-		Datum firstDatum = FunctionCall2Coll(comparisonFunction, collation, firstMax,
-											 secondMin);
-		Datum secondDatum = FunctionCall2Coll(comparisonFunction, collation, secondMax,
-											  firstMin);
-		int firstComparison = DatumGetInt32(firstDatum);
-		int secondComparison = DatumGetInt32(secondDatum);
+	Datum firstDatum = FunctionCall2Coll(comparisonFunction, collation, firstMax,
+										 secondMin);
+	Datum secondDatum = FunctionCall2Coll(comparisonFunction, collation, secondMax,
+										  firstMin);
+	int firstComparison = DatumGetInt32(firstDatum);
+	int secondComparison = DatumGetInt32(secondDatum);
 
-		if (firstComparison < 0 || secondComparison < 0)
-		{
-			return false;
-		}
+	if (firstComparison < 0 || secondComparison < 0)
+	{
+		return false;
 	}
 
 	return true;

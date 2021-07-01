@@ -845,6 +845,17 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.enable_manual_metadata_changes_for_user",
+		gettext_noop("Enables some helper UDFs to modify metadata "
+					 "for the given user"),
+		NULL,
+		&EnableManualMetadataChangesForUser,
+		"",
+		PGC_SIGHUP,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.enable_object_propagation",
 		gettext_noop("Enables propagating object creation for more complex objects, "

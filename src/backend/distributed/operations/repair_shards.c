@@ -1490,6 +1490,9 @@ UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 		return;
 	}
 
+	uint32 sourceGroupId = GroupForNode(sourceNodeName, sourceNodePort);
+	uint32 targetGroupId = GroupForNode(targetNodeName, targetNodePort);
+
 	List *colocatedShardList = ColocatedShardIntervalList(shardInterval);
 
 	/* iterate through the colocated shards and copy each */
@@ -1498,15 +1501,10 @@ UpdateColocatedShardPlacementMetadataOnWorkers(int64 shardId,
 		ShardInterval *colocatedShard = (ShardInterval *) lfirst(colocatedShardCell);
 		StringInfo updateCommand = makeStringInfo();
 
-		appendStringInfo(updateCommand, "UPDATE pg_dist_shard_placement "
-										"SET nodename=%s, nodeport=%d WHERE "
-										"shardid=%lu AND nodename=%s AND nodeport=%d",
-						 quote_literal_cstr(targetNodeName),
-						 targetNodePort,
+		appendStringInfo(updateCommand,
+						 "SELECT citus_internal_update_placement_metadata(%ld, %d, %d)",
 						 colocatedShard->shardId,
-						 quote_literal_cstr(sourceNodeName),
-						 sourceNodePort);
-
+						 sourceGroupId, targetGroupId);
 		SendCommandToWorkersWithMetadata(updateCommand->data);
 	}
 }

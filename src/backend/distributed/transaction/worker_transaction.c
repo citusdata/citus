@@ -58,7 +58,7 @@ static void SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerS
 void
 SendCommandToWorker(const char *nodeName, int32 nodePort, const char *command)
 {
-	const char *nodeUser = CitusExtensionOwnerName();
+	const char *nodeUser = CurrentUserName();
 	SendCommandToWorkerAsUser(nodeName, nodePort, nodeUser, command);
 }
 
@@ -118,7 +118,7 @@ SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort, const char *node
 void
 SendCommandToWorkersWithMetadata(const char *command)
 {
-	SendCommandToMetadataWorkersParams(command, CitusExtensionOwnerName(),
+	SendCommandToMetadataWorkersParams(command, CurrentUserName(),
 									   0, NULL, NULL);
 }
 
@@ -168,7 +168,7 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 {
 	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_METADATA_NODES;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
-	char *nodeUser = CitusExtensionOwnerName();
+	char *nodeUser = CurrentUserName();
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
@@ -194,51 +194,6 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 
 		CloseConnection(workerConnection);
 	}
-}
-
-
-/*
- * SendBareOptionalCommandListToAllWorkersAsUser sends a list of commands
- * to all workers in serial. Commands are committed immediately: new
- * connections are always used and no transaction block is used (hence "bare").
- */
-int
-SendBareOptionalCommandListToAllWorkersAsUser(List *commandList, const char *user)
-{
-	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_NODES;
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
-	int maxError = RESPONSE_OKAY;
-
-	/* run commands serially */
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		const char *nodeName = workerNode->workerName;
-		int nodePort = workerNode->workerPort;
-		int connectionFlags = FORCE_NEW_CONNECTION;
-
-		MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
-																		  nodeName,
-																		  nodePort, user,
-																		  NULL);
-
-		/* iterate over the commands and execute them in the same connection */
-		const char *commandString = NULL;
-		foreach_ptr(commandString, commandList)
-		{
-			int result = ExecuteOptionalRemoteCommand(workerConnection, commandString,
-													  NULL);
-			if (result != RESPONSE_OKAY)
-			{
-				maxError = Max(maxError, result);
-				break;
-			}
-		}
-
-		CloseConnection(workerConnection);
-	}
-
-	return maxError;
 }
 
 

@@ -564,10 +564,13 @@ SELECT shardid, shardstate, nodename, nodeport
 	WHERE logicalrelid = 'numbers_hash_other'::regclass order by shardid, nodeport;
 
 -- manually corrupt pg_dist_shard such that both copies of one shard is placed in
--- worker_1. This is to test the behavior when no replica of a shard is accessible.
--- Whole copy operation is supposed to fail and rollback.
+-- worker_1+10. This is to test the behavior when no replica of a shard is accessible.
+-- Whole copy operation is supposed to fail and rollback. We use session_replication_role
+-- trick to disable the triggers on the pg_dist_shard_placement view
 \c - :default_user
-UPDATE pg_dist_shard_placement SET nodeport = :worker_1_port WHERE shardid = 560176;
+SET session_replication_role = replica;
+UPDATE pg_dist_shard_placement SET nodeport = :worker_1_port+10 WHERE shardid = 560176 and nodeport = :worker_2_port;
+SET session_replication_role = DEFAULT;
 
 -- disable test_user on the first worker
 \c - :default_user - :worker_1_port

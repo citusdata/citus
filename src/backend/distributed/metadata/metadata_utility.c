@@ -1472,9 +1472,8 @@ ActiveShardPlacement(uint64 shardId, bool missingOk)
  * because it shares code with other routines in this file.
  */
 List *
-BuildShardPlacementList(ShardInterval *shardInterval)
+BuildShardPlacementList(int64 shardId)
 {
-	int64 shardId = shardInterval->shardId;
 	List *shardPlacementList = NIL;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
@@ -2042,6 +2041,62 @@ UpdateShardPlacementState(uint64 placementId, char shardState)
 	values[Anum_pg_dist_placement_shardstate - 1] = CharGetDatum(shardState);
 	isnull[Anum_pg_dist_placement_shardstate - 1] = false;
 	replace[Anum_pg_dist_placement_shardstate - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistPlacement, &heapTuple->t_self, heapTuple);
+
+	uint64 shardId = DatumGetInt64(heap_getattr(heapTuple,
+												Anum_pg_dist_placement_shardid,
+												tupleDescriptor, &colIsNull));
+	Assert(!colIsNull);
+	CitusInvalidateRelcacheByShardId(shardId);
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPlacement, NoLock);
+}
+
+
+/*
+ * UpdatePlacementGroupId sets the groupId for the placement identified
+ * by placementId.
+ */
+void
+UpdatePlacementGroupId(uint64 placementId, int groupId)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_placement];
+	bool isnull[Natts_pg_dist_placement];
+	bool replace[Natts_pg_dist_placement];
+	bool colIsNull = false;
+
+	Relation pgDistPlacement = table_open(DistPlacementRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPlacement);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_placement_placementid,
+				BTEqualStrategyNumber, F_INT8EQ, Int64GetDatum(placementId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPlacement,
+													DistPlacementPlacementidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for shard placement "
+							   UINT64_FORMAT,
+							   placementId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_dist_placement_groupid - 1] = Int32GetDatum(groupId);
+	isnull[Anum_pg_dist_placement_groupid - 1] = false;
+	replace[Anum_pg_dist_placement_groupid - 1] = true;
 
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 

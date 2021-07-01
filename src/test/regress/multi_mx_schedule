@@ -57,6 +57,7 @@ test: multi_mx_alter_distributed_table
 
 # should be executed sequentially because it modifies metadata
 test: local_shard_execution_dropped_column
+test: metadata_sync_helpers
 
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak

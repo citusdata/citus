@@ -143,6 +143,9 @@ extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
 
 extern bool IsCitusTable(Oid relationId);
+extern char PgDistPartitionViaCatalog(Oid relationId);
+extern List * LookupDistShardTuples(Oid relationId);
+extern char PartitionMethodViaCatalog(Oid relationId);
 extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
@@ -196,6 +199,9 @@ extern void ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
 extern char LookupDistributionMethod(Oid distributionMethodOid);
 extern bool RelationExists(Oid relationId);
+extern ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
+											TupleDesc tupleDescriptor, Oid intervalTypeId,
+											int32 intervalTypeMod);
 
 /* access WorkerNodeHash */
 extern bool HasAnyNodes(void);

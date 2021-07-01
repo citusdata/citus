@@ -557,6 +557,10 @@ extern Var * MakeInt4Column(void);
 extern int CompareShardPlacements(const void *leftElement, const void *rightElement);
 extern bool ShardIntervalsOverlap(ShardInterval *firstInterval,
 								  ShardInterval *secondInterval);
+extern bool ShardIntervalsOverlapWithParams(Datum firstMin, Datum firstMax,
+											Datum secondMin, Datum secondMax,
+											FmgrInfo *comparisonFunction,
+											Oid collation);
 extern bool CoPartitionedTables(Oid firstRelationId, Oid secondRelationId);
 extern ShardInterval ** GenerateSyntheticShardIntervalArray(int partitionCount);
 extern RowModifyLevel RowModifyLevelForQuery(Query *query);
