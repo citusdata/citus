@@ -261,18 +261,11 @@ SELECT dist_col='(1000024218, 5817149518686890)'::comp_type FROM range_dist_tabl
 WHERE dist_col >= '(1000024218,2533274790395904)'::comp_type AND
       dist_col <= '(1000024218,7007199254740991)'::comp_type;
 
--- should print following values:
--- (1000024218, 5817149518686890)
--- (1000024218, 9047149518686890)
 SELECT * FROM range_dist_table_2
 WHERE dist_col >= '(1000024218,5700000000000000)'::comp_type AND
       dist_col <= '(1000024218,9090974510923775)'::comp_type
 ORDER BY dist_col;
 
--- should print following values:
--- (1000024218, 5817149518686890)
--- (1000024218, 9047149518686890)
--- (2000024300,1000000000000000)
 SELECT * FROM range_dist_table_2
 WHERE dist_col >= '(1000024218,5700000000000000)'::comp_type
 ORDER BY dist_col;
