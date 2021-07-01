@@ -92,6 +92,8 @@ static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
 static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
+static void UpdateHasmetadataOnWorkersWithMetadata(const char *nodeNameString,
+												   int32 nodePort, char *hasMetadata);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
@@ -222,6 +224,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
 	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
+	UpdateHasmetadataOnWorkersWithMetadata(nodeNameString, nodePort, "true");
 }
 
 
@@ -305,6 +308,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
 	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
+	UpdateHasmetadataOnWorkersWithMetadata(nodeNameString, nodePort, "false");
 
 	if (clearMetadata)
 	{
@@ -624,6 +628,19 @@ MetadataCreateCommands(void)
 	}
 
 	return metadataSnapshotCommandList;
+}
+
+
+static void
+UpdateHasmetadataOnWorkersWithMetadata(const char *nodeNameString, int32 nodePort,
+									   char *hasMetadata)
+{
+	StringInfo updateCommand = makeStringInfo();
+	appendStringInfo(updateCommand,
+					 "UPDATE pg_dist_node SET hasmetadata = %s "
+					 "WHERE nodename = '%s' AND nodeport = %d",
+					 hasMetadata, quote_identifier(nodeNameString), nodePort);
+	SendCommandToWorkersWithMetadata(updateCommand->data);
 }
 
 
