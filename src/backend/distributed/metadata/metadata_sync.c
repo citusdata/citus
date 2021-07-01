@@ -211,6 +211,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	}
 
 	UseCoordinatedTransaction();
+	UpdateHasmetadataOnWorkersWithMetadata(nodeNameString, nodePort, "true");
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 
 	if (!NodeIsPrimary(workerNode))
@@ -224,7 +225,6 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
 	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
-	UpdateHasmetadataOnWorkersWithMetadata(nodeNameString, nodePort, "true");
 }
 
 
@@ -308,7 +308,6 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
 	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
-	UpdateHasmetadataOnWorkersWithMetadata(nodeNameString, nodePort, "false");
 
 	if (clearMetadata)
 	{
@@ -329,6 +328,8 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 									nodeNameString, nodePort)));
 		}
 	}
+
+	UpdateHasmetadataOnWorkersWithMetadata(nodeNameString, nodePort, "false");
 
 	PG_RETURN_VOID();
 }
@@ -635,12 +636,26 @@ static void
 UpdateHasmetadataOnWorkersWithMetadata(const char *nodeNameString, int32 nodePort,
 									   char *hasMetadata)
 {
+	char *extensionOwner = CitusExtensionOwnerName();
 	StringInfo updateCommand = makeStringInfo();
 	appendStringInfo(updateCommand,
 					 "UPDATE pg_dist_node SET hasmetadata = %s "
 					 "WHERE nodename = '%s' AND nodeport = %d",
 					 hasMetadata, quote_identifier(nodeNameString), nodePort);
-	SendCommandToWorkersWithMetadata(updateCommand->data);
+
+	List *updateCommandL = list_make1(updateCommand->data);
+
+	List *targetWorkerSet = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+													ShareLock);
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, targetWorkerSet)
+	{
+		SendOptionalCommandListToWorkerInTransaction(nodeNameString,
+													 nodePort,
+													 extensionOwner,
+													 updateCommandL);
+	}
 }
 
 
