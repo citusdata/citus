@@ -75,6 +75,7 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
 static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
+static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
@@ -191,22 +192,52 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureSuperUser();
+	PreventInTransactionBlock(true, "stop_metadata_sync_to_node");
 
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
+	bool clearMetadata = PG_GETARG_BOOL(2);
 	char *nodeNameString = text_to_cstring(nodeName);
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeNameString, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("node (%s,%d) does not exist", nodeNameString, nodePort)));
 	}
 
+	if (NodeIsCoordinator(workerNode))
+	{
+		ereport(NOTICE, (errmsg("node (%s,%d) is the coordinator and should have "
+								"metadata, skipping stopping the metadata sync",
+								nodeNameString, nodePort)));
+		PG_RETURN_VOID();
+	}
+
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
 	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
+
+	if (clearMetadata)
+	{
+		if (NodeIsPrimary(workerNode))
+		{
+			ereport(NOTICE, (errmsg("dropping metadata on the node (%s,%d)",
+									nodeNameString, nodePort)));
+			DropMetadataSnapshotOnNode(workerNode);
+		}
+		else
+		{
+			/*
+			 * If this is a secondary node we can't actually clear metadata from it,
+			 * we assume the primary node is cleared.
+			 */
+			ereport(NOTICE, (errmsg("(%s,%d) is a secondary node: to clear the metadata,"
+									" you should clear metadata from the primary node",
+									nodeNameString, nodePort)));
+		}
+	}
 
 	PG_RETURN_VOID();
 }
@@ -319,6 +350,28 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 														 recreateMetadataSnapshotCommandList);
 		return success;
 	}
+}
+
+
+/*
+ * DropMetadataSnapshotOnNode creates the queries which drop the metadata and sends them
+ * to the worker given as parameter.
+ */
+static void
+DropMetadataSnapshotOnNode(WorkerNode *workerNode)
+{
+	char *extensionOwner = CitusExtensionOwnerName();
+
+	/* generate the queries which drop the metadata */
+	List *dropMetadataCommandList = MetadataDropCommands();
+
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  LocalGroupIdUpdateCommand(0));
+
+	SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
+												 workerNode->workerPort,
+												 extensionOwner,
+												 dropMetadataCommandList);
 }
 
 
