@@ -201,7 +201,7 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeNameString, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -210,9 +210,10 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	if (NodeIsCoordinator(workerNode))
 	{
-		ereport(ERROR, (errmsg("node (%s,%d) is the coordinator and should have "
-							   "metadata, skipping stopping the metadata sync",
-							   nodeNameString, nodePort)));
+		ereport(NOTICE, (errmsg("node (%s,%d) is the coordinator and should have "
+								"metadata, skipping stopping the metadata sync",
+								nodeNameString, nodePort)));
+		PG_RETURN_VOID();
 	}
 
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
@@ -232,8 +233,8 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 			 * If this is a secondary node we can't actually clear metadata from it,
 			 * we assume the primary node is cleared.
 			 */
-			ereport(NOTICE, (errmsg("(%s,%d) is a secondary node: to clear the metadata"
-									" you should clear it from the primary node",
+			ereport(NOTICE, (errmsg("(%s,%d) is a secondary node: to clear the metadata,"
+									" you should clear metadata from the primary node",
 									nodeNameString, nodePort)));
 		}
 	}
