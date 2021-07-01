@@ -107,10 +107,6 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND r
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
 \c - - - :worker_1_port
 SET search_path TO "start_stop_metadata_sync";
--- these should not be found because of stop_metadata_sync_to_node
-SELECT * FROM distributed_table_1;
-SELECT * FROM test_view;
-SELECT * FROM test_matview;
 
 SELECT count(*) > 0 FROM pg_dist_node;
 SELECT count(*) > 0 FROM pg_dist_shard;
