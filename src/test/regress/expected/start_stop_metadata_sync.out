@@ -91,6 +91,11 @@ SELECT alter_table_set_access_method('events_2021_jan', 'columnar');
 (1 row)
 
 VACUUM (FREEZE, ANALYZE) events_2021_jan;
+-- this should fail
+BEGIN;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ERROR:  start_metadata_sync_to_node cannot run inside a transaction block
+ROLLBACK;
 -- sync metadata
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
@@ -159,6 +164,11 @@ SELECT * FROM distributed_table_1;
 (0 rows)
 
 ALTER TABLE distributed_table_4 DROP COLUMN b;
+-- this should fail
+BEGIN;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ERROR:  stop_metadata_sync_to_node cannot run inside a transaction block
+ROLLBACK;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
@@ -275,7 +285,7 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
---cleanup
+-- cleanup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node

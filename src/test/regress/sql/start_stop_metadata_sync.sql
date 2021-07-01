@@ -68,6 +68,11 @@ SELECT alter_table_set_access_method('events_2021_jan', 'columnar');
 
 VACUUM (FREEZE, ANALYZE) events_2021_jan;
 
+-- this should fail
+BEGIN;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ROLLBACK;
+
 -- sync metadata
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
@@ -87,6 +92,12 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 SET search_path TO "start_stop_metadata_sync";
 SELECT * FROM distributed_table_1;
 ALTER TABLE distributed_table_4 DROP COLUMN b;
+
+-- this should fail
+BEGIN;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ROLLBACK;
+
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT * FROM test_view;
 SELECT * FROM test_matview;
