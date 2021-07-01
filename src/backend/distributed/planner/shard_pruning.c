@@ -1638,7 +1638,7 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	if (lowerBoundIndex == shardCount)
 	{
 		/*
-		 * Since lowerBoundIndex is an inclusive index, INVALID_SHARD_INDEX
+		 * Since lowerBoundIndex is an inclusive index, being equal to shardCount
 		 * means all the shards have smaller values than partitionColumnValue,
 		 * which corresponds to possibility 3).
 		 * In that case, since we can't have a lower bound shard, we return
@@ -1741,9 +1741,9 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	if (upperBoundIndex == 0)
 	{
 		/*
-		 * Since upperBoundIndex is an exclusive index, 0 means all the shards
-		 * have greater values than partitionColumnValue, which corresponds to
-		 * possibility 3).
+		 * Since upperBoundIndex is an exclusive index, being equal to 0 means
+		 * all the shards have greater values than partitionColumnValue, which
+		 * corresponds to possibility 3).
 		 * In that case, since we can't have an upper bound shard, we return
 		 * INVALID_SHARD_INDEX here.
 		 */
