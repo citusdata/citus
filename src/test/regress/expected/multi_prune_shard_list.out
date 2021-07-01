@@ -579,6 +579,32 @@ SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2000;
  t
 (1 row)
 
+-- we didn't have such an off-by-one error in upper bound
+-- calculation, but let's test such cases too
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col <= 4001;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col < 4001;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col <= 4500;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col < 6000;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- now test with composite type and more shards
 CREATE TYPE comp_type AS (
     int_field_1 BIGINT,
