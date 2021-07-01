@@ -221,17 +221,7 @@ SELECT * FROM numeric_test WHERE id = 21.1::numeric;
 CREATE TABLE range_dist_table_1 (dist_col BIGINT);
 SELECT create_distributed_table('range_dist_table_1', 'dist_col', 'range');
 
-select master_create_empty_shard('range_dist_table_1') as sid \gset
-update pg_dist_shard set shardminvalue = 1000 where shardid=:sid;
-update pg_dist_shard set shardmaxvalue = 2000 where shardid=:sid;
-
-select master_create_empty_shard('range_dist_table_1') as sid \gset
-update pg_dist_shard set shardminvalue = 3000 where shardid=:sid;
-update pg_dist_shard set shardmaxvalue = 4000 where shardid=:sid;
-
-select master_create_empty_shard('range_dist_table_1') as sid \gset
-update pg_dist_shard set shardminvalue = 6000 where shardid=:sid;
-update pg_dist_shard set shardmaxvalue = 7000 where shardid=:sid;
+CALL public.create_range_partitioned_shards('range_dist_table_1', '{1000,3000,6000}', '{2000,4000,7000}');
 
 INSERT INTO range_dist_table_1 VALUES (1001);
 INSERT INTO range_dist_table_1 VALUES (3800);
@@ -255,28 +245,16 @@ CREATE TYPE comp_type_range AS RANGE (
 CREATE TABLE range_dist_table_2 (dist_col comp_type);
 SELECT create_distributed_table('range_dist_table_2', 'dist_col', 'range');
 
-select master_create_empty_shard('range_dist_table_2') as sid \gset
-update pg_dist_shard set shardminvalue = '(1000024218,2439449798159018)'::comp_type where shardid=:sid;
-update pg_dist_shard set shardmaxvalue = '(1000024218,2533274790395903)'::comp_type where shardid=:sid;
+CALL public.create_range_partitioned_shards(
+	'range_dist_table_2',
+    '{"(1000024218,2439449798159018)","(1000024218,5817149518686890)",
+	  "(1000024218,9017149518686890)","(2000024300,1000000000000000)"}',
+	'{"(1000024218,2533274790395903)","(1000024218,5910974510923775)",
+	  "(1000024218,9080974510923775)","(2000024300,1000000000000000)"}');
 
 INSERT INTO range_dist_table_2 VALUES ((1000024218, 2439449798159018));
-
-select master_create_empty_shard('range_dist_table_2') as sid \gset
-update pg_dist_shard set shardminvalue = '(1000024218,5817149518686890)'::comp_type where shardid=:sid;
-update pg_dist_shard set shardmaxvalue = '(1000024218,5910974510923775)'::comp_type where shardid=:sid;
-
 INSERT INTO range_dist_table_2 VALUES ((1000024218, 5817149518686890));
-
-select master_create_empty_shard('range_dist_table_2') as sid \gset
-update pg_dist_shard set shardminvalue = '(1000024218,9017149518686890)'::comp_type where shardid=:sid;
-update pg_dist_shard set shardmaxvalue = '(1000024218,9080974510923775)'::comp_type where shardid=:sid;
-
 INSERT INTO range_dist_table_2 VALUES ((1000024218, 9047149518686890));
-
-select master_create_empty_shard('range_dist_table_2') as sid \gset
-update pg_dist_shard set shardminvalue = '(2000024300,1000000000000000)'::comp_type where shardid=:sid;
-update pg_dist_shard set shardmaxvalue = '(2000024300,1000000000000000)'::comp_type where shardid=:sid;
-
 INSERT INTO range_dist_table_2 VALUES ((2000024300, 1000000000000000));
 
 SELECT dist_col='(1000024218, 5817149518686890)'::comp_type FROM range_dist_table_2
