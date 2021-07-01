@@ -120,6 +120,10 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
 
---cleanup
+-- cleanup
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 SET client_min_messages TO WARNING;
 DROP SCHEMA start_stop_metadata_sync CASCADE;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
