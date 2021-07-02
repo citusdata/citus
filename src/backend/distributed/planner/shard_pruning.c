@@ -1584,8 +1584,8 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	 *    partitionColumnValue > shard[x].max and
 	 *    partitionColumnValue < shard[x+1].min
 	 *
-	 * For 1), we find that shard in below loop and return the index of it.
-	 * For the others, see the end of this function.
+	 * For 1), we find that shard in below loop using binary search and
+	 * return the index of it. For the others, see the end of this function.
 	 */
 	while (lowerBoundIndex < upperBoundIndex)
 	{
@@ -1686,8 +1686,8 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	 *    partitionColumnValue > shard[x].max and
 	 *    partitionColumnValue < shard[x+1].min
 	 *
-	 * For 1), we find that shard in below loop and return the index of it.
-	 * For the others, see the end of this function.
+	 * For 1), we find that shard in below loop using binary search and
+	 * return the index of it. For the others, see the end of this function.
 	 */
 
 	while (lowerBoundIndex < upperBoundIndex)
