@@ -84,7 +84,7 @@ SELECT prune_using_both_values('pruning', 'tomato', 'rose');
 
 -- unit test of the equality expression generation code
 SELECT debug_equality_expression('pruning');
-                                                                                                                                                                           debug_equality_expression
+                                                                                                                                                                            debug_equality_expression
 ---------------------------------------------------------------------
  {OPEXPR :opno 98 :opfuncid 67 :opresulttype 16 :opretset false :opcollid 0 :inputcollid 100 :args ({VAR :varno 1 :varattno 1 :vartype 25 :vartypmod -1 :varcollid 100 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} {CONST :consttype 25 :consttypmod -1 :constcollid 100 :constlen -1 :constbyval false :constisnull true :location -1 :constvalue <>}) :location -1}
 (1 row)
@@ -543,6 +543,154 @@ SELECT * FROM numeric_test WHERE id = 21.1::numeric;
  21.1 |  87
 (1 row)
 
+CREATE TABLE range_dist_table_1 (dist_col BIGINT);
+SELECT create_distributed_table('range_dist_table_1', 'dist_col', 'range');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL public.create_range_partitioned_shards('range_dist_table_1', '{1000,3000,6000}', '{2000,4000,7000}');
+INSERT INTO range_dist_table_1 VALUES (1001);
+INSERT INTO range_dist_table_1 VALUES (3800);
+INSERT INTO range_dist_table_1 VALUES (6500);
+-- all were returning false before fixing #5077
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col >= 2999;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2999;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col >= 2500;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2000;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 1001;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col >= 1001;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col > 1000;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col >= 1000;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- we didn't have such an off-by-one error in upper bound
+-- calculation, but let's test such cases too
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col <= 4001;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col < 4001;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col <= 4500;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col < 6000;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- now test with composite type and more shards
+CREATE TYPE comp_type AS (
+    int_field_1 BIGINT,
+    int_field_2 BIGINT
+);
+CREATE TYPE comp_type_range AS RANGE (
+    subtype = comp_type);
+CREATE TABLE range_dist_table_2 (dist_col comp_type);
+SELECT create_distributed_table('range_dist_table_2', 'dist_col', 'range');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL public.create_range_partitioned_shards(
+	'range_dist_table_2',
+    '{"(10,24)","(10,58)",
+	  "(10,90)","(20,100)"}',
+	'{"(10,25)","(10,65)",
+	  "(10,99)","(20,100)"}');
+INSERT INTO range_dist_table_2 VALUES ((10, 24));
+INSERT INTO range_dist_table_2 VALUES ((10, 60));
+INSERT INTO range_dist_table_2 VALUES ((10, 91));
+INSERT INTO range_dist_table_2 VALUES ((20, 100));
+SELECT dist_col='(10, 60)'::comp_type FROM range_dist_table_2
+WHERE dist_col >= '(10,26)'::comp_type AND
+      dist_col <= '(10,75)'::comp_type;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT * FROM range_dist_table_2
+WHERE dist_col >= '(10,57)'::comp_type AND
+      dist_col <= '(10,95)'::comp_type
+ORDER BY dist_col;
+ dist_col
+---------------------------------------------------------------------
+ (10,60)
+ (10,91)
+(2 rows)
+
+SELECT * FROM range_dist_table_2
+WHERE dist_col >= '(10,57)'::comp_type
+ORDER BY dist_col;
+ dist_col
+---------------------------------------------------------------------
+ (10,60)
+ (10,91)
+ (20,100)
+(3 rows)
+
+SELECT dist_col='(20,100)'::comp_type FROM range_dist_table_2
+WHERE dist_col > '(20,99)'::comp_type;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE range_dist_table_1, range_dist_table_2;
+DROP TYPE comp_type CASCADE;
+NOTICE:  drop cascades to type comp_type_range
 SET search_path TO public;
 DROP SCHEMA prune_shard_list CASCADE;
 NOTICE:  drop cascades to 10 other objects

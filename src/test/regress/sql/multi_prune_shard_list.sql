@@ -218,5 +218,75 @@ SELECT * FROM numeric_test WHERE id = 21;
 SELECT * FROM numeric_test WHERE id = 21::numeric;
 SELECT * FROM numeric_test WHERE id = 21.1::numeric;
 
+CREATE TABLE range_dist_table_1 (dist_col BIGINT);
+SELECT create_distributed_table('range_dist_table_1', 'dist_col', 'range');
+
+CALL public.create_range_partitioned_shards('range_dist_table_1', '{1000,3000,6000}', '{2000,4000,7000}');
+
+INSERT INTO range_dist_table_1 VALUES (1001);
+INSERT INTO range_dist_table_1 VALUES (3800);
+INSERT INTO range_dist_table_1 VALUES (6500);
+
+-- all were returning false before fixing #5077
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col >= 2999;
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2999;
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col >= 2500;
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2000;
+
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 1001;
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col >= 1001;
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col > 1000;
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col >= 1000;
+
+-- we didn't have such an off-by-one error in upper bound
+-- calculation, but let's test such cases too
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col <= 4001;
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col < 4001;
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col <= 4500;
+SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col < 6000;
+
+-- now test with composite type and more shards
+CREATE TYPE comp_type AS (
+    int_field_1 BIGINT,
+    int_field_2 BIGINT
+);
+
+CREATE TYPE comp_type_range AS RANGE (
+    subtype = comp_type);
+
+CREATE TABLE range_dist_table_2 (dist_col comp_type);
+SELECT create_distributed_table('range_dist_table_2', 'dist_col', 'range');
+
+CALL public.create_range_partitioned_shards(
+	'range_dist_table_2',
+    '{"(10,24)","(10,58)",
+	  "(10,90)","(20,100)"}',
+	'{"(10,25)","(10,65)",
+	  "(10,99)","(20,100)"}');
+
+INSERT INTO range_dist_table_2 VALUES ((10, 24));
+INSERT INTO range_dist_table_2 VALUES ((10, 60));
+INSERT INTO range_dist_table_2 VALUES ((10, 91));
+INSERT INTO range_dist_table_2 VALUES ((20, 100));
+
+SELECT dist_col='(10, 60)'::comp_type FROM range_dist_table_2
+WHERE dist_col >= '(10,26)'::comp_type AND
+      dist_col <= '(10,75)'::comp_type;
+
+SELECT * FROM range_dist_table_2
+WHERE dist_col >= '(10,57)'::comp_type AND
+      dist_col <= '(10,95)'::comp_type
+ORDER BY dist_col;
+
+SELECT * FROM range_dist_table_2
+WHERE dist_col >= '(10,57)'::comp_type
+ORDER BY dist_col;
+
+SELECT dist_col='(20,100)'::comp_type FROM range_dist_table_2
+WHERE dist_col > '(20,99)'::comp_type;
+
+DROP TABLE range_dist_table_1, range_dist_table_2;
+DROP TYPE comp_type CASCADE;
+
 SET search_path TO public;
 DROP SCHEMA prune_shard_list CASCADE;
