@@ -1576,6 +1576,22 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	/* setup partitionColumnValue argument once */
 	fcSetArg(compareFunction, 0, partitionColumnValue);
 
+	/*
+	 * Now we test partitionColumnValue used in where clause such as
+	 * partCol > partitionColumnValue (or partCol >= partitionColumnValue)
+	 * against four possibilities, these are:
+	 * 1) partitionColumnValue falls into a specific shard, such that:
+	 *    partitionColumnValue >= shard[x].min, and
+	 *    partitionColumnValue < shard[x].max (or partitionColumnValue <= shard[x].max).
+	 * 2) partitionColumnValue < shard[x].min for all the shards
+	 * 3) partitionColumnValue > shard[x].max for all the shards
+	 * 4) partitionColumnValue falls in between two shards, such that:
+	 *    partitionColumnValue > shard[x].max and
+	 *    partitionColumnValue < shard[x+1].min
+	 *
+	 * For 1), we find that shard in below loop using binary search and
+	 * return the index of it. For the others, see the end of this function.
+	 */
 	while (lowerBoundIndex < upperBoundIndex)
 	{
 		int middleIndex = lowerBoundIndex + ((upperBoundIndex - lowerBoundIndex) / 2);
@@ -1608,7 +1624,7 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 			continue;
 		}
 
-		/* found interval containing partitionValue */
+		/* partitionColumnValue falls into a specific shard, possibility 1) */
 		return middleIndex;
 	}
 
@@ -1619,20 +1635,30 @@ LowerShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	 * (we'd have hit the return middleIndex; case otherwise). Figure out
 	 * whether there's possibly any interval containing a value that's bigger
 	 * than the partition key one.
+	 *
+	 * Also note that we initialized lowerBoundIndex with 0. Similarly,
+	 * we always set it to the index of the  shard that we consider as our
+	 * lower boundary during binary search.
 	 */
-	if (lowerBoundIndex == 0)
+	if (lowerBoundIndex == shardCount)
 	{
-		/* all intervals are bigger, thus return 0 */
-		return 0;
-	}
-	else if (lowerBoundIndex == shardCount)
-	{
-		/* partition value is bigger than all partition values */
+		/*
+		 * Since lowerBoundIndex is an inclusive index, being equal to shardCount
+		 * means all the shards have smaller values than partitionColumnValue,
+		 * which corresponds to possibility 3).
+		 * In that case, since we can't have a lower bound shard, we return
+		 * INVALID_SHARD_INDEX here.
+		 */
 		return INVALID_SHARD_INDEX;
 	}
 
-	/* value falls inbetween intervals */
-	return lowerBoundIndex + 1;
+	/*
+	 * partitionColumnValue is either smaller than all the shards or falls in
+	 * between two shards, which corresponds to possibility 2) or 4).
+	 * Knowing that lowerBoundIndex is an inclusive index, we directly return
+	 * it as the index for the lower bound shard here.
+	 */
+	return lowerBoundIndex;
 }
 
 
@@ -1651,6 +1677,23 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 
 	/* setup partitionColumnValue argument once */
 	fcSetArg(compareFunction, 0, partitionColumnValue);
+
+	/*
+	 * Now we test partitionColumnValue used in where clause such as
+	 * partCol < partitionColumnValue (or partCol <= partitionColumnValue)
+	 * against four possibilities, these are:
+	 * 1) partitionColumnValue falls into a specific shard, such that:
+	 *    partitionColumnValue <= shard[x].max, and
+	 *    partitionColumnValue > shard[x].min (or partitionColumnValue >= shard[x].min).
+	 * 2) partitionColumnValue > shard[x].max for all the shards
+	 * 3) partitionColumnValue < shard[x].min for all the shards
+	 * 4) partitionColumnValue falls in between two shards, such that:
+	 *    partitionColumnValue > shard[x].max and
+	 *    partitionColumnValue < shard[x+1].min
+	 *
+	 * For 1), we find that shard in below loop using binary search and
+	 * return the index of it. For the others, see the end of this function.
+	 */
 
 	while (lowerBoundIndex < upperBoundIndex)
 	{
@@ -1684,7 +1727,7 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 			continue;
 		}
 
-		/* found interval containing partitionValue */
+		/* partitionColumnValue falls into a specific shard, possibility 1) */
 		return middleIndex;
 	}
 
@@ -1695,19 +1738,29 @@ UpperShardBoundary(Datum partitionColumnValue, ShardInterval **shardIntervalCach
 	 * (we'd have hit the return middleIndex; case otherwise). Figure out
 	 * whether there's possibly any interval containing a value that's smaller
 	 * than the partition key one.
+	 *
+	 * Also note that we initialized upperBoundIndex with shardCount. Similarly,
+	 * we always set it to the index of the next shard that we consider as our
+	 * upper boundary during binary search.
 	 */
-	if (upperBoundIndex == shardCount)
+	if (upperBoundIndex == 0)
 	{
-		/* all intervals are smaller, thus return 0 */
-		return shardCount - 1;
-	}
-	else if (upperBoundIndex == 0)
-	{
-		/* partition value is smaller than all partition values */
+		/*
+		 * Since upperBoundIndex is an exclusive index, being equal to 0 means
+		 * all the shards have greater values than partitionColumnValue, which
+		 * corresponds to possibility 3).
+		 * In that case, since we can't have an upper bound shard, we return
+		 * INVALID_SHARD_INDEX here.
+		 */
 		return INVALID_SHARD_INDEX;
 	}
 
-	/* value falls inbetween intervals, return the inverval one smaller as bound */
+	/*
+	 * partitionColumnValue is either greater than all the shards or falls in
+	 * between two shards, which corresponds to possibility 2) or 4).
+	 * Knowing that upperBoundIndex is an exclusive index, we return the index
+	 * for the previous shard here.
+	 */
 	return upperBoundIndex - 1;
 }
 
