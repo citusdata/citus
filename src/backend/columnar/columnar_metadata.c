@@ -73,7 +73,12 @@ typedef enum RowNumberLookupMode
 	 * Find the stripe whose firstRowNumber is less than or equal to given
 	 * input rowNumber.
 	 */
-	FIND_LESS_OR_EQUAL
+	FIND_LESS_OR_EQUAL,
+
+	/*
+	 * Find the stripe whose firstRowNumber is greater than input rowNumber.
+	 */
+	FIND_GREATER
 } RowNumberLookupMode;
 
 static void InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe);
@@ -635,6 +640,18 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 
 /*
+ * FindStripeByRowNumber returns StripeMetadata for the stripe whose
+ * firstRowNumber is greater than given rowNumber. If no such stripe
+ * exists, then returns NULL.
+ */
+StripeMetadata *
+FindNextStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
+{
+	return StripeMetadataLookupRowNumber(relation, rowNumber, snapshot, FIND_GREATER);
+}
+
+
+/*
  * FindStripeByRowNumber returns StripeMetadata for the stripe that contains
  * the row with rowNumber. If no such stripe exists, then returns NULL.
  */
@@ -662,15 +679,16 @@ FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
 
 /*
  * StripeMetadataLookupRowNumber returns StripeMetadata for the stripe whose
- * firstRowNumber is less than or equal to (FIND_LESS_OR_EQUAL) given rowNumber
- * by doing backward index scan on stripe_first_row_number_idx.
+ * firstRowNumber is less than or equal to (FIND_LESS_OR_EQUAL), or is
+ * greater than (FIND_GREATER) given rowNumber by doing backward index
+ * scan on stripe_first_row_number_idx.
  * If no such stripe exists, then returns NULL.
  */
 static StripeMetadata *
 StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot,
 							  RowNumberLookupMode lookupMode)
 {
-	Assert(lookupMode == FIND_LESS_OR_EQUAL);
+	Assert(lookupMode == FIND_LESS_OR_EQUAL || lookupMode == FIND_GREATER);
 
 	StripeMetadata *foundStripeMetadata = NULL;
 
@@ -685,6 +703,11 @@ StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snap
 	{
 		strategyNumber = BTLessEqualStrategyNumber;
 		procedure = F_INT8LE;
+	}
+	else if (lookupMode == FIND_GREATER)
+	{
+		strategyNumber = BTGreaterStrategyNumber;
+		procedure = F_INT8GT;
 	}
 	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_first_row_number,
 				strategyNumber, procedure, UInt64GetDatum(rowNumber));
@@ -701,6 +724,10 @@ StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snap
 	if (lookupMode == FIND_LESS_OR_EQUAL)
 	{
 		scanDirection = BackwardScanDirection;
+	}
+	else if (lookupMode == FIND_GREATER)
+	{
+		scanDirection = ForwardScanDirection;
 	}
 	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, scanDirection);
 	if (HeapTupleIsValid(heapTuple))

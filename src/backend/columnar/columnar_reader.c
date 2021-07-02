@@ -64,11 +64,10 @@ typedef struct StripeReadState
 
 struct ColumnarReadState
 {
-	List *stripeList;
 	TupleDesc tupleDescriptor;
 	Relation relation;
 
-	int64 currentStripe; /* index of current stripe */
+	StripeMetadata *currentStripeMetadata;
 	StripeReadState *stripeReadState;
 
 	/*
@@ -159,15 +158,6 @@ ColumnarReadState *
 ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				  List *projectedColumnList, List *whereClauseList)
 {
-	List *stripeList = StripesForRelfilenode(relation->rd_node);
-	StripeMetadata *stripeMetadata = NULL;
-
-	uint64 totalRowCount = 0;
-	foreach_ptr(stripeMetadata, stripeList)
-	{
-		totalRowCount += stripeMetadata->rowCount;
-	}
-
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
 	 * this memory context before loading a new stripe. This is to avoid memory
@@ -177,7 +167,6 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 
 	ColumnarReadState *readState = palloc0(sizeof(ColumnarReadState));
 	readState->relation = relation;
-	readState->stripeList = stripeList;
 	readState->projectedColumnList = projectedColumnList;
 	readState->whereClauseList = whereClauseList;
 	readState->whereClauseVars = GetClauseVars(whereClauseList, tupleDescriptor->natts);
@@ -185,6 +174,9 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
 	readState->stripeReadState = NULL;
+	readState->currentStripeMetadata = FindNextStripeByRowNumber(relation,
+																 COLUMNAR_INVALID_ROW_NUMBER,
+																 GetTransactionSnapshot());
 
 	return readState;
 }
@@ -220,9 +212,7 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 				return false;
 			}
 
-			StripeMetadata *stripeMetadata = list_nth(readState->stripeList,
-													  readState->currentStripe);
-			readState->stripeReadState = BeginStripeRead(stripeMetadata,
+			readState->stripeReadState = BeginStripeRead(readState->currentStripeMetadata,
 														 readState->relation,
 														 readState->tupleDescriptor,
 														 readState->projectedColumnList,
@@ -239,9 +229,7 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 
 		if (rowNumber)
 		{
-			StripeMetadata *stripeMetadata = list_nth(readState->stripeList,
-													  readState->currentStripe);
-			*rowNumber = stripeMetadata->firstRowNumber +
+			*rowNumber = readState->currentStripeMetadata->firstRowNumber +
 						 readState->stripeReadState->currentRow - 1;
 		}
 
@@ -367,8 +355,7 @@ StripeReadInProgress(ColumnarReadState *readState)
 static bool
 HasUnreadStripe(ColumnarReadState *readState)
 {
-	uint32 stripeCount = list_length(readState->stripeList);
-	return readState->currentStripe < stripeCount;
+	return readState->currentStripeMetadata != NULL;
 }
 
 
@@ -380,7 +367,9 @@ void
 ColumnarRescan(ColumnarReadState *readState)
 {
 	readState->stripeReadState = NULL;
-	readState->currentStripe = 0;
+	readState->currentStripeMetadata = FindNextStripeByRowNumber(readState->relation,
+																 COLUMNAR_INVALID_ROW_NUMBER,
+																 GetTransactionSnapshot());
 	readState->chunkGroupsFiltered = 0;
 }
 
@@ -392,7 +381,11 @@ void
 ColumnarEndRead(ColumnarReadState *readState)
 {
 	MemoryContextDelete(readState->stripeReadContext);
-	list_free_deep(readState->stripeList);
+	if (readState->currentStripeMetadata)
+	{
+		pfree(readState->currentStripeMetadata);
+	}
+
 	pfree(readState);
 }
 
@@ -445,17 +438,23 @@ EndStripeRead(StripeReadState *stripeReadState)
 
 
 /*
- * AdvanceStripeRead updates chunkGroupsFiltered and increments currentStripe
- * for next stripe read.
+ * AdvanceStripeRead updates chunkGroupsFiltered and sets
+ * currentStripeMetadata for next stripe read.
  */
 static void
 AdvanceStripeRead(ColumnarReadState *readState)
 {
 	readState->chunkGroupsFiltered +=
 		readState->stripeReadState->chunkGroupsFiltered;
+
+	uint64 lastReadRowNumber = readState->currentStripeMetadata->firstRowNumber +
+							   readState->currentStripeMetadata->rowCount - 1;
+
 	EndStripeRead(readState->stripeReadState);
 
-	readState->currentStripe++;
+	readState->currentStripeMetadata = FindNextStripeByRowNumber(readState->relation,
+																 lastReadRowNumber,
+																 GetTransactionSnapshot());
 	readState->stripeReadState = NULL;
 	MemoryContextReset(readState->stripeReadContext);
 }
