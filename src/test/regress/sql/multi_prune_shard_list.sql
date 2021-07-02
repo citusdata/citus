@@ -233,6 +233,11 @@ SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2999;
 SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col >= 2500;
 SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2000;
 
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 1001;
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col >= 1001;
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col > 1000;
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col >= 1000;
+
 -- we didn't have such an off-by-one error in upper bound
 -- calculation, but let's test such cases too
 SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col <= 4001;

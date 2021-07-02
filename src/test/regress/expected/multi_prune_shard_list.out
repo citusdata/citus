@@ -84,7 +84,7 @@ SELECT prune_using_both_values('pruning', 'tomato', 'rose');
 
 -- unit test of the equality expression generation code
 SELECT debug_equality_expression('pruning');
-                                                                                                                                                                           debug_equality_expression
+                                                                                                                                                                            debug_equality_expression
 ---------------------------------------------------------------------
  {OPEXPR :opno 98 :opfuncid 67 :opresulttype 16 :opretset false :opcollid 0 :inputcollid 100 :args ({VAR :varno 1 :varattno 1 :vartype 25 :vartypmod -1 :varcollid 100 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} {CONST :consttype 25 :consttypmod -1 :constcollid 100 :constlen -1 :constbyval false :constisnull true :location -1 :constvalue <>}) :location -1}
 (1 row)
@@ -579,6 +579,30 @@ SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 2000;
  t
 (1 row)
 
+SELECT SUM(dist_col)=3800+6500 FROM range_dist_table_1 WHERE dist_col > 1001;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col >= 1001;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col > 1000;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT SUM(dist_col)=1001+3800+6500 FROM range_dist_table_1 WHERE dist_col >= 1000;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 -- we didn't have such an off-by-one error in upper bound
 -- calculation, but let's test such cases too
 SELECT SUM(dist_col)=1001+3800 FROM range_dist_table_1 WHERE dist_col <= 4001;
@@ -642,8 +666,6 @@ WHERE dist_col >= '(10,57)'::comp_type AND
       dist_col <= '(10,95)'::comp_type
 ORDER BY dist_col;
  dist_col
-           dist_col
- dist_col
 ---------------------------------------------------------------------
  (10,60)
  (10,91)
@@ -652,8 +674,6 @@ ORDER BY dist_col;
 SELECT * FROM range_dist_table_2
 WHERE dist_col >= '(10,57)'::comp_type
 ORDER BY dist_col;
- dist_col
-           dist_col
  dist_col
 ---------------------------------------------------------------------
  (10,60)
