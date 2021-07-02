@@ -254,31 +254,31 @@ SELECT create_distributed_table('range_dist_table_2', 'dist_col', 'range');
 
 CALL public.create_range_partitioned_shards(
 	'range_dist_table_2',
-    '{"(1000024218,2439449798159018)","(1000024218,5817149518686890)",
-	  "(1000024218,9017149518686890)","(2000024300,1000000000000000)"}',
-	'{"(1000024218,2533274790395903)","(1000024218,5910974510923775)",
-	  "(1000024218,9080974510923775)","(2000024300,1000000000000000)"}');
+    '{"(10,24)","(10,58)",
+	  "(10,90)","(20,100)"}',
+	'{"(10,25)","(10,65)",
+	  "(10,99)","(20,100)"}');
 
-INSERT INTO range_dist_table_2 VALUES ((1000024218, 2439449798159018));
-INSERT INTO range_dist_table_2 VALUES ((1000024218, 5817149518686890));
-INSERT INTO range_dist_table_2 VALUES ((1000024218, 9047149518686890));
-INSERT INTO range_dist_table_2 VALUES ((2000024300, 1000000000000000));
+INSERT INTO range_dist_table_2 VALUES ((10, 24));
+INSERT INTO range_dist_table_2 VALUES ((10, 60));
+INSERT INTO range_dist_table_2 VALUES ((10, 91));
+INSERT INTO range_dist_table_2 VALUES ((20, 100));
 
-SELECT dist_col='(1000024218, 5817149518686890)'::comp_type FROM range_dist_table_2
-WHERE dist_col >= '(1000024218,2533274790395904)'::comp_type AND
-      dist_col <= '(1000024218,7007199254740991)'::comp_type;
+SELECT dist_col='(10, 60)'::comp_type FROM range_dist_table_2
+WHERE dist_col >= '(10,26)'::comp_type AND
+      dist_col <= '(10,75)'::comp_type;
 
 SELECT * FROM range_dist_table_2
-WHERE dist_col >= '(1000024218,5700000000000000)'::comp_type AND
-      dist_col <= '(1000024218,9090974510923775)'::comp_type
+WHERE dist_col >= '(10,57)'::comp_type AND
+      dist_col <= '(10,95)'::comp_type
 ORDER BY dist_col;
 
 SELECT * FROM range_dist_table_2
-WHERE dist_col >= '(1000024218,5700000000000000)'::comp_type
+WHERE dist_col >= '(10,57)'::comp_type
 ORDER BY dist_col;
 
-SELECT dist_col='(2000024300,1000000000000000)'::comp_type FROM range_dist_table_2
-WHERE dist_col > '(2000024300,999999999999999)'::comp_type;
+SELECT dist_col='(20,100)'::comp_type FROM range_dist_table_2
+WHERE dist_col > '(20,99)'::comp_type;
 
 DROP TABLE range_dist_table_1, range_dist_table_2;
 DROP TYPE comp_type CASCADE;
