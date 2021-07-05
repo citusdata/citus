@@ -92,8 +92,6 @@ static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
 static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
-static void UpdateHasmetadataOnWorkersWithMetadata(const char *nodeNameString,
-												   int32 nodePort, char *hasMetadata);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
@@ -210,8 +208,11 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		return;
 	}
 
+<<<<<<< HEAD
 	UseCoordinatedTransaction();
 	UpdateHasmetadataOnWorkersWithMetadata(nodeNameString, nodePort, "true");
+=======
+>>>>>>> Use SetWorkerColumn
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 
 	if (!NodeIsPrimary(workerNode))
@@ -225,6 +226,9 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
 	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
+
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, true);
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, true);
 }
 
 
@@ -329,7 +333,8 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		}
 	}
 
-	UpdateHasmetadataOnWorkersWithMetadata(nodeNameString, nodePort, "false");
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, false);
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, false);
 
 	PG_RETURN_VOID();
 }
@@ -629,33 +634,6 @@ MetadataCreateCommands(void)
 	}
 
 	return metadataSnapshotCommandList;
-}
-
-
-static void
-UpdateHasmetadataOnWorkersWithMetadata(const char *nodeNameString, int32 nodePort,
-									   char *hasMetadata)
-{
-	char *extensionOwner = CitusExtensionOwnerName();
-	StringInfo updateCommand = makeStringInfo();
-	appendStringInfo(updateCommand,
-					 "UPDATE pg_dist_node SET hasmetadata = %s "
-					 "WHERE nodename = '%s' AND nodeport = %d",
-					 hasMetadata, quote_identifier(nodeNameString), nodePort);
-
-	List *updateCommandL = list_make1(updateCommand->data);
-
-	List *targetWorkerSet = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
-													ShareLock);
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, targetWorkerSet)
-	{
-		SendOptionalCommandListToWorkerInTransaction(nodeNameString,
-													 nodePort,
-													 extensionOwner,
-													 updateCommandL);
-	}
 }
 
 
@@ -1110,6 +1088,40 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 					 quote_literal_cstr(qualifiedRelationName), colocationId);
 
 	return command->data;
+}
+
+
+/*
+ * NodeHasmetadataUpdateCommand generates and returns a SQL UPDATE command
+ * that updates the hasmetada column of pg_dist_node, for the given nodeid.
+ */
+char *
+NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata)
+{
+	StringInfo updateCommand = makeStringInfo();
+	char *hasMetadataString = hasMetadata ? "TRUE" : "FALSE";
+	appendStringInfo(updateCommand,
+					 "UPDATE pg_dist_node SET hasmetadata = %s "
+					 "WHERE nodeid = %u",
+					 hasMetadataString, nodeId);
+	return updateCommand->data;
+}
+
+
+/*
+ * NodeMetadataSyncedUpdateCommand generates and returns a SQL UPDATE command
+ * that updates the metadataSynced column of pg_dist_node, for the given nodeid.
+ */
+char *
+NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced)
+{
+	StringInfo updateCommand = makeStringInfo();
+	char *hasMetadataString = metadataSynced ? "TRUE" : "FALSE";
+	appendStringInfo(updateCommand,
+					 "UPDATE pg_dist_node SET metadatasynced = %s "
+					 "WHERE nodeid = %u",
+					 hasMetadataString, nodeId);
+	return updateCommand->data;
 }
 
 

@@ -1557,7 +1557,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
  * (see pg_dist_node.h) on the worker in pg_dist_node.
  * It returns the new worker node after the modification.
  */
-static WorkerNode *
+WorkerNode *
 SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 {
 	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
@@ -1575,7 +1575,8 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 		case Anum_pg_dist_node_hasmetadata:
 		{
 			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "hasmetadata");
-
+			metadataSyncCommand = NodeHasmetadataUpdateCommand(workerNode->nodeId,
+															   DatumGetBool(value));
 			break;
 		}
 
@@ -1598,7 +1599,8 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 		case Anum_pg_dist_node_metadatasynced:
 		{
 			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "metadatasynced");
-
+			metadataSyncCommand = NodeMetadataSyncedUpdateCommand(workerNode->nodeId,
+																  DatumGetBool(value));
 			break;
 		}
 
