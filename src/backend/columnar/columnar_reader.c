@@ -85,10 +85,14 @@ struct ColumnarReadState
 
 /* static function declarations */
 static MemoryContext CreateStripeReadMemoryContext(void);
-static void ReadStripeRowByRowNumber(StripeReadState *stripeReadState,
-									 StripeMetadata *stripeMetadata,
+static bool ColumnarReadIsCurrentStripe(ColumnarReadState *readState,
+										uint64 rowNumber);
+static StripeMetadata * ColumnarReadGetCurrentStripe(ColumnarReadState *readState);
+static void ReadStripeRowByRowNumber(ColumnarReadState *readState,
 									 uint64 rowNumber, Datum *columnValues,
 									 bool *columnNulls);
+static bool StripeReadIsCurrentChunkGroup(StripeReadState *stripeReadState,
+										  int chunkGroupIndex);
 static void ReadChunkGroupRowByRowOffset(ChunkGroupReadState *chunkGroupReadState,
 										 StripeMetadata *stripeMetadata,
 										 uint64 stripeRowOffset, Datum *columnValues,
@@ -246,36 +250,76 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
  * exists, then returns false.
  */
 bool
-ColumnarReadRowByRowNumber(Relation relation, uint64 rowNumber,
-						   List *neededColumnList, Datum *columnValues,
+ColumnarReadRowByRowNumber(ColumnarReadState *readState,
+						   uint64 rowNumber, Datum *columnValues,
 						   bool *columnNulls, Snapshot snapshot)
 {
-	StripeMetadata *stripeMetadata = FindStripeByRowNumber(relation, rowNumber, snapshot);
-	if (stripeMetadata == NULL)
+	if (!ColumnarReadIsCurrentStripe(readState, rowNumber))
 	{
-		/* no such row exists */
+		Relation columnarRelation = readState->relation;
+		StripeMetadata *stripeMetadata = FindStripeByRowNumber(columnarRelation,
+															   rowNumber, snapshot);
+		if (stripeMetadata == NULL)
+		{
+			/* no such row exists */
+			return false;
+		}
+
+		/* do the cleanup before reading a new stripe */
+		ColumnarResetRead(readState);
+
+		TupleDesc relationTupleDesc = RelationGetDescr(columnarRelation);
+		List *whereClauseList = NIL;
+		List *whereClauseVars = NIL;
+		MemoryContext stripeReadContext = readState->stripeReadContext;
+		readState->stripeReadState = BeginStripeRead(stripeMetadata,
+													 columnarRelation,
+													 relationTupleDesc,
+													 readState->projectedColumnList,
+													 whereClauseList,
+													 whereClauseVars,
+													 stripeReadContext);
+
+		readState->currentStripeMetadata = stripeMetadata;
+	}
+
+	ReadStripeRowByRowNumber(readState, rowNumber, columnValues, columnNulls);
+
+	return true;
+}
+
+
+/*
+ * ColumnarReadIsCurrentStripe returns true if stripe being read contains
+ * row with given rowNumber.
+ */
+static bool
+ColumnarReadIsCurrentStripe(ColumnarReadState *readState, uint64 rowNumber)
+{
+	if (!StripeReadInProgress(readState))
+	{
 		return false;
 	}
 
-	TupleDesc relationTupleDesc = RelationGetDescr(relation);
-	List *whereClauseList = NIL;
-	List *whereClauseVars = NIL;
-	MemoryContext stripeReadContext = CreateStripeReadMemoryContext();
-	StripeReadState *stripeReadState = BeginStripeRead(stripeMetadata,
-													   relation,
-													   relationTupleDesc,
-													   neededColumnList,
-													   whereClauseList,
-													   whereClauseVars,
-													   stripeReadContext);
+	StripeMetadata *currentStripeMetadata = readState->currentStripeMetadata;
+	if (rowNumber >= currentStripeMetadata->firstRowNumber &&
+		rowNumber <= StripeGetHighestRowNumber(currentStripeMetadata))
+	{
+		return true;
+	}
 
-	ReadStripeRowByRowNumber(stripeReadState, stripeMetadata, rowNumber,
-							 columnValues, columnNulls);
+	return false;
+}
 
-	EndStripeRead(stripeReadState);
-	MemoryContextReset(stripeReadContext);
 
-	return true;
+/*
+ * ColumnarReadGetCurrentStripe returns StripeMetadata for the stripe that is
+ * being read.
+ */
+static StripeMetadata *
+ColumnarReadGetCurrentStripe(ColumnarReadState *readState)
+{
+	return readState->currentStripeMetadata;
 }
 
 
@@ -285,11 +329,13 @@ ColumnarReadRowByRowNumber(Relation relation, uint64 rowNumber,
  * Errors out if no such row exists in the stripe being read.
  */
 static void
-ReadStripeRowByRowNumber(StripeReadState *stripeReadState,
-						 StripeMetadata *stripeMetadata,
+ReadStripeRowByRowNumber(ColumnarReadState *readState,
 						 uint64 rowNumber, Datum *columnValues,
 						 bool *columnNulls)
 {
+	StripeMetadata *stripeMetadata = ColumnarReadGetCurrentStripe(readState);
+	StripeReadState *stripeReadState = readState->stripeReadState;
+
 	if (rowNumber < stripeMetadata->firstRowNumber)
 	{
 		/* not expected but be on the safe side */
@@ -298,21 +344,42 @@ ReadStripeRowByRowNumber(StripeReadState *stripeReadState,
 
 	/* find the exact chunk group to be read */
 	uint64 stripeRowOffset = rowNumber - stripeMetadata->firstRowNumber;
-	stripeReadState->chunkGroupIndex = stripeRowOffset /
-									   stripeMetadata->chunkGroupRowCount;
-	stripeReadState->chunkGroupReadState = BeginChunkGroupRead(
-		stripeReadState->stripeBuffers,
-		stripeReadState->chunkGroupIndex,
-		stripeReadState->tupleDescriptor,
-		stripeReadState->projectedColumnList,
-		stripeReadState->stripeReadContext);
+	int chunkGroupIndex = stripeRowOffset / stripeMetadata->chunkGroupRowCount;
+	if (!StripeReadIsCurrentChunkGroup(stripeReadState, chunkGroupIndex))
+	{
+		if (stripeReadState->chunkGroupReadState)
+		{
+			EndChunkGroupRead(stripeReadState->chunkGroupReadState);
+		}
+
+		stripeReadState->chunkGroupIndex = chunkGroupIndex;
+		stripeReadState->chunkGroupReadState = BeginChunkGroupRead(
+			stripeReadState->stripeBuffers,
+			stripeReadState->chunkGroupIndex,
+			stripeReadState->tupleDescriptor,
+			stripeReadState->projectedColumnList,
+			stripeReadState->stripeReadContext);
+	}
 
 	ReadChunkGroupRowByRowOffset(stripeReadState->chunkGroupReadState,
 								 stripeMetadata, stripeRowOffset,
 								 columnValues, columnNulls);
+}
 
-	EndChunkGroupRead(stripeReadState->chunkGroupReadState);
-	stripeReadState->chunkGroupReadState = NULL;
+
+/*
+ * StripeReadIsCurrentChunkGroup returns true if chunk group being read is
+ * the has given chunkGroupIndex in its stripe.
+ */
+static bool
+StripeReadIsCurrentChunkGroup(StripeReadState *stripeReadState, int chunkGroupIndex)
+{
+	if (!stripeReadState->chunkGroupReadState)
+	{
+		return false;
+	}
+
+	return (stripeReadState->chunkGroupIndex == chunkGroupIndex);
 }
 
 
@@ -387,6 +454,24 @@ ColumnarEndRead(ColumnarReadState *readState)
 	}
 
 	pfree(readState);
+}
+
+
+/*
+ * ColumnarResetRead resets the stripe and the chunk group that is
+ * being read currently (if any).
+ */
+void
+ColumnarResetRead(ColumnarReadState *readState)
+{
+	if (StripeReadInProgress(readState))
+	{
+		pfree(readState->currentStripeMetadata);
+		readState->currentStripeMetadata = NULL;
+
+		readState->stripeReadState = NULL;
+		MemoryContextReset(readState->stripeReadContext);
+	}
 }
 
 

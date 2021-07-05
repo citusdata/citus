@@ -87,6 +87,25 @@ typedef struct ColumnarScanDescData
 
 typedef struct ColumnarScanDescData *ColumnarScanDesc;
 
+/*
+ * IndexFetchColumnarData is the scan state passed between index_fetch_begin,
+ * index_fetch_reset, index_fetch_end, index_fetch_tuple calls.
+ */
+typedef struct IndexFetchColumnarData
+{
+	IndexFetchTableData cs_base;
+	ColumnarReadState *cs_readState;
+
+	/*
+	 * We initialize cs_readState lazily in the first columnar_index_fetch_tuple
+	 * call. However, we want to do memory allocations in a sub MemoryContext of
+	 * columnar_index_fetch_begin. For this reason, we store scanContext in
+	 * columnar_index_fetch_begin.
+	 */
+	MemoryContext scanContext;
+} IndexFetchColumnarData;
+
+
 static object_access_hook_type PrevObjectAccessHook = NULL;
 static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 
@@ -409,29 +428,43 @@ columnar_index_fetch_begin(Relation rel)
 
 	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
 
-	IndexFetchTableData *scan = palloc0(sizeof(IndexFetchTableData));
-	scan->rel = rel;
-	return scan;
+	MemoryContext scanContext = CreateColumnarScanMemoryContext();
+	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
+
+	IndexFetchColumnarData *scan = palloc0(sizeof(IndexFetchColumnarData));
+	scan->cs_base.rel = rel;
+	scan->cs_readState = NULL;
+	scan->scanContext = scanContext;
+
+	MemoryContextSwitchTo(oldContext);
+
+	return &scan->cs_base;
 }
 
 
 static void
-columnar_index_fetch_reset(IndexFetchTableData *scan)
+columnar_index_fetch_reset(IndexFetchTableData *sscan)
 {
 	/* no-op */
 }
 
 
 static void
-columnar_index_fetch_end(IndexFetchTableData *scan)
+columnar_index_fetch_end(IndexFetchTableData *sscan)
 {
-	columnar_index_fetch_reset(scan);
-	pfree(scan);
+	columnar_index_fetch_reset(sscan);
+
+	IndexFetchColumnarData *scan = (IndexFetchColumnarData *) sscan;
+	if (scan->cs_readState)
+	{
+		ColumnarEndRead(scan->cs_readState);
+		scan->cs_readState = NULL;
+	}
 }
 
 
 static bool
-columnar_index_fetch_tuple(struct IndexFetchTableData *scan,
+columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 						   ItemPointer tid,
 						   Snapshot snapshot,
 						   TupleTableSlot *slot,
@@ -451,19 +484,35 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *scan,
 
 	ExecClearTuple(slot);
 
-	/* we need all columns */
-	int natts = scan->rel->rd_att->natts;
-	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
-	TupleDesc relationTupleDesc = RelationGetDescr(scan->rel);
-	List *relationColumnList = NeededColumnsList(relationTupleDesc, attr_needed);
+	IndexFetchColumnarData *scan = (IndexFetchColumnarData *) sscan;
+	Relation columnarRelation = scan->cs_base.rel;
+
+	/* initialize read state for the first row */
+	if (scan->cs_readState == NULL)
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(scan->scanContext);
+
+		/* we need all columns */
+		int natts = columnarRelation->rd_att->natts;
+		Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
+
+		/* no quals for index scan */
+		List *scanQual = NIL;
+
+		scan->cs_readState = init_columnar_read_state(columnarRelation,
+													  slot->tts_tupleDescriptor,
+													  attr_needed, scanQual);
+		MemoryContextSwitchTo(oldContext);
+	}
+
 	uint64 rowNumber = tid_to_row_number(*tid);
-	if (!ColumnarReadRowByRowNumber(scan->rel, rowNumber, relationColumnList,
-									slot->tts_values, slot->tts_isnull, snapshot))
+	if (!ColumnarReadRowByRowNumber(scan->cs_readState, rowNumber, slot->tts_values,
+									slot->tts_isnull, snapshot))
 	{
 		return false;
 	}
 
-	slot->tts_tableOid = RelationGetRelid(scan->rel);
+	slot->tts_tableOid = RelationGetRelid(columnarRelation);
 	slot->tts_tid = *tid;
 	ExecStoreVirtualTuple(slot);
 
