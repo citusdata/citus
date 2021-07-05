@@ -5,21 +5,6 @@ CREATE OR REPLACE FUNCTION pg_catalog.citus_prepare_pg_upgrade()
     AS $cppu$
 BEGIN
     --
-    -- Drop existing backup tables
-    --
-    DROP TABLE IF EXISTS public.pg_dist_partition;
-    DROP TABLE IF EXISTS public.pg_dist_shard;
-    DROP TABLE IF EXISTS public.pg_dist_placement;
-    DROP TABLE IF EXISTS public.pg_dist_node_metadata;
-    DROP TABLE IF EXISTS public.pg_dist_node;
-    DROP TABLE IF EXISTS public.pg_dist_local_group;
-    DROP TABLE IF EXISTS public.pg_dist_transaction;
-    DROP TABLE IF EXISTS public.pg_dist_colocation;
-    DROP TABLE IF EXISTS public.pg_dist_authinfo;
-    DROP TABLE IF EXISTS public.pg_dist_poolinfo;
-    DROP TABLE IF EXISTS public.pg_dist_rebalance_strategy;
-
-    --
     -- backup citus catalog tables
     --
     CREATE TABLE public.pg_dist_partition AS SELECT * FROM pg_catalog.pg_dist_partition;
@@ -40,8 +25,7 @@ BEGIN
         node_capacity_function::regprocedure::text,
         shard_allowed_on_node_function::regprocedure::text,
         default_threshold,
-        minimum_threshold,
-        improvement_threshold
+        minimum_threshold
     FROM pg_catalog.pg_dist_rebalance_strategy;
 
     -- store upgrade stable identifiers on pg_dist_object catalog
