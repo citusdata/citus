@@ -23,6 +23,7 @@
 #include "optimizer/paths.h"
 #include "optimizer/restrictinfo.h"
 #include "utils/relcache.h"
+#include "utils/spccache.h"
 
 #include "columnar/columnar_customscan.h"
 #include "columnar/columnar_metadata.h"
@@ -60,8 +61,8 @@ static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPred
 static bool IsNotIndexPath(Path *path);
 static Path * CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
 									 RangeTblEntry *rte);
-static Cost ColumnarScanCost(Oid relationId, int numberOfColumnsRead);
-static Cost ColumnarPerStripeScanCost(Oid relationId,
+static Cost ColumnarScanCost(RelOptInfo *rel, Oid relationId, int numberOfColumnsRead);
+static Cost ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId,
 									  int numberOfColumnsRead);
 static uint64 ColumnarTableStripeCount(Oid relationId);
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
@@ -270,7 +271,7 @@ CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	path->startup_cost = 0;
 	int numberOfColumnsRead = bms_num_members(rte->selectedCols);
 	path->total_cost = path->startup_cost +
-					   ColumnarScanCost(rte->relid, numberOfColumnsRead);
+					   ColumnarScanCost(rel, rte->relid, numberOfColumnsRead);
 
 	return (Path *) cspath;
 }
@@ -282,10 +283,10 @@ CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * need to be read.
  */
 static Cost
-ColumnarScanCost(Oid relationId, int numberOfColumnsRead)
+ColumnarScanCost(RelOptInfo *rel, Oid relationId, int numberOfColumnsRead)
 {
 	return ColumnarTableStripeCount(relationId) *
-		   ColumnarPerStripeScanCost(relationId, numberOfColumnsRead);
+		   ColumnarPerStripeScanCost(rel, relationId, numberOfColumnsRead);
 }
 
 
@@ -295,7 +296,7 @@ ColumnarScanCost(Oid relationId, int numberOfColumnsRead)
  * read during scan operation.
  */
 static Cost
-ColumnarPerStripeScanCost(Oid relationId, int numberOfColumnsRead)
+ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId, int numberOfColumnsRead)
 {
 	Relation relation = RelationIdGetRelation(relationId);
 	List *stripeList = StripesForRelfilenode(relation->rd_node);
@@ -324,6 +325,20 @@ ColumnarPerStripeScanCost(Oid relationId, int numberOfColumnsRead)
 	double columnSelectionRatio = numberOfColumnsRead / (double) maxColumnCount;
 	Cost tableScanCost = (double) totalStripeSize / BLCKSZ * columnSelectionRatio;
 	Cost perStripeScanCost = tableScanCost / list_length(stripeList);
+
+	/*
+	 * Finally, multiply the cost of reading a single stripe by seq page read
+	 * cost to make our estimation scale compatible with postgres.
+	 * Since we are calculating the cost for a single stripe here, we use seq
+	 * page cost instead of random page cost. This is because, random page
+	 * access only happens when switching between columns, which is pretty
+	 * much neglactable.
+	 */
+	double relSpaceSeqPageCost;
+	get_tablespace_page_costs(rel->reltablespace,
+							  NULL, &relSpaceSeqPageCost);
+	perStripeScanCost = perStripeScanCost * relSpaceSeqPageCost;
+
 	return perStripeScanCost;
 }
 
