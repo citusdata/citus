@@ -103,7 +103,6 @@ static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relatio
 										 TupleDesc tupleDesc, List *projectedColumnList,
 										 List *whereClauseList, List *whereClauseVars,
 										 MemoryContext stripeReadContext);
-static void EndStripeRead(StripeReadState *stripeReadState);
 static void AdvanceStripeRead(ColumnarReadState *readState);
 static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
 							  bool *columnNulls);
@@ -513,16 +512,6 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 
 
 /*
- * EndStripeRead finishes a stripe read.
- */
-static void
-EndStripeRead(StripeReadState *stripeReadState)
-{
-	pfree(stripeReadState);
-}
-
-
-/*
  * AdvanceStripeRead updates chunkGroupsFiltered and sets
  * currentStripeMetadata for next stripe read.
  */
@@ -534,9 +523,6 @@ AdvanceStripeRead(ColumnarReadState *readState)
 
 	uint64 lastReadRowNumber =
 		StripeGetHighestRowNumber(readState->currentStripeMetadata);
-
-	EndStripeRead(readState->stripeReadState);
-
 	readState->currentStripeMetadata = FindNextStripeByRowNumber(readState->relation,
 																 lastReadRowNumber,
 																 GetTransactionSnapshot());
