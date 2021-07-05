@@ -1793,13 +1793,35 @@ RelationRestrictionPartitionKeyIndex(Query* originalQuery, RelationRestriction *
 		partitionKeyTargetAttrIndex++;
 
 		if (!targetEntry->resjunk &&
-			IsA(targetExpression, Var) &&
-			IsPartitionColumn(targetExpression, relationPlannerParseQuery))
+			IsA(targetExpression, Var))
 		{
 			Var *targetColumn = (Var *) targetExpression;
+
+			// elog(WARNING, "%d %d", targetColumn->varno, targetColumn->varattno);
+
+			if (!IsPartitionColumn(targetExpression, relationPlannerParseQuery)) {
+				continue;
+			}
+
+			Oid relationId = InvalidOid;
+			Var *column = NULL;
+
 			RangeTblEntry* res = (RangeTblEntry*) list_nth(relationPlannerParseQuery->rtable, targetColumn->varno - 1);
+			if (res->rtekind == RTE_JOIN) {
+				Var* cur = NULL;
+				int index = 1;
+				foreach_ptr(cur, res->joinaliasvars) {
+					if (index == targetColumn->varattno) {
+						res = (RangeTblEntry*) list_nth(relationPlannerParseQuery->rtable, cur->varno - 1);
+						break;
+					}
+					index++;
+				}
+			}
 			if (res->rtekind == RTE_RELATION && GetRTEIdentity(res) == findRteIdentityContext->rteIdentity)
 			{
+				FindReferencedTableColumn(targetExpression, NIL, relationPlannerParseQuery, &relationId, &column);
+				targetColumn = column;
 				*partitionKeyIndex = partitionKeyTargetAttrIndex;
 				return (Var*)copyObject(targetColumn);
 			}
