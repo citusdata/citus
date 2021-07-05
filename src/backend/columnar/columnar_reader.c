@@ -447,8 +447,8 @@ AdvanceStripeRead(ColumnarReadState *readState)
 	readState->chunkGroupsFiltered +=
 		readState->stripeReadState->chunkGroupsFiltered;
 
-	uint64 lastReadRowNumber = readState->currentStripeMetadata->firstRowNumber +
-							   readState->currentStripeMetadata->rowCount - 1;
+	uint64 lastReadRowNumber =
+		StripeGetHighestRowNumber(readState->currentStripeMetadata);
 
 	EndStripeRead(readState->stripeReadState);
 

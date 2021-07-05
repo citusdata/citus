@@ -101,7 +101,7 @@ static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
 static uint64 LookupStorageId(RelFileNode relfilenode);
-static uint64 GetHighestUsedFirstRowNumber(uint64 storageId);
+static uint64 GetHighestUsedRowNumber(uint64 storageId);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
 												   Oid storageIdIndexId,
@@ -666,14 +666,23 @@ FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
 		return NULL;
 	}
 
-	uint64 stripeMaxRowNumber = stripeMetadata->firstRowNumber +
-								stripeMetadata->rowCount - 1;
-	if (rowNumber > stripeMaxRowNumber)
+	if (rowNumber > StripeGetHighestRowNumber(stripeMetadata))
 	{
 		return NULL;
 	}
 
 	return stripeMetadata;
+}
+
+
+/*
+ * StripeGetHighestRowNumber returns rowNumber of the row with highest
+ * rowNumber in given stripe.
+ */
+uint64
+StripeGetHighestRowNumber(StripeMetadata *stripeMetadata)
+{
+	return stripeMetadata->firstRowNumber + stripeMetadata->rowCount - 1;
 }
 
 
@@ -1489,41 +1498,33 @@ ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
 
 	uint64 reservedStripeId = highestId + 1;
 	uint64 reservedOffset = highestOffset + 1;
-	uint64 reservedRowNumber = GetHighestUsedFirstRowNumber(storageId) + 1;
+	uint64 reservedRowNumber = GetHighestUsedRowNumber(storageId) + 1;
 	ColumnarStorageUpdateCurrent(rel, isUpgrade, reservedStripeId,
 								 reservedRowNumber, reservedOffset);
 }
 
 
 /*
- * GetHighestUsedFirstRowNumber returns the highest used first_row_number
- * for given storageId. Returns COLUMNAR_INVALID_ROW_NUMBER if storage with
+ * GetHighestUsedRowNumber returns the highest used rowNumber for given
+ * storageId. Returns COLUMNAR_INVALID_ROW_NUMBER if storage with
  * storageId has no stripes.
  * Note that normally we would use ColumnarStorageGetReservedRowNumber
  * to decide that. However, this function is designed to be used when
  * building the metapage itself during upgrades.
  */
 static uint64
-GetHighestUsedFirstRowNumber(uint64 storageId)
+GetHighestUsedRowNumber(uint64 storageId)
 {
+	uint64 highestRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
+
 	List *stripeMetadataList = ReadDataFileStripeList(storageId,
 													  GetTransactionSnapshot());
-	if (list_length(stripeMetadataList) == 0)
-	{
-		return COLUMNAR_INVALID_ROW_NUMBER;
-	}
-
-	/* XXX: Better to have an invalid value for StripeMetadata.rowCount too */
-	uint64 stripeRowCount = -1;
-	uint64 highestFirstRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
-
 	StripeMetadata *stripeMetadata = NULL;
 	foreach_ptr(stripeMetadata, stripeMetadataList)
 	{
-		highestFirstRowNumber = Max(highestFirstRowNumber,
-									stripeMetadata->firstRowNumber);
-		stripeRowCount = stripeMetadata->rowCount;
+		highestRowNumber = Max(highestRowNumber,
+							   StripeGetHighestRowNumber(stripeMetadata));
 	}
 
-	return highestFirstRowNumber + stripeRowCount - 1;
+	return highestRowNumber;
 }
