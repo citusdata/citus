@@ -1,4 +1,4 @@
--- citus--10.0-3--10.1-1
+-- citus--10.0-4--10.1-1
 
 -- add the current database to the distributed objects if not already in there.
 -- this is to reliably propagate some of the alter database commands that might be

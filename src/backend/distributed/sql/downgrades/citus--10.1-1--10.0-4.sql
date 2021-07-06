@@ -1,4 +1,8 @@
--- citus--10.1-1--10.0-3
+-- citus--10.1-1--10.0-4
+
+-- This migration file aims to fix the issues with upgrades on clusters without public schema.
+
+-- copy of citus--10.1-1--10.0-3
 
 -- remove databases as distributed objects to prevent unknown object types being managed
 -- on older versions.
