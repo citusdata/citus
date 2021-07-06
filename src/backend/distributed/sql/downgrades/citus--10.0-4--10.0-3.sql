@@ -1,9 +1,0 @@
---
--- 10.0-3--10.0-4 was added later as a patch to fix a bug in our PG upgrade functions
---
--- The upgrade fixes a bug in citus_(prepare|finish)_pg_upgrade. Given the old versions of
--- these functions contain a bug it is better to _not_ restore the old version and keep
--- the patched version of the function.
---
--- This is inline with the downgrade scripts for earlier versions of this patch
---
