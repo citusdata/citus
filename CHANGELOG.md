@@ -1,3 +1,15 @@
+### citus v9.4.5 (July 7, 2021) ###
+
+* Adds a configure flag to enforce security
+
+* Avoids re-using connections for intermediate results
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes a bug that might cause self-deadlocks when COPY used in TX block
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
 ### citus v9.4.4 (December 28, 2020) ###
 
 * Fixes a bug that could cause router queries with local tables to be pushed
