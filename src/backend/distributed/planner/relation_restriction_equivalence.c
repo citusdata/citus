@@ -63,7 +63,7 @@ typedef struct FindQueryContainingRteIdentityContext
 {
 	int targetRTEIdentity;
 	Query *query;
-	Query *tempQuery;
+	Query *parentQuery;
 }FindQueryContainingRteIdentityContext;
 
 /*
@@ -163,10 +163,11 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													queryRteIdentities);
 static Relids QueryRteIdentities(Query *queryTree);
 
+static Query * FindQueryContainingRTEIdentity(Query *mainQuery, int rteIndex);
 static bool FindQueryContainingRTEIdentityInternal(Node *node,
 												   FindQueryContainingRteIdentityContext *
 												   context);
-static Query * FindQueryContainingRTEIdentity(Query *mainQuery, int rteIndex);
+
 
 #if PG_VERSION_NUM >= PG_VERSION_13
 static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
@@ -1807,18 +1808,21 @@ RelationRestrictionPartitionKeyIndex(Query *originalQuery,
 			IsPartitionColumn(targetExpression, originalQueryContainingRTEIdentity))
 		{
 			Var *targetColumn = (Var *) targetExpression;
-
+#if PG_VERSION_NUM < PG_VERSION_13
+/*
+ * As of pg13, columns point to RELATION_RTE so we don't need to do
+ * anything further. Prior to pg13, columns point to JOIN_RTE so we 
+ * find the actual column.
+ */
 			Oid relationId = InvalidOid;
-			Var *column = NULL;
 			FindReferencedTableColumn(targetExpression, NIL,
 									  originalQueryContainingRTEIdentity, &relationId,
-									  &column);
+									  &targetColumn);
 
-			targetColumn = column;
-			RangeTblEntry *resRTE =
-				(RangeTblEntry *) list_nth(originalQueryContainingRTEIdentity->rtable,
-										   targetColumn->varno - 1);
-			if (resRTE->rtekind == RTE_RELATION && GetRTEIdentity(resRTE) ==
+#endif			
+			RangeTblEntry *rteContainingPartitionKey =
+				rt_fetch(targetColumn->varno, originalQueryContainingRTEIdentity->rtable);
+			if (rteContainingPartitionKey->rtekind == RTE_RELATION && GetRTEIdentity(rteContainingPartitionKey) ==
 				targetRTEIndex)
 			{
 				*partitionKeyIndex = partitionKeyTargetAttrIndex;
@@ -1848,7 +1852,15 @@ FindQueryContainingRTEIdentity(Query *mainQuery, int rteIndex)
 
 /*
  * FindQueryContainingRTEIdentityInternal walks on the given node to find a query
- * which has an RTE that has a given rteIdentity.
+ * which has an RTE that has a given rteIdentity. This approach fails to detect when
+ * the top level query might have the column indexes in different order:
+ * explain
+ * SELECT count(*) FROM
+ * (
+ * SELECT user_id,value_2 FROM events_table
+ * UNION
+ * SELECT value_2, user_id FROM (SELECT user_id, value_2, random() FROM events_table) as foo
+ * ) foobar;
  */
 static bool
 FindQueryContainingRTEIdentityInternal(Node *node,
@@ -1861,11 +1873,11 @@ FindQueryContainingRTEIdentityInternal(Node *node,
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		Query *prevQuery = context->tempQuery;
-		context->tempQuery = query;
+		Query *prevQuery = context->parentQuery;
+		context->parentQuery = query;
 		query_tree_walker(query, FindQueryContainingRTEIdentityInternal, context,
 						  QTW_EXAMINE_RTES_BEFORE);
-		context->tempQuery = prevQuery;
+		context->parentQuery = prevQuery;
 		return false;
 	}
 
@@ -1879,7 +1891,7 @@ FindQueryContainingRTEIdentityInternal(Node *node,
 	{
 		if (GetRTEIdentity(rte) == context->targetRTEIdentity)
 		{
-			context->query = context->tempQuery;
+			context->query = context->parentQuery;
 			return true;
 		}
 	}

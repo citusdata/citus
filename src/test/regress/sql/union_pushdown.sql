@@ -655,10 +655,86 @@ LIMIT 1;
 $$);
 
 -- #4781
-CREATE TABLE test_a (id int, k int);
-CREATE TABLE test_b (id int, k int);
+CREATE TABLE test_a (a int, b int, id int, k int);
+CREATE TABLE test_b (a int, b int, id int, k int);
+ALTER TABLE test_a DROP column a;
+ALTER TABLE test_b DROP column a;
 SELECT create_distributed_table('test_a','id');
 SELECT create_distributed_table('test_b','id');
+
+-- try with composite types
+CREATE TYPE comp_type AS (
+    int_field_1 BIGINT,
+    int_field_2 BIGINT
+);
+
+CREATE TABLE range_dist_table_2 (dist_col comp_type);
+SELECT create_distributed_table('range_dist_table_2', 'dist_col', 'range');
+
+CALL public.create_range_partitioned_shards('range_dist_table_2',
+    '{"(10,24)","(10,58)",
+	  "(10,90)","(20,100)"}',
+	'{"(10,25)","(10,65)",
+	  "(10,99)","(20,100)"}');
+INSERT INTO range_dist_table_2 VALUES ((10, 24));
+INSERT INTO range_dist_table_2 VALUES ((10, 60));
+INSERT INTO range_dist_table_2 VALUES ((10, 91));
+INSERT INTO range_dist_table_2 VALUES ((20, 100));
+-- the following can be pushed down
+CREATE OR REPLACE VIEW v2 AS SELECT * from range_dist_table_2 UNION ALL SELECT * from range_dist_table_2;
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(dist_col) FROM v2;
+$$);
+
+DROP TABLE range_dist_table_2 cascade;
+
+-- these should be pushed down.
+SELECT public.explain_has_distributed_subplan($$
+explain SELECT * FROM users_table_part u1 WHERE (user_id) IN
+(
+SELECT user_id FROM users_table_part
+UNION
+SELECT user_id FROM users_table_part
+) ;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+explain SELECT * FROM users_table_part u1 WHERE (user_id) IN
+(
+SELECT user_id FROM (SELECT * FROM users_table_part) as foo
+UNION
+SELECT user_id FROM (SELECT * FROM users_table_part) as bar
+);
+$$);
+
+CREATE OR REPLACE VIEW v AS SELECT * from test_a where k>1 UNION SELECT * from test_b where k<1;
+-- tests with union
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(k) FROM v;
+$$);
+
 
 CREATE OR REPLACE VIEW v AS SELECT * from test_a where k>1 UNION ALL SELECT * from test_b where k<1;
 -- the followings can be pushed down since dist_key is used in the aggregation
@@ -743,6 +819,26 @@ $$);
 SELECT public.explain_has_distributed_subplan($$
 EXPLAIN
 SELECT MAX(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT * FROM users_table_part u1 WHERE (value_1, user_id) IN
+(
+SELECT u1.user_id, user_id FROM users_table_part
+UNION
+SELECT u1.user_id, user_id FROM users_table_part
+);
+$$);
+
+CREATE OR REPLACE VIEW v AS SELECT test_a.* from test_a where k>1 UNION ALL SELECT test_b.* from test_b where k<1;
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT COUNT(*) FROM v;
+$$);
+
+CREATE OR REPLACE VIEW v AS (SELECT * from (SELECT * from test_a)a1 where k>1) UNION ALL SELECT * from (SELECT * from test_b)b1 where k<1;
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT COUNT(*) FROM v;
 $$);
 
 -- order by prevents postgres from optimizing fields so can be pushed down
