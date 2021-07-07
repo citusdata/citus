@@ -1378,13 +1378,6 @@ DeserializeChunkData(StripeBuffers *stripeBuffers, uint64 chunkIndex,
 								 chunkBuffers->valueCompressionType,
 								 chunkBuffers->decompressedValueSize);
 
-			if (chunkBuffers->valueCompressionType != COMPRESSION_NONE)
-			{
-				/* compressed data is not needed anymore */
-				pfree(chunkBuffers->valueBuffer->data);
-				pfree(chunkBuffers->valueBuffer);
-			}
-
 			DeserializeBoolArray(chunkBuffers->existsBuffer,
 								 chunkData->existsArray[columnIndex],
 								 rowCount);

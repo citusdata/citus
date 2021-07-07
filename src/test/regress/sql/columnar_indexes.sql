@@ -391,5 +391,11 @@ WHERE
   circle_col >= circle(point(7, 7), 350) AND
   float_col <= 5.0;
 
+CREATE TABLE revisit_same_cgroup(a INT, b TEXT) USING columnar;
+CREATE INDEX ON revisit_same_cgroup USING HASH (b);
+INSERT INTO revisit_same_cgroup SELECT random()*500, (random()*500)::INT::TEXT FROM generate_series(1, 100000) i;
+
+SELECT sum(a)>-1 FROM revisit_same_cgroup WHERE b = '1';
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;
