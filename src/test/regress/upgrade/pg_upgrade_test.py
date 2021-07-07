@@ -67,6 +67,8 @@ def main(config):
                    NODE_PORTS[COORDINATOR_NAME], AFTER_PG_UPGRADE_SCHEDULE)
 
     citus_prepare_pg_upgrade(config.old_bindir)
+    # prepare should be idempotent, calling it a second time should never fail.
+    citus_prepare_pg_upgrade(config.old_bindir)
     common.stop_databases(config.old_bindir, config.old_datadir)
 
     common.initialize_db_for_cluster(
