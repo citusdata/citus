@@ -18,6 +18,7 @@ BEGIN
     DROP TABLE IF EXISTS public.pg_dist_authinfo;
     DROP TABLE IF EXISTS public.pg_dist_poolinfo;
     DROP TABLE IF EXISTS public.pg_dist_rebalance_strategy;
+    DROP TABLE IF EXISTS public.pg_dist_object;
 
     --
     -- backup citus catalog tables
