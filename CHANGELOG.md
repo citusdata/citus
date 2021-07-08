@@ -1,3 +1,8 @@
+### citus v9.5.6 (July 8, 2021) ###
+
+* Fixes minor bug in `citus_prepare_pg_upgrade` that caused it to lose its
+  idempotency
+
 ### citus v9.5.5 (July 7, 2021) ###
 
 * Adds a configure flag to enforce security
