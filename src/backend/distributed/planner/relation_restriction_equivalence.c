@@ -63,7 +63,6 @@ typedef struct FindQueryContainingRteIdentityContext
 {
 	int targetRTEIdentity;
 	Query *query;
-	Query *parentQuery;
 }FindQueryContainingRteIdentityContext;
 
 /*
@@ -149,9 +148,8 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  firstClass,
 													  AttributeEquivalenceClass *
 													  secondClass);
-static Var * RelationRestrictionPartitionKeyIndex(Query *query, RelationRestriction *
-												  relationRestriction,
-												  Index *partitionKeyIndex);
+static Var * PartitionKeyForRTEIdentityInQuery(Query *query, int targetRTEIndex,
+											   Index *partitionKeyIndex);
 static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
 													  restrictionContext);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
@@ -300,16 +298,17 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 										   &partitionKeyIndex);
 
 			/* union does not have partition key in the target list */
-			if (partitionKeyIndex == 0)
+			if (partitionKeyIndex == 0 || varToBeAdded == NULL)
 			{
 				continue;
 			}
 		}
 		else
 		{
+			int targetRTEIndex = GetRTEIdentity(relationRestriction->rte);
 			varToBeAdded =
-				RelationRestrictionPartitionKeyIndex(originalQuery, relationRestriction,
-													 &partitionKeyIndex);
+				PartitionKeyForRTEIdentityInQuery(originalQuery, targetRTEIndex,
+												  &partitionKeyIndex);
 
 			/* union does not have partition key in the target list */
 			if (partitionKeyIndex == 0)
@@ -317,10 +316,20 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 				continue;
 			}
 
+
 			/*
-			 * we update the varno because we use the original parse tree for finding the
+			 * This should never happen but to be on the safe side, we have this
+			 */
+			if (relationPlannerRoot->simple_rel_array_size < relationRestriction->index)
+			{
+				continue;
+			}
+
+			/*
+			 * We update the varno because we use the original parse tree for finding the
 			 * var. However the rest of the code relies on a query tree that might be different
 			 * than the original parse tree because of postgres optimizations.
+			 * That's why we update the varno to reflect the rteIndex in the modified query tree.
 			 */
 			varToBeAdded->varno = relationRestriction->index;
 		}
@@ -1769,16 +1778,12 @@ ContainsUnionSubquery(Query *queryTree)
 
 
 /*
- * RelationRestrictionPartitionKeyIndex gets a relation restriction and finds the
- * index that the partition key of the relation exists in the query. The query is
- * found in the planner info of the relation restriction.
+ * PartitionKeyForRTEIdentityInQuery finds the partition key var(if exists), in the given original query for the rte that has targetRTEIndex.
  */
 static Var *
-RelationRestrictionPartitionKeyIndex(Query *originalQuery,
-									 RelationRestriction *relationRestriction,
-									 Index *partitionKeyIndex)
+PartitionKeyForRTEIdentityInQuery(Query *originalQuery, int targetRTEIndex,
+								  Index *partitionKeyIndex)
 {
-	int targetRTEIndex = GetRTEIdentity(relationRestriction->rte);
 	Query *originalQueryContainingRTEIdentity =
 		FindQueryContainingRTEIdentity(originalQuery, targetRTEIndex);
 	if (!originalQueryContainingRTEIdentity)
@@ -1792,6 +1797,18 @@ RelationRestrictionPartitionKeyIndex(Query *originalQuery,
 		return NULL;
 	}
 
+	/*
+	 * This approach fails to detect when
+	 * the top level query might have the column indexes in different order:
+	 * explain
+	 * SELECT count(*) FROM
+	 * (
+	 * SELECT user_id,value_2 FROM events_table
+	 * UNION
+	 * SELECT value_2, user_id FROM (SELECT user_id, value_2, random() FROM events_table) as foo
+	 * ) foobar;
+	 * So we hit https://github.com/citusdata/citus/issues/5093.
+	 */
 	List *relationTargetList = originalQueryContainingRTEIdentity->targetList;
 
 	ListCell *targetEntryCell = NULL;
@@ -1809,9 +1826,10 @@ RelationRestrictionPartitionKeyIndex(Query *originalQuery,
 		{
 			Var *targetColumn = (Var *) targetExpression;
 #if PG_VERSION_NUM < PG_VERSION_13
+
 /*
  * As of pg13, columns point to RELATION_RTE so we don't need to do
- * anything further. Prior to pg13, columns point to JOIN_RTE so we 
+ * anything further. Prior to pg13, columns point to JOIN_RTE so we
  * find the actual column.
  */
 			Oid relationId = InvalidOid;
@@ -1819,11 +1837,12 @@ RelationRestrictionPartitionKeyIndex(Query *originalQuery,
 									  originalQueryContainingRTEIdentity, &relationId,
 									  &targetColumn);
 
-#endif			
+#endif
 			RangeTblEntry *rteContainingPartitionKey =
 				rt_fetch(targetColumn->varno, originalQueryContainingRTEIdentity->rtable);
-			if (rteContainingPartitionKey->rtekind == RTE_RELATION && GetRTEIdentity(rteContainingPartitionKey) ==
-				targetRTEIndex)
+
+			if (rteContainingPartitionKey->rtekind == RTE_RELATION &&
+				GetRTEIdentity(rteContainingPartitionKey) == targetRTEIndex)
 			{
 				*partitionKeyIndex = partitionKeyTargetAttrIndex;
 				return (Var *) copyObject(targetColumn);
@@ -1852,15 +1871,7 @@ FindQueryContainingRTEIdentity(Query *mainQuery, int rteIndex)
 
 /*
  * FindQueryContainingRTEIdentityInternal walks on the given node to find a query
- * which has an RTE that has a given rteIdentity. This approach fails to detect when
- * the top level query might have the column indexes in different order:
- * explain
- * SELECT count(*) FROM
- * (
- * SELECT user_id,value_2 FROM events_table
- * UNION
- * SELECT value_2, user_id FROM (SELECT user_id, value_2, random() FROM events_table) as foo
- * ) foobar;
+ * which has an RTE that has a given rteIdentity.
  */
 static bool
 FindQueryContainingRTEIdentityInternal(Node *node,
@@ -1873,11 +1884,14 @@ FindQueryContainingRTEIdentityInternal(Node *node,
 	if (IsA(node, Query))
 	{
 		Query *query = (Query *) node;
-		Query *prevQuery = context->parentQuery;
-		context->parentQuery = query;
-		query_tree_walker(query, FindQueryContainingRTEIdentityInternal, context,
-						  QTW_EXAMINE_RTES_BEFORE);
-		context->parentQuery = prevQuery;
+		Query *parentQuery = context->query;
+		context->query = query;
+		if (query_tree_walker(query, FindQueryContainingRTEIdentityInternal, context,
+							  QTW_EXAMINE_RTES_BEFORE))
+		{
+			return true;
+		}
+		context->query = parentQuery;
 		return false;
 	}
 
@@ -1891,7 +1905,6 @@ FindQueryContainingRTEIdentityInternal(Node *node,
 	{
 		if (GetRTEIdentity(rte) == context->targetRTEIdentity)
 		{
-			context->query = context->parentQuery;
 			return true;
 		}
 	}

@@ -687,6 +687,11 @@ EXPLAIN
 SELECT COUNT(dist_col) FROM v2;
 $$);
 
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v2;
+$$);
+
 DROP TABLE range_dist_table_2 cascade;
 
 -- these should be pushed down.

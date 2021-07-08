@@ -908,6 +908,15 @@ $$);
  f
 (1 row)
 
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v2;
+$$);
+ explain_has_distributed_subplan
+---------------------------------------------------------------------
+ f
+(1 row)
+
 DROP TABLE range_dist_table_2 cascade;
 NOTICE:  drop cascades to view v2
 -- these should be pushed down.
