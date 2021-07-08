@@ -1,3 +1,7 @@
+### citus v9.5.6 (July 8, 2021) ###
+
+* Makes `citus_prepare_pg_upgrade` idempotent by dropping a transition table
+
 ### citus v9.5.5 (July 7, 2021) ###
 
 * Adds a configure flag to enforce security
