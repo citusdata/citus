@@ -1,6 +1,7 @@
 ### citus v9.5.6 (July 8, 2021) ###
 
-* Makes `citus_prepare_pg_upgrade` idempotent by dropping a transition table
+* Fixes minor bug in `citus_prepare_pg_upgrade` that caused it to lose its
+  idempotency
 
 ### citus v9.5.5 (July 7, 2021) ###
 
