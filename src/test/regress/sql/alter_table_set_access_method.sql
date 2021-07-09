@@ -102,7 +102,6 @@ SELECT event FROM time_partitioned ORDER BY 1;
 DROP TABLE time_partitioned;
 
 -- test altering a table with index to columnar
--- the index will be dropped
 CREATE TABLE index_table (a INT) USING heap;
 CREATE INDEX idx1 ON index_table (a);
 -- also create an index with statistics
@@ -114,6 +113,50 @@ SELECT alter_table_set_access_method('index_table', 'columnar');
 SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table';
 SELECT a.amname FROM pg_class c, pg_am a where c.relname = 'index_table' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 
+CREATE TABLE "heap_\'tbl" (
+  c1 CIRCLE,
+  c2 TEXT,
+  i int4[],
+  p point,
+  a int,
+  EXCLUDE USING gist
+    (c1 WITH &&, (c2::circle) WITH &&)
+    WHERE (circle_center(c1) <> '(0,0)'),
+  EXCLUDE USING btree
+    (a WITH =)
+	INCLUDE(p)
+	WHERE (c2 < 'astring')
+);
+
+CREATE INDEX heap_tbl_gin ON "heap_\'tbl" USING gin (i);
+CREATE INDEX "heap_tbl_\'gist" ON "heap_\'tbl" USING gist(p);
+CREATE INDEX heap_tbl_brin ON "heap_\'tbl" USING brin (a) WITH (pages_per_range = 1);
+
+CREATE INDEX heap_tbl_hash ON "heap_\'tbl" USING hash (c2);
+ALTER TABLE "heap_\'tbl" ADD CONSTRAINT heap_tbl_unique UNIQUE (c2);
+
+CREATE UNIQUE INDEX "heap_tbl_\'btree" ON "heap_\'tbl" USING btree (a);
+ALTER TABLE "heap_\'tbl" ADD CONSTRAINT "heap_tbl_\'pkey" PRIMARY KEY USING INDEX "heap_tbl_\'btree";
+
+SELECT indexname FROM pg_indexes
+WHERE schemaname = 'alter_table_set_access_method' AND
+      tablename = 'heap_\''tbl'
+ORDER BY indexname;
+
+SELECT conname FROM pg_constraint
+WHERE conrelid = 'heap_\''tbl'::regclass
+ORDER BY conname;
+
+SELECT alter_table_set_access_method('heap_\''tbl', 'columnar');
+
+SELECT indexname FROM pg_indexes
+WHERE schemaname = 'alter_table_set_access_method' AND
+      tablename = 'heap_\''tbl'
+ORDER BY indexname;
+
+SELECT conname FROM pg_constraint
+WHERE conrelid = 'heap_\''tbl'::regclass
+ORDER BY conname;
 
 -- test different table types
 SET client_min_messages to WARNING;
