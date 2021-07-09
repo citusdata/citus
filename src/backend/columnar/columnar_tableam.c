@@ -1293,8 +1293,7 @@ ColumnarGetHighestItemPointer(Relation relation, Snapshot snapshot)
 		return invalidItemPtr;
 	}
 
-	uint64 highestRowNumber = stripeWithHighestRowNumber->firstRowNumber +
-							  stripeWithHighestRowNumber->rowCount - 1;
+	uint64 highestRowNumber = StripeGetHighestRowNumber(stripeWithHighestRowNumber);
 	return row_number_to_tid(highestRowNumber);
 }
 

@@ -254,8 +254,11 @@ extern void SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
 										   uint32 chunkCount);
+extern StripeMetadata * FindNextStripeByRowNumber(Relation relation, uint64 rowNumber,
+												  Snapshot snapshot);
 extern StripeMetadata * FindStripeByRowNumber(Relation relation, uint64 rowNumber,
 											  Snapshot snapshot);
+extern uint64 StripeGetHighestRowNumber(StripeMetadata *stripeMetadata);
 extern StripeMetadata * FindStripeWithHighestRowNumber(Relation relation,
 													   Snapshot snapshot);
 extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);

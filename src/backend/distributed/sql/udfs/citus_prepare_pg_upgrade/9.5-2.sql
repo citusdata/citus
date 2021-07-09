@@ -41,8 +41,7 @@ BEGIN
         node_capacity_function::regprocedure::text,
         shard_allowed_on_node_function::regprocedure::text,
         default_threshold,
-        minimum_threshold,
-        improvement_threshold
+        minimum_threshold
     FROM pg_catalog.pg_dist_rebalance_strategy;
 
     -- store upgrade stable identifiers on pg_dist_object catalog

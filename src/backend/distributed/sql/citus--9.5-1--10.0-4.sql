@@ -1,10 +1,16 @@
--- citus--9.5-1--10.0-1
+-- citus--9.5-1--10.0-4
+
+-- This migration file aims to fix the issues with upgrades on clusters without public schema.
+
+-- This file is created by the following command, and some more changes in a separate commit
+-- cat citus--9.5-1--10.0-1.sql citus--10.0-1--10.0-2.sql citus--10.0-2--10.0-3.sql > citus--9.5-1--10.0-4.sql
+
+-- copy of citus--9.5-1--10.0-1
 
 DROP FUNCTION pg_catalog.upgrade_to_reference_table(regclass);
 DROP FUNCTION IF EXISTS pg_catalog.citus_total_relation_size(regclass);
 
 #include "udfs/citus_total_relation_size/10.0-1.sql"
-#include "udfs/citus_tables/10.0-1.sql"
 #include "udfs/citus_finish_pg_upgrade/10.0-1.sql"
 #include "udfs/alter_distributed_table/10.0-1.sql"
 #include "udfs/alter_table_set_access_method/10.0-1.sql"
@@ -163,5 +169,49 @@ CREATE VIEW citus.citus_worker_stat_activity AS
 SELECT * FROM pg_catalog.citus_worker_stat_activity();
 ALTER VIEW citus.citus_worker_stat_activity SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_worker_stat_activity TO PUBLIC;
+
+-- copy of citus--10.0-1--10.0-2
+
+#include "../../columnar/sql/columnar--10.0-1--10.0-2.sql"
+
+-- copy of citus--10.0-2--10.0-3
+
+#include "udfs/citus_update_table_statistics/10.0-3.sql"
+
+CREATE OR REPLACE FUNCTION master_update_table_statistics(relation regclass)
+RETURNS VOID
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$citus_update_table_statistics$$;
+COMMENT ON FUNCTION pg_catalog.master_update_table_statistics(regclass)
+	IS 'updates shard statistics of the given table';
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_get_active_worker_nodes(OUT node_name text, OUT node_port bigint)
+    RETURNS SETOF record
+    LANGUAGE C STRICT ROWS 100
+    AS 'MODULE_PATHNAME', $$citus_get_active_worker_nodes$$;
+COMMENT ON FUNCTION pg_catalog.citus_get_active_worker_nodes()
+    IS 'fetch set of active worker nodes';
+
+-- copy of citus--10.0-3--10.0-4
+
+-- This migration file aims to fix 2 issues with upgrades on clusters
+
+-- 1. a bug in public schema dependency for citus_tables view.
+--
+-- Users who do not have public schema in their clusters were unable to upgrade
+-- to Citus 10.x due to the citus_tables view that used to be created in public
+-- schema
+
+#include "udfs/citus_tables/10.0-4.sql"
+
+-- 2. a bug in our PG upgrade functions
+--
+-- Users who took the 9.5-2--10.0-1 upgrade path already have the fix, but users
+-- who took the 9.5-1--10.0-1 upgrade path do not. Hence, we repeat the CREATE OR
+-- REPLACE from the 9.5-2 definition for citus_prepare_pg_upgrade.
+
+#include "udfs/citus_prepare_pg_upgrade/9.5-2.sql"
+#include "udfs/citus_finish_pg_upgrade/10.0-4.sql"
+
 
 RESET search_path;
