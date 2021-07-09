@@ -1,3 +1,4 @@
 test: columnar_write_concurrency
 test: columnar_vacuum_vs_insert
 test: columnar_temp_tables
+test: columnar_index_concurrency
