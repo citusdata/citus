@@ -1535,7 +1535,7 @@ TupleSortSkipSmallerItemPointers(Tuplesortstate *tupleSort, ItemPointer targetIt
 		 * If int8 is pass-by-ref, we need to free Datum memory.
 		 * See tuplesort_getdatum function's comment.
 		 */
-		pfree(DatumGetPointer(tupleSortDatum));
+		pfree(DatumGetPointer(tsDatum));
 #endif
 	}
 
