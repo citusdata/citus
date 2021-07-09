@@ -223,6 +223,13 @@ SELECT r.a FROM ref r JOIN local_table lt on r.a = lt.a;
 
 \c - - - :master_port
 SET search_path TO mx_add_coordinator,public;
+SELECT stop_metadata_sync_to_node('localhost', :master_port);
+NOTICE:  node (localhost,57636) is the coordinator and should have metadata, skipping stopping the metadata sync
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT * FROM ref ORDER BY a;
  a
 ---------------------------------------------------------------------

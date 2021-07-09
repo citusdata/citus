@@ -214,6 +214,7 @@ extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
 extern List * ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId);
 extern List * ActiveShardPlacementList(uint64 shardId);
+extern List * ShardPlacementListWithoutOrphanedPlacements(uint64 shardId);
 extern ShardPlacement * ActiveShardPlacement(uint64 shardId, bool missingOk);
 extern List * BuildShardPlacementList(ShardInterval *shardInterval);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
@@ -223,7 +224,6 @@ extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 														SizeQueryType sizeQueryType,
 														bool optimizePartitionCalculations);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
-extern ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
@@ -290,4 +290,11 @@ extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
 											   uint64 *availableBytes,
 											   uint64 *totalBytes);
 extern void ExecuteQueryViaSPI(char *query, int SPIOK);
+extern void EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId);
+extern void AlterSequenceType(Oid seqOid, Oid typeOid);
+extern void MarkSequenceListDistributedAndPropagateDependencies(List *sequenceList);
+extern void MarkSequenceDistributedAndPropagateDependencies(Oid sequenceOid);
+extern void EnsureDistributedSequencesHaveOneType(Oid relationId,
+												  List *dependentSequenceList,
+												  List *attnumList);
 #endif   /* METADATA_UTILITY_H */

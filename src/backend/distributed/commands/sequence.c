@@ -24,10 +24,12 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "nodes/parsenodes.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
 
 /* Local functions forward declarations for helper functions */
 static bool OptionsSpecifyOwnedBy(List *optionList, Oid *ownedByTableId);
-static bool ShouldPropagateAlterSequence(const ObjectAddress *address);
+static Oid SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress);
 
 
 /*
@@ -284,9 +286,9 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 	}
 
 	/*
-	 * managing types can only be done on the coordinator if ddl propagation is on. when
+	 * managing sequences can only be done on the coordinator if ddl propagation is on. when
 	 * it is off we will never get here. MX workers don't have a notion of distributed
-	 * types, so we block the call.
+	 * sequences, so we block the call.
 	 */
 	EnsureCoordinator();
 
@@ -303,14 +305,13 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 	 */
 	DropStmt *stmtCopy = copyObject(stmt);
 	stmtCopy->objects = distributedSequencesList;
-	stmtCopy->missing_ok = true;
 	const char *dropStmtSql = DeparseTreeNode((Node *) stmtCopy);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) dropStmtSql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
 }
 
 
@@ -332,7 +333,7 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
 														  stmt->missing_ok);
 
-	if (!ShouldPropagateAlterSequence(&address))
+	if (!ShouldPropagateObject(&address))
 	{
 		return NIL;
 	}
@@ -340,16 +341,12 @@ PreprocessRenameSequenceStmt(Node *node, const char *queryString, ProcessUtility
 	EnsureCoordinator();
 	QualifyTreeNode((Node *) stmt);
 
-	/* this takes care of cases where not all workers have synced metadata */
-	RenameStmt *stmtCopy = copyObject(stmt);
-	stmtCopy->missing_ok = true;
-
-	const char *sql = DeparseTreeNode((Node *) stmtCopy);
+	const char *sql = DeparseTreeNode((Node *) stmt);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
 								ENABLE_DDL_PROPAGATION);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
 }
 
 
@@ -369,40 +366,6 @@ RenameSequenceStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
 
 	return sequenceAddress;
-}
-
-
-/*
- * ShouldPropagateAlterSequence returns, based on the address of a sequence, if alter
- * statements targeting the function should be propagated.
- */
-static bool
-ShouldPropagateAlterSequence(const ObjectAddress *address)
-{
-	if (creating_extension)
-	{
-		/*
-		 * extensions should be created separately on the workers, sequences cascading
-		 * from an extension should therefore not be propagated.
-		 */
-		return false;
-	}
-
-	if (!EnableDependencyCreation)
-	{
-		/*
-		 * we are configured to disable object propagation, should not propagate anything
-		 */
-		return false;
-	}
-
-	if (!IsObjectDistributed(address))
-	{
-		/* do not propagate alter sequence for non-distributed sequences */
-		return false;
-	}
-
-	return true;
 }
 
 
@@ -435,21 +398,77 @@ PreprocessAlterSequenceStmt(Node *node, const char *queryString,
 	if (IsObjectDistributed(&address))
 	{
 		ereport(ERROR, (errmsg(
-							"This operation is currently not allowed for a distributed sequence.")));
+							"Altering a distributed sequence is currently not supported.")));
 	}
-	else
+
+	/*
+	 * error out if the sequence is used in a distributed table
+	 * and this is an ALTER SEQUENCE .. AS .. statement
+	 */
+	Oid citusTableId = SequenceUsedInDistributedTable(&address);
+	if (citusTableId != InvalidOid)
 	{
-		return NIL;
+		List *options = stmt->options;
+		DefElem *defel = NULL;
+		foreach_ptr(defel, options)
+		{
+			if (strcmp(defel->defname, "as") == 0)
+			{
+				if (IsCitusTableType(citusTableId, CITUS_LOCAL_TABLE))
+				{
+					ereport(ERROR, (errmsg(
+										"Altering a sequence used in a local table that"
+										" is added to metadata is currently not supported.")));
+				}
+				ereport(ERROR, (errmsg(
+									"Altering a sequence used in a distributed"
+									" table is currently not supported.")));
+			}
+		}
 	}
+
+	return NIL;
 }
 
 
 /*
- * AlterSequenceOwnerObjectAddress returns the ObjectAddress of the sequence that is the
- * subject of the AlterOwnerStmt.
+ * SequenceUsedInDistributedTable returns true if the argument sequence
+ * is used as the default value of a column in a distributed table.
+ * Returns false otherwise
+ */
+static Oid
+SequenceUsedInDistributedTable(const ObjectAddress *sequenceAddress)
+{
+	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
+	Oid citusTableId = InvalidOid;
+	foreach_oid(citusTableId, citusTableIdList)
+	{
+		List *attnumList = NIL;
+		List *dependentSequenceList = NIL;
+		GetDependentSequencesWithRelation(citusTableId, &attnumList,
+										  &dependentSequenceList, 0);
+		Oid currentSeqOid = InvalidOid;
+		foreach_oid(currentSeqOid, dependentSequenceList)
+		{
+			/*
+			 * This sequence is used in a distributed table
+			 */
+			if (currentSeqOid == sequenceAddress->objectId)
+			{
+				return citusTableId;
+			}
+		}
+	}
+	return InvalidOid;
+}
+
+
+/*
+ * AlterSequenceStmtObjectAddress returns the ObjectAddress of the sequence that is the
+ * subject of the AlterSeqStmt.
  */
 ObjectAddress
-AlterSequenceObjectAddress(Node *node, bool missing_ok)
+AlterSequenceStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterSeqStmt *stmt = castNode(AlterSeqStmt, node);
 
@@ -466,7 +485,7 @@ AlterSequenceObjectAddress(Node *node, bool missing_ok)
  * PreprocessAlterSequenceSchemaStmt is executed before the statement is applied to the local
  * postgres instance.
  *
- * For distributed sequences, this operation will not be allowed for now.
+ * In this stage we can prepare the commands that need to be run on all workers.
  */
 List *
 PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
@@ -477,17 +496,20 @@ PreprocessAlterSequenceSchemaStmt(Node *node, const char *queryString,
 
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
 														  stmt->missing_ok);
-
-	/* error out if the sequence is distributed */
-	if (IsObjectDistributed(&address))
-	{
-		ereport(ERROR, (errmsg(
-							"This operation is currently not allowed for a distributed sequence.")));
-	}
-	else
+	if (!ShouldPropagateObject(&address))
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
+	QualifyTreeNode((Node *) stmt);
+
+	const char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
 }
 
 
@@ -502,9 +524,135 @@ AlterSequenceSchemaStmtObjectAddress(Node *node, bool missing_ok)
 	Assert(stmt->objectType == OBJECT_SEQUENCE);
 
 	RangeVar *sequence = stmt->relation;
+	Oid seqOid = RangeVarGetRelid(sequence, NoLock, true);
+
+	if (seqOid == InvalidOid)
+	{
+		/*
+		 * couldn't find the sequence, might have already been moved to the new schema, we
+		 * construct a new sequence name that uses the new schema to search in.
+		 */
+		const char *newSchemaName = stmt->newschema;
+		Oid newSchemaOid = get_namespace_oid(newSchemaName, true);
+		seqOid = get_relname_relid(sequence->relname, newSchemaOid);
+
+		if (!missing_ok && seqOid == InvalidOid)
+		{
+			/*
+			 * if the sequence is still invalid we couldn't find the sequence, error with the same
+			 * message postgres would error with if missing_ok is false (not ok to miss)
+			 */
+			const char *quotedSequenceName =
+				quote_qualified_identifier(sequence->schemaname, sequence->relname);
+
+			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_TABLE),
+							errmsg("relation \"%s\" does not exist",
+								   quotedSequenceName)));
+		}
+	}
+
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
+
+	return sequenceAddress;
+}
+
+
+/*
+ * PostprocessAlterSequenceSchemaStmt is executed after the change has been applied locally,
+ * we can now use the new dependencies of the sequence to ensure all its dependencies
+ * exist on the workers before we apply the commands remotely.
+ */
+List *
+PostprocessAlterSequenceSchemaStmt(Node *node, const char *queryString)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+
+	if (!ShouldPropagateObject(&address))
+	{
+		return NIL;
+	}
+
+	/* dependencies have changed (schema) let's ensure they exist */
+	EnsureDependenciesExistOnAllNodes(&address);
+
+	return NIL;
+}
+
+
+/*
+ * PreprocessAlterSequenceOwnerStmt is called for change of ownership of sequences before the
+ * ownership is changed on the local instance.
+ *
+ * If the sequence for which the owner is changed is distributed we execute the change on
+ * all the workers to keep the type in sync across the cluster.
+ */
+List *
+PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
+								 ProcessUtilityContext processUtilityContext)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Assert(stmt->relkind == OBJECT_SEQUENCE);
+
+	ObjectAddress sequenceAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&sequenceAddress))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	QualifyTreeNode((Node *) stmt);
+
+	const char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION, (void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+}
+
+
+/*
+ * AlterSequenceOwnerStmtObjectAddress returns the ObjectAddress of the sequence that is the
+ * subject of the AlterOwnerStmt.
+ */
+ObjectAddress
+AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Assert(stmt->relkind == OBJECT_SEQUENCE);
+
+	RangeVar *sequence = stmt->relation;
 	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
 	ObjectAddress sequenceAddress = { 0 };
 	ObjectAddressSet(sequenceAddress, RelationRelationId, seqOid);
 
 	return sequenceAddress;
+}
+
+
+/*
+ * PostprocessAlterSequenceOwnerStmt is executed after the change has been applied locally,
+ * we can now use the new dependencies of the sequence to ensure all its dependencies
+ * exist on the workers before we apply the commands remotely.
+ */
+List *
+PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	Assert(stmt->relkind == OBJECT_SEQUENCE);
+
+	ObjectAddress sequenceAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&sequenceAddress))
+	{
+		return NIL;
+	}
+
+	/* dependencies have changed (owner) let's ensure they exist */
+	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+
+	return NIL;
 }

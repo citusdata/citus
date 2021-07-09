@@ -15,6 +15,7 @@
 
 #include "catalog/namespace.h"
 #include "distributed/deparser.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 
@@ -23,6 +24,8 @@
 static void AppendDropSequenceStmt(StringInfo buf, DropStmt *stmt);
 static void AppendSequenceNameList(StringInfo buf, List *objects, ObjectType objtype);
 static void AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt);
+static void AppendAlterSequenceSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
+static void AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt);
 
 /*
  * DeparseDropSequenceStmt builds and returns a string representing the DropStmt
@@ -138,21 +141,121 @@ AppendRenameSequenceStmt(StringInfo buf, RenameStmt *stmt)
 
 
 /*
- * QualifyRenameSequenceStmt transforms a
- * ALTER SEQUENCE .. RENAME TO ..
- * statement in place and makes the sequence name fully qualified.
+ * DeparseAlterSequenceSchemaStmt builds and returns a string representing the AlterObjectSchemaStmt
  */
-void
-QualifyRenameSequenceStmt(Node *node)
+char *
+DeparseAlterSequenceSchemaStmt(Node *node)
 {
-	RenameStmt *stmt = castNode(RenameStmt, node);
-	Assert(stmt->renameType == OBJECT_SEQUENCE);
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
 
+	Assert(stmt->objectType == OBJECT_SEQUENCE);
+
+	AppendAlterSequenceSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendAlterSequenceSchemaStmt appends a string representing the AlterObjectSchemaStmt to a buffer
+ */
+static void
+AppendAlterSequenceSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
+{
 	RangeVar *seq = stmt->relation;
 
-	if (seq->schemaname == NULL)
+	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
+															 seq->relname);
+
+	appendStringInfoString(buf, "ALTER SEQUENCE ");
+
+	if (stmt->missing_ok)
 	{
-		Oid schemaOid = RangeVarGetCreationNamespace(seq);
-		seq->schemaname = get_namespace_name(schemaOid);
+		appendStringInfoString(buf, "IF EXISTS ");
+	}
+
+	appendStringInfoString(buf, qualifiedSequenceName);
+
+	appendStringInfo(buf, " SET SCHEMA %s;", quote_identifier(stmt->newschema));
+}
+
+
+/*
+ * DeparseAlterSequenceOwnerStmt builds and returns a string representing the AlterTableStmt
+ * consisting of changing the owner of a sequence
+ */
+char *
+DeparseAlterSequenceOwnerStmt(Node *node)
+{
+	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	Assert(stmt->relkind == OBJECT_SEQUENCE);
+
+	AppendAlterSequenceOwnerStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+/*
+ * AppendAlterSequenceOwnerStmt appends a string representing the AlterTableStmt to a buffer
+ * consisting of changing the owner of a sequence
+ */
+static void
+AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt)
+{
+	Assert(stmt->relkind == OBJECT_SEQUENCE);
+	RangeVar *seq = stmt->relation;
+	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
+															 seq->relname);
+	appendStringInfoString(buf, "ALTER SEQUENCE ");
+
+	if (stmt->missing_ok)
+	{
+		appendStringInfoString(buf, "IF EXISTS ");
+	}
+
+	appendStringInfoString(buf, qualifiedSequenceName);
+
+	ListCell *cmdCell = NULL;
+	foreach(cmdCell, stmt->cmds)
+	{
+		if (cmdCell != list_head(stmt->cmds))
+		{
+			/*
+			 * normally we shouldn't ever reach this
+			 * because we enter this function after making sure we have only
+			 * one subcommand of the type AT_ChangeOwner
+			 */
+			ereport(ERROR, (errmsg("More than one subcommand is not supported "
+								   "for ALTER SEQUENCE")));
+		}
+
+		AlterTableCmd *alterTableCmd = castNode(AlterTableCmd, lfirst(cmdCell));
+		switch (alterTableCmd->subtype)
+		{
+			case AT_ChangeOwner:
+			{
+				appendStringInfo(buf, " OWNER TO %s;", get_rolespec_name(
+									 alterTableCmd->newowner));
+				break;
+			}
+
+			default:
+			{
+				/*
+				 * normally we shouldn't ever reach this
+				 * because we enter this function after making sure this stmt is of the form
+				 * ALTER SEQUENCE .. OWNER TO ..
+				 */
+				ereport(ERROR, (errmsg("unsupported subtype for alter sequence command"),
+								errdetail("sub command type: %d",
+										  alterTableCmd->subtype)));
+			}
+		}
 	}
 }

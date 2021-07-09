@@ -164,6 +164,136 @@ WHERE logicalrelid='t2'::regclass;
  f
 (1 row)
 
+-- Failure to set groupid in the worker
+SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET groupid").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET groupid").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Failure to drop all tables in pg_dist_partition
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Failure to truncate pg_dist_node in the worker
+SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_port
+SELECT count(*) FROM pg_dist_node;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+\c - - - :master_port
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
+ hasmetadata
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- Verify we can drop metadata after unsuccessful attempts
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_port
+SELECT count(*) FROM pg_dist_node;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+\c - - - :master_port
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
+ hasmetadata
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SET SEARCH_PATH = mx_metadata_sync;
 DROP TABLE t1;
 DROP TABLE t2;
 DROP SCHEMA mx_metadata_sync CASCADE;

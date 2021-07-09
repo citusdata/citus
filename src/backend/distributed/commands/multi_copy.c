@@ -2139,7 +2139,7 @@ ShardIntervalListHasLocalPlacements(List *shardIntervalList)
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		if (FindShardPlacementOnGroup(localGroupId, shardInterval->shardId) != NULL)
+		if (ActiveShardPlacementOnGroup(localGroupId, shardInterval->shardId) != NULL)
 		{
 			return true;
 		}

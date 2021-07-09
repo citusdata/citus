@@ -85,17 +85,7 @@ BEGIN
     FROM pg_catalog.pg_dist_partition p;
 
     -- restore pg_dist_object from the stable identifiers
-    -- DELETE/INSERT to avoid primary key violations
-    WITH old_records AS (
-        DELETE FROM
-            citus.pg_dist_object
-        RETURNING
-            type,
-            object_names,
-            object_args,
-            distribution_argument_index,
-            colocationid
-    )
+    TRUNCATE citus.pg_dist_object;
     INSERT INTO citus.pg_dist_object (classid, objid, objsubid, distribution_argument_index, colocationid)
     SELECT
         address.classid,
@@ -104,8 +94,10 @@ BEGIN
         naming.distribution_argument_index,
         naming.colocationid
     FROM
-        old_records naming,
-        pg_get_object_address(naming.type, naming.object_names, naming.object_args) address;
+        public.pg_dist_object naming,
+        pg_catalog.pg_get_object_address(naming.type, naming.object_names, naming.object_args) address;
+
+    DROP TABLE public.pg_dist_object;
 END;
 $cppu$;
 

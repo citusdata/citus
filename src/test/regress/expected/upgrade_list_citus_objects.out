@@ -173,7 +173,7 @@ ORDER BY 1;
  function run_command_on_workers(text,boolean)
  function shard_name(regclass,bigint)
  function start_metadata_sync_to_node(text,integer)
- function stop_metadata_sync_to_node(text,integer)
+ function stop_metadata_sync_to_node(text,integer,boolean)
  function time_partition_range(regclass)
  function truncate_local_data_after_distributing_table(regclass)
  function undistribute_table(regclass,boolean)

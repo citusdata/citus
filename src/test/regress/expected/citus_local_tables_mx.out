@@ -26,6 +26,7 @@ SELECT citus_add_local_table_to_metadata('citus_local_table');
 
 -- first stop metadata sync to worker_1
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

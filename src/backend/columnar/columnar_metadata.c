@@ -66,6 +66,21 @@ typedef struct
 	EState *estate;
 } ModifyState;
 
+/* RowNumberLookupMode to be used in StripeMetadataLookupRowNumber */
+typedef enum RowNumberLookupMode
+{
+	/*
+	 * Find the stripe whose firstRowNumber is less than or equal to given
+	 * input rowNumber.
+	 */
+	FIND_LESS_OR_EQUAL,
+
+	/*
+	 * Find the stripe whose firstRowNumber is greater than input rowNumber.
+	 */
+	FIND_GREATER
+} RowNumberLookupMode;
+
 static void InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe);
 static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
@@ -86,7 +101,7 @@ static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
 static uint64 LookupStorageId(RelFileNode relfilenode);
-static uint64 GetHighestUsedFirstRowNumber(uint64 storageId);
+static uint64 GetHighestUsedRowNumber(uint64 storageId);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
 												   Oid storageIdIndexId,
@@ -100,6 +115,9 @@ static EState * create_estate_for_relation(Relation rel);
 static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
 static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite);
+static StripeMetadata * StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber,
+													  Snapshot snapshot,
+													  RowNumberLookupMode lookupMode);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 
@@ -623,21 +641,87 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 
 
 /*
- * FindStripeByRowNumber returns StripeMetadata for the stripe that has the
- * row with rowNumber by doing backward index scan on
- * stripe_first_row_number_idx. If no such row exists, then returns NULL.
+ * FindStripeByRowNumber returns StripeMetadata for the stripe whose
+ * firstRowNumber is greater than given rowNumber. If no such stripe
+ * exists, then returns NULL.
+ */
+StripeMetadata *
+FindNextStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
+{
+	return StripeMetadataLookupRowNumber(relation, rowNumber, snapshot, FIND_GREATER);
+}
+
+
+/*
+ * FindStripeByRowNumber returns StripeMetadata for the stripe that contains
+ * the row with rowNumber. If no such stripe exists, then returns NULL.
  */
 StripeMetadata *
 FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
 {
+	StripeMetadata *stripeMetadata =
+		StripeMetadataLookupRowNumber(relation, rowNumber,
+									  snapshot, FIND_LESS_OR_EQUAL);
+	if (!stripeMetadata)
+	{
+		return NULL;
+	}
+
+	if (rowNumber > StripeGetHighestRowNumber(stripeMetadata))
+	{
+		return NULL;
+	}
+
+	return stripeMetadata;
+}
+
+
+/*
+ * StripeGetHighestRowNumber returns rowNumber of the row with highest
+ * rowNumber in given stripe.
+ */
+uint64
+StripeGetHighestRowNumber(StripeMetadata *stripeMetadata)
+{
+	return stripeMetadata->firstRowNumber + stripeMetadata->rowCount - 1;
+}
+
+
+/*
+ * StripeMetadataLookupRowNumber returns StripeMetadata for the stripe whose
+ * firstRowNumber is less than or equal to (FIND_LESS_OR_EQUAL), or is
+ * greater than (FIND_GREATER) given rowNumber by doing backward index
+ * scan on stripe_first_row_number_idx.
+ * If no such stripe exists, then returns NULL.
+ */
+static StripeMetadata *
+StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot,
+							  RowNumberLookupMode lookupMode)
+{
+	Assert(lookupMode == FIND_LESS_OR_EQUAL || lookupMode == FIND_GREATER);
+
 	StripeMetadata *foundStripeMetadata = NULL;
 
 	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
 	ScanKeyData scanKey[2];
 	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+
+	StrategyNumber strategyNumber = InvalidStrategy;
+	RegProcedure procedure = InvalidOid;
+	if (lookupMode == FIND_LESS_OR_EQUAL)
+	{
+		strategyNumber = BTLessEqualStrategyNumber;
+		procedure = F_INT8LE;
+	}
+	else if (lookupMode == FIND_GREATER)
+	{
+		strategyNumber = BTGreaterStrategyNumber;
+		procedure = F_INT8GT;
+	}
 	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_first_row_number,
-				BTLessEqualStrategyNumber, F_INT8LE, UInt64GetDatum(rowNumber));
+				strategyNumber, procedure, UInt64GetDatum(rowNumber));
+
 
 	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
 	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
@@ -646,7 +730,16 @@ FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
 															snapshot, 2,
 															scanKey);
 
-	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, BackwardScanDirection);
+	ScanDirection scanDirection = NoMovementScanDirection;
+	if (lookupMode == FIND_LESS_OR_EQUAL)
+	{
+		scanDirection = BackwardScanDirection;
+	}
+	else if (lookupMode == FIND_GREATER)
+	{
+		scanDirection = ForwardScanDirection;
+	}
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, scanDirection);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
@@ -654,11 +747,7 @@ FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
 		bool isNullArray[Natts_columnar_stripe];
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-		StripeMetadata *stripeMetadata = BuildStripeMetadata(datumArray);
-		if (rowNumber < stripeMetadata->firstRowNumber + stripeMetadata->rowCount)
-		{
-			foundStripeMetadata = stripeMetadata;
-		}
+		foundStripeMetadata = BuildStripeMetadata(datumArray);
 	}
 
 	systable_endscan_ordered(scanDescriptor);
@@ -1412,41 +1501,33 @@ ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
 
 	uint64 reservedStripeId = highestId + 1;
 	uint64 reservedOffset = highestOffset + 1;
-	uint64 reservedRowNumber = GetHighestUsedFirstRowNumber(storageId) + 1;
+	uint64 reservedRowNumber = GetHighestUsedRowNumber(storageId) + 1;
 	ColumnarStorageUpdateCurrent(rel, isUpgrade, reservedStripeId,
 								 reservedRowNumber, reservedOffset);
 }
 
 
 /*
- * GetHighestUsedFirstRowNumber returns the highest used first_row_number
- * for given storageId. Returns COLUMNAR_INVALID_ROW_NUMBER if storage with
+ * GetHighestUsedRowNumber returns the highest used rowNumber for given
+ * storageId. Returns COLUMNAR_INVALID_ROW_NUMBER if storage with
  * storageId has no stripes.
  * Note that normally we would use ColumnarStorageGetReservedRowNumber
  * to decide that. However, this function is designed to be used when
  * building the metapage itself during upgrades.
  */
 static uint64
-GetHighestUsedFirstRowNumber(uint64 storageId)
+GetHighestUsedRowNumber(uint64 storageId)
 {
+	uint64 highestRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
+
 	List *stripeMetadataList = ReadDataFileStripeList(storageId,
 													  GetTransactionSnapshot());
-	if (list_length(stripeMetadataList) == 0)
-	{
-		return COLUMNAR_INVALID_ROW_NUMBER;
-	}
-
-	/* XXX: Better to have an invalid value for StripeMetadata.rowCount too */
-	uint64 stripeRowCount = -1;
-	uint64 highestFirstRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
-
 	StripeMetadata *stripeMetadata = NULL;
 	foreach_ptr(stripeMetadata, stripeMetadataList)
 	{
-		highestFirstRowNumber = Max(highestFirstRowNumber,
-									stripeMetadata->firstRowNumber);
-		stripeRowCount = stripeMetadata->rowCount;
+		highestRowNumber = Max(highestRowNumber,
+							   StripeGetHighestRowNumber(stripeMetadata));
 	}
 
-	return highestFirstRowNumber + stripeRowCount - 1;
+	return highestRowNumber;
 }
