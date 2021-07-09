@@ -270,7 +270,7 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
 															1, scanKey);
 
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		if (overwrite)
@@ -340,7 +340,7 @@ DeleteColumnarTableOptions(Oid regclass, bool missingOk)
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
 															1, scanKey);
 
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		CatalogTupleDelete(columnarOptions, &heapTuple->t_self);
@@ -393,7 +393,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
 															1, scanKey);
 
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		Form_columnar_options tupOptions = (Form_columnar_options) GETSTRUCT(heapTuple);
@@ -563,7 +563,8 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 			palloc0(chunkCount * sizeof(ColumnChunkSkipNode));
 	}
 
-	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
+																 ForwardScanDirection)))
 	{
 		Datum datumArray[Natts_columnar_chunk];
 		bool isNullArray[Natts_columnar_chunk];
@@ -821,7 +822,8 @@ ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount)
 	HeapTuple heapTuple = NULL;
 	uint32 *chunkGroupRowCounts = palloc0(chunkGroupCount * sizeof(uint32));
 
-	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
+																 ForwardScanDirection)))
 	{
 		Datum datumArray[Natts_columnar_chunkgroup];
 		bool isNullArray[Natts_columnar_chunkgroup];
@@ -1013,7 +1015,8 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 															snapshot, 1,
 															scanKey);
 
-	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
+																 ForwardScanDirection)))
 	{
 		Datum datumArray[Natts_columnar_stripe];
 		bool isNullArray[Natts_columnar_stripe];
@@ -1117,11 +1120,11 @@ DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 
 	ModifyState *modifyState = StartModifyRelation(metadataTable);
 
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	HeapTuple heapTuple;
+	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
+																 ForwardScanDirection)))
 	{
 		DeleteTupleAndEnforceConstraints(modifyState, heapTuple);
-		heapTuple = systable_getnext(scanDescriptor);
 	}
 
 	systable_endscan_ordered(scanDescriptor);
