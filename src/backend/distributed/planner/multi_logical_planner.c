@@ -216,10 +216,11 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		Expr *targetExpression = targetEntry->expr;
 
 		bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
-		Oid relationId = InvalidOid;
 		Var *column = NULL;
+		RangeTblEntry *rte = NULL;
 
-		FindReferencedTableColumn(targetExpression, NIL, query, &relationId, &column);
+		FindReferencedTableColumn(targetExpression, NIL, query, &column, &rte);
+		Oid relationId = rte ? rte->relid : InvalidOid;
 
 		/*
 		 * If the expression belongs to a non-distributed table continue searching for

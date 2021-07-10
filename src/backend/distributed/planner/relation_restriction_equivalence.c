@@ -1825,21 +1825,17 @@ PartitionKeyForRTEIdentityInQuery(Query *originalQuery, int targetRTEIndex,
 			IsPartitionColumn(targetExpression, originalQueryContainingRTEIdentity))
 		{
 			Var *targetColumn = (Var *) targetExpression;
-#if PG_VERSION_NUM < PG_VERSION_13
 
 /*
  * As of pg13, columns point to RELATION_RTE so we don't need to do
  * anything further. Prior to pg13, columns point to JOIN_RTE so we
  * find the actual column.
  */
-			Oid relationId = InvalidOid;
+			RangeTblEntry *rteContainingPartitionKey = NULL;
 			FindReferencedTableColumn(targetExpression, NIL,
-									  originalQueryContainingRTEIdentity, &relationId,
-									  &targetColumn);
-
-#endif
-			RangeTblEntry *rteContainingPartitionKey =
-				rt_fetch(targetColumn->varno, originalQueryContainingRTEIdentity->rtable);
+									  originalQueryContainingRTEIdentity,
+									  &targetColumn,
+									  &rteContainingPartitionKey);
 
 			if (rteContainingPartitionKey->rtekind == RTE_RELATION &&
 				GetRTEIdentity(rteContainingPartitionKey) == targetRTEIndex)

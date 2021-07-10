@@ -4377,11 +4377,11 @@ bool
 IsPartitionColumn(Expr *columnExpression, Query *query)
 {
 	bool isPartitionColumn = false;
-	Oid relationId = InvalidOid;
 	Var *column = NULL;
+	RangeTblEntry *relationRTE = NULL;
 
-	FindReferencedTableColumn(columnExpression, NIL, query, &relationId, &column);
-
+	FindReferencedTableColumn(columnExpression, NIL, query, &column, &relationRTE);
+	Oid relationId = relationRTE ? relationRTE->relid : InvalidOid;
 	if (relationId != InvalidOid && column != NULL)
 	{
 		Var *partitionColumn = DistPartitionKey(relationId);
@@ -4407,14 +4407,13 @@ IsPartitionColumn(Expr *columnExpression, Query *query)
  */
 void
 FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *query,
-						  Oid *relationId, Var **column)
+						  Var **column, RangeTblEntry **rte)
 {
 	Var *candidateColumn = NULL;
-	List *rangetableList = query->rtable;
 	Expr *strippedColumnExpression = (Expr *) strip_implicit_coercions(
 		(Node *) columnExpression);
 
-	*relationId = InvalidOid;
+	*rte = NULL;
 	*column = NULL;
 
 	if (IsA(strippedColumnExpression, Var))
@@ -4445,7 +4444,18 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 	 */
 	if (candidateColumn->varlevelsup > 0)
 	{
-		return;
+		int parentQueryIndex = list_length(parentQueryList) -
+							   candidateColumn->varlevelsup;
+		if (parentQueryIndex < 0)
+		{
+			return;
+		}
+
+		/*
+		 * as we get the query from varlevelsup up, we reset the varlevelsup.
+		 */
+		candidateColumn->varlevelsup = 0;
+		query = list_nth(parentQueryList, parentQueryIndex);
 	}
 
 	if (candidateColumn->varattno == InvalidAttrNumber)
@@ -4457,12 +4467,13 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		return;
 	}
 
+	List *rangetableList = query->rtable;
 	int rangeTableEntryIndex = candidateColumn->varno - 1;
 	RangeTblEntry *rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
-		*relationId = rangeTableEntry->relid;
+		*rte = rangeTableEntry;
 		*column = candidateColumn;
 	}
 	else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
@@ -4476,7 +4487,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		/* append current query to parent query list */
 		parentQueryList = lappend(parentQueryList, query);
 		FindReferencedTableColumn(subColumnExpression, parentQueryList,
-								  subquery, relationId, column);
+								  subquery, column, rte);
 	}
 	else if (rangeTableEntry->rtekind == RTE_JOIN)
 	{
@@ -4485,8 +4496,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		Expr *joinColumn = list_nth(joinColumnList, joinColumnIndex);
 
 		/* parent query list stays the same since still in the same query boundary */
-		FindReferencedTableColumn(joinColumn, parentQueryList, query,
-								  relationId, column);
+		FindReferencedTableColumn(joinColumn, parentQueryList, query, column, rte);
 	}
 	else if (rangeTableEntry->rtekind == RTE_CTE)
 	{
@@ -4526,7 +4536,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 
 			parentQueryList = lappend(parentQueryList, query);
 			FindReferencedTableColumn(targetEntry->expr, parentQueryList,
-									  cteQuery, relationId, column);
+									  cteQuery, column, rte);
 		}
 	}
 }

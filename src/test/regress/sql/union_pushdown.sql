@@ -827,6 +827,223 @@ SELECT MAX(k) FROM v;
 $$);
 
 SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT count(*) FROM
+(
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as bar;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT count(*) FROM
+(
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id, random() FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id, random() FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as bar;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+explain
+SELECT count(*) FROM
+(
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u2.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u2.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as bar;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN WITH cte_1 AS not materialized
+(
+       SELECT user_id
+       FROM   (
+                     SELECT *
+                     FROM   users_table_part) AS l1
+       UNION ALL
+       SELECT user_id
+       FROM   (
+                       SELECT   user_id
+                       FROM     users_table_part
+                       GROUP BY user_id) AS l2
+       UNION ALL
+       SELECT user_id
+       FROM   (
+                     SELECT *
+                     FROM   users_table_part) AS l2
+       UNION ALL
+       SELECT user_id
+       FROM   (
+                     SELECT *
+                     FROM   users_table_part) AS l1
+       UNION
+       SELECT user_id
+       FROM   (
+                     SELECT user_id
+                     FROM   (
+                                            SELECT DISTINCT user_id
+                                            FROM            users_table_part) aa ) AS fooo
+       UNION
+       SELECT user_id
+       FROM   (
+                              SELECT DISTINCT user_id
+                              FROM            users_table_part) AS l2 ), cte_2 AS NOT materialized
+(
+       SELECT *
+       FROM   cte_1), cte_3 AS NOT materialized
+(
+       SELECT *
+       FROM   cte_2), cte_4 AS
+(
+                SELECT DISTINCT user_id
+                FROM            cte_3)
+SELECT count(*)
+FROM   (
+              SELECT user_id
+              FROM   (
+                            SELECT *
+                            FROM   users_table_part) AS l1
+              UNION ALL
+              SELECT user_id
+              FROM   (
+                            SELECT *
+                            FROM   users_table_part) AS l2
+              UNION ALL
+              SELECT user_id
+              FROM   (
+                            SELECT *,
+                                   random()
+                            FROM   users_table_part) AS l2
+              UNION ALL
+              SELECT user_id
+              FROM   (
+                            SELECT *
+                            FROM   users_table_part) AS l1
+              UNION
+              SELECT user_id
+              FROM   (
+                            SELECT user_id AS user_id
+                            FROM   users_table_part) AS l2
+              UNION
+              SELECT user_id
+              FROM   (
+                            SELECT *,
+                                   random()
+                            FROM   users_table_part) AS l2
+              UNION
+              SELECT user_id
+              FROM   (
+                            SELECT *
+                            FROM   cte_1) AS bar
+              UNION ALL
+              SELECT user_id
+              FROM   cte_2
+              UNION
+              SELECT *
+              FROM   (
+                              SELECT   user_id
+                              FROM     cte_2
+                              GROUP BY user_id) AS bar
+              UNION
+              SELECT user_id
+              FROM   cte_4
+              UNION
+              SELECT user_id
+              FROM   cte_3 ) AS foo
+JOIN   lateral
+       (
+              SELECT *
+              FROM   (
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *
+                                          FROM   users_table_part) AS l1
+                            UNION ALL
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *
+                                          FROM   users_table_part) AS l2
+                            UNION ALL
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *,
+                                                 random()
+                                          FROM   users_table_part) AS l2
+                            UNION ALL
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *
+                                          FROM   users_table_part) AS l1
+                            UNION
+                            SELECT user_id
+                            FROM   (
+                                          SELECT user_id AS user_id
+                                          FROM   users_table_part) AS l2
+                            UNION
+                            SELECT user_id
+                            FROM   (
+                                          SELECT users_table_part.user_id,
+                                                 random()
+                                          FROM   users_table_part) AS l2
+                            UNION
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *
+                                          FROM   cte_1) AS bar
+                            UNION ALL
+                            SELECT user_id
+                            FROM   cte_2
+                            UNION
+                            SELECT *
+                            FROM   (
+                                            SELECT   user_id
+                                            FROM     cte_2
+                                            GROUP BY user_id) AS bar
+                            UNION
+                            SELECT user_id
+                            FROM   cte_3 ) AS subqu) AS bar
+using  (user_id)
+WHERE  (
+              foo.user_id) IN
+                               (
+                               SELECT DISTINCT user_id
+                               FROM            (
+                                                      SELECT foo.user_id
+                                                      FROM   users_table_part u1
+                                                      JOIN   lateral
+                                                             (
+                                                                    SELECT u1.user_id
+                                                                    FROM   users_table_part u2
+                                                                    WHERE  u2.user_id = u1.user_id) AS foo
+                                                      ON     (
+                                                                    true)
+                                                      UNION
+                                                      SELECT foo.user_id
+                                                      FROM   users_table_part u1
+                                                      JOIN   lateral
+                                                             (
+                                                                    SELECT u1.user_id
+                                                                    FROM   users_table_part u2
+                                                                    WHERE  u2.user_id = u1.user_id) AS foo
+                                                      ON     (
+                                                                    true) ) AS bar
+                               UNION
+                               SELECT *
+                               FROM   cte_2
+                               WHERE  user_id IN
+                                      (
+                                             SELECT user_id
+                                             FROM   users_table_part)
+                               UNION
+                               SELECT *
+                               FROM   cte_1 ) ;
+$$);
+
+
+SELECT public.explain_has_distributed_subplan($$
 EXPLAIN SELECT * FROM users_table_part u1 WHERE (value_1, user_id) IN
 (
 SELECT u1.user_id, user_id FROM users_table_part

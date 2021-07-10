@@ -1170,7 +1170,6 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		List *insertTargetEntryColumnList = pull_var_clause_default((Node *) targetEntry);
-		Oid subqueryPartitionColumnRelationId = InvalidOid;
 		Var *subqueryPartitionColumn = NULL;
 
 		/*
@@ -1202,11 +1201,16 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 													insertVar->varattno - 1);
 		Expr *selectTargetExpr = subqueryTargetEntry->expr;
 
+		RangeTblEntry *subqueryPartitionColumnRelationIdRTE = NULL;
 		List *parentQueryList = list_make2(query, subquery);
 		FindReferencedTableColumn(selectTargetExpr,
 								  parentQueryList, subquery,
-								  &subqueryPartitionColumnRelationId,
-								  &subqueryPartitionColumn);
+								  &subqueryPartitionColumn,
+								  &subqueryPartitionColumnRelationIdRTE);
+		Oid subqueryPartitionColumnRelationId = subqueryPartitionColumnRelationIdRTE ?
+												subqueryPartitionColumnRelationIdRTE->
+												relid :
+												InvalidOid;
 
 		/*
 		 * Corresponding (i.e., in the same ordinal position as the target table's
