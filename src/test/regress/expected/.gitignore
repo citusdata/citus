@@ -2,6 +2,10 @@
 /columnar_copyto.out
 /columnar_data_types.out
 /columnar_load.out
+/am_chunk_filtering.out
+/am_copyto.out
+/am_data_types.out
+/am_load.out
 /hyperscale_tutorial.out
 /multi_agg_distinct.out
 /multi_agg_type_conversion.out

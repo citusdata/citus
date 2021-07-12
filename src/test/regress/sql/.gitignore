@@ -2,6 +2,10 @@
 /columnar_copyto.sql
 /columnar_data_types.sql
 /columnar_load.sql
+/am_chunk_filtering.sql
+/am_copyto.sql
+/am_data_types.sql
+/am_load.sql
 /hyperscale_tutorial.sql
 /multi_agg_distinct.sql
 /multi_agg_type_conversion.sql
