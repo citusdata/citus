@@ -2016,27 +2016,7 @@ ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2010;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2011;
 ALTER TABLE partitioning_test DETACH PARTITION partitioning_test_2013;
 DROP TABLE partitioning_test_2008, partitioning_test_2009, partitioning_test_2010,
-           partitioning_test_2011, partitioning_test_2013, reference_table_2;
--- verify this doesn't crash and gives a debug message for dropped table
-SET client_min_messages TO DEBUG1;
-DROP TABLE partitioning_test, reference_table;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  Table "<dropped>" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed tables due to foreign keys. Any parallel modification to those hash distributed tables in the same transaction can only be executed in sequential query execution mode
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 16 at PERFORM
-DEBUG:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660179 on table partitioning_schema.partitioning_test_1660179
-drop cascades to constraint partitioning_reference_fkey_1660181 on table partitioning_schema.partitioning_test_1660181
-DETAIL:  from localhost:xxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 16 at PERFORM
-DEBUG:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660180 on table partitioning_schema.partitioning_test_1660180
-drop cascades to constraint partitioning_reference_fkey_1660182 on table partitioning_schema.partitioning_test_1660182
-DETAIL:  from localhost:xxxxx
-CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
-PL/pgSQL function citus_drop_trigger() line 16 at PERFORM
-RESET client_min_messages;
+           partitioning_test_2011, partitioning_test_2013, reference_table_2, partitioning_test, reference_table;
 RESET SEARCH_PATH;
 -- not timestamp partitioned
 CREATE TABLE not_time_partitioned (x int, y int) PARTITION BY RANGE (x);
