@@ -1336,6 +1336,10 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 static void
 RemoveOldShardPlacementForNodeGroup(int groupId)
 {
+	/*
+	 * Prevent concurrent deferred drop
+	 */
+	LockPlacementCleanup();
 	List *shardPlacementsOnNode = AllShardPlacementsOnNodeGroup(groupId);
 	GroupShardPlacement *placement = NULL;
 	foreach_ptr(placement, shardPlacementsOnNode)
