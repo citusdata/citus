@@ -837,6 +837,22 @@ SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM
 $$);
 
 SELECT public.explain_has_distributed_subplan($$
+EXPLAIN WITH cte AS (
+SELECT * FROM
+(
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as bar )
+SELECT count(*) FROM
+(
+SELECT bar.user_id FROM cte u1 JOIN LATERAL (SELECT u1.user_id FROM cte u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM cte u1 JOIN LATERAL (SELECT u1.user_id FROM cte u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as foo;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
 EXPLAIN
 SELECT count(*) FROM
 (
@@ -854,6 +870,11 @@ SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u2.user_id FROM
 UNION
 SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u2.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
 ) as bar;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+explain
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT *,random() FROM (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as foo) as bar ON (true)
 $$);
 
 SELECT public.explain_has_distributed_subplan($$
@@ -1009,7 +1030,7 @@ using  (user_id)
 WHERE  (
               foo.user_id) IN
                                (
-                               SELECT DISTINCT user_id
+                               SELECT user_id
                                FROM            (
                                                       SELECT foo.user_id
                                                       FROM   users_table_part u1
@@ -1049,6 +1070,15 @@ EXPLAIN SELECT * FROM users_table_part u1 WHERE (value_1, user_id) IN
 SELECT u1.user_id, user_id FROM users_table_part
 UNION
 SELECT u1.user_id, user_id FROM users_table_part
+);
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT * FROM users_table_part u1 WHERE (user_id) IN
+(
+SELECT foo.user_id FROM users_table_part JOIN users_table_part foo ON users_table_part.user_id = foo.user_id
+UNION
+SELECT foo.user_id FROM users_table_part JOIN users_table_part foo on users_table_part.user_id = foo.user_id
 );
 $$);
 

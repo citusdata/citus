@@ -1836,7 +1836,9 @@ PartitionColumnForPushedDownSubquery(Query *query)
 		Expr *targetExpression = targetEntry->expr;
 		if (IsA(targetExpression, Var))
 		{
-			bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
+			bool skipOuterVars = true;
+			bool isPartitionColumn = IsPartitionColumn(targetExpression, query,
+													   skipOuterVars);
 			if (isPartitionColumn)
 			{
 				Var *partitionColumn = copyObject((Var *) targetExpression);

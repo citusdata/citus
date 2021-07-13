@@ -171,10 +171,11 @@ extern bool GroupedByColumn(List *groupClauseList, List *targetList, Var *column
 extern List * SubqueryMultiTableList(MultiNode *multiNode);
 extern List * GroupTargetEntryList(List *groupClauseList, List *targetEntryList);
 extern bool ExtractQueryWalker(Node *node, List **queryList);
-extern bool IsPartitionColumn(Expr *columnExpression, Query *query);
+extern bool IsPartitionColumn(Expr *columnExpression, Query *query, bool skipOuterVars);
 extern void FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList,
 									  Query *query, Var **column,
-									  RangeTblEntry **rte);
+									  RangeTblEntry **rteContainingReferencedColumn,
+									  bool skipOuterVars);
 extern char * WorkerColumnName(AttrNumber resno);
 extern bool IsGroupBySubsetOfDistinct(List *groupClauses, List *distinctClauses);
 extern bool TargetListHasAggregates(List *targetEntryList);

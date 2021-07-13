@@ -215,11 +215,14 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *targetExpression = targetEntry->expr;
 
-		bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
+		bool skipOuterVars = true;
+		bool isPartitionColumn = IsPartitionColumn(targetExpression, query,
+												   skipOuterVars);
 		Var *column = NULL;
 		RangeTblEntry *rte = NULL;
 
-		FindReferencedTableColumn(targetExpression, NIL, query, &column, &rte);
+		FindReferencedTableColumn(targetExpression, NIL, query, &column, &rte,
+								  skipOuterVars);
 		Oid relationId = rte ? rte->relid : InvalidOid;
 
 		/*

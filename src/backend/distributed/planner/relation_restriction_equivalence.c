@@ -1820,9 +1820,11 @@ PartitionKeyForRTEIdentityInQuery(Query *originalQuery, int targetRTEIndex,
 
 		partitionKeyTargetAttrIndex++;
 
+		bool skipOuterVars = false;
 		if (!targetEntry->resjunk &&
 			IsA(targetExpression, Var) &&
-			IsPartitionColumn(targetExpression, originalQueryContainingRTEIdentity))
+			IsPartitionColumn(targetExpression, originalQueryContainingRTEIdentity,
+							  skipOuterVars))
 		{
 			Var *targetColumn = (Var *) targetExpression;
 
@@ -1835,7 +1837,8 @@ PartitionKeyForRTEIdentityInQuery(Query *originalQuery, int targetRTEIndex,
 			FindReferencedTableColumn(targetExpression, NIL,
 									  originalQueryContainingRTEIdentity,
 									  &targetColumn,
-									  &rteContainingPartitionKey);
+									  &rteContainingPartitionKey,
+									  skipOuterVars);
 
 			if (rteContainingPartitionKey->rtekind == RTE_RELATION &&
 				GetRTEIdentity(rteContainingPartitionKey) == targetRTEIndex)
@@ -1855,12 +1858,12 @@ PartitionKeyForRTEIdentityInQuery(Query *originalQuery, int targetRTEIndex,
  * with rteIndex in its rtable.
  */
 static Query *
-FindQueryContainingRTEIdentity(Query *mainQuery, int rteIndex)
+FindQueryContainingRTEIdentity(Query *query, int rteIndex)
 {
 	FindQueryContainingRteIdentityContext *findRteIdentityContext =
 		palloc0(sizeof(FindQueryContainingRteIdentityContext));
 	findRteIdentityContext->targetRTEIdentity = rteIndex;
-	FindQueryContainingRTEIdentityInternal((Node *) mainQuery, findRteIdentityContext);
+	FindQueryContainingRTEIdentityInternal((Node *) query, findRteIdentityContext);
 	return findRteIdentityContext->query;
 }
 

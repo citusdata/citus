@@ -1136,7 +1136,8 @@ HasUnsupportedDistinctOn(Query *query)
 		TargetEntry *distinctEntry = get_sortgroupclause_tle(distinctClause,
 															 query->targetList);
 
-		if (IsPartitionColumn(distinctEntry->expr, query))
+		bool skipOuterVars = true;
+		if (IsPartitionColumn(distinctEntry->expr, query, skipOuterVars))
 		{
 			return false;
 		}
@@ -1203,10 +1204,12 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 
 		RangeTblEntry *subqueryPartitionColumnRelationIdRTE = NULL;
 		List *parentQueryList = list_make2(query, subquery);
+		bool skipOuterVars = true;
 		FindReferencedTableColumn(selectTargetExpr,
 								  parentQueryList, subquery,
 								  &subqueryPartitionColumn,
-								  &subqueryPartitionColumnRelationIdRTE);
+								  &subqueryPartitionColumnRelationIdRTE,
+								  skipOuterVars);
 		Oid subqueryPartitionColumnRelationId = subqueryPartitionColumnRelationIdRTE ?
 												subqueryPartitionColumnRelationIdRTE->
 												relid :
@@ -1343,7 +1346,7 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 		}
 
 		/* finally, check that the select target column is a partition column */
-		if (!IsPartitionColumn(selectTargetExpr, subquery))
+		if (!IsPartitionColumn(selectTargetExpr, subquery, skipOuterVars))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "cannot perform distributed INSERT INTO ... SELECT "
