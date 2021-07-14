@@ -533,9 +533,13 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 * AlterTableStmt applies also to INDEX relations, and we have support for
 	 * SET/SET storage parameters in Citus, so we might have to check for
 	 * another relation here.
+	 *
+	 * ALTER INDEX ATTACH PARTITION also applies to INDEX relation, so we might
+	 * check another relation for that option as well.
 	 */
 	char leftRelationKind = get_rel_relkind(leftRelationId);
-	if (leftRelationKind == RELKIND_INDEX)
+	if (leftRelationKind == RELKIND_INDEX ||
+		leftRelationKind == RELKIND_PARTITIONED_INDEX)
 	{
 		bool missingOk = false;
 		leftRelationId = IndexGetRelation(leftRelationId, missingOk);
@@ -598,7 +602,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 * we have a special implementation for ALTER INDEX, and a specific error
 	 * message in case of unsupported sub-command.
 	 */
-	if (leftRelationKind == RELKIND_INDEX)
+	if (leftRelationKind == RELKIND_INDEX ||
+		leftRelationKind == RELKIND_PARTITIONED_INDEX)
 	{
 		ErrorIfUnsupportedAlterIndexStmt(alterTableStatement);
 	}
@@ -820,23 +825,45 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		else if (alterTableType == AT_AttachPartition)
 		{
 			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+			Oid attachedRelationId = RangeVarGetRelid(partitionCommand->name, NoLock,
+													  false);
+			char attachedRelationKind = get_rel_relkind(attachedRelationId);
 
 			/*
-			 * We only support ALTER TABLE ATTACH PARTITION, if it is only subcommand of
-			 * ALTER TABLE. It was already checked in ErrorIfUnsupportedAlterTableStmt.
+			 * We support ALTER INDEX ATTACH PARTITION and ALTER TABLE ATTACH PARTITION
+			 * if it is only subcommand of ALTER TABLE command. Since the attached relation
+			 * type is index for ALTER INDEX ATTACH PARTITION, we need to use the relation
+			 * id this index is created for.
+			 *
+			 * Both were already checked in ErrorIfUnsupportedAlterIndexStmt and
+			 * ErrorIfUnsupportedAlterTableStmt.
 			 */
-			Assert(list_length(commandList) <= 1);
-
-			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
-
-			/*
-			 * Do not generate tasks if relation is distributed and the partition
-			 * is not distributed. Because, we'll manually convert the partition into
-			 * distributed table and co-locate with its parent.
-			 */
-			if (!IsCitusTable(rightRelationId))
+			if (attachedRelationKind == RELKIND_INDEX)
 			{
-				return NIL;
+				bool missingOk = false;
+				rightRelationId = IndexGetRelation(attachedRelationId, missingOk);
+
+				/*
+				 * Since left relation is checked above to make sure it is Citus table,
+				 * partition of that must be Citus table as well.
+				 */
+				Assert(IsCitusTable(rightRelationId));
+			}
+			else if (attachedRelationKind == RELKIND_RELATION)
+			{
+				Assert(list_length(commandList) <= 1);
+
+				/*
+				 * Do not generate tasks if relation is distributed and the partition
+				 * is not distributed. Because, we'll manually convert the partition into
+				 * distributed table and co-locate with its parent.
+				 */
+				if (!IsCitusTable(attachedRelationId))
+				{
+					return NIL;
+				}
+
+				rightRelationId = attachedRelationId;
 			}
 		}
 		else if (alterTableType == AT_DetachPartition)
@@ -900,7 +927,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		}
 		else
 		{
-			/* if foreign key related, use specialized task list function ... */
+			/* if foreign key or attaching partition index related, use specialized task list function ... */
 			ddlJob->taskList = InterShardDDLTaskList(leftRelationId, rightRelationId,
 													 sqlForTaskList);
 		}
@@ -2606,11 +2633,11 @@ SetupExecutionModeForAlterTable(Oid relationId, AlterTableCmd *command)
 /*
  * InterShardDDLTaskList builds a list of tasks to execute a inter shard DDL command on a
  * shards of given list of distributed table. At the moment this function is used to run
- * foreign key and partitioning command on worker node.
+ * foreign key, partitioning and attaching partition index command on worker node.
  *
  * leftRelationId is the relation id of actual distributed table which given command is
- * applied. rightRelationId is the relation id of distributed table which given command
- * refers to.
+ * applied. rightRelationId is the relation id of either index or distributed table which
+ * given command refers to.
  */
 static List *
 InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,

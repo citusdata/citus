@@ -810,6 +810,7 @@ ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
 			case AT_ResetRelOptions:    /* RESET (...) */
 			case AT_ReplaceRelOptions:  /* replace entire option list */
 			case AT_SetStatistics:  /* SET STATISTICS */
+			case AT_AttachPartition: /* ATTACH PARTITION */
 			{
 				/* this command is supported by Citus */
 				break;
@@ -823,7 +824,7 @@ ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("alter index ... set tablespace ... "
 								"is currently unsupported"),
-						 errdetail("Only RENAME TO, SET (), RESET () "
+						 errdetail("Only RENAME TO, SET (), RESET (), ATTACH PARTITION "
 								   "and SET STATISTICS are supported.")));
 				return; /* keep compiler happy */
 			}

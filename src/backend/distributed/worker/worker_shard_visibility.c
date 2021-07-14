@@ -96,7 +96,7 @@ citus_table_is_visible(PG_FUNCTION_ARGS)
 		 * more meaningful debug message here.
 		 */
 		relKind = get_rel_relkind(relationId);
-		if (relKind == RELKIND_INDEX)
+		if (relKind == RELKIND_INDEX || relKind == RELKIND_PARTITIONED_INDEX)
 		{
 			ereport(DEBUG2, (errmsg("skipping index \"%s\" since it belongs to a shard",
 									get_rel_name(relationId))));
@@ -207,7 +207,7 @@ RelationIsAKnownShard(Oid shardRelationId)
 	 * as well.
 	 */
 	relKind = get_rel_relkind(shardRelationId);
-	if (relKind == RELKIND_INDEX)
+	if (relKind == RELKIND_INDEX || relKind == RELKIND_PARTITIONED_INDEX)
 	{
 		shardRelationId = IndexGetRelation(shardRelationId, false);
 	}

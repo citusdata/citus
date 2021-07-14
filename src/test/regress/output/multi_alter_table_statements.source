@@ -1190,7 +1190,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' OR
 -- verify error message on ALTER INDEX, SET TABLESPACE is unsupported
 ALTER INDEX hash_dist_pkey SET TABLESPACE foo;
 ERROR:  alter index ... set tablespace ... is currently unsupported
-DETAIL:  Only RENAME TO, SET (), RESET () and SET STATISTICS are supported.
+DETAIL:  Only RENAME TO, SET (), RESET (), ATTACH PARTITION and SET STATISTICS are supported.
 -- verify that we can add indexes with new storage options
 CREATE UNIQUE INDEX another_index ON hash_dist(id) WITH (fillfactor=50);
 -- show the index and its storage options on coordinator, then workers
