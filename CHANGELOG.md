@@ -1,4 +1,4 @@
-### citus v10.1.0 (June 15, 2021) ###
+### citus v10.1.0 (July 14, 2021) ###
 
 * Drops support for PostgreSQL 11
 
@@ -53,15 +53,34 @@
 
 * Removes length limits around partition names
 
+* Removes dependencies on the existence of public schema
+
 * Executor avoids opening extra connections
+
+* Excludes orphaned shards while finding shard placements
+
+* Preserves access method of materialized views when undistributing
+  or altering distributed tables
+
+* Fixes a bug that allowed moving of shards belonging to a reference table
 
 * Fixes a bug that can cause a crash when DEBUG4 logging is enabled
 
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes a bug that causes worker_create_or_alter_role to crash with NULL input
+
+* Fixes a bug where foreign key to reference table was disallowed
+
+* Fixes a bug with local cached plans on tables with dropped columns
+
 * Fixes data race in `get_rebalance_progress`
 
-* Fixes error message for local table joins
-
 * Fixes `FROM ONLY` queries on partitioned tables
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes error message for local table joins
 
 * Fixes issues caused by omitting public schema in queries
 
@@ -77,10 +96,60 @@
 
 * Fixes stale hostnames bug in prepared statements after `master_update_node`
 
+* Fixes the relation size bug during rebalancing
+
+* Fixes two race conditions in the get_rebalance_progress
+
 * Fixes using 2PC when it might be necessary
 
-* Preserves access method of materialized views when undistributing
-  or altering distributed tables
+### citus v10.0.4 (July 14, 2021) ###
+
+* Introduces `citus.local_hostname` GUC for connections to the current node
+
+* Removes dependencies on the existence of public schema
+
+* Removes limits around long partition names
+
+* Fixes a bug that can cause a crash when DEBUG4 logging is enabled
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes FROM ONLY queries on partitioned tables
+
+* Fixes issues caused by public schema being omitted in queries
+
+* Fixes problems with concurrent calls of DropMarkedShards
+
+* Fixes relname null bug when using parallel execution
+
+* Fixes two race conditions in the get_rebalance_progress
+
+### citus v9.5.6 (July 8, 2021) ###
+
+* Fixes minor bug in `citus_prepare_pg_upgrade` that caused it to lose its
+  idempotency
+
+### citus v9.5.5 (July 7, 2021) ###
+
+* Adds a configure flag to enforce security
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+### citus v9.4.5 (July 7, 2021) ###
+
+* Adds a configure flag to enforce security
+
+* Avoids re-using connections for intermediate results
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes a bug that might cause self-deadlocks when COPY used in TX block
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
 
 ### citus v8.3.3 (March 23, 2021) ###
 
