@@ -1,3 +1,27 @@
+### citus v10.0.4 (July 14, 2021) ###
+
+* Introduces `citus.local_hostname` GUC for connections to the current node
+
+* Removes dependencies on the existence of public schema
+
+* Removes limits around long partition names
+
+* Fixes a bug that can cause a crash when DEBUG4 logging is enabled
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes FROM ONLY queries on partitioned tables
+
+* Fixes issues caused by public schema being omitted in queries
+
+* Fixes problems with concurrent calls of DropMarkedShards
+
+* Fixes relname null bug when using parallel execution
+
+* Fixes two race conditions in the get_rebalance_progress
+
 ### citus v10.0.3 (March 16, 2021) ###
 
 * Prevents infinite recursion for queries that involve `UNION ALL`
