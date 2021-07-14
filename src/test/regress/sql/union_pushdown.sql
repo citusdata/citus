@@ -707,9 +707,9 @@ $$);
 SELECT public.explain_has_distributed_subplan($$
 explain SELECT * FROM users_table_part u1 WHERE (user_id) IN
 (
-SELECT user_id FROM (SELECT * FROM users_table_part) as foo
+SELECT user_id FROM (SELECT *, random() FROM users_table_part) as foo
 UNION
-SELECT user_id FROM (SELECT * FROM users_table_part) as bar
+SELECT user_id FROM (SELECT *, random() FROM users_table_part) as bar
 );
 $$);
 
@@ -836,6 +836,8 @@ SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM
 ) as bar;
 $$);
 
+-- we hit the following error hence can't pushdown:
+-- Complex subqueries and CTEs are not supported within a UNION
 SELECT public.explain_has_distributed_subplan($$
 EXPLAIN WITH cte AS (
 SELECT * FROM
@@ -1064,6 +1066,7 @@ WHERE  (
 $$);
 
 
+-- we hit https://github.com/citusdata/citus/blob/f00c63c33daf3d16f06462626ca14732b141ae7a/src/backend/distributed/planner/relation_restriction_equivalence.c#L235-L242
 SELECT public.explain_has_distributed_subplan($$
 EXPLAIN SELECT * FROM users_table_part u1 WHERE (value_1, user_id) IN
 (

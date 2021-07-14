@@ -4409,6 +4409,9 @@ IsPartitionColumn(Expr *columnExpression, Query *query, bool skipOuterVars)
  * into CTEs that may be present in the query.
  *
  * If skipOuterVars is true, then it doesn't check vars coming from outer queries.
+ * We probably don't need this skipOuterVars check but we wanted to be on the safe side
+ * and used it only in UNION path, we can separately work on verifying that it doesn't break
+ * anything existing.
  */
 void
 FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *query,
@@ -4463,6 +4466,11 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		 */
 		candidateColumn = copyObject(candidateColumn);
 		candidateColumn->varlevelsup = 0;
+
+		/*
+		 * We should be careful about these fields because they need to
+		 * be updated correctly based on ctelevelsup and varlevelsup.
+		 */
 		query = list_nth(parentQueryList, parentQueryIndex);
 		parentQueryList = list_truncate(parentQueryList, parentQueryIndex);
 	}
