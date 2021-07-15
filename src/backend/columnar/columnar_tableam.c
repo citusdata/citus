@@ -83,6 +83,8 @@ typedef struct ColumnarScanDescData
 	MemoryContext scanContext;
 	Bitmapset *attr_needed;
 	List *scanQual;
+
+	int tupleindex;
 } ColumnarScanDescData;
 
 typedef struct ColumnarScanDescData *ColumnarScanDesc;
@@ -2066,6 +2068,57 @@ IsColumnarTableAmTable(Oid relationId)
 }
 
 
+static bool
+columnar_bitmap_next_block(TableScanDesc scan, TBMIterateResult *tbmres)
+{
+	ColumnarScanDesc cscan = (ColumnarScanDesc) scan;
+	cscan->tupleindex = 0;
+
+//	ereport(ERROR, (errmsg("bitmap scan not implemented")));
+	return tbmres->blockno == 0;
+}
+
+
+static bool
+columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
+						   TupleTableSlot *slot)
+{
+	ColumnarScanDesc cscan = (ColumnarScanDesc) scan;
+
+	/**/
+	if (cscan->tupleindex >= tbmres->ntuples || cscan->tupleindex > 0 || tbmres->blockno != 0)
+	{
+		return false;
+	}
+
+	ItemPointerData tid = {};
+
+	ItemPointerSet(&tid, tbmres->blockno, tbmres->offsets[cscan->tupleindex]);
+	cscan->tupleindex++;
+
+	ExecClearTuple(slot);
+
+	/* we need all columns */
+	Relation rel = cscan->cs_base.rs_rd;
+	int natts = rel->rd_att->natts;
+	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
+	TupleDesc relationTupleDesc = RelationGetDescr(rel);
+	List *relationColumnList = NeededColumnsList(relationTupleDesc, attr_needed);
+	uint64 rowNumber = tid_to_row_number(tid);
+	if (!ColumnarReadRowByRowNumber(rel, rowNumber, relationColumnList,
+									slot->tts_values, slot->tts_isnull,
+									cscan->cs_base.rs_snapshot))
+	{
+		return false;
+	}
+
+	slot->tts_tableOid = RelationGetRelid(rel);
+	slot->tts_tid = tid;
+	ExecStoreVirtualTuple(slot);
+
+	return true;
+}
+
 static const TableAmRoutine columnar_am_methods = {
 	.type = T_TableAmRoutine,
 
@@ -2119,8 +2172,8 @@ static const TableAmRoutine columnar_am_methods = {
 
 	.relation_estimate_size = columnar_estimate_rel_size,
 
-	.scan_bitmap_next_block = NULL,
-	.scan_bitmap_next_tuple = NULL,
+	.scan_bitmap_next_block = columnar_bitmap_next_block,
+	.scan_bitmap_next_tuple = columnar_bitmap_next_tuple,
 	.scan_sample_next_block = columnar_scan_sample_next_block,
 	.scan_sample_next_tuple = columnar_scan_sample_next_tuple
 };
