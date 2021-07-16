@@ -882,12 +882,13 @@ pg_get_indexclusterdef_string(Oid indexRelationId)
 	/* check if the table is clustered on this index */
 	if (indexForm->indisclustered)
 	{
-		char *tableName = generate_relation_name(tableRelationId, NIL);
+		char *qualifiedRelationName =
+			generate_qualified_relation_name(tableRelationId);
 		char *indexName = get_rel_name(indexRelationId); /* needs to be quoted */
 
 		initStringInfo(&buffer);
 		appendStringInfo(&buffer, "ALTER TABLE %s CLUSTER ON %s",
-						 tableName, quote_identifier(indexName));
+						 qualifiedRelationName, quote_identifier(indexName));
 	}
 
 	ReleaseSysCache(indexTuple);
