@@ -207,6 +207,7 @@ static ScanKeyData DistObjectScanKey[3];
 
 /* local function forward declarations */
 static bool IsCitusTableViaCatalog(Oid relationId);
+static HeapTuple PgDistPartitionTupleViaCatalog(Oid relationId);
 static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
 static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
 static void BuildCachedShardList(CitusTableCacheEntry *cacheEntry);
@@ -236,13 +237,9 @@ static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid rela
 static void CitusTableCacheEntryReleaseCallback(ResourceReleasePhase phase, bool isCommit,
 												bool isTopLevel, void *arg);
 static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
-static List * LookupDistShardTuples(Oid relationId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 									  Oid *columnTypeId, int32 *columnTypeMod,
 									  Oid *intervalTypeId, int32 *intervalTypeMod);
-static ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
-											TupleDesc tupleDescriptor, Oid intervalTypeId,
-											int32 intervalTypeMod);
 static void CachedNamespaceLookup(const char *nspname, Oid *cachedOid);
 static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 static void CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
@@ -428,6 +425,66 @@ IsCitusTable(Oid relationId)
 static bool
 IsCitusTableViaCatalog(Oid relationId)
 {
+	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+
+	bool heapTupleIsValid = HeapTupleIsValid(partitionTuple);
+
+	if (heapTupleIsValid)
+	{
+		heap_freetuple(partitionTuple);
+	}
+	return heapTupleIsValid;
+}
+
+
+/*
+ * PartitionMethodViaCatalog gets a relationId and returns the partition
+ * method column from pg_dist_partition via reading from catalog.
+ */
+char
+PartitionMethodViaCatalog(Oid relationId)
+{
+	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+	if (!HeapTupleIsValid(partitionTuple))
+	{
+		return DISTRIBUTE_BY_INVALID;
+	}
+
+	Datum datumArray[Natts_pg_dist_partition];
+	bool isNullArray[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
+
+	if (isNullArray[Anum_pg_dist_partition_partmethod - 1])
+	{
+		/* partition method cannot be NULL, still let's make sure */
+		heap_freetuple(partitionTuple);
+		table_close(pgDistPartition, NoLock);
+		return DISTRIBUTE_BY_INVALID;
+	}
+
+	Datum partitionMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
+	char partitionMethodChar = DatumGetChar(partitionMethodDatum);
+
+	heap_freetuple(partitionTuple);
+	table_close(pgDistPartition, NoLock);
+
+	return partitionMethodChar;
+}
+
+
+/*
+ * PgDistPartitionTupleViaCatalog is a helper function that searches
+ * pg_dist_partition for the given relationId. The caller is responsible
+ * for ensuring that the returned heap tuple is valid before accessing
+ * its fields.
+ */
+static HeapTuple
+PgDistPartitionTupleViaCatalog(Oid relationId)
+{
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
 	bool indexOK = true;
@@ -442,10 +499,17 @@ IsCitusTableViaCatalog(Oid relationId)
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple partitionTuple = systable_getnext(scanDescriptor);
+
+	if (HeapTupleIsValid(partitionTuple))
+	{
+		/* callers should have the tuple in their memory contexts */
+		partitionTuple = heap_copytuple(partitionTuple);
+	}
+
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);
 
-	return HeapTupleIsValid(partitionTuple);
+	return partitionTuple;
 }
 
 
@@ -1504,7 +1568,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 		cacheEntry->shardIntervalArrayLength++;
 
 		/* build list of shard placements */
-		List *placementList = BuildShardPlacementList(shardInterval);
+		List *placementList = BuildShardPlacementList(shardId);
 		int numberOfPlacements = list_length(placementList);
 
 		/* and copy that list into the cache entry */
@@ -3997,7 +4061,7 @@ LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
  * LookupDistShardTuples returns a list of all dist_shard tuples for the
  * specified relation.
  */
-static List *
+List *
 LookupDistShardTuples(Oid relationId)
 {
 	List *distShardTupleList = NIL;
@@ -4208,7 +4272,7 @@ GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
  * TupleToShardInterval transforms the specified dist_shard tuple into a new
  * ShardInterval using the provided descriptor and partition type information.
  */
-static ShardInterval *
+ShardInterval *
 TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid
 					 intervalTypeId,
 					 int32 intervalTypeMod)

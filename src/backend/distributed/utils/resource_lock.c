@@ -107,9 +107,6 @@ lock_shard_metadata(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("no locks specified")));
 	}
 
-	/* we don't want random users to block writes */
-	EnsureSuperUser();
-
 	int shardIdCount = ArrayObjectCount(shardIdArrayObject);
 	Datum *shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
 
@@ -117,10 +114,49 @@ lock_shard_metadata(PG_FUNCTION_ARGS)
 	{
 		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
 
+		/*
+		 * We don't want random users to block writes. The callers of this
+		 * function either operates on all the colocated placements, such
+		 * as shard moves, or requires superuser such as adding node.
+		 * In other words, the coordinator initiated operations has already
+		 * ensured table owner, we are preventing any malicious attempt to
+		 * use this function.
+		 */
+		bool missingOk = true;
+		EnsureShardOwner(shardId, missingOk);
+
 		LockShardDistributionMetadata(shardId, lockMode);
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsureShardOwner gets the shardId and reads pg_dist_partition to find
+ * the corresponding relationId. If the relation does not exist, the function
+ * returns. If the relation exists, the function ensures if the current
+ * user is the owner of the table.
+ *
+ */
+void
+EnsureShardOwner(uint64 shardId, bool missingOk)
+{
+	Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
+
+	if (!OidIsValid(relationId) && missingOk)
+	{
+		/*
+		 * This could happen in two ways. First, a malicious user is trying
+		 * to acquire locks on non-existing shards. Second, the metadata has
+		 * not been synced (or not yet visible) to this node. In the second
+		 * case, there is no point in locking the shards because no other
+		 * transaction can be accessing the table.
+		 */
+		return;
+	}
+
+	EnsureTableOwner(relationId);
 }
 
 
@@ -144,15 +180,23 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errmsg("no locks specified")));
 	}
 
-	/* we don't want random users to block writes */
-	EnsureSuperUser();
-
 	int shardIdCount = ArrayObjectCount(shardIdArrayObject);
 	Datum *shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
 
 	for (int shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
 	{
 		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
+
+		/*
+		 * We don't want random users to block writes. The callers of this
+		 * function either operates on all the colocated placements, such
+		 * as shard moves, or requires superuser such as adding node.
+		 * In other words, the coordinator initiated operations has already
+		 * ensured table owner, we are preventing any malicious attempt to
+		 * use this function.
+		 */
+		bool missingOk = true;
+		EnsureShardOwner(shardId, missingOk);
 
 		LockShardResource(shardId, lockMode);
 	}
@@ -176,7 +220,7 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 	int totalShardIntervalCount = list_length(shardIntervalList);
 	WorkerNode *firstWorkerNode = GetFirstPrimaryWorkerNode();
 	int connectionFlags = 0;
-	const char *superuser = CitusExtensionOwnerName();
+	const char *superuser = CurrentUserName();
 
 	appendStringInfo(lockCommand, "SELECT lock_shard_resources(%d, ARRAY[", lockmode);
 
@@ -831,7 +875,6 @@ lock_relation_if_exists(PG_FUNCTION_ARGS)
 											  CitusRangeVarCallbackForLockTable,
 											  (void *) &lockMode);
 	bool relationExists = OidIsValid(relationId);
-
 	PG_RETURN_BOOL(relationExists);
 }
 

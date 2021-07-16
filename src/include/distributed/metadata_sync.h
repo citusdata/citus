@@ -82,4 +82,8 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 	"groupid = EXCLUDED.groupid"
 #define METADATA_SYNC_CHANNEL "metadata_sync"
 
+
+/* controlled via GUC */
+extern char *EnableManualMetadataChangesForUser;
+
 #endif /* METADATA_SYNC_H */

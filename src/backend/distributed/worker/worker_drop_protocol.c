@@ -50,7 +50,6 @@ Datum
 worker_drop_distributed_table(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
-	EnsureSuperUser();
 
 	text *relationName = PG_GETARG_TEXT_P(0);
 	Oid relationId = ResolveRelationId(relationName, true);
@@ -64,6 +63,8 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 								text_to_cstring(relationName))));
 		PG_RETURN_VOID();
 	}
+
+	EnsureTableOwner(relationId);
 
 	List *shardList = LoadShardList(relationId);
 

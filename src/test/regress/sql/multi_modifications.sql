@@ -885,6 +885,7 @@ DELETE FROM summary_table WHERE id < (
 CREATE TABLE multi_modifications.local (a int default 1, b int);
 INSERT INTO multi_modifications.local VALUES (default, (SELECT min(id) FROM summary_table));
 
+DROP TABLE insufficient_shards;
 DROP TABLE raw_table;
 DROP TABLE summary_table;
 DROP TABLE reference_raw_table;
