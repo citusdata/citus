@@ -189,8 +189,6 @@ PostprocessCompositeTypeStmt(Node *node, const char *queryString)
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
-	MarkObjectDistributed(&typeAddress);
-
 	return NIL;
 }
 
@@ -298,13 +296,6 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
 	/* lookup type address of just created type */
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
-
-	/*
-	 * now that the object has been created and distributed to the workers we mark them as
-	 * distributed so we know to keep them up to date and recreate on a new node in the
-	 * future
-	 */
-	MarkObjectDistributed(&typeAddress);
 
 	return NIL;
 }

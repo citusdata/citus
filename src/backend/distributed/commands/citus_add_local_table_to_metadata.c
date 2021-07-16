@@ -33,6 +33,7 @@
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/namespace_utils.h"
 #include "distributed/reference_table_utils.h"
@@ -1059,9 +1060,19 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 			 * Ensure sequence dependencies and mark them as distributed
 			 * before creating table metadata on workers
 			 */
-			MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
+			PropagateSequenceListDependencies(dependentSequenceList);
 		}
 		CreateTableMetadataOnWorkers(relationId);
+
+		Oid sequenceOid;
+		foreach_oid(sequenceOid, dependentSequenceList)
+		{
+			ObjectAddress address;
+
+			ObjectAddressSet(address, RelationRelationId, sequenceOid);
+			bool shouldSyncMetadata = true;
+			MarkObjectDistributed(&address, shouldSyncMetadata);
+		}
 	}
 
 	/*

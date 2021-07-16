@@ -1,0 +1,14 @@
+SELECT success FROM run_command_on_workers('ALTER SYSTEM SET citus.enable_ddl_propagation TO OFF');
+ success
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+
+SELECT success FROM run_command_on_workers('select pg_reload_conf()');
+ success
+---------------------------------------------------------------------
+ t
+ t
+(2 rows)
+

@@ -590,8 +590,6 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 
 	EnsureDependenciesExistOnAllNodes(&collationAddress);
 
-	MarkObjectDistributed(&collationAddress);
-
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, CreateCollationDDLsIdempotent(
 							   collationAddress.objectId));
 }

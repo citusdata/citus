@@ -42,7 +42,8 @@ Datum
 master_metadata_snapshot(PG_FUNCTION_ARGS)
 {
 	List *dropSnapshotCommands = MetadataDropCommands();
-	List *createSnapshotCommands = MetadataCreateCommands();
+	List *newDistributedObjects = NIL;
+	List *createSnapshotCommands = MetadataCreateCommands(&newDistributedObjects);
 	List *snapshotCommandList = NIL;
 	int snapshotCommandIndex = 0;
 	Oid ddlCommandTypeId = TEXTOID;

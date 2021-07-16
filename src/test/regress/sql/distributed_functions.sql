@@ -204,6 +204,12 @@ END;
 SELECT create_distributed_function('dup(macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.dup('0123456789ab');$$) ORDER BY 1,2;
 
+-- Wait two times for metadata sync, once for each node in the cluster.
+-- Otherwise the next distributed function creation will fail, telling us to
+-- wait for syncing.
+SELECT public.wait_until_metadata_sync(30000);
+SELECT public.wait_until_metadata_sync(30000);
+
 SELECT create_distributed_function('eq(macaddr,macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('012345689ab','0123456789ab');$$) ORDER BY 1,2;
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');

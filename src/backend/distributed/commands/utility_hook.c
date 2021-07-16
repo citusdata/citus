@@ -53,6 +53,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_physical_planner.h"
@@ -649,6 +650,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 				/* no failures during CONCURRENTLY, mark the index as valid */
 				MarkIndexValid(indexStmt);
 			}
+		}
+		if (ops && ops->markDistributed)
+		{
+			ObjectAddress address = GetObjectAddressFromParseTree(parsetree, false);
+			bool shouldSyncMetadata = true;
+			MarkObjectDistributed(&address, shouldSyncMetadata);
 		}
 	}
 

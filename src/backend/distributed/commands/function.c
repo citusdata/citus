@@ -75,9 +75,6 @@ static int GetFunctionColocationId(Oid functionOid, char *colocateWithName, Oid
 static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 												  distributionColumnType, Oid
 												  sourceRelationId);
-static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
-										   int *distribution_argument_index,
-										   int *colocationId);
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
@@ -187,10 +184,15 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
 	const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
 	initStringInfo(&ddlCommand);
-	appendStringInfo(&ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
+	appendStringInfo(&ddlCommand, "%s;%s;%s;%s",
+					 DISABLE_DDL_PROPAGATION,
+					 createFunctionSQL,
+					 alterFunctionOwnerSQL,
+					 ENABLE_DDL_PROPAGATION);
 	SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(), ddlCommand.data);
 
-	MarkObjectDistributed(&functionAddress);
+	bool shouldSyncMetadata = true;
+	MarkObjectDistributed(&functionAddress, shouldSyncMetadata);
 
 	if (distributionArgumentName != NULL)
 	{
@@ -236,8 +238,9 @@ DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
 								distributionArgumentOid);
 
 	/* record the distribution argument and colocationId */
+	bool shouldSyncMetadata = true;
 	UpdateFunctionDistributionInfo(functionAddress, &distributionArgumentIndex,
-								   &colocationId);
+								   &colocationId, shouldSyncMetadata);
 
 	/*
 	 * Once we have at least one distributed function/procedure with distribution
@@ -274,8 +277,10 @@ DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid,
 								" parameter should also be provided")));
 	}
 
+	bool shouldSyncMetadata = true;
+
 	/* set distribution argument and colocationId to NULL */
-	UpdateFunctionDistributionInfo(functionAddress, NULL, NULL);
+	UpdateFunctionDistributionInfo(functionAddress, NULL, NULL, shouldSyncMetadata);
 }
 
 
@@ -291,8 +296,9 @@ DistributeFunctionColocatedWithReferenceTable(const ObjectAddress *functionAddre
 
 	/* set distribution argument to NULL and colocationId to the reference table colocation id */
 	int *distributionArgumentIndex = NULL;
+	bool shouldSyncMetadata = true;
 	UpdateFunctionDistributionInfo(functionAddress, distributionArgumentIndex,
-								   &colocationId);
+								   &colocationId, shouldSyncMetadata);
 
 	/*
 	 * Once we have at least one distributed function/procedure that reads
@@ -564,10 +570,10 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
  * UpdateFunctionDistributionInfo gets object address of a function and
  * updates its distribution_argument_index and colocationId in pg_dist_object.
  */
-static void
+void
 UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 							   int *distribution_argument_index,
-							   int *colocationId)
+							   int *colocationId, bool shouldSyncMetadata)
 {
 	const bool indexOK = true;
 
@@ -637,6 +643,13 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 	systable_endscan(scanDescriptor);
 
 	table_close(pgDistObjectRel, NoLock);
+
+	if (shouldSyncMetadata)
+	{
+		char *workerMetadataUpdateCommand = DistributedObjectCreateCommand(
+			distAddress, distribution_argument_index, colocationId);
+		SendCommandToWorkersWithMetadata(workerMetadataUpdateCommand);
+	}
 }
 
 
@@ -1089,8 +1102,8 @@ EnsureSequentialModeForFunctionDDL(void)
 
 /*
  * TriggerSyncMetadataToPrimaryNodes iterates over the active primary nodes,
- * and triggers the metadata syncs if the node has not the metadata. Later,
- * maintenance daemon will sync the metadata to nodes.
+ * and triggers the metadata syncs if the node does not have the metadata.
+ * Later the maintenance daemon will sync the metadata to nodes.
  */
 static void
 TriggerSyncMetadataToPrimaryNodes(void)

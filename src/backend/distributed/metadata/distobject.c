@@ -31,7 +31,11 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_transaction.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
@@ -137,7 +141,7 @@ ObjectExists(const ObjectAddress *address)
  * by adding appropriate entries to citus.pg_dist_object.
  */
 void
-MarkObjectDistributed(const ObjectAddress *distAddress)
+MarkObjectDistributed(const ObjectAddress *distAddress, bool shouldSyncMetadata)
 {
 	int paramCount = 3;
 	Oid paramTypes[3] = {
@@ -159,6 +163,13 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 	if (spiStatus < 0)
 	{
 		ereport(ERROR, (errmsg("failed to insert object into citus.pg_dist_object")));
+	}
+
+	if (shouldSyncMetadata)
+	{
+		char *workerMetadataUpdateCommand = DistributedObjectCreateCommand(
+			distAddress, NULL, NULL);
+		SendCommandToWorkersWithMetadata(workerMetadataUpdateCommand);
 	}
 }
 

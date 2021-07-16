@@ -31,8 +31,12 @@ typedef enum
 extern void StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern bool ShouldSyncTableMetadata(Oid relationId);
-extern List * MetadataCreateCommands(void);
+extern List * MetadataCreateCommands(List **newDistributedObjects);
 extern List * MetadataDropCommands(void);
+extern char * DistributedObjectCreateCommand(const ObjectAddress *address,
+											 int32 *distributionArgumentIndex,
+											 int32 *colocationId);
+extern char * DistributedObjectDeleteCommand(const ObjectAddress *address);
 extern char * DistributionCreateCommand(CitusTableCacheEntry *cacheEntry);
 extern char * DistributionDeleteCommand(const char *schemaName,
 										const char *tableName);
@@ -63,6 +67,7 @@ extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
 #define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"
+#define DELETE_ALL_DISTRIBUTED_OBJECTS "TRUNCATE citus.pg_dist_object"
 #define REMOVE_ALL_CLUSTERED_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"
 #define DISABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'off'"

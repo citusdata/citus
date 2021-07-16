@@ -49,8 +49,8 @@ bool EnableDependencyCreation = true;
  * This is solved by creating the dependencies in an idempotent manner, either via
  * postgres native CREATE IF NOT EXISTS, or citus helper functions.
  */
-void
-EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
+List *
+EnsureDependenciesExistOnAllNodesWithoutMarkingDistributed(const ObjectAddress *target)
 {
 	List *dependenciesWithCommands = NIL;
 	List *ddlCommands = NULL;
@@ -72,7 +72,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	if (list_length(ddlCommands) <= 0)
 	{
 		/* no ddl commands to be executed */
-		return;
+		return NIL;
 	}
 
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
@@ -89,30 +89,8 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
 
 	/*
-	 * right after we acquired the lock we mark our objects as distributed, these changes
-	 * will not become visible before we have successfully created all the objects on our
-	 * workers.
-	 *
-	 * It is possible to create distributed tables which depend on other dependencies
-	 * before any node is in the cluster. If we would wait till we actually had connected
-	 * to the nodes before marking the objects as distributed these objects would never be
-	 * created on the workers when they get added, causing shards to fail to create.
-	 */
-	foreach_ptr(dependency, dependenciesWithCommands)
-	{
-		MarkObjectDistributed(dependency);
-	}
-
-	/*
 	 * collect and connect to all applicable nodes
 	 */
-	if (list_length(workerNodeList) <= 0)
-	{
-		/* no nodes to execute on */
-		return;
-	}
-
-
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
@@ -122,6 +100,29 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
 												   CitusExtensionOwnerName(),
 												   ddlCommands);
+	}
+
+	return dependenciesWithCommands;
+}
+
+
+void
+EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
+{
+	List *dependenciesWithCommands =
+		EnsureDependenciesExistOnAllNodesWithoutMarkingDistributed(target);
+
+	/*
+	 * It is possible to create distributed tables which depend on other dependencies
+	 * before any node is in the cluster. If we would wait till we actually had connected
+	 * to the nodes before marking the objects as distributed these objects would never be
+	 * created on the workers when they get added, causing shards to fail to create.
+	 */
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependenciesWithCommands)
+	{
+		bool shouldSyncMetadata = true;
+		MarkObjectDistributed(dependency, shouldSyncMetadata);
 	}
 }
 

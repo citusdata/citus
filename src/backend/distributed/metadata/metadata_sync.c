@@ -47,6 +47,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
@@ -126,6 +127,7 @@ PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
 PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
 
@@ -216,7 +218,6 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	}
 
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
-	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
 }
 
 
@@ -357,8 +358,10 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	/* generate the queries which drop the metadata */
 	List *dropMetadataCommandList = MetadataDropCommands();
 
+	List *newDistributedObjects = NIL;
+
 	/* generate the queries which create the metadata from scratch */
-	List *createMetadataCommandList = MetadataCreateCommands();
+	List *createMetadataCommandList = MetadataCreateCommands(&newDistributedObjects);
 
 	List *recreateMetadataSnapshotCommandList = list_make1(localGroupIdUpdateCommand);
 	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
@@ -378,7 +381,6 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 												   workerNode->workerPort,
 												   currentUser,
 												   recreateMetadataSnapshotCommandList);
-		return true;
 	}
 	else
 	{
@@ -387,8 +389,20 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 														 workerNode->workerPort,
 														 currentUser,
 														 recreateMetadataSnapshotCommandList);
-		return success;
+		if (!success)
+		{
+			return false;
+		}
 	}
+	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
+
+	ObjectAddress *address;
+	foreach_ptr(address, newDistributedObjects)
+	{
+		bool shouldSyncMetadata = true;
+		MarkObjectDistributed(address, shouldSyncMetadata);
+	}
+	return true;
 }
 
 
@@ -428,7 +442,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
  * (v)   Queries that populate pg_dist_placement table referenced by (iv)
  */
 List *
-MetadataCreateCommands(void)
+MetadataCreateCommands(List **newDistributedObjects)
 {
 	List *metadataSnapshotCommandList = NIL;
 	List *distributedTableList = CitusTableList();
@@ -486,7 +500,19 @@ MetadataCreateCommands(void)
 		List *dependentSequenceList = NIL;
 		GetDependentSequencesWithRelation(relationId, &attnumList,
 										  &dependentSequenceList, 0);
-		MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
+
+		Oid sequenceOid;
+		foreach_oid(sequenceOid, dependentSequenceList)
+		{
+			ObjectAddress *sequenceAddress = palloc(sizeof(ObjectAddress));
+			ObjectAddressSet(*sequenceAddress, RelationRelationId, sequenceOid);
+			List *addedDependencies =
+				EnsureDependenciesExistOnAllNodesWithoutMarkingDistributed(
+					sequenceAddress);
+			*newDistributedObjects = list_concat(*newDistributedObjects,
+												 addedDependencies);
+			*newDistributedObjects = lappend(*newDistributedObjects, sequenceAddress);
+		}
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
@@ -572,6 +598,43 @@ MetadataCreateCommands(void)
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  shardCreateCommandList);
 	}
+
+	HeapTuple pgDistObjectTup = NULL;
+
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
+
+	TupleDesc pgDistObjectDesc = RelationGetDescr(pgDistObjectRel);
+
+	SysScanDesc pgDistObjectScan =
+		systable_beginscan(pgDistObjectRel, InvalidOid, false, NULL, 0, NULL);
+	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
+	{
+		Form_pg_dist_object pg_dist_object =
+			(Form_pg_dist_object) GETSTRUCT(pgDistObjectTup);
+
+		ObjectAddress address;
+		ObjectAddressSubSet(address, pg_dist_object->classid, pg_dist_object->objid,
+							pg_dist_object->objsubid);
+		bool distributionArgumentIndexIsNull = true;
+		int32 distributionArgumentIndex = DatumGetInt32(
+			heap_getattr(pgDistObjectTup, Anum_pg_dist_object_distribution_argument_index,
+						 pgDistObjectDesc, &distributionArgumentIndexIsNull));
+		bool colocationIdIsNull = true;
+		int32 colocationId = DatumGetInt32(
+			heap_getattr(pgDistObjectTup, Anum_pg_dist_object_distribution_argument_index,
+						 pgDistObjectDesc, &colocationIdIsNull));
+
+		char *workerMetadataUpdateCommand = DistributedObjectCreateCommand(
+			&address,
+			distributionArgumentIndexIsNull ? NULL : &distributionArgumentIndex,
+			colocationIdIsNull ? NULL : &colocationId);
+		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+											  workerMetadataUpdateCommand);
+	}
+
+	systable_endscan(pgDistObjectScan);
+	relation_close(pgDistObjectRel, AccessShareLock);
+
 
 	return metadataSnapshotCommandList;
 }
@@ -666,6 +729,7 @@ GetDistributedTableDDLEvents(Oid relationId)
  * (v)   Queries that delete all the rows from pg_dist_shard table referenced by (iv)
  * (vi)  Queries that delete all the rows from pg_dist_placement table
  *        referenced by (v)
+ * (vii) Truncate pg_dist_object
  */
 List *
 MetadataDropCommands(void)
@@ -680,6 +744,8 @@ MetadataDropCommands(void)
 									  REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
 
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList, DELETE_ALL_NODES);
+	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
+									  DELETE_ALL_DISTRIBUTED_OBJECTS);
 
 	return dropSnapshotCommandList;
 }
@@ -749,6 +815,86 @@ NodeListInsertCommand(List *workerNodeList)
 	}
 
 	return nodeListInsertCommand->data;
+}
+
+
+char *
+DistributedObjectCreateCommand(const ObjectAddress *address,
+							   int32 *distributionArgumentIndex,
+							   int32 *colocationId)
+{
+	StringInfo insertDistributedObjectCommand = makeStringInfo();
+
+	/*
+	 * Here we get the three things that pg_identify_object_as_address returns,
+	 * without going through the hassle of going from and to Datums using
+	 * DirectFunctionCall3.
+	 */
+	List *names;
+	List *args;
+	char *objectType = getObjectTypeDescription(address);
+	getObjectIdentityParts(address, &names, &args);
+
+	appendStringInfo(insertDistributedObjectCommand,
+					 "SELECT citus_internal_add_object_metadata "
+					 "(classid, objid, objsubid, ");
+	if (distributionArgumentIndex == NULL)
+	{
+		appendStringInfo(insertDistributedObjectCommand, "NULL, ");
+	}
+	else
+	{
+		appendStringInfo(insertDistributedObjectCommand, "%d, ",
+						 *distributionArgumentIndex);
+	}
+	if (colocationId == NULL)
+	{
+		appendStringInfo(insertDistributedObjectCommand, "NULL");
+	}
+	else
+	{
+		appendStringInfo(insertDistributedObjectCommand, "%d", *colocationId);
+	}
+
+	appendStringInfo(insertDistributedObjectCommand,
+					 ") FROM pg_get_object_address(%s, ARRAY[",
+					 quote_literal_cstr(objectType));
+
+	char *name;
+	bool firstLoop = true;
+	foreach_ptr(name, names)
+	{
+		if (!firstLoop)
+		{
+			appendStringInfo(insertDistributedObjectCommand, ", ");
+		}
+		firstLoop = false;
+		appendStringInfoString(insertDistributedObjectCommand, quote_literal_cstr(name));
+	}
+
+	appendStringInfo(insertDistributedObjectCommand, "]::text[], ARRAY[");
+
+	char *arg;
+	firstLoop = true;
+	foreach_ptr(arg, args)
+	{
+		if (!firstLoop)
+		{
+			appendStringInfo(insertDistributedObjectCommand, ", ");
+		}
+		firstLoop = false;
+		appendStringInfoString(insertDistributedObjectCommand, quote_literal_cstr(arg));
+	}
+
+	appendStringInfo(insertDistributedObjectCommand, "]::text[])");
+	return insertDistributedObjectCommand->data;
+}
+
+
+char *
+DistributedObjectDeleteCommand(const ObjectAddress *address)
+{
+	return NULL;
 }
 
 
@@ -1803,11 +1949,6 @@ SyncMetadataToNodes(void)
 										 workerNode->workerPort)));
 				result = METADATA_SYNC_FAILED_SYNC;
 			}
-			else
-			{
-				MarkNodeMetadataSynced(workerNode->workerName,
-									   workerNode->workerPort, true);
-			}
 		}
 	}
 
@@ -2476,6 +2617,56 @@ EnsureShardPlacementMetadataIsSane(Oid relationId, int64 shardId, int64 placemen
 						errmsg("Node with group id %d for shard placement "
 							   "%ld does not exist", groupId, shardId)));
 	}
+}
+
+
+/*
+ * citus_internal_add_object_metadata is an internal UDF to
+ * add a row to pg_dist_object.
+ */
+Datum
+citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
+{
+	PG_ENSURE_ARGNOTNULL(0, "classid");
+	Oid classid = PG_GETARG_OID(0);
+	PG_ENSURE_ARGNOTNULL(1, "objid");
+	Oid objid = PG_GETARG_OID(1);
+	PG_ENSURE_ARGNOTNULL(2, "objsubid");
+	Oid objsubid = PG_GETARG_OID(2);
+	int distributionArgumentIndexValue;
+	int colocationIdValue;
+	int *distributionArgumentIndex = NULL;
+	int *colocationId = NULL;
+	if (!PG_ARGISNULL(3))
+	{
+		distributionArgumentIndexValue = PG_GETARG_INT32(3);
+		distributionArgumentIndex = &distributionArgumentIndexValue;
+	}
+	if (!PG_ARGISNULL(4))
+	{
+		colocationIdValue = PG_GETARG_INT32(4);
+		colocationId = &colocationIdValue;
+	}
+
+
+	/* TODO: only owner of the object is allowed to modify the metadata */
+
+	/* TODO: maybe we want to serialize all the metadata changes to this table */
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	ObjectAddress address = { 0 };
+	ObjectAddressSubSet(address, classid, objid, objsubid);
+	bool shouldSyncMetadata = false;
+	MarkObjectDistributed(&address, shouldSyncMetadata);
+	UpdateFunctionDistributionInfo(&address, distributionArgumentIndex, colocationId,
+								   shouldSyncMetadata);
+
+	PG_RETURN_VOID();
 }
 
 

@@ -327,8 +327,14 @@ test: distributed_procedure
 
 # ---------
 # deparsing logic tests
+#
+# we temporarily disable ddl propagation on the workers, because these tests
+# run queries there directly. We do this disabling/enabling in a separate test,
+# so that the deparse tests can run in parallel.
 # ---------
+test: disable_worker_ddl_propagation
 test: multi_deparse_function multi_deparse_procedure
+test: enable_worker_ddl_propagation
 
 # --------
 # cannot be run in parallel with any other tests as it checks

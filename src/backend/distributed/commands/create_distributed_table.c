@@ -513,10 +513,9 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		if (ClusterHasKnownMetadataWorkers())
 		{
 			/*
-			 * Ensure sequence dependencies and mark them as distributed
-			 * before creating table metadata on workers
+			 * Ensure sequence dependencies table metadata on workers
 			 */
-			MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
+			PropagateSequenceListDependencies(dependentSequenceList);
 		}
 
 		CreateTableMetadataOnWorkers(relationId);
@@ -551,6 +550,22 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		if (RegularTable(relationId))
 		{
 			CopyLocalDataIntoShards(relationId);
+		}
+	}
+
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		if (ClusterHasKnownMetadataWorkers())
+		{
+			Oid sequenceOid;
+			foreach_oid(sequenceOid, dependentSequenceList)
+			{
+				ObjectAddress address;
+
+				ObjectAddressSet(address, RelationRelationId, sequenceOid);
+				bool shouldSyncMetadata = true;
+				MarkObjectDistributed(&address, shouldSyncMetadata);
+			}
 		}
 	}
 
@@ -642,34 +657,36 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 
 
 /*
- * MarkSequenceListDistributedAndPropagateDependencies ensures dependencies
- * for the given sequence list exist on all nodes and marks the sequences
- * as distributed.
+ * PropagateSequenceListDependencies ensures dependencies for the given
+ * sequence list exist on all nodes and marks these dependencies as
+ * distributed.
+ * NOTE: The sequences in the sequence list itself are not created yet on
+ * all nodes and they are also not marked distributed.
  */
 void
-MarkSequenceListDistributedAndPropagateDependencies(List *sequenceList)
+PropagateSequenceListDependencies(List *sequenceList)
 {
 	Oid sequenceOid = InvalidOid;
 	foreach_oid(sequenceOid, sequenceList)
 	{
-		MarkSequenceDistributedAndPropagateDependencies(sequenceOid);
+		PropagateSequenceDependencies(sequenceOid);
 	}
 }
 
 
 /*
- * MarkSequenceDistributedAndPropagateDependencies ensures dependencies
- * for the given sequence exist on all nodes and marks the sequence
- * as distributed.
+ * PropagateSequenceDependencies ensures dependencies for the given sequence
+ * exist on all nodes and marks them as distributed.
+ * NOTE: The sequence itself is not created yet on workers and it's also not
+ * marked distributed.
  */
 void
-MarkSequenceDistributedAndPropagateDependencies(Oid sequenceOid)
+PropagateSequenceDependencies(Oid sequenceOid)
 {
 	/* get sequence address */
 	ObjectAddress sequenceAddress = { 0 };
 	ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
 	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-	MarkObjectDistributed(&sequenceAddress);
 }
 
 

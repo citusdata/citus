@@ -13,5 +13,6 @@ ALTER TABLE pg_catalog.pg_dist_placement ADD CONSTRAINT placement_shardid_groupi
 #include "udfs/citus_internal_add_partition_metadata/10.2-1.sql";
 #include "udfs/citus_internal_add_shard_metadata/10.2-1.sql";
 #include "udfs/citus_internal_add_placement_metadata/10.2-1.sql";
+#include "udfs/citus_internal_add_object_metadata/10.2-1.sql";
 #include "udfs/citus_internal_update_placement_metadata/10.2-1.sql";
 #include "udfs/citus_internal_delete_shard_metadata/10.2-1.sql";

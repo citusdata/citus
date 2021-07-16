@@ -188,8 +188,6 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 
 	EnsureDependenciesExistOnAllNodes(&extensionAddress);
 
-	MarkObjectDistributed(&extensionAddress);
-
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
@@ -593,7 +591,8 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	ObjectAddress *objectAddress = NULL;
 	foreach_ptr(objectAddress, uniqueObjectAddresses)
 	{
-		MarkObjectDistributed(objectAddress);
+		bool shouldSyncMetadata = true;
+		MarkObjectDistributed(objectAddress, shouldSyncMetadata);
 	}
 }
 

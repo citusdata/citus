@@ -127,6 +127,7 @@ static DistributeObjectOps Any_CompositeType = {
 	.preprocess = PreprocessCompositeTypeStmt,
 	.postprocess = PostprocessCompositeTypeStmt,
 	.address = CompositeTypeStmtObjectAddress,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateEnum = {
 	.deparse = DeparseCreateEnumStmt,
@@ -134,6 +135,7 @@ static DistributeObjectOps Any_CreateEnum = {
 	.preprocess = PreprocessCreateEnumStmt,
 	.postprocess = PostprocessCreateEnumStmt,
 	.address = CreateEnumStmtObjectAddress,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateExtension = {
 	.deparse = DeparseCreateExtensionStmt,
@@ -141,6 +143,7 @@ static DistributeObjectOps Any_CreateExtension = {
 	.preprocess = NULL,
 	.postprocess = PostprocessCreateExtensionStmt,
 	.address = CreateExtensionStmtObjectAddress,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateFunction = {
 	.deparse = NULL,
@@ -225,6 +228,7 @@ static DistributeObjectOps Collation_Define = {
 	.preprocess = NULL,
 	.postprocess = PostprocessDefineCollationStmt,
 	.address = DefineCollationStmtObjectAddress,
+	.markDistributed = true,
 };
 static DistributeObjectOps Collation_Drop = {
 	.deparse = DeparseDropCollationStmt,
