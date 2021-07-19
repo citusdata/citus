@@ -2256,8 +2256,8 @@ EnsureCoordinatorInitiatedOperation(void)
 		GetLocalGroupId() == COORDINATOR_GROUP_ID)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("This is an internal function that only Citus "
-							   "requires to use in a distributed transaction")));
+						errmsg("This is an internal Citus function can only be "
+							   "used in a distributed transaction")));
 	}
 }
 

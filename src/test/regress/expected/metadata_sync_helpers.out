@@ -13,7 +13,7 @@ SET search_path TO metadata_sync_helpers;
 CREATE TABLE test(col_1 int);
 -- not in a distributed transaction
 SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
-ERROR:  This is an internal function that only Citus requires to use in a distributed transaction
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
 -- in a distributed transaction, but the application name is not Citus
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
@@ -23,7 +23,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 (1 row)
 
 	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
-ERROR:  This is an internal function that only Citus requires to use in a distributed transaction
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- in a distributed transaction and the application name is Citus
 -- but we are on the coordinator, so still not allowed
@@ -36,7 +36,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus';
 	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
-ERROR:  This is an internal function that only Citus requires to use in a distributed transaction
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- connect back as super user, and then connect to the worker
 -- with the superuser to make sure we can ingest metadata with
@@ -908,7 +908,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	WITH shard_data(shardid)
 		AS (VALUES (1420007))
 	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
-ERROR:  This is an internal function that only Citus requires to use in a distributed transaction
+ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
 -- the user cannot delete non-existing shards
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
