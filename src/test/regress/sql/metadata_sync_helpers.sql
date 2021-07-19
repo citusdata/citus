@@ -572,6 +572,53 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT citus_internal_update_placement_metadata(1420007, get_node_id(), get_node_id()+1);
 COMMIT;
 
+-- the user only allowed to delete their own shards
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	\set VERBOSITY terse
+	WITH shard_data(shardid)
+		AS (VALUES (1420007))
+	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
+ROLLBACK;
+
+-- the user only allowed to delete shards in a distributed transaction
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SET application_name to 'citus';
+	\set VERBOSITY terse
+	WITH shard_data(shardid)
+		AS (VALUES (1420007))
+	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
+ROLLBACK;
+
+-- the user cannot delete non-existing shards
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	\set VERBOSITY terse
+	WITH shard_data(shardid)
+		AS (VALUES (1420100))
+	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
+ROLLBACK;
+
+
+-- sucessfully delete shards
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+
+	SELECT count(*) FROM pg_dist_shard WHERE shardid = 1420000;
+	SELECT count(*) FROM pg_dist_placement WHERE shardid = 1420000;
+
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	\set VERBOSITY terse
+	WITH shard_data(shardid)
+		AS (VALUES (1420000))
+	SELECT citus_internal_delete_shard_metadata(shardid) FROM shard_data;
+
+	SELECT count(*) FROM pg_dist_shard WHERE shardid = 1420000;
+	SELECT count(*) FROM pg_dist_placement WHERE shardid = 1420000;
+ROLLBACK;
+
 -- we don't need the table/schema anymore
 -- connect back as super user to drop everything
 \c - postgres - :worker_1_port

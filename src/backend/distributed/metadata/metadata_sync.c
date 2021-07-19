@@ -127,6 +127,7 @@ PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
 
 
 static bool got_SIGTERM = false;
@@ -2570,6 +2571,44 @@ citus_internal_update_placement_metadata(PG_FUNCTION_ARGS)
 	}
 
 	UpdatePlacementGroupId(placement->placementId, targetGroupId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_delete_shard_metadata is an internal UDF to
+ * delete a row in pg_dist_shard and corresponding placement rows
+ * from pg_dist_shard_placement.
+ */
+Datum
+citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
+{
+	int64 shardId = PG_GETARG_INT64(0);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		if (!ShardExists(shardId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Shard id does not exists: %ld", shardId)));
+		}
+
+		bool missingOk = false;
+		EnsureShardOwner(shardId, missingOk);
+	}
+
+	List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
+	ShardPlacement *shardPlacement = NULL;
+	foreach_ptr(shardPlacement, shardPlacementList)
+	{
+		DeleteShardPlacementRow(shardPlacement->placementId);
+	}
+
+	DeleteShardRow(shardId);
 
 	PG_RETURN_VOID();
 }

@@ -15,6 +15,7 @@ DROP FUNCTION pg_catalog.citus_internal_add_partition_metadata(regclass, "char",
 DROP FUNCTION pg_catalog.citus_internal_add_shard_metadata(regclass, bigint, "char", text, text);
 DROP FUNCTION pg_catalog.citus_internal_add_placement_metadata(bigint, integer, bigint, integer, bigint);
 DROP FUNCTION pg_catalog.citus_internal_update_placement_metadata(bigint, integer, integer);
+DROP FUNCTION pg_catalog.citus_internal_delete_shard_metadata(bigint);
 
 REVOKE ALL ON FUNCTION pg_catalog.worker_record_sequence_dependency(regclass,regclass,name) FROM PUBLIC;
 ALTER TABLE pg_catalog.pg_dist_placement DROP CONSTRAINT placement_shardid_groupid_unique_index;
