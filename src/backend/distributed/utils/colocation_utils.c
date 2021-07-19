@@ -42,15 +42,12 @@
 
 /* local function forward declarations */
 static void MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId);
-static void ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId);
 static bool ShardsIntervalsEqual(ShardInterval *leftShardInterval,
 								 ShardInterval *rightShardInterval);
 static bool HashPartitionedShardIntervalsEqual(ShardInterval *leftShardInterval,
 											   ShardInterval *rightShardInterval);
 static int CompareShardPlacementsByNode(const void *leftElement,
 										const void *rightElement);
-static void UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId);
-static List * ColocationGroupTableList(Oid colocationId);
 static void DeleteColocationGroup(uint32 colocationId);
 static uint32 CreateColocationGroupForRelation(Oid sourceRelationId);
 static void BreakColocation(Oid sourceRelationId);
@@ -161,7 +158,8 @@ BreakColocation(Oid sourceRelationId)
 	Relation pgDistColocation = table_open(DistColocationRelationId(), ExclusiveLock);
 
 	uint32 newColocationId = GetNextColocationId();
-	UpdateRelationColocationGroup(sourceRelationId, newColocationId);
+	bool localOnly = false;
+	UpdateRelationColocationGroup(sourceRelationId, newColocationId, localOnly);
 
 	/* if there is not any remaining table in the colocation group, delete it */
 	DeleteColocationGroupIfNoTablesBelong(sourceRelationId);
@@ -230,7 +228,8 @@ CreateColocationGroupForRelation(Oid sourceRelationId)
 	uint32 sourceColocationId = CreateColocationGroup(shardCount, shardReplicationFactor,
 													  sourceDistributionColumnType,
 													  sourceDistributionColumnCollation);
-	UpdateRelationColocationGroup(sourceRelationId, sourceColocationId);
+	bool localOnly = false;
+	UpdateRelationColocationGroup(sourceRelationId, sourceColocationId, localOnly);
 	return sourceColocationId;
 }
 
@@ -279,7 +278,8 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
 	uint32 targetColocationId = TableColocationId(targetRelationId);
 
 	/* finally set colocation group for the target relation */
-	UpdateRelationColocationGroup(targetRelationId, sourceColocationId);
+	bool localOnly = false;
+	UpdateRelationColocationGroup(targetRelationId, sourceColocationId, localOnly);
 
 	/* if there is not any remaining table in the colocation group, delete it */
 	DeleteColocationGroupIfNoTablesBelong(targetColocationId);
@@ -300,7 +300,7 @@ MarkTablesColocated(Oid sourceRelationId, Oid targetRelationId)
  *
  * Note that, this functions assumes that both tables are hash distributed.
  */
-static void
+void
 ErrorIfShardPlacementsNotColocated(Oid leftRelationId, Oid rightRelationId)
 {
 	ListCell *leftShardIntervalCell = NULL;
@@ -681,28 +681,47 @@ CheckReplicationModel(Oid sourceRelationId, Oid targetRelationId)
 void
 CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId)
 {
+	/* reference tables have NULL distribution column */
+	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
+
+	/* reference tables have NULL distribution column */
+	Var *targetDistributionColumn = DistPartitionKey(targetRelationId);
+
+	EnsureColumnTypeEquality(sourceRelationId, targetRelationId,
+							 sourceDistributionColumn, targetDistributionColumn);
+}
+
+
+/*
+ * GetColumnTypeEquality checks if distribution column types and collations
+ * of the given columns are same. The function sets the boolean pointers.
+ */
+void
+EnsureColumnTypeEquality(Oid sourceRelationId, Oid targetRelationId,
+						 Var *sourceDistributionColumn, Var *targetDistributionColumn)
+{
 	Oid sourceDistributionColumnType = InvalidOid;
 	Oid targetDistributionColumnType = InvalidOid;
 	Oid sourceDistributionColumnCollation = InvalidOid;
 	Oid targetDistributionColumnCollation = InvalidOid;
 
-	/* reference tables have NULL distribution column */
-	Var *sourceDistributionColumn = DistPartitionKey(sourceRelationId);
 	if (sourceDistributionColumn != NULL)
 	{
 		sourceDistributionColumnType = sourceDistributionColumn->vartype;
 		sourceDistributionColumnCollation = sourceDistributionColumn->varcollid;
 	}
 
-	/* reference tables have NULL distribution column */
-	Var *targetDistributionColumn = DistPartitionKey(targetRelationId);
 	if (targetDistributionColumn != NULL)
 	{
 		targetDistributionColumnType = targetDistributionColumn->vartype;
 		targetDistributionColumnCollation = targetDistributionColumn->varcollid;
 	}
 
-	if (sourceDistributionColumnType != targetDistributionColumnType)
+	bool columnTypesSame = sourceDistributionColumnType == targetDistributionColumnType;
+	bool columnCollationsSame =
+		sourceDistributionColumnCollation == targetDistributionColumnCollation;
+
+	if (!columnTypesSame)
 	{
 		char *sourceRelationName = get_rel_name(sourceRelationId);
 		char *targetRelationName = get_rel_name(targetRelationId);
@@ -714,16 +733,17 @@ CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId)
 								  targetRelationName)));
 	}
 
-	if (sourceDistributionColumnCollation != targetDistributionColumnCollation)
+	if (!columnCollationsSame)
 	{
 		char *sourceRelationName = get_rel_name(sourceRelationId);
 		char *targetRelationName = get_rel_name(targetRelationId);
 
 		ereport(ERROR, (errmsg("cannot colocate tables %s and %s",
 							   sourceRelationName, targetRelationName),
-						errdetail("Distribution column collations don't match for "
-								  "%s and %s.", sourceRelationName,
-								  targetRelationName)));
+						errdetail(
+							"Distribution column collations don't match for "
+							"%s and %s.", sourceRelationName,
+							targetRelationName)));
 	}
 }
 
@@ -731,9 +751,13 @@ CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId)
 /*
  * UpdateRelationColocationGroup updates colocation group in pg_dist_partition
  * for the given relation.
+ *
+ * When localOnly is true, the function does not propagate changes to the
+ * metadata workers.
  */
-static void
-UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
+void
+UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId,
+							  bool localOnly)
 {
 	bool indexOK = true;
 	int scanKeyCount = 1;
@@ -782,7 +806,7 @@ UpdateRelationColocationGroup(Oid distributedRelationId, uint32 colocationId)
 	table_close(pgDistPartition, NoLock);
 
 	bool shouldSyncMetadata = ShouldSyncTableMetadata(distributedRelationId);
-	if (shouldSyncMetadata)
+	if (shouldSyncMetadata && !localOnly)
 	{
 		char *updateColocationIdCommand = ColocationIdUpdateCommand(distributedRelationId,
 																	colocationId);
@@ -878,7 +902,8 @@ ColocatedTableList(Oid distributedTableId)
 		return colocatedTableList;
 	}
 
-	colocatedTableList = ColocationGroupTableList(tableColocationId);
+	int count = 0;
+	colocatedTableList = ColocationGroupTableList(tableColocationId, count);
 
 	return colocatedTableList;
 }
@@ -887,9 +912,14 @@ ColocatedTableList(Oid distributedTableId)
 /*
  * ColocationGroupTableList returns the list of tables in the given colocation
  * group. If the colocation group is INVALID_COLOCATION_ID, it returns NIL.
+ *
+ * If count is zero then the command is executed for all rows that it applies to.
+ * If count is greater than zero, then no more than count rows will be retrieved;
+ * execution stops when the count is reached, much like adding a LIMIT clause
+ * to the query.
  */
-static List *
-ColocationGroupTableList(Oid colocationId)
+List *
+ColocationGroupTableList(uint32 colocationId, uint32 count)
 {
 	List *colocatedTableList = NIL;
 	bool indexOK = true;
@@ -906,7 +936,7 @@ ColocationGroupTableList(Oid colocationId)
 	}
 
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_colocationid,
-				BTEqualStrategyNumber, F_INT4EQ, ObjectIdGetDatum(colocationId));
+				BTEqualStrategyNumber, F_INT4EQ, UInt32GetDatum(colocationId));
 
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
@@ -924,6 +954,17 @@ ColocationGroupTableList(Oid colocationId)
 
 		colocatedTableList = lappend_oid(colocatedTableList, colocatedTableId);
 		heapTuple = systable_getnext(scanDescriptor);
+
+		if (count == 0)
+		{
+			/* fetch all rows */
+			continue;
+		}
+		else if (list_length(colocatedTableList) >= count)
+		{
+			/* we are done */
+			break;
+		}
 	}
 
 	systable_endscan(scanDescriptor);
@@ -1158,7 +1199,8 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
 {
 	if (colocationId != INVALID_COLOCATION_ID)
 	{
-		List *colocatedTableList = ColocationGroupTableList(colocationId);
+		int count = 1;
+		List *colocatedTableList = ColocationGroupTableList(colocationId, count);
 		int colocatedTableCount = list_length(colocatedTableList);
 
 		if (colocatedTableCount == 0)

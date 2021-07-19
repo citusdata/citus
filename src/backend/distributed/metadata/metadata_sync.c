@@ -103,8 +103,9 @@ static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
 
 
 static bool ShouldSkipMetadataChecks(void);
-static void EnsurePartitionMetadataIsSane(char distributionMethod, int colocationId,
-										  char replicationModel);
+static void EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod,
+										  int colocationId, char replicationModel,
+										  Var *distributionKey);
 static void EnsureCoordinatorInitiatedOperation(void);
 static void EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 									  text *shardMinValue,
@@ -128,6 +129,7 @@ PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
 
 
 static bool got_SIGTERM = false;
@@ -1020,10 +1022,9 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 {
 	StringInfo command = makeStringInfo();
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-	appendStringInfo(command, "UPDATE pg_dist_partition "
-							  "SET colocationid = %d "
-							  "WHERE logicalrelid = %s::regclass",
-					 colocationId, quote_literal_cstr(qualifiedRelationName));
+	appendStringInfo(command,
+					 "SELECT citus_internal_update_relation_colocation(%s::regclass, %d)",
+					 quote_literal_cstr(qualifiedRelationName), colocationId);
 
 	return command->data;
 }
@@ -2122,8 +2123,8 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 		 * metadata is not sane, the user can only affect its own tables.
 		 * Given that the user is owner of the table, we should allow.
 		 */
-		EnsurePartitionMetadataIsSane(distributionMethod, colocationId,
-									  replicationModel);
+		EnsurePartitionMetadataIsSane(relationId, distributionMethod, colocationId,
+									  replicationModel, distributionColumnVar);
 	}
 
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumnVar,
@@ -2138,8 +2139,8 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
  * for inserting into pg_dist_partition metadata.
  */
 static void
-EnsurePartitionMetadataIsSane(char distributionMethod, int colocationId,
-							  char replicationModel)
+EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod, int colocationId,
+							  char replicationModel, Var *distributionColumnVar)
 {
 	if (!(distributionMethod == DISTRIBUTE_BY_HASH ||
 		  distributionMethod == DISTRIBUTE_BY_NONE))
@@ -2155,6 +2156,26 @@ EnsurePartitionMetadataIsSane(char distributionMethod, int colocationId,
 						errmsg("Metadata syncing is only allowed for valid "
 							   "colocation id values.")));
 	}
+	else if (colocationId != INVALID_COLOCATION_ID &&
+			 distributionMethod == DISTRIBUTE_BY_HASH)
+	{
+		int count = 1;
+		List *targetColocatedTableList =
+			ColocationGroupTableList(colocationId, count);
+
+		/*
+		 * If we have any colocated hash tables, ensure if they share the
+		 * same distribution key properties.
+		 */
+		if (list_length(targetColocatedTableList) >= 1)
+		{
+			Oid targetRelationId = linitial_oid(targetColocatedTableList);
+
+			EnsureColumnTypeEquality(relationId, targetRelationId, distributionColumnVar,
+									 DistPartitionKeyOrError(targetRelationId));
+		}
+	}
+
 
 	if (!(replicationModel == REPLICATION_MODEL_2PC ||
 		  replicationModel == REPLICATION_MODEL_STREAMING ||
@@ -2609,6 +2630,67 @@ citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
 	}
 
 	DeleteShardRow(shardId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_update_relation_colocation is an internal UDF to
+ * delete a row in pg_dist_shard and corresponding placement rows
+ * from pg_dist_shard_placement.
+ */
+Datum
+citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+	uint32 tagetColocationId = PG_GETARG_UINT32(1);
+
+	EnsureTableOwner(relationId);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		/* ensure that the table is in pg_dist_partition */
+		char partitionMethod = PartitionMethodViaCatalog(relationId);
+		if (partitionMethod == DISTRIBUTE_BY_INVALID)
+		{
+			/* connection from the coordinator operating on a shard */
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("The relation \"%s\" does not have a valid "
+								   "entry in pg_dist_partition.",
+								   get_rel_name(relationId))));
+		}
+		else if (partitionMethod != DISTRIBUTE_BY_HASH)
+		{
+			/* connection from the coordinator operating on a shard */
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Updating colocation ids are only allowed for hash "
+								   "distributed tables: %c", partitionMethod)));
+		}
+
+		int count = 1;
+		List *targetColocatedTableList =
+			ColocationGroupTableList(tagetColocationId, count);
+
+		if (list_length(targetColocatedTableList) == 0)
+		{
+			/* the table is colocated with none, so nothing to check */
+		}
+		else
+		{
+			Oid targetRelationId = linitial_oid(targetColocatedTableList);
+
+			ErrorIfShardPlacementsNotColocated(relationId, targetRelationId);
+			CheckReplicationModel(relationId, targetRelationId);
+			CheckDistributionColumnType(relationId, targetRelationId);
+		}
+	}
+
+	bool localOnly = true;
+	UpdateRelationColocationGroup(relationId, tagetColocationId, localOnly);
 
 	PG_RETURN_VOID();
 }

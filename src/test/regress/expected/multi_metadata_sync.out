@@ -833,12 +833,21 @@ SELECT create_distributed_table('mx_colocation_test_1', 'a');
 (1 row)
 
 CREATE TABLE mx_colocation_test_2 (a int);
-SELECT create_distributed_table('mx_colocation_test_2', 'a');
+SELECT create_distributed_table('mx_colocation_test_2', 'a', colocate_with:='none');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+-- Reset the colocation IDs of the test tables
+DELETE FROM
+	pg_dist_colocation
+WHERE EXISTS (
+	SELECT 1
+	FROM pg_dist_partition
+	WHERE
+		colocationid = pg_dist_partition.colocationid
+		AND pg_dist_partition.logicalrelid = 'mx_colocation_test_1'::regclass);
 -- Check the colocation IDs of the created tables
 SELECT
 	logicalrelid, colocationid
@@ -851,25 +860,9 @@ ORDER BY logicalrelid;
      logicalrelid     | colocationid
 ---------------------------------------------------------------------
  mx_colocation_test_1 |        10000
- mx_colocation_test_2 |        10000
+ mx_colocation_test_2 |        10001
 (2 rows)
 
--- Reset the colocation IDs of the test tables
-DELETE FROM
-	pg_dist_colocation
-WHERE EXISTS (
-	SELECT 1
-	FROM pg_dist_partition
-	WHERE
-		colocationid = pg_dist_partition.colocationid
-		AND pg_dist_partition.logicalrelid = 'mx_colocation_test_1'::regclass);
-UPDATE
-	pg_dist_partition
-SET
-	colocationid = 0
-WHERE
-	logicalrelid = 'mx_colocation_test_1'::regclass
-	OR logicalrelid = 'mx_colocation_test_2'::regclass;
 -- Update colocation and see the changes on the master and the worker
 SELECT update_distributed_table_colocation('mx_colocation_test_1', colocate_with => 'mx_colocation_test_2');
  update_distributed_table_colocation
@@ -1680,9 +1673,9 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  SELECT citus_internal_add_partition_metadata ('mx_test_schema_1.mx_table_1'::regclass, 'h', 'col1', 3, 's')
  SELECT citus_internal_add_partition_metadata ('mx_test_schema_2.mx_table_2'::regclass, 'h', 'col1', 3, 's')
  SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 0, 's')
- SELECT citus_internal_add_partition_metadata ('public.dist_table_1'::regclass, 'h', 'a', 10004, 's')
- SELECT citus_internal_add_partition_metadata ('public.mx_ref'::regclass, 'n', NULL, 10002, 't')
- SELECT citus_internal_add_partition_metadata ('public.test_table'::regclass, 'h', 'id', 10004, 's')
+ SELECT citus_internal_add_partition_metadata ('public.dist_table_1'::regclass, 'h', 'a', 10005, 's')
+ SELECT citus_internal_add_partition_metadata ('public.mx_ref'::regclass, 'n', NULL, 10003, 't')
+ SELECT citus_internal_add_partition_metadata ('public.test_table'::regclass, 'h', 'id', 10005, 's')
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_sequence_0 AS integer INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1 NO CYCLE','integer')
