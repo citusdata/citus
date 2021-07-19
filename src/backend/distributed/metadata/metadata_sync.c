@@ -177,7 +177,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeNameString, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
