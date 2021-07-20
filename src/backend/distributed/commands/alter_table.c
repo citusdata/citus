@@ -1071,6 +1071,30 @@ CreateDistributedTableLike(TableConversionState *con)
 	{
 		newShardCount = con->shardCount;
 	}
+
+	Oid originalRelationId = con->relationId;
+	if (con->originalDistributionKey != NULL && PartitionTable(originalRelationId))
+	{
+		/*
+		 * Due to dropped columns, the partition tables might have different
+		 * distribution keys than their parents, see issue #5123 for details.
+		 *
+		 * At this point, we get the partitioning information from the
+		 * originalRelationId, but we get the distribution key for newRelationId.
+		 *
+		 * We have to do this, because the newRelationId is just a placeholder
+		 * at this moment, but that's going to be the table in pg_dist_partition.
+		 */
+		Oid parentRelationId = PartitionParentOid(originalRelationId);
+		Var *parentDistKey = DistPartitionKey(parentRelationId);
+		char *parentDistKeyColumnName =
+			ColumnToColumnName(parentRelationId, nodeToString(parentDistKey));
+
+		newDistributionKey =
+			FindColumnWithNameOnTargetRelation(parentRelationId, parentDistKeyColumnName,
+											   con->newRelationId);
+	}
+
 	char partitionMethod = PartitionMethod(con->relationId);
 	CreateDistributedTable(con->newRelationId, newDistributionKey, partitionMethod,
 						   newShardCount, true, newColocateWith, false);
