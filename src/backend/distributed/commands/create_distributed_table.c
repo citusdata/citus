@@ -412,6 +412,24 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	char replicationModel = DecideReplicationModel(distributionMethod,
 												   viaDeprecatedAPI);
 
+
+	/*
+	 * Due to dropping columns, the parent's distribution key may not match the
+	 * partition's distribution key. The input distributionColumn belongs to
+	 * the parent. That's why we override the distribution column of partitions
+	 * here. See issue #5123 for details.
+	 */
+	if (PartitionTable(relationId))
+	{
+		Oid parentRelationId = PartitionParentOid(relationId);
+		char *distributionColumnName =
+			ColumnToColumnName(parentRelationId, nodeToString(distributionColumn));
+
+		distributionColumn =
+			FindColumnWithNameOnTargetRelation(parentRelationId, distributionColumnName,
+											   relationId);
+	}
+
 	/*
 	 * ColocationIdForNewTable assumes caller acquires lock on relationId. In our case,
 	 * our caller already acquired lock on relationId.

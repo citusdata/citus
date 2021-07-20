@@ -89,7 +89,7 @@ test: subquery_prepared_statements
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
 test: cte_inline recursive_view_local_table
 test: pg13 pg12
-test: tableam
+test: tableam drop_column_partitioned_table
 
 # ----------
 # Tests for statistics propagation
