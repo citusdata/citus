@@ -652,6 +652,11 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 		SetDefElemArg(alterSequenceStatement, "as", asTypeNode);
 		ParseState *pstate = make_parsestate(NULL);
 		AlterSequence(pstate, alterSequenceStatement);
+
+		/*
+		 * Make sure later reads in this transaction read the correct type.
+		 */
+		CommandCounterIncrement();
 	}
 }
 
