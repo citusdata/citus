@@ -269,7 +269,9 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- Check that various ALTER SEQUENCE commands
 -- are not allowed for a distributed sequence for now
-CREATE SEQUENCE seq_8;
+-- Also check that various sequence options are passed on to the worker
+-- correctly
+CREATE SEQUENCE seq_8 AS integer INCREMENT BY 3 CACHE 10 CYCLE;
 CREATE SCHEMA sequence_default_8;
 -- can change schema in a sequence not yet distributed
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
@@ -282,6 +284,7 @@ ALTER SEQUENCE seq_8 INCREMENT BY 2;
 ALTER SEQUENCE seq_8 MINVALUE 5 MAXVALUE 5000;
 ALTER SEQUENCE seq_8 START WITH 6;
 ALTER SEQUENCE seq_8 RESTART WITH 6;
+ALTER SEQUENCE seq_8 CACHE 5;
 ALTER SEQUENCE seq_8 NO CYCLE;
 ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
 ALTER SEQUENCE seq_test_8_z_seq AS smallint;
@@ -289,6 +292,7 @@ ALTER SEQUENCE seq_test_8_z_seq INCREMENT BY 2;
 ALTER SEQUENCE seq_test_8_z_seq MINVALUE 5 MAXVALUE 5000;
 ALTER SEQUENCE seq_test_8_z_seq START WITH 6;
 ALTER SEQUENCE seq_test_8_z_seq RESTART WITH 6;
+ALTER SEQUENCE seq_test_8_z_seq CACHE 5;
 ALTER SEQUENCE seq_test_8_z_seq NO CYCLE;
 ALTER SEQUENCE seq_test_8_z_seq OWNED BY seq_test_7;
 -- can change schema in a distributed sequence
@@ -372,6 +376,7 @@ INSERT INTO sequence_default.seq_test_10 VALUES (1);
 
 -- clean up
 DROP TABLE sequence_default.seq_test_7_par;
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA sequence_default CASCADE;
 SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);

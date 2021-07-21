@@ -1,6 +1,8 @@
 CREATE SCHEMA "Mx Regular User";
 SET search_path TO "Mx Regular User";
 
+-- add coordinator in idempotent way
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
 -- sync the metadata to both nodes
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
@@ -55,7 +57,7 @@ COMMIT;
 -- make sure that partitioned tables, columnar and conversion to columnar workes fine
 -- on Citus MX with a non-super user
 CREATE SEQUENCE my_mx_seq;
-CREATE TABLE users_table_part(col_to_drop int, user_id int, value_1 int, value_2 int DEFAULT nextval('my_mx_seq'::regclass), value_3 bigserial) PARTITION BY RANGE (value_1);
+CREATE TABLE users_table_part(col_to_drop int, user_id int, value_1 int, value_2 bigint DEFAULT nextval('my_mx_seq'::regclass), value_3 bigserial) PARTITION BY RANGE (value_1);
 CREATE TABLE users_table_part_0 PARTITION OF users_table_part FOR VALUES FROM (0) TO (1);
 CREATE TABLE users_table_part_1 PARTITION OF users_table_part FOR VALUES FROM (1) TO (2);
 SELECT create_distributed_table('users_table_part', 'user_id', colocate_with:='partitioned_table');
@@ -72,7 +74,7 @@ BEGIN;
 	CREATE TABLE users_table_part_2 PARTITION OF users_table_part FOR VALUES FROM (2) TO (3);
 	INSERT INTO users_table_part SELECT i, i %3, i %50 FROM generate_series(0, 100) i;
 
-	CREATE TABLE users_table_part_3 (user_id int, value_1 int, value_2 int, value_3 bigserial);
+	CREATE TABLE users_table_part_3 (user_id int, value_1 int, value_2 bigint, value_3 bigserial);
 	ALTER TABLE users_table_part ATTACH PARTITION users_table_part_3 FOR VALUES FROM (3) TO (4);
 	CREATE TABLE users_table_part_4 PARTITION OF users_table_part FOR VALUES FROM (4) TO (5) USING COLUMNAR;;
 COMMIT;

@@ -93,3 +93,6 @@ DROP SCHEMA procedure_tests2 CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA procedure_tests2 CASCADE;$$);
 DROP USER procedureuser;
 SELECT run_command_on_workers($$DROP USER procedureuser;$$);
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);

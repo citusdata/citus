@@ -121,7 +121,7 @@ SELECT undistribute_table('reference_table_2');
 (1 row)
 
 create table countries(
-  id serial primary key
+  id bigserial primary key
   , name text
   , code varchar(2) collate "C" unique
 );
