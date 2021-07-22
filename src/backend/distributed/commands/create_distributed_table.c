@@ -700,8 +700,8 @@ MarkSequenceListDistributed(List *sequenceList)
 		ObjectAddress address;
 
 		ObjectAddressSet(address, RelationRelationId, sequenceOid);
-		bool shouldSyncMetadata = true;
-		MarkObjectDistributed(&address, shouldSyncMetadata);
+		bool localOnly = false;
+		MarkObjectDistributed(&address, localOnly);
 	}
 }
 

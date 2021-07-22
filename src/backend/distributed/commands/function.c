@@ -191,8 +191,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 					 ENABLE_DDL_PROPAGATION);
 	SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(), ddlCommand.data);
 
-	bool shouldSyncMetadata = true;
-	MarkObjectDistributed(&functionAddress, shouldSyncMetadata);
+	bool localOnly = false;
+	MarkObjectDistributed(&functionAddress, localOnly);
 
 	if (distributionArgumentName != NULL)
 	{
@@ -238,9 +238,9 @@ DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
 								distributionArgumentOid);
 
 	/* record the distribution argument and colocationId */
-	bool shouldSyncMetadata = true;
+	bool localOnly = false;
 	UpdateFunctionDistributionInfo(functionAddress, &distributionArgumentIndex,
-								   &colocationId, shouldSyncMetadata);
+								   &colocationId, localOnly);
 
 	/*
 	 * Once we have at least one distributed function/procedure with distribution
@@ -277,10 +277,10 @@ DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid,
 								" parameter should also be provided")));
 	}
 
-	bool shouldSyncMetadata = true;
+	bool localOnly = false;
 
 	/* set distribution argument and colocationId to NULL */
-	UpdateFunctionDistributionInfo(functionAddress, NULL, NULL, shouldSyncMetadata);
+	UpdateFunctionDistributionInfo(functionAddress, NULL, NULL, localOnly);
 }
 
 
@@ -296,9 +296,9 @@ DistributeFunctionColocatedWithReferenceTable(const ObjectAddress *functionAddre
 
 	/* set distribution argument to NULL and colocationId to the reference table colocation id */
 	int *distributionArgumentIndex = NULL;
-	bool shouldSyncMetadata = true;
+	bool localOnly = false;
 	UpdateFunctionDistributionInfo(functionAddress, distributionArgumentIndex,
-								   &colocationId, shouldSyncMetadata);
+								   &colocationId, localOnly);
 
 	/*
 	 * Once we have at least one distributed function/procedure that reads
@@ -573,7 +573,7 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 void
 UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 							   int *distribution_argument_index,
-							   int *colocationId, bool shouldSyncMetadata)
+							   int *colocationId, bool localOnly)
 {
 	const bool indexOK = true;
 
@@ -644,7 +644,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 
 	table_close(pgDistObjectRel, NoLock);
 
-	if (shouldSyncMetadata)
+	if (!localOnly)
 	{
 		char *workerMetadataUpdateCommand = DistributedObjectCreateCommand(
 			distAddress, distribution_argument_index, colocationId);

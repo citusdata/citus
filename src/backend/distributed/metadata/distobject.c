@@ -141,7 +141,7 @@ ObjectExists(const ObjectAddress *address)
  * by adding appropriate entries to citus.pg_dist_object.
  */
 void
-MarkObjectDistributed(const ObjectAddress *distAddress, bool shouldSyncMetadata)
+MarkObjectDistributed(const ObjectAddress *distAddress, bool localOnly)
 {
 	int paramCount = 3;
 	Oid paramTypes[3] = {
@@ -165,7 +165,7 @@ MarkObjectDistributed(const ObjectAddress *distAddress, bool shouldSyncMetadata)
 		ereport(ERROR, (errmsg("failed to insert object into citus.pg_dist_object")));
 	}
 
-	if (shouldSyncMetadata)
+	if (!localOnly)
 	{
 		char *workerMetadataUpdateCommand = DistributedObjectCreateCommand(
 			distAddress, NULL, NULL);

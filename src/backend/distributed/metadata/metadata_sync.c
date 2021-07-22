@@ -399,8 +399,8 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	ObjectAddress *address;
 	foreach_ptr(address, newDistributedObjects)
 	{
-		bool shouldSyncMetadata = true;
-		MarkObjectDistributed(address, shouldSyncMetadata);
+		bool localOnly = false;
+		MarkObjectDistributed(address, localOnly);
 	}
 	return true;
 }
@@ -2661,10 +2661,10 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 
 	ObjectAddress address = { 0 };
 	ObjectAddressSubSet(address, classid, objid, objsubid);
-	bool shouldSyncMetadata = false;
-	MarkObjectDistributed(&address, shouldSyncMetadata);
+	bool localOnly = true;
+	MarkObjectDistributed(&address, localOnly);
 	UpdateFunctionDistributionInfo(&address, distributionArgumentIndex, colocationId,
-								   shouldSyncMetadata);
+								   localOnly);
 
 	PG_RETURN_VOID();
 }

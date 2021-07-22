@@ -654,8 +654,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (ops && ops->markDistributed)
 		{
 			ObjectAddress address = GetObjectAddressFromParseTree(parsetree, false);
-			bool shouldSyncMetadata = true;
-			MarkObjectDistributed(&address, shouldSyncMetadata);
+			bool localOnly = false;
+			MarkObjectDistributed(&address, localOnly);
 		}
 	}
 

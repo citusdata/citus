@@ -474,7 +474,7 @@ extern ObjectWithArgs * ObjectWithArgsFromOid(Oid funcOid);
 extern void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 										   int *distribution_argument_index,
 										   int *colocationId,
-										   bool shouldSyncMetadata);
+										   bool localOnly);
 
 /* vacuum.c - forward declarations */
 extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);

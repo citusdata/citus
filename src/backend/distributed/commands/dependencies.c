@@ -121,8 +121,8 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependenciesWithCommands)
 	{
-		bool shouldSyncMetadata = true;
-		MarkObjectDistributed(dependency, shouldSyncMetadata);
+		bool localOnly = false;
+		MarkObjectDistributed(dependency, localOnly);
 	}
 }
 
