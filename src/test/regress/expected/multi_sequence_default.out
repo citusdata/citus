@@ -541,7 +541,9 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- Check that various ALTER SEQUENCE commands
 -- are not allowed for a distributed sequence for now
-CREATE SEQUENCE seq_8;
+-- Also check that various sequence options are passed on to the worker
+-- correctly
+CREATE SEQUENCE seq_8 AS integer INCREMENT BY 3 CACHE 10 CYCLE;
 CREATE SCHEMA sequence_default_8;
 -- can change schema in a sequence not yet distributed
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
@@ -564,6 +566,8 @@ ALTER SEQUENCE seq_8 START WITH 6;
 ERROR:  Altering a distributed sequence is currently not supported.
 ALTER SEQUENCE seq_8 RESTART WITH 6;
 ERROR:  Altering a distributed sequence is currently not supported.
+ALTER SEQUENCE seq_8 CACHE 5;
+ERROR:  Altering a distributed sequence is currently not supported.
 ALTER SEQUENCE seq_8 NO CYCLE;
 ERROR:  Altering a distributed sequence is currently not supported.
 ALTER SEQUENCE seq_8 OWNED BY seq_test_7;
@@ -578,6 +582,8 @@ ALTER SEQUENCE seq_test_8_z_seq START WITH 6;
 ERROR:  Altering a distributed sequence is currently not supported.
 ALTER SEQUENCE seq_test_8_z_seq RESTART WITH 6;
 ERROR:  Altering a distributed sequence is currently not supported.
+ALTER SEQUENCE seq_test_8_z_seq CACHE 5;
+ERROR:  Altering a distributed sequence is currently not supported.
 ALTER SEQUENCE seq_test_8_z_seq NO CYCLE;
 ERROR:  Altering a distributed sequence is currently not supported.
 ALTER SEQUENCE seq_test_8_z_seq OWNED BY seq_test_7;
@@ -587,10 +593,10 @@ ERROR:  cannot alter OWNED BY option of a sequence already owned by a distribute
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
 \c - - - :worker_1_port
 \d sequence_default_8.seq_8
-                   Sequence "sequence_default_8.seq_8"
-  Type  |   Start   |  Minimum  |  Maximum  | Increment | Cycles? | Cache
+                    Sequence "sequence_default_8.seq_8"
+  Type   |   Start   |  Minimum  |  Maximum  | Increment | Cycles? | Cache
 ---------------------------------------------------------------------
- bigint | 268435457 | 268435457 | 536870913 |         1 | no      |     1
+ integer | 268435457 | 268435457 | 536870913 |         3 | yes     |    10
 
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
@@ -605,10 +611,10 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 ALTER TABLE sequence_default_8.seq_8 SET SCHEMA sequence_default;
 \c - - - :worker_1_port
 \d sequence_default.seq_8
-                    Sequence "sequence_default.seq_8"
-  Type  |   Start   |  Minimum  |  Maximum  | Increment | Cycles? | Cache
+                     Sequence "sequence_default.seq_8"
+  Type   |   Start   |  Minimum  |  Maximum  | Increment | Cycles? | Cache
 ---------------------------------------------------------------------
- bigint | 268435457 | 268435457 | 536870913 |         1 | no      |     1
+ integer | 268435457 | 268435457 | 536870913 |         3 | yes     |    10
 
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
@@ -768,37 +774,8 @@ ERROR:  relation "seq_11" does not exist
 \c - - - :master_port
 -- clean up
 DROP TABLE sequence_default.seq_test_7_par;
+SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA sequence_default CASCADE;
-NOTICE:  drop cascades to 29 other objects
-DETAIL:  drop cascades to sequence sequence_default.seq_0
-drop cascades to sequence sequence_default.seq_0_local_table
-drop cascades to table sequence_default.seq_test_0
-drop cascades to table sequence_default.seq_test_0_local_table_890004
-drop cascades to table sequence_default.seq_test_0_local_table
-drop cascades to table sequence_default.seq_test_4
-drop cascades to sequence sequence_default.seq_4
-drop cascades to sequence sequence_default.seq_1
-drop cascades to table sequence_default.seq_test_1
-drop cascades to sequence sequence_default.seq_1_local_table
-drop cascades to table sequence_default.seq_test_1_local_table_102016
-drop cascades to table sequence_default.seq_test_1_local_table
-drop cascades to sequence sequence_default.seq_2
-drop cascades to table sequence_default.seq_test_2
-drop cascades to table sequence_default.seq_test_3
-drop cascades to table sequence_default.seq_test_5
-drop cascades to sequence sequence_default.seq_6
-drop cascades to table sequence_default.seq_test_6
-drop cascades to sequence sequence_default.seq_7
-drop cascades to table sequence_default.seq_test_7
-drop cascades to sequence sequence_default.seq_7_par
-drop cascades to sequence sequence_default.seq_8
-drop cascades to table sequence_default.seq_test_8
-drop cascades to sequence sequence_default.seq_9
-drop cascades to table sequence_default.seq_test_9
-drop cascades to sequence sequence_default.seq_11
-drop cascades to table sequence_default.seq_test_10
-drop cascades to table sequence_default.seq_test_10_102060
-drop cascades to table sequence_default.seq_test_11
 SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
       run_command_on_workers
 ---------------------------------------------------------------------
@@ -807,7 +784,6 @@ SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
 (2 rows)
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 

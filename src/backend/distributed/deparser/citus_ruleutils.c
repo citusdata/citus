@@ -207,10 +207,13 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 
 	/* build our DDL command */
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceRelationId);
+	char *typeName = format_type_be(pgSequenceForm->seqtypid);
 
 	char *sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
+								 typeName,
 								 pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
 								 pgSequenceForm->seqmax, pgSequenceForm->seqstart,
+								 pgSequenceForm->seqcache,
 								 pgSequenceForm->seqcycle ? "" : "NO ");
 
 	return sequenceDef;
