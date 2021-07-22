@@ -83,6 +83,7 @@ static List * GetDistributedTableDDLEvents(Oid relationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
 static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
 								   int attrNum, bool value);
+static List * DistributedObjectSyncCommandList();
 static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
@@ -508,7 +509,8 @@ MetadataCreateCommands()
 			 *
 			 * Instead we rely on the initial sync of the pg_dist_object
 			 * contents at the end of this function. By inserting it here
-			 * locally, it will become part of that sync automatically.
+			 * locally, it will become part of that the list of commands that
+			 * DistributedObjectSyncCommandList returns automatically.
 			 *
 			 * The only downside of this approach is that it won't be synced to
 			 * other metadata nodes than the current one. This should not be a
@@ -608,6 +610,20 @@ MetadataCreateCommands()
 												  shardCreateCommandList);
 	}
 
+	metadataSnapshotCommandList = list_concat(
+		metadataSnapshotCommandList,
+		DistributedObjectSyncCommandList());
+
+
+	return metadataSnapshotCommandList;
+}
+
+
+static List *
+DistributedObjectSyncCommandList()
+{
+	List *commandList = NIL;
+
 	HeapTuple pgDistObjectTup = NULL;
 
 	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
@@ -637,15 +653,12 @@ MetadataCreateCommands()
 			&address,
 			distributionArgumentIndexIsNull ? NULL : &distributionArgumentIndex,
 			colocationIdIsNull ? NULL : &colocationId);
-		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-											  workerMetadataUpdateCommand);
+		commandList = lappend(commandList, workerMetadataUpdateCommand);
 	}
 
 	systable_endscan(pgDistObjectScan);
 	relation_close(pgDistObjectRel, AccessShareLock);
-
-
-	return metadataSnapshotCommandList;
+	return commandList;
 }
 
 
