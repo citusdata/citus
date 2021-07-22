@@ -509,7 +509,7 @@ MetadataCreateCommands(void)
 			 *
 			 * Instead we rely on the initial sync of the pg_dist_object
 			 * contents at the end of this function. By inserting it here
-			 * locally, it will become part of that the list of commands that
+			 * locally, it will become part of the list of commands that
 			 * DistributedObjectSyncCommandList returns automatically.
 			 *
 			 * The only downside of this approach is that it won't be synced to
