@@ -31,7 +31,7 @@ typedef enum
 extern void StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern bool ShouldSyncTableMetadata(Oid relationId);
-extern List * MetadataCreateCommands(List **newDistributedObjects);
+extern List * MetadataCreateCommands();
 extern List * MetadataDropCommands(void);
 extern char * DistributedObjectCreateCommand(const ObjectAddress *address,
 											 int32 *distributionArgumentIndex,

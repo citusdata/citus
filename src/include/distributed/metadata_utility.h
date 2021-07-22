@@ -251,6 +251,9 @@ extern void CreateTruncateTrigger(Oid relationId);
 extern TableConversionReturn * UndistributeTable(TableConversionParameters *params);
 
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
+extern void EnsureDependenciesExistOnAllNodesLocalOnlyMarkDistributed(const
+																	  ObjectAddress *
+																	  target);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateObject(const ObjectAddress *address);

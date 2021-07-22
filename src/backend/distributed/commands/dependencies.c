@@ -31,26 +31,56 @@ typedef bool (*AddressPredicate)(const ObjectAddress *);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
+static void EnsureDependenciesExistOnAllNodesInternal(const ObjectAddress *target,
+													  bool localOnlyMarkDistributed);
 
 bool EnableDependencyCreation = true;
 
 /*
- * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes
- * sure these are available on all workers. If not available they will be created on the
- * workers via a separate session that will be committed directly so that the objects are
- * visible to potentially multiple sessions creating the shards.
+ * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support
+ * and makes sure these are available on all workers. If not available they
+ * will be created on the workers via a separate session that will be committed
+ * directly so that the objects are visible to potentially multiple sessions
+ * creating the shards. After making the objects available it also marks them
+ * as distributed.
  *
- * Note; only the actual objects are created via a separate session, the local records to
- * pg_dist_object are created in this session. As a side effect the objects could be
- * created on the workers without a catalog entry on the coordinator. Updates to the
- * objects on the coordinator are not propagated to the workers until the record is
- * visible on the coordinator.
+ * Note; only the actual objects are created via a separate session, the
+ * records to pg_dist_object are created in this session. As a side effect the
+ * objects could be created on the workers without a catalog entry on the
+ * coordinator. Updates to the objects on the coordinator are not propagated to
+ * the workers until the record is visible on the coordinator.
  *
  * This is solved by creating the dependencies in an idempotent manner, either via
  * postgres native CREATE IF NOT EXISTS, or citus helper functions.
  */
-List *
-EnsureDependenciesExistOnAllNodesWithoutMarkingDistributed(const ObjectAddress *target)
+void
+EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
+{
+	EnsureDependenciesExistOnAllNodesInternal(target, false);
+}
+
+
+/*
+ * EnsureDependenciesExistOnAllNodesLocalOnlyMarkDistributed is the same as
+ * EnsureDependenciesExistOnAllNodes, except that it only marks objects
+ * distributed on the local node. This should never be used, except during
+ * initial metadata syncing.
+ */
+void
+EnsureDependenciesExistOnAllNodesLocalOnlyMarkDistributed(const ObjectAddress *target)
+{
+	EnsureDependenciesExistOnAllNodesInternal(target, true);
+}
+
+
+/*
+ * EnsureDependenciesExistOnAllNodesInternal is the internal function used by
+ * EnsureDependenciesExistOnAllNodes and
+ * EnsureDependenciesExistOnAllNodesLocalOnlyMarkDistributed.
+ */
+static void
+EnsureDependenciesExistOnAllNodesInternal(const ObjectAddress *target,
+										  bool localOnlyMarkDistributed)
 {
 	List *dependenciesWithCommands = NIL;
 	List *ddlCommands = NULL;
@@ -69,10 +99,11 @@ EnsureDependenciesExistOnAllNodesWithoutMarkingDistributed(const ObjectAddress *
 			dependenciesWithCommands = lappend(dependenciesWithCommands, dependency);
 		}
 	}
+
 	if (list_length(ddlCommands) <= 0)
 	{
 		/* no ddl commands to be executed */
-		return NIL;
+		return;
 	}
 
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
@@ -102,27 +133,15 @@ EnsureDependenciesExistOnAllNodesWithoutMarkingDistributed(const ObjectAddress *
 												   ddlCommands);
 	}
 
-	return dependenciesWithCommands;
-}
-
-
-void
-EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
-{
-	List *dependenciesWithCommands =
-		EnsureDependenciesExistOnAllNodesWithoutMarkingDistributed(target);
-
 	/*
 	 * It is possible to create distributed tables which depend on other dependencies
 	 * before any node is in the cluster. If we would wait till we actually had connected
 	 * to the nodes before marking the objects as distributed these objects would never be
 	 * created on the workers when they get added, causing shards to fail to create.
 	 */
-	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependenciesWithCommands)
 	{
-		bool localOnly = false;
-		MarkObjectDistributed(dependency, localOnly);
+		MarkObjectDistributed(dependency, localOnlyMarkDistributed);
 	}
 }
 

@@ -358,10 +358,8 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	/* generate the queries which drop the metadata */
 	List *dropMetadataCommandList = MetadataDropCommands();
 
-	List *newDistributedObjects = NIL;
-
 	/* generate the queries which create the metadata from scratch */
-	List *createMetadataCommandList = MetadataCreateCommands(&newDistributedObjects);
+	List *createMetadataCommandList = MetadataCreateCommands();
 
 	List *recreateMetadataSnapshotCommandList = list_make1(localGroupIdUpdateCommand);
 	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
@@ -394,14 +392,8 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 			return false;
 		}
 	}
-	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
 
-	ObjectAddress *address;
-	foreach_ptr(address, newDistributedObjects)
-	{
-		bool localOnly = false;
-		MarkObjectDistributed(address, localOnly);
-	}
+	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
 	return true;
 }
 
@@ -441,17 +433,9 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
  * (iv)  Queries that populate pg_dist_shard table referenced by (iii)
  * (v)   Queries that populate pg_dist_placement table referenced by (iv)
  * (vi)  Queries that populate pg_dist_object
- *
- * The first argument will be filled with a list of objects that are after the
- * returned commands have been run. These objects should then be marked
- * distributed afterwards. This function does not mark them as distributed
- * directly. The reason for that is marking as distributed is also done on the
- * metadata workers, and thus can only be done safely once all nodes their
- * metadata is up to date. Since this function is only called when at least one
- * node is out of sync, doing it in this function would always fail.
  */
 List *
-MetadataCreateCommands(List **newDistributedObjects)
+MetadataCreateCommands()
 {
 	List *metadataSnapshotCommandList = NIL;
 	List *distributedTableList = CitusTableList();
@@ -513,14 +497,30 @@ MetadataCreateCommands(List **newDistributedObjects)
 		Oid sequenceOid;
 		foreach_oid(sequenceOid, dependentSequenceList)
 		{
-			ObjectAddress *sequenceAddress = palloc(sizeof(ObjectAddress));
-			ObjectAddressSet(*sequenceAddress, RelationRelationId, sequenceOid);
-			List *addedDependencies =
-				EnsureDependenciesExistOnAllNodesWithoutMarkingDistributed(
-					sequenceAddress);
-			*newDistributedObjects = list_concat(*newDistributedObjects,
-												 addedDependencies);
-			*newDistributedObjects = lappend(*newDistributedObjects, sequenceAddress);
+			ObjectAddress sequenceAddress;
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+
+			/*
+			 * We only mark these new objects as distributed in pg_dist_object
+			 * locally. We cannot do it on all nodes with metadata syncing
+			 * enabled. It would error out for the node we're currently
+			 * syncing, because it's metadata is not up to date.
+			 *
+			 * Instead we rely on the initial sync of the pg_dist_object
+			 * contents at the end of this function. By inserting it here
+			 * locally, it will become part of that sync automatically.
+			 *
+			 * The only downside of this approach is that it won't be synced to
+			 * other metadata nodes than the current one. This should not be a
+			 * problem however, because this marking as distributed only does
+			 * something for the very first metadata worker that is added. For
+			 * future nodes these rows in pg_dist_object would have either
+			 * already been added when metadata was synced to them or when the
+			 * distributed table was created.
+			 */
+			EnsureDependenciesExistOnAllNodesLocalOnlyMarkDistributed(&sequenceAddress);
+			bool localOnly = true;
+			MarkObjectDistributed(&sequenceAddress, localOnly);
 		}
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
