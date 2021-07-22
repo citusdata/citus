@@ -1600,7 +1600,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 	}
 
-	List *newDistributedObjects = NIL;
+	List *newDependentSequences = NIL;
 
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
@@ -1692,12 +1692,8 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 								{
 									PropagateSequenceDependencies(
 										seqOid);
-									ObjectAddress *sequenceAddress = palloc(
-										sizeof(ObjectAddress));
-									ObjectAddressSet(*sequenceAddress, RelationRelationId,
-													 seqOid);
-									newDistributedObjects = lappend(newDistributedObjects,
-																	sequenceAddress);
+									newDependentSequences = lappend_oid(
+										newDependentSequences, seqOid);
 								}
 							}
 						}
@@ -1730,10 +1726,8 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 						ClusterHasKnownMetadataWorkers())
 					{
 						PropagateSequenceDependencies(seqOid);
-						ObjectAddress *sequenceAddress = palloc(sizeof(ObjectAddress));
-						ObjectAddressSet(*sequenceAddress, RelationRelationId, seqOid);
-						newDistributedObjects = lappend(newDistributedObjects,
-														sequenceAddress);
+						newDependentSequences = lappend_oid(newDependentSequences,
+															seqOid);
 					}
 				}
 			}
@@ -1760,13 +1754,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		}
 
 		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
-
-		ObjectAddress *address;
-		foreach_ptr(address, newDistributedObjects)
-		{
-			bool shouldSyncMetadata = true;
-			MarkObjectDistributed(address, shouldSyncMetadata);
-		}
+		MarkSequenceListDistributed(newDependentSequences);
 	}
 }
 

@@ -295,6 +295,7 @@ extern void EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId);
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
 extern void PropagateSequenceListDependencies(List *sequenceList);
 extern void PropagateSequenceDependencies(Oid sequenceOid);
+extern void MarkSequenceListDistributed(List *sequenceList);
 extern void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *dependentSequenceList,
 												  List *attnumList);

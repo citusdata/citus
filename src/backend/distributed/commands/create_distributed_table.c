@@ -557,15 +557,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	{
 		if (ClusterHasKnownMetadataWorkers())
 		{
-			Oid sequenceOid;
-			foreach_oid(sequenceOid, dependentSequenceList)
-			{
-				ObjectAddress address;
-
-				ObjectAddressSet(address, RelationRelationId, sequenceOid);
-				bool shouldSyncMetadata = true;
-				MarkObjectDistributed(&address, shouldSyncMetadata);
-			}
+			MarkSequenceListDistributed(dependentSequenceList);
 		}
 	}
 
@@ -692,6 +684,25 @@ PropagateSequenceDependencies(Oid sequenceOid)
 	ObjectAddress sequenceAddress = { 0 };
 	ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
 	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+}
+
+
+/*
+ * MarkSequenceListDistributed marks all sequences in the list as distributed.
+ * NOTE: The sequences should have already been created on the worker nodes.
+ */
+void
+MarkSequenceListDistributed(List *sequenceList)
+{
+	Oid sequenceOid = InvalidOid;
+	foreach_oid(sequenceOid, sequenceList)
+	{
+		ObjectAddress address;
+
+		ObjectAddressSet(address, RelationRelationId, sequenceOid);
+		bool shouldSyncMetadata = true;
+		MarkObjectDistributed(&address, shouldSyncMetadata);
+	}
 }
 
 

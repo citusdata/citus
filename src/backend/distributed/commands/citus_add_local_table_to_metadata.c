@@ -1063,16 +1063,7 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 			PropagateSequenceListDependencies(dependentSequenceList);
 		}
 		CreateTableMetadataOnWorkers(relationId);
-
-		Oid sequenceOid;
-		foreach_oid(sequenceOid, dependentSequenceList)
-		{
-			ObjectAddress address;
-
-			ObjectAddressSet(address, RelationRelationId, sequenceOid);
-			bool shouldSyncMetadata = true;
-			MarkObjectDistributed(&address, shouldSyncMetadata);
-		}
+		MarkSequenceListDistributed(dependentSequenceList);
 	}
 
 	/*
