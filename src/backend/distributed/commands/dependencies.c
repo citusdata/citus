@@ -138,6 +138,9 @@ EnsureDependenciesExistOnAllNodesInternal(const ObjectAddress *target,
 	 * before any node is in the cluster. If we would wait till we actually had connected
 	 * to the nodes before marking the objects as distributed these objects would never be
 	 * created on the workers when they get added, causing shards to fail to create.
+	 *
+	 * NOTE: We do this after creating the objects on the workers, otherwise
+	 * MarkObjectDistributed would fail when localOnlyMarkdistributed is false.
 	 */
 	foreach_ptr(dependency, dependenciesWithCommands)
 	{
