@@ -83,7 +83,7 @@ static List * GetDistributedTableDDLEvents(Oid relationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
 static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
 								   int attrNum, bool value);
-static List * DistributedObjectSyncCommandList();
+static List * DistributedObjectSyncCommandList(void);
 static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
@@ -436,7 +436,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
  * (vi)  Queries that populate pg_dist_object
  */
 List *
-MetadataCreateCommands()
+MetadataCreateCommands(void)
 {
 	List *metadataSnapshotCommandList = NIL;
 	List *distributedTableList = CitusTableList();
@@ -620,7 +620,7 @@ MetadataCreateCommands()
 
 
 static List *
-DistributedObjectSyncCommandList()
+DistributedObjectSyncCommandList(void)
 {
 	List *commandList = NIL;
 
