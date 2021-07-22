@@ -557,6 +557,10 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	{
 		if (ClusterHasKnownMetadataWorkers())
 		{
+			/*
+			 * Now that we have created the sequence on the worker we can mark
+			 * it as distributed.
+			 */
 			MarkSequenceListDistributed(dependentSequenceList);
 		}
 	}

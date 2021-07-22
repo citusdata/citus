@@ -137,8 +137,13 @@ ObjectExists(const ObjectAddress *address)
 
 
 /*
- * MarkObjectDistributed marks an object as a distributed object by citus. Marking is done
- * by adding appropriate entries to citus.pg_dist_object.
+ * MarkObjectDistributed marks an object as a distributed object by citus.
+ * Marking is done by adding appropriate entries to citus.pg_dist_object.
+ *
+ * This also marks the object as distributed on all of the workers with
+ * metadata (unless localOnly is true). This means that the object should
+ * actually be created on those workers already, otherwise the oid of the
+ * object cannot be looked up.
  */
 void
 MarkObjectDistributed(const ObjectAddress *distAddress, bool localOnly)

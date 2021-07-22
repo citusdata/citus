@@ -440,6 +440,15 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
  * (iii) Queries that populate pg_dist_partition table referenced by (ii)
  * (iv)  Queries that populate pg_dist_shard table referenced by (iii)
  * (v)   Queries that populate pg_dist_placement table referenced by (iv)
+ * (vi)  Queries that populate pg_dist_object
+ *
+ * The first argument will be filled with a list of objects that are after the
+ * returned commands have been run. These objects should then be marked
+ * distributed afterwards. This function does not mark them as distributed
+ * directly. The reason for that is marking as distributed is also done on the
+ * metadata workers, and thus can only be done safely once all nodes their
+ * metadata is up to date. Since this function is only called when at least one
+ * node is out of sync, doing it in this function would always fail.
  */
 List *
 MetadataCreateCommands(List **newDistributedObjects)
@@ -818,6 +827,10 @@ NodeListInsertCommand(List *workerNodeList)
 }
 
 
+/*
+ * DistributedObjectCreateCommand generates a command that can be executed to
+ * insert the provided object into pg_dist_object on a worker node.
+ */
 char *
 DistributedObjectCreateCommand(const ObjectAddress *address,
 							   int32 *distributionArgumentIndex,
@@ -888,13 +901,6 @@ DistributedObjectCreateCommand(const ObjectAddress *address,
 
 	appendStringInfo(insertDistributedObjectCommand, "]::text[])");
 	return insertDistributedObjectCommand->data;
-}
-
-
-char *
-DistributedObjectDeleteCommand(const ObjectAddress *address)
-{
-	return NULL;
 }
 
 
