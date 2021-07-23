@@ -958,6 +958,12 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 												   tableOwner, ddlCommandList);
 
 		ddlCommandList = NIL;
+
+		/*
+		 * Skip copying data for partitioned tables, because they contain no
+		 * data themselves. Their partitions do contain data, but those are
+		 * different colocated shards that will be copied seperately.
+		 */
 		if (!PartitionedTable(shardInterval->relationId))
 		{
 			ddlCommandList = CopyShardContentsCommandList(shardInterval, sourceNodeName,
