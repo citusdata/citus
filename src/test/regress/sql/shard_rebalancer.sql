@@ -926,6 +926,7 @@ SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_d
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'by_disk_size', shard_transfer_mode:='block_writes');
 CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
+VACUUM FULL tab, tab2;
 ANALYZE tab, tab2;
 
 \c - - - :worker_1_port
