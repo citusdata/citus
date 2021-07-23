@@ -65,8 +65,8 @@ step s3-progress:
 
 table_name     shardid        shard_size     sourcename     sourceport     source_shard_sizetargetname     targetport     target_shard_sizeprogress
 
-colocated1     1500001        49152          localhost      57637          49152          localhost      57638          49152          2
-colocated2     1500005        376832         localhost      57637          376832         localhost      57638          376832         2
+colocated1     1500001        73728          localhost      57637          49152          localhost      57638          73728          2
+colocated2     1500005        401408         localhost      57637          376832         localhost      57638          401408         2
 colocated1     1500002        196608         localhost      57637          196608         localhost      57638          0              1
 colocated2     1500006        8192           localhost      57637          8192           localhost      57638          0              1
 step s2-unlock-2:
