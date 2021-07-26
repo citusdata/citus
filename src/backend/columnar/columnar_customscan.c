@@ -19,6 +19,7 @@
 #include "nodes/extensible.h"
 #include "nodes/pg_list.h"
 #include "nodes/plannodes.h"
+#include "optimizer/cost.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
@@ -276,6 +277,12 @@ static void
 RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 						IndexPath *indexPath)
 {
+	if (!enable_indexscan)
+	{
+		/* costs are already set to disable_cost, don't adjust them */
+		return;
+	}
+
 	ereport(DEBUG4, (errmsg("columnar table index scan costs estimated by "
 							"indexAM: startup cost = %.10f, total cost = "
 							"%.10f", indexPath->path.startup_cost,
