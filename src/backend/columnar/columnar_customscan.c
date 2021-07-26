@@ -61,7 +61,7 @@ static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index
 									   RangeTblEntry *rte);
 static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
 static bool IsNotIndexPath(Path *path);
-static void RecostColumnarIndexPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
+static void RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
 static void RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 									IndexPath *indexPath);
 static Cost ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId,
@@ -203,7 +203,7 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 			 * comparisons between them.
 			 */
 			RemovePathsByPredicate(rel, IsNotIndexPath);
-			RecostColumnarIndexPaths(root, rel, rte->relid);
+			RecostColumnarPaths(root, rel, rte->relid);
 			add_path(rel, customPath);
 		}
 	}
@@ -244,24 +244,24 @@ IsNotIndexPath(Path *path)
 
 
 /*
- * RecostColumnarIndexPaths re-costs index paths of given RelOptInfo for
+ * RecostColumnarPaths re-costs paths of given RelOptInfo for
  * columnar table with relationId.
  */
 static void
-RecostColumnarIndexPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
+RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 {
 	Path *path = NULL;
 	foreach_ptr(path, rel->pathlist)
 	{
-		/*
-		 * Since we don't provide implementations for scan_bitmap_next_block
-		 * & scan_bitmap_next_tuple, postgres doesn't generate bitmap index
-		 * scan paths for columnar tables already (see related comments in
-		 * TableAmRoutine). For this reason, we only consider IndexPath's
-		 * here.
-		 */
 		if (IsA(path, IndexPath))
 		{
+			/*
+			 * Since we don't provide implementations for scan_bitmap_next_block
+			 * & scan_bitmap_next_tuple, postgres doesn't generate bitmap index
+			 * scan paths for columnar tables already (see related comments in
+			 * TableAmRoutine). For this reason, we only consider IndexPath's
+			 * here.
+			 */
 			RecostColumnarIndexPath(root, rel, relationId, (IndexPath *) path);
 		}
 	}
