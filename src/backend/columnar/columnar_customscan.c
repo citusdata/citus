@@ -202,6 +202,13 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 			 * we only consider ColumnarScanPath's & IndexPath's. For this reason,
 			 * we remove other paths and re-estimate IndexPath costs to make accurate
 			 * comparisons between them.
+			 *
+			 * Even more, we might calculate an equal cost for a
+			 * ColumnarCustomScan and a SeqPath if we are reading all columns
+			 * of given table since we don't consider chunk group filtering
+			 * when costing ColumnarCustomScan.
+			 * In that case, if we don't remove SeqPath's, we might wrongly choose
+			 * SeqPath thinking that its cost would be equal to ColumnarCustomScan.
 			 */
 			RemovePathsByPredicate(rel, IsNotIndexPath);
 			RecostColumnarPaths(root, rel, rte->relid);
