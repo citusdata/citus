@@ -1866,8 +1866,9 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 			if (!ColumnarSupportsIndexAM(indexStmt->accessMethod))
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("only btree and hash indexes are supported on "
-									   "columnar tables ")));
+								errmsg("unsupported access method for the "
+									   "index on columnar table %s",
+									   RelationGetRelationName(rel))));
 			}
 		}
 
