@@ -62,6 +62,8 @@ static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index
 									   RangeTblEntry *rte);
 static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
 static bool IsNotIndexPath(Path *path);
+static Path * CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel,
+										Oid relationId);
 static void RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
 static void RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 									IndexPath *indexPath);
@@ -69,6 +71,7 @@ static Cost ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId,
 											IndexPath *indexPath);
 static Cost ColumnarIndexScanAddTotalCost(PlannerInfo *root, RelOptInfo *rel,
 										  Oid relationId, IndexPath *indexPath);
+static void RecostColumnarSeqPath(RelOptInfo *rel, Oid relationId, Path *path);
 static int RelationIdGetNumberOfAttributes(Oid relationId);
 static Path * CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
 									 RangeTblEntry *rte);
@@ -191,6 +194,22 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		/* columnar doesn't support parallel paths */
 		rel->partial_pathlist = NIL;
 
+		/*
+		 * There are cases where IndexPath is normally more preferrable over
+		 * SeqPath for heapAM but not for columnarAM. In such cases, an
+		 * IndexPath could wrongly dominate a SeqPath based on the costs
+		 * estimated by postgres earlier. For this reason, here we manually
+		 * create a SeqPath, estimate the cost based on columnarAM and append
+		 * to pathlist.
+		 *
+		 * Before doing that, we first re-cost all the existing paths so that
+		 * add_path makes correct cost comparisons when appending our SeqPath.
+		 */
+		RecostColumnarPaths(root, rel, rte->relid);
+
+		Path *seqPath = CreateColumnarSeqScanPath(root, rel, rte->relid);
+		add_path(rel, seqPath);
+
 		if (EnableColumnarCustomScan)
 		{
 			Path *customPath = CreateColumnarScanPath(root, rel, rte);
@@ -211,7 +230,6 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 			 * SeqPath thinking that its cost would be equal to ColumnarCustomScan.
 			 */
 			RemovePathsByPredicate(rel, IsNotIndexPath);
-			RecostColumnarPaths(root, rel, rte->relid);
 			add_path(rel, customPath);
 		}
 	}
@@ -252,6 +270,23 @@ IsNotIndexPath(Path *path)
 
 
 /*
+ * CreateColumnarSeqScanPath returns Path for sequential scan on columnar
+ * table with relationId.
+ */
+static Path *
+CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
+{
+	/* columnar doesn't support parallel scan */
+	int parallelWorkers = 0;
+
+	Relids requiredOuter = rel->lateral_relids;
+	Path *path = create_seqscan_path(root, rel, requiredOuter, parallelWorkers);
+	RecostColumnarSeqPath(rel, relationId, path);
+	return path;
+}
+
+
+/*
  * RecostColumnarPaths re-costs paths of given RelOptInfo for
  * columnar table with relationId.
  */
@@ -271,6 +306,10 @@ RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 			 * here.
 			 */
 			RecostColumnarIndexPath(root, rel, relationId, (IndexPath *) path);
+		}
+		else if (path->pathtype == T_SeqScan)
+		{
+			RecostColumnarSeqPath(rel, relationId, path);
 		}
 	}
 }
@@ -418,6 +457,33 @@ ColumnarIndexScanAddTotalCost(PlannerInfo *root, RelOptInfo *rel,
 							scanCost)));
 
 	return scanCost;
+}
+
+
+/*
+ * RecostColumnarSeqPath re-costs given seq path for columnar table with
+ * relationId.
+ */
+static void
+RecostColumnarSeqPath(RelOptInfo *rel, Oid relationId, Path *path)
+{
+	if (!enable_seqscan)
+	{
+		/* costs are already set to disable_cost, don't adjust them */
+		return;
+	}
+
+	path->startup_cost = 0;
+
+	/*
+	 * Seq scan doesn't support projection pushdown, so we will read all the
+	 * columns.
+	 * Also note that seq scan doesn't support chunk group filtering too but
+	 * our costing model already doesn't consider chunk group filtering.
+	 */
+	int numberOfColumnsRead = RelationIdGetNumberOfAttributes(relationId);
+	path->total_cost = path->startup_cost +
+					   ColumnarScanCost(rel, relationId, numberOfColumnsRead);
 }
 
 

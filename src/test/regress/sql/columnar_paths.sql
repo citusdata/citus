@@ -36,6 +36,15 @@ SELECT a FROM full_correlated WHERE a>900000;
 $$
 );
 
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_seq_scan (
+  $$
+  SELECT a FROM full_correlated WHERE a>900000;
+  $$
+  );
+ROLLBACK;
+
 SELECT columnar_test_helpers.uses_index_scan (
 $$
 SELECT a FROM full_correlated WHERE a<1000;
@@ -55,12 +64,28 @@ $$
 );
 
 BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_index_scan (
+  $$
+  SELECT a FROM full_correlated WHERE a<9000;
+  $$
+  );
+ROLLBACK;
+
+BEGIN;
   TRUNCATE full_correlated;
   INSERT INTO full_correlated SELECT i, i::text FROM generate_series(1, 1000) i;
 
   -- Since we have much smaller number of rows, selectivity of below
   -- query should be much higher. So we would choose columnar custom scan.
   SELECT columnar_test_helpers.uses_custom_scan (
+  $$
+  SELECT a FROM full_correlated WHERE a=200;
+  $$
+  );
+
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_seq_scan (
   $$
   SELECT a FROM full_correlated WHERE a=200;
   $$
@@ -75,6 +100,15 @@ SELECT a,b,c,d FROM full_correlated WHERE a<9000;
 $$
 );
 
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_index_scan (
+  $$
+  SELECT a,b,c,d FROM full_correlated WHERE a<9000;
+  $$
+  );
+ROLLBACK;
+
 -- again same filter used in above, but we would choose custom scan this
 -- time since it would read three less columns from disk
 SELECT columnar_test_helpers.uses_custom_scan (
@@ -82,6 +116,15 @@ $$
 SELECT c FROM full_correlated WHERE a<10000;
 $$
 );
+
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_index_scan (
+  $$
+  SELECT c FROM full_correlated WHERE a<10000;
+  $$
+  );
+ROLLBACK;
 
 SELECT columnar_test_helpers.uses_custom_scan (
 $$
@@ -94,6 +137,65 @@ $$
 SELECT a FROM full_correlated WHERE a=0 OR a=5;
 $$
 );
+
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_seq_scan (
+  $$
+  SELECT a FROM full_correlated WHERE a=0 OR a=5;
+  $$
+  );
+ROLLBACK;
+
+--
+-- some tests with joins / subqueries etc.
+--
+CREATE TABLE heap_table (a int, b text, c int, d int);
+INSERT INTO heap_table SELECT i, i::text, (i+1000)*7, (i+900)*5 FROM generate_series(1, 1000000) i;
+CREATE INDEX heap_table_btree ON heap_table (a);
+ANALYZE heap_table;
+
+EXPLAIN (COSTS OFF)
+WITH cte AS MATERIALIZED (SELECT d FROM full_correlated WHERE a > 1)
+SELECT SUM(ht_1.a), MIN(ct_1.c)
+FROM heap_table AS ht_1
+LEFT JOIN full_correlated AS ct_1 ON ht_1.a=ct_1.d
+LEFT JOIN heap_table AS ht_2 ON ht_2.a=ct_1.c
+JOIN cte ON cte.d=ht_1.a
+WHERE ct_1.a < 3000;
+
+-- same query but columnar custom scan is disabled
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+
+  EXPLAIN (COSTS OFF)
+  WITH cte AS MATERIALIZED (SELECT d FROM full_correlated WHERE a > 1)
+  SELECT SUM(ht_1.a), MIN(ct_1.c)
+  FROM heap_table AS ht_1
+  LEFT JOIN full_correlated AS ct_1 ON ht_1.a=ct_1.d
+  LEFT JOIN heap_table AS ht_2 ON ht_2.a=ct_1.c
+  JOIN cte ON cte.d=ht_1.a
+  WHERE ct_1.a < 3000;
+ROLLBACK;
+
+-- use custom scan
+EXPLAIN (COSTS OFF) WITH w AS (SELECT * FROM full_correlated)
+SELECT * FROM w AS w1 JOIN w AS w2 ON w1.a = w2.d
+WHERE w2.a = 123;
+
+-- use index
+EXPLAIN (COSTS OFF) WITH w AS NOT MATERIALIZED (SELECT * FROM full_correlated)
+SELECT * FROM w AS w1 JOIN w AS w2 ON w1.a = w2.d
+WHERE w2.a = 123;
+
+EXPLAIN (COSTS OFF) SELECT sub_1.b, sub_2.a, sub_3.avg
+FROM
+  (SELECT b FROM full_correlated WHERE (a > 2) GROUP BY b HAVING count(DISTINCT a) > 0 ORDER BY 1 DESC LIMIT 5) AS sub_1,
+  (SELECT a FROM full_correlated WHERE (a > 10) GROUP BY a HAVING count(DISTINCT a) >= 1 ORDER BY 1 DESC LIMIT 3) AS sub_2,
+  (SELECT avg(a) AS AVG FROM full_correlated WHERE (a > 2) GROUP BY a HAVING sum(a) > 10 ORDER BY (sum(d) - avg(a) - COALESCE(array_upper(ARRAY[max(a)],1) * 5, 0)) DESC LIMIT 3) AS sub_3
+WHERE sub_2.a < sub_1.b::integer
+ORDER BY 3 DESC, 2 DESC, 1 DESC
+LIMIT 100;
 
 DROP INDEX full_correlated_btree;
 
@@ -130,6 +232,15 @@ SELECT a,c FROM full_correlated WHERE a=1000;
 $$
 );
 
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_index_scan (
+  $$
+  SELECT a,c FROM full_correlated WHERE a=1000;
+  $$
+  );
+ROLLBACK;
+
 CREATE TABLE full_anti_correlated (a int, b text) USING columnar;
 INSERT INTO full_anti_correlated SELECT i, i::text FROM generate_series(1, 500000) i;
 CREATE INDEX full_anti_correlated_hash ON full_anti_correlated USING hash(b);
@@ -152,6 +263,15 @@ $$
 SELECT a,b FROM full_anti_correlated WHERE b='600' OR b='10';
 $$
 );
+
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_seq_scan (
+  $$
+  SELECT a,b FROM full_anti_correlated WHERE b='600' OR b='10';
+  $$
+  );
+ROLLBACK;
 
 DROP INDEX full_anti_correlated_hash;
 
@@ -182,6 +302,15 @@ SELECT a FROM full_anti_correlated WHERE a<7000 AND b<'10000';
 $$
 );
 
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_seq_scan (
+  $$
+  SELECT a FROM full_anti_correlated WHERE a<7000 AND b<'10000';
+  $$
+  );
+ROLLBACK;
+
 CREATE TABLE no_correlation (a int, b text) USING columnar;
 INSERT INTO no_correlation SELECT random()*5000, (random()*5000)::int::text FROM generate_series(1, 500000) i;
 CREATE INDEX no_correlation_btree ON no_correlation (a);
@@ -198,6 +327,15 @@ $$
 SELECT a FROM no_correlation WHERE a = 200;
 $$
 );
+
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  SELECT columnar_test_helpers.uses_seq_scan (
+  $$
+  SELECT a FROM no_correlation WHERE a = 200;
+  $$
+  );
+ROLLBACK;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_paths CASCADE;

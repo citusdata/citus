@@ -105,9 +105,9 @@ EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent;
          Workers Planned: 4
          ->  Partial Aggregate
                ->  Parallel Append
+                     ->  Seq Scan on p3
                      ->  Seq Scan on p0
                      ->  Seq Scan on p1
-                     ->  Seq Scan on p3
                      ->  Parallel Seq Scan on p2
 (9 rows)
 
@@ -123,6 +123,45 @@ SET min_parallel_table_scan_size TO DEFAULT;
 SET parallel_tuple_cost TO DEFAULT;
 SET max_parallel_workers TO DEFAULT;
 SET max_parallel_workers_per_gather TO DEFAULT;
+CREATE INDEX parent_btree ON parent (n);
+ANALYZE parent;
+-- will use columnar custom scan on columnar partitions but index
+-- scan on heap partition
+EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent
+WHERE ts > '2020-02-20' AND n < 5;
+                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Append
+         ->  Custom Scan (ColumnarScan) on p1
+               Filter: ((ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone) AND (n < '5'::numeric))
+         ->  Index Scan using p2_n_idx on p2
+               Index Cond: (n < '5'::numeric)
+               Filter: (ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone)
+         ->  Custom Scan (ColumnarScan) on p3
+               Filter: ((ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone) AND (n < '5'::numeric))
+(9 rows)
+
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+  -- now that we disabled columnar custom scan, will use seq scan on columnar
+  -- partitions since index scan is more expensive than seq scan too
+  EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent
+  WHERE ts > '2020-02-20' AND n < 5;
+                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Append
+         ->  Seq Scan on p1
+               Filter: ((ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone) AND (n < '5'::numeric))
+         ->  Index Scan using p2_n_idx on p2
+               Index Cond: (n < '5'::numeric)
+               Filter: (ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone)
+         ->  Seq Scan on p3
+               Filter: ((ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone) AND (n < '5'::numeric))
+(9 rows)
+
+ROLLBACK;
 DROP TABLE parent;
 --
 -- Test inheritance

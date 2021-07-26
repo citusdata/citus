@@ -52,6 +52,23 @@ SET parallel_tuple_cost TO DEFAULT;
 SET max_parallel_workers TO DEFAULT;
 SET max_parallel_workers_per_gather TO DEFAULT;
 
+CREATE INDEX parent_btree ON parent (n);
+ANALYZE parent;
+
+-- will use columnar custom scan on columnar partitions but index
+-- scan on heap partition
+EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent
+WHERE ts > '2020-02-20' AND n < 5;
+
+BEGIN;
+  SET LOCAL columnar.enable_custom_scan TO 'OFF';
+
+  -- now that we disabled columnar custom scan, will use seq scan on columnar
+  -- partitions since index scan is more expensive than seq scan too
+  EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent
+  WHERE ts > '2020-02-20' AND n < 5;
+ROLLBACK;
+
 DROP TABLE parent;
 
 --

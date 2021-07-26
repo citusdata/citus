@@ -113,3 +113,17 @@ BEGIN
   END LOOP;
   RETURN false;
 END; $$ language plpgsql;
+
+CREATE OR REPLACE FUNCTION uses_seq_scan(command text)
+RETURNS BOOLEAN AS $$
+DECLARE
+  query_plan text;
+BEGIN
+  FOR query_plan IN EXECUTE 'EXPLAIN' || command LOOP
+    IF query_plan ILIKE '%Seq Scan on %'
+    THEN
+        RETURN true;
+    END IF;
+  END LOOP;
+  RETURN false;
+END; $$ language plpgsql;
