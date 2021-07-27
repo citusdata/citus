@@ -42,6 +42,7 @@ extern bool SendOptionalCommandListToWorkerInTransaction(const char *nodeName, i
 														 const char *nodeUser,
 														 List *commandList);
 extern void SendCommandToWorkersWithMetadata(const char *command);
+extern void SendOptionalCommandToWorkersWithMetadata(const char *command);
 extern void SendBareCommandListToMetadataWorkers(List *commandList);
 extern void EnsureNoModificationsHaveBeenDone(void);
 extern void SendCommandListToWorkerInSingleTransaction(const char *nodeName,

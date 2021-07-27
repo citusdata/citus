@@ -366,28 +366,17 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
 													  createMetadataCommandList);
 
-	/*
-	 * Send the snapshot recreation commands in a single remote transaction and
-	 * if requested, error out in any kind of failure. Note that it is not
-	 * required to send createMetadataSnapshotCommandList in the same transaction
-	 * that we send nodeDeleteCommand and nodeInsertCommand commands below.
-	 */
-	if (raiseOnError)
+	const char *command = NULL;
+	foreach_ptr(command, recreateMetadataSnapshotCommandList)
 	{
-		SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
-												   workerNode->workerPort,
-												   currentUser,
-												   recreateMetadataSnapshotCommandList);
-		return true;
-	}
-	else
-	{
-		bool success =
-			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
-														 workerNode->workerPort,
-														 currentUser,
-														 recreateMetadataSnapshotCommandList);
-		return success;
+		if (raiseOnError)
+		{
+			SendCommandToWorkersWithMetadata(command);
+		}
+		else
+		{
+			SendOptionalCommandToWorkersWithMetadata(command);
+		}
 	}
 }
 
@@ -407,10 +396,11 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  LocalGroupIdUpdateCommand(0));
 
-	SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
-												 workerNode->workerPort,
-												 userName,
-												 dropMetadataCommandList);
+	const char *command = NULL;
+	foreach_ptr(command, dropMetadataCommandList)
+	{
+		SendOptionalCommandToWorkersWithMetadata(command);
+	}
 }
 
 

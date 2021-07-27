@@ -36,12 +36,14 @@
 static void SendCommandToMetadataWorkersParams(const char *command,
 											   const char *user, int parameterCount,
 											   const Oid *parameterTypes,
-											   const char *const *parameterValues);
+											   const char *const *parameterValues,
+											   bool raiseInterrupts);
 static void SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   const char *command, const char *user,
 											   int parameterCount,
 											   const Oid *parameterTypes,
-											   const char *const *parameterValues);
+											   const char *const *parameterValues,
+											   bool raiseInterrupts);
 static void ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList);
 static List * OpenConnectionsToWorkersInParallel(TargetWorkerSet targetWorkerSet,
 												 const char *user);
@@ -112,14 +114,29 @@ SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort, const char *node
 /*
  * SendCommandToWorkers sends a command to all workers in
  * parallel. Commands are committed on the workers when the local
- * transaction commits. The connection are made as the extension
- * owner to ensure write access to the Citus metadata tables.
+ * transaction commits. Failures abort the current transaction.
  */
 void
 SendCommandToWorkersWithMetadata(const char *command)
 {
+	bool raiseInterrupts = true;
 	SendCommandToMetadataWorkersParams(command, CurrentUserName(),
-									   0, NULL, NULL);
+									   0, NULL, NULL, raiseInterrupts);
+}
+
+
+/*
+ * SendOptionalCommandToWorkersWithMetadata sends a command to
+ * all workers in parallel. Commands are committed on the workers
+ * when the local transaction commits. Failures do not abort
+ * the current transaction.
+ */
+void
+SendOptionalCommandToWorkersWithMetadata(const char *command)
+{
+	bool raiseInterrupts = false;
+	SendCommandToMetadataWorkersParams(command, CurrentUserName(),
+									   0, NULL, NULL, raiseInterrupts);
 }
 
 
@@ -205,7 +222,8 @@ static void
 SendCommandToMetadataWorkersParams(const char *command,
 								   const char *user, int parameterCount,
 								   const Oid *parameterTypes,
-								   const char *const *parameterValues)
+								   const char *const *parameterValues,
+								   bool raiseInterrupts)
 {
 	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
 												   ShareLock);
@@ -214,7 +232,7 @@ SendCommandToMetadataWorkersParams(const char *command,
 
 	SendCommandToWorkersParamsInternal(NON_COORDINATOR_METADATA_NODES, command, user,
 									   parameterCount, parameterTypes,
-									   parameterValues);
+									   parameterValues, raiseInterrupts);
 }
 
 
@@ -353,13 +371,16 @@ static void
 SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *command,
 								   const char *user, int parameterCount,
 								   const Oid *parameterTypes,
-								   const char *const *parameterValues)
+								   const char *const *parameterValues,
+								   bool raiseInterrupts)
 {
 	List *connectionList = NIL;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 
 	UseCoordinatedTransaction();
 	Use2PCForCoordinatedTransaction();
+
+	int logLevel = raiseInterrupts ? ERROR : WARNING;
 
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
@@ -397,7 +418,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 												parameterTypes, parameterValues, false);
 		if (querySent == 0)
 		{
-			ReportConnectionError(connection, ERROR);
+			ReportConnectionError(connection, logLevel);
 		}
 	}
 
@@ -407,7 +428,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 		PGresult *result = GetRemoteCommandResult(connection, true);
 		if (!IsResponseOK(result))
 		{
-			ReportResultError(connection, result, ERROR);
+			ReportResultError(connection, result, logLevel);
 		}
 
 		PQclear(result);
