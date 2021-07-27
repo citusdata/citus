@@ -204,6 +204,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	}
 
 	UseCoordinatedTransaction();
+
 	if (!NodeIsPrimary(workerNode))
 	{
 		/*
@@ -213,9 +214,11 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		return;
 	}
 
-	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
+
+	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
+
 }
 
 
