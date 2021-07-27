@@ -349,7 +349,7 @@ ShouldSyncTableMetadata(Oid relationId)
 static bool
 SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 {
-	char *currentUser = CurrentUserName();
+	bool failed = false;
 
 	/* generate and add the local group id's update query */
 	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
@@ -375,9 +375,14 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 		}
 		else
 		{
-			SendOptionalCommandToWorkersWithMetadata(command);
+			bool commandFailed =
+				SendOptionalCommandToWorkersWithMetadata(command);
+
+			failed |= commandFailed;
 		}
 	}
+
+	return failed;
 }
 
 
@@ -388,8 +393,6 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 static void
 DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 {
-	char *userName = CurrentUserName();
-
 	/* generate the queries which drop the metadata */
 	List *dropMetadataCommandList = MetadataDropCommands();
 
