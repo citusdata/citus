@@ -214,6 +214,8 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
 
+	workerNode = FindWorkerNode(nodeNameString, nodePort);
+
 	/* fail if metadata synchronization doesn't succeed */
 	bool raiseInterrupts = true;
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
@@ -371,7 +373,7 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	{
 		if (raiseOnError)
 		{
-			SendCommandToWorkersWithMetadata(command);
+			SendCommandToWorkersWithMetadataNonStrict(command);
 		}
 		else
 		{
@@ -1789,17 +1791,19 @@ SyncMetadataToNodes(void)
 		{
 			bool raiseInterrupts = false;
 
+			MarkNodeMetadataSynced(workerNode->workerName,
+								   workerNode->workerPort, true);
+			workerNode = FindWorkerNode(workerNode->workerName, workerNode->workerPort);
+
 			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
 			{
 				ereport(WARNING, (errmsg("failed to sync metadata to %s:%d",
 										 workerNode->workerName,
 										 workerNode->workerPort)));
 				result = METADATA_SYNC_FAILED_SYNC;
-			}
-			else
-			{
+
 				MarkNodeMetadataSynced(workerNode->workerName,
-									   workerNode->workerPort, true);
+									   workerNode->workerPort, false);
 			}
 		}
 	}

@@ -37,7 +37,7 @@ static bool SendCommandToMetadataWorkersParams(const char *command,
 											   const char *user, int parameterCount,
 											   const Oid *parameterTypes,
 											   const char *const *parameterValues,
-											   bool raiseInterrupts);
+											   bool raiseInterrupts, bool strictMode);
 static bool SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet,
 											   const char *command, const char *user,
 											   int parameterCount,
@@ -120,8 +120,19 @@ void
 SendCommandToWorkersWithMetadata(const char *command)
 {
 	bool raiseInterrupts = true;
+	bool strictMode = true;
 	SendCommandToMetadataWorkersParams(command, CurrentUserName(),
-									   0, NULL, NULL, raiseInterrupts);
+									   0, NULL, NULL, raiseInterrupts, strictMode);
+}
+
+
+void
+SendCommandToWorkersWithMetadataNonStrict(const char *command)
+{
+	bool raiseInterrupts = true;
+	bool strictMode = false;
+	SendCommandToMetadataWorkersParams(command, CurrentUserName(),
+									   0, NULL, NULL, raiseInterrupts, strictMode);
 }
 
 
@@ -136,8 +147,9 @@ bool
 SendOptionalCommandToWorkersWithMetadata(const char *command)
 {
 	bool raiseInterrupts = false;
+	bool strictMode = false;
 	return SendCommandToMetadataWorkersParams(command, CurrentUserName(),
-											  0, NULL, NULL, raiseInterrupts);
+											  0, NULL, NULL, raiseInterrupts, strictMode);
 }
 
 
@@ -224,13 +236,16 @@ SendCommandToMetadataWorkersParams(const char *command,
 								   const char *user, int parameterCount,
 								   const Oid *parameterTypes,
 								   const char *const *parameterValues,
-								   bool raiseInterrupts)
+								   bool raiseInterrupts,
+								   bool strictMode)
 {
 	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
 												   ShareLock);
 
-	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
-
+	if (strictMode)
+	{
+		ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
+	}
 	return SendCommandToWorkersParamsInternal(NON_COORDINATOR_METADATA_NODES, command,
 											  user,
 											  parameterCount, parameterTypes,
