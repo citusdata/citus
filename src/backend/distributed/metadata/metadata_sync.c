@@ -165,9 +165,6 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 {
 	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
-	/* fail if metadata synchronization doesn't succeed */
-	bool raiseInterrupts = true;
-
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureSuperUser();
@@ -217,8 +214,9 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
 
+	/* fail if metadata synchronization doesn't succeed */
+	bool raiseInterrupts = true;
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
-
 }
 
 

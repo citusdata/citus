@@ -137,7 +137,7 @@ SendOptionalCommandToWorkersWithMetadata(const char *command)
 {
 	bool raiseInterrupts = false;
 	return SendCommandToMetadataWorkersParams(command, CurrentUserName(),
-									   0, NULL, NULL, raiseInterrupts);
+											  0, NULL, NULL, raiseInterrupts);
 }
 
 
@@ -231,9 +231,10 @@ SendCommandToMetadataWorkersParams(const char *command,
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
-	return SendCommandToWorkersParamsInternal(NON_COORDINATOR_METADATA_NODES, command, user,
-									   parameterCount, parameterTypes,
-									   parameterValues, raiseInterrupts);
+	return SendCommandToWorkersParamsInternal(NON_COORDINATOR_METADATA_NODES, command,
+											  user,
+											  parameterCount, parameterTypes,
+											  parameterValues, raiseInterrupts);
 }
 
 
