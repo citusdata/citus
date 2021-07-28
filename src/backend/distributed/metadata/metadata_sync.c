@@ -384,7 +384,7 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 		}
 	}
 
-	return failed;
+	return !failed;
 }
 
 
