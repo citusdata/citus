@@ -615,10 +615,10 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
 		/* send commands to new workers*/
-		SendCommandListToWorkerInSingleTransaction(newWorkerNode->workerName,
-												   newWorkerNode->workerPort,
-												   CitusExtensionOwnerName(),
-												   ddlCommands);
+		SendCommandListToWorkerOutsideTransaction(newWorkerNode->workerName,
+												  newWorkerNode->workerPort,
+												  CitusExtensionOwnerName(),
+												  ddlCommands);
 	}
 }
 

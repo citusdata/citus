@@ -91,11 +91,6 @@ SELECT alter_table_set_access_method('events_2021_jan', 'columnar');
 (1 row)
 
 VACUUM (FREEZE, ANALYZE) events_2021_jan;
--- this should fail
-BEGIN;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-ERROR:  start_metadata_sync_to_node cannot run inside a transaction block
-ROLLBACK;
 -- sync metadata
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
@@ -125,7 +120,7 @@ SELECT * FROM test_matview;
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'events%' ORDER BY logicalrelid::text;
-  logicalrelid   | partmethod |                                                          partkey                                                           | colocationid | repmodel
+  logicalrelid   | partmethod |                                                         partkey                                                          | colocationid | repmodel
 ---------------------------------------------------------------------
  events          | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |      1390012 | s
  events_2021_feb | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |      1390012 | s
@@ -164,18 +159,15 @@ SELECT * FROM distributed_table_1;
 (0 rows)
 
 ALTER TABLE distributed_table_4 DROP COLUMN b;
--- this should fail
 BEGIN;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-ERROR:  stop_metadata_sync_to_node cannot run inside a transaction block
-ROLLBACK;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+	SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
+COMMIT;
 SELECT * FROM test_view;
  count
 ---------------------------------------------------------------------
@@ -245,12 +237,14 @@ SELECT * FROM distributed_table_1;
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+BEGIN;
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
+COMMIT;
 \c - - - :worker_1_port
 SELECT count(*) > 0 FROM pg_dist_node;
  ?column?
@@ -278,7 +272,180 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
+-- both start & stop metadata sync operations can be transactional
+BEGIN;
+	-- sync the same node multiple times
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+	-- sync the same node in the same command
+	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
+									   'localhost', :worker_1_port,
+									   'localhost', :worker_2_port,
+									   'localhost', :worker_2_port))
+	SELECT start_metadata_sync_to_node(name,port) FROM nodes;
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+	-- stop the same node in the same command
+	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
+									   'localhost', :worker_1_port,
+									   'localhost', :worker_2_port,
+									   'localhost', :worker_2_port))
+	SELECT stop_metadata_sync_to_node(name,port) FROM nodes;
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+COMMIT;
+\c - - - :worker_1_port
+SELECT count(*) > 0 FROM pg_dist_node;
+ ?column?
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT count(*) > 0 FROM pg_dist_shard;
+ ?column?
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
+ ?column?
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
+ ?column?
+---------------------------------------------------------------------
+ f
+(1 row)
+
+\c - - - :master_port
+SET search_path TO "start_stop_metadata_sync";
+-- start metadata sync sets the multi-shard modify mode to sequential
+BEGIN;
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+	show citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+COMMIT;
+-- stop metadata sync sets the multi-shard modify mode to sequential
+BEGIN;
+	SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+	show citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+COMMIT;
+-- multi-connection commands are not allowed with start_metadata_sync
+BEGIN;
+	SET citus.force_max_query_parallelization TO ON;
+	CREATE TABLE test_table(a int);
+	SELECT create_distributed_table('test_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ERROR:  cannot execute metadata syncing operation because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When modifying metadata, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
+ROLLBACK;
+-- this is safe because start_metadata_sync_to_node already switches to
+-- sequential execution
+BEGIN;
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+	CREATE TABLE test_table(a int);
+	SELECT create_distributed_table('test_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
+-- multi-shard commands are allowed with start_metadata_sync
+-- as long as the start_metadata_sync_to_node executed
+-- when it is OK to switch to sequential execution
+BEGIN;
+	-- sync at the start of the tx
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+	SET citus.multi_shard_modify_mode TO sequential;
+	CREATE TABLE test_table(a int);
+	SELECT create_distributed_table('test_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+	ALTER TABLE test_table ADD COLUMN B INT;
+	INSERT INTO test_table SELECT i,i From generate_series(0,100)i;
+	SELECT count(*) FROM test_table;
+ count
+---------------------------------------------------------------------
+   101
+(1 row)
+
+	ALTER TABLE distributed_table_3 ADD COLUMN new_col INT DEFAULT 15;
+	SELECT count(*) FROM distributed_table_3;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+	-- sync at the end of the tx
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
 -- cleanup
+\c - - - :master_port
+SET search_path TO "start_stop_metadata_sync";
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node

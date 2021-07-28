@@ -47,11 +47,13 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_shard.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/worker_manager.h"
@@ -78,6 +80,7 @@
 char *EnableManualMetadataChangesForUser = "";
 
 
+static void EnsureSequentialModeMetadataOperations(void);
 static List * GetDistributedTableDDLEvents(Oid relationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
 static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
@@ -175,7 +178,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	EnsureSuperUser();
 	EnsureModificationsCanRun();
 
-	PreventInTransactionBlock(true, "start_metadata_sync_to_node");
+	EnsureSequentialModeMetadataOperations();
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
@@ -223,6 +226,50 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 
 /*
+ * EnsureSequentialModeMetadataOperations makes sure that the current transaction is
+ * already in sequential mode, or can still safely be put in sequential mode,
+ * it errors if that is not possible. The error contains information for the user to
+ * retry the transaction with sequential mode set from the begining.
+ *
+ * Metadata objects (e.g., distributed table on the workers) exists only 1 instance of
+ * the type used by potentially multiple other shards/connections. To make sure all
+ * shards/connections in the transaction can interact with the metadata needs to be
+ * visible on all connections used by the transaction, meaning we can only use 1
+ * connection per node.
+ */
+static void
+EnsureSequentialModeMetadataOperations(void)
+{
+	if (!IsTransactionBlock())
+	{
+		/* we do not need to switch to sequential mode if we are not in a transaction */
+		return;
+	}
+
+	if (ParallelQueryExecutedInTransaction())
+	{
+		ereport(ERROR, (errmsg(
+							"cannot execute metadata syncing operation because there was a "
+							"parallel operation on a distributed table in the "
+							"transaction"),
+						errdetail("When modifying metadata, Citus needs to "
+								  "perform all operations over a single connection per "
+								  "node to ensure consistency."),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
+	}
+
+	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
+					 errdetail("Metadata synced or stopped syncing. To make "
+							   "sure subsequent commands see the metadata correctly "
+							   "we need to make sure to use only one connection for "
+							   "all future commands")));
+	SetLocalMultiShardModifyModeToSequential();
+}
+
+
+/*
  * stop_metadata_sync_to_node function sets the hasmetadata column of the specified node
  * to false in pg_dist_node table, thus indicating that the specified worker node does not
  * receive DDL changes anymore and cannot be used for issuing queries.
@@ -233,7 +280,6 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureSuperUser();
-	PreventInTransactionBlock(true, "stop_metadata_sync_to_node");
 
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -376,19 +422,19 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	 */
 	if (raiseOnError)
 	{
-		SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
-												   workerNode->workerPort,
-												   currentUser,
-												   recreateMetadataSnapshotCommandList);
+		SendCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+														workerNode->workerPort,
+														currentUser,
+														recreateMetadataSnapshotCommandList);
 		return true;
 	}
 	else
 	{
 		bool success =
-			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
-														 workerNode->workerPort,
-														 currentUser,
-														 recreateMetadataSnapshotCommandList);
+			SendOptionalCommandListToWorkerInCoordinatedTransaction(
+				workerNode->workerName, workerNode->workerPort,
+				currentUser, recreateMetadataSnapshotCommandList);
+
 		return success;
 	}
 }
@@ -401,6 +447,8 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 static void
 DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 {
+	EnsureSequentialModeMetadataOperations();
+
 	char *userName = CurrentUserName();
 
 	/* generate the queries which drop the metadata */
@@ -409,10 +457,10 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  LocalGroupIdUpdateCommand(0));
 
-	SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
-												 workerNode->workerPort,
-												 userName,
-												 dropMetadataCommandList);
+	SendOptionalCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+															workerNode->workerPort,
+															userName,
+															dropMetadataCommandList);
 }
 
 

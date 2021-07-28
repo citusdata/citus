@@ -753,8 +753,8 @@ RepairShardPlacement(int64 shardId, const char *sourceNodeName, int32 sourceNode
 	}
 
 	EnsureNoModificationsHaveBeenDone();
-	SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort, tableOwner,
-											   ddlCommandList);
+	SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort, tableOwner,
+											  ddlCommandList);
 
 	/* after successful repair, we update shard state as healthy*/
 	List *placementList = ShardPlacementListWithoutOrphanedPlacements(shardId);
@@ -954,8 +954,8 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		List *ddlCommandList = RecreateShardDDLCommandList(shardInterval, sourceNodeName,
 														   sourceNodePort);
 		char *tableOwner = TableOwner(shardInterval->relationId);
-		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
-												   tableOwner, ddlCommandList);
+		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+												  tableOwner, ddlCommandList);
 
 		ddlCommandList = NIL;
 
@@ -973,8 +973,8 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 			ddlCommandList,
 			PostLoadShardCreationCommandList(shardInterval, sourceNodeName,
 											 sourceNodePort));
-		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
-												   tableOwner, ddlCommandList);
+		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+												  tableOwner, ddlCommandList);
 
 		MemoryContextReset(localContext);
 	}
@@ -1007,8 +1007,8 @@ CopyShardTablesViaBlockWrites(List *shardIntervalList, char *sourceNodeName,
 		}
 
 		char *tableOwner = TableOwner(shardInterval->relationId);
-		SendCommandListToWorkerInSingleTransaction(targetNodeName, targetNodePort,
-												   tableOwner, commandList);
+		SendCommandListToWorkerOutsideTransaction(targetNodeName, targetNodePort,
+												  tableOwner, commandList);
 
 		MemoryContextReset(localContext);
 	}

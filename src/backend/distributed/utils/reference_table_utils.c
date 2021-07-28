@@ -370,8 +370,8 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 							nodePort)));
 
 	EnsureNoModificationsHaveBeenDone();
-	SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
-											   ddlCommandList);
+	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
+											  ddlCommandList);
 	int32 groupId = GroupForNode(nodeName, nodePort);
 
 	uint64 placementId = GetNextPlacementId();
@@ -570,8 +570,8 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 			char *tableOwner = TableOwner(shardInterval->relationId);
 			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
 
-			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
-													   commandList);
+			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
+													  commandList);
 		}
 	}
 }

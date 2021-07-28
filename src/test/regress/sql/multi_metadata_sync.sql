@@ -168,7 +168,7 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_testing_schema.mx_index'::regclass;
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
--- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
+-- Make sure that start_metadata_sync_to_node can be called inside a transaction and rollbacked
 \c - - - :master_port
 BEGIN;
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
