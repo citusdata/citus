@@ -432,7 +432,7 @@ HasUnreadStripe(ColumnarReadState *readState)
 void
 ColumnarRescan(ColumnarReadState *readState)
 {
-	readState->stripeReadState = NULL;
+	ColumnarResetRead(readState);
 	readState->currentStripeMetadata = FindNextStripeByRowNumber(readState->relation,
 																 COLUMNAR_INVALID_ROW_NUMBER,
 																 GetTransactionSnapshot());
