@@ -8559,4 +8559,4 @@ getOwnedSequences_internal(Oid relid, AttrNumber attnum, char deptype)
 	return result;
 }
 
-#endif /* (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13) */
+#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
