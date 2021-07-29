@@ -32,7 +32,9 @@
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
+#include "distributed/lock_graph.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_executor.h"
 #include "distributed/metadata_utility.h"
@@ -65,11 +67,21 @@ static List * RelationShardListForShardCreate(ShardInterval *shardInterval);
 static bool WorkerShardStats(ShardPlacement *placement, Oid relationId,
 							 const char *shardName, uint64 *shardSize,
 							 text **shardMinValue, text **shardMaxValue);
+static void UpdateTableStatistics(Oid relationId);
+static void ReceiveAndUpdateShardsSizeAndMinMax(List *connectionList);
+static void UpdateShardSizeAndMinMax(uint64 shardId, ShardInterval *shardInterval, Oid
+									 relationId, List *shardPlacementList, uint64
+									 shardSize, text *shardMinValue,
+									 text *shardMaxValue);
+static bool ProcessShardStatisticsRow(PGresult *result, int64 rowIndex, uint64 *shardId,
+									  text **shardMinValue, text **shardMaxValue,
+									  uint64 *shardSize);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_empty_shard);
 PG_FUNCTION_INFO_V1(master_append_table_to_shard);
 PG_FUNCTION_INFO_V1(master_update_shard_statistics);
+PG_FUNCTION_INFO_V1(citus_update_table_statistics);
 
 
 /*
@@ -343,6 +355,23 @@ master_update_shard_statistics(PG_FUNCTION_ARGS)
 	uint64 shardSize = UpdateShardStatistics(shardId);
 
 	PG_RETURN_INT64(shardSize);
+}
+
+
+/*
+ * citus_update_table_statistics updates metadata (shard size and shard min/max
+ * values) of the shards of the given table
+ */
+Datum
+citus_update_table_statistics(PG_FUNCTION_ARGS)
+{
+	Oid distributedTableId = PG_GETARG_OID(0);
+
+	CheckCitusVersion(ERROR);
+
+	UpdateTableStatistics(distributedTableId);
+
+	PG_RETURN_VOID();
 }
 
 
@@ -760,8 +789,6 @@ UpdateShardStatistics(int64 shardId)
 {
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid relationId = shardInterval->relationId;
-	char storageType = shardInterval->storageType;
-	char partitionType = PartitionMethod(relationId);
 	bool statsOK = false;
 	uint64 shardSize = 0;
 	text *minValue = NULL;
@@ -804,36 +831,176 @@ UpdateShardStatistics(int64 shardId)
 						  errdetail("Setting shard statistics to NULL")));
 	}
 
-	/* make sure we don't process cancel signals */
-	HOLD_INTERRUPTS();
+	UpdateShardSizeAndMinMax(shardId, shardInterval, relationId, shardPlacementList,
+							 shardSize, minValue, maxValue);
+	return shardSize;
+}
 
-	/* update metadata for each shard placement we appended to */
+
+/*
+ * UpdateTableStatistics updates metadata (shard size and shard min/max values)
+ * of the shards of the given table. Follows a similar logic to citus_shard_sizes function.
+ */
+static void
+UpdateTableStatistics(Oid relationId)
+{
+	List *citusTableIds = NIL;
+	citusTableIds = lappend_oid(citusTableIds, relationId);
+
+	/* we want to use a distributed transaction here to detect distributed deadlocks */
+	bool useDistributedTransaction = true;
+
+	/* we also want shard min/max values for append distributed tables */
+	bool useShardMinMaxQuery = true;
+
+	List *connectionList = SendShardStatisticsQueriesInParallel(citusTableIds,
+																useDistributedTransaction,
+																useShardMinMaxQuery);
+
+	ReceiveAndUpdateShardsSizeAndMinMax(connectionList);
+}
+
+
+/*
+ * ReceiveAndUpdateShardsSizeAndMinMax receives shard id, size
+ * and min max results from the given connection list, and updates
+ * respective entries in pg_dist_placement and pg_dist_shard
+ */
+static void
+ReceiveAndUpdateShardsSizeAndMinMax(List *connectionList)
+{
+	/*
+	 * From the connection list, we will not get all the shards, but
+	 * all the placements. We use a hash table to remember already visited shard ids
+	 * since we update all the different placements of a shard id at once.
+	 */
+	HTAB *alreadyVisitedShardPlacements = CreateOidVisitedHashSet();
+
+	MultiConnection *connection = NULL;
+	foreach_ptr(connection, connectionList)
+	{
+		if (PQstatus(connection->pgConn) != CONNECTION_OK)
+		{
+			continue;
+		}
+
+		bool raiseInterrupts = true;
+		PGresult *result = GetRemoteCommandResult(connection, raiseInterrupts);
+		if (!IsResponseOK(result))
+		{
+			ReportResultError(connection, result, WARNING);
+			continue;
+		}
+
+		int64 rowCount = PQntuples(result);
+		int64 colCount = PQnfields(result);
+
+		/* Although it is not expected */
+		if (colCount != UPDATE_SHARD_STATISTICS_COLUMN_COUNT)
+		{
+			ereport(WARNING, (errmsg("unexpected number of columns from "
+									 "master_update_table_statistics")));
+			continue;
+		}
+
+		for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
+		{
+			uint64 shardId = 0;
+			text *shardMinValue = NULL;
+			text *shardMaxValue = NULL;
+			uint64 shardSize = 0;
+
+			if (!ProcessShardStatisticsRow(result, rowIndex, &shardId, &shardMinValue,
+										   &shardMaxValue, &shardSize))
+			{
+				/* this row has no valid shard statistics */
+				continue;
+			}
+
+			if (OidVisited(alreadyVisitedShardPlacements, shardId))
+			{
+				/* We have already updated this placement list */
+				continue;
+			}
+
+			VisitOid(alreadyVisitedShardPlacements, shardId);
+
+			ShardInterval *shardInterval = LoadShardInterval(shardId);
+			Oid relationId = shardInterval->relationId;
+			List *shardPlacementList = ActiveShardPlacementList(shardId);
+
+			UpdateShardSizeAndMinMax(shardId, shardInterval, relationId,
+									 shardPlacementList, shardSize, shardMinValue,
+									 shardMaxValue);
+		}
+		PQclear(result);
+		ForgetResults(connection);
+	}
+	hash_destroy(alreadyVisitedShardPlacements);
+}
+
+
+/*
+ * ProcessShardStatisticsRow processes a row of shard statistics of the input PGresult
+ * - it returns true if this row belongs to a valid shard
+ * - it returns false if this row has no valid shard statistics (shardId = INVALID_SHARD_ID)
+ */
+static bool
+ProcessShardStatisticsRow(PGresult *result, int64 rowIndex, uint64 *shardId,
+						  text **shardMinValue, text **shardMaxValue, uint64 *shardSize)
+{
+	*shardId = ParseIntField(result, rowIndex, 0);
+
+	/* check for the dummy entries we put so that UNION ALL wouldn't complain */
+	if (*shardId == INVALID_SHARD_ID)
+	{
+		/* this row has no valid shard statistics */
+		return false;
+	}
+
+	char *minValueResult = PQgetvalue(result, rowIndex, 1);
+	char *maxValueResult = PQgetvalue(result, rowIndex, 2);
+	*shardMinValue = cstring_to_text(minValueResult);
+	*shardMaxValue = cstring_to_text(maxValueResult);
+	*shardSize = ParseIntField(result, rowIndex, 3);
+	return true;
+}
+
+
+/*
+ * UpdateShardSizeAndMinMax updates the shardlength (shard size) of the given
+ * shard and its placements in pg_dist_placement, and updates the shard min value
+ * and shard max value of the given shard in pg_dist_shard if the relationId belongs
+ * to an append-distributed table
+ */
+static void
+UpdateShardSizeAndMinMax(uint64 shardId, ShardInterval *shardInterval, Oid relationId,
+						 List *shardPlacementList, uint64 shardSize, text *shardMinValue,
+						 text *shardMaxValue)
+{
+	char storageType = shardInterval->storageType;
+
+	ShardPlacement *placement = NULL;
+
+	/* update metadata for each shard placement */
 	foreach_ptr(placement, shardPlacementList)
 	{
 		uint64 placementId = placement->placementId;
 		int32 groupId = placement->groupId;
 
 		DeleteShardPlacementRow(placementId);
-		InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE, shardSize,
+		InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE,
+								shardSize,
 								groupId);
 	}
 
 	/* only update shard min/max values for append-partitioned tables */
-	if (partitionType == DISTRIBUTE_BY_APPEND)
+	if (PartitionMethod(relationId) == DISTRIBUTE_BY_APPEND)
 	{
 		DeleteShardRow(shardId);
-		InsertShardRow(relationId, shardId, storageType, minValue, maxValue);
+		InsertShardRow(relationId, shardId, storageType, shardMinValue,
+					   shardMaxValue);
 	}
-
-	if (QueryCancelPending)
-	{
-		ereport(WARNING, (errmsg("cancel requests are ignored during metadata update")));
-		QueryCancelPending = false;
-	}
-
-	RESUME_INTERRUPTS();
-
-	return shardSize;
 }
 
 
