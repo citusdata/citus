@@ -253,13 +253,13 @@ CreateColumnarScanMemoryContext(void)
  */
 static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
-						 List *scanQual, MemoryContext scanContext)
+						 List *scanQual, MemoryContext scanContext, Snapshot snapshot)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
 
 	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
-													 scanQual, scanContext);
+													 scanQual, scanContext, snapshot);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -309,7 +309,7 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 		scan->cs_readState =
 			init_columnar_read_state(scan->cs_base.rs_rd, slot->tts_tupleDescriptor,
 									 scan->attr_needed, scan->scanQual,
-									 scan->scanContext);
+									 scan->scanContext, scan->cs_base.rs_snapshot);
 	}
 
 	ExecClearTuple(slot);
@@ -503,12 +503,13 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 		scan->cs_readState = init_columnar_read_state(columnarRelation,
 													  slot->tts_tupleDescriptor,
 													  attr_needed, scanQual,
-													  scan->scanContext);
+													  scan->scanContext,
+													  snapshot);
 	}
 
 	uint64 rowNumber = tid_to_row_number(*tid);
 	if (!ColumnarReadRowByRowNumber(scan->cs_readState, rowNumber, slot->tts_values,
-									slot->tts_isnull, snapshot))
+									slot->tts_isnull))
 	{
 		return false;
 	}
@@ -550,7 +551,9 @@ static bool
 columnar_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
 								  Snapshot snapshot)
 {
-	return true;
+	uint64 rowNumber = tid_to_row_number(slot->tts_tid);
+	StripeMetadata *stripeMetadata = FindStripeByRowNumber(rel, rowNumber, snapshot);
+	return stripeMetadata != NULL;
 }
 
 
@@ -800,10 +803,13 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	/* no quals for table rewrite */
 	List *scanQual = NIL;
 
+	/* use SnapshotAny when re-writing table as heapAM does */
+	Snapshot snapshot = SnapshotAny;
+
 	MemoryContext scanContext = CreateColumnarScanMemoryContext();
 	ColumnarReadState *readState = init_columnar_read_state(OldHeap, sourceDesc,
 															attr_needed, scanQual,
-															scanContext);
+															scanContext, snapshot);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));
@@ -911,7 +917,8 @@ LogRelationStats(Relation rel, int elevel)
 		StripeMetadata *stripe = lfirst(stripeMetadataCell);
 		StripeSkipList *skiplist = ReadStripeSkipList(relfilenode, stripe->id,
 													  RelationGetDescr(rel),
-													  stripe->chunkCount);
+													  stripe->chunkCount,
+													  GetTransactionSnapshot());
 		for (uint32 column = 0; column < skiplist->columnCount; column++)
 		{
 			bool attrDropped = tupdesc->attrs[column].attisdropped;

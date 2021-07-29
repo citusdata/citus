@@ -88,7 +88,7 @@ static void GetHighestUsedAddressAndId(uint64 storageId,
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
 static StripeMetadata * BuildStripeMetadata(Datum *datumArray);
 static uint32 * ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32
-										chunkGroupCount);
+										chunkGroupCount, Snapshot snapshot);
 static Oid ColumnarStorageIdSequenceRelationId(void);
 static Oid ColumnarStripeRelationId(void);
 static Oid ColumnarStripePKeyIndexRelationId(void);
@@ -532,7 +532,7 @@ SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
  */
 StripeSkipList *
 ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
-				   uint32 chunkCount)
+				   uint32 chunkCount, Snapshot snapshot)
 {
 	int32 columnIndex = 0;
 	HeapTuple heapTuple = NULL;
@@ -550,8 +550,8 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	ScanKeyInit(&scanKey[1], Anum_columnar_chunk_stripe,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarChunk, index, NULL,
-															2, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarChunk, index,
+															snapshot, 2, scanKey);
 
 	StripeSkipList *chunkList = palloc0(sizeof(StripeSkipList));
 	chunkList->chunkCount = chunkCount;
@@ -634,7 +634,7 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	table_close(columnarChunk, AccessShareLock);
 
 	chunkList->chunkGroupRowCounts =
-		ReadChunkGroupRowCounts(storageId, stripe, chunkCount);
+		ReadChunkGroupRowCounts(storageId, stripe, chunkCount, snapshot);
 
 	return chunkList;
 }
@@ -803,7 +803,8 @@ FindStripeWithHighestRowNumber(Relation relation, Snapshot snapshot)
  * given stripe.
  */
 static uint32 *
-ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount)
+ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount,
+						Snapshot snapshot)
 {
 	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
 	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, AccessShareLock);
@@ -816,7 +817,7 @@ ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount)
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
 	SysScanDesc scanDescriptor =
-		systable_beginscan_ordered(columnarChunkGroup, index, NULL, 2, scanKey);
+		systable_beginscan_ordered(columnarChunkGroup, index, snapshot, 2, scanKey);
 
 	uint32 chunkGroupIndex = 0;
 	HeapTuple heapTuple = NULL;
