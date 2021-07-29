@@ -184,6 +184,30 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 SELECT * FROM multi_extension.print_extension_changes();
 
+-- Test upgrade paths for backported improvement of master_update_table_statistics function
+ALTER EXTENSION citus UPDATE TO '9.4-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+ALTER EXTENSION citus UPDATE TO '9.4-2';
+
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+
+ALTER EXTENSION citus UPDATE TO '9.4-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 9.4-1
+ALTER EXTENSION citus UPDATE TO '9.4-1';
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+
 -- Test downgrade to 9.4-1 from 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 
