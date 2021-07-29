@@ -280,59 +280,34 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
 		Index partitionKeyIndex = InvalidAttrNumber;
 		PlannerInfo *relationPlannerRoot = relationRestriction->plannerInfo;
-		List *appendRelList = relationPlannerRoot->append_rel_list;
-		Var *varToBeAdded = NULL;
+
+		int targetRTEIndex = GetRTEIdentity(relationRestriction->rte);
+		Var *varToBeAdded =
+			PartitionKeyForRTEIdentityInQuery(originalQuery, targetRTEIndex,
+											  &partitionKeyIndex);
+
+		/* union does not have partition key in the target list */
+		if (partitionKeyIndex == 0)
+		{
+			continue;
+		}
 
 		/*
-		 * We first check whether UNION ALLs are pulled up or not. Note that Postgres
-		 * planner creates AppendRelInfos per each UNION ALL query that is pulled up.
-		 * Then, postgres stores the related information in the append_rel_list on the
-		 * plannerInfo struct.
+		 * This should never happen but to be on the safe side, we have this
 		 */
-		if (appendRelList != NULL)
+		if (relationPlannerRoot->simple_rel_array_size < relationRestriction->index)
 		{
-			varToBeAdded = FindUnionAllVar(relationPlannerRoot,
-										   relationRestriction->translatedVars,
-										   relationRestriction->relationId,
-										   relationRestriction->index,
-										   &partitionKeyIndex);
-
-			/* union does not have partition key in the target list */
-			if (partitionKeyIndex == 0 || varToBeAdded == NULL)
-			{
-				continue;
-			}
+			continue;
 		}
-		else
-		{
-			int targetRTEIndex = GetRTEIdentity(relationRestriction->rte);
-			varToBeAdded =
-				PartitionKeyForRTEIdentityInQuery(originalQuery, targetRTEIndex,
-												  &partitionKeyIndex);
 
-			/* union does not have partition key in the target list */
-			if (partitionKeyIndex == 0)
-			{
-				continue;
-			}
+		/*
+		 * We update the varno because we use the original parse tree for finding the
+		 * var. However the rest of the code relies on a query tree that might be different
+		 * than the original parse tree because of postgres optimizations.
+		 * That's why we update the varno to reflect the rteIndex in the modified query tree.
+		 */
+		varToBeAdded->varno = relationRestriction->index;
 
-
-			/*
-			 * This should never happen but to be on the safe side, we have this
-			 */
-			if (relationPlannerRoot->simple_rel_array_size < relationRestriction->index)
-			{
-				continue;
-			}
-
-			/*
-			 * We update the varno because we use the original parse tree for finding the
-			 * var. However the rest of the code relies on a query tree that might be different
-			 * than the original parse tree because of postgres optimizations.
-			 * That's why we update the varno to reflect the rteIndex in the modified query tree.
-			 */
-			varToBeAdded->varno = relationRestriction->index;
-		}
 
 		/*
 		 * The current relation does not have its partition key in the target list.
@@ -1778,7 +1753,8 @@ ContainsUnionSubquery(Query *queryTree)
 
 
 /*
- * PartitionKeyForRTEIdentityInQuery finds the partition key var(if exists), in the given original query for the rte that has targetRTEIndex.
+ * PartitionKeyForRTEIdentityInQuery finds the partition key var(if exists),
+ * in the given original query for the rte that has targetRTEIndex.
  */
 static Var *
 PartitionKeyForRTEIdentityInQuery(Query *originalQuery, int targetRTEIndex,
@@ -1828,11 +1804,10 @@ PartitionKeyForRTEIdentityInQuery(Query *originalQuery, int targetRTEIndex,
 		{
 			Var *targetColumn = (Var *) targetExpression;
 
-/*
- * As of pg13, columns point to RELATION_RTE so we don't need to do
- * anything further. Prior to pg13, columns point to JOIN_RTE so we
- * find the actual column.
- */
+			/*
+			 * We find the referenced table column to support distribution
+			 * columns that are correlated.
+			 */
 			RangeTblEntry *rteContainingPartitionKey = NULL;
 			FindReferencedTableColumn(targetExpression, NIL,
 									  originalQueryContainingRTEIdentity,

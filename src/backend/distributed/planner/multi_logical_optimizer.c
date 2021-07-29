@@ -4451,11 +4451,11 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 	 * subqueries in WHERE clause, we don't support use of partition keys
 	 * in the subquery that is referred from the outer query.
 	 */
-	if (candidateColumn->varlevelsup > 0)
+	if (candidateColumn->varlevelsup > 0 && !skipOuterVars)
 	{
 		int parentQueryIndex = list_length(parentQueryList) -
 							   candidateColumn->varlevelsup;
-		if (skipOuterVars || !(IsIndexInRange(parentQueryList, parentQueryIndex)))
+		if (!(IsIndexInRange(parentQueryList, parentQueryIndex)))
 		{
 			return;
 		}
@@ -4519,6 +4519,12 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 	}
 	else if (rangeTableEntry->rtekind == RTE_CTE)
 	{
+		/*
+		 * When outerVars are considered, we modify parentQueryList, so this
+		 * logic might need to change when we support outervars in CTEs.
+		 */
+		Assert(!skipOuterVars);
+
 		int cteParentListIndex = list_length(parentQueryList) -
 								 rangeTableEntry->ctelevelsup - 1;
 		Query *cteParentQuery = NULL;
