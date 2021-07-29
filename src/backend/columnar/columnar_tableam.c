@@ -2091,6 +2091,8 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 		return false;
 	}
 
+	// TEST!
+
 	ItemPointerData tid = {};
 
 	ItemPointerSet(&tid, tbmres->blockno, tbmres->offsets[cscan->tupleindex]);
