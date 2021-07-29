@@ -2086,7 +2086,7 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 	ColumnarScanDesc cscan = (ColumnarScanDesc) scan;
 
 	/**/
-	if (cscan->tupleindex >= tbmres->ntuples || cscan->tupleindex > 0 || tbmres->blockno != 0)
+	if (cscan->tupleindex >= tbmres->ntuples)
 	{
 		return false;
 	}
@@ -2100,12 +2100,31 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 
 	/* we need all columns */
 	Relation rel = cscan->cs_base.rs_rd;
-	int natts = rel->rd_att->natts;
-	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
-	TupleDesc relationTupleDesc = RelationGetDescr(rel);
-	List *relationColumnList = NeededColumnsList(relationTupleDesc, attr_needed);
+//	int natts = rel->rd_att->natts;
+//	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
+//	TupleDesc relationTupleDesc = RelationGetDescr(rel);
+//	List *relationColumnList = NeededColumnsList(relationTupleDesc, attr_needed);
+
+	/* initialize read state for the first row */
+	if (cscan->cs_readState == NULL)
+	{
+		MemoryContext oldContext = MemoryContextSwitchTo(cscan->scanContext);
+
+		/* we need all columns */
+		int natts = rel->rd_att->natts;
+		Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
+
+		/* no quals for index scan */
+		List *scanQual = NIL;
+
+		cscan->cs_readState = init_columnar_read_state(rel,
+													  slot->tts_tupleDescriptor,
+													  attr_needed, scanQual);
+		MemoryContextSwitchTo(oldContext);
+	}
+
 	uint64 rowNumber = tid_to_row_number(tid);
-	if (!ColumnarReadRowByRowNumber(rel, rowNumber, relationColumnList,
+	if (!ColumnarReadRowByRowNumber(cscan->cs_readState, rowNumber,
 									slot->tts_values, slot->tts_isnull,
 									cscan->cs_base.rs_snapshot))
 	{
