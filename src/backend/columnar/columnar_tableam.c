@@ -227,8 +227,6 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 			 "cannot read from table when there is unflushed data in upper transactions");
 	}
 
-	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
-
 	MemoryContextSwitchTo(oldContext);
 
 	return ((TableScanDesc) scan);
@@ -256,6 +254,9 @@ init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_n
 						 List *scanQual, MemoryContext scanContext, Snapshot snapshot)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
+
+	Oid relfilenode = relation->rd_node.relNode;
+	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
 
 	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
@@ -428,8 +429,6 @@ columnar_index_fetch_begin(Relation rel)
 		elog(ERROR, "cannot read from index when there is unflushed data in "
 					"upper transactions");
 	}
-
-	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
 
 	MemoryContext scanContext = CreateColumnarScanMemoryContext();
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
