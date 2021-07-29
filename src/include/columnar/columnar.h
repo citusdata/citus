@@ -214,7 +214,8 @@ extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 List *projectedColumnList,
 											 List *qualConditions,
 											 MemoryContext scanContext,
-											 Snapshot snaphot);
+											 Snapshot snaphot,
+											 bool snapshotRegisteredByUs);
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls, uint64 *rowNumber);
 extern void ColumnarRescan(ColumnarReadState *readState);

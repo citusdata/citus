@@ -258,9 +258,49 @@ init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_n
 	Oid relfilenode = relation->rd_node.relNode;
 	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
 
+	bool snapshotRegisteredByUs = false;
+	if (snapshot != InvalidSnapshot && IsMVCCSnapshot(snapshot))
+	{
+		/*
+		 * If we flushed any pending writes, then we should guarantee that
+		 * those writes are visible to us too. For this reason, if given
+		 * snapshot is an MVCC snapshot, then we set its curcid to current
+		 * command id.
+		 *
+		 * For simplicity, we do that even if we didn't flush any writes
+		 * since we don't see any problem with that.
+		 *
+		 * XXX: We should either not update cid if we are executing a FETCH
+		 * (from cursor) command, or we should have a better way to deal with
+		 * pending writes, see the discussion in
+		 * https://github.com/citusdata/citus/issues/5231.
+		 */
+		PushCopiedSnapshot(snapshot);
+
+		/* now our snapshot is the active one */
+		UpdateActiveSnapshotCommandId();
+		snapshot = GetActiveSnapshot();
+		RegisterSnapshot(snapshot);
+
+		/*
+		 * To be able to use UpdateActiveSnapshotCommandId, we pushed the
+		 * copied snapshot to the stack. However, we don't need to keep it
+		 * there since we will anyway rely on ColumnarReadState->snapshot
+		 * during read operation.
+		 *
+		 * Note that since we registered the snapshot already, we guarantee
+		 * that PopActiveSnapshot won't free it.
+		 */
+		PopActiveSnapshot();
+
+		/* not forget to unregister it when finishing read operation */
+		snapshotRegisteredByUs = true;
+	}
+
 	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
-													 scanQual, scanContext, snapshot);
+													 scanQual, scanContext, snapshot,
+													 snapshotRegisteredByUs);
 
 	MemoryContextSwitchTo(oldContext);
 

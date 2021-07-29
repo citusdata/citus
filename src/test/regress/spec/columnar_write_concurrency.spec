@@ -74,6 +74,11 @@ step "s2-begin"
     BEGIN;
 }
 
+step "s2-begin-repeatable"
+{
+    BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+}
+
 step "s2-insert"
 {
     INSERT INTO test_insert_concurrency SELECT i, 2 * i FROM generate_series(4, 6) i;
@@ -103,3 +108,5 @@ permutation "s1-begin" "s2-begin" "s2-insert" "s1-copy" "s1-select" "s2-select" 
 # Then verify that while the stripe written by session 2 has the greater first_row_number, stripe written by session 1 has
 # the greater stripe_num. This is because, we reserve stripe_num and first_row_number at different times.
 permutation "s1-truncate" "s1-begin" "s1-insert-10000-rows" "s2-begin" "s2-insert" "s2-commit" "s1-commit" "s1-verify-metadata"
+
+permutation "s1-begin" "s2-begin-repeatable" "s1-insert" "s2-insert" "s2-select" "s1-commit" "s2-select" "s2-commit"
