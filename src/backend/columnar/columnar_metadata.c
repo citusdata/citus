@@ -484,8 +484,6 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 
 	FinishModifyRelation(modifyState);
 	table_close(columnarChunk, RowExclusiveLock);
-
-	CommandCounterIncrement();
 }
 
 
@@ -522,8 +520,6 @@ SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 
 	FinishModifyRelation(modifyState);
 	table_close(columnarChunkGroup, NoLock);
-
-	CommandCounterIncrement();
 }
 
 
@@ -887,8 +883,6 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 
 	FinishModifyRelation(modifyState);
 
-	CommandCounterIncrement();
-
 	table_close(columnarStripes, RowExclusiveLock);
 }
 
@@ -1206,6 +1200,8 @@ FinishModifyRelation(ModifyState *state)
 	ExecCleanUpTriggerState(state->estate);
 	ExecResetTupleTable(state->estate->es_tupleTable, false);
 	FreeExecutorState(state->estate);
+
+	CommandCounterIncrement();
 }
 
 
