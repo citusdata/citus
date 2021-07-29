@@ -358,7 +358,8 @@ AddPartitionKeyNotNullFilterToSelect(Query *subqery)
 	{
 		TargetEntry *targetEntry = lfirst(targetEntryCell);
 
-		if (IsPartitionColumn(targetEntry->expr, subqery) &&
+		bool skipOuterVars = true;
+		if (IsPartitionColumn(targetEntry->expr, subqery, skipOuterVars) &&
 			IsA(targetEntry->expr, Var))
 		{
 			targetPartitionColumnVar = (Var *) targetEntry->expr;

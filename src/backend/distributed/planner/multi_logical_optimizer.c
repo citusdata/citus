@@ -327,7 +327,7 @@ static bool ShouldProcessDistinctOrderAndLimitForWorker(
 	ExtendedOpNodeProperties *extendedOpNodeProperties,
 	bool pushingDownOriginalGrouping,
 	Node *havingQual);
-
+static bool IsIndexInRange(const List *list, int index);
 
 /*
  * MultiLogicalPlanOptimize applies multi-relational algebra optimizations on
@@ -4372,16 +4372,19 @@ GroupTargetEntryList(List *groupClauseList, List *targetEntryList)
  * reference tables do not have partition column. The function does not
  * support queries with CTEs, it would return false if columnExpression
  * refers to a column returned by a CTE.
+ *
+ * If skipOuterVars is true, then it doesn't process the outervars.
  */
 bool
-IsPartitionColumn(Expr *columnExpression, Query *query)
+IsPartitionColumn(Expr *columnExpression, Query *query, bool skipOuterVars)
 {
 	bool isPartitionColumn = false;
-	Oid relationId = InvalidOid;
 	Var *column = NULL;
+	RangeTblEntry *relationRTE = NULL;
 
-	FindReferencedTableColumn(columnExpression, NIL, query, &relationId, &column);
-
+	FindReferencedTableColumn(columnExpression, NIL, query, &column, &relationRTE,
+							  skipOuterVars);
+	Oid relationId = relationRTE ? relationRTE->relid : InvalidOid;
 	if (relationId != InvalidOid && column != NULL)
 	{
 		Var *partitionColumn = DistPartitionKey(relationId);
@@ -4400,21 +4403,26 @@ IsPartitionColumn(Expr *columnExpression, Query *query)
 /*
  * FindReferencedTableColumn recursively traverses query tree to find actual relation
  * id, and column that columnExpression refers to. If columnExpression is a
- * non-relational or computed/derived expression, the function returns InvalidOid for
- * relationId and NULL for column. The caller should provide parent query list from
+ * non-relational or computed/derived expression, the function returns NULL for
+ * rte and NULL for column. The caller should provide parent query list from
  * top of the tree to this particular Query's parent. This argument is used to look
  * into CTEs that may be present in the query.
+ *
+ * If skipOuterVars is true, then it doesn't check vars coming from outer queries.
+ * We probably don't need this skipOuterVars check but we wanted to be on the safe side
+ * and used it only in UNION path, we can separately work on verifying that it doesn't break
+ * anything existing.
  */
 void
 FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *query,
-						  Oid *relationId, Var **column)
+						  Var **column, RangeTblEntry **rteContainingReferencedColumn,
+						  bool skipOuterVars)
 {
 	Var *candidateColumn = NULL;
-	List *rangetableList = query->rtable;
 	Expr *strippedColumnExpression = (Expr *) strip_implicit_coercions(
 		(Node *) columnExpression);
 
-	*relationId = InvalidOid;
+	*rteContainingReferencedColumn = NULL;
 	*column = NULL;
 
 	if (IsA(strippedColumnExpression, Var))
@@ -4443,9 +4451,28 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 	 * subqueries in WHERE clause, we don't support use of partition keys
 	 * in the subquery that is referred from the outer query.
 	 */
-	if (candidateColumn->varlevelsup > 0)
+	if (candidateColumn->varlevelsup > 0 && !skipOuterVars)
 	{
-		return;
+		int parentQueryIndex = list_length(parentQueryList) -
+							   candidateColumn->varlevelsup;
+		if (!(IsIndexInRange(parentQueryList, parentQueryIndex)))
+		{
+			return;
+		}
+
+		/*
+		 * Before we recurse into the query tree, we should update the candidateColumn and we use copy of it.
+		 * As we get the query from varlevelsup up, we reset the varlevelsup.
+		 */
+		candidateColumn = copyObject(candidateColumn);
+		candidateColumn->varlevelsup = 0;
+
+		/*
+		 * We should be careful about these fields because they need to
+		 * be updated correctly based on ctelevelsup and varlevelsup.
+		 */
+		query = list_nth(parentQueryList, parentQueryIndex);
+		parentQueryList = list_truncate(parentQueryList, parentQueryIndex);
 	}
 
 	if (candidateColumn->varattno == InvalidAttrNumber)
@@ -4457,12 +4484,13 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		return;
 	}
 
+	List *rangetableList = query->rtable;
 	int rangeTableEntryIndex = candidateColumn->varno - 1;
 	RangeTblEntry *rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
-		*relationId = rangeTableEntry->relid;
+		*rteContainingReferencedColumn = rangeTableEntry;
 		*column = candidateColumn;
 	}
 	else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
@@ -4476,7 +4504,8 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		/* append current query to parent query list */
 		parentQueryList = lappend(parentQueryList, query);
 		FindReferencedTableColumn(subColumnExpression, parentQueryList,
-								  subquery, relationId, column);
+								  subquery, column, rteContainingReferencedColumn,
+								  skipOuterVars);
 	}
 	else if (rangeTableEntry->rtekind == RTE_JOIN)
 	{
@@ -4485,11 +4514,17 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		Expr *joinColumn = list_nth(joinColumnList, joinColumnIndex);
 
 		/* parent query list stays the same since still in the same query boundary */
-		FindReferencedTableColumn(joinColumn, parentQueryList, query,
-								  relationId, column);
+		FindReferencedTableColumn(joinColumn, parentQueryList, query, column,
+								  rteContainingReferencedColumn, skipOuterVars);
 	}
 	else if (rangeTableEntry->rtekind == RTE_CTE)
 	{
+		/*
+		 * When outerVars are considered, we modify parentQueryList, so this
+		 * logic might need to change when we support outervars in CTEs.
+		 */
+		Assert(!skipOuterVars);
+
 		int cteParentListIndex = list_length(parentQueryList) -
 								 rangeTableEntry->ctelevelsup - 1;
 		Query *cteParentQuery = NULL;
@@ -4501,7 +4536,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		 * moment due to usage from IsPartitionColumn. Callers of that function
 		 * do not have access to parent query list.
 		 */
-		if (cteParentListIndex >= 0)
+		if (IsIndexInRange(parentQueryList, cteParentListIndex))
 		{
 			cteParentQuery = list_nth(parentQueryList, cteParentListIndex);
 			cteList = cteParentQuery->cteList;
@@ -4526,9 +4561,21 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 
 			parentQueryList = lappend(parentQueryList, query);
 			FindReferencedTableColumn(targetEntry->expr, parentQueryList,
-									  cteQuery, relationId, column);
+									  cteQuery, column, rteContainingReferencedColumn,
+									  skipOuterVars);
 		}
 	}
+}
+
+
+/*
+ * IsIndexInRange returns true if the given index is within the
+ * range of the given list.
+ */
+static bool
+IsIndexInRange(const List *list, int index)
+{
+	return index >= 0 && index < list_length(list);
 }
 
 

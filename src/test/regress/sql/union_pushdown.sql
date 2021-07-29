@@ -655,10 +655,91 @@ LIMIT 1;
 $$);
 
 -- #4781
-CREATE TABLE test_a (id int, k int);
-CREATE TABLE test_b (id int, k int);
+CREATE TABLE test_a (a int, b int, id int, k int);
+CREATE TABLE test_b (a int, b int, id int, k int);
+ALTER TABLE test_a DROP column a;
+ALTER TABLE test_b DROP column a;
 SELECT create_distributed_table('test_a','id');
 SELECT create_distributed_table('test_b','id');
+
+-- try with composite types
+CREATE TYPE comp_type AS (
+    int_field_1 BIGINT,
+    int_field_2 BIGINT
+);
+
+CREATE TABLE range_dist_table_2 (dist_col comp_type);
+SELECT create_distributed_table('range_dist_table_2', 'dist_col', 'range');
+
+CALL public.create_range_partitioned_shards('range_dist_table_2',
+    '{"(10,24)","(10,58)",
+	  "(10,90)","(20,100)"}',
+	'{"(10,25)","(10,65)",
+	  "(10,99)","(20,100)"}');
+INSERT INTO range_dist_table_2 VALUES ((10, 24));
+INSERT INTO range_dist_table_2 VALUES ((10, 60));
+INSERT INTO range_dist_table_2 VALUES ((10, 91));
+INSERT INTO range_dist_table_2 VALUES ((20, 100));
+-- the following can be pushed down
+CREATE OR REPLACE VIEW v2 AS SELECT * from range_dist_table_2 UNION ALL SELECT * from range_dist_table_2;
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(dist_col) FROM v2;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v2;
+$$);
+
+DROP TABLE range_dist_table_2 cascade;
+
+-- these should be pushed down.
+SELECT public.explain_has_distributed_subplan($$
+explain SELECT * FROM users_table_part u1 WHERE (user_id) IN
+(
+SELECT user_id FROM users_table_part
+UNION
+SELECT user_id FROM users_table_part
+) ;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+explain SELECT * FROM users_table_part u1 WHERE (user_id) IN
+(
+SELECT user_id FROM (SELECT *, random() FROM users_table_part) as foo
+UNION
+SELECT user_id FROM (SELECT *, random() FROM users_table_part) as bar
+);
+$$);
+
+CREATE OR REPLACE VIEW v AS SELECT * from test_a where k>1 UNION SELECT * from test_b where k<1;
+-- tests with union
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(k) FROM v;
+$$);
+
 
 CREATE OR REPLACE VIEW v AS SELECT * from test_a where k>1 UNION ALL SELECT * from test_b where k<1;
 -- the followings can be pushed down since dist_key is used in the aggregation
@@ -682,7 +763,6 @@ EXPLAIN
 SELECT MAX(id) FROM v;
 $$);
 
--- cannot pushed down because postgres optimizes fields, needs to be fixed with #4781
 SELECT public.explain_has_distributed_subplan($$
 EXPLAIN
 SELECT COUNT(k) FROM v;
@@ -701,6 +781,319 @@ $$);
 SELECT public.explain_has_distributed_subplan($$
 EXPLAIN
 SELECT MAX(k) FROM v;
+$$);
+
+CREATE OR REPLACE VIEW v AS (SELECT * from (SELECT * from test_a)a1 where k>1) UNION ALL SELECT * from (SELECT * from test_b)b1 where k<1;
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+
+CREATE OR REPLACE VIEW v AS SELECT * from test_a where k<1 UNION ALL SELECT * from test_b where k<1;
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT COUNT(*) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT AVG(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT SUM(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT MAX(k) FROM v;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT count(*) FROM
+(
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as bar;
+$$);
+
+-- we hit the following error hence can't pushdown:
+-- Complex subqueries and CTEs are not supported within a UNION
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN WITH cte AS (
+SELECT * FROM
+(
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as bar )
+SELECT count(*) FROM
+(
+SELECT bar.user_id FROM cte u1 JOIN LATERAL (SELECT u1.user_id FROM cte u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM cte u1 JOIN LATERAL (SELECT u1.user_id FROM cte u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as foo;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN
+SELECT count(*) FROM
+(
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id, random() FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u1.user_id, random() FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as bar;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+explain
+SELECT count(*) FROM
+(
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u2.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+UNION
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT u2.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as bar ON (true)
+) as bar;
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+explain
+SELECT bar.user_id FROM users_table_part u1 JOIN LATERAL (SELECT *,random() FROM (SELECT u1.user_id FROM users_table_part u2 WHERE u2.user_id = u1.user_id) as foo) as bar ON (true)
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN WITH cte_1 AS not materialized
+(
+       SELECT user_id
+       FROM   (
+                     SELECT *
+                     FROM   users_table_part) AS l1
+       UNION ALL
+       SELECT user_id
+       FROM   (
+                       SELECT   user_id
+                       FROM     users_table_part
+                       GROUP BY user_id) AS l2
+       UNION ALL
+       SELECT user_id
+       FROM   (
+                     SELECT *
+                     FROM   users_table_part) AS l2
+       UNION ALL
+       SELECT user_id
+       FROM   (
+                     SELECT *
+                     FROM   users_table_part) AS l1
+       UNION
+       SELECT user_id
+       FROM   (
+                     SELECT user_id
+                     FROM   (
+                                            SELECT DISTINCT user_id
+                                            FROM            users_table_part) aa ) AS fooo
+       UNION
+       SELECT user_id
+       FROM   (
+                              SELECT DISTINCT user_id
+                              FROM            users_table_part) AS l2 ), cte_2 AS NOT materialized
+(
+       SELECT *
+       FROM   cte_1), cte_3 AS NOT materialized
+(
+       SELECT *
+       FROM   cte_2), cte_4 AS
+(
+                SELECT DISTINCT user_id
+                FROM            cte_3)
+SELECT count(*)
+FROM   (
+              SELECT user_id
+              FROM   (
+                            SELECT *
+                            FROM   users_table_part) AS l1
+              UNION ALL
+              SELECT user_id
+              FROM   (
+                            SELECT *
+                            FROM   users_table_part) AS l2
+              UNION ALL
+              SELECT user_id
+              FROM   (
+                            SELECT *,
+                                   random()
+                            FROM   users_table_part) AS l2
+              UNION ALL
+              SELECT user_id
+              FROM   (
+                            SELECT *
+                            FROM   users_table_part) AS l1
+              UNION
+              SELECT user_id
+              FROM   (
+                            SELECT user_id AS user_id
+                            FROM   users_table_part) AS l2
+              UNION
+              SELECT user_id
+              FROM   (
+                            SELECT *,
+                                   random()
+                            FROM   users_table_part) AS l2
+              UNION
+              SELECT user_id
+              FROM   (
+                            SELECT *
+                            FROM   cte_1) AS bar
+              UNION ALL
+              SELECT user_id
+              FROM   cte_2
+              UNION
+              SELECT *
+              FROM   (
+                              SELECT   user_id
+                              FROM     cte_2
+                              GROUP BY user_id) AS bar
+              UNION
+              SELECT user_id
+              FROM   cte_4
+              UNION
+              SELECT user_id
+              FROM   cte_3 ) AS foo
+JOIN   lateral
+       (
+              SELECT *
+              FROM   (
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *
+                                          FROM   users_table_part) AS l1
+                            UNION ALL
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *
+                                          FROM   users_table_part) AS l2
+                            UNION ALL
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *,
+                                                 random()
+                                          FROM   users_table_part) AS l2
+                            UNION ALL
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *
+                                          FROM   users_table_part) AS l1
+                            UNION
+                            SELECT user_id
+                            FROM   (
+                                          SELECT user_id AS user_id
+                                          FROM   users_table_part) AS l2
+                            UNION
+                            SELECT user_id
+                            FROM   (
+                                          SELECT users_table_part.user_id,
+                                                 random()
+                                          FROM   users_table_part) AS l2
+                            UNION
+                            SELECT user_id
+                            FROM   (
+                                          SELECT *
+                                          FROM   cte_1) AS bar
+                            UNION ALL
+                            SELECT user_id
+                            FROM   cte_2
+                            UNION
+                            SELECT *
+                            FROM   (
+                                            SELECT   user_id
+                                            FROM     cte_2
+                                            GROUP BY user_id) AS bar
+                            UNION
+                            SELECT user_id
+                            FROM   cte_3 ) AS subqu) AS bar
+using  (user_id)
+WHERE  (
+              foo.user_id) IN
+                               (
+                               SELECT user_id
+                               FROM            (
+                                                      SELECT foo.user_id
+                                                      FROM   users_table_part u1
+                                                      JOIN   lateral
+                                                             (
+                                                                    SELECT u1.user_id
+                                                                    FROM   users_table_part u2
+                                                                    WHERE  u2.user_id = u1.user_id) AS foo
+                                                      ON     (
+                                                                    true)
+                                                      UNION
+                                                      SELECT foo.user_id
+                                                      FROM   users_table_part u1
+                                                      JOIN   lateral
+                                                             (
+                                                                    SELECT u1.user_id
+                                                                    FROM   users_table_part u2
+                                                                    WHERE  u2.user_id = u1.user_id) AS foo
+                                                      ON     (
+                                                                    true) ) AS bar
+                               UNION
+                               SELECT *
+                               FROM   cte_2
+                               WHERE  user_id IN
+                                      (
+                                             SELECT user_id
+                                             FROM   users_table_part)
+                               UNION
+                               SELECT *
+                               FROM   cte_1 ) ;
+$$);
+
+
+-- we hit https://github.com/citusdata/citus/blob/f00c63c33daf3d16f06462626ca14732b141ae7a/src/backend/distributed/planner/relation_restriction_equivalence.c#L235-L242
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT * FROM users_table_part u1 WHERE (value_1, user_id) IN
+(
+SELECT u1.user_id, user_id FROM users_table_part
+UNION
+SELECT u1.user_id, user_id FROM users_table_part
+);
+$$);
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT * FROM users_table_part u1 WHERE (user_id) IN
+(
+SELECT foo.user_id FROM users_table_part JOIN users_table_part foo ON users_table_part.user_id = foo.user_id
+UNION
+SELECT foo.user_id FROM users_table_part JOIN users_table_part foo on users_table_part.user_id = foo.user_id
+);
+$$);
+
+CREATE OR REPLACE VIEW v AS SELECT test_a.* from test_a where k>1 UNION ALL SELECT test_b.* from test_b where k<1;
+
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT COUNT(*) FROM v;
+$$);
+
+CREATE OR REPLACE VIEW v AS (SELECT * from (SELECT * from test_a)a1 where k>1) UNION ALL SELECT * from (SELECT * from test_b)b1 where k<1;
+SELECT public.explain_has_distributed_subplan($$
+EXPLAIN SELECT COUNT(*) FROM v;
 $$);
 
 -- order by prevents postgres from optimizing fields so can be pushed down

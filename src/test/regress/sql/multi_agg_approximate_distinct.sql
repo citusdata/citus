@@ -13,6 +13,18 @@ WHERE name = 'hll'
 
 :create_cmd;
 
+SELECT public.explain_has_distributed_subplan($$
+ EXPLAIN SELECT symbol_id,
+        HLL_ADD_AGG(HLL_HASH_BIGINT(event_id)) AS event_hll_hash,
+        HLL_CARDINALITY(HLL_ADD_AGG(HLL_HASH_BIGINT(event_id))) AS event_n_users
+ FROM (
+    SELECT event_time, composite_id, event_id, 4640476 symbol_id FROM "events"
+ UNION ALL
+    SELECT event_time, composite_id, event_id, 4640477 symbol_id FROM "events"
+ ) pushdown_events
+ GROUP BY symbol_id;
+ $$);
+
 SET citus.coordinator_aggregation_strategy TO 'disabled';
 
 -- Try to execute count(distinct) when approximate distincts aren't enabled
