@@ -92,9 +92,6 @@ static ForeignConstraintRelationshipNode * CreateOrFindNode(HTAB *adjacencyLists
 															relid);
 static List * GetConnectedListHelper(ForeignConstraintRelationshipNode *node,
 									 bool isReferencing);
-static HTAB * CreateOidVisitedHashSet(void);
-static bool OidVisited(HTAB *oidVisitedMap, Oid oid);
-static void VisitOid(HTAB *oidVisitedMap, Oid oid);
 static List * GetForeignConstraintRelationshipHelper(Oid relationId, bool isReferencing);
 
 
@@ -314,7 +311,7 @@ GetConnectedListHelper(ForeignConstraintRelationshipNode *node, bool isReferenci
  * As hash_create allocates memory in heap, callers are responsible to call
  * hash_destroy when appropriate.
  */
-static HTAB *
+HTAB *
 CreateOidVisitedHashSet(void)
 {
 	HASHCTL info = { 0 };
@@ -336,7 +333,7 @@ CreateOidVisitedHashSet(void)
 /*
  * OidVisited returns true if given oid is visited according to given oid hash-set.
  */
-static bool
+bool
 OidVisited(HTAB *oidVisitedMap, Oid oid)
 {
 	bool found = false;
@@ -348,7 +345,7 @@ OidVisited(HTAB *oidVisitedMap, Oid oid)
 /*
  * VisitOid sets given oid as visited in given hash-set.
  */
-static void
+void
 VisitOid(HTAB *oidVisitedMap, Oid oid)
 {
 	bool found = false;

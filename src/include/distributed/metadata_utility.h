@@ -35,6 +35,8 @@
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
 #define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
 
+#define UPDATE_SHARD_STATISTICS_COLUMN_COUNT 4
+
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
 {
@@ -169,5 +171,8 @@ extern ShardInterval * DeformedDistShardTupleToShardInterval(Datum *datumArray,
 															 int32 intervalTypeMod);
 extern void GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
 								Oid *intervalTypeId, int32 *intervalTypeMod);
+extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds, bool
+												   useDistributedTransaction, bool
+												   useShardMinMaxQuery);
 
 #endif   /* METADATA_UTILITY_H */
