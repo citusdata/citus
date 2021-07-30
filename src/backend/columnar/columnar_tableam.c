@@ -1863,13 +1863,12 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 									   GetCreateIndexRelationLockMode(indexStmt));
 		if (rel->rd_tableam == GetColumnarTableAmRoutine())
 		{
-			/* for now, we don't support index access methods other than btree & hash */
-			if (strncmp(indexStmt->accessMethod, "btree", NAMEDATALEN) != 0 &&
-				strncmp(indexStmt->accessMethod, "hash", NAMEDATALEN) != 0)
+			if (!ColumnarSupportsIndexAM(indexStmt->accessMethod))
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("only btree and hash indexes are supported on "
-									   "columnar tables ")));
+								errmsg("unsupported access method for the "
+									   "index on columnar table %s",
+									   RelationGetRelationName(rel))));
 			}
 		}
 
@@ -1878,6 +1877,18 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 	PrevProcessUtilityHook(pstmt, queryString, context,
 						   params, queryEnv, dest, completionTag);
+}
+
+
+/*
+ * ColumnarSupportsIndexAM returns true if indexAM with given name is
+ * supported by columnar tables.
+ */
+bool
+ColumnarSupportsIndexAM(char *indexAMName)
+{
+	return strncmp(indexAMName, "btree", NAMEDATALEN) == 0 ||
+		   strncmp(indexAMName, "hash", NAMEDATALEN) == 0;
 }
 
 

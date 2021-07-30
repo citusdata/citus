@@ -301,7 +301,6 @@ SELECT event FROM time_partitioned ORDER BY 1;
 \set VERBOSITY default
 DROP TABLE time_partitioned;
 -- test altering a table with index to columnar
--- the index will be dropped
 CREATE TABLE index_table (a INT) ;
 CREATE INDEX idx1 ON index_table (a);
 -- also create an index with statistics
@@ -321,8 +320,6 @@ SELECT a.amname FROM pg_class c, pg_am a where c.relname = 'index_table' AND c.r
 (1 row)
 
 SELECT alter_table_set_access_method('index_table', 'columnar');
-NOTICE:  the index idx1 on table alter_table_set_access_method.index_table will be dropped, because columnar tables cannot have indexes
-NOTICE:  the index idx2 on table alter_table_set_access_method.index_table will be dropped, because columnar tables cannot have indexes
 NOTICE:  creating a new table for alter_table_set_access_method.index_table
 NOTICE:  moving the data of alter_table_set_access_method.index_table
 NOTICE:  dropping the old alter_table_set_access_method.index_table
@@ -335,13 +332,100 @@ NOTICE:  renaming the new table to alter_table_set_access_method.index_table
 SELECT indexname FROM pg_indexes WHERE schemaname = 'alter_table_set_access_method' AND tablename = 'index_table';
  indexname
 ---------------------------------------------------------------------
-(0 rows)
+ idx1
+ idx2
+(2 rows)
 
 SELECT a.amname FROM pg_class c, pg_am a where c.relname = 'index_table' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
   amname
 ---------------------------------------------------------------------
  columnar
 (1 row)
+
+CREATE TABLE "heap_\'tbl" (
+  c1 CIRCLE,
+  c2 TEXT,
+  i int4[],
+  p point,
+  a int,
+  EXCLUDE USING gist
+    (c1 WITH &&, (c2::circle) WITH &&)
+    WHERE (circle_center(c1) <> '(0,0)'),
+  EXCLUDE USING btree
+    (a WITH =)
+	INCLUDE(p)
+	WHERE (c2 < 'astring')
+);
+CREATE INDEX heap_tbl_gin ON "heap_\'tbl" USING gin (i);
+CREATE INDEX "heap_tbl_\'gist" ON "heap_\'tbl" USING gist(p);
+CREATE INDEX heap_tbl_brin ON "heap_\'tbl" USING brin (a) WITH (pages_per_range = 1);
+CREATE INDEX heap_tbl_hash ON "heap_\'tbl" USING hash (c2);
+ALTER TABLE "heap_\'tbl" ADD CONSTRAINT heap_tbl_unique UNIQUE (c2);
+CREATE UNIQUE INDEX "heap_tbl_\'btree" ON "heap_\'tbl" USING btree (a);
+ALTER TABLE "heap_\'tbl" ADD CONSTRAINT "heap_tbl_\'pkey" PRIMARY KEY USING INDEX "heap_tbl_\'btree";
+NOTICE:  ALTER TABLE / ADD CONSTRAINT USING INDEX will rename index "heap_tbl_\'btree" to "heap_tbl_\'pkey"
+SELECT indexname FROM pg_indexes
+WHERE schemaname = 'alter_table_set_access_method' AND
+      tablename = 'heap_\''tbl'
+ORDER BY indexname;
+       indexname
+---------------------------------------------------------------------
+ heap_\'tbl_a_p_excl
+ heap_\'tbl_c1_c2_excl
+ heap_tbl_\'gist
+ heap_tbl_\'pkey
+ heap_tbl_brin
+ heap_tbl_gin
+ heap_tbl_hash
+ heap_tbl_unique
+(8 rows)
+
+SELECT conname FROM pg_constraint
+WHERE conrelid = 'heap_\''tbl'::regclass
+ORDER BY conname;
+        conname
+---------------------------------------------------------------------
+ heap_\'tbl_a_p_excl
+ heap_\'tbl_c1_c2_excl
+ heap_tbl_\'pkey
+ heap_tbl_unique
+(4 rows)
+
+SELECT alter_table_set_access_method('heap_\''tbl', 'columnar');
+NOTICE:  unsupported access method for index heap_\'tbl_c1_c2_excl on columnar table alter_table_set_access_method."heap_\'tbl", given index and the constraint depending on the index (if any) will be dropped
+NOTICE:  unsupported access method for index heap_tbl_gin on columnar table alter_table_set_access_method."heap_\'tbl", given index and the constraint depending on the index (if any) will be dropped
+NOTICE:  unsupported access method for index heap_tbl_\'gist on columnar table alter_table_set_access_method."heap_\'tbl", given index and the constraint depending on the index (if any) will be dropped
+NOTICE:  unsupported access method for index heap_tbl_brin on columnar table alter_table_set_access_method."heap_\'tbl", given index and the constraint depending on the index (if any) will be dropped
+NOTICE:  creating a new table for alter_table_set_access_method."heap_\'tbl"
+NOTICE:  moving the data of alter_table_set_access_method."heap_\'tbl"
+NOTICE:  dropping the old alter_table_set_access_method."heap_\'tbl"
+NOTICE:  renaming the new table to alter_table_set_access_method."heap_\'tbl"
+ alter_table_set_access_method
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT indexname FROM pg_indexes
+WHERE schemaname = 'alter_table_set_access_method' AND
+      tablename = 'heap_\''tbl'
+ORDER BY indexname;
+      indexname
+---------------------------------------------------------------------
+ heap_\'tbl_a_p_excl
+ heap_tbl_\'pkey
+ heap_tbl_hash
+ heap_tbl_unique
+(4 rows)
+
+SELECT conname FROM pg_constraint
+WHERE conrelid = 'heap_\''tbl'::regclass
+ORDER BY conname;
+       conname
+---------------------------------------------------------------------
+ heap_\'tbl_a_p_excl
+ heap_tbl_\'pkey
+ heap_tbl_unique
+(3 rows)
 
 -- test different table types
 SET client_min_messages to WARNING;

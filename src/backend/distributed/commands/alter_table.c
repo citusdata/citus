@@ -181,6 +181,11 @@ static TableConversionReturn * AlterTableSetAccessMethod(
 static TableConversionReturn * ConvertTable(TableConversionState *con);
 static bool SwitchToSequentialAndLocalExecutionIfShardNameTooLong(char *relationName,
 																  char *longestShardName);
+static void DropIndexesNotSupportedByColumnar(Oid relationId,
+											  bool suppressNoticeMessages);
+static char * GetIndexAccessMethodName(Oid indexId);
+static void DropConstraintRestrict(Oid relationId, Oid constraintId);
+static void DropIndexRestrict(Oid indexId);
 static void EnsureTableNotReferencing(Oid relationId, char conversionType);
 static void EnsureTableNotReferenced(Oid relationId, char conversionType);
 static void EnsureTableNotForeign(Oid relationId);
@@ -537,26 +542,17 @@ ConvertTable(TableConversionState *con)
 	List *preLoadCommands = GetPreLoadTableCreationCommands(con->relationId, true,
 															newAccessMethod);
 
-	bool includeIndexes = true;
 	if (con->accessMethod && strcmp(con->accessMethod, "columnar") == 0)
 	{
-		if (!con->suppressNoticeMessages)
-		{
-			List *explicitIndexesOnTable = GetExplicitIndexOidList(con->relationId);
-			Oid indexOid = InvalidOid;
-			foreach_oid(indexOid, explicitIndexesOnTable)
-			{
-				ereport(NOTICE, (errmsg("the index %s on table %s will be dropped, "
-										"because columnar tables cannot have indexes",
-										get_rel_name(indexOid),
-										quote_qualified_identifier(con->schemaName,
-																   con->relationName))));
-			}
-		}
-
-		includeIndexes = false;
+		DropIndexesNotSupportedByColumnar(con->relationId,
+										  con->suppressNoticeMessages);
 	}
 
+	/*
+	 * Since we already dropped unsupported indexes, we can safely pass
+	 * includeIndexes to be true.
+	 */
+	bool includeIndexes = true;
 	bool includeReplicaIdentity = true;
 	List *postLoadCommands = GetPostLoadTableCreationCommands(con->relationId,
 															  includeIndexes,
@@ -822,6 +818,117 @@ ConvertTable(TableConversionState *con)
 	SetLocalEnableLocalReferenceForeignKeys(oldEnableLocalReferenceForeignKeys);
 
 	return ret;
+}
+
+
+/*
+ * DropIndexesNotSupportedByColumnar is a helper function used during accces
+ * method conversion to drop the indexes that are not supported by columnarAM.
+ */
+static void
+DropIndexesNotSupportedByColumnar(Oid relationId, bool suppressNoticeMessages)
+{
+	Relation columnarRelation = RelationIdGetRelation(relationId);
+	List *indexIdList = RelationGetIndexList(columnarRelation);
+
+	/*
+	 * Immediately close the relation since we might execute ALTER TABLE
+	 * for that relation.
+	 */
+	RelationClose(columnarRelation);
+
+	Oid indexId = InvalidOid;
+	foreach_oid(indexId, indexIdList)
+	{
+		char *indexAmName = GetIndexAccessMethodName(indexId);
+		if (ColumnarSupportsIndexAM(indexAmName))
+		{
+			continue;
+		}
+
+		if (!suppressNoticeMessages)
+		{
+			ereport(NOTICE, (errmsg("unsupported access method for index %s "
+									"on columnar table %s, given index and "
+									"the constraint depending on the index "
+									"(if any) will be dropped",
+									get_rel_name(indexId),
+									generate_qualified_relation_name(relationId))));
+		}
+
+		Oid constraintId = get_index_constraint(indexId);
+		if (OidIsValid(constraintId))
+		{
+			/* index is implied by a constraint, so drop the constraint itself */
+			DropConstraintRestrict(relationId, constraintId);
+		}
+		else
+		{
+			DropIndexRestrict(indexId);
+		}
+	}
+}
+
+
+/*
+ * GetIndexAccessMethodName returns access method name of index with indexId.
+ * If there is no such index, then errors out.
+ */
+static char *
+GetIndexAccessMethodName(Oid indexId)
+{
+	/* fetch pg_class tuple of the index relation */
+	HeapTuple indexTuple = SearchSysCache1(RELOID, ObjectIdGetDatum(indexId));
+	if (!HeapTupleIsValid(indexTuple))
+	{
+		ereport(ERROR, (errmsg("index with oid %u does not exist", indexId)));
+	}
+
+	Form_pg_class indexForm = (Form_pg_class) GETSTRUCT(indexTuple);
+	Oid indexAMId = indexForm->relam;
+	ReleaseSysCache(indexTuple);
+
+	/* fetch pg_am tuple of index' access method */
+	HeapTuple indexAMTuple = SearchSysCache1(AMOID, ObjectIdGetDatum(indexAMId));
+	if (!HeapTupleIsValid(indexAMTuple))
+	{
+		ereport(ERROR, (errmsg("access method with oid %u does not exist", indexAMId)));
+	}
+
+	Form_pg_am indexAMForm = (Form_pg_am) GETSTRUCT(indexAMTuple);
+	char *indexAmName = pstrdup(indexAMForm->amname.data);
+	ReleaseSysCache(indexAMTuple);
+
+	return indexAmName;
+}
+
+
+/*
+ * DropConstraintRestrict drops the constraint with constraintId by using spi.
+ */
+static void
+DropConstraintRestrict(Oid relationId, Oid constraintId)
+{
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	char *constraintName = get_constraint_name(constraintId);
+	const char *quotedConstraintName = quote_identifier(constraintName);
+	StringInfo dropConstraintCommand = makeStringInfo();
+	appendStringInfo(dropConstraintCommand, "ALTER TABLE %s DROP CONSTRAINT %s RESTRICT;",
+					 qualifiedRelationName, quotedConstraintName);
+	ExecuteQueryViaSPI(dropConstraintCommand->data, SPI_OK_UTILITY);
+}
+
+
+/*
+ * DropIndexRestrict drops the index with indexId by using spi.
+ */
+static void
+DropIndexRestrict(Oid indexId)
+{
+	char *qualifiedIndexName = generate_qualified_relation_name(indexId);
+	StringInfo dropIndexCommand = makeStringInfo();
+	appendStringInfo(dropIndexCommand, "DROP INDEX %s RESTRICT;", qualifiedIndexName);
+	ExecuteQueryViaSPI(dropIndexCommand->data, SPI_OK_UTILITY);
 }
 
 

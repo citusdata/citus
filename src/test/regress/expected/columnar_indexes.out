@@ -396,19 +396,19 @@ SELECT COUNT(*)=2 FROM pg_indexes WHERE tablename = 'p1';
 CREATE TABLE testjsonb (j JSONB) USING columnar;
 INSERT INTO testjsonb SELECT CAST('{"f1" : ' ||'"'|| i*4 ||'", ' || '"f2" : '||'"'|| i*10 ||'"}' AS JSON) FROM generate_series(1,10) i;
 CREATE INDEX jidx ON testjsonb USING GIN (j);
-ERROR:  only btree and hash indexes are supported on columnar tables
+ERROR:  unsupported access method for the index on columnar table testjsonb
 INSERT INTO testjsonb SELECT CAST('{"f1" : ' ||'"'|| i*4 ||'", ' || '"f2" : '||'"'|| i*10 ||'"}' AS JSON) FROM generate_series(15,20) i;
 -- gist --
 CREATE TABLE gist_point_tbl(id INT4, p POINT) USING columnar;
 INSERT INTO gist_point_tbl (id, p) SELECT g, point(g*10, g*10) FROM generate_series(1, 10) g;
 CREATE INDEX gist_pointidx ON gist_point_tbl USING gist(p);
-ERROR:  only btree and hash indexes are supported on columnar tables
+ERROR:  unsupported access method for the index on columnar table gist_point_tbl
 INSERT INTO gist_point_tbl (id, p) SELECT g, point(g*10, g*10) FROM generate_series(10, 20) g;
 -- sp gist --
 CREATE TABLE box_temp (f1 box) USING columnar;
 INSERT INTO box_temp SELECT box(point(i, i), point(i * 2, i * 2)) FROM generate_series(1, 10) AS i;
 CREATE INDEX CONCURRENTLY box_spgist ON box_temp USING spgist (f1);
-ERROR:  only btree and hash indexes are supported on columnar tables
+ERROR:  unsupported access method for the index on columnar table box_temp
 -- CONCURRENTLY should not leave an invalid index behind
 SELECT COUNT(*)=0 FROM pg_index WHERE indrelid = 'box_temp'::regclass AND indisvalid = 'false';
  ?column?
@@ -420,7 +420,7 @@ INSERT INTO box_temp SELECT box(point(i, i), point(i * 2, i * 2)) FROM generate_
 -- brin --
 CREATE TABLE brin_summarize (value int) USING columnar;
 CREATE INDEX brin_summarize_idx ON brin_summarize USING brin (value) WITH (pages_per_range=2);
-ERROR:  only btree and hash indexes are supported on columnar tables
+ERROR:  unsupported access method for the index on columnar table brin_summarize
 -- Show that we safely fallback to serial index build.
 CREATE TABLE parallel_scan_test(a int) USING columnar WITH ( parallel_workers = 2 );
 INSERT INTO parallel_scan_test SELECT i FROM generate_series(1,10) i;
