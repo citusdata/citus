@@ -217,6 +217,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 		text *relationName = PG_GETARG_TEXT_P(0);
 		Oid relationId = ResolveRelationId(relationName, false);
 		bool includeSequenceDefaults = true;
+		bool includeUDFDefaults = false;
 
 
 		/* create a function context for cross-call persistence */
@@ -228,7 +229,8 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 
 		/* allocate DDL statements, and then save position in DDL statements */
 		List *tableDDLEventList = GetFullTableCreationCommands(relationId,
-															   includeSequenceDefaults);
+															   includeSequenceDefaults,
+															   includeUDFDefaults);
 		tableDDLEventCell = list_head(tableDDLEventList);
 		ListCellAndListWrapper *wrapper = palloc0(sizeof(ListCellAndListWrapper));
 		wrapper->list = tableDDLEventList;
@@ -542,12 +544,14 @@ ResolveRelationId(text *relationName, bool missingOk)
  * constraint and trigger definitions.
  */
 List *
-GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
+GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
+							 bool includeUDFDefaults)
 {
 	List *tableDDLEventList = NIL;
 
 	List *preLoadCreationCommandList =
-		GetPreLoadTableCreationCommands(relationId, includeSequenceDefaults, NULL);
+		GetPreLoadTableCreationCommands(relationId, includeSequenceDefaults,
+										includeUDFDefaults, NULL);
 
 	tableDDLEventList = list_concat(tableDDLEventList, preLoadCreationCommandList);
 
@@ -652,7 +656,7 @@ GetTableReplicaIdentityCommand(Oid relationId)
  */
 List *
 GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
-								char *accessMethod)
+								bool includeUDFDefaults, char *accessMethod)
 {
 	List *tableDDLEventList = NIL;
 
@@ -677,6 +681,7 @@ GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
 	/* fetch table schema and column option definitions */
 	char *tableSchemaDef = pg_get_tableschemadef_string(relationId,
 														includeSequenceDefaults,
+														includeUDFDefaults,
 														accessMethod);
 	char *tableColumnOptionsDef = pg_get_tablecolumnoptionsdef_string(relationId);
 

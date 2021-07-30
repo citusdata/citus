@@ -193,11 +193,13 @@ extern bool CStoreTable(Oid relationId);
 extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
-extern List * GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults);
+extern List * GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
+										   bool includeUDFDefaults);
 extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes,
 											   bool includeReplicaIdentity);
 extern List * GetPreLoadTableCreationCommands(Oid relationId,
 											  bool includeSequenceDefaults,
+											  bool includeUDFDefaults,
 											  char *accessMethod);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId, int indexFlags);
 extern List * GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(Oid relationId,

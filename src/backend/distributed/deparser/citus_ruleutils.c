@@ -35,6 +35,8 @@
 #include "catalog/pg_extension.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_index.h"
+#include "catalog/pg_namespace.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
@@ -68,7 +70,6 @@
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
 #include "utils/syscache.h"
-
 
 static void deparse_index_columns(StringInfo buffer, List *indexParameterList,
 								  List *deparseContext);
@@ -251,7 +252,7 @@ pg_get_sequencedef(Oid sequenceRelationId)
  */
 char *
 pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
-							 char *accessMethod)
+							 bool includeUDFDefaults, char *accessMethod)
 {
 	bool firstAttributePrinted = false;
 	AttrNumber defaultValueIndex = 0;
@@ -348,13 +349,21 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 				/* convert expression to node tree, and prepare deparse context */
 				Node *defaultNode = (Node *) stringToNode(defaultValue->adbin);
 
-				/*
-				 * if column default value is explicitly requested, or it is
-				 * not set from a sequence then we include DEFAULT clause for
-				 * this column.
-				 */
-				if (includeSequenceDefaults ||
-					!contain_nextval_expression_walker(defaultNode, NULL))
+				bool containsNextVal =
+					contain_nextval_expression_walker(defaultNode, NULL);
+				bool containsUDF = contain_udf_expression_walker(defaultNode, NULL);
+				bool shouldIncludeDefault = true;
+
+				if (!includeSequenceDefaults && containsNextVal)
+				{
+					shouldIncludeDefault = false;
+				}
+				else if (!includeUDFDefaults && containsUDF)
+				{
+					shouldIncludeDefault = false;
+				}
+
+				if (shouldIncludeDefault)
 				{
 					defaultContext = deparse_context_for(relationName, tableRelationId);
 
@@ -1022,6 +1031,40 @@ contain_nextval_expression_walker(Node *node, void *context)
 		if (funcExpr->funcid == F_NEXTVAL_OID)
 		{
 			return true;
+		}
+	}
+	return expression_tree_walker(node, contain_nextval_expression_walker, context);
+}
+
+
+/*
+ * contain_udf_expression_walker walks over expression tree and returns
+ * true if it contains call to a UDF that is not in pg_catalog.
+ */
+bool
+contain_udf_expression_walker(Node *node, void *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, FuncExpr))
+	{
+		FuncExpr *funcExpr = (FuncExpr *) node;
+		HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcExpr->funcid));
+
+		/*
+		 * We can not qualify the function if the catalogs do not have any records.
+		 */
+		if (HeapTupleIsValid(proctup))
+		{
+			Form_pg_proc procform = (Form_pg_proc) GETSTRUCT(proctup);
+
+			if (procform->pronamespace != PG_CATALOG_NAMESPACE)
+			{
+				return true;
+			}
 		}
 	}
 	return expression_tree_walker(node, contain_nextval_expression_walker, context);

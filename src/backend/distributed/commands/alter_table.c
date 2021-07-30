@@ -534,7 +534,11 @@ ConvertTable(TableConversionState *con)
 	}
 	char *newAccessMethod = con->accessMethod ? con->accessMethod :
 							con->originalAccessMethod;
-	List *preLoadCommands = GetPreLoadTableCreationCommands(con->relationId, true,
+	bool includeSequenceDefaults = true;
+	bool includeUDFDefaults = false;
+	List *preLoadCommands = GetPreLoadTableCreationCommands(con->relationId,
+															includeSequenceDefaults,
+															includeUDFDefaults,
 															newAccessMethod);
 
 	bool includeIndexes = true;

@@ -461,9 +461,11 @@ GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
 	 * a sequence.
 	 */
 	bool includeSequenceDefaults = true;
+	bool includeUDFDefaults = false;
 
 	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-														  includeSequenceDefaults);
+														  includeSequenceDefaults,
+														  includeUDFDefaults);
 
 	List *shellTableDDLEvents = NIL;
 	TableDDLCommand *tableDDLCommand = NULL;

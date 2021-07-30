@@ -436,6 +436,7 @@ MetadataCreateCommands(void)
 	bool includeNodesFromOtherClusters = true;
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 	bool includeSequenceDefaults = true;
+	bool includeUDFDefaults = false;
 
 	/* make sure we have deterministic output for our tests */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
@@ -468,7 +469,8 @@ MetadataCreateCommands(void)
 		}
 
 		List *ddlCommandList = GetFullTableCreationCommands(relationId,
-															includeSequenceDefaults);
+															includeSequenceDefaults,
+															includeUDFDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
 
 		/*
@@ -590,6 +592,7 @@ GetDistributedTableDDLEvents(Oid relationId)
 
 	List *commandList = NIL;
 	bool includeSequenceDefaults = true;
+	bool includeUDFDefaults = false;
 
 	/* if the table is owned by an extension we only propagate pg_dist_* records */
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
@@ -604,7 +607,8 @@ GetDistributedTableDDLEvents(Oid relationId)
 		 * materialize to the non-sharded version
 		 */
 		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-															  includeSequenceDefaults);
+															  includeSequenceDefaults,
+															  includeUDFDefaults);
 		TableDDLCommand *tableDDLCommand = NULL;
 		foreach_ptr(tableDDLCommand, tableDDLCommands)
 		{
