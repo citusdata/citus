@@ -560,6 +560,82 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Test upgrade paths for backported improvement of master_update_table_statistics function
+ALTER EXTENSION citus UPDATE TO '9.5-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+            prosrc
+---------------------------------------------------------------------
+ citus_update_table_statistics
+(1 row)
+
+ALTER EXTENSION citus UPDATE TO '9.5-2';
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+                               prosrc
+---------------------------------------------------------------------
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
+
+(1 row)
+
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+ALTER EXTENSION citus UPDATE TO '9.5-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+            prosrc
+---------------------------------------------------------------------
+ citus_update_table_statistics
+(1 row)
+
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 9.5-1
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+                               prosrc
+---------------------------------------------------------------------
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
+
+(1 row)
+
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 -- We removed the upgrade paths to 10.0-1, 10.0-2 and 10.0-3 due to a bug that blocked
 -- upgrades to 10.0, Therefore we test upgrades to 10.0-4 instead
 -- Test downgrade to 9.5-1 from 10.0-4
