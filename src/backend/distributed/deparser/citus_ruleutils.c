@@ -1065,6 +1065,7 @@ contain_udf_expression_walker(Node *node, void *context)
 			{
 				return true;
 			}
+			ReleaseSysCache(proctup);
 		}
 	}
 	return expression_tree_walker(node, contain_nextval_expression_walker, context);
