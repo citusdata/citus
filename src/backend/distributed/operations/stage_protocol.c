@@ -380,7 +380,32 @@ citus_update_table_statistics(PG_FUNCTION_ARGS)
 
 	Oid distributedTableId = PG_GETARG_OID(0);
 
-	UpdateTableStatistics(distributedTableId);
+	/*
+	 * Ensure the table still exists by trying to acquire a lock on it
+	 * If function returns NULL, it means the table doesn't exist
+	 * hence we should skip
+	 */
+	Relation relation = try_relation_open(distributedTableId, AccessShareLock);
+
+	if (relation != NULL)
+	{
+		UpdateTableStatistics(distributedTableId);
+
+		/*
+		 * We release the lock here since citus_update_table_statistics
+		 * is usually used in the following command:
+		 * SELECT citus_update_table_statistics(logicalrelid) FROM pg_dist_partition;
+		 * In this way we avoid holding the locks on distributed tables for a long time:
+		 * If we close the relation with NoLock, the locks on the distributed tables will
+		 * be held until the above command is finished (all distributed tables are updated).
+		 */
+		relation_close(relation, AccessShareLock);
+	}
+	else
+	{
+		ereport(NOTICE, (errmsg("relation with OID %u does not exist, skipping",
+								distributedTableId)));
+	}
 
 	PG_RETURN_VOID();
 }
