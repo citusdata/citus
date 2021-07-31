@@ -16,12 +16,16 @@
 
 #include "access/skey.h"
 #include "nodes/extensible.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/plannodes.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
 #include "optimizer/restrictinfo.h"
+#include "utils/datum.h"
+#include "utils/lsyscache.h"
 #include "utils/relcache.h"
 
 #include "columnar/columnar_customscan.h"
@@ -77,6 +81,8 @@ static void ColumnarScan_EndCustomScan(CustomScanState *node);
 static void ColumnarScan_ReScanCustomScan(CustomScanState *node);
 static void ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 										   ExplainState *es);
+
+static List * ExprListBindParams(List *node, ParamListInfo paramLI);
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
@@ -362,6 +368,11 @@ ColumnarScan_CreateCustomScanState(CustomScan *cscan)
 static void
 ColumnarScan_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags)
 {
+	ColumnarScanState *columnarScanState = (ColumnarScanState *) cscanstate;
+
+	columnarScanState->qual = ExprListBindParams(columnarScanState->qual,
+												 estate->es_param_list_info);
+
 	/* scan slot is already initialized */
 }
 
@@ -524,4 +535,113 @@ ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 		ExplainPropertyInteger("Columnar Chunk Groups Removed by Filter", NULL,
 							   chunkGroupsFiltered, es);
 	}
+}
+
+
+static Node *
+ExprListBindParams_mutator(Node *node, ParamListInfo paramLI)
+{
+	if (node == NULL)
+	{
+		return NULL;
+	}
+
+	/* copied from eval_const_expressions() */
+	if (IsA(node, Param))
+	{
+		Param *param = (Param *) node;
+
+		/* Look to see if we've been given a value for this Param */
+		if (param->paramkind == PARAM_EXTERN &&
+			paramLI != NULL &&
+			param->paramid > 0 &&
+			param->paramid <= paramLI->numParams)
+		{
+			ParamExternData *prm;
+			ParamExternData prmdata;
+
+			/*
+			 * Give hook a chance in case parameter is dynamic.  Tell
+			 * it that this fetch is speculative, so it should avoid
+			 * erroring out if parameter is unavailable.
+			 */
+			if (paramLI->paramFetch != NULL)
+			{
+				prm = paramLI->paramFetch(paramLI, param->paramid,
+										  true, &prmdata);
+			}
+			else
+			{
+				prm = &paramLI->params[param->paramid - 1];
+			}
+
+			/*
+			 * We don't just check OidIsValid, but insist that the
+			 * fetched type match the Param, just in case the hook did
+			 * something unexpected.  No need to throw an error here
+			 * though; leave that for runtime.
+			 */
+			if (OidIsValid(prm->ptype) &&
+				prm->ptype == param->paramtype)
+			{
+				/* OK to substitute parameter value? */
+				if (prm->pflags & PARAM_FLAG_CONST)
+				{
+					/*
+					 * Return a Const representing the param value.
+					 * Must copy pass-by-ref datatypes, since the
+					 * Param might be in a memory context
+					 * shorter-lived than our output plan should be.
+					 */
+					int16 typLen;
+					bool typByVal;
+					Datum pval;
+
+					get_typlenbyval(param->paramtype,
+									&typLen, &typByVal);
+					if (prm->isnull || typByVal)
+					{
+						pval = prm->value;
+					}
+					else
+					{
+						pval = datumCopy(prm->value, typByVal, typLen);
+					}
+					pval = datumCopy(prm->value, typByVal, typLen);
+					Const *con = makeConst(param->paramtype,
+										   param->paramtypmod,
+										   param->paramcollid,
+										   (int) typLen,
+										   pval,
+										   prm->isnull,
+										   typByVal);
+					con->location = param->location;
+					return (Node *) con;
+				}
+			}
+		}
+
+		/*
+		 * Not replaceable, so just copy the Param (no need to
+		 * recurse)
+		 */
+		return (Node *) copyObject(param);
+	}
+
+	return expression_tree_mutator(node, ExprListBindParams_mutator, (void *) paramLI);
+}
+
+
+/*
+ * ExprListBindParams - take a List of Exprs, and replace Params with Consts
+ * using paramLI, if able.
+ *
+ * The given node can be any type acceptable to expression_tree_mutator
+ * (e.g. List); not just an Expr.
+ */
+static List *
+ExprListBindParams(List *exprList, ParamListInfo paramLI)
+{
+	return (List *) expression_tree_mutator(
+		(Node *) exprList, ExprListBindParams_mutator, (void *) paramLI);
 }

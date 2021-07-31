@@ -196,3 +196,58 @@ select filtered_row_count('select count(*) from part_table where id > 75000');
 (1 row)
 
 drop table part_table;
+--
+-- https://github.com/citusdata/citus/issues/4488
+--
+create table columnar_prepared_stmt (x int, y int) using columnar;
+insert into columnar_prepared_stmt select s, s from generate_series(1,5000000) s;
+prepare foo (int) as select x from columnar_prepared_stmt where x = $1;
+execute foo(3);
+ x
+---------------------------------------------------------------------
+ 3
+(1 row)
+
+execute foo(3);
+ x
+---------------------------------------------------------------------
+ 3
+(1 row)
+
+execute foo(3);
+ x
+---------------------------------------------------------------------
+ 3
+(1 row)
+
+execute foo(3);
+ x
+---------------------------------------------------------------------
+ 3
+(1 row)
+
+select filtered_row_count('execute foo(3)');
+ filtered_row_count
+---------------------------------------------------------------------
+               9999
+(1 row)
+
+select filtered_row_count('execute foo(3)');
+ filtered_row_count
+---------------------------------------------------------------------
+               9999
+(1 row)
+
+select filtered_row_count('execute foo(3)');
+ filtered_row_count
+---------------------------------------------------------------------
+               9999
+(1 row)
+
+select filtered_row_count('execute foo(3)');
+ filtered_row_count
+---------------------------------------------------------------------
+               9999
+(1 row)
+
+drop table columnar_prepared_stmt;
