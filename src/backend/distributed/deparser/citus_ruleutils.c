@@ -1063,8 +1063,10 @@ contain_udf_expression_walker(Node *node, void *context)
 
 			if (procform->pronamespace != PG_CATALOG_NAMESPACE)
 			{
+				ReleaseSysCache(proctup);
 				return true;
 			}
+
 			ReleaseSysCache(proctup);
 		}
 	}
