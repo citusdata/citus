@@ -14,6 +14,7 @@
 
 #include "postgres.h"
 
+#include "access/amapi.h"
 #include "access/skey.h"
 #include "nodes/extensible.h"
 #include "nodes/pg_list.h"
@@ -23,7 +24,9 @@
 #include "optimizer/paths.h"
 #include "optimizer/restrictinfo.h"
 #include "utils/relcache.h"
+#include "utils/spccache.h"
 
+#include "columnar/columnar.h"
 #include "columnar/columnar_customscan.h"
 #include "columnar/columnar_metadata.h"
 #include "columnar/columnar_tableam.h"
@@ -58,9 +61,20 @@ static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index
 									   RangeTblEntry *rte);
 static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
 static bool IsNotIndexPath(Path *path);
+static void RecostColumnarIndexPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
+static void RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+									IndexPath *indexPath);
+static Cost ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId,
+											IndexPath *indexPath);
+static Cost ColumnarIndexScanAddTotalCost(PlannerInfo *root, RelOptInfo *rel,
+										  Oid relationId, IndexPath *indexPath);
+static int RelationIdGetNumberOfAttributes(Oid relationId);
 static Path * CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
 									 RangeTblEntry *rte);
-static Cost ColumnarScanCost(RangeTblEntry *rte);
+static Cost ColumnarScanCost(RelOptInfo *rel, Oid relationId, int numberOfColumnsRead);
+static Cost ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId,
+									  int numberOfColumnsRead);
+static uint64 ColumnarTableStripeCount(Oid relationId);
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
 											  struct CustomPath *best_path,
@@ -183,12 +197,13 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 			ereport(DEBUG1, (errmsg("pathlist hook for columnar table am")));
 
 			/*
-			 * TODO: Since we don't have a proper costing model for
-			 * ColumnarCustomScan, we remove other paths to force postgres
-			 * using ColumnarCustomScan. Note that we still keep index paths
-			 * since they still might be useful.
+			 * When columnar custom scan is enabled (columnar.enable_custom_scan),
+			 * we only consider ColumnarScanPath's & IndexPath's. For this reason,
+			 * we remove other paths and re-estimate IndexPath costs to make accurate
+			 * comparisons between them.
 			 */
 			RemovePathsByPredicate(rel, IsNotIndexPath);
+			RecostColumnarIndexPaths(root, rel, rte->relid);
 			add_path(rel, customPath);
 		}
 	}
@@ -225,6 +240,184 @@ static bool
 IsNotIndexPath(Path *path)
 {
 	return !IsA(path, IndexPath);
+}
+
+
+/*
+ * RecostColumnarIndexPaths re-costs index paths of given RelOptInfo for
+ * columnar table with relationId.
+ */
+static void
+RecostColumnarIndexPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
+{
+	Path *path = NULL;
+	foreach_ptr(path, rel->pathlist)
+	{
+		/*
+		 * Since we don't provide implementations for scan_bitmap_next_block
+		 * & scan_bitmap_next_tuple, postgres doesn't generate bitmap index
+		 * scan paths for columnar tables already (see related comments in
+		 * TableAmRoutine). For this reason, we only consider IndexPath's
+		 * here.
+		 */
+		if (IsA(path, IndexPath))
+		{
+			RecostColumnarIndexPath(root, rel, relationId, (IndexPath *) path);
+		}
+	}
+}
+
+
+/*
+ * RecostColumnarIndexPath re-costs given index path for columnar table with
+ * relationId.
+ */
+static void
+RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+						IndexPath *indexPath)
+{
+	ereport(DEBUG4, (errmsg("columnar table index scan costs estimated by "
+							"indexAM: startup cost = %.10f, total cost = "
+							"%.10f", indexPath->path.startup_cost,
+							indexPath->path.total_cost)));
+
+	/*
+	 * We estimate the cost for columnar table read during index scan. Also,
+	 * instead of overwriting startup & total costs, we "add" ours to the
+	 * costs estimated by indexAM since we should consider index traversal
+	 * related costs too.
+	 */
+	Cost indexAMStartupCost = indexPath->path.startup_cost;
+	Cost indexAMScanCost = indexPath->path.total_cost - indexAMStartupCost;
+
+	Cost columnarIndexScanStartupCost = ColumnarIndexScanAddStartupCost(rel, relationId,
+																		indexPath);
+	Cost columnarIndexScanCost = ColumnarIndexScanAddTotalCost(root, rel, relationId,
+															   indexPath);
+
+	indexPath->path.startup_cost = indexAMStartupCost + columnarIndexScanStartupCost;
+	indexPath->path.total_cost = indexPath->path.startup_cost +
+								 indexAMScanCost + columnarIndexScanCost;
+
+	ereport(DEBUG4, (errmsg("columnar table index scan costs re-estimated "
+							"by columnarAM (including indexAM costs): "
+							"startup cost = %.10f, total cost = %.10f",
+							indexPath->path.startup_cost,
+							indexPath->path.total_cost)));
+}
+
+
+/*
+ * ColumnarIndexScanAddStartupCost returns additional startup cost estimated
+ * for index scan described by IndexPath for columnar table with relationId.
+ */
+static Cost
+ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId, IndexPath *indexPath)
+{
+	int numberOfColumnsRead = RelationIdGetNumberOfAttributes(relationId);
+
+	/* we would at least read one stripe */
+	return ColumnarPerStripeScanCost(rel, relationId, numberOfColumnsRead);
+}
+
+
+/*
+ * ColumnarIndexScanAddTotalCost returns additional cost estimated for
+ * index scan described by IndexPath for columnar table with relationId.
+ */
+static Cost
+ColumnarIndexScanAddTotalCost(PlannerInfo *root, RelOptInfo *rel,
+							  Oid relationId, IndexPath *indexPath)
+{
+	int numberOfColumnsRead = RelationIdGetNumberOfAttributes(relationId);
+	Cost perStripeCost = ColumnarPerStripeScanCost(rel, relationId, numberOfColumnsRead);
+
+	/*
+	 * We don't need to pass correct loop count to amcostestimate since we
+	 * will only use index correlation & index selectivity, and loop count
+	 * doesn't have any effect on those two.
+	 */
+	double fakeLoopCount = 1;
+	Cost fakeIndexStartupCost;
+	Cost fakeIndexTotalCost;
+	double fakeIndexPages;
+	Selectivity indexSelectivity;
+	double indexCorrelation;
+	amcostestimate_function amcostestimate = indexPath->indexinfo->amcostestimate;
+	amcostestimate(root, indexPath, fakeLoopCount, &fakeIndexStartupCost,
+				   &fakeIndexTotalCost, &indexSelectivity,
+				   &indexCorrelation, &fakeIndexPages);
+
+	Relation relation = RelationIdGetRelation(relationId);
+	uint64 rowCount = ColumnarTableRowCount(relation);
+	RelationClose(relation);
+	double estimatedRows = rowCount * indexSelectivity;
+
+	/*
+	 * In the worst case (i.e no correlation between the column & the index),
+	 * we need to read a different stripe for each row.
+	 */
+	double maxStripeReadCount = estimatedRows;
+
+	/*
+	 * In the best case (i.e the column is fully correlated with the index),
+	 * we wouldn't read the same stripe again and again thanks
+	 * to locality.
+	 */
+	double avgStripeRowCount =
+		rowCount / (double) ColumnarTableStripeCount(relationId);
+	double minStripeReadCount = estimatedRows / avgStripeRowCount;
+
+	/*
+	 * While being close to 0 means low correlation, being close to -1 or +1
+	 * means high correlation. For index scans on columnar tables, it doesn't
+	 * matter if the column and the index are "correlated" (+1) or
+	 * "anti-correlated" (-1) since both help us avoiding from reading the
+	 * same stripe again and again.
+	 */
+	double absIndexCorrelation = Abs(indexCorrelation);
+
+	/*
+	 * To estimate the number of stripes that we need to read, we do linear
+	 * interpolation between minStripeReadCount & maxStripeReadCount. To do
+	 * that, we use complement to 1 of absolute correlation, where being
+	 * close to 0 means high correlation and being close to 1 means low
+	 * correlation.
+	 * In practice, we only want to do an index scan when absIndexCorrelation
+	 * is 1 (or extremely close to it), or when the absolute number of tuples
+	 * returned is very small. Other cases will have a prohibitive cost.
+	 */
+	double complementIndexCorrelation = 1 - absIndexCorrelation;
+	double estimatedStripeReadCount =
+		minStripeReadCount + complementIndexCorrelation * (maxStripeReadCount -
+														   minStripeReadCount);
+
+	Cost scanCost = perStripeCost * estimatedStripeReadCount;
+
+	ereport(DEBUG4, (errmsg("re-costing index scan for columnar table: "
+							"selectivity = %.10f, complement abs "
+							"correlation = %.10f, per stripe cost = %.10f, "
+							"estimated stripe read count = %.10f, "
+							"total additional cost = %.10f",
+							indexSelectivity, complementIndexCorrelation,
+							perStripeCost, estimatedStripeReadCount,
+							scanCost)));
+
+	return scanCost;
+}
+
+
+/*
+ * RelationIdGetNumberOfAttributes returns number of attributes that relation
+ * with relationId has.
+ */
+static int
+RelationIdGetNumberOfAttributes(Oid relationId)
+{
+	Relation relation = RelationIdGetRelation(relationId);
+	int nattrs = relation->rd_att->natts;
+	RelationClose(relation);
+	return nattrs;
 }
 
 
@@ -265,7 +458,9 @@ CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 */
 	path->rows = rel->rows;
 	path->startup_cost = 0;
-	path->total_cost = path->startup_cost + ColumnarScanCost(rte);
+	int numberOfColumnsRead = bms_num_members(rte->selectedCols);
+	path->total_cost = path->startup_cost +
+					   ColumnarScanCost(rel, rte->relid, numberOfColumnsRead);
 
 	return (Path *) cspath;
 }
@@ -277,42 +472,79 @@ CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
  * need to be read.
  */
 static Cost
-ColumnarScanCost(RangeTblEntry *rte)
+ColumnarScanCost(RelOptInfo *rel, Oid relationId, int numberOfColumnsRead)
 {
-	Relation rel = RelationIdGetRelation(rte->relid);
-	List *stripeList = StripesForRelfilenode(rel->rd_node);
-	RelationClose(rel);
+	return ColumnarTableStripeCount(relationId) *
+		   ColumnarPerStripeScanCost(rel, relationId, numberOfColumnsRead);
+}
+
+
+/*
+ * ColumnarPerStripeScanCost calculates the cost to scan a single stripe
+ * of given columnar table based on number of columns that needs to be
+ * read during scan operation.
+ */
+static Cost
+ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId, int numberOfColumnsRead)
+{
+	Relation relation = RelationIdGetRelation(relationId);
+	List *stripeList = StripesForRelfilenode(relation->rd_node);
+	RelationClose(relation);
 
 	uint32 maxColumnCount = 0;
 	uint64 totalStripeSize = 0;
-	ListCell *stripeMetadataCell = NULL;
-	rel = NULL;
-
-	foreach(stripeMetadataCell, stripeList)
+	StripeMetadata *stripeMetadata = NULL;
+	foreach_ptr(stripeMetadata, stripeList)
 	{
-		StripeMetadata *stripeMetadata = (StripeMetadata *) lfirst(stripeMetadataCell);
 		totalStripeSize += stripeMetadata->dataLength;
 		maxColumnCount = Max(maxColumnCount, stripeMetadata->columnCount);
 	}
 
+	/*
+	 * When no stripes are in the table we don't have a count in maxColumnCount. To
+	 * prevent a division by zero turning into a NaN we keep the ratio on zero.
+	 * This will result in a cost of 0 for scanning the table which is a reasonable
+	 * cost on an empty table.
+	 */
+	if (maxColumnCount == 0)
 	{
-		Bitmapset *attr_needed = rte->selectedCols;
-		double numberOfColumnsRead = bms_num_members(attr_needed);
-		double selectionRatio = 0;
-
-		/*
-		 * When no stripes are in the table we don't have a count in maxColumnCount. To
-		 * prevent a division by zero turning into a NaN we keep the ratio on zero.
-		 * This will result in a cost of 0 for scanning the table which is a reasonable
-		 * cost on an empty table.
-		 */
-		if (maxColumnCount != 0)
-		{
-			selectionRatio = numberOfColumnsRead / (double) maxColumnCount;
-		}
-		Cost scanCost = (double) totalStripeSize / BLCKSZ * selectionRatio;
-		return scanCost;
+		return 0;
 	}
+
+	double columnSelectionRatio = numberOfColumnsRead / (double) maxColumnCount;
+	Cost tableScanCost = (double) totalStripeSize / BLCKSZ * columnSelectionRatio;
+	Cost perStripeScanCost = tableScanCost / list_length(stripeList);
+
+	/*
+	 * Finally, multiply the cost of reading a single stripe by seq page read
+	 * cost to make our estimation scale compatible with postgres.
+	 * Since we are calculating the cost for a single stripe here, we use seq
+	 * page cost instead of random page cost. This is because, random page
+	 * access only happens when switching between columns, which is pretty
+	 * much neglactable.
+	 */
+	double relSpaceSeqPageCost;
+	get_tablespace_page_costs(rel->reltablespace,
+							  NULL, &relSpaceSeqPageCost);
+	perStripeScanCost = perStripeScanCost * relSpaceSeqPageCost;
+
+	return perStripeScanCost;
+}
+
+
+/*
+ * ColumnarTableStripeCount returns the number of stripes that columnar
+ * table with relationId has by using stripe metadata.
+ */
+static uint64
+ColumnarTableStripeCount(Oid relationId)
+{
+	Relation relation = RelationIdGetRelation(relationId);
+	List *stripeList = StripesForRelfilenode(relation->rd_node);
+	int stripeCount = list_length(stripeList);
+	RelationClose(relation);
+
+	return stripeCount;
 }
 
 
