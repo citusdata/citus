@@ -670,7 +670,7 @@ MarkSequenceDistributedAndPropagateDependencies(Oid sequenceOid)
 	ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
 	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
 	MarkObjectDistributed(&sequenceAddress);
-	UpdateMetadataSyncedOnlyForDistObject(&sequenceAddress);
+	UpdateMetadataSyncedOnlyForDistObject(&sequenceAddress, true);
 }
 
 
