@@ -19,3 +19,4 @@ DROP FUNCTION pg_catalog.citus_internal_delete_shard_metadata(bigint);
 
 REVOKE ALL ON FUNCTION pg_catalog.worker_record_sequence_dependency(regclass,regclass,name) FROM PUBLIC;
 ALTER TABLE pg_catalog.pg_dist_placement DROP CONSTRAINT placement_shardid_groupid_unique_index;
+ALTER TABLE citus.pg_dist_object DROP COLUMN sync_to_metadata_nodes;
