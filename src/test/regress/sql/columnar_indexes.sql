@@ -25,6 +25,7 @@ SELECT * FROM t;
 -- make sure that we test index scan
 set columnar.enable_custom_scan to 'off';
 set enable_seqscan to off;
+set seq_page_cost TO 10000000;
 
 CREATE table columnar_table (a INT, b int) USING columnar;
 
@@ -157,6 +158,14 @@ INSERT INTO columnar_table VALUES (16999);
 TRUNCATE columnar_table;
 INSERT INTO columnar_table (a, b) SELECT i,i*2 FROM generate_series(1, 160000) i;
 SELECT (SELECT b FROM columnar_table WHERE a = 150000)=300000;
+
+-- Since our index is highly correlated with the relation itself, we should
+-- de-serialize each chunk group only once. For this reason, if this test
+-- file hangs on below queries, then you should think that we are not properly
+-- caching the last-read chunk group during index reads.
+SELECT SUM(a)=312487500 FROM columnar_table WHERE a < 25000;
+SELECT SUM(a)=167000 FROM columnar_table WHERE a = 16000 OR a = 151000;
+SELECT SUM(a)=48000 FROM columnar_table WHERE a = 16000 OR a = 32000;
 
 TRUNCATE columnar_table;
 ALTER TABLE columnar_table DROP CONSTRAINT columnar_table_pkey;
@@ -320,6 +329,73 @@ VACUUM FULL parallel_scan_test;
 REINDEX TABLE parallel_scan_test;
 CREATE INDEX CONCURRENTLY ON parallel_scan_test (a);
 REINDEX TABLE CONCURRENTLY parallel_scan_test;
+
+-- test with different data types & indexAM's --
+
+CREATE TABLE hash_text(a INT, b TEXT) USING columnar;
+INSERT INTO hash_text SELECT i, (i*2)::TEXT FROM generate_series(1, 10) i;
+
+CREATE INDEX ON hash_text USING hash (b);
+
+SELECT b FROM hash_text WHERE b='10';
+
+CREATE TABLE hash_int(a INT, b TEXT) USING columnar;
+INSERT INTO hash_int SELECT i, (i*3)::TEXT FROM generate_series(1, 10) i;
+
+CREATE INDEX ON hash_int USING hash (a);
+
+SELECT b='15' FROM hash_int WHERE a=5;
+
+CREATE TABLE mixed_data_types (
+  timestamp_col timestamp,
+  box_col box,
+  circle_col circle,
+  float_col float,
+  uuid_col uuid,
+  text_col text,
+  numeric_col numeric,
+  PRIMARY KEY(timestamp_col, text_col)
+) USING columnar;
+
+INSERT INTO mixed_data_types
+SELECT
+  to_timestamp(i+36000),
+  box(point(i, i+90)),
+  circle(point(i*2, i*3), i*100),
+  (i*1.2)::float,
+  uuid_in(md5((i*10)::text || (i*15)::text)::cstring),
+  (i*8)::text,
+  (i*42)::numeric
+FROM generate_series(1, 10) i;
+
+SELECT text_col='64'
+FROM mixed_data_types WHERE timestamp_col='1970-01-01 02:00:08';
+
+SELECT uuid_col='298923c8-1900-45e9-1288-b430794814c4'
+FROM mixed_data_types WHERE timestamp_col='1970-01-01 02:00:01';
+
+CREATE INDEX hash_uuid ON mixed_data_types USING hash(uuid_col);
+
+SELECT box_col=box(point(1, 91)) AND timestamp_col='1970-01-01 02:00:01'
+FROM mixed_data_types WHERE uuid_col='298923c8-1900-45e9-1288-b430794814c4';
+
+DROP INDEX hash_uuid;
+
+CREATE INDEX btree_multi_numeric_text_timestamp
+ON mixed_data_types (numeric_col, text_col, timestamp_col);
+
+SELECT uuid_col='ab2481c9-f93d-0ed3-033a-3281d865ccb2'
+FROM mixed_data_types
+WHERE
+  numeric_col >= 120 AND numeric_col <= 220 AND
+  circle_col >= circle(point(7, 7), 350) AND
+  float_col <= 5.0;
+
+CREATE TABLE revisit_same_cgroup(a INT, b TEXT) USING columnar;
+CREATE INDEX ON revisit_same_cgroup USING HASH (b);
+INSERT INTO revisit_same_cgroup SELECT random()*500, (random()*500)::INT::TEXT FROM generate_series(1, 100000) i;
+
+SELECT sum(a)>-1 FROM revisit_same_cgroup WHERE b = '1';
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;

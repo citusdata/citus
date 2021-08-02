@@ -216,10 +216,11 @@ extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls, uint64 *rowNumber);
 extern void ColumnarRescan(ColumnarReadState *readState);
-extern bool ColumnarReadRowByRowNumber(Relation relation, uint64 rowNumber,
-									   List *neededColumnList, Datum *columnValues,
+extern bool ColumnarReadRowByRowNumber(ColumnarReadState *readState,
+									   uint64 rowNumber, Datum *columnValues,
 									   bool *columnNulls, Snapshot snapshot);
 extern void ColumnarEndRead(ColumnarReadState *state);
+extern void ColumnarResetRead(ColumnarReadState *readState);
 extern int64 ColumnarReadChunkGroupsFiltered(ColumnarReadState *state);
 
 /* Function declarations for common functions */
