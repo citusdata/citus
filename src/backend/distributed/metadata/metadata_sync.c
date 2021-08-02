@@ -208,11 +208,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		return;
 	}
 
-<<<<<<< HEAD
 	UseCoordinatedTransaction();
-	UpdateHasmetadataOnWorkersWithMetadata(nodeNameString, nodePort, "true");
-=======
->>>>>>> Use SetWorkerColumn
 	MarkNodeHasMetadata(nodeNameString, nodePort, true);
 
 	if (!NodeIsPrimary(workerNode))
@@ -310,9 +306,6 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, false);
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, false);
-
 	MarkNodeHasMetadata(nodeNameString, nodePort, false);
 	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
 
@@ -335,6 +328,9 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 									nodeNameString, nodePort)));
 		}
 	}
+
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, false);
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, false);
 
 	PG_RETURN_VOID();
 }
