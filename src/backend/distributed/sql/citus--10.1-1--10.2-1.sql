@@ -8,6 +8,8 @@ GRANT ALL ON FUNCTION pg_catalog.worker_record_sequence_dependency(regclass,regc
 -- the same shard cannot have placements on different nodes
 ALTER TABLE pg_catalog.pg_dist_placement ADD CONSTRAINT placement_shardid_groupid_unique_index UNIQUE (shardid, groupid);
 
+ALTER TABLE citus.pg_dist_object ADD COLUMN sync_to_metadata_nodes bool;
+
 #include "udfs/stop_metadata_sync_to_node/10.2-1.sql"
 #include "../../columnar/sql/columnar--10.1-1--10.2-1.sql"
 #include "udfs/citus_internal_add_partition_metadata/10.2-1.sql";

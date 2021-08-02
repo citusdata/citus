@@ -160,6 +160,8 @@ extern CitusTableCacheEntry * GetCitusTableCacheEntry(Oid distributedRelationId)
 extern CitusTableCacheEntry * LookupCitusTableCacheEntry(Oid relationId);
 extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid, int32
 														 objsubid);
+extern void UpdateMetadataSyncedOnlyForDistObject(const ObjectAddress *distAddress,
+												  bool metadataSync);
 extern int32 GetLocalGroupId(void);
 extern void CitusTableCacheFlushInvalidatedEntries(void);
 extern Oid LookupShardRelationFromCatalog(int64 shardId, bool missing_ok);

@@ -1271,6 +1271,57 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 
 
 /*
+ * TODO: make the column enum, not bool for future extensibility.
+ * TODO: probably better to move distobject.c
+ */
+void
+UpdateMetadataSyncedOnlyForDistObject(const ObjectAddress *distAddress, bool metadataSync)
+{
+	ScanKeyData pgDistObjectKey[3];
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
+	TupleDesc pgDistObjectTupleDesc = RelationGetDescr(pgDistObjectRel);
+
+	ScanKeyInit(&pgDistObjectKey[0], Anum_pg_dist_object_classid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distAddress->classId));
+	ScanKeyInit(&pgDistObjectKey[1], Anum_pg_dist_object_objid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distAddress->objectId));
+	ScanKeyInit(&pgDistObjectKey[2], Anum_pg_dist_object_objsubid,
+				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(distAddress->objectSubId));
+
+	SysScanDesc pgDistObjectScan = systable_beginscan(pgDistObjectRel,
+													  DistObjectPrimaryKeyIndexId(),
+													  true, NULL, 3, pgDistObjectKey);
+	HeapTuple pgDistObjectTup = systable_getnext(pgDistObjectScan);
+
+	if (HeapTupleIsValid(pgDistObjectTup))
+	{
+		Datum values[Natts_pg_dist_object];
+		bool isnull[Natts_pg_dist_object];
+		bool replace[Natts_pg_dist_object];
+		memset(replace, 0, sizeof(replace));
+
+		replace[Anum_pg_dist_object_sync_metadata_node - 1] = true;
+
+		/* update the colocationId to the new one */
+		values[Anum_pg_dist_object_sync_metadata_node - 1] = BoolGetDatum(metadataSync);
+
+		isnull[Anum_pg_dist_object_sync_metadata_node - 1] = false;
+
+		pgDistObjectTup = heap_modify_tuple(pgDistObjectTup, pgDistObjectTupleDesc,
+											values, isnull,
+											replace);
+
+		CatalogTupleUpdate(pgDistObjectRel, &pgDistObjectTup->t_self, pgDistObjectTup);
+		CitusInvalidateRelcacheByRelid(DistObjectRelationId());
+	}
+
+	systable_endscan(pgDistObjectScan);
+	table_close(pgDistObjectRel, NoLock);
+	CommandCounterIncrement();
+}
+
+
+/*
  * BuildCitusTableCacheEntry is a helper routine for
  * LookupCitusTableCacheEntry() for building the cache contents.
  * This function returns NULL if the relation isn't a distributed table.
