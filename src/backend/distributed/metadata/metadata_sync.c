@@ -209,7 +209,9 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	}
 
 	UseCoordinatedTransaction();
-	MarkNodeHasMetadata(nodeNameString, nodePort, true);
+
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, true);
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, true);
 
 	if (!NodeIsPrimary(workerNode))
 	{
@@ -221,10 +223,6 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	}
 
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
-	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
-
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, true);
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, true);
 }
 
 
@@ -306,9 +304,6 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	MarkNodeHasMetadata(nodeNameString, nodePort, false);
-	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
-
 	if (clearMetadata)
 	{
 		if (NodeIsPrimary(workerNode))
@@ -329,8 +324,8 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		}
 	}
 
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, false);
 	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, false);
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, false);
 
 	PG_RETURN_VOID();
 }
