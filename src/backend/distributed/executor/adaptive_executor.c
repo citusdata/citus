@@ -1559,6 +1559,20 @@ LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan)
 		Oid targetRelationId = distributedPlan->targetRelationId;
 
 		LockPartitionsInRelationList(list_make1_oid(targetRelationId), RowExclusiveLock);
+
+		if (PartitionTable(targetRelationId))
+		{
+			Oid parentRelationId = PartitionParentOid(targetRelationId);
+
+			/*
+			 * We lock the parent relation after locking relations to prevent
+			 * distributed deadlock.
+			 * Postgres doesn't take AccessShareLock on the parent table when the
+			 * child quals are already cached and a drop/create partition can
+			 * result in a distributed deadlock with multi-shard update.
+			 */
+			LockRelationOid(parentRelationId, AccessShareLock);
+		}
 	}
 
 	/*
