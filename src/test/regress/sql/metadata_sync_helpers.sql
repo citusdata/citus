@@ -16,6 +16,7 @@ CREATE TABLE test(col_1 int);
 
 -- not in a distributed transaction
 SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
+SELECT citus_internal_update_relation_colocation ('test'::regclass, 1);
 
 -- in a distributed transaction, but the application name is not Citus
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -70,8 +71,16 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
 ROLLBACK;
 
+-- we do not own the relation
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	SELECT citus_internal_update_relation_colocation ('test'::regclass, 10);
+ROLLBACK;
+
 -- finally, a user can only add its own tables to the metadata
 CREATE TABLE test_2(col_1 int, col_2 int);
+CREATE TABLE test_3(col_1 int, col_2 int);
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus';
@@ -264,9 +273,17 @@ ROLLBACK;
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 	SET application_name to 'citus';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
+	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 250, 's');
+	SELECT citus_internal_add_partition_metadata ('test_3'::regclass, 'h', 'col_1', 251, 's');
 	SELECT citus_internal_add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 't');
 COMMIT;
+
+-- we can update to a non-existing colocation group (e.g., colocate_with:=none)
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	SELECT citus_internal_update_relation_colocation ('test_2'::regclass, 1231231232);
+ROLLBACK;
 
 -- invalid shard ids are not allowed
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -377,7 +394,29 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 				   ('test_2'::regclass, 1420002::bigint, 't'::"char", '31'::text, '40'::text),
 				   ('test_2'::regclass, 1420003::bigint, 't'::"char", '41'::text, '50'::text),
 				   ('test_2'::regclass, 1420004::bigint, 't'::"char", '51'::text, '60'::text),
-				   ('test_2'::regclass, 1420005::bigint, 't'::"char", '61'::text, '70'::text))
+				   ('test_2'::regclass, 1420005::bigint, 't'::"char", '61'::text, '70'::text),
+				   ('test_3'::regclass, 1420008::bigint, 't'::"char", '11'::text, '20'::text))
+	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+COMMIT;
+
+-- we cannot mark these two tables colocated because they are not colocated
+BEGIN;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
+ROLLBACK;
+
+-- now, add few more shards for test_3 to make it colocated with test_2
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	\set VERBOSITY terse
+	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
+		AS (VALUES ('test_3'::regclass, 1420009::bigint, 't'::"char", '21'::text, '30'::text),
+				   ('test_3'::regclass, 1420010::bigint, 't'::"char", '31'::text, '40'::text),
+				   ('test_3'::regclass, 1420011::bigint, 't'::"char", '41'::text, '50'::text),
+				   ('test_3'::regclass, 1420012::bigint, 't'::"char", '51'::text, '60'::text),
+				   ('test_3'::regclass, 1420013::bigint, 't'::"char", '61'::text, '70'::text))
 	SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
 COMMIT;
 
@@ -526,9 +565,22 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 				(1420002, 1, 0::bigint, get_node_id(), 1500002),
 				(1420003, 1, 0::bigint, get_node_id(), 1500003),
 				(1420004, 1, 0::bigint, get_node_id(), 1500004),
-				(1420005, 1, 0::bigint, get_node_id(), 1500005))
+				(1420005, 1, 0::bigint, get_node_id(), 1500005),
+				(1420008, 1, 0::bigint, get_node_id(), 1500006),
+				(1420009, 1, 0::bigint, get_node_id(), 1500007),
+				(1420010, 1, 0::bigint, get_node_id(), 1500008),
+				(1420011, 1, 0::bigint, get_node_id(), 1500009),
+				(1420012, 1, 0::bigint, get_node_id(), 1500010),
+				(1420013, 1, 0::bigint, get_node_id(), 1500011))
 	SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
 COMMIT;
+
+-- we should be able to colocate both tables now
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
+ROLLBACK;
 
 -- try to update placements
 
@@ -617,6 +669,80 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SELECT count(*) FROM pg_dist_shard WHERE shardid = 1420000;
 	SELECT count(*) FROM pg_dist_placement WHERE shardid = 1420000;
+ROLLBACK;
+
+
+-- we'll do some metadata changes to trigger some error cases
+-- so connect as superuser
+\c - postgres - :worker_1_port
+SET search_path TO metadata_sync_helpers;
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	-- with an ugly trick, update the repmodel
+	-- so that making two tables colocated fails
+	UPDATE pg_dist_partition SET repmodel = 't'
+	WHERE logicalrelid = 'test_2'::regclass;
+	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
+ROLLBACK;
+
+
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	-- with an ugly trick, update the vartype of table from int to bigint
+	-- so that making two tables colocated fails
+	UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}'
+	WHERE logicalrelid = 'test_2'::regclass;
+	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
+ROLLBACK;
+
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	-- with an ugly trick, update the partmethod of the table to not-valid
+	-- so that making two tables colocated fails
+	UPDATE pg_dist_partition SET partmethod = ''
+	WHERE logicalrelid = 'test_2'::regclass;
+	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
+ROLLBACK;
+
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	-- with an ugly trick, update the partmethod of the table to not-valid
+	-- so that making two tables colocated fails
+	UPDATE pg_dist_partition SET partmethod = 'a'
+	WHERE logicalrelid = 'test_2'::regclass;
+	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
+ROLLBACK;
+
+-- colocated hash distributed table should have the same dist key columns
+CREATE TABLE test_5(int_col int, text_col text);
+CREATE TABLE test_6(int_col int, text_col text);
+
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	\set VERBOSITY terse
+	SELECT citus_internal_add_partition_metadata ('test_5'::regclass, 'h', 'int_col', 500, 's');
+	SELECT citus_internal_add_partition_metadata ('test_6'::regclass, 'h', 'text_col', 500, 's');
+ROLLBACK;
+
+
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+	CREATE COLLATION collation_t1 (provider = icu, locale = 'de-u-co-phonebk');
+	CREATE COLLATION caseinsensitive (provider = icu, locale = 'und-u-ks-level2');
+
+	-- colocated hash distributed table should have the same dist key collations
+	CREATE TABLE test_7(int_col int, text_col text COLLATE "collation_t1");
+	CREATE TABLE test_8(int_col int, text_col text COLLATE "caseinsensitive");
+
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SET application_name to 'citus';
+	\set VERBOSITY terse
+	SELECT citus_internal_add_partition_metadata ('test_7'::regclass, 'h', 'text_col', 500, 's');
+	SELECT citus_internal_add_partition_metadata ('test_8'::regclass, 'h', 'text_col', 500, 's');
 ROLLBACK;
 
 -- we don't need the table/schema anymore

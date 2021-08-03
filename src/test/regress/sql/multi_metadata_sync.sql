@@ -363,17 +363,7 @@ CREATE TABLE mx_colocation_test_1 (a int);
 SELECT create_distributed_table('mx_colocation_test_1', 'a');
 
 CREATE TABLE mx_colocation_test_2 (a int);
-SELECT create_distributed_table('mx_colocation_test_2', 'a');
-
--- Check the colocation IDs of the created tables
-SELECT
-	logicalrelid, colocationid
-FROM
-	pg_dist_partition
-WHERE
-	logicalrelid = 'mx_colocation_test_1'::regclass
-	OR logicalrelid = 'mx_colocation_test_2'::regclass
-ORDER BY logicalrelid;
+SELECT create_distributed_table('mx_colocation_test_2', 'a', colocate_with:='none');
 
 -- Reset the colocation IDs of the test tables
 DELETE FROM
@@ -384,13 +374,16 @@ WHERE EXISTS (
 	WHERE
 		colocationid = pg_dist_partition.colocationid
 		AND pg_dist_partition.logicalrelid = 'mx_colocation_test_1'::regclass);
-UPDATE
+
+-- Check the colocation IDs of the created tables
+SELECT
+	logicalrelid, colocationid
+FROM
 	pg_dist_partition
-SET
-	colocationid = 0
 WHERE
 	logicalrelid = 'mx_colocation_test_1'::regclass
-	OR logicalrelid = 'mx_colocation_test_2'::regclass;
+	OR logicalrelid = 'mx_colocation_test_2'::regclass
+ORDER BY logicalrelid;
 
 -- Update colocation and see the changes on the master and the worker
 SELECT update_distributed_table_colocation('mx_colocation_test_1', colocate_with => 'mx_colocation_test_2');
