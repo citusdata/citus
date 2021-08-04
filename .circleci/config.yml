@@ -82,6 +82,12 @@ jobs:
       - run:
           name: 'Check if all CI scripts are actually run'
           command: ci/check_all_ci_scripts_are_run.sh
+      - run:
+          name: 'Check if all GUCs are sorted alphabetically'
+          command: |
+            set -euo pipefail
+            grep -o -E "(\.*\"citus.\w+\")," src/backend/distributed/shared_library_init.c > gucs.out
+            sort -c gucs.out
 
   check-sql-snapshots:
     docker:
