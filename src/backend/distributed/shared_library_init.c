@@ -614,19 +614,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomRealVariable(
-		"citus.count_distinct_error_rate",
-		gettext_noop("Desired error rate when calculating count(distinct) "
-					 "approximates using the postgresql-hll extension. "
-					 "0.0 disables approximations for count(distinct); 1.0 "
-					 "provides no guarantees about the accuracy of results."),
-		NULL,
-		&CountDistinctErrorRate,
-		0.0, 0.0, 1.0,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.copy_switchover_threshold",
 		gettext_noop("Sets the threshold for copy to be switched "
@@ -641,6 +628,19 @@ RegisterCitusConfigVariables(void)
 		4 * 1024 * 1024, 1, INT_MAX,
 		PGC_USERSET,
 		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomRealVariable(
+		"citus.count_distinct_error_rate",
+		gettext_noop("Desired error rate when calculating count(distinct) "
+					 "approximates using the postgresql-hll extension. "
+					 "0.0 disables approximations for count(distinct); 1.0 "
+					 "provides no guarantees about the accuracy of results."),
+		NULL,
+		&CountDistinctErrorRate,
+		0.0, 0.0, 1.0,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -691,18 +691,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomBoolVariable(
-		"citus.enable_manual_changes_to_shards",
-		gettext_noop("Enables dropping and truncating known shards."),
-		gettext_noop("Set to false by default. If set to true, enables "
-					 "dropping and truncating shards on the coordinator "
-					 "(or the workers with metadata)"),
-		&EnableManualChangesToShards,
-		false,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
 	DefineCustomRealVariable(
 		"citus.distributed_deadlock_detection_factor",
 		gettext_noop("Sets the time to wait before checking for distributed "
@@ -715,6 +703,17 @@ RegisterCitusConfigVariables(void)
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		ErrorIfNotASuitableDeadlockFactor, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_alter_database_owner",
+		gettext_noop("Enables propagating ALTER DATABASE ... OWNER TO ... statements to "
+					 "workers"),
+		NULL,
+		&EnableAlterDatabaseOwner,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_alter_role_propagation",
@@ -738,17 +737,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.enable_alter_database_owner",
-		gettext_noop("Enables propagating ALTER DATABASE ... OWNER TO ... statements to "
-					 "workers"),
-		NULL,
-		&EnableAlterDatabaseOwner,
-		false,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.enable_binary_protocol",
 		gettext_noop(
 			"Enables communication between nodes using binary protocol when possible"),
@@ -757,6 +745,18 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_cost_based_connection_establishment",
+		gettext_noop("When enabled the connection establishment times "
+					 "and task execution times into account for deciding "
+					 "whether or not to establish new connections."),
+		NULL,
+		&EnableCostBasedConnectionEstablishment,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -843,6 +843,18 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_manual_changes_to_shards",
+		gettext_noop("Enables dropping and truncating known shards."),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "dropping and truncating shards on the coordinator "
+					 "(or the workers with metadata)"),
+		&EnableManualChangesToShards,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -1006,38 +1018,12 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.enable_cost_based_connection_establishment",
-		gettext_noop("When enabled the connection establishment times "
-					 "and task execution times into account for deciding "
-					 "whether or not to establish new connections."),
-		NULL,
-		&EnableCostBasedConnectionEstablishment,
-		true,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.explain_distributed_queries",
 		gettext_noop("Enables Explain for distributed queries."),
 		gettext_noop("When enabled, the Explain command shows remote and local "
 					 "plans when used with a distributed query. It is enabled "
 					 "by default, but can be disabled for regression tests."),
 		&ExplainDistributedQueries,
-		true,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.function_opens_transaction_block",
-		gettext_noop("Open transaction blocks for function calls"),
-		gettext_noop("When enabled, Citus will always send a BEGIN to workers when "
-					 "running distributed queres in a function. When disabled, the "
-					 "queries may be committed immediately after the statemnent "
-					 "completes. Disabling this flag is dangerous, it is only provided "
-					 "for backwards compatibility with pre-8.2 behaviour."),
-		&FunctionOpensTransactionBlock,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -1055,6 +1041,20 @@ RegisterCitusConfigVariables(void)
 					 "will end up with using one connection per task."),
 		&ForceMaxQueryParallelization,
 		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.function_opens_transaction_block",
+		gettext_noop("Open transaction blocks for function calls"),
+		gettext_noop("When enabled, Citus will always send a BEGIN to workers when "
+					 "running distributed queres in a function. When disabled, the "
+					 "queries may be committed immediately after the statemnent "
+					 "completes. Disabling this flag is dangerous, it is only provided "
+					 "for backwards compatibility with pre-8.2 behaviour."),
+		&FunctionOpensTransactionBlock,
+		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
