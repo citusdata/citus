@@ -210,8 +210,9 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	UseCoordinatedTransaction();
 
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, true);
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, true);
+	bool localOnly = false;
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, true, localOnly);
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, true, localOnly);
 
 	if (!NodeIsPrimary(workerNode))
 	{
@@ -324,8 +325,9 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		}
 	}
 
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, false);
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, false);
+	bool localOnly = false;
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, false, localOnly);
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, false, localOnly);
 
 	PG_RETURN_VOID();
 }
@@ -1164,19 +1166,6 @@ MarkNodeHasMetadata(const char *nodeName, int32 nodePort, bool hasMetadata)
 
 
 /*
- * MarkNodeMetadataSynced function sets the metadatasynced column of the
- * specified worker in pg_dist_node to the given value.
- */
-void
-MarkNodeMetadataSynced(const char *nodeName, int32 nodePort, bool synced)
-{
-	UpdateDistNodeBoolAttr(nodeName, nodePort,
-						   Anum_pg_dist_node_metadatasynced,
-						   synced);
-}
-
-
-/*
  * UpdateDistNodeBoolAttr updates a boolean attribute of the specified worker
  * to the given value.
  */
@@ -1875,6 +1864,7 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_FAILED_LOCK;
 	}
 
+	bool localOnly = true;
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
@@ -1892,8 +1882,7 @@ SyncMetadataToNodes(void)
 			}
 			else
 			{
-				MarkNodeMetadataSynced(workerNode->workerName,
-									   workerNode->workerPort, true);
+				SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, true, localOnly);
 			}
 		}
 	}

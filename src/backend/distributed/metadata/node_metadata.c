@@ -1556,9 +1556,11 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
  * SetWorkerColumn function sets the column with the specified index
  * (see pg_dist_node.h) on the worker in pg_dist_node.
  * It returns the new worker node after the modification.
+ * It also sends commands for the same update on the other metadata nodes, 
+ * unless localOnly is true.
  */
 WorkerNode *
-SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
+SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value, bool localOnly)
 {
 	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
@@ -1633,8 +1635,12 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 
 	table_close(pgDistNode, NoLock);
 
-	/* we also update the column at worker nodes */
-	SendCommandToWorkersWithMetadata(metadataSyncCommand);
+	if (!localOnly)
+	{
+		/* we also update the column at worker nodes */
+		SendCommandToWorkersWithMetadata(metadataSyncCommand);
+	}
+
 	return newWorkerNode;
 }
 
@@ -1657,28 +1663,30 @@ ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value, char *fi
 
 /*
  * SetShouldHaveShards function sets the shouldhaveshards column of the
- * specified worker in pg_dist_node.
+ * specified worker in pg_dist_node. also propagates this to other metadata nodes.
  * It returns the new worker node after the modification.
  */
 static WorkerNode *
 SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
 {
+	bool localOnly = false;
 	return SetWorkerColumn(workerNode, Anum_pg_dist_node_shouldhaveshards,
-						   BoolGetDatum(shouldHaveShards));
+						   BoolGetDatum(shouldHaveShards), localOnly);
 }
 
 
 /*
  * SetNodeState function sets the isactive column of the specified worker in
- * pg_dist_node to isActive.
+ * pg_dist_node to isActive. Also propagates this to other metadata nodes.
  * It returns the new worker node after the modification.
  */
 static WorkerNode *
 SetNodeState(char *nodeName, int nodePort, bool isActive)
 {
+	bool localOnly = false;
 	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive,
-						   BoolGetDatum(isActive));
+						   BoolGetDatum(isActive), localOnly);
 }
 
 
