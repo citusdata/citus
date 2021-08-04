@@ -1556,7 +1556,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
  * SetWorkerColumn function sets the column with the specified index
  * (see pg_dist_node.h) on the worker in pg_dist_node.
  * It returns the new worker node after the modification.
- * It also sends commands for the same update on the other metadata nodes, 
+ * It also sends commands for the same update on the other metadata nodes,
  * unless localOnly is true.
  */
 WorkerNode *
