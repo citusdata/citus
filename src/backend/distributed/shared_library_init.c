@@ -601,18 +601,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomEnumVariable(
-		"citus.coordinator_aggregation_strategy",
-		gettext_noop("Sets the strategy for when an aggregate cannot be pushed down. "
-					 "'row-gather' will pull up intermediate rows to the coordinator, "
-					 "while 'disabled' will error if coordinator aggregation is necessary"),
-		NULL,
-		&CoordinatorAggregationStrategy,
-		COORDINATOR_AGGREGATION_ROW_GATHER,
-		coordinator_aggregation_options,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
 		"citus.copy_switchover_threshold",
@@ -629,7 +617,18 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
-
+	DefineCustomEnumVariable(
+		"citus.coordinator_aggregation_strategy",
+		gettext_noop("Sets the strategy for when an aggregate cannot be pushed down. "
+					 "'row-gather' will pull up intermediate rows to the coordinator, "
+					 "while 'disabled' will error if coordinator aggregation is necessary"),
+		NULL,
+		&CoordinatorAggregationStrategy,
+		COORDINATOR_AGGREGATION_ROW_GATHER,
+		coordinator_aggregation_options,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
 	DefineCustomRealVariable(
 		"citus.count_distinct_error_rate",
 		gettext_noop("Desired error rate when calculating count(distinct) "
