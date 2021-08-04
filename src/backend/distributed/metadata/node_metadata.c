@@ -579,8 +579,9 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 		 */
 		if (ClusterHasDistributedFunctionWithDistArgument())
 		{
-			MarkNodeHasMetadata(newWorkerNode->workerName, newWorkerNode->workerPort,
-								true);
+			bool localOnly = false;
+			SetWorkerColumn(newWorkerNode, Anum_pg_dist_node_hasmetadata, true,
+							localOnly);
 			TriggerMetadataSyncOnCommit();
 		}
 	}

@@ -1157,19 +1157,6 @@ LocalGroupIdUpdateCommand(int32 groupId)
 
 
 /*
- * MarkNodeHasMetadata function sets the hasmetadata column of the specified worker in
- * pg_dist_node to hasMetadata.
- */
-void
-MarkNodeHasMetadata(const char *nodeName, int32 nodePort, bool hasMetadata)
-{
-	UpdateDistNodeBoolAttr(nodeName, nodePort,
-						   Anum_pg_dist_node_hasmetadata,
-						   hasMetadata);
-}
-
-
-/*
  * UpdateDistNodeBoolAttr updates a boolean attribute of the specified worker
  * to the given value.
  */

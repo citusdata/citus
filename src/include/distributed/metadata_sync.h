@@ -50,7 +50,6 @@ extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
-extern void MarkNodeHasMetadata(const char *nodeName, int32 nodePort, bool hasMetadata);
 extern BackgroundWorkerHandle * SpawnSyncMetadataToNodes(Oid database, Oid owner);
 extern void SyncMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
