@@ -116,6 +116,16 @@ alter table domain_test add column c str_domain;
 alter table domain_test add column c str_domain DEFAULT 'x';
 SELECT * FROM domain_test;
 
+-- similar to "add column c str_domain DEFAULT 'x'", both were getting
+-- stucked before fixing https://github.com/citusdata/citus/issues/5164
+BEGIN;
+  ALTER TABLE domain_test ADD COLUMN d INT DEFAULT random();
+ROLLBACK;
+BEGIN;
+  ALTER TABLE domain_test ADD COLUMN d SERIAL;
+  SELECT * FROM domain_test ORDER BY 1,2,3,4;
+ROLLBACK;
+
 set default_table_access_method TO 'columnar';
 CREATE TABLE has_volatile AS
 SELECT * FROM generate_series(1,10) id;
