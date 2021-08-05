@@ -253,11 +253,15 @@ CreateColumnarScanMemoryContext(void)
  */
 static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
-						 List *scanQual)
+						 List *scanQual, MemoryContext scanContext)
 {
+	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
+
 	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
 													 scanQual);
+
+	MemoryContextSwitchTo(oldContext);
 
 	return readState;
 }
@@ -302,11 +306,10 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 	 */
 	if (scan->cs_readState == NULL)
 	{
-		MemoryContext oldContext = MemoryContextSwitchTo(scan->scanContext);
 		scan->cs_readState =
 			init_columnar_read_state(scan->cs_base.rs_rd, slot->tts_tupleDescriptor,
-									 scan->attr_needed, scan->scanQual);
-		MemoryContextSwitchTo(oldContext);
+									 scan->attr_needed, scan->scanQual,
+									 scan->scanContext);
 	}
 
 	ExecClearTuple(slot);
@@ -490,8 +493,6 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 	/* initialize read state for the first row */
 	if (scan->cs_readState == NULL)
 	{
-		MemoryContext oldContext = MemoryContextSwitchTo(scan->scanContext);
-
 		/* we need all columns */
 		int natts = columnarRelation->rd_att->natts;
 		Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
@@ -501,8 +502,8 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 
 		scan->cs_readState = init_columnar_read_state(columnarRelation,
 													  slot->tts_tupleDescriptor,
-													  attr_needed, scanQual);
-		MemoryContextSwitchTo(oldContext);
+													  attr_needed, scanQual,
+													  scan->scanContext);
 	}
 
 	uint64 rowNumber = tid_to_row_number(*tid);
@@ -799,8 +800,10 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	/* no quals for table rewrite */
 	List *scanQual = NIL;
 
+	MemoryContext scanContext = CreateColumnarScanMemoryContext();
 	ColumnarReadState *readState = init_columnar_read_state(OldHeap, sourceDesc,
-															attr_needed, scanQual);
+															attr_needed, scanQual,
+															scanContext);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));
