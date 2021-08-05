@@ -33,23 +33,13 @@
 #include "columnar/columnar_tableam.h"
 #include "distributed/listutils.h"
 
-typedef struct ColumnarScanPath
-{
-	CustomPath custom_path;
-
-	/* place for local state during planning */
-} ColumnarScanPath;
-
-typedef struct ColumnarScanScan
-{
-	CustomScan custom_scan;
-
-	/* place for local state during execution */
-} ColumnarScanScan;
-
+/*
+ * ColumnarScanState represents the state for a columnar scan. It's a
+ * CustomScanState with additional fields specific to columnar scans.
+ */
 typedef struct ColumnarScanState
 {
-	CustomScanState custom_scanstate;
+	CustomScanState custom_scanstate; /* must be first field */
 
 	List *qual;
 } ColumnarScanState;
@@ -113,7 +103,7 @@ const struct CustomScanMethods ColumnarScanScanMethods = {
 	.CreateCustomScanState = ColumnarScan_CreateCustomScanState,
 };
 
-const struct CustomExecMethods ColumnarExecuteMethods = {
+const struct CustomExecMethods ColumnarScanExecuteMethods = {
 	.CustomName = "ColumnarScan",
 
 	.BeginCustomScan = ColumnarScan_BeginCustomScan,
@@ -504,13 +494,13 @@ RelationIdGetNumberOfAttributes(Oid relationId)
 static Path *
 CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 {
-	ColumnarScanPath *cspath = (ColumnarScanPath *) newNode(sizeof(ColumnarScanPath),
-															T_CustomPath);
-
 	/*
-	 * popuate custom path information
+	 * Must return a CustomPath, not a larger structure containing a
+	 * CustomPath as the first field. Otherwise, nodeToString() will fail to
+	 * output the additional fields.
 	 */
-	CustomPath *cpath = &cspath->custom_path;
+	CustomPath *cpath = (CustomPath *) newNode(sizeof(CustomPath), T_CustomPath);
+
 	cpath->methods = &ColumnarScanPathMethods;
 
 	/*
@@ -542,7 +532,7 @@ CreateColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	path->total_cost = path->startup_cost +
 					   ColumnarScanCost(rel, rte->relid, numberOfColumnsRead);
 
-	return (Path *) cspath;
+	return (Path *) cpath;
 }
 
 
@@ -636,10 +626,13 @@ ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 								List *clauses,
 								List *custom_plans)
 {
-	ColumnarScanScan *plan = (ColumnarScanScan *) newNode(sizeof(ColumnarScanScan),
-														  T_CustomScan);
+	/*
+	 * Must return a CustomScan, not a larger structure containing a
+	 * CustomScan as the first field. Otherwise, copyObject() will fail to
+	 * copy the additional fields.
+	 */
+	CustomScan *cscan = (CustomScan *) newNode(sizeof(CustomScan), T_CustomScan);
 
-	CustomScan *cscan = &plan->custom_scan;
 	cscan->methods = &ColumnarScanScanMethods;
 
 	/* Reduce RestrictInfo list to bare expressions; ignore pseudoconstants */
@@ -649,7 +642,7 @@ ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 	cscan->scan.plan.qual = clauses;
 	cscan->scan.scanrelid = best_path->path.parent->relid;
 
-	return (Plan *) plan;
+	return (Plan *) cscan;
 }
 
 
@@ -660,7 +653,7 @@ ColumnarScan_CreateCustomScanState(CustomScan *cscan)
 		sizeof(ColumnarScanState), T_CustomScanState);
 
 	CustomScanState *cscanstate = &columnarScanState->custom_scanstate;
-	cscanstate->methods = &ColumnarExecuteMethods;
+	cscanstate->methods = &ColumnarScanExecuteMethods;
 
 	if (EnableColumnarQualPushdown)
 	{
