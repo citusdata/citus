@@ -83,8 +83,6 @@ char *EnableManualMetadataChangesForUser = "";
 static void EnsureSequentialModeMetadataOperations(void);
 static List * GetDistributedTableDDLEvents(Oid relationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
-static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
-								   int attrNum, bool value);
 static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
@@ -1153,57 +1151,6 @@ LocalGroupIdUpdateCommand(int32 groupId)
 					 groupId);
 
 	return updateCommand->data;
-}
-
-
-/*
- * UpdateDistNodeBoolAttr updates a boolean attribute of the specified worker
- * to the given value.
- */
-static void
-UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort, int attrNum, bool value)
-{
-	const bool indexOK = false;
-
-	ScanKeyData scanKey[2];
-	Datum values[Natts_pg_dist_node];
-	bool isnull[Natts_pg_dist_node];
-	bool replace[Natts_pg_dist_node];
-
-	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
-				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
-													NULL, 2, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
-							   nodeName, nodePort)));
-	}
-
-	memset(replace, 0, sizeof(replace));
-
-	values[attrNum - 1] = BoolGetDatum(value);
-	isnull[attrNum - 1] = false;
-	replace[attrNum - 1] = true;
-
-	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-
-	CatalogTupleUpdate(pgDistNode, &heapTuple->t_self, heapTuple);
-
-	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
-
-	CommandCounterIncrement();
-
-	systable_endscan(scanDescriptor);
-	table_close(pgDistNode, NoLock);
 }
 
 
