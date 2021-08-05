@@ -795,10 +795,12 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	/* we need all columns */
 	int natts = OldHeap->rd_att->natts;
 	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
-	List *projectedColumnList = NeededColumnsList(sourceDesc, attr_needed);
-	ColumnarReadState *readState = ColumnarBeginRead(OldHeap, sourceDesc,
-													 projectedColumnList,
-													 NULL);
+
+	/* no quals for table rewrite */
+	List *scanQual = NIL;
+
+	ColumnarReadState *readState = init_columnar_read_state(OldHeap, sourceDesc,
+															attr_needed, scanQual);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));
