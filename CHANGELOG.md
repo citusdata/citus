@@ -1,3 +1,10 @@
+### citus v10.1.1 (August 5, 2021) ###
+
+* Improves citus_update_table_statistics and provides distributed deadlock
+  detection
+
+* Fixes showing target shard size in the rebalance progress monitor
+
 ### citus v10.1.0 (July 14, 2021) ###
 
 * Drops support for PostgreSQL 11
