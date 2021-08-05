@@ -208,11 +208,8 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	UseCoordinatedTransaction();
 
-	bool localOnly = false;
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, true,
-								 localOnly);
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, true,
-								 localOnly);
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(true));
 
 	if (!NodeIsPrimary(workerNode))
 	{
@@ -325,11 +322,8 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		}
 	}
 
-	bool localOnly = false;
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, false,
-								 localOnly);
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, false,
-								 localOnly);
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(false));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(false));
 
 	PG_RETURN_VOID();
 }
@@ -1802,7 +1796,6 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_FAILED_LOCK;
 	}
 
-	bool localOnly = true;
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
@@ -1820,8 +1813,7 @@ SyncMetadataToNodes(void)
 			}
 			else
 			{
-				SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, true,
-								localOnly);
+				SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true));
 			}
 		}
 	}

@@ -579,9 +579,7 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 		 */
 		if (ClusterHasDistributedFunctionWithDistArgument())
 		{
-			bool localOnly = false;
-			SetWorkerColumn(newWorkerNode, Anum_pg_dist_node_hasmetadata, true,
-							localOnly);
+			SetWorkerColumn(newWorkerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(true));
 			TriggerMetadataSyncOnCommit();
 		}
 	}
@@ -1555,23 +1553,16 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 
 /*
  * SetWorkerColumn function sets the column with the specified index
- * (see pg_dist_node.h) on the worker in pg_dist_node.
- * It returns the new worker node after the modification.
- * It also sends commands for the same update on the other metadata nodes,
- * unless localOnly is true.
+ * on the worker in pg_dist_node, by calling SetWorkerColumnLocalOnly.
+ * It also sends the same command for node update to other metadata nodes.
+ * Returns the new worker node after the modification.
  */
 WorkerNode *
-SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value, bool localOnly)
+SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 {
-	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
-	HeapTuple heapTuple = GetNodeTuple(workerNode->workerName, workerNode->workerPort);
+	workerNode = SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
 
-	Datum values[Natts_pg_dist_node];
-	bool isnull[Natts_pg_dist_node];
-	bool replace[Natts_pg_dist_node];
 	char *metadataSyncCommand = NULL;
-
 
 	switch (columnIndex)
 	{
@@ -1614,6 +1605,28 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value, bool local
 		}
 	}
 
+	SendCommandToWorkersWithMetadata(metadataSyncCommand);
+
+	return workerNode;
+}
+
+
+/*
+ * SetWorkerColumnLocalOnly function sets the column with the specified index
+ * (see pg_dist_node.h) on the worker in pg_dist_node.
+ * It returns the new worker node after the modification.
+ */
+WorkerNode *
+SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
+{
+	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
+	HeapTuple heapTuple = GetNodeTuple(workerNode->workerName, workerNode->workerPort);
+
+	Datum values[Natts_pg_dist_node];
+	bool isnull[Natts_pg_dist_node];
+	bool replace[Natts_pg_dist_node];
+
 	if (heapTuple == NULL)
 	{
 		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
@@ -1635,12 +1648,6 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value, bool local
 	WorkerNode *newWorkerNode = TupleToWorkerNode(tupleDescriptor, heapTuple);
 
 	table_close(pgDistNode, NoLock);
-
-	if (!localOnly)
-	{
-		/* we also update the column at worker nodes */
-		SendCommandToWorkersWithMetadata(metadataSyncCommand);
-	}
 
 	return newWorkerNode;
 }
@@ -1670,9 +1677,8 @@ ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value, char *fi
 static WorkerNode *
 SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
 {
-	bool localOnly = false;
 	return SetWorkerColumn(workerNode, Anum_pg_dist_node_shouldhaveshards,
-						   BoolGetDatum(shouldHaveShards), localOnly);
+						   BoolGetDatum(shouldHaveShards));
 }
 
 
@@ -1684,10 +1690,9 @@ SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
 static WorkerNode *
 SetNodeState(char *nodeName, int nodePort, bool isActive)
 {
-	bool localOnly = false;
 	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive,
-						   BoolGetDatum(isActive), localOnly);
+						   BoolGetDatum(isActive));
 }
 
 
