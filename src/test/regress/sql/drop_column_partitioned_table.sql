@@ -3,7 +3,6 @@ SET search_path TO drop_column_partitioned_table;
 
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 2580000;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- create a partitioned table with some columns that
 -- are going to be dropped within the tests
@@ -15,8 +14,7 @@ col_to_drop_3 inet,
 col_to_drop_4 date,
 measureid integer,
 eventdatetime date,
-measure_data jsonb,
-PRIMARY KEY (measureid, eventdatetime, measure_data))
+measure_data jsonb)
 PARTITION BY RANGE(eventdatetime);
 
 -- drop column even before attaching any partitions
@@ -76,7 +74,6 @@ col_to_drop_4 date, measureid integer NOT NULL, eventdatetime date NOT NULL, mea
 
 ALTER TABLE sensors ATTACH PARTITION sensors_2004 FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
 ALTER TABLE sensors DROP COLUMN col_to_drop_4;
-SELECT alter_table_set_access_method('sensors_2004', 'columnar');
 
 -- show that all partitions have the same distribution key
 SELECT
@@ -111,7 +108,6 @@ EXPLAIN (COSTS FALSE) INSERT INTO sensors_2001 VALUES (3, '2001-01-01', row_to_j
 EXPLAIN (COSTS FALSE) INSERT INTO sensors_2002 VALUES (3, '2002-01-01', row_to_json(row(1)));
 EXPLAIN (COSTS FALSE) INSERT INTO sensors_2003 VALUES (3, '2003-01-01', row_to_json(row(1)));
 
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors WHERE measureid = 3 AND eventdatetime = '2000-02-02';
 EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2000 WHERE measureid = 3;
 EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2001 WHERE measureid = 3;
 EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2002 WHERE measureid = 3;
@@ -167,21 +163,5 @@ WHERE
 	logicalrelid IN ('sensors'::regclass, 'sensors_2000'::regclass,
 					 'sensors_2001'::regclass, 'sensors_2002'::regclass,
 					 'sensors_2003'::regclass, 'sensors_2004'::regclass);
-
-\c - - - :worker_1_port
-SET search_path TO drop_column_partitioned_table;
-SELECT
-	p.logicalrelid::regclass, column_to_column_name(p.logicalrelid, p.partkey)
-FROM
-	pg_dist_partition p
-WHERE
-	logicalrelid IN ('sensors'::regclass, 'sensors_2000'::regclass,
-					 'sensors_2001'::regclass, 'sensors_2002'::regclass,
-					 'sensors_2003'::regclass, 'sensors_2004'::regclass);
-
-\c - - - :master_port
 SET client_min_messages TO WARNING;
 DROP SCHEMA drop_column_partitioned_table CASCADE;
-
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-
