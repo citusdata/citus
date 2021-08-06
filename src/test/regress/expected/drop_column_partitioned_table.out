@@ -2,12 +2,6 @@ CREATE SCHEMA drop_column_partitioned_table;
 SET search_path TO drop_column_partitioned_table;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 2580000;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 -- create a partitioned table with some columns that
 -- are going to be dropped within the tests
 CREATE TABLE sensors(
@@ -18,8 +12,7 @@ col_to_drop_3 inet,
 col_to_drop_4 date,
 measureid integer,
 eventdatetime date,
-measure_data jsonb,
-PRIMARY KEY (measureid, eventdatetime, measure_data))
+measure_data jsonb)
 PARTITION BY RANGE(eventdatetime);
 -- drop column even before attaching any partitions
 ALTER TABLE sensors DROP COLUMN col_to_drop_1;
@@ -112,16 +105,6 @@ CREATE TABLE sensors_2004(
 col_to_drop_4 date, measureid integer NOT NULL, eventdatetime date NOT NULL, measure_data jsonb NOT NULL);
 ALTER TABLE sensors ATTACH PARTITION sensors_2004 FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
 ALTER TABLE sensors DROP COLUMN col_to_drop_4;
-SELECT alter_table_set_access_method('sensors_2004', 'columnar');
-NOTICE:  creating a new table for drop_column_partitioned_table.sensors_2004
-NOTICE:  moving the data of drop_column_partitioned_table.sensors_2004
-NOTICE:  dropping the old drop_column_partitioned_table.sensors_2004
-NOTICE:  renaming the new table to drop_column_partitioned_table.sensors_2004
- alter_table_set_access_method
----------------------------------------------------------------------
-
-(1 row)
-
 -- show that all partitions have the same distribution key
 SELECT
 	p.logicalrelid::regclass, column_to_column_name(p.logicalrelid, p.partkey)
@@ -160,7 +143,7 @@ SELECT logicalrelid, shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WH
  sensors_2001 | 2580009 | -1073741824   | -1
  sensors_2002 | 2580013 | -1073741824   | -1
  sensors_2003 | 2580017 | -1073741824   | -1
- sensors_2004 | 2580025 | -1073741824   | -1
+ sensors_2004 | 2580021 | -1073741824   | -1
 (6 rows)
 
 VACUUM ANALYZE sensors, sensors_2000, sensors_2001, sensors_2002, sensors_2003;
@@ -226,8 +209,8 @@ EXPLAIN (COSTS FALSE) INSERT INTO sensors_2003 VALUES (3, '2003-01-01', row_to_j
                ->  Result
 (7 rows)
 
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors WHERE measureid = 3 AND eventdatetime = '2000-02-02';
-                                            QUERY PLAN
+EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2000 WHERE measureid = 3;
+                           QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
@@ -235,27 +218,12 @@ EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors WHERE measureid = 3 AND event
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
          ->  Aggregate
-               ->  Index Only Scan using sensors_2000_pkey_2580005 on sensors_2000_2580005 sensors
-                     Index Cond: ((measureid = 3) AND (eventdatetime = '2000-02-02'::date))
+               ->  Seq Scan on sensors_2000_2580005 sensors_2000
+                     Filter: (measureid = 3)
 (8 rows)
 
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2000 WHERE measureid = 3;
-                               QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2000_2580005 sensors_2000
-                     Recheck Cond: (measureid = 3)
-                     ->  Bitmap Index Scan on sensors_2000_pkey_2580005
-                           Index Cond: (measureid = 3)
-(10 rows)
-
 EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2001 WHERE measureid = 3;
-                               QUERY PLAN
+                           QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
    Task Count: 1
@@ -263,11 +231,9 @@ EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2001 WHERE measureid = 3;
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
          ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2001_2580009 sensors_2001
-                     Recheck Cond: (measureid = 3)
-                     ->  Bitmap Index Scan on sensors_2001_pkey_2580009
-                           Index Cond: (measureid = 3)
-(10 rows)
+               ->  Seq Scan on sensors_2001_2580009 sensors_2001
+                     Filter: (measureid = 3)
+(8 rows)
 
 EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2002 WHERE measureid = 3;
                                QUERY PLAN
@@ -366,7 +332,6 @@ SELECT * FROM sensors_2003 WHERE measureid = 3
 	UNION
 SELECT * FROM sensors_2004 WHERE measureid = 3
 ) as foo;
-DEBUG:  pathlist hook for columnar table am
 DEBUG:  Creating router plan
 DEBUG:  query has a single distribution column value: 3
  count
@@ -397,32 +362,5 @@ WHERE
  sensors_2004 | measureid
 (6 rows)
 
-\c - - - :worker_1_port
-SET search_path TO drop_column_partitioned_table;
-SELECT
-	p.logicalrelid::regclass, column_to_column_name(p.logicalrelid, p.partkey)
-FROM
-	pg_dist_partition p
-WHERE
-	logicalrelid IN ('sensors'::regclass, 'sensors_2000'::regclass,
-					 'sensors_2001'::regclass, 'sensors_2002'::regclass,
-					 'sensors_2003'::regclass, 'sensors_2004'::regclass);
- logicalrelid | column_to_column_name
----------------------------------------------------------------------
- sensors      | measureid
- sensors_2000 | measureid
- sensors_2001 | measureid
- sensors_2002 | measureid
- sensors_2003 | measureid
- sensors_2004 | measureid
-(6 rows)
-
-\c - - - :master_port
 SET client_min_messages TO WARNING;
 DROP SCHEMA drop_column_partitioned_table CASCADE;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
