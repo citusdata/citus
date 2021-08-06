@@ -5,9 +5,11 @@ step s1-begin:
     BEGIN;
 
 step s1-update:
+    set citus.force_max_query_parallelization to 'on';
     update test_9_1 set destination = 1;
 
 step s2-drop:
+    set citus.force_max_query_parallelization to 'on';
     drop table test_6_1;
  <waiting ...>
 step s1-commit: 
@@ -20,9 +22,11 @@ step s2-begin:
     BEGIN;
 
 step s2-drop:
+    set citus.force_max_query_parallelization to 'on';
     drop table test_6_1;
 
 step s1-update:
+    set citus.force_max_query_parallelization to 'on';
     update test_9_1 set destination = 1;
  <waiting ...>
 step s2-commit: 
@@ -35,9 +39,11 @@ step s1-begin:
     BEGIN;
 
 step s1-update:
+    set citus.force_max_query_parallelization to 'on';
     update test_9_1 set destination = 1;
 
 step s2-create:
+    set citus.force_max_query_parallelization to 'on';
     CREATE TABLE test_10_1 PARTITION OF test FOR VALUES FROM ('10', '2021-07-16') TO ('11', '2021-07-17');
  <waiting ...>
 step s1-commit: 
@@ -50,9 +56,115 @@ step s2-begin:
     BEGIN;
 
 step s2-create:
+    set citus.force_max_query_parallelization to 'on';
     CREATE TABLE test_10_1 PARTITION OF test FOR VALUES FROM ('10', '2021-07-16') TO ('11', '2021-07-17');
 
 step s1-update:
+    set citus.force_max_query_parallelization to 'on';
+    update test_9_1 set destination = 1;
+ <waiting ...>
+step s2-commit: 
+    COMMIT;
+
+step s1-update: <... completed>
+
+starting permutation: s1-begin s1-update s2-truncate s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-update:
+    set citus.force_max_query_parallelization to 'on';
+    update test_9_1 set destination = 1;
+
+step s2-truncate:
+    set citus.force_max_query_parallelization to 'on';
+    TRUNCATE TABLE test_6_1;
+
+step s1-commit:
+    COMMIT;
+
+
+starting permutation: s2-begin s2-truncate s1-update s2-commit
+step s2-begin:
+    BEGIN;
+
+step s2-truncate:
+    set citus.force_max_query_parallelization to 'on';
+    TRUNCATE TABLE test_6_1;
+
+step s1-update:
+    set citus.force_max_query_parallelization to 'on';
+    update test_9_1 set destination = 1;
+
+step s2-commit:
+    COMMIT;
+
+
+starting permutation: s1-begin s1-update s2-detach s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-update:
+    set citus.force_max_query_parallelization to 'on';
+    update test_9_1 set destination = 1;
+
+step s2-detach:
+    ALTER TABLE test DETACH PARTITION test_6_1;
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-detach: <... completed>
+
+starting permutation: s2-begin s2-detach s1-update s2-commit
+step s2-begin:
+    BEGIN;
+
+step s2-detach:
+    ALTER TABLE test DETACH PARTITION test_6_1;
+
+step s1-update:
+    set citus.force_max_query_parallelization to 'on';
+    update test_9_1 set destination = 1;
+ <waiting ...>
+step s2-commit: 
+    COMMIT;
+
+step s1-update: <... completed>
+
+starting permutation: s1-begin s1-update s2-alter-table s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-update:
+    set citus.force_max_query_parallelization to 'on';
+    update test_9_1 set destination = 1;
+
+step s2-alter-table:
+    set citus.force_max_query_parallelization to 'on';
+    SELECT alter_table_set_access_method('test_6_1','columnar');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-alter-table: <... completed>
+alter_table_set_access_method
+
+
+
+starting permutation: s2-begin s2-alter-table s1-update s2-commit
+step s2-begin:
+    BEGIN;
+
+step s2-alter-table:
+    set citus.force_max_query_parallelization to 'on';
+    SELECT alter_table_set_access_method('test_6_1','columnar');
+
+alter_table_set_access_method
+
+
+step s1-update:
+    set citus.force_max_query_parallelization to 'on';
     update test_9_1 set destination = 1;
  <waiting ...>
 step s2-commit: 
