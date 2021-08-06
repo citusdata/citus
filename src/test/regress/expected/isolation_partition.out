@@ -1,0 +1,61 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-update s2-drop s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-update:
+    update test_9_1 set destination = 1;
+
+step s2-drop:
+    drop table test_6_1;
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-drop: <... completed>
+
+starting permutation: s2-begin s2-drop s1-update s2-commit
+step s2-begin:
+    BEGIN;
+
+step s2-drop:
+    drop table test_6_1;
+
+step s1-update:
+    update test_9_1 set destination = 1;
+ <waiting ...>
+step s2-commit: 
+    COMMIT;
+
+step s1-update: <... completed>
+
+starting permutation: s1-begin s1-update s2-create s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-update:
+    update test_9_1 set destination = 1;
+
+step s2-create:
+    CREATE TABLE test_10_1 PARTITION OF test FOR VALUES FROM ('10', '2021-07-16') TO ('11', '2021-07-17');
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-create: <... completed>
+
+starting permutation: s2-begin s2-create s1-update s2-commit
+step s2-begin:
+    BEGIN;
+
+step s2-create:
+    CREATE TABLE test_10_1 PARTITION OF test FOR VALUES FROM ('10', '2021-07-16') TO ('11', '2021-07-17');
+
+step s1-update:
+    update test_9_1 set destination = 1;
+ <waiting ...>
+step s2-commit: 
+    COMMIT;
+
+step s1-update: <... completed>
