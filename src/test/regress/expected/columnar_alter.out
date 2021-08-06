@@ -13,11 +13,11 @@ INSERT INTO test_alter_table SELECT * FROM sample_data;
 -- drop a column
 ALTER TABLE test_alter_table DROP COLUMN a;
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('test_alter_table');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  2 |              150001 |           16402
+             2 |             0 |                  2 |              150001
 (1 row)
 
 -- test analyze
@@ -68,11 +68,11 @@ SELECT * FROM test_alter_table;
 (5 rows)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('test_alter_table');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  4 |              450001 |           32724
+             2 |             0 |                  4 |              450001
 (1 row)
 
 -- add a fixed-length column with default value
@@ -100,11 +100,11 @@ SELECT * from test_alter_table;
 (6 rows)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('test_alter_table');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  5 |              600001 |           40906
+             2 |             0 |                  5 |              600001
 (1 row)
 
 -- add a variable-length column with default value

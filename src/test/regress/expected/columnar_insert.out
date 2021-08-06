@@ -46,11 +46,11 @@ select count(*) from test_insert_command;
 (1 row)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('test_insert_command');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  4 |              450001 |           32686
+             2 |             0 |                  4 |              450001
 (1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
@@ -150,11 +150,11 @@ FROM test_toast_columnar;
 (1 row)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('test_toast_columnar');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  2 |              150001 |           16428
+             2 |             0 |                  2 |              150001
 (1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
@@ -190,11 +190,11 @@ INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('zero_col');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  6 |              750001 |           16336
+             2 |             0 |                  6 |              750001
 (1 row)
 
 SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b

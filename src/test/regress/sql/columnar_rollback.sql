@@ -14,7 +14,7 @@ ROLLBACK;
 SELECT count(*) FROM t;
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
 
 -- check stripe metadata also have been rolled-back
@@ -34,7 +34,7 @@ SAVEPOINT s1;
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
 
 SELECT count(*) FROM t;
@@ -46,7 +46,7 @@ INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 COMMIT;
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
 
 SELECT count(*) FROM t;
