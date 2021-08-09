@@ -1779,6 +1779,7 @@ SyncMetadataToNodes(void)
 										 workerNode->workerName,
 										 workerNode->workerPort)));
 				result = METADATA_SYNC_FAILED_SYNC;
+				break;
 			}
 		}
 	}
