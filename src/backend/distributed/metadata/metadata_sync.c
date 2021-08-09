@@ -1773,7 +1773,8 @@ SyncMetadataToNodes(void)
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
 			bool raiseInterrupts = false;
-
+			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
+									 BoolGetDatum(true));
 			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
 			{
 				ereport(WARNING, (errmsg("failed to sync metadata to %s:%d",
@@ -1783,8 +1784,8 @@ SyncMetadataToNodes(void)
 			}
 			else
 			{
-				SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
-										 BoolGetDatum(true));
+				SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
+								BoolGetDatum(true));
 			}
 		}
 	}
