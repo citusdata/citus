@@ -579,7 +579,7 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 		 */
 		if (ClusterHasDistributedFunctionWithDistArgument())
 		{
-			SetWorkerColumn(newWorkerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(true));
+			SetWorkerColumnLocalOnly(newWorkerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(true));
 			TriggerMetadataSyncOnCommit();
 		}
 	}
