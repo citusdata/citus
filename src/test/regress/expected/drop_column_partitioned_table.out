@@ -248,7 +248,7 @@ EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2000 WHERE measureid = 3;
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
          ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2000_2580005 sensors_2000
+               ->  Bitmap Heap Scan on sensors_2000_2580005 sensors_xxx
                      Recheck Cond: (measureid = 3)
                      ->  Bitmap Index Scan on sensors_2000_pkey_2580005
                            Index Cond: (measureid = 3)
@@ -263,7 +263,7 @@ EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2001 WHERE measureid = 3;
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
          ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2001_2580009 sensors_2001
+               ->  Bitmap Heap Scan on sensors_2001_2580009 sensors_xxx
                      Recheck Cond: (measureid = 3)
                      ->  Bitmap Index Scan on sensors_2001_pkey_2580009
                            Index Cond: (measureid = 3)
@@ -278,7 +278,7 @@ EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2002 WHERE measureid = 3;
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
          ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2002_2580013 sensors_2002
+               ->  Bitmap Heap Scan on sensors_2002_2580013 sensors_xxx
                      Recheck Cond: (measureid = 3)
                      ->  Bitmap Index Scan on sensors_2002_pkey_2580013
                            Index Cond: (measureid = 3)
@@ -293,7 +293,7 @@ EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2003 WHERE measureid = 3;
    ->  Task
          Node: host=localhost port=xxxxx dbname=regression
          ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2003_2580017 sensors_2003
+               ->  Bitmap Heap Scan on sensors_2003_2580017 sensors_xxx
                      Recheck Cond: (measureid = 3)
                      ->  Bitmap Index Scan on sensors_2003_pkey_2580017
                            Index Cond: (measureid = 3)

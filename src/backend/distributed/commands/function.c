@@ -1110,7 +1110,8 @@ TriggerSyncMetadataToPrimaryNodes(void)
 			 * this because otherwise node activation might fail withing transaction blocks.
 			 */
 			LockRelationOid(DistNodeRelationId(), ExclusiveLock);
-			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(true));
+			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_hasmetadata,
+									 BoolGetDatum(true));
 
 			triggerMetadataSync = true;
 		}

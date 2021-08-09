@@ -208,8 +208,10 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	UseCoordinatedTransaction();
 
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true));
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(true));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
+								 BoolGetDatum(true));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
+									 true));
 
 	if (!NodeIsPrimary(workerNode))
 	{
@@ -322,8 +324,10 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		}
 	}
 
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(false));
-	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(false));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
+									 false));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
+								 BoolGetDatum(false));
 
 	PG_RETURN_VOID();
 }
@@ -1813,7 +1817,8 @@ SyncMetadataToNodes(void)
 			}
 			else
 			{
-				SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true));
+				SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
+										 BoolGetDatum(true));
 			}
 		}
 	}

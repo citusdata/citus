@@ -97,7 +97,8 @@ extern bool NodeIsSecondary(WorkerNode *worker);
 extern bool NodeIsReadable(WorkerNode *worker);
 extern bool NodeIsCoordinator(WorkerNode *node);
 extern WorkerNode * SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value);
-extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value);
+extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex,
+											 Datum value);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
 
