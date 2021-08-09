@@ -1085,40 +1085,6 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 
 
 /*
- * NodeHasmetadataUpdateCommand generates and returns a SQL UPDATE command
- * that updates the hasmetada column of pg_dist_node, for the given nodeid.
- */
-char *
-NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata)
-{
-	StringInfo updateCommand = makeStringInfo();
-	char *hasMetadataString = hasMetadata ? "TRUE" : "FALSE";
-	appendStringInfo(updateCommand,
-					 "UPDATE pg_dist_node SET hasmetadata = %s "
-					 "WHERE nodeid = %u",
-					 hasMetadataString, nodeId);
-	return updateCommand->data;
-}
-
-
-/*
- * NodeMetadataSyncedUpdateCommand generates and returns a SQL UPDATE command
- * that updates the metadataSynced column of pg_dist_node, for the given nodeid.
- */
-char *
-NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced)
-{
-	StringInfo updateCommand = makeStringInfo();
-	char *hasMetadataString = metadataSynced ? "TRUE" : "FALSE";
-	appendStringInfo(updateCommand,
-					 "UPDATE pg_dist_node SET metadatasynced = %s "
-					 "WHERE nodeid = %u",
-					 hasMetadataString, nodeId);
-	return updateCommand->data;
-}
-
-
-/*
  * PlacementUpsertCommand creates a SQL command for upserting a pg_dist_placment
  * entry with the given properties. In the case of a conflict on placementId, the command
  * updates all properties (excluding the placementId) with the given ones.

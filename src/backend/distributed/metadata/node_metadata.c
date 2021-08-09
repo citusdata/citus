@@ -109,6 +109,8 @@ static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
+static char * NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata);
+static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced);
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
 											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
@@ -1651,6 +1653,40 @@ SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
 	table_close(pgDistNode, NoLock);
 
 	return newWorkerNode;
+}
+
+
+/*
+ * NodeHasmetadataUpdateCommand generates and returns a SQL UPDATE command
+ * that updates the hasmetada column of pg_dist_node, for the given nodeid.
+ */
+static char *
+NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata)
+{
+	StringInfo updateCommand = makeStringInfo();
+	char *hasMetadataString = hasMetadata ? "TRUE" : "FALSE";
+	appendStringInfo(updateCommand,
+					 "UPDATE pg_dist_node SET hasmetadata = %s "
+					 "WHERE nodeid = %u",
+					 hasMetadataString, nodeId);
+	return updateCommand->data;
+}
+
+
+/*
+ * NodeMetadataSyncedUpdateCommand generates and returns a SQL UPDATE command
+ * that updates the metadataSynced column of pg_dist_node, for the given nodeid.
+ */
+static char *
+NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced)
+{
+	StringInfo updateCommand = makeStringInfo();
+	char *hasMetadataString = metadataSynced ? "TRUE" : "FALSE";
+	appendStringInfo(updateCommand,
+					 "UPDATE pg_dist_node SET metadatasynced = %s "
+					 "WHERE nodeid = %u",
+					 hasMetadataString, nodeId);
+	return updateCommand->data;
 }
 
 

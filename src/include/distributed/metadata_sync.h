@@ -42,8 +42,6 @@ extern List * ShardListInsertCommand(List *shardIntervalList);
 extern char * NodeDeleteCommand(uint32 nodeId);
 extern char * NodeStateUpdateCommand(uint32 nodeId, bool isActive);
 extern char * ShouldHaveShardsUpdateCommand(uint32 nodeId, bool shouldHaveShards);
-extern char * NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata);
-extern char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced);
 extern char * ColocationIdUpdateCommand(Oid relationId, uint32 colocationId);
 extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern List * GrantOnSchemaDDLCommands(Oid schemaId);
