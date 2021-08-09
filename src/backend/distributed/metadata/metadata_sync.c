@@ -1787,7 +1787,7 @@ SyncMetadataToNodes(void)
 	{
 		foreach_ptr(workerNode, workerList)
 		{
-			SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
+			SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(
 								true));
 		}
 	}
