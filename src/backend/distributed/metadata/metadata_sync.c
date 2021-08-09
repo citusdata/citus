@@ -1773,20 +1773,23 @@ SyncMetadataToNodes(void)
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
 			bool raiseInterrupts = false;
-			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
-									 BoolGetDatum(true));
 			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
 			{
 				ereport(WARNING, (errmsg("failed to sync metadata to %s:%d",
 										 workerNode->workerName,
 										 workerNode->workerPort)));
 				result = METADATA_SYNC_FAILED_SYNC;
+				break;
 			}
-			else
-			{
-				SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-								BoolGetDatum(true));
-			}
+		}
+	}
+
+	if (result == METADATA_SYNC_SUCCESS)
+	{
+		foreach_ptr(workerNode, workerList)
+		{
+			SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
+								true));
 		}
 	}
 
