@@ -188,6 +188,12 @@ WARNING:  server closed the connection unexpectedly
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -217,6 +223,12 @@ WARNING:  server closed the connection unexpectedly
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -243,6 +255,12 @@ NOTICE:  dropping metadata on the node (localhost,9060)
 WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  connection not open
 CONTEXT:  while executing command on localhost:xxxxx

@@ -434,14 +434,14 @@ EnsureNoModificationsHaveBeenDone()
 
 
 /*
- * SendCommandListToWorkerInSingleTransaction opens connection to the node with the given
- * nodeName and nodePort. Then, the connection starts a transaction on the remote
- * node and executes the commands in the transaction. The function raises error if
- * any of the queries fails.
+ * SendCommandListToWorkerOutsideTransaction forces to open a new connection
+ * to the node with the given nodeName and nodePort. Then, the connection starts
+ * a transaction on the remote node and executes the commands in the transaction.
+ * The function raises error if any of the queries fails.
  */
 void
-SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
-										   const char *nodeUser, List *commandList)
+SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
+										  const char *nodeUser, List *commandList)
 {
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
@@ -465,13 +465,43 @@ SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 
 
 /*
- * SendOptionalCommandListToWorkerInTransaction sends the given command list to
- * the given worker in a single transaction. If any of the commands fail, it
- * rollbacks the transaction, and otherwise commits.
+ * SendCommandListToWorkerInCoordinatedTransaction opens connection to the node
+ * with the given nodeName and nodePort. The commands are sent as part of the
+ * coordinated transaction. Any failures aborts the coordinated transaction.
+ */
+void
+SendCommandListToWorkerInCoordinatedTransaction(const char *nodeName, int32 nodePort,
+												const char *nodeUser, List *commandList)
+{
+	int connectionFlags = 0;
+
+	UseCoordinatedTransaction();
+
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  nodeUser, NULL);
+
+	MarkRemoteTransactionCritical(workerConnection);
+	RemoteTransactionBeginIfNecessary(workerConnection);
+
+	/* iterate over the commands and execute them in the same connection */
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
+	{
+		ExecuteCriticalRemoteCommand(workerConnection, commandString);
+	}
+}
+
+
+/*
+ * SendOptionalCommandListToWorkerOutsideTransaction sends the given command
+ * list to the given worker in a single transaction that is outside of the
+ * coordinated tranaction. If any of the commands fail, it rollbacks the
+ * transaction, and otherwise commits.
  */
 bool
-SendOptionalCommandListToWorkerInTransaction(const char *nodeName, int32 nodePort,
-											 const char *nodeUser, List *commandList)
+SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
+												  const char *nodeUser, List *commandList)
 {
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	bool failed = false;
@@ -506,6 +536,51 @@ SendOptionalCommandListToWorkerInTransaction(const char *nodeName, int32 nodePor
 	}
 
 	CloseConnection(workerConnection);
+
+	return !failed;
+}
+
+
+/*
+ * SendOptionalCommandListToWorkerInCoordinatedTransaction sends the given
+ * command list to the given worker as part of the coordinated transaction.
+ * If any of the commands fail, the function returns false.
+ */
+bool
+SendOptionalCommandListToWorkerInCoordinatedTransaction(const char *nodeName, int32
+														nodePort,
+														const char *nodeUser,
+														List *commandList)
+{
+	int connectionFlags = 0;
+	bool failed = false;
+
+	UseCoordinatedTransaction();
+
+	MultiConnection *workerConnection =
+		GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
+									  nodeUser, NULL);
+	if (PQstatus(workerConnection->pgConn) != CONNECTION_OK)
+	{
+		return false;
+	}
+
+	RemoteTransactionsBeginIfNecessary(list_make1(workerConnection));
+
+	/* iterate over the commands and execute them in the same connection */
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
+	{
+		if (ExecuteOptionalRemoteCommand(workerConnection, commandString, NULL) !=
+			RESPONSE_OKAY)
+		{
+			failed = true;
+
+			bool raiseErrors = false;
+			MarkRemoteTransactionFailed(workerConnection, raiseErrors);
+			break;
+		}
+	}
 
 	return !failed;
 }

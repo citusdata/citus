@@ -162,8 +162,26 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 --------------------------------------------------------------------------
 -- Test updating a node when another node is in readonly-mode
 --------------------------------------------------------------------------
-SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
-SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
+
+-- first, add node and sync metadata in the same transaction
+CREATE TYPE some_type AS (a int, b int);
+CREATE TABLE some_ref_table (a int, b some_type);
+SELECT create_reference_table('some_ref_table');
+INSERT INTO some_ref_table (a) SELECT i FROM generate_series(0,10)i;
+
+BEGIN;
+	SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
+	SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
+
+  -- and modifications can be read from any worker in the same transaction
+  INSERT INTO some_ref_table (a) SELECT i FROM generate_series(0,10)i;
+  SET LOCAL citus.task_assignment_policy TO "round-robin";
+  SELECT count(*) FROM some_ref_table;
+  SELECT count(*) FROM some_ref_table;
+COMMIT;
+
+DROP TABLE some_ref_table;
+DROP TYPE some_type;
 
 -- Create a table with shards on both nodes
 CREATE TABLE dist_table_2(a int);

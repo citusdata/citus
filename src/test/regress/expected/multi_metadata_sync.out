@@ -470,11 +470,15 @@ SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table':
      1
 (1 row)
 
--- Make sure that start_metadata_sync_to_node cannot be called inside a transaction
+-- Make sure that start_metadata_sync_to_node can be called inside a transaction and rollbacked
 \c - - - :master_port
 BEGIN;
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
-ERROR:  start_metadata_sync_to_node cannot run inside a transaction block
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 ROLLBACK;
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
  hasmetadata

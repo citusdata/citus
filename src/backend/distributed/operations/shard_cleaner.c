@@ -275,9 +275,9 @@ TryDropShard(GroupShardPlacement *placement)
 
 	/* remove the shard from the node */
 	bool success =
-		SendOptionalCommandListToWorkerInTransaction(shardPlacement->nodeName,
-													 shardPlacement->nodePort,
-													 NULL, dropCommandList);
+		SendOptionalCommandListToWorkerOutsideTransaction(shardPlacement->nodeName,
+														  shardPlacement->nodePort,
+														  NULL, dropCommandList);
 	if (success)
 	{
 		/* delete the actual placement */

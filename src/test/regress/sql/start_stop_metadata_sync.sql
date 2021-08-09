@@ -68,11 +68,6 @@ SELECT alter_table_set_access_method('events_2021_jan', 'columnar');
 
 VACUUM (FREEZE, ANALYZE) events_2021_jan;
 
--- this should fail
-BEGIN;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-ROLLBACK;
-
 -- sync metadata
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
@@ -93,12 +88,10 @@ SET search_path TO "start_stop_metadata_sync";
 SELECT * FROM distributed_table_1;
 ALTER TABLE distributed_table_4 DROP COLUMN b;
 
--- this should fail
 BEGIN;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-ROLLBACK;
+	SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+COMMIT;
 
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT * FROM test_view;
 SELECT * FROM test_matview;
 SELECT count(*) > 0 FROM pg_dist_node;
@@ -116,7 +109,9 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
 SELECT * FROM distributed_table_1;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+BEGIN;
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+COMMIT;
 
 \c - - - :worker_1_port
 SELECT count(*) > 0 FROM pg_dist_node;
@@ -127,7 +122,87 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
 
+-- both start & stop metadata sync operations can be transactional
+BEGIN;
+	-- sync the same node multiple times
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+	-- sync the same node in the same command
+	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
+									   'localhost', :worker_1_port,
+									   'localhost', :worker_2_port,
+									   'localhost', :worker_2_port))
+	SELECT start_metadata_sync_to_node(name,port) FROM nodes;
+
+	-- stop the same node in the same command
+	WITH nodes(name, port) AS (VALUES ('localhost', :worker_1_port,
+									   'localhost', :worker_1_port,
+									   'localhost', :worker_2_port,
+									   'localhost', :worker_2_port))
+	SELECT stop_metadata_sync_to_node(name,port) FROM nodes;
+COMMIT;
+
+
+\c - - - :worker_1_port
+SELECT count(*) > 0 FROM pg_dist_node;
+SELECT count(*) > 0 FROM pg_dist_shard;
+SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
+SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
+
+\c - - - :master_port
+SET search_path TO "start_stop_metadata_sync";
+
+-- start metadata sync sets the multi-shard modify mode to sequential
+BEGIN;
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+	show citus.multi_shard_modify_mode;
+COMMIT;
+
+-- stop metadata sync sets the multi-shard modify mode to sequential
+BEGIN;
+	SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+	show citus.multi_shard_modify_mode;
+COMMIT;
+
+-- multi-connection commands are not allowed with start_metadata_sync
+BEGIN;
+	SET citus.force_max_query_parallelization TO ON;
+	CREATE TABLE test_table(a int);
+	SELECT create_distributed_table('test_table', 'a');
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ROLLBACK;
+
+-- this is safe because start_metadata_sync_to_node already switches to
+-- sequential execution
+BEGIN;
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+	CREATE TABLE test_table(a int);
+	SELECT create_distributed_table('test_table', 'a');
+ROLLBACK;
+
+-- multi-shard commands are allowed with start_metadata_sync
+-- as long as the start_metadata_sync_to_node executed
+-- when it is OK to switch to sequential execution
+BEGIN;
+	-- sync at the start of the tx
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+	SET citus.multi_shard_modify_mode TO sequential;
+	CREATE TABLE test_table(a int);
+	SELECT create_distributed_table('test_table', 'a');
+	ALTER TABLE test_table ADD COLUMN B INT;
+	INSERT INTO test_table SELECT i,i From generate_series(0,100)i;
+	SELECT count(*) FROM test_table;
+	ALTER TABLE distributed_table_3 ADD COLUMN new_col INT DEFAULT 15;
+	SELECT count(*) FROM distributed_table_3;
+	-- sync at the end of the tx
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ROLLBACK;
+
 -- cleanup
+\c - - - :master_port
+SET search_path TO "start_stop_metadata_sync";
+
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 SET client_min_messages TO WARNING;

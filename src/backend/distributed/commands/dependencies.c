@@ -119,9 +119,9 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		const char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
-												   CitusExtensionOwnerName(),
-												   ddlCommands);
+		SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+												  CitusExtensionOwnerName(),
+												  ddlCommands);
 	}
 }
 
@@ -312,8 +312,8 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
 
-	SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
-											   CitusExtensionOwnerName(), ddlCommands);
+	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+											  CitusExtensionOwnerName(), ddlCommands);
 }
 
 
