@@ -26,6 +26,7 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "distributed/version_compat.h"
 
 #define AlterEnumIsRename(stmt) (stmt->oldVal != NULL)
 #define AlterEnumIsAddValue(stmt) (stmt->oldVal == NULL)
@@ -121,7 +122,7 @@ DeparseAlterTypeStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(stmt->relkind == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_TYPE);
 
 	AppendAlterTypeStmt(&str, stmt);
 
@@ -136,7 +137,7 @@ AppendAlterTypeStmt(StringInfo buf, AlterTableStmt *stmt)
 														stmt->relation->relname);
 	ListCell *cmdCell = NULL;
 
-	Assert(stmt->relkind == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_TYPE);
 
 	appendStringInfo(buf, "ALTER TYPE %s", identifier);
 	foreach(cmdCell, stmt->cmds)
