@@ -473,8 +473,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (IsA(parsetree, AlterTableStmt))
 		{
 			AlterTableStmt *alterTableStmt = (AlterTableStmt *) parsetree;
-			if (alterTableStmt->relkind == OBJECT_TABLE ||
-				alterTableStmt->relkind == OBJECT_FOREIGN_TABLE)
+			if (AlterTableStmtObjType(alterTableStmt) == OBJECT_TABLE ||
+				AlterTableStmtObjType(alterTableStmt) == OBJECT_FOREIGN_TABLE)
 			{
 				ErrorIfAlterDropsPartitionColumn(alterTableStmt);
 

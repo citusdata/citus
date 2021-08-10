@@ -12,6 +12,7 @@
 #include "postgres.h"
 
 #include "distributed/deparser.h"
+#include "distributed/version_compat.h"
 #include "nodes/nodes.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_type.h"
@@ -63,7 +64,7 @@ DeparseAlterTableStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(stmt->relkind == OBJECT_TABLE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_TABLE);
 
 	AppendAlterTableStmt(&str, stmt);
 	return str.data;
@@ -82,7 +83,7 @@ AppendAlterTableStmt(StringInfo buf, AlterTableStmt *stmt)
 														stmt->relation->relname);
 	ListCell *cmdCell = NULL;
 
-	Assert(stmt->relkind == OBJECT_TABLE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_TABLE);
 
 	appendStringInfo(buf, "ALTER TABLE %s", identifier);
 	foreach(cmdCell, stmt->cmds)

@@ -206,7 +206,7 @@ PreprocessAlterTypeStmt(Node *node, const char *queryString,
 						ProcessUtilityContext processUtilityContext)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_TYPE);
 
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateObject(&typeAddress))
@@ -789,7 +789,7 @@ ObjectAddress
 AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_TYPE);
 
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);

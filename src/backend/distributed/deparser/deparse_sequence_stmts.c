@@ -15,6 +15,7 @@
 
 #include "catalog/namespace.h"
 #include "distributed/deparser.h"
+#include "distributed/version_compat.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -193,7 +194,7 @@ DeparseAlterSequenceOwnerStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(stmt->relkind == OBJECT_SEQUENCE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_SEQUENCE);
 
 	AppendAlterSequenceOwnerStmt(&str, stmt);
 
@@ -208,7 +209,7 @@ DeparseAlterSequenceOwnerStmt(Node *node)
 static void
 AppendAlterSequenceOwnerStmt(StringInfo buf, AlterTableStmt *stmt)
 {
-	Assert(stmt->relkind == OBJECT_SEQUENCE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_SEQUENCE);
 	RangeVar *seq = stmt->relation;
 	char *qualifiedSequenceName = quote_qualified_identifier(seq->schemaname,
 															 seq->relname);
