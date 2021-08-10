@@ -1793,7 +1793,7 @@ SyncMetadataToNodes(void)
 			}
 		}
 
-		if(setMetadataSynced)
+		if (setMetadataSynced)
 		{
 			workerSuccess = lappend(workerSuccess, workerNode);
 		}
