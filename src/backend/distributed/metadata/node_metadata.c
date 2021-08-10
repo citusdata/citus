@@ -1608,12 +1608,17 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 		}
 	}
 
-	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES, ShareLock);
+	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+												   ShareLock);
+
 	/* open connections in parallel */
 	WorkerNode *workerNodeIterate = NULL;
 	foreach_ptr(workerNodeIterate, workerNodeList)
 	{
-		SendOptionalCommandListToWorkerInCoordinatedTransaction(workerNodeIterate->workerName, workerNodeIterate->workerPort, CurrentUserName(), list_make1(metadataSyncCommand));
+		SendOptionalCommandListToWorkerInCoordinatedTransaction(
+			workerNodeIterate->workerName, workerNodeIterate->workerPort,
+			CurrentUserName(),
+			list_make1(metadataSyncCommand));
 	}
 
 	return workerNode;
