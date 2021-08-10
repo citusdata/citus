@@ -15,6 +15,7 @@
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/pg_version_constants.h"
+#include "distributed/version_compat.h"
 
 static DistributeObjectOps NoDistributeOps = {
 	.deparse = NULL,
@@ -772,7 +773,7 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterTableStmt:
 		{
 			AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-			switch (stmt->relkind)
+			switch (AlterTableStmtObjType(stmt))
 			{
 				case OBJECT_TYPE:
 				{

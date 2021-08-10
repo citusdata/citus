@@ -31,7 +31,9 @@
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_14
+#define AlterTableStmtObjType(a) ((a)->objtype)
 #else
+#define AlterTableStmtObjType(a) ((a)->relkind)
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13

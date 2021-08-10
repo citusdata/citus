@@ -595,7 +595,7 @@ PreprocessAlterSequenceOwnerStmt(Node *node, const char *queryString,
 								 ProcessUtilityContext processUtilityContext)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_SEQUENCE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_SEQUENCE);
 
 	ObjectAddress sequenceAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateObject(&sequenceAddress))
@@ -623,7 +623,7 @@ ObjectAddress
 AlterSequenceOwnerStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_SEQUENCE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_SEQUENCE);
 
 	RangeVar *sequence = stmt->relation;
 	Oid seqOid = RangeVarGetRelid(sequence, NoLock, missing_ok);
@@ -643,7 +643,7 @@ List *
 PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_SEQUENCE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_SEQUENCE);
 
 	ObjectAddress sequenceAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateObject(&sequenceAddress))

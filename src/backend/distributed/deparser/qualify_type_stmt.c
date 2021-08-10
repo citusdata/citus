@@ -25,6 +25,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
 #include "utils/syscache.h"
@@ -125,7 +126,7 @@ void
 QualifyAlterTypeStmt(Node *node)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType(stmt) == OBJECT_TYPE);
 
 	if (stmt->relation->schemaname == NULL)
 	{
