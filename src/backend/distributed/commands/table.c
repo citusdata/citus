@@ -536,7 +536,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	if (get_rel_relkind(leftRelationId) == RELKIND_SEQUENCE)
 	{
 		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
-		stmtCopy->relkind = OBJECT_SEQUENCE;
+		AlterTableStmtObjType_compat(stmtCopy) = OBJECT_SEQUENCE;
 		return PreprocessAlterSequenceOwnerStmt((Node *) stmtCopy, alterTableCommand,
 												processUtilityContext);
 	}
@@ -1629,7 +1629,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		 */
 		if (get_rel_relkind(relationId) == RELKIND_SEQUENCE)
 		{
-			alterTableStatement->relkind = OBJECT_SEQUENCE;
+			AlterTableStmtObjType_compat(alterTableStatement) = OBJECT_SEQUENCE;
 			PostprocessAlterSequenceOwnerStmt((Node *) alterTableStatement, NULL);
 			return;
 		}
