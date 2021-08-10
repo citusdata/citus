@@ -1559,10 +1559,9 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
  * on the worker in pg_dist_node, by calling SetWorkerColumnLocalOnly.
  * It also sends the same command for node update to other metadata nodes.
  * Returns the new worker node after the modification.
- * Raises error if raiseOnError is true and a meteadata node is out of sync.
  */
 WorkerNode *
-SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value, bool raiseOnError)
+SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 {
 	workerNode = SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
 
@@ -1609,25 +1608,77 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value, bool raise
 		}
 	}
 
-	if (raiseOnError)
-	{
-		/* this function errors out if any metadata node is out of sync */
-		SendCommandToWorkersWithMetadata(metadataSyncCommand);
-	}
-	else
-	{
-		List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
-													   ShareLock);
+	SendCommandToWorkersWithMetadata(metadataSyncCommand);
 
-		/* open connections in parallel */
-		WorkerNode *workerNodeIterate = NULL;
-		foreach_ptr(workerNodeIterate, workerNodeList)
+	return workerNode;
+}
+
+
+/*
+ * SetWorkerColumnOptional function sets the column with the specified index
+ * on the worker in pg_dist_node, by calling SetWorkerColumnLocalOnly.
+ * It also sends the same command optionally for node update to other metadata nodes.
+ * Returns the new worker node after the modification.
+ */
+WorkerNode *
+SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
+{
+	workerNode = SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
+
+	char *metadataSyncCommand = NULL;
+
+	switch (columnIndex)
+	{
+		case Anum_pg_dist_node_hasmetadata:
 		{
-			SendOptionalCommandListToWorkerInCoordinatedTransaction(
-				workerNodeIterate->workerName, workerNodeIterate->workerPort,
-				CurrentUserName(),
-				list_make1(metadataSyncCommand));
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "hasmetadata");
+			metadataSyncCommand = NodeHasmetadataUpdateCommand(workerNode->nodeId,
+															   DatumGetBool(value));
+			break;
 		}
+
+		case Anum_pg_dist_node_isactive:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "isactive");
+
+			metadataSyncCommand = NodeStateUpdateCommand(workerNode->nodeId,
+														 DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_shouldhaveshards:
+		{
+			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
+																DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_metadatasynced:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "metadatasynced");
+			metadataSyncCommand = NodeMetadataSyncedUpdateCommand(workerNode->nodeId,
+																  DatumGetBool(value));
+			break;
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
+								   workerNode->workerName, workerNode->workerPort)));
+		}
+	}
+
+	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+												   ShareLock);
+
+	/* open connections in parallel */
+	WorkerNode *workerNodeIterate = NULL;
+	foreach_ptr(workerNodeIterate, workerNodeList)
+	{
+		SendOptionalCommandListToWorkerInCoordinatedTransaction(
+			workerNodeIterate->workerName, workerNodeIterate->workerPort,
+			CurrentUserName(),
+			list_make1(metadataSyncCommand));
 	}
 
 	return workerNode;
@@ -1734,9 +1785,8 @@ ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value, char *fi
 static WorkerNode *
 SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
 {
-	bool raiseOnError = true;
-	return SetWorkerColumn(workerNode, Anum_pg_dist_node_shouldhaveshards,
-						   BoolGetDatum(shouldHaveShards), raiseOnError);
+	return SetWorkerColumn(workerNode, Anum_pg_dist_node_shouldhaveshards, BoolGetDatum(
+							   shouldHaveShards));
 }
 
 
@@ -1748,10 +1798,9 @@ SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
 static WorkerNode *
 SetNodeState(char *nodeName, int nodePort, bool isActive)
 {
-	bool raiseOnError = true;
 	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive,
-						   BoolGetDatum(isActive), raiseOnError);
+	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive, BoolGetDatum(
+							   isActive));
 }
 
 
