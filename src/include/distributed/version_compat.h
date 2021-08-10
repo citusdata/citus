@@ -30,6 +30,10 @@
 #include "tcop/tcopprot.h"
 #endif
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+#else
+#endif
+
 #if PG_VERSION_NUM >= PG_VERSION_13
 #define lnext_compat(l, r) lnext(l, r)
 #define list_delete_cell_compat(l, c, p) list_delete_cell(l, c)

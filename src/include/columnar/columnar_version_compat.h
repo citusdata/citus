@@ -12,6 +12,10 @@
 #ifndef COLUMNAR_COMPAT_H
 #define COLUMNAR_COMPAT_H
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+#else
+#endif
+
 #define ACLCHECK_OBJECT_TABLE OBJECT_TABLE
 
 #define ExplainPropertyLong(qlabel, value, es) \
