@@ -1793,7 +1793,8 @@ SyncMetadataToNodes(void)
 	bool raiseOnError = false;
 	foreach_ptr(workerNode, workerSuccess)
 	{
-		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true), raiseOnError);
+		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true),
+						raiseOnError);
 	}
 
 	return result;

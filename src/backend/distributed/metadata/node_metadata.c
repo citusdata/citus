@@ -1611,9 +1611,9 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value, bool raise
 
 	if (raiseOnError)
 	{
+		/* this function errors out if any metadata node is out of sync */
 		SendCommandToWorkersWithMetadata(metadataSyncCommand);
 	}
-
 	else
 	{
 		List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
