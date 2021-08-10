@@ -1766,6 +1766,7 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_FAILED_LOCK;
 	}
 
+	List *workerSuccess = NIL;
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
@@ -1779,24 +1780,17 @@ SyncMetadataToNodes(void)
 										 workerNode->workerName,
 										 workerNode->workerPort)));
 				result = METADATA_SYNC_FAILED_SYNC;
-				break;
+			}
+			else
+			{
+				workerSuccess = lappend(workerSuccess, workerNode);
 			}
 		}
 	}
 
-	if (result == METADATA_SYNC_SUCCESS)
+	foreach_ptr(workerNode, workerSuccess)
 	{
-		foreach_ptr(workerNode, workerList)
-		{
-			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_metadatasynced,
-									 BoolGetDatum(true));
-		}
-
-		foreach_ptr(workerNode, workerList)
-		{
-			SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(
-								true));
-		}
+		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true));
 	}
 
 	return result;
