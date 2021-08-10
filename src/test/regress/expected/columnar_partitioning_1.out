@@ -132,20 +132,22 @@ ANALYZE parent;
 -- scan on heap partition
 EXPLAIN (costs off) SELECT count(*), sum(i), min(i), max(i) FROM parent
 WHERE ts > '2020-02-20' AND n < 5;
-                                                   QUERY PLAN
+                                                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Append
          ->  Custom Scan (ColumnarScan) on p1
                Filter: ((ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone) AND (n < '5'::numeric))
                Columnar Projected Columns: ts, i, n
+               Columnar Chunk Group Filters: ((ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone) AND (n < '5'::numeric))
          ->  Index Scan using p2_n_idx on p2
                Index Cond: (n < '5'::numeric)
                Filter: (ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone)
          ->  Custom Scan (ColumnarScan) on p3
                Filter: ((ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone) AND (n < '5'::numeric))
                Columnar Projected Columns: ts, i, n
-(11 rows)
+               Columnar Chunk Group Filters: ((ts > 'Thu Feb 20 00:00:00 2020 PST'::timestamp with time zone) AND (n < '5'::numeric))
+(13 rows)
 
 BEGIN;
   SET LOCAL columnar.enable_custom_scan TO 'OFF';

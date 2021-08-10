@@ -4,6 +4,8 @@ CREATE TABLE full_correlated (a int, b text, c int, d int) USING columnar;
 INSERT INTO full_correlated SELECT i, i::text FROM generate_series(1, 1000000) i;
 CREATE INDEX full_correlated_btree ON full_correlated (a);
 ANALYZE full_correlated;
+-- Prevent qual pushdown from competing with index scans.
+SET columnar.enable_qual_pushdown = false;
 SELECT columnar_test_helpers.uses_index_scan (
 $$
 SELECT a FROM full_correlated WHERE a=200;
@@ -572,5 +574,54 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
+SET columnar.enable_qual_pushdown TO DEFAULT;
+BEGIN;
+SET LOCAL columnar.stripe_row_limit = 2000;
+SET LOCAL columnar.chunk_group_row_limit = 1000;
+CREATE TABLE correlated(x int) using columnar;
+INSERT INTO correlated
+  SELECT g FROM generate_series(1,100000) g;
+CREATE TABLE uncorrelated(x int) using columnar;
+INSERT INTO uncorrelated
+  SELECT (g * 19) % 100000 FROM generate_series(1,100000) g;
+COMMIT;
+CREATE INDEX correlated_idx ON correlated(x);
+CREATE INDEX uncorrelated_idx ON uncorrelated(x);
+ANALYZE correlated, uncorrelated;
+-- should choose chunk group filtering; selective and correlated
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT * FROM correlated WHERE x = 78910;
+                            QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on correlated (actual rows=1 loops=1)
+   Filter: (x = 78910)
+   Rows Removed by Filter: 999
+   Columnar Projected Columns: x
+   Columnar Chunk Group Filters: (x = 78910)
+   Columnar Chunk Groups Removed by Filter: 99
+(6 rows)
+
+SELECT * FROM correlated WHERE x = 78910;
+   x
+---------------------------------------------------------------------
+ 78910
+(1 row)
+
+-- should choose index scan; selective but uncorrelated
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT * FROM uncorrelated WHERE x = 78910;
+                                   QUERY PLAN
+---------------------------------------------------------------------
+ Index Only Scan using uncorrelated_idx on uncorrelated (actual rows=1 loops=1)
+   Index Cond: (x = 78910)
+   Heap Fetches: 1
+(3 rows)
+
+SELECT * FROM uncorrelated WHERE x = 78910;
+   x
+---------------------------------------------------------------------
+ 78910
+(1 row)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_paths CASCADE;

@@ -139,12 +139,13 @@ explain (costs off, summary off) select * from
    ->  Custom Scan (ColumnarScan) on int8_tbl_columnar a
          Columnar Projected Columns: q1, q2
    ->  Nested Loop
+         ->  Custom Scan (ColumnarScan) on int8_tbl_columnar c
+               Columnar Projected Columns: q1
          ->  Custom Scan (ColumnarScan) on int8_tbl_columnar b
                Filter: (a.q2 = q1)
                Columnar Projected Columns: q1
-         ->  Custom Scan (ColumnarScan) on int8_tbl_columnar c
-               Columnar Projected Columns: q1
-(9 rows)
+               Columnar Chunk Group Filters: (a.q2 = q1)
+(10 rows)
 
 explain (costs off, summary off)
   SELECT COUNT(*) FROM INT8_TBL_columnar t1 JOIN

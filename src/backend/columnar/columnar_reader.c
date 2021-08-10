@@ -467,7 +467,7 @@ HasUnreadStripe(ColumnarReadState *readState)
  * the beginning again
  */
 void
-ColumnarRescan(ColumnarReadState *readState)
+ColumnarRescan(ColumnarReadState *readState, List *scanQual)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(readState->scanContext);
 
@@ -477,6 +477,7 @@ ColumnarRescan(ColumnarReadState *readState)
 																 readState->snapshot);
 	readState->chunkGroupsFiltered = 0;
 
+	readState->whereClauseList = copyObject(scanQual);
 	MemoryContextSwitchTo(oldContext);
 }
 

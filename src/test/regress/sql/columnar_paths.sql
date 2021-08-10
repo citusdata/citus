@@ -6,6 +6,9 @@ INSERT INTO full_correlated SELECT i, i::text FROM generate_series(1, 1000000) i
 CREATE INDEX full_correlated_btree ON full_correlated (a);
 ANALYZE full_correlated;
 
+-- Prevent qual pushdown from competing with index scans.
+SET columnar.enable_qual_pushdown = false;
+
 SELECT columnar_test_helpers.uses_index_scan (
 $$
 SELECT a FROM full_correlated WHERE a=200;
@@ -336,6 +339,36 @@ BEGIN;
   $$
   );
 ROLLBACK;
+
+SET columnar.enable_qual_pushdown TO DEFAULT;
+
+BEGIN;
+SET LOCAL columnar.stripe_row_limit = 2000;
+SET LOCAL columnar.chunk_group_row_limit = 1000;
+
+CREATE TABLE correlated(x int) using columnar;
+INSERT INTO correlated
+  SELECT g FROM generate_series(1,100000) g;
+
+CREATE TABLE uncorrelated(x int) using columnar;
+INSERT INTO uncorrelated
+  SELECT (g * 19) % 100000 FROM generate_series(1,100000) g;
+
+COMMIT;
+
+CREATE INDEX correlated_idx ON correlated(x);
+CREATE INDEX uncorrelated_idx ON uncorrelated(x);
+ANALYZE correlated, uncorrelated;
+
+-- should choose chunk group filtering; selective and correlated
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT * FROM correlated WHERE x = 78910;
+SELECT * FROM correlated WHERE x = 78910;
+
+-- should choose index scan; selective but uncorrelated
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT * FROM uncorrelated WHERE x = 78910;
+SELECT * FROM uncorrelated WHERE x = 78910;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_paths CASCADE;
