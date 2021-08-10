@@ -208,10 +208,11 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	UseCoordinatedTransaction();
 
+	bool raiseOnError = true;
 	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-								 BoolGetDatum(true));
+								 BoolGetDatum(true), raiseOnError);
 	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
-									 true));
+									 true), raiseOnError);
 
 	if (!NodeIsPrimary(workerNode))
 	{
@@ -324,10 +325,11 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		}
 	}
 
+	bool raiseOnError = true;
 	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
-									 false));
+									 false), raiseOnError);
 	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-								 BoolGetDatum(false));
+								 BoolGetDatum(false), raiseOnError);
 
 	PG_RETURN_VOID();
 }
@@ -1788,9 +1790,10 @@ SyncMetadataToNodes(void)
 		}
 	}
 
+	bool raiseOnError = false;
 	foreach_ptr(workerNode, workerSuccess)
 	{
-		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true));
+		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced, BoolGetDatum(true), raiseOnError);
 	}
 
 	return result;
