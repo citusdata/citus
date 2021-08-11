@@ -371,7 +371,7 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 	memset(values, 0, sizeof(values));
 	memset(isNulls, false, sizeof(isNulls));
 
-	if (is_member_of_role(userId, DEFAULT_ROLE_MONITOR))
+	if (is_member_of_role(userId, ROLE_MONITOR_COMPAT))
 	{
 		showAllTransactions = true;
 	}
