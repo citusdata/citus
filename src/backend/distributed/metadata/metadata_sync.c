@@ -764,7 +764,8 @@ NodeListInsertCommand(List *workerNodeList)
 	/* generate the query without any values yet */
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
-					 "noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES ");
+					 "noderack, hasmetadata, metadatasynced, isactive, noderole, "
+					 "nodecluster, shouldhaveshards) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	WorkerNode *workerNode = NULL;
@@ -773,13 +774,14 @@ NodeListInsertCommand(List *workerNodeList)
 		char *hasMetadataString = workerNode->hasMetadata ? "TRUE" : "FALSE";
 		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
+		char *shouldHaveShards = workerNode->shouldHaveShards ? "TRUE" : "FALSE";
 
 		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
 		Datum nodeRoleStringDatum = DirectFunctionCall1(enum_out, nodeRoleOidDatum);
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s)",
+						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
@@ -789,7 +791,8 @@ NodeListInsertCommand(List *workerNodeList)
 						 metadataSyncedString,
 						 isActiveString,
 						 nodeRoleString,
-						 quote_literal_cstr(workerNode->nodeCluster));
+						 quote_literal_cstr(workerNode->nodeCluster),
+						 shouldHaveShards);
 
 		processedWorkerNodeCount++;
 		if (processedWorkerNodeCount != workerCount)
