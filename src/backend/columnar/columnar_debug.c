@@ -17,6 +17,7 @@
 #include "catalog/pg_type.h"
 #include "distributed/pg_version_constants.h"
 #include "distributed/tuplestore.h"
+#include "distributed/version_compat.h"
 #include "miscadmin.h"
 #include "storage/fd.h"
 #include "storage/smgr.h"
@@ -161,5 +162,5 @@ MemoryContextTotals(MemoryContext context, MemoryContextCounters *counters)
 		MemoryContextTotals(child, counters);
 	}
 
-	context->methods->stats(context, NULL, NULL, counters);
+	context->methods->stats_compat(context, NULL, NULL, counters, true);
 }
