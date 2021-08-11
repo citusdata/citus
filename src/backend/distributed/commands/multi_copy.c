@@ -267,7 +267,9 @@ static CopyCoercionData * ColumnCoercionPaths(TupleDesc destTupleDescriptor,
 											  Oid *finalColumnTypeArray);
 static FmgrInfo * TypeOutputFunctions(uint32 columnCount, Oid *typeIdArray,
 									  bool binaryFormat);
+#if PG_VERSION_NUM < PG_VERSION_14
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
+#endif
 static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
 static void CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag);
 static HTAB * CreateConnectionStateHash(MemoryContext memoryContext);
@@ -3277,6 +3279,8 @@ CreateRangeTable(Relation rel, AclMode requiredAccess)
 }
 
 
+#if PG_VERSION_NUM < PG_VERSION_14
+
 /* Helper for CheckCopyPermissions(), copied from postgres */
 static List *
 CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
@@ -3356,6 +3360,9 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 	return attnums;
 	/* *INDENT-ON* */
 }
+
+
+#endif
 
 
 /*
