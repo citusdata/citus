@@ -32,8 +32,10 @@
 
 #if PG_VERSION_NUM >= PG_VERSION_14
 #define AlterTableStmtObjType(a) ((a)->objtype)
+#define F_NEXTVAL_COMPAT F_NEXTVAL
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
+#define F_NEXTVAL_COMPAT F_NEXTVAL_OID
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
