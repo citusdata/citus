@@ -1613,7 +1613,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 	 * workers
 	 */
 
-	const char *functionName = getObjectIdentity(&address);
+	const char *functionName = getObjectIdentity_compat(&address, false);
 	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
 						   "extension"),
 					errdetail("Function \"%s\" is already distributed. Functions from "
@@ -1932,8 +1932,8 @@ ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress)
 
 	if (IsObjectAddressOwnedByExtension(functionAddress, &extensionAddress))
 	{
-		char *functionName = getObjectIdentity(functionAddress);
-		char *extensionName = getObjectIdentity(&extensionAddress);
+		char *functionName = getObjectIdentity_compat(functionAddress, false);
+		char *extensionName = getObjectIdentity_compat(&extensionAddress, false);
 		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
 							   "owned by an extension"),
 						errdetail("Function \"%s\" has a dependency on extension \"%s\". "

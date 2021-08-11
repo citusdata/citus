@@ -973,7 +973,8 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 	/* add owner ship change so the creation command can be run as a different user */
 	const char *username = GetUserNameFromId(GetTypeOwner(typeAddress->objectId), false);
 	initStringInfo(&buf);
-	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND, getObjectIdentity(typeAddress),
+	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND,
+					 getObjectIdentity_compat(typeAddress, false),
 					 quote_identifier(username));
 	ddlCommands = lappend(ddlCommands, buf.data);
 
