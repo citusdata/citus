@@ -109,7 +109,8 @@ static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
-static char * SetWorkerColumnInternal(WorkerNode *workerNode, int columnIndex, Datum value);
+static char * SetWorkerColumnInternal(WorkerNode *workerNode, int columnIndex, Datum
+									  value);
 static char * NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata);
 static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced);
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,

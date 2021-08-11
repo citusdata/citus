@@ -205,7 +205,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	UseCoordinatedTransaction();
 
-	/* 
+	/*
 	 * We first set metadatasynced, and then hasmetadata; since setting columns for
 	 * nodes with metadatasynced==false could cause errors.
 	 * (See ErrorIfAnyMetadataNodeOutOfSync)
@@ -1791,6 +1791,7 @@ SyncMetadataToNodes(void)
 										 workerNode->workerName,
 										 workerNode->workerPort)));
 				result = METADATA_SYNC_FAILED_SYNC;
+
 				/* we shouldn't send command to this worker, since the sync is failed */
 				shouldSetMetadataSynced = false;
 			}
