@@ -456,7 +456,7 @@ BuildLocalWaitGraph(void)
 static bool
 IsProcessWaitingForSafeOperations(PGPROC *proc)
 {
-	if (proc->waitStatus != STATUS_WAITING)
+	if (proc->waitStatus != STATUS_WAITING_COMPAT)
 	{
 		return false;
 	}
@@ -715,7 +715,7 @@ AddProcToVisit(PROCStack *remaining, PGPROC *proc)
 bool
 IsProcessWaitingForLock(PGPROC *proc)
 {
-	return proc->waitStatus == STATUS_WAITING;
+	return proc->waitStatus == STATUS_WAITING_COMPAT;
 }
 
 
