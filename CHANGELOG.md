@@ -1,3 +1,10 @@
+### citus v9.4.6 (August 8, 2021) ###
+
+* Allows more graceful failovers when replication factor > 1
+
+* Improves master_update_table_statistics and provides distributed deadlock
+  detection
+
 ### citus v9.4.5 (July 7, 2021) ###
 
 * Adds a configure flag to enforce security
