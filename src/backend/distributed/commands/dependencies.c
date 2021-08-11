@@ -251,7 +251,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 	 */
 	Assert(false);
 	ereport(ERROR, (errmsg("unsupported object %s for distribution by citus",
-						   getObjectTypeDescription(dependency)),
+						   getObjectTypeDescription_compat(dependency, false)),
 					errdetail(
 						"citus tries to recreate an unsupported object on its workers"),
 					errhint("please report a bug as this should not be happening")));

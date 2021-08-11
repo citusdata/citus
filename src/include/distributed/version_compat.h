@@ -35,11 +35,15 @@
 #define F_NEXTVAL_COMPAT F_NEXTVAL
 #define ROLE_MONITOR_COMPAT ROLE_PG_MONITOR
 #define STATUS_WAITING_COMPAT PROC_WAIT_STATUS_WAITING
+#define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a, b)
+#define getObjectIdentity_compat(a, b) getObjectIdentity(a, b)
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
 #define ROLE_MONITOR_COMPAT DEFAULT_ROLE_MONITOR
 #define STATUS_WAITING_COMPAT STATUS_WAITING
+#define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a)
+#define getObjectIdentity_compat(a, b) getObjectIdentity(a)
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
