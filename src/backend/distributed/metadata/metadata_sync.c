@@ -1775,14 +1775,7 @@ SyncMetadataToNodes(void)
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
 	{
-		if (!workerNode->hasMetadata)
-		{
-			/* we have nothing to sync on workers with no metadata */
-			continue;
-		}
-
-		bool shouldSetMetadataSynced = true;
-		if (!workerNode->metadataSynced)
+		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
 			bool raiseInterrupts = false;
 			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
@@ -1792,14 +1785,11 @@ SyncMetadataToNodes(void)
 										 workerNode->workerPort)));
 				result = METADATA_SYNC_FAILED_SYNC;
 
-				/* we shouldn't send command to this worker, since the sync is failed */
-				shouldSetMetadataSynced = false;
 			}
-		}
-
-		if (shouldSetMetadataSynced)
-		{
-			syncedWorkerList = lappend(syncedWorkerList, workerNode);
+			else
+			{
+				syncedWorkerList = lappend(syncedWorkerList, workerNode);
+			}
 		}
 	}
 
