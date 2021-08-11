@@ -206,9 +206,14 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	UseCoordinatedTransaction();
 
 	/*
+	 * One would normally expect to set hasmetadata first, and then metadata sync.
+	 * However, at this point we do the order reverse.
 	 * We first set metadatasynced, and then hasmetadata; since setting columns for
 	 * nodes with metadatasynced==false could cause errors.
 	 * (See ErrorIfAnyMetadataNodeOutOfSync)
+	 * We can safely do that because we are in a coordinated transaction and the changes
+	 * are only visible to our own transaction.
+	 * If anything goes wrong, we are going to rollback all the changes.
 	 */
 	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
 								 BoolGetDatum(true));
@@ -1787,6 +1792,7 @@ SyncMetadataToNodes(void)
 			}
 			else
 			{
+				/* we add successfully synced nodes to set metadatasynced column later */
 				syncedWorkerList = lappend(syncedWorkerList, workerNode);
 			}
 		}
