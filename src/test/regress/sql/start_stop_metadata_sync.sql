@@ -132,7 +132,15 @@ SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_
 
 \c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+\c - - - :worker_1_port
+SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+
+\c - - - :worker_2_port
+SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+
+\c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+
 \c - - - :worker_1_port
 SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
 
