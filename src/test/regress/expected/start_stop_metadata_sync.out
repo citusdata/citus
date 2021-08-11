@@ -271,7 +271,13 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND rel
 (1 row)
 
 \c - - - :master_port
--- test synchronization for hasmetadata flag
+-- test synchronization for pg_dist_node flags
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -284,23 +290,35 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 (1 row)
 
-\c - - - :worker_1_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
- hasmetadata | metadatasynced
+SELECT citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
+ citus_set_node_property
 ---------------------------------------------------------------------
- t           | t
- t           | t
+
+(1 row)
+
+\c - - - :worker_1_port
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+ hasmetadata | metadatasynced | shouldhaveshards
+---------------------------------------------------------------------
+ t           | t              | f
+ t           | t              | f
 (2 rows)
 
 \c - - - :worker_2_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
- hasmetadata | metadatasynced
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+ hasmetadata | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
- t           | t
- t           | t
+ t           | t              | f
+ t           | t              | f
 (2 rows)
 
 \c - - - :master_port
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
@@ -308,18 +326,24 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 
 (1 row)
 
+SELECT citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
 \c - - - :worker_1_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
- hasmetadata | metadatasynced
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+ hasmetadata | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_2_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
- hasmetadata | metadatasynced
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+ hasmetadata | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
- f           | f
- t           | t
+ f           | f              | t
+ t           | t              | t
 (2 rows)
 
 \c - - - :master_port
@@ -331,14 +355,14 @@ NOTICE:  dropping metadata on the node (localhost,57638)
 (1 row)
 
 \c - - - :worker_1_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
- hasmetadata | metadatasynced
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+ hasmetadata | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
 (0 rows)
 
 \c - - - :worker_2_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
- hasmetadata | metadatasynced
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+ hasmetadata | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
 (0 rows)
 

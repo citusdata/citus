@@ -120,32 +120,36 @@ SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND r
 SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
 
 \c - - - :master_port
--- test synchronization for hasmetadata flag
+-- test synchronization for pg_dist_node flags
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
 
 \c - - - :worker_1_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
 
 \c - - - :worker_2_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
 
 \c - - - :master_port
+SELECT citus_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT citus_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', true);
 \c - - - :worker_1_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
 
 \c - - - :worker_2_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
 
 \c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 \c - - - :worker_1_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
 
 \c - - - :worker_2_port
-SELECT hasmetadata, metadatasynced FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
+SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
 
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
