@@ -109,6 +109,7 @@ static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
+static char * SetWorkerColumnInternal(WorkerNode *workerNode, int columnIndex, Datum value);
 static char * NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata);
 static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced);
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
@@ -1565,48 +1566,7 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 {
 	workerNode = SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
 
-	char *metadataSyncCommand = NULL;
-
-	switch (columnIndex)
-	{
-		case Anum_pg_dist_node_hasmetadata:
-		{
-			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "hasmetadata");
-			metadataSyncCommand = NodeHasmetadataUpdateCommand(workerNode->nodeId,
-															   DatumGetBool(value));
-			break;
-		}
-
-		case Anum_pg_dist_node_isactive:
-		{
-			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "isactive");
-
-			metadataSyncCommand = NodeStateUpdateCommand(workerNode->nodeId,
-														 DatumGetBool(value));
-			break;
-		}
-
-		case Anum_pg_dist_node_shouldhaveshards:
-		{
-			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
-																DatumGetBool(value));
-			break;
-		}
-
-		case Anum_pg_dist_node_metadatasynced:
-		{
-			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "metadatasynced");
-			metadataSyncCommand = NodeMetadataSyncedUpdateCommand(workerNode->nodeId,
-																  DatumGetBool(value));
-			break;
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
-								   workerNode->workerName, workerNode->workerPort)));
-		}
-	}
+	char *metadataSyncCommand = SetWorkerColumnInternal(workerNode, columnIndex, value);
 
 	SendCommandToWorkersWithMetadata(metadataSyncCommand);
 
@@ -1625,48 +1585,7 @@ SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 {
 	workerNode = SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
 
-	char *metadataSyncCommand = NULL;
-
-	switch (columnIndex)
-	{
-		case Anum_pg_dist_node_hasmetadata:
-		{
-			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "hasmetadata");
-			metadataSyncCommand = NodeHasmetadataUpdateCommand(workerNode->nodeId,
-															   DatumGetBool(value));
-			break;
-		}
-
-		case Anum_pg_dist_node_isactive:
-		{
-			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "isactive");
-
-			metadataSyncCommand = NodeStateUpdateCommand(workerNode->nodeId,
-														 DatumGetBool(value));
-			break;
-		}
-
-		case Anum_pg_dist_node_shouldhaveshards:
-		{
-			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
-																DatumGetBool(value));
-			break;
-		}
-
-		case Anum_pg_dist_node_metadatasynced:
-		{
-			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "metadatasynced");
-			metadataSyncCommand = NodeMetadataSyncedUpdateCommand(workerNode->nodeId,
-																  DatumGetBool(value));
-			break;
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
-								   workerNode->workerName, workerNode->workerPort)));
-		}
-	}
+	char *metadataSyncCommand = SetWorkerColumnInternal(workerNode, columnIndex, value);
 
 	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
 												   ShareLock);
@@ -1724,6 +1643,60 @@ SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
 	table_close(pgDistNode, NoLock);
 
 	return newWorkerNode;
+}
+
+
+/*
+ * SetWorkerColumnInternal checks if the given workerNode and value is valid or not.
+ * Then it returns the necessary metadata sync command as a string.
+ */
+static char *
+SetWorkerColumnInternal(WorkerNode *workerNode, int columnIndex, Datum value)
+{
+	char *metadataSyncCommand = NULL;
+
+	switch (columnIndex)
+	{
+		case Anum_pg_dist_node_hasmetadata:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "hasmetadata");
+			metadataSyncCommand = NodeHasmetadataUpdateCommand(workerNode->nodeId,
+															   DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_isactive:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "isactive");
+
+			metadataSyncCommand = NodeStateUpdateCommand(workerNode->nodeId,
+														 DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_shouldhaveshards:
+		{
+			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
+																DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_metadatasynced:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "metadatasynced");
+			metadataSyncCommand = NodeMetadataSyncedUpdateCommand(workerNode->nodeId,
+																  DatumGetBool(value));
+			break;
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
+								   workerNode->workerName, workerNode->workerPort)));
+		}
+	}
+
+	return metadataSyncCommand;
 }
 
 

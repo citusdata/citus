@@ -168,9 +168,6 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 {
 	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
-	/* fail if metadata synchronization doesn't succeed */
-	bool raiseInterrupts = true;
-
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureSuperUser();
@@ -208,6 +205,11 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	UseCoordinatedTransaction();
 
+	/* 
+	 * We first set metadatasynced, and then hasmetadata; since setting columns for
+	 * nodes with metadatasynced==false could cause errors.
+	 * (See ErrorIfAnyMetadataNodeOutOfSync)
+	 */
 	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
 								 BoolGetDatum(true));
 	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
@@ -222,6 +224,8 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		return;
 	}
 
+	/* fail if metadata synchronization doesn't succeed */
+	bool raiseInterrupts = true;
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
 }
 
@@ -1766,7 +1770,7 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_FAILED_LOCK;
 	}
 
-	List *workerSuccess = NIL;
+	List *syncedWorkerList = NIL;
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
@@ -1777,7 +1781,7 @@ SyncMetadataToNodes(void)
 			continue;
 		}
 
-		bool setMetadataSynced = true;
+		bool shouldSetMetadataSynced = true;
 		if (!workerNode->metadataSynced)
 		{
 			bool raiseInterrupts = false;
@@ -1787,17 +1791,18 @@ SyncMetadataToNodes(void)
 										 workerNode->workerName,
 										 workerNode->workerPort)));
 				result = METADATA_SYNC_FAILED_SYNC;
-				setMetadataSynced = false;
+				/* we shouldn't send command to this worker, since the sync is failed */
+				shouldSetMetadataSynced = false;
 			}
 		}
 
-		if (setMetadataSynced)
+		if (shouldSetMetadataSynced)
 		{
-			workerSuccess = lappend(workerSuccess, workerNode);
+			syncedWorkerList = lappend(syncedWorkerList, workerNode);
 		}
 	}
 
-	foreach_ptr(workerNode, workerSuccess)
+	foreach_ptr(workerNode, syncedWorkerList)
 	{
 		SetWorkerColumnOptional(workerNode, Anum_pg_dist_node_metadatasynced,
 								BoolGetDatum(true));
