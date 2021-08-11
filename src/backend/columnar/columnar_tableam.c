@@ -634,6 +634,16 @@ columnar_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+static TransactionId
+columnar_index_delete_tuples(Relation rel,
+							 TM_IndexDeleteOp *delstate)
+{
+	elog(ERROR, "columnar_index_delete_tuples not implemented");
+}
+
+
+#else
 static TransactionId
 columnar_compute_xid_horizon_for_tuples(Relation rel,
 										ItemPointerData *tids,
@@ -641,6 +651,9 @@ columnar_compute_xid_horizon_for_tuples(Relation rel,
 {
 	elog(ERROR, "columnar_compute_xid_horizon_for_tuples not implemented");
 }
+
+
+#endif
 
 
 static void
@@ -2096,7 +2109,11 @@ static const TableAmRoutine columnar_am_methods = {
 	.tuple_get_latest_tid = columnar_get_latest_tid,
 	.tuple_tid_valid = columnar_tuple_tid_valid,
 	.tuple_satisfies_snapshot = columnar_tuple_satisfies_snapshot,
+#if PG_VERSION_NUM >= PG_VERSION_14
+	.index_delete_tuples = columnar_index_delete_tuples,
+#else
 	.compute_xid_horizon_for_tuples = columnar_compute_xid_horizon_for_tuples,
+#endif
 
 	.tuple_insert = columnar_tuple_insert,
 	.tuple_insert_speculative = columnar_tuple_insert_speculative,
