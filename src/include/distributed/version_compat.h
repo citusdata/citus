@@ -37,6 +37,9 @@
 #define STATUS_WAITING_COMPAT PROC_WAIT_STATUS_WAITING
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a, b)
 #define getObjectIdentity_compat(a, b) getObjectIdentity(a, b)
+
+/* for MemoryContextMethods->stats */
+#define stats_compat(a, b, c, d, e) stats(a, b, c, d, e)
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -44,6 +47,9 @@
 #define STATUS_WAITING_COMPAT STATUS_WAITING
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a)
 #define getObjectIdentity_compat(a, b) getObjectIdentity(a)
+
+/* for MemoryContextMethods->stats */
+#define stats_compat(a, b, c, d, e) stats(a, b, c, d)
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
