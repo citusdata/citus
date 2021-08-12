@@ -893,11 +893,22 @@ GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableI
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, citusTableIds)
 	{
-		List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode, relationId);
-		char *shardStatisticsQuery =
-			GenerateShardStatisticsQueryForShardList(shardIntervalsOnNode,
-													 useShardMinMaxQuery);
-		appendStringInfoString(allShardStatisticsQuery, shardStatisticsQuery);
+		/*
+		 * Ensure the table still exists by trying to acquire a lock on it
+		 * If function returns NULL, it means the table doesn't exist
+		 * hence we should skip
+		 */
+		Relation relation = try_relation_open(relationId, AccessShareLock);
+		if (relation != NULL)
+		{
+			List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode,
+																	 relationId);
+			char *shardStatisticsQuery =
+				GenerateShardStatisticsQueryForShardList(shardIntervalsOnNode,
+														 useShardMinMaxQuery);
+			appendStringInfoString(allShardStatisticsQuery, shardStatisticsQuery);
+			relation_close(relation, AccessShareLock);
+		}
 	}
 
 	/* Add a dummy entry so that UNION ALL doesn't complain */
