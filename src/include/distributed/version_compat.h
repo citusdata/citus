@@ -43,6 +43,10 @@
 #define FuncnameGetCandidates_compat(a, b, c, d, e, f, g) \
 	FuncnameGetCandidates(a, b, c, d, e, f, g)
 #define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, b, c, d)
+#define VacOptValue_compat VacOptValue
+#define VACOPTVALUE_UNSPECIFIED_COMPAT VACOPTVALUE_UNSPECIFIED
+#define VACOPTVALUE_DISABLED_COMPAT VACOPTVALUE_DISABLED
+#define VACOPTVALUE_ENABLED_COMPAT VACOPTVALUE_ENABLED
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -56,6 +60,10 @@
 #define FuncnameGetCandidates_compat(a, b, c, d, e, f, g) \
 	FuncnameGetCandidates(a, b, c, d, e, g)
 #define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, c, d)
+#define VacOptValue_compat VacOptTernaryValue
+#define VACOPTVALUE_UNSPECIFIED_COMPAT VACOPT_TERNARY_DEFAULT
+#define VACOPTVALUE_DISABLED_COMPAT VACOPT_TERNARY_DISABLED
+#define VACOPTVALUE_ENABLED_COMPAT VACOPT_TERNARY_ENABLED
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
