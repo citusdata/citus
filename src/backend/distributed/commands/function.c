@@ -44,6 +44,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/namespace_utils.h"
+#include "distributed/pg_dist_node.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/version_compat.h"
@@ -1109,7 +1110,8 @@ TriggerSyncMetadataToPrimaryNodes(void)
 			 * this because otherwise node activation might fail withing transaction blocks.
 			 */
 			LockRelationOid(DistNodeRelationId(), ExclusiveLock);
-			MarkNodeHasMetadata(workerNode->workerName, workerNode->workerPort, true);
+			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_hasmetadata,
+									 BoolGetDatum(true));
 
 			triggerMetadataSync = true;
 		}

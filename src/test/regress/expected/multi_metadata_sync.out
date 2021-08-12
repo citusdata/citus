@@ -266,7 +266,7 @@ SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole  |  nodecluster   | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-      1 |       1 | localhost |    57637 | default  | t           | t        | primary   | default        | f              | t
+      1 |       1 | localhost |    57637 | default  | t           | t        | primary   | default        | t              | t
       2 |       2 | localhost |    57638 | default  | f           | t        | primary   | default        | f              | t
       4 |       1 | localhost |     8888 | default  | f           | t        | secondary | default        | f              | t
       5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t

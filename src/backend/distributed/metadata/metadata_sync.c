@@ -83,8 +83,6 @@ char *EnableManualMetadataChangesForUser = "";
 static void EnsureSequentialModeMetadataOperations(void);
 static List * GetDistributedTableDDLEvents(Oid relationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
-static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
-								   int attrNum, bool value);
 static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
@@ -170,9 +168,6 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 {
 	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
-	/* fail if metadata synchronization doesn't succeed */
-	bool raiseInterrupts = true;
-
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 	EnsureSuperUser();
@@ -209,7 +204,21 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	}
 
 	UseCoordinatedTransaction();
-	MarkNodeHasMetadata(nodeNameString, nodePort, true);
+
+	/*
+	 * One would normally expect to set hasmetadata first, and then metadata sync.
+	 * However, at this point we do the order reverse.
+	 * We first set metadatasynced, and then hasmetadata; since setting columns for
+	 * nodes with metadatasynced==false could cause errors.
+	 * (See ErrorIfAnyMetadataNodeOutOfSync)
+	 * We can safely do that because we are in a coordinated transaction and the changes
+	 * are only visible to our own transaction.
+	 * If anything goes wrong, we are going to rollback all the changes.
+	 */
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
+								 BoolGetDatum(true));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
+									 true));
 
 	if (!NodeIsPrimary(workerNode))
 	{
@@ -220,8 +229,9 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		return;
 	}
 
+	/* fail if metadata synchronization doesn't succeed */
+	bool raiseInterrupts = true;
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
-	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
 }
 
 
@@ -303,9 +313,6 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 		PG_RETURN_VOID();
 	}
 
-	MarkNodeHasMetadata(nodeNameString, nodePort, false);
-	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
-
 	if (clearMetadata)
 	{
 		if (NodeIsPrimary(workerNode))
@@ -325,6 +332,11 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 									nodeNameString, nodePort)));
 		}
 	}
+
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
+									 false));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
+								 BoolGetDatum(false));
 
 	PG_RETURN_VOID();
 }
@@ -1116,83 +1128,6 @@ LocalGroupIdUpdateCommand(int32 groupId)
 
 
 /*
- * MarkNodeHasMetadata function sets the hasmetadata column of the specified worker in
- * pg_dist_node to hasMetadata.
- */
-void
-MarkNodeHasMetadata(const char *nodeName, int32 nodePort, bool hasMetadata)
-{
-	UpdateDistNodeBoolAttr(nodeName, nodePort,
-						   Anum_pg_dist_node_hasmetadata,
-						   hasMetadata);
-}
-
-
-/*
- * MarkNodeMetadataSynced function sets the metadatasynced column of the
- * specified worker in pg_dist_node to the given value.
- */
-void
-MarkNodeMetadataSynced(const char *nodeName, int32 nodePort, bool synced)
-{
-	UpdateDistNodeBoolAttr(nodeName, nodePort,
-						   Anum_pg_dist_node_metadatasynced,
-						   synced);
-}
-
-
-/*
- * UpdateDistNodeBoolAttr updates a boolean attribute of the specified worker
- * to the given value.
- */
-static void
-UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort, int attrNum, bool value)
-{
-	const bool indexOK = false;
-
-	ScanKeyData scanKey[2];
-	Datum values[Natts_pg_dist_node];
-	bool isnull[Natts_pg_dist_node];
-	bool replace[Natts_pg_dist_node];
-
-	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
-				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
-													NULL, 2, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
-							   nodeName, nodePort)));
-	}
-
-	memset(replace, 0, sizeof(replace));
-
-	values[attrNum - 1] = BoolGetDatum(value);
-	isnull[attrNum - 1] = false;
-	replace[attrNum - 1] = true;
-
-	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-
-	CatalogTupleUpdate(pgDistNode, &heapTuple->t_self, heapTuple);
-
-	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
-
-	CommandCounterIncrement();
-
-	systable_endscan(scanDescriptor);
-	table_close(pgDistNode, NoLock);
-}
-
-
-/*
  * SequenceDDLCommandsForTable returns a list of commands which create sequences (and
  * their schemas) to run on workers before creating the relation. The sequence creation
  * commands are wrapped with a `worker_apply_sequence_command` call, which sets the
@@ -1840,6 +1775,7 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_FAILED_LOCK;
 	}
 
+	List *syncedWorkerList = NIL;
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
@@ -1847,7 +1783,6 @@ SyncMetadataToNodes(void)
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
 			bool raiseInterrupts = false;
-
 			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
 			{
 				ereport(WARNING, (errmsg("failed to sync metadata to %s:%d",
@@ -1857,9 +1792,24 @@ SyncMetadataToNodes(void)
 			}
 			else
 			{
-				MarkNodeMetadataSynced(workerNode->workerName,
-									   workerNode->workerPort, true);
+				/* we add successfully synced nodes to set metadatasynced column later */
+				syncedWorkerList = lappend(syncedWorkerList, workerNode);
 			}
+		}
+	}
+
+	foreach_ptr(workerNode, syncedWorkerList)
+	{
+		SetWorkerColumnOptional(workerNode, Anum_pg_dist_node_metadatasynced,
+								BoolGetDatum(true));
+
+		/* we fetch the same node again to check if it's synced or not */
+		WorkerNode *nodeUpdated = FindWorkerNode(workerNode->workerName,
+												 workerNode->workerPort);
+		if (!nodeUpdated->metadataSynced)
+		{
+			/* set the result to FAILED to trigger the sync again */
+			result = METADATA_SYNC_FAILED_SYNC;
 		}
 	}
 

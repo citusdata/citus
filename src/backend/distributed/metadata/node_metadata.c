@@ -109,6 +109,11 @@ static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
+static char * GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode,
+													int columnIndex,
+													Datum value);
+static char * NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata);
+static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced);
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
 											   char *field);
 static WorkerNode * SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards);
@@ -579,8 +584,8 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 		 */
 		if (ClusterHasDistributedFunctionWithDistArgument())
 		{
-			MarkNodeHasMetadata(newWorkerNode->workerName, newWorkerNode->workerPort,
-								true);
+			SetWorkerColumnLocalOnly(newWorkerNode, Anum_pg_dist_node_hasmetadata,
+									 BoolGetDatum(true));
 			TriggerMetadataSyncOnCommit();
 		}
 	}
@@ -1554,11 +1559,85 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 
 /*
  * SetWorkerColumn function sets the column with the specified index
+ * on the worker in pg_dist_node, by calling SetWorkerColumnLocalOnly.
+ * It also sends the same command for node update to other metadata nodes.
+ * If anything fails during the transaction, we rollback it.
+ * Returns the new worker node after the modification.
+ */
+WorkerNode *
+SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
+{
+	workerNode = SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
+
+	char *metadataSyncCommand = GetMetadataSyncCommandToSetNodeColumn(workerNode,
+																	  columnIndex,
+																	  value);
+
+	SendCommandToWorkersWithMetadata(metadataSyncCommand);
+
+	return workerNode;
+}
+
+
+/*
+ * SetWorkerColumnOptional function sets the column with the specified index
+ * on the worker in pg_dist_node, by calling SetWorkerColumnLocalOnly.
+ * It also sends the same command optionally for node update to other metadata nodes,
+ * meaning that failures are ignored. Returns the new worker node after the modification.
+ */
+WorkerNode *
+SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
+{
+	char *metadataSyncCommand = GetMetadataSyncCommandToSetNodeColumn(workerNode,
+																	  columnIndex,
+																	  value);
+
+	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
+												   ShareLock);
+
+	/* open connections in parallel */
+	WorkerNode *worker = NULL;
+	foreach_ptr(worker, workerNodeList)
+	{
+		bool success = SendOptionalCommandListToWorkerInCoordinatedTransaction(
+			worker->workerName, worker->workerPort,
+			CurrentUserName(),
+			list_make1(metadataSyncCommand));
+
+		if (!success)
+		{
+			/* metadata out of sync, mark the worker as not synced */
+			ereport(WARNING, (errmsg("Updating the metadata of the node %s:%d "
+									 "is failed on node %s:%d."
+									 "Metadata on %s:%d is marked as out of sync.",
+									 workerNode->workerName, workerNode->workerPort,
+									 worker->workerName, worker->workerPort,
+									 worker->workerName, worker->workerPort)));
+
+			SetWorkerColumnLocalOnly(worker, Anum_pg_dist_node_metadatasynced,
+									 BoolGetDatum(false));
+		}
+		else if (workerNode->nodeId == worker->nodeId)
+		{
+			/*
+			 * If this is the node we want to update and it is updated succesfully,
+			 * then we can safely update the flag on the coordinator as well.
+			 */
+			SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
+		}
+	}
+
+	return FindWorkerNode(workerNode->workerName, workerNode->workerPort);
+}
+
+
+/*
+ * SetWorkerColumnLocalOnly function sets the column with the specified index
  * (see pg_dist_node.h) on the worker in pg_dist_node.
  * It returns the new worker node after the modification.
  */
-static WorkerNode *
-SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
+WorkerNode *
+SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
 {
 	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
@@ -1567,47 +1646,6 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 	Datum values[Natts_pg_dist_node];
 	bool isnull[Natts_pg_dist_node];
 	bool replace[Natts_pg_dist_node];
-	char *metadataSyncCommand = NULL;
-
-
-	switch (columnIndex)
-	{
-		case Anum_pg_dist_node_hasmetadata:
-		{
-			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "hasmetadata");
-
-			break;
-		}
-
-		case Anum_pg_dist_node_isactive:
-		{
-			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "isactive");
-
-			metadataSyncCommand = NodeStateUpdateCommand(workerNode->nodeId,
-														 DatumGetBool(value));
-			break;
-		}
-
-		case Anum_pg_dist_node_shouldhaveshards:
-		{
-			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
-																DatumGetBool(value));
-			break;
-		}
-
-		case Anum_pg_dist_node_metadatasynced:
-		{
-			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "metadatasynced");
-
-			break;
-		}
-
-		default:
-		{
-			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
-								   workerNode->workerName, workerNode->workerPort)));
-		}
-	}
 
 	if (heapTuple == NULL)
 	{
@@ -1631,9 +1669,96 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 
 	table_close(pgDistNode, NoLock);
 
-	/* we also update the column at worker nodes */
-	SendCommandToWorkersWithMetadata(metadataSyncCommand);
 	return newWorkerNode;
+}
+
+
+/*
+ * GetMetadataSyncCommandToSetNodeColumn checks if the given workerNode and value is
+ * valid or not. Then it returns the necessary metadata sync command as a string.
+ */
+static char *
+GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode, int columnIndex, Datum
+									  value)
+{
+	char *metadataSyncCommand = NULL;
+
+	switch (columnIndex)
+	{
+		case Anum_pg_dist_node_hasmetadata:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "hasmetadata");
+			metadataSyncCommand = NodeHasmetadataUpdateCommand(workerNode->nodeId,
+															   DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_isactive:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "isactive");
+
+			metadataSyncCommand = NodeStateUpdateCommand(workerNode->nodeId,
+														 DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_shouldhaveshards:
+		{
+			metadataSyncCommand = ShouldHaveShardsUpdateCommand(workerNode->nodeId,
+																DatumGetBool(value));
+			break;
+		}
+
+		case Anum_pg_dist_node_metadatasynced:
+		{
+			ErrorIfCoordinatorMetadataSetFalse(workerNode, value, "metadatasynced");
+			metadataSyncCommand = NodeMetadataSyncedUpdateCommand(workerNode->nodeId,
+																  DatumGetBool(value));
+			break;
+		}
+
+		default:
+		{
+			ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
+								   workerNode->workerName, workerNode->workerPort)));
+		}
+	}
+
+	return metadataSyncCommand;
+}
+
+
+/*
+ * NodeHasmetadataUpdateCommand generates and returns a SQL UPDATE command
+ * that updates the hasmetada column of pg_dist_node, for the given nodeid.
+ */
+static char *
+NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata)
+{
+	StringInfo updateCommand = makeStringInfo();
+	char *hasMetadataString = hasMetadata ? "TRUE" : "FALSE";
+	appendStringInfo(updateCommand,
+					 "UPDATE pg_dist_node SET hasmetadata = %s "
+					 "WHERE nodeid = %u",
+					 hasMetadataString, nodeId);
+	return updateCommand->data;
+}
+
+
+/*
+ * NodeMetadataSyncedUpdateCommand generates and returns a SQL UPDATE command
+ * that updates the metadataSynced column of pg_dist_node, for the given nodeid.
+ */
+static char *
+NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced)
+{
+	StringInfo updateCommand = makeStringInfo();
+	char *hasMetadataString = metadataSynced ? "TRUE" : "FALSE";
+	appendStringInfo(updateCommand,
+					 "UPDATE pg_dist_node SET metadatasynced = %s "
+					 "WHERE nodeid = %u",
+					 hasMetadataString, nodeId);
+	return updateCommand->data;
 }
 
 
@@ -1655,28 +1780,28 @@ ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value, char *fi
 
 /*
  * SetShouldHaveShards function sets the shouldhaveshards column of the
- * specified worker in pg_dist_node.
+ * specified worker in pg_dist_node. also propagates this to other metadata nodes.
  * It returns the new worker node after the modification.
  */
 static WorkerNode *
 SetShouldHaveShards(WorkerNode *workerNode, bool shouldHaveShards)
 {
-	return SetWorkerColumn(workerNode, Anum_pg_dist_node_shouldhaveshards,
-						   BoolGetDatum(shouldHaveShards));
+	return SetWorkerColumn(workerNode, Anum_pg_dist_node_shouldhaveshards, BoolGetDatum(
+							   shouldHaveShards));
 }
 
 
 /*
  * SetNodeState function sets the isactive column of the specified worker in
- * pg_dist_node to isActive.
+ * pg_dist_node to isActive. Also propagates this to other metadata nodes.
  * It returns the new worker node after the modification.
  */
 static WorkerNode *
 SetNodeState(char *nodeName, int nodePort, bool isActive)
 {
 	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
-	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive,
-						   BoolGetDatum(isActive));
+	return SetWorkerColumn(workerNode, Anum_pg_dist_node_isactive, BoolGetDatum(
+							   isActive));
 }
 
 
