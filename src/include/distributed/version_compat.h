@@ -40,6 +40,9 @@
 
 /* for MemoryContextMethods->stats */
 #define stats_compat(a, b, c, d, e) stats(a, b, c, d, e)
+#define FuncnameGetCandidates_compat(a, b, c, d, e, f, g) \
+	FuncnameGetCandidates(a, b, c, d, e, f, g)
+#define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, b, c, d)
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -50,6 +53,9 @@
 
 /* for MemoryContextMethods->stats */
 #define stats_compat(a, b, c, d, e) stats(a, b, c, d)
+#define FuncnameGetCandidates_compat(a, b, c, d, e, f, g) \
+	FuncnameGetCandidates(a, b, c, d, e, g)
+#define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, c, d)
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
