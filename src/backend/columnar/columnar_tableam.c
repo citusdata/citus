@@ -966,7 +966,7 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	int elevel = (params->options & VACOPT_VERBOSE) ? INFO : DEBUG2;
 
 	/* this should have been resolved by vacuum.c until now */
-	Assert(params->truncate != VACOPT_TERNARY_DEFAULT);
+	Assert(params->truncate != VACOPTVALUE_UNSPECIFIED);
 
 	LogRelationStats(rel, elevel);
 
@@ -974,7 +974,7 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	 * We don't have updates, deletes, or concurrent updates, so all we
 	 * care for now is truncating the unused space at the end of storage.
 	 */
-	if (params->truncate == VACOPT_TERNARY_ENABLED)
+	if (params->truncate == VACOPTVALUE_ENABLED)
 	{
 		TruncateColumnar(rel, elevel);
 	}
