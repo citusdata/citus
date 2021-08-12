@@ -4523,7 +4523,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		 * When outerVars are considered, we modify parentQueryList, so this
 		 * logic might need to change when we support outervars in CTEs.
 		 */
-		Assert(!skipOuterVars);
+		Assert(skipOuterVars);
 
 		int cteParentListIndex = list_length(parentQueryList) -
 								 rangeTableEntry->ctelevelsup - 1;
