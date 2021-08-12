@@ -1808,8 +1808,8 @@ GenerateBackupNameForProcCollision(const ObjectAddress *address)
 		List *newProcName = list_make2(namespace, makeString(newName));
 
 		/* don't need to rename if the input arguments don't match */
-		FuncCandidateList clist = FuncnameGetCandidates(newProcName, numargs, NIL, false,
-														false, true);
+		FuncCandidateList clist = FuncnameGetCandidates_compat(newProcName, numargs, NIL,
+															   false, false, false, true);
 		for (; clist; clist = clist->next)
 		{
 			if (memcmp(clist->args, argtypes, sizeof(Oid) * numargs) == 0)
