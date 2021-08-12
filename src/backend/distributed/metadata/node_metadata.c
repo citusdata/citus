@@ -109,8 +109,9 @@ static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
 static void UpdateNodeLocation(int32 nodeId, char *newNodeName, int32 newNodePort);
 static bool UnsetMetadataSyncedForAll(void);
-static char * GetMetadataSyncCommand(WorkerNode *workerNode, int columnIndex, Datum
-									 value);
+static char * GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode,
+													int columnIndex,
+													Datum value);
 static char * NodeHasmetadataUpdateCommand(uint32 nodeId, bool hasMetadata);
 static char * NodeMetadataSyncedUpdateCommand(uint32 nodeId, bool metadataSynced);
 static void ErrorIfCoordinatorMetadataSetFalse(WorkerNode *workerNode, Datum value,
@@ -1560,6 +1561,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
  * SetWorkerColumn function sets the column with the specified index
  * on the worker in pg_dist_node, by calling SetWorkerColumnLocalOnly.
  * It also sends the same command for node update to other metadata nodes.
+ * If anything fails during the transaction, we rollback it.
  * Returns the new worker node after the modification.
  */
 WorkerNode *
@@ -1567,7 +1569,9 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 {
 	workerNode = SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
 
-	char *metadataSyncCommand = GetMetadataSyncCommand(workerNode, columnIndex, value);
+	char *metadataSyncCommand = GetMetadataSyncCommandToSetNodeColumn(workerNode,
+																	  columnIndex,
+																	  value);
 
 	SendCommandToWorkersWithMetadata(metadataSyncCommand);
 
@@ -1578,13 +1582,15 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 /*
  * SetWorkerColumnOptional function sets the column with the specified index
  * on the worker in pg_dist_node, by calling SetWorkerColumnLocalOnly.
- * It also sends the same command optionally for node update to other metadata nodes.
- * Returns the new worker node after the modification.
+ * It also sends the same command optionally for node update to other metadata nodes,
+ * meaning that failures are ignored. Returns the new worker node after the modification.
  */
 WorkerNode *
 SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 {
-	char *metadataSyncCommand = GetMetadataSyncCommand(workerNode, columnIndex, value);
+	char *metadataSyncCommand = GetMetadataSyncCommandToSetNodeColumn(workerNode,
+																	  columnIndex,
+																	  value);
 
 	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
 												   ShareLock);
@@ -1661,11 +1667,12 @@ SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex, Datum value)
 
 
 /*
- * GetMetadataSyncCommand checks if the given workerNode and value is valid or not.
- * Then it returns the necessary metadata sync command as a string.
+ * GetMetadataSyncCommandToSetNodeColumn checks if the given workerNode and value is
+ * valid or not. Then it returns the necessary metadata sync command as a string.
  */
 static char *
-GetMetadataSyncCommand(WorkerNode *workerNode, int columnIndex, Datum value)
+GetMetadataSyncCommandToSetNodeColumn(WorkerNode *workerNode, int columnIndex, Datum
+									  value)
 {
 	char *metadataSyncCommand = NULL;
 
