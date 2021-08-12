@@ -20,3 +20,14 @@ DROP FUNCTION pg_catalog.citus_internal_update_relation_colocation(oid, integer)
 
 REVOKE ALL ON FUNCTION pg_catalog.worker_record_sequence_dependency(regclass,regclass,name) FROM PUBLIC;
 ALTER TABLE pg_catalog.pg_dist_placement DROP CONSTRAINT placement_shardid_groupid_unique_index;
+
+DROP FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text, boolean);
+CREATE FUNCTION pg_catalog.citus_drop_all_shards(logicalrelid regclass,
+                                                 schema_name text,
+                                                 table_name text)
+    RETURNS integer
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$master_drop_all_shards$$;
+COMMENT ON FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text)
+    IS 'drop all shards in a relation and update metadata';
+#include "../udfs/citus_drop_trigger/10.0-1.sql"

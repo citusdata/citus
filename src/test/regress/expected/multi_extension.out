@@ -793,19 +793,21 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 10.2-1
 ALTER EXTENSION citus UPDATE TO '10.2-1';
 SELECT * FROM multi_extension.print_extension_changes();
-                    previous_object                     |                                      current_object
+                    previous_object                         |                                      current_object
 ---------------------------------------------------------------------
- function stop_metadata_sync_to_node(text,integer) void |
-                                                        | function citus_internal.downgrade_columnar_storage(regclass) void
-                                                        | function citus_internal.upgrade_columnar_storage(regclass) void
-                                                        | function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char") void
-                                                        | function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint) void
-                                                        | function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text) void
-                                                        | function citus_internal_delete_shard_metadata(bigint) void
-                                                        | function citus_internal_update_placement_metadata(bigint,integer,integer) void
-                                                        | function citus_internal_update_relation_colocation(oid,integer) void
-                                                        | function stop_metadata_sync_to_node(text,integer,boolean) void
-(10 rows)
+ function citus_drop_all_shards(regclass,text,text) integer |
+ function stop_metadata_sync_to_node(text,integer) void     |
+                                                            | function citus_drop_all_shards(regclass,text,text,boolean) integer
+                                                            | function citus_internal.downgrade_columnar_storage(regclass) void
+                                                            | function citus_internal.upgrade_columnar_storage(regclass) void
+                                                            | function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char") void
+                                                            | function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint) void
+                                                            | function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text) void
+                                                            | function citus_internal_delete_shard_metadata(bigint) void
+                                                            | function citus_internal_update_placement_metadata(bigint,integer,integer) void
+                                                            | function citus_internal_update_relation_colocation(oid,integer) void
+                                                            | function stop_metadata_sync_to_node(text,integer,boolean) void
+(12 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

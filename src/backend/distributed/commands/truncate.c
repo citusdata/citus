@@ -89,11 +89,13 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 		Oid schemaId = get_rel_namespace(relationId);
 		char *schemaName = get_namespace_name(schemaId);
 		char *relationName = get_rel_name(relationId);
+		bool dropShardsMetadataOnly = false;
 
-		DirectFunctionCall3(citus_drop_all_shards,
+		DirectFunctionCall4(citus_drop_all_shards,
 							ObjectIdGetDatum(relationId),
 							CStringGetTextDatum(relationName),
-							CStringGetTextDatum(schemaName));
+							CStringGetTextDatum(schemaName),
+							BoolGetDatum(dropShardsMetadataOnly));
 	}
 	else
 	{
