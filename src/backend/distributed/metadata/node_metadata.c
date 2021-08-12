@@ -1607,6 +1607,9 @@ SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 		if (!success)
 		{
 			/* metadata out of sync, mark the worker as not synced */
+			ereport(WARNING, (errmsg("Worker column failed to set for node: (%s,%d)."
+									 "Metadata out of sync.", worker->workerName,
+									 worker->workerPort)));
 			SetWorkerColumnLocalOnly(worker, Anum_pg_dist_node_metadatasynced,
 									 BoolGetDatum(false));
 		}
