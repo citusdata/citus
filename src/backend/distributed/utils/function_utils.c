@@ -45,10 +45,13 @@ FunctionOidExtended(const char *schemaName, const char *functionName, int argume
 	const bool findVariadics = false;
 	const bool findDefaults = false;
 
-	FuncCandidateList functionList = FuncnameGetCandidates(qualifiedFunctionNameList,
-														   argumentCount,
-														   argumentList, findVariadics,
-														   findDefaults, true);
+	FuncCandidateList functionList = FuncnameGetCandidates_compat(
+		qualifiedFunctionNameList,
+		argumentCount,
+		argumentList,
+		findVariadics,
+		findDefaults, false,
+		true);
 
 	if (functionList == NULL)
 	{
