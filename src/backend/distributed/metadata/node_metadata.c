@@ -1584,8 +1584,6 @@ SetWorkerColumn(WorkerNode *workerNode, int columnIndex, Datum value)
 WorkerNode *
 SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 {
-	workerNode = SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
-
 	char *metadataSyncCommand = GetMetadataSyncCommand(workerNode, columnIndex, value);
 
 	List *workerNodeList = TargetWorkerSetNodeList(NON_COORDINATOR_METADATA_NODES,
@@ -1595,13 +1593,28 @@ SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 	WorkerNode *worker = NULL;
 	foreach_ptr(worker, workerNodeList)
 	{
-		SendOptionalCommandListToWorkerInCoordinatedTransaction(
+		bool success = SendOptionalCommandListToWorkerInCoordinatedTransaction(
 			worker->workerName, worker->workerPort,
 			CurrentUserName(),
 			list_make1(metadataSyncCommand));
+
+		if (!success)
+		{
+			/* metadata out of sync, mark the worker as not synced */
+			SetWorkerColumnLocalOnly(worker, Anum_pg_dist_node_metadatasynced,
+									 BoolGetDatum(false));
+		}
+		else if (workerNode->nodeId == worker->nodeId)
+		{
+			/*
+			 * If this is the node we want to update and it is updated succesfully,
+			 * then we can safely update the flag on the coordinator as well.
+			 */
+			SetWorkerColumnLocalOnly(workerNode, columnIndex, value);
+		}
 	}
 
-	return workerNode;
+	return FindWorkerNode(workerNode->workerName, workerNode->workerPort);
 }
 
 

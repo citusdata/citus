@@ -1802,6 +1802,15 @@ SyncMetadataToNodes(void)
 	{
 		SetWorkerColumnOptional(workerNode, Anum_pg_dist_node_metadatasynced,
 								BoolGetDatum(true));
+
+		/* we fetch the same node again to check if it's synced or not */
+		WorkerNode *nodeUpdated = FindWorkerNode(workerNode->workerName,
+												 workerNode->workerPort);
+		if (!nodeUpdated->metadataSynced)
+		{
+			/* set the result to FAILED to trigger the sync again */
+			result = METADATA_SYNC_FAILED_SYNC;
+		}
 	}
 
 	return result;
