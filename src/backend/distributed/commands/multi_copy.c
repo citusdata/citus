@@ -520,7 +520,7 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	}
 
 	/* initialize copy state to read from COPY data source */
-	CopyState copyState = BeginCopyFrom(NULL,
+	CopyFromState_compat copyState = BeginCopyFrom(NULL,
 										copiedDistributedRelation,
 										copyStatement->filename,
 										copyStatement->is_program,
@@ -617,7 +617,7 @@ CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, O
 		(ShardConnections *) palloc0(sizeof(ShardConnections));
 
 	/* initialize copy state to read from COPY data source */
-	CopyState copyState = BeginCopyFrom(NULL,
+	CopyFromState_compat copyState = BeginCopyFrom(NULL,
 										distributedRelation,
 										copyStatement->filename,
 										copyStatement->is_program,
