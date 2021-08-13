@@ -520,13 +520,14 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	}
 
 	/* initialize copy state to read from COPY data source */
-	CopyFromState_compat copyState = BeginCopyFrom(NULL,
-										copiedDistributedRelation,
-										copyStatement->filename,
-										copyStatement->is_program,
-										NULL,
-										copyStatement->attlist,
-										copyStatement->options);
+	CopyFromState_compat copyState = BeginCopyFrom_compat(NULL,
+														  copiedDistributedRelation,
+														  NULL,
+														  copyStatement->filename,
+														  copyStatement->is_program,
+														  NULL,
+														  copyStatement->attlist,
+														  copyStatement->options);
 
 	/* set up callback to identify error line number */
 	errorCallback.callback = CopyFromErrorCallback;
@@ -617,13 +618,14 @@ CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, O
 		(ShardConnections *) palloc0(sizeof(ShardConnections));
 
 	/* initialize copy state to read from COPY data source */
-	CopyFromState_compat copyState = BeginCopyFrom(NULL,
-										distributedRelation,
-										copyStatement->filename,
-										copyStatement->is_program,
-										NULL,
-										copyStatement->attlist,
-										copyStatement->options);
+	CopyFromState_compat copyState = BeginCopyFrom_compat(NULL,
+														  distributedRelation,
+														  NULL,
+														  copyStatement->filename,
+														  copyStatement->is_program,
+														  NULL,
+														  copyStatement->attlist,
+														  copyStatement->options);
 
 	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->delim = (char *) delimiterCharacter;
