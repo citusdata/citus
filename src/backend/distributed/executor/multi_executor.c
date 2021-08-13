@@ -410,8 +410,9 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 									  location);
 	copyOptions = lappend(copyOptions, copyOption);
 
-	CopyFromState_compat copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
-										NULL, copyOptions);
+	CopyFromState_compat copyState = BeginCopyFrom_compat(NULL, stubRelation, NULL,
+														  fileName, false, NULL,
+														  NULL, copyOptions);
 
 	while (true)
 	{
