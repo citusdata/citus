@@ -118,6 +118,9 @@ static void ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId
 											void *arg);
 static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   const char *queryString,
+#if PG_VERSION_NUM >= PG_VERSION_14
+								   bool readOnlyTree,
+#endif
 								   ProcessUtilityContext context,
 								   ParamListInfo params,
 								   struct QueryEnvironment *queryEnv,
@@ -2006,12 +2009,23 @@ ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid object
 static void
 ColumnarProcessUtility(PlannedStmt *pstmt,
 					   const char *queryString,
+#if PG_VERSION_NUM >= PG_VERSION_14
+					   bool readOnlyTree,
+#endif
 					   ProcessUtilityContext context,
 					   ParamListInfo params,
 					   struct QueryEnvironment *queryEnv,
 					   DestReceiver *dest,
 					   QueryCompletionCompat *completionTag)
 {
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+	if (readOnlyTree)
+	{
+		pstmt = copyObject(pstmt);
+	}
+#endif
+
 	Node *parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, IndexStmt))
@@ -2034,8 +2048,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		RelationClose(rel);
 	}
 
-	PrevProcessUtilityHook(pstmt, queryString, context,
-						   params, queryEnv, dest, completionTag);
+	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
+								  params, queryEnv, dest, completionTag);
 }
 
 
