@@ -111,8 +111,8 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 	plannedStmt->commandType = CMD_UTILITY;
 	plannedStmt->utilityStmt = node;
 
-	ProcessUtility(plannedStmt, queryString, context, params, NULL, dest,
-				   completionTag);
+	ProcessUtility_compat(plannedStmt, queryString, false, context, params, NULL, dest,
+						  completionTag);
 }
 
 
@@ -128,13 +128,25 @@ ProcessUtilityParseTree(Node *node, const char *queryString, ProcessUtilityConte
 void
 multi_ProcessUtility(PlannedStmt *pstmt,
 					 const char *queryString,
+#if PG_VERSION_NUM >= PG_VERSION_14
+					 bool readOnlyTree,
+#endif
 					 ProcessUtilityContext context,
 					 ParamListInfo params,
 					 struct QueryEnvironment *queryEnv,
 					 DestReceiver *dest,
 					 QueryCompletionCompat *completionTag)
 {
-	Node *parsetree = pstmt->utilityStmt;
+	Node *parsetree;
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+	if (readOnlyTree)
+	{
+		pstmt = copyObject(pstmt);
+	}
+#endif
+
+	parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, TransactionStmt) ||
 		IsA(parsetree, LockStmt) ||
@@ -154,8 +166,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * that state. Since we never need to intercept transaction statements,
 		 * skip our checks and immediately fall into standard_ProcessUtility.
 		 */
-		standard_ProcessUtility(pstmt, queryString, context,
-								params, queryEnv, dest, completionTag);
+		standard_ProcessUtility_compat(pstmt, queryString, false, context,
+									   params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -173,8 +185,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 		 * Ensure that utility commands do not behave any differently until CREATE
 		 * EXTENSION is invoked.
 		 */
-		standard_ProcessUtility(pstmt, queryString, context,
-								params, queryEnv, dest, completionTag);
+		standard_ProcessUtility_compat(pstmt, queryString, false, context,
+									   params, queryEnv, dest, completionTag);
 
 		return;
 	}
@@ -205,8 +217,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			standard_ProcessUtility(pstmt, queryString, context,
-									params, queryEnv, dest, completionTag);
+			standard_ProcessUtility_compat(pstmt, queryString, false, context,
+										   params, queryEnv, dest, completionTag);
 
 			StoredProcedureLevel -= 1;
 		}
@@ -229,8 +241,8 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 
 		PG_TRY();
 		{
-			standard_ProcessUtility(pstmt, queryString, context,
-									params, queryEnv, dest, completionTag);
+			standard_ProcessUtility_compat(pstmt, queryString, false, context,
+										   params, queryEnv, dest, completionTag);
 
 			DoBlockLevel -= 1;
 		}
@@ -555,8 +567,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			citusCanBeUpdatedToAvailableVersion = !InstalledAndAvailableVersionsSame();
 		}
 
-		standard_ProcessUtility(pstmt, queryString, context,
-								params, queryEnv, dest, completionTag);
+		standard_ProcessUtility_compat(pstmt, queryString, false, context,
+									   params, queryEnv, dest, completionTag);
 
 		/*
 		 * if we are running ALTER EXTENSION citus UPDATE (to "<version>") command, we may need
