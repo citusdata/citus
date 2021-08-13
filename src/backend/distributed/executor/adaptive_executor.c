@@ -712,6 +712,7 @@ static void SetAttributeInputMetadata(DistributedExecution *execution,
 static void LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
 										   int *nodePort);
 static bool IsDummyPlacement(ShardPlacement *taskPlacement);
+static void LockParentShardResouceIfPartitionTaskList(List* taskList);
 
 /*
  * AdaptiveExecutorPreExecutorRun gets called right before postgres starts its executor
@@ -1603,6 +1604,9 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	/* acquire the locks for both the remote and local tasks */
 	List *taskList = execution->remoteAndLocalTaskList;
 
+	if (modLevel == ROW_MODIFY_NONE) {
+		LockParentShardResouceIfPartitionTaskList(taskList);
+	}
 	if (modLevel <= ROW_MODIFY_READONLY &&
 		!SelectForUpdateOnReferenceTable(taskList))
 	{
@@ -1631,6 +1635,22 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	}
 }
 
+
+static void LockParentShardResouceIfPartitionTaskList(List* taskList) {
+	if (list_length(taskList) < 1) return;
+	Task* task = (Task*) linitial(taskList);
+	uint64 shardId = task->anchorShardId;
+	if (shardId == INVALID_SHARD_ID) {
+		return;
+	}
+	ShardInterval *shardInterval = LoadShardInterval(shardId);
+	Oid relationId = shardInterval->relationId;
+	if (PartitionTable(relationId)) {
+		LockParentShardResourceIfPartition(shardId, AccessShareLock);
+	}
+
+
+}
 
 /*
  * FinishDistributedExecution cleans up resources associated with a
