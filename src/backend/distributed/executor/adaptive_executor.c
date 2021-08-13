@@ -1560,20 +1560,6 @@ LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan)
 		Oid targetRelationId = distributedPlan->targetRelationId;
 
 		LockPartitionsInRelationList(list_make1_oid(targetRelationId), RowExclusiveLock);
-
-		if (PartitionTable(targetRelationId))
-		{
-			Oid parentRelationId = PartitionParentOid(targetRelationId);
-
-			/*
-			 * Postgres only takes the lock on parent when the session accesses the
-			 * partition for the first time. So it should be okay to get this lock from
-			 * PG perspective. Even though we diverge from PG behavior for concurrent
-			 * modifications on partitions vs CREATE/DROP partitions, we consider this as
-			 * a reasonable trade-off to avoid distributed deadlocks.
-			 */
-			LockRelationOid(parentRelationId, AccessShareLock);
-		}
 	}
 
 	/*
@@ -1663,12 +1649,7 @@ LockParentShardResouceIfPartitionTaskList(List *taskList)
 		return;
 	}
 
-	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	Oid relationId = shardInterval->relationId;
-	if (PartitionTable(relationId))
-	{
-		LockParentShardResourceIfPartition(shardId, AccessExclusiveLock);
-	}
+	LockParentShardResourceIfPartition(shardId, AccessExclusiveLock);
 }
 
 
