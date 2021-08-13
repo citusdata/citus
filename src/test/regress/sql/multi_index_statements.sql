@@ -279,6 +279,72 @@ CREATE INDEX f1
     ON test_index_creation1 USING btree
     (field1);
 
+-- should be able to create index only for parent on both
+-- coordinator and worker nodes
+CREATE INDEX parent_index
+    ON ONLY test_index_creation1 USING btree
+    (field1);
+
+-- show that we have parent index only on the parent table not on the partitions
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text = 'test_index_creation1' AND indexrelid::regclass::text = 'parent_index';
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text LIKE 'test_index_creation1_p2020%' AND indexrelid::regclass::text LIKE 'parent_index%';
+
+\c - - - :worker_1_port
+SET search_path TO multi_index_statements;
+
+-- show that we have parent index_* only on the parent shards not on the partition shards
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text LIKE 'test_index_creation1_%' AND indexrelid::regclass::text LIKE 'parent_index%';
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text LIKE 'test_index_creation1_p2020%' AND indexrelid::regclass::text LIKE 'parent_index%';
+
+\c - - - :master_port
+SET search_path TO multi_index_statements;
+
+-- attach child index of a partition to parent index of the partitioned table
+CREATE INDEX child_index
+    ON test_index_creation1_p2020_09_26 USING btree
+    (field1);
+
+ALTER INDEX parent_index ATTACH PARTITION child_index;
+
+-- show that child index inherits from parent index which means it is attached to it
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text = 'child_index' AND inhparent::regclass::text = 'parent_index';
+
+\c - - - :worker_1_port
+SET search_path TO multi_index_statements;
+
+-- show that child indices of partition shards also inherit from parent indices of parent shards
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index%' AND inhparent::regclass::text LIKE 'parent_index%';
+
+\c - - - :master_port
+SET search_path TO multi_index_statements;
+
+-- verify error check for partitioned index
+ALTER INDEX parent_index SET TABLESPACE foo;
+
+-- drop parent index and show that child index will also be dropped
+DROP INDEX parent_index;
+SELECT count(*) FROM pg_index where indexrelid::regclass::text = 'child_index';
+
+-- show that having a foreign key to reference table causes sequential execution mode
+-- with ALTER INDEX ... ATTACH PARTITION
+
+CREATE TABLE index_creation_reference_table (id int primary key);
+SELECT create_reference_table('index_creation_reference_table');
+ALTER TABLE test_index_creation1 ADD CONSTRAINT foreign_key_to_ref_table
+    FOREIGN KEY (tenant_id)
+    REFERENCES index_creation_reference_table (id);
+
+CREATE INDEX parent_index ON ONLY test_index_creation1 USING btree (field1);
+CREATE INDEX child_index ON test_index_creation1_p2020_09_26 USING btree (field1);
+
+BEGIN;
+    show citus.multi_shard_modify_mode;
+    ALTER INDEX parent_index ATTACH PARTITION child_index;
+    show citus.multi_shard_modify_mode;
+ROLLBACK;
+
+DROP TABLE index_creation_reference_table CASCADE;
+
 SELECT
 'CREATE TABLE distributed_table(' ||
 string_Agg('col' || x::text || ' int,', ' ') ||

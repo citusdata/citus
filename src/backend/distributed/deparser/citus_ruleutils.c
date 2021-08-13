@@ -695,11 +695,12 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	List *deparseContext = deparse_context_for(relationName, distrelid);
 	indexStmt = transformIndexStmt(distrelid, indexStmt, NULL);
 
-	appendStringInfo(buffer, "CREATE %s INDEX %s %s %s ON %s USING %s ",
+	appendStringInfo(buffer, "CREATE %s INDEX %s %s %s ON %s %s USING %s ",
 					 (indexStmt->unique ? "UNIQUE" : ""),
 					 (indexStmt->concurrent ? "CONCURRENTLY" : ""),
 					 (indexStmt->if_not_exists ? "IF NOT EXISTS" : ""),
 					 quote_identifier(indexName),
+					 (indexStmt->relation->inh ? "" : "ONLY"),
 					 quote_qualified_identifier(indexStmt->relation->schemaname,
 												relationName),
 					 indexStmt->accessMethod);
