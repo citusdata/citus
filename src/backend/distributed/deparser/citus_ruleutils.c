@@ -39,6 +39,7 @@
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/metadata_cache.h"
@@ -740,7 +741,8 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 {
 	ReindexStmt *reindexStmt = copyObject(origStmt); /* copy to avoid modifications */
 	char *relationName = NULL;
-	const char *concurrentlyString = reindexStmt->concurrent ? "CONCURRENTLY " : "";
+	const char *concurrentlyString =
+		IsReindexWithParam_compat(reindexStmt, "concurrently") ? "CONCURRENTLY " : "";
 
 
 	if (reindexStmt->kind == REINDEX_OBJECT_INDEX ||
@@ -754,7 +756,7 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 
 	appendStringInfoString(buffer, "REINDEX ");
 
-	if (reindexStmt->options == REINDEXOPT_VERBOSE)
+	if (IsReindexWithParam_compat(reindexStmt, "verbose"))
 	{
 		appendStringInfoString(buffer, "(VERBOSE) ");
 	}
@@ -1237,3 +1239,29 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 		}
 	}
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+
+/*
+ * IsReindexWithParam searches the ReindexStmt's params for paramName
+ * and returns true if it exists and value of param is true and returns
+ * false otherwise
+ */
+bool
+IsReindexWithParam(ReindexStmt *stmt, char *paramName)
+{
+	ListCell *lc;
+	foreach(lc, stmt->params)
+	{
+		DefElem *opt = (DefElem *) lfirst(lc);
+		if (strcmp(opt->defname, paramName) == 0)
+		{
+			return defGetBoolean(opt);
+		}
+	}
+	return false;
+}
+
+
+#endif
