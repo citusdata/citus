@@ -288,6 +288,9 @@ extern void ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement
 extern void MarkIndexValid(IndexStmt *indexStmt);
 extern List * ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor
 											  pgIndexProcessor, int flags);
+#if PG_VERSION_NUM >= PG_VERSION_14
+extern bool IsReindexWithParam(ReindexStmt *stmt, char *paramName);
+#endif
 
 /* objectaddress.c - forward declarations */
 extern ObjectAddress CreateExtensionStmtObjectAddress(Node *stmt, bool missing_ok);
