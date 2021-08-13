@@ -704,7 +704,6 @@ static void SetAttributeInputMetadata(DistributedExecution *execution,
 static void LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
 										   int *nodePort);
 static bool IsDummyPlacement(ShardPlacement *taskPlacement);
-static void LockParentShardResouceIfPartitionTaskList(List *taskList);
 
 /*
  * AdaptiveExecutorPreExecutorRun gets called right before postgres starts its executor
@@ -1560,20 +1559,6 @@ LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan)
 		Oid targetRelationId = distributedPlan->targetRelationId;
 
 		LockPartitionsInRelationList(list_make1_oid(targetRelationId), RowExclusiveLock);
-
-		if (PartitionTable(targetRelationId))
-		{
-			Oid parentRelationId = PartitionParentOid(targetRelationId);
-
-			/*
-			 * Postgres only takes the lock on parent when the session accesses the
-			 * partition for the first time. So it should be okay to get this lock from
-			 * PG perspective. Even though we diverge from PG behavior for concurrent
-			 * modifications on partitions vs CREATE/DROP partitions, we consider this as
-			 * a reasonable trade-off to avoid distributed deadlocks.
-			 */
-			LockRelationOid(parentRelationId, AccessShareLock);
-		}
 	}
 
 	/*
@@ -1610,11 +1595,6 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	/* acquire the locks for both the remote and local tasks */
 	List *taskList = execution->remoteAndLocalTaskList;
 
-	if (modLevel == ROW_MODIFY_NONE)
-	{
-		LockParentShardResouceIfPartitionTaskList(taskList);
-	}
-
 	if (modLevel <= ROW_MODIFY_READONLY &&
 		!SelectForUpdateOnReferenceTable(taskList))
 	{
@@ -1640,34 +1620,6 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	else if (list_length(taskList) > 1)
 	{
 		AcquireExecutorMultiShardLocks(taskList);
-	}
-}
-
-
-/*
- * LockParentShardResouceIfPartitionTaskList locks the parent shard
- * resource if the given taskList is on a partition table.
- */
-static void
-LockParentShardResouceIfPartitionTaskList(List *taskList)
-{
-	if (list_length(taskList) < 1)
-	{
-		return;
-	}
-
-	Task *task = (Task *) linitial(taskList);
-	uint64 shardId = task->anchorShardId;
-	if (shardId == INVALID_SHARD_ID)
-	{
-		return;
-	}
-
-	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	Oid relationId = shardInterval->relationId;
-	if (PartitionTable(relationId))
-	{
-		LockParentShardResourceIfPartition(shardId, AccessExclusiveLock);
 	}
 }
 

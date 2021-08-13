@@ -58,6 +58,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"

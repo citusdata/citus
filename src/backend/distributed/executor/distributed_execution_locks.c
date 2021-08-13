@@ -168,6 +168,23 @@ AcquireExecutorMultiShardLocks(List *taskList)
 }
 
 
+void
+LockParentShardResourcesForShardsOfPartition(Oid relationId)
+{
+	if (!PartitionTable(relationId) || !IsCitusTable(relationId))
+	{
+		return;
+	}
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		LockParentShardResourceIfPartition(shardInterval->shardId, AccessExclusiveLock);
+	}
+}
+
+
 /*
  * RequiresConsistentSnapshot returns true if the given task need to take
  * the necessary locks to ensure that a subquery in the modify query

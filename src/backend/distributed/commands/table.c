@@ -26,6 +26,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/distributed_execution_locks.h"
 #include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
@@ -137,6 +138,8 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 		{
 			continue;
 		}
+
+		LockParentShardResourcesForShardsOfPartition(relationId);
 
 		if (IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
@@ -367,6 +370,8 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 							   parentDistributionMethod, ShardCount, false,
 							   parentRelationName, viaDeprecatedAPI);
 	}
+
+	LockParentShardResourcesForShardsOfPartition(relationId);
 }
 
 
@@ -444,6 +449,7 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 									   distributionMethod, ShardCount, false,
 									   parentRelationName, viaDeprecatedAPI);
 			}
+			LockParentShardResourcesForShardsOfPartition(partitionRelationId);
 		}
 	}
 
@@ -849,6 +855,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			Assert(list_length(commandList) <= 1);
 
 			rightRelationId = RangeVarGetRelid(partitionCommand->name, NoLock, false);
+			LockParentShardResourcesForShardsOfPartition(rightRelationId);
 		}
 		else if (AlterTableCommandTypeIsTrigger(alterTableType))
 		{

@@ -19,6 +19,7 @@
 extern void AcquireExecutorShardLocks(Task *task, RowModifyLevel modLevel);
 extern void AcquireExecutorMultiShardLocks(List *taskList);
 extern void AcquireMetadataLocks(List *taskList);
+extern void LockParentShardResourcesForShardsOfPartition(Oid relationId);
 extern void LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode);
 extern void LockPartitionRelations(Oid relationId, LOCKMODE lockMode);
 
