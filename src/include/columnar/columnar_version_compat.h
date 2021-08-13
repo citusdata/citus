@@ -13,7 +13,15 @@
 #define COLUMNAR_COMPAT_H
 
 #if PG_VERSION_NUM >= PG_VERSION_14
+#define ColumnarProcessUtility_compat(a, b, c, d, e, f, g, h) \
+	ColumnarProcessUtility(a, b, c, d, e, f, g, h)
+#define PrevProcessUtilityHook_compat(a, b, c, d, e, f, g, h) \
+	PrevProcessUtilityHook(a, b, c, d, e, f, g, h)
 #else
+#define ColumnarProcessUtility_compat(a, b, c, d, e, f, g, h) \
+	ColumnarProcessUtility(a, b, d, e, f, g, h)
+#define PrevProcessUtilityHook_compat(a, b, c, d, e, f, g, h) \
+	PrevProcessUtilityHook(a, b, d, e, f, g, h)
 #endif
 
 #define ACLCHECK_OBJECT_TABLE OBJECT_TABLE

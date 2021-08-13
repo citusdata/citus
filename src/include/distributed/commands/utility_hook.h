@@ -64,6 +64,9 @@ typedef struct DDLJob
 
 
 extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
+#if PG_VERSION_NUM >= PG_VERSION_14
+								 bool readOnlyTree,
+#endif
 								 ProcessUtilityContext context, ParamListInfo params,
 								 struct QueryEnvironment *queryEnv, DestReceiver *dest,
 								 QueryCompletionCompat *completionTag
