@@ -48,6 +48,7 @@
 #define VACOPTVALUE_DISABLED_COMPAT VACOPTVALUE_DISABLED
 #define VACOPTVALUE_ENABLED_COMPAT VACOPTVALUE_ENABLED
 #define IsReindexWithParam_compat(reindex, param) IsReindexWithParam(reindex, param)
+#define CopyFromState_compat CopyFromState
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -69,6 +70,7 @@
 	((strcmp(param, "concurrently") == 0) ? ((reindex)->concurrent) : \
 	 ((strcmp(param, "verbose") == 0) ? ((reindex)->options == REINDEXOPT_VERBOSE) : \
 	  false))
+#define CopyFromState_compat CopyState
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
