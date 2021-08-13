@@ -47,6 +47,7 @@
 #define VACOPTVALUE_UNSPECIFIED_COMPAT VACOPTVALUE_UNSPECIFIED
 #define VACOPTVALUE_DISABLED_COMPAT VACOPTVALUE_DISABLED
 #define VACOPTVALUE_ENABLED_COMPAT VACOPTVALUE_ENABLED
+#define IsReindexWithParam_compat(reindex, param) IsReindexWithParam(reindex, param)
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -64,6 +65,10 @@
 #define VACOPTVALUE_UNSPECIFIED_COMPAT VACOPT_TERNARY_DEFAULT
 #define VACOPTVALUE_DISABLED_COMPAT VACOPT_TERNARY_DISABLED
 #define VACOPTVALUE_ENABLED_COMPAT VACOPT_TERNARY_ENABLED
+#define IsReindexWithParam_compat(reindex, param) \
+	((strcmp(param, "concurrently") == 0) ? ((reindex)->concurrent) : \
+	 ((strcmp(param, "verbose") == 0) ? ((reindex)->options == REINDEXOPT_VERBOSE) : \
+	  false))
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
