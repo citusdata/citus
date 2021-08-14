@@ -67,6 +67,7 @@
 #include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
+#include "commands/progress.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
@@ -1806,9 +1807,11 @@ CreateEmptyShard(char *relationName)
 static void
 SendCopyBegin(CopyOutState cstate)
 {
+#if PG_VERSION_NUM < PG_VERSION_14
 	if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
 	{
 		/* new way */
+#endif
 		StringInfoData buf;
 		int			natts = list_length(cstate->attnumlist);
 		int16		format = (cstate->binary ? 1 : 0);
@@ -1820,7 +1823,8 @@ SendCopyBegin(CopyOutState cstate)
 		for (i = 0; i < natts; i++)
 			pq_sendint16(&buf, format); /* per-column formats */
 		pq_endmessage(&buf);
-		cstate->copy_dest = COPY_NEW_FE;
+		cstate->copy_dest = COPY_FRONTEND_COMPAT;
+#if PG_VERSION_NUM < PG_VERSION_14
 	}
 	else
 	{
@@ -1834,6 +1838,7 @@ SendCopyBegin(CopyOutState cstate)
 		pq_startcopyout();
 		cstate->copy_dest = COPY_OLD_FE;
 	}
+#endif
 }
 
 
@@ -1841,12 +1846,15 @@ SendCopyBegin(CopyOutState cstate)
 static void
 SendCopyEnd(CopyOutState cstate)
 {
+#if PG_VERSION_NUM < PG_VERSION_14
 	if (cstate->copy_dest == COPY_NEW_FE)
 	{
+#endif
 		/* Shouldn't have any unsent data */
 		Assert(cstate->fe_msgbuf->len == 0);
 		/* Send Copy Done message */
 		pq_putemptymessage('c');
+#if PG_VERSION_NUM < PG_VERSION_14
 	}
 	else
 	{
@@ -1855,6 +1863,7 @@ SendCopyEnd(CopyOutState cstate)
 		CopySendEndOfRow(cstate, true);
 		pq_endcopyout(false);
 	}
+#endif
 }
 
 
@@ -1908,6 +1917,7 @@ CopySendEndOfRow(CopyOutState cstate, bool includeEndOfLine)
 
 	switch (cstate->copy_dest)
 	{
+#if PG_VERSION_NUM < PG_VERSION_14
 		case COPY_OLD_FE:
 			/* The FE/BE protocol uses \n as newline for all platforms */
 			if (!cstate->binary && includeEndOfLine)
@@ -1921,7 +1931,8 @@ CopySendEndOfRow(CopyOutState cstate, bool includeEndOfLine)
 						 errmsg("connection lost during COPY to stdout")));
 			}
 			break;
-		case COPY_NEW_FE:
+#endif
+		case COPY_FRONTEND_COMPAT:
 			/* The FE/BE protocol uses \n as newline for all platforms */
 			if (!cstate->binary && includeEndOfLine)
 				CopySendChar(cstate, '\n');
