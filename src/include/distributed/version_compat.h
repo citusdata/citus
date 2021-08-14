@@ -54,6 +54,7 @@
 	standard_ProcessUtility(a, b, c, d, e, f, g, h)
 #define ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	ProcessUtility(a, b, c, d, e, f, g, h)
+#define COPY_FRONTEND_COMPAT COPY_FRONTEND
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -80,6 +81,7 @@
 #define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	standard_ProcessUtility(a, b, d, e, f, g, h)
 #define ProcessUtility_compat(a, b, c, d, e, f, g, h) ProcessUtility(a, b, d, e, f, g, h)
+#define COPY_FRONTEND_COMPAT COPY_NEW_FE
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
