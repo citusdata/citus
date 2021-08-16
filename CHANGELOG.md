@@ -1,3 +1,13 @@
+### citus v9.5.7 (August 16, 2021) ###
+
+* Allows more graceful failovers when replication factor > 1
+
+* Fixes a bug that causes partitions to have wrong distribution key after
+  `DROP COLUMN`
+
+* Improves master_update_table_statistics and provides distributed deadlock
+  detection
+
 ### citus v9.5.6 (July 8, 2021) ###
 
 * Fixes minor bug in `citus_prepare_pg_upgrade` that caused it to lose its
