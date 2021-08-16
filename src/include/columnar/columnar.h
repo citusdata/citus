@@ -212,7 +212,8 @@ extern MemoryContext ColumnarWritePerTupleContext(ColumnarWriteState *state);
 extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 TupleDesc tupleDescriptor,
 											 List *projectedColumnList,
-											 List *qualConditions);
+											 List *qualConditions,
+											 MemoryContext scanContext);
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls, uint64 *rowNumber);
 extern void ColumnarRescan(ColumnarReadState *readState);

@@ -81,6 +81,13 @@ struct ColumnarReadState
 
 	MemoryContext stripeReadContext;
 	int64 chunkGroupsFiltered;
+
+	/*
+	 * Memory context guaranteed to be not freed during scan so we can
+	 * safely use for any memory allocations regarding ColumnarReadState
+	 * itself.
+	 */
+	MemoryContext scanContext;
 };
 
 /* static function declarations */
@@ -159,7 +166,8 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
  */
 ColumnarReadState *
 ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
-				  List *projectedColumnList, List *whereClauseList)
+				  List *projectedColumnList, List *whereClauseList,
+				  MemoryContext scanContext)
 {
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -180,6 +188,7 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->currentStripeMetadata = FindNextStripeByRowNumber(relation,
 																 COLUMNAR_INVALID_ROW_NUMBER,
 																 GetTransactionSnapshot());
+	readState->scanContext = scanContext;
 
 	return readState;
 }
@@ -432,11 +441,15 @@ HasUnreadStripe(ColumnarReadState *readState)
 void
 ColumnarRescan(ColumnarReadState *readState)
 {
+	MemoryContext oldContext = MemoryContextSwitchTo(readState->scanContext);
+
 	ColumnarResetRead(readState);
 	readState->currentStripeMetadata = FindNextStripeByRowNumber(readState->relation,
 																 COLUMNAR_INVALID_ROW_NUMBER,
 																 GetTransactionSnapshot());
 	readState->chunkGroupsFiltered = 0;
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 
@@ -518,6 +531,8 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 static void
 AdvanceStripeRead(ColumnarReadState *readState)
 {
+	MemoryContext oldContext = MemoryContextSwitchTo(readState->scanContext);
+
 	readState->chunkGroupsFiltered +=
 		readState->stripeReadState->chunkGroupsFiltered;
 
@@ -528,6 +543,8 @@ AdvanceStripeRead(ColumnarReadState *readState)
 																 GetTransactionSnapshot());
 	readState->stripeReadState = NULL;
 	MemoryContextReset(readState->stripeReadContext);
+
+	MemoryContextSwitchTo(oldContext);
 }
 
 
