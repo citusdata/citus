@@ -443,7 +443,7 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	{
 		/* we need create commands for already created stats before distribution */
 		char *createStatisticsCommand = pg_get_statisticsobj_worker(statisticsId,
-																	false);
+																	false, false);
 
 		explicitStatisticsCommandList =
 			lappend(explicitStatisticsCommandList,
