@@ -318,6 +318,9 @@ typedef struct
  * as a parameter, and append their text output to its contents.
  * ----------
  */
+static char *deparse_expression_pretty(Node *expr, List *dpcontext,
+									   bool forceprefix, bool showimplicit,
+									   int prettyFlags, int startIndent);
 static void set_rtable_names(deparse_namespace *dpns, List *parent_namespaces,
 				 Bitmapset *rels_used);
 static void set_deparse_for_query(deparse_namespace *dpns, Query *query,
@@ -433,7 +436,8 @@ static void get_from_clause_coldeflist(RangeTblFunction *rtfunc,
 						   deparse_context *context);
 static void get_tablesample_def(TableSampleClause *tablesample,
 					deparse_context *context);
-char *pg_get_statisticsobj_worker(Oid statextid, bool missing_ok);
+char *pg_get_statisticsobj_worker(Oid statextid, bool columns_only,
+								  bool missing_ok);
 static char *pg_get_triggerdef_worker(Oid trigid, bool pretty);
 static void set_simple_column_names(deparse_namespace *dpns);
 static void get_opclass_name(Oid opclass, Oid actual_datatype,
@@ -504,6 +508,51 @@ pg_get_rule_expr(Node *expression)
 	PopOverrideSearchPath();
 
 	return buffer->data;
+}
+
+
+/* ----------
+ * deparse_expression_pretty	- General utility for deparsing expressions
+ *
+ * expr is the node tree to be deparsed.  It must be a transformed expression
+ * tree (ie, not the raw output of gram.y).
+ *
+ * dpcontext is a list of deparse_namespace nodes representing the context
+ * for interpreting Vars in the node tree.  It can be NIL if no Vars are
+ * expected.
+ *
+ * forceprefix is true to force all Vars to be prefixed with their table names.
+ *
+ * showimplicit is true to force all implicit casts to be shown explicitly.
+ *
+ * Tries to pretty up the output according to prettyFlags and startIndent.
+ *
+ * The result is a palloc'd string.
+ * ----------
+ */
+static char *
+deparse_expression_pretty(Node *expr, List *dpcontext,
+						  bool forceprefix, bool showimplicit,
+						  int prettyFlags, int startIndent)
+{
+	StringInfoData buf;
+	deparse_context context;
+
+	initStringInfo(&buf);
+	context.buf = &buf;
+	context.namespaces = dpcontext;
+	context.windowClause = NIL;
+	context.windowTList = NIL;
+	context.varprefix = forceprefix;
+	context.prettyFlags = prettyFlags;
+	context.wrapColumn = WRAP_COLUMN_DEFAULT;
+	context.indentLevel = startIndent;
+	context.special_exprkind = EXPR_KIND_NONE;
+	context.appendparents = NULL;
+
+	get_rule_expr(expr, &context, showimplicit);
+
+	return buf.data;
 }
 
 
@@ -7837,12 +7886,24 @@ pg_get_triggerdef_command(Oid triggerId)
 
 
 char *
-pg_get_statisticsobj_worker(Oid statextid, bool missing_ok)
+pg_get_statisticsobj_worker(Oid statextid, bool columns_only, bool missing_ok)
 {
 	StringInfoData buf;
 	int colno;
+	char *nsp;
+	ArrayType *arr;
+	char *enabled;
+	Datum datum;
 	bool isnull;
+	bool ndistinct_enabled;
+	bool dependencies_enabled;
+	bool mcv_enabled;
 	int i;
+	List *context;
+	ListCell *lc;
+	List *exprs = NIL;
+	bool has_exprs;
+	int ncolumns;
 
 	HeapTuple statexttup = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statextid));
 
@@ -7855,85 +7916,116 @@ pg_get_statisticsobj_worker(Oid statextid, bool missing_ok)
 		elog(ERROR, "cache lookup failed for statistics object %u", statextid);
 	}
 
+	/* has the statistics expressions? */
+	has_exprs = !heap_attisnull(statexttup, Anum_pg_statistic_ext_stxexprs, NULL);
+
 	Form_pg_statistic_ext statextrec = (Form_pg_statistic_ext) GETSTRUCT(statexttup);
+
+	/*
+	 * Get the statistics expressions, if any.  (NOTE: we do not use the
+	 * relcache versions of the expressions, because we want to display
+	 * non-const-folded expressions.)
+	 */
+	if (has_exprs)
+	{
+		Datum		exprsDatum;
+		bool		isnull;
+		char	   *exprsString;
+
+		exprsDatum = SysCacheGetAttr(STATEXTOID, statexttup,
+									 Anum_pg_statistic_ext_stxexprs, &isnull);
+		Assert(!isnull);
+		exprsString = TextDatumGetCString(exprsDatum);
+		exprs = (List *) stringToNode(exprsString);
+		pfree(exprsString);
+	}
+	else
+	{
+		exprs = NIL;
+	}
+
+	/* count the number of columns (attributes and expressions) */
+	ncolumns = statextrec->stxkeys.dim1 + list_length(exprs);
 
 	initStringInfo(&buf);
 
-	char *nsp = get_namespace_name(statextrec->stxnamespace);
-	appendStringInfo(&buf, "CREATE STATISTICS %s",
-					 quote_qualified_identifier(nsp,
-												NameStr(statextrec->stxname)));
-
-	/*
-	 * Decode the stxkind column so that we know which stats types to print.
-	 */
-	Datum datum = SysCacheGetAttr(STATEXTOID, statexttup,
-								  Anum_pg_statistic_ext_stxkind, &isnull);
-	Assert(!isnull);
-	ArrayType *arr = DatumGetArrayTypeP(datum);
-	if (ARR_NDIM(arr) != 1 ||
-		ARR_HASNULL(arr) ||
-		ARR_ELEMTYPE(arr) != CHAROID)
+	if (!columns_only)
 	{
-		elog(ERROR, "stxkind is not a 1-D char array");
+		nsp = get_namespace_name(statextrec->stxnamespace);
+		appendStringInfo(&buf, "CREATE STATISTICS %s",
+						 quote_qualified_identifier(nsp,
+													NameStr(statextrec->stxname)));
+
+		/*
+		 * Decode the stxkind column so that we know which stats types to
+		 * print.
+		 */
+		datum = SysCacheGetAttr(STATEXTOID, statexttup,
+								Anum_pg_statistic_ext_stxkind, &isnull);
+		Assert(!isnull);
+		arr = DatumGetArrayTypeP(datum);
+		if (ARR_NDIM(arr) != 1 ||
+			ARR_HASNULL(arr) ||
+			ARR_ELEMTYPE(arr) != CHAROID)
+			elog(ERROR, "stxkind is not a 1-D char array");
+		enabled = (char *) ARR_DATA_PTR(arr);
+
+		ndistinct_enabled = false;
+		dependencies_enabled = false;
+		mcv_enabled = false;
+
+		for (i = 0; i < ARR_DIMS(arr)[0]; i++)
+		{
+			if (enabled[i] == STATS_EXT_NDISTINCT)
+				ndistinct_enabled = true;
+			else if (enabled[i] == STATS_EXT_DEPENDENCIES)
+				dependencies_enabled = true;
+			else if (enabled[i] == STATS_EXT_MCV)
+				mcv_enabled = true;
+
+			/* ignore STATS_EXT_EXPRESSIONS (it's built automatically) */
+		}
+
+		/*
+		 * If any option is disabled, then we'll need to append the types
+		 * clause to show which options are enabled.  We omit the types clause
+		 * on purpose when all options are enabled, so a pg_dump/pg_restore
+		 * will create all statistics types on a newer postgres version, if
+		 * the statistics had all options enabled on the original version.
+		 *
+		 * But if the statistics is defined on just a single column, it has to
+		 * be an expression statistics. In that case we don't need to specify
+		 * kinds.
+		 */
+		if ((!ndistinct_enabled || !dependencies_enabled || !mcv_enabled) &&
+			(ncolumns > 1))
+		{
+			bool gotone = false;
+
+			appendStringInfoString(&buf, " (");
+
+			if (ndistinct_enabled)
+			{
+				appendStringInfoString(&buf, "ndistinct");
+				gotone = true;
+			}
+
+			if (dependencies_enabled)
+			{
+				appendStringInfo(&buf, "%sdependencies", gotone ? ", " : "");
+				gotone = true;
+			}
+
+			if (mcv_enabled)
+				appendStringInfo(&buf, "%smcv", gotone ? ", " : "");
+
+			appendStringInfoChar(&buf, ')');
+		}
+
+		appendStringInfoString(&buf, " ON ");
 	}
-	char *enabled = (char *) ARR_DATA_PTR(arr);
 
-	bool ndistinct_enabled = false;
-	bool dependencies_enabled = false;
-	bool mcv_enabled = false;
-
-	for (i = 0; i < ARR_DIMS(arr)[0]; i++)
-	{
-		if (enabled[i] == STATS_EXT_NDISTINCT)
-		{
-			ndistinct_enabled = true;
-		}
-		if (enabled[i] == STATS_EXT_DEPENDENCIES)
-		{
-			dependencies_enabled = true;
-		}
-		if (enabled[i] == STATS_EXT_MCV)
-		{
-			mcv_enabled = true;
-		}
-	}
-
-	/*
-	 * If any option is disabled, then we'll need to append the types clause
-	 * to show which options are enabled.  We omit the types clause on purpose
-	 * when all options are enabled, so a pg_dump/pg_restore will create all
-	 * statistics types on a newer postgres version, if the statistics had all
-	 * options enabled on the original version.
-	 */
-	if (!ndistinct_enabled || !dependencies_enabled || !mcv_enabled)
-	{
-		bool gotone = false;
-
-		appendStringInfoString(&buf, " (");
-
-		if (ndistinct_enabled)
-		{
-			appendStringInfoString(&buf, "ndistinct");
-			gotone = true;
-		}
-
-		if (dependencies_enabled)
-		{
-			appendStringInfo(&buf, "%sdependencies", gotone ? ", " : "");
-			gotone = true;
-		}
-
-		if (mcv_enabled)
-		{
-			appendStringInfo(&buf, "%smcv", gotone ? ", " : "");
-		}
-
-		appendStringInfoChar(&buf, ')');
-	}
-
-	appendStringInfoString(&buf, " ON ");
-
+	/* decode simple column references */
 	for (colno = 0; colno < statextrec->stxkeys.dim1; colno++)
 	{
 		AttrNumber attnum = statextrec->stxkeys.values[colno];
@@ -7948,8 +8040,33 @@ pg_get_statisticsobj_worker(Oid statextid, bool missing_ok)
 		appendStringInfoString(&buf, quote_identifier(attname));
 	}
 
-	appendStringInfo(&buf, " FROM %s",
-					 generate_relation_name(statextrec->stxrelid, NIL));
+	context = deparse_context_for(get_relation_name(statextrec->stxrelid),
+								  statextrec->stxrelid);
+
+	foreach(lc, exprs)
+	{
+		Node	   *expr = (Node *) lfirst(lc);
+		char	   *str;
+		int			prettyFlags = PRETTYFLAG_INDENT;
+
+		str = deparse_expression_pretty(expr, context, false, false,
+										prettyFlags, 0);
+
+		if (colno > 0)
+			appendStringInfoString(&buf, ", ");
+
+		/* Need parens if it's not a bare function call */
+		if (looks_like_function(expr))
+			appendStringInfoString(&buf, str);
+		else
+			appendStringInfo(&buf, "(%s)", str);
+
+		colno++;
+	}
+
+	if (!columns_only)
+		appendStringInfo(&buf, " FROM %s",
+						 generate_relation_name(statextrec->stxrelid, NIL));
 
 	ReleaseSysCache(statexttup);
 
