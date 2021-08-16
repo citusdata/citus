@@ -31,7 +31,6 @@
 #include "access/relation.h"
 #include "access/sysattr.h"
 #include "access/table.h"
-#include "catalog/dependency.h"
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_authid.h"
