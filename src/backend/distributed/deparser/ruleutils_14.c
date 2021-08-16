@@ -182,6 +182,10 @@ typedef struct
 	List	   *outer_tlist;	/* referent for OUTER_VAR Vars */
 	List	   *inner_tlist;	/* referent for INNER_VAR Vars */
 	List	   *index_tlist;	/* referent for INDEX_VAR Vars */
+	/* Special namespace representing a function signature: */
+	char	   *funcname;
+	int			numargs;
+	char	  **argnames;
 } deparse_namespace;
 
 /* Callback signature for resolve_special_varno() */
@@ -2358,7 +2362,10 @@ get_basic_select_query(Query *query, deparse_context *context,
 	/*
 	 * Build up the query string - first we say SELECT
 	 */
-	appendStringInfoString(buf, "SELECT");
+	if (query->isReturn)
+		appendStringInfoString(buf, "RETURN");
+	else
+		appendStringInfoString(buf, "SELECT");
 
 	/* Add the DISTINCT clause if given */
 	if (query->distinctClause != NIL)
@@ -4592,6 +4599,50 @@ get_parameter(Param *param, deparse_context *context)
 		pop_ancestor_plan(dpns, &save_dpns);
 
 		return;
+	}
+
+	/*
+	 * If it's an external parameter, see if the outermost namespace provides
+	 * function argument names.
+	 */
+	if (param->paramkind == PARAM_EXTERN)
+	{
+		dpns = lfirst(list_tail(context->namespaces));
+		if (dpns->argnames)
+		{
+			char	   *argname = dpns->argnames[param->paramid - 1];
+
+			if (argname)
+			{
+				bool		should_qualify = false;
+				ListCell   *lc;
+
+				/*
+				 * Qualify the parameter name if there are any other deparse
+				 * namespaces with range tables.  This avoids qualifying in
+				 * trivial cases like "RETURN a + b", but makes it safe in all
+				 * other cases.
+				 */
+				foreach(lc, context->namespaces)
+				{
+					deparse_namespace *dpns = lfirst(lc);
+
+					if (list_length(dpns->rtable_names) > 0)
+					{
+						should_qualify = true;
+						break;
+					}
+				}
+				if (should_qualify)
+				{
+					appendStringInfoString(context->buf, quote_identifier(dpns->funcname));
+					appendStringInfoChar(context->buf, '.');
+				}
+
+				appendStringInfoString(context->buf, quote_identifier(argname));
+				return;
+			}
+		}
 	}
 
 	/*
