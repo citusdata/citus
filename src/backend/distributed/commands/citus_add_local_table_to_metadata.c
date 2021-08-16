@@ -400,7 +400,8 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 
 
 	char relationKind = get_rel_relkind(relationId);
-	if (!(relationKind == RELKIND_RELATION || relationKind == RELKIND_FOREIGN_TABLE || relationKind == RELKIND_PARTITIONED_TABLE))
+	if (!(relationKind == RELKIND_RELATION || relationKind == RELKIND_FOREIGN_TABLE ||
+		  relationKind == RELKIND_PARTITIONED_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot add local table \"%s\" to metadata, only regular "

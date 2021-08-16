@@ -360,7 +360,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 	 */
 	if (IsCitusTable(parentRelationId))
 	{
-		if(IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
+		if (IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
 		{
 			/* if it's a citus local table, we don't need distribution column */
 			CreateCitusLocalTable(relationId, false);
