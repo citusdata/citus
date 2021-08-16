@@ -1,3 +1,10 @@
+### citus v10.1.2 (August 16, 2021) ###
+
+* Allows more graceful failovers when replication factor > 1
+
+* Fixes a bug that causes partitions to have wrong distribution key after
+  `DROP COLUMN`
+
 ### citus v10.1.1 (August 5, 2021) ###
 
 * Improves citus_update_table_statistics and provides distributed deadlock
