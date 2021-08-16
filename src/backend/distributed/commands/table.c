@@ -139,7 +139,12 @@ PreprocessDropTableStmt(Node *node, const char *queryString,
 			continue;
 		}
 
-		LockParentShardResourcesForShardsOfPartition(relationId);
+		if(PartitionTable(relationId))  {
+			Oid parentId = PartitionParentOid(relationId);
+			LockRelationOid(parentId, AccessExclusiveLock);
+			LockRelationOid(relationId, AccessExclusiveLock);
+			LockParentShardResourcesForShardsOfPartition(relationId);
+		}
 
 		if (IsCitusTableType(relationId, REFERENCE_TABLE))
 		{
