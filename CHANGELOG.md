@@ -1,3 +1,13 @@
+### citus v10.0.5 (August 16, 2021) ###
+
+* Allows more graceful failovers when replication factor > 1
+
+* Fixes a bug that causes partitions to have wrong distribution key after
+  `DROP COLUMN`
+
+* Improves citus_update_table_statistics and provides distributed deadlock
+  detection
+
 ### citus v10.0.4 (July 14, 2021) ###
 
 * Introduces `citus.local_hostname` GUC for connections to the current node
