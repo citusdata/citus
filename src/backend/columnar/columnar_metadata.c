@@ -81,10 +81,14 @@ typedef enum RowNumberLookupMode
 	FIND_GREATER
 } RowNumberLookupMode;
 
-static void InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe);
+static void InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId,
+										 uint32 columnCount, uint32 chunkGroupRowCount,
+										 uint64 firstRowNumber);
 static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
+static StripeMetadata * UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId,
+												bool *update, Datum *newValues);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
 static StripeMetadata * BuildStripeMetadata(Datum *datumArray);
 static uint32 * ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32
@@ -118,6 +122,7 @@ static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool ov
 static StripeMetadata * StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber,
 													  Snapshot snapshot,
 													  RowNumberLookupMode lookupMode);
+static void CheckStripeMetadataConsistency(StripeMetadata *stripeMetadata);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 
@@ -656,8 +661,7 @@ StripeMetadata *
 FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
 {
 	StripeMetadata *stripeMetadata =
-		StripeMetadataLookupRowNumber(relation, rowNumber,
-									  snapshot, FIND_LESS_OR_EQUAL);
+		FindStripeWithMatchingFirstRowNumber(relation, rowNumber, snapshot);
 	if (!stripeMetadata)
 	{
 		return NULL;
@@ -669,6 +673,46 @@ FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
 	}
 
 	return stripeMetadata;
+}
+
+
+/*
+ * FindStripeWithMatchingFirstRowNumber returns a StripeMetadata object for
+ * the stripe that has the greatest firstRowNumber among the stripes whose
+ * firstRowNumber is smaller than or equal to given rowNumber. If no such
+ * stripe exists, then returns NULL.
+ *
+ * Note that this doesn't mean that found stripe certainly contains the tuple
+ * with given rowNumber. This is because, it also needs to be verified if
+ * highest row number that found stripe contains is greater than or equal to
+ * given rowNumber. For this reason, unless that additional check is done,
+ * this function is mostly useful for checking against "possible" constraint
+ * violations due to concurrent writes that are not flushed by other backends
+ * yet.
+ */
+StripeMetadata *
+FindStripeWithMatchingFirstRowNumber(Relation relation, uint64 rowNumber,
+									 Snapshot snapshot)
+{
+	return StripeMetadataLookupRowNumber(relation, rowNumber, snapshot,
+										 FIND_LESS_OR_EQUAL);
+}
+
+
+/*
+ * StripeIsFlushed returns true if stripe with stripeMetadata is flushed to
+ * disk.
+ */
+bool
+StripeIsFlushed(StripeMetadata *stripeMetadata)
+{
+	/*
+	 * We insert dummy stripe metadata entry when inserting the first row.
+	 * For this reason, rowCount being equal to 0 cannot mean a valid stripe
+	 * with 0 rows but a stripe that is not flushed to disk, probably because
+	 * of an aborted xact.
+	 */
+	return stripeMetadata->rowCount > 0;
 }
 
 
@@ -744,6 +788,7 @@ StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snap
 		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
 		foundStripeMetadata = BuildStripeMetadata(datumArray);
+		CheckStripeMetadataConsistency(foundStripeMetadata);
 	}
 
 	systable_endscan_ordered(scanDescriptor);
@@ -751,6 +796,35 @@ StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snap
 	table_close(columnarStripes, AccessShareLock);
 
 	return foundStripeMetadata;
+}
+
+
+/*
+ * CheckStripeMetadataConsistency errors out if given StripeMetadata object
+ * belongs to an un-flushed stripe but some fields of it contradicts with
+ * this fact.
+ */
+static void
+CheckStripeMetadataConsistency(StripeMetadata *stripeMetadata)
+{
+	if (StripeIsFlushed(stripeMetadata))
+	{
+		return;
+	}
+
+	if (stripeMetadata->rowCount > 0 || stripeMetadata->chunkCount > 0 ||
+		stripeMetadata->fileOffset != ColumnarInvalidLogicalOffset ||
+		stripeMetadata->dataLength > 0)
+	{
+		/*
+		 * If stripe was not flushed to disk, then values of given four
+		 * fields should match the columns inserted by
+		 * InsertEmptyStripeMetadataRow.
+		 */
+		ereport(ERROR, (errmsg("unexpected stripe state, stripe with id="
+							   UINT64_FORMAT " was not flushed properly",
+							   stripeMetadata->id)));
+	}
 }
 
 
@@ -856,23 +930,36 @@ ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount,
 
 
 /*
- * InsertStripeMetadataRow adds a row to columnar.stripe.
+ * InsertEmptyStripeMetadataRow adds a row to columnar.stripe for the empty
+ * stripe reservation made for stripeId.
  */
 static void
-InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
+InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCount,
+							 uint32 chunkGroupRowCount, uint64 firstRowNumber)
 {
-	bool nulls[Natts_columnar_stripe] = { 0 };
-	Datum values[Natts_columnar_stripe] = {
-		UInt64GetDatum(storageId),
-		Int64GetDatum(stripe->id),
-		Int64GetDatum(stripe->fileOffset),
-		Int64GetDatum(stripe->dataLength),
-		Int32GetDatum(stripe->columnCount),
-		Int32GetDatum(stripe->chunkGroupRowCount),
-		Int64GetDatum(stripe->rowCount),
-		Int32GetDatum(stripe->chunkCount),
-		UInt64GetDatum(stripe->firstRowNumber)
-	};
+	bool nulls[Natts_columnar_stripe] = { false };
+
+	Datum values[Natts_columnar_stripe] = { 0 };
+	values[Anum_columnar_stripe_storageid - 1] =
+		UInt64GetDatum(storageId);
+	values[Anum_columnar_stripe_stripe - 1] =
+		UInt64GetDatum(stripeId);
+	values[Anum_columnar_stripe_column_count - 1] =
+		UInt32GetDatum(columnCount);
+	values[Anum_columnar_stripe_chunk_row_count - 1] =
+		UInt32GetDatum(chunkGroupRowCount);
+	values[Anum_columnar_stripe_first_row_number - 1] =
+		UInt64GetDatum(firstRowNumber);
+
+	/* stripe has no rows yet, so initialize rest of the columns accordingly */
+	values[Anum_columnar_stripe_row_count - 1] =
+		UInt64GetDatum(0);
+	values[Anum_columnar_stripe_file_offset - 1] =
+		UInt64GetDatum(ColumnarInvalidLogicalOffset);
+	values[Anum_columnar_stripe_data_length - 1] =
+		UInt64GetDatum(0);
+	values[Anum_columnar_stripe_chunk_count - 1] =
+		UInt32GetDatum(0);
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 	Relation columnarStripes = table_open(columnarStripesOid, RowExclusiveLock);
@@ -953,35 +1040,123 @@ GetHighestUsedAddressAndId(uint64 storageId,
 
 
 /*
- * ReserveStripe reserves and stripe of given size for the given relation,
+ * ReserveEmptyStripe reserves an empty stripe for given relation
  * and inserts it into columnar.stripe. It is guaranteed that concurrent
  * writes won't overwrite the returned stripe.
  */
-StripeMetadata
-ReserveStripe(Relation rel, uint64 sizeBytes,
-			  uint64 rowCount, uint64 columnCount,
-			  uint64 chunkCount, uint64 chunkGroupRowCount,
-			  uint64 stripeFirstRowNumber)
+EmptyStripeReservation *
+ReserveEmptyStripe(Relation rel, uint64 columnCount, uint64 chunkGroupRowCount,
+				   uint64 stripeRowCount)
 {
-	StripeMetadata stripe = { 0 };
+	EmptyStripeReservation *stripeReservation = palloc0(sizeof(EmptyStripeReservation));
 
 	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
 
-	uint64 stripeId = ColumnarStorageReserveStripe(rel);
+	stripeReservation->stripeId = ColumnarStorageReserveStripeId(rel);
+	stripeReservation->stripeFirstRowNumber =
+		ColumnarStorageReserveRowNumber(rel, stripeRowCount);
+
+	/*
+	 * XXX: Instead of inserting a dummy entry to columnar.stripe and
+	 * updating it when flushing the stripe, we could have a hash table
+	 * in shared memory for the bookkeeping of ongoing writes.
+	 */
+	InsertEmptyStripeMetadataRow(storageId, stripeReservation->stripeId,
+								 columnCount, chunkGroupRowCount,
+								 stripeReservation->stripeFirstRowNumber);
+
+	return stripeReservation;
+}
+
+
+/*
+ * CompleteStripeReservation completes reservation of the stripe with
+ * stripeId for given size and in-place updates related stripe metadata tuple
+ * to complete reservation.
+ */
+StripeMetadata *
+CompleteStripeReservation(Relation rel, uint64 stripeId, uint64 sizeBytes,
+						  uint64 rowCount, uint64 chunkCount)
+{
 	uint64 resLogicalStart = ColumnarStorageReserveData(rel, sizeBytes);
+	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
 
-	stripe.fileOffset = resLogicalStart;
-	stripe.dataLength = sizeBytes;
-	stripe.chunkCount = chunkCount;
-	stripe.chunkGroupRowCount = chunkGroupRowCount;
-	stripe.columnCount = columnCount;
-	stripe.rowCount = rowCount;
-	stripe.id = stripeId;
-	stripe.firstRowNumber = stripeFirstRowNumber;
+	bool update[Natts_columnar_stripe] = { false };
+	update[Anum_columnar_stripe_file_offset - 1] = true;
+	update[Anum_columnar_stripe_data_length - 1] = true;
+	update[Anum_columnar_stripe_row_count - 1] = true;
+	update[Anum_columnar_stripe_chunk_count - 1] = true;
 
-	InsertStripeMetadataRow(storageId, &stripe);
+	Datum newValues[Natts_columnar_stripe] = { 0 };
+	newValues[Anum_columnar_stripe_file_offset - 1] = Int64GetDatum(resLogicalStart);
+	newValues[Anum_columnar_stripe_data_length - 1] = Int64GetDatum(sizeBytes);
+	newValues[Anum_columnar_stripe_row_count - 1] = UInt64GetDatum(rowCount);
+	newValues[Anum_columnar_stripe_chunk_count - 1] = Int32GetDatum(chunkCount);
 
-	return stripe;
+	return UpdateStripeMetadataRow(storageId, stripeId, update, newValues);
+}
+
+
+/*
+ * UpdateStripeMetadataRow updates stripe metadata tuple for the stripe with
+ * stripeId according to given newValues and update arrays.
+ * Note that this function shouldn't be used for the cases where any indexes
+ * of stripe metadata should be updated according to modifications done.
+ */
+static StripeMetadata *
+UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
+						Datum *newValues)
+{
+	SnapshotData dirtySnapshot;
+	InitDirtySnapshot(dirtySnapshot);
+
+	ScanKeyData scanKey[2];
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_stripe,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripeId));
+
+	Oid columnarStripesOid = ColumnarStripeRelationId();
+
+	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
+	Relation columnarStripePkeyIndex = index_open(ColumnarStripePKeyIndexRelationId(),
+												  AccessShareLock);
+
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes,
+															columnarStripePkeyIndex,
+															&dirtySnapshot, 2, scanKey);
+
+	HeapTuple oldTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
+	if (!HeapTupleIsValid(oldTuple))
+	{
+		ereport(ERROR, (errmsg("attempted to modify an unexpected stripe, "
+							   "columnar storage with id=" UINT64_FORMAT
+							   " does not have stripe with id=" UINT64_FORMAT,
+							   storageId, stripeId)));
+	}
+
+	/*
+	 * heap_inplace_update already doesn't allow changing size of the original
+	 * tuple, so we don't allow setting any Datum's to NULL values.
+	 */
+	bool newNulls[Natts_columnar_stripe] = { false };
+	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
+	HeapTuple modifiedTuple = heap_modify_tuple(oldTuple, tupleDescriptor,
+												newValues, newNulls, update);
+
+	heap_inplace_update(columnarStripes, modifiedTuple);
+
+	CommandCounterIncrement();
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(columnarStripePkeyIndex, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
+
+	/* return StripeMetadata object built from modified tuple */
+	Datum datumArray[Natts_columnar_stripe];
+	bool isNullArray[Natts_columnar_stripe];
+	heap_deform_tuple(modifiedTuple, tupleDescriptor, datumArray, isNullArray);
+	return BuildStripeMetadata(datumArray);
 }
 
 

@@ -28,6 +28,16 @@ typedef struct StripeMetadata
 	uint64 firstRowNumber;
 } StripeMetadata;
 
+/*
+ * EmptyStripeReservation represents information for an empty stripe
+ * reservation.
+ */
+typedef struct EmptyStripeReservation
+{
+	uint64 stripeId;
+	uint64 stripeFirstRowNumber;
+} EmptyStripeReservation;
+
 extern List * StripesForRelfilenode(RelFileNode relfilenode);
 extern void ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade);
 

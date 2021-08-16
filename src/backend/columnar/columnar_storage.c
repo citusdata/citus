@@ -371,15 +371,13 @@ ColumnarStorageReserveRowNumber(Relation rel, uint64 nrows)
 
 
 /*
- * ColumnarStorageReserveStripe returns stripeId and advances it for next
+ * ColumnarStorageReserveStripeId returns stripeId and advances it for next
  * stripeId reservation.
  * Note that this function doesn't handle row number reservation.
- * This is because, unlike stripeId reservation, we immediately reserve
- * row number during writes, not when flushing stripes to disk.
  * See ColumnarStorageReserveRowNumber function.
  */
 uint64
-ColumnarStorageReserveStripe(Relation rel)
+ColumnarStorageReserveStripeId(Relation rel)
 {
 	LockRelationForExtension(rel, ExclusiveLock);
 

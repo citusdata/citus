@@ -19,7 +19,7 @@ select
   from columnar_test_helpers.columnar_storage_info('t');
  version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  1 |              150001
+             2 |             0 |                  2 |              150001
 (1 row)
 
 -- check stripe metadata also have been rolled-back
@@ -59,7 +59,7 @@ select
   from columnar_test_helpers.columnar_storage_info('t');
  version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  3 |              600001
+             2 |             0 |                  5 |              600001
 (1 row)
 
 SELECT count(*) FROM t;
@@ -89,7 +89,7 @@ select
   from columnar_test_helpers.columnar_storage_info('t');
  version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  5 |              750001
+             2 |             0 |                  6 |              750001
 (1 row)
 
 SELECT count(*) FROM t;

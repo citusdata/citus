@@ -1,0 +1,610 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s1-begin s1-insert-1 s2-copy-1 s1-commit s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s1-insert-1:
+    INSERT INTO write_concurrency_index SELECT (3*s)::text, s FROM generate_series(1,2) s;
+
+step s2-copy-1:
+    COPY write_concurrency_index(b) FROM PROGRAM 'seq 1 4';
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-copy-1: <... completed>
+ERROR:  duplicate key value violates unique constraint "write_concurrency_index_b_key"
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+3|1
+6|2
+(2 rows)
+
+
+starting permutation: s1-begin s1-copy-1 s2-insert-1 s1-rollback s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s1-copy-1:
+    COPY write_concurrency_index(b) FROM PROGRAM 'seq 1 2';
+
+step s2-insert-1:
+    INSERT INTO write_concurrency_index SELECT (2*s)::text, s FROM generate_series(1,4) s;
+ <waiting ...>
+step s1-rollback: 
+    ROLLBACK;
+
+step s2-insert-1: <... completed>
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+2|1
+4|2
+6|3
+8|4
+(4 rows)
+
+
+starting permutation: s1-begin s1-copy-1 s2-insert-2 s3-insert-1 s1-commit s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s1-copy-1:
+    COPY write_concurrency_index(b) FROM PROGRAM 'seq 1 2';
+
+step s2-insert-2:
+    INSERT INTO write_concurrency_index SELECT (5*s)::text, s FROM generate_series(1,2) s;
+ <waiting ...>
+step s3-insert-1: 
+    INSERT INTO write_concurrency_index SELECT (7*s)::text, s FROM generate_series(3,4) s;
+
+step s1-commit:
+    COMMIT;
+
+step s2-insert-2: <... completed>
+ERROR:  duplicate key value violates unique constraint "write_concurrency_index_b_key"
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+ a|b
+---------------------------------------------------------------------
+21|3
+28|4
+  |1
+  |2
+(4 rows)
+
+
+starting permutation: s1-begin s1-insert-1 s2-insert-2 s3-insert-1 s1-rollback s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s1-insert-1:
+    INSERT INTO write_concurrency_index SELECT (3*s)::text, s FROM generate_series(1,2) s;
+
+step s2-insert-2:
+    INSERT INTO write_concurrency_index SELECT (5*s)::text, s FROM generate_series(1,2) s;
+ <waiting ...>
+step s3-insert-1: 
+    INSERT INTO write_concurrency_index SELECT (7*s)::text, s FROM generate_series(3,4) s;
+
+step s1-rollback:
+    ROLLBACK;
+
+step s2-insert-2: <... completed>
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+ a|b
+---------------------------------------------------------------------
+10|2
+21|3
+28|4
+ 5|1
+(4 rows)
+
+
+starting permutation: s1-begin s2-begin s1-insert-1 s2-insert-3 s3-insert-2 s1-commit s2-rollback s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-insert-1:
+    INSERT INTO write_concurrency_index SELECT (3*s)::text, s FROM generate_series(1,2) s;
+
+step s2-insert-3:
+    INSERT INTO write_concurrency_index SELECT (5*s)::text, s FROM generate_series(3,4) s;
+
+step s3-insert-2:
+    INSERT INTO write_concurrency_index SELECT (7*s)::text, s FROM generate_series(2,3) s;
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s3-insert-2: <... completed>
+ERROR:  duplicate key value violates unique constraint "write_concurrency_index_b_key"
+step s2-rollback:
+    ROLLBACK;
+
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+3|1
+6|2
+(2 rows)
+
+
+starting permutation: s1-begin s2-begin s1-copy-1 s2-copy-2 s3-insert-2 s1-rollback s2-commit s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-copy-1:
+    COPY write_concurrency_index(b) FROM PROGRAM 'seq 1 2';
+
+step s2-copy-2:
+    COPY write_concurrency_index(b) FROM PROGRAM 'seq 3 4';
+
+step s3-insert-2:
+    INSERT INTO write_concurrency_index SELECT (7*s)::text, s FROM generate_series(2,3) s;
+ <waiting ...>
+step s1-rollback: 
+    ROLLBACK;
+
+step s2-commit:
+    COMMIT;
+
+step s3-insert-2: <... completed>
+ERROR:  duplicate key value violates unique constraint "write_concurrency_index_b_key"
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+ |3
+ |4
+(2 rows)
+
+
+starting permutation: s1-begin s2-begin s1-insert-1 s2-copy-2 s3-insert-2 s1-rollback s2-rollback s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-insert-1:
+    INSERT INTO write_concurrency_index SELECT (3*s)::text, s FROM generate_series(1,2) s;
+
+step s2-copy-2:
+    COPY write_concurrency_index(b) FROM PROGRAM 'seq 3 4';
+
+step s3-insert-2:
+    INSERT INTO write_concurrency_index SELECT (7*s)::text, s FROM generate_series(2,3) s;
+ <waiting ...>
+step s1-rollback: 
+    ROLLBACK;
+
+step s2-rollback:
+    ROLLBACK;
+
+step s3-insert-2: <... completed>
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+ a|b
+---------------------------------------------------------------------
+14|2
+21|3
+(2 rows)
+
+
+starting permutation: s1-begin s1-insert-2 s2-insert-4 s1-rollback s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s1-insert-2:
+    INSERT INTO write_concurrency_index SELECT s::text, 3*s FROM generate_series(1,2) s;
+
+step s2-insert-4:
+    INSERT INTO write_concurrency_index SELECT s::text, 2*s FROM generate_series(1,4) s;
+ <waiting ...>
+step s1-rollback: 
+    ROLLBACK;
+
+step s2-insert-4: <... completed>
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+1|2
+2|4
+3|6
+4|8
+(4 rows)
+
+
+starting permutation: s1-begin s1-insert-2 s2-insert-5 s3-insert-3 s1-commit s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s1-insert-2:
+    INSERT INTO write_concurrency_index SELECT s::text, 3*s FROM generate_series(1,2) s;
+
+step s2-insert-5:
+    INSERT INTO write_concurrency_index SELECT s::text, 5*s FROM generate_series(1,2) s;
+ <waiting ...>
+step s3-insert-3: 
+    INSERT INTO write_concurrency_index SELECT s::text, 7*s FROM generate_series(3,4) s;
+
+step s1-commit:
+    COMMIT;
+
+step s2-insert-5: <... completed>
+ERROR:  conflicting key value violates exclusion constraint "write_concurrency_index_a_excl"
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a| b
+---------------------------------------------------------------------
+1| 3
+2| 6
+3|21
+4|28
+(4 rows)
+
+
+starting permutation: s1-begin s2-begin s1-insert-2 s2-insert-6 s3-insert-4 s1-commit s2-rollback s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-insert-2:
+    INSERT INTO write_concurrency_index SELECT s::text, 3*s FROM generate_series(1,2) s;
+
+step s2-insert-6:
+    INSERT INTO write_concurrency_index SELECT s::text, 5*s FROM generate_series(3,4) s;
+
+step s3-insert-4:
+    INSERT INTO write_concurrency_index SELECT s::text, 7*s FROM generate_series(2,3) s;
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s3-insert-4: <... completed>
+ERROR:  conflicting key value violates exclusion constraint "write_concurrency_index_a_excl"
+step s2-rollback:
+    ROLLBACK;
+
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+1|3
+2|6
+(2 rows)
+
+
+starting permutation: s1-begin s2-begin s1-insert-2 s2-insert-6 s3-insert-4 s1-rollback s2-rollback s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-insert-2:
+    INSERT INTO write_concurrency_index SELECT s::text, 3*s FROM generate_series(1,2) s;
+
+step s2-insert-6:
+    INSERT INTO write_concurrency_index SELECT s::text, 5*s FROM generate_series(3,4) s;
+
+step s3-insert-4:
+    INSERT INTO write_concurrency_index SELECT s::text, 7*s FROM generate_series(2,3) s;
+ <waiting ...>
+step s1-rollback: 
+    ROLLBACK;
+
+step s2-rollback:
+    ROLLBACK;
+
+step s3-insert-4: <... completed>
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a| b
+---------------------------------------------------------------------
+2|14
+3|21
+(2 rows)
+
+
+starting permutation: s1-begin s1-insert-1 s2-index-select-all-b s1-rollback
+step s1-begin:
+    BEGIN;
+
+step s1-insert-1:
+    INSERT INTO write_concurrency_index SELECT (3*s)::text, s FROM generate_series(1,2) s;
+
+step s2-index-select-all-b:
+    SET enable_seqscan TO OFF;
+    SET columnar.enable_custom_scan TO OFF;
+    SELECT b FROM write_concurrency_index ORDER BY 1;
+
+b
+-
+(0 rows)
+
+step s1-rollback:
+    ROLLBACK;
+
+
+starting permutation: s1-begin s2-begin s1-insert-1 s2-copy-2 s2-index-select-all-b s3-index-select-all-b s1-commit s2-index-select-all-b s2-rollback
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-insert-1:
+    INSERT INTO write_concurrency_index SELECT (3*s)::text, s FROM generate_series(1,2) s;
+
+step s2-copy-2:
+    COPY write_concurrency_index(b) FROM PROGRAM 'seq 3 4';
+
+step s2-index-select-all-b:
+    SET enable_seqscan TO OFF;
+    SET columnar.enable_custom_scan TO OFF;
+    SELECT b FROM write_concurrency_index ORDER BY 1;
+
+b
+-
+3
+4
+(2 rows)
+
+step s3-index-select-all-b:
+    SET enable_seqscan TO OFF;
+    SET columnar.enable_custom_scan TO OFF;
+    SELECT b FROM write_concurrency_index ORDER BY 1;
+
+b
+-
+(0 rows)
+
+step s1-commit:
+    COMMIT;
+
+step s2-index-select-all-b:
+    SET enable_seqscan TO OFF;
+    SET columnar.enable_custom_scan TO OFF;
+    SELECT b FROM write_concurrency_index ORDER BY 1;
+
+b
+-
+1
+2
+3
+4
+(4 rows)
+
+step s2-rollback:
+    ROLLBACK;
+
+
+starting permutation: s1-begin s2-begin s1-insert-1 s1-select-all s2-insert-1 s1-commit s2-rollback
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-insert-1:
+    INSERT INTO write_concurrency_index SELECT (3*s)::text, s FROM generate_series(1,2) s;
+
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+3|1
+6|2
+(2 rows)
+
+step s2-insert-1:
+    INSERT INTO write_concurrency_index SELECT (2*s)::text, s FROM generate_series(1,4) s;
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-insert-1: <... completed>
+ERROR:  duplicate key value violates unique constraint "write_concurrency_index_b_key"
+step s2-rollback:
+    ROLLBACK;
+
+
+starting permutation: s1-begin s2-begin s1-insert-1 s1-select-all s2-insert-1 s1-rollback s2-rollback
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-insert-1:
+    INSERT INTO write_concurrency_index SELECT (3*s)::text, s FROM generate_series(1,2) s;
+
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+3|1
+6|2
+(2 rows)
+
+step s2-insert-1:
+    INSERT INTO write_concurrency_index SELECT (2*s)::text, s FROM generate_series(1,4) s;
+ <waiting ...>
+step s1-rollback: 
+    ROLLBACK;
+
+step s2-insert-1: <... completed>
+step s2-rollback:
+    ROLLBACK;
+
+
+starting permutation: s1-begin s1-copy-1 s1-select-all s2-insert-2 s3-insert-1 s1-rollback s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s1-copy-1:
+    COPY write_concurrency_index(b) FROM PROGRAM 'seq 1 2';
+
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+ |1
+ |2
+(2 rows)
+
+step s2-insert-2:
+    INSERT INTO write_concurrency_index SELECT (5*s)::text, s FROM generate_series(1,2) s;
+ <waiting ...>
+step s3-insert-1: 
+    INSERT INTO write_concurrency_index SELECT (7*s)::text, s FROM generate_series(3,4) s;
+
+step s1-rollback:
+    ROLLBACK;
+
+step s2-insert-2: <... completed>
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+ a|b
+---------------------------------------------------------------------
+10|2
+21|3
+28|4
+ 5|1
+(4 rows)
+
+
+starting permutation: s1-begin s1-insert-2 s1-select-all s2-insert-5 s3-insert-3 s1-commit s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s1-insert-2:
+    INSERT INTO write_concurrency_index SELECT s::text, 3*s FROM generate_series(1,2) s;
+
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+1|3
+2|6
+(2 rows)
+
+step s2-insert-5:
+    INSERT INTO write_concurrency_index SELECT s::text, 5*s FROM generate_series(1,2) s;
+ <waiting ...>
+step s3-insert-3: 
+    INSERT INTO write_concurrency_index SELECT s::text, 7*s FROM generate_series(3,4) s;
+
+step s1-commit:
+    COMMIT;
+
+step s2-insert-5: <... completed>
+ERROR:  conflicting key value violates exclusion constraint "write_concurrency_index_a_excl"
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a| b
+---------------------------------------------------------------------
+1| 3
+2| 6
+3|21
+4|28
+(4 rows)
+
+
+starting permutation: s1-begin s2-begin s1-insert-2 s1-select-all s2-insert-6 s3-insert-4 s1-rollback s2-rollback s1-select-all
+step s1-begin:
+    BEGIN;
+
+step s2-begin:
+    BEGIN;
+
+step s1-insert-2:
+    INSERT INTO write_concurrency_index SELECT s::text, 3*s FROM generate_series(1,2) s;
+
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a|b
+---------------------------------------------------------------------
+1|3
+2|6
+(2 rows)
+
+step s2-insert-6:
+    INSERT INTO write_concurrency_index SELECT s::text, 5*s FROM generate_series(3,4) s;
+
+step s3-insert-4:
+    INSERT INTO write_concurrency_index SELECT s::text, 7*s FROM generate_series(2,3) s;
+ <waiting ...>
+step s1-rollback: 
+    ROLLBACK;
+
+step s2-rollback:
+    ROLLBACK;
+
+step s3-insert-4: <... completed>
+step s1-select-all:
+    SELECT * FROM write_concurrency_index ORDER BY a,b;
+
+a| b
+---------------------------------------------------------------------
+2|14
+3|21
+(2 rows)
+
+
+starting permutation: s1-begin s2-begin-repeatable s1-insert-1 s2-insert-1 s1-commit s2-rollback
+step s1-begin:
+    BEGIN;
+
+step s2-begin-repeatable:
+    BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+
+step s1-insert-1:
+    INSERT INTO write_concurrency_index SELECT (3*s)::text, s FROM generate_series(1,2) s;
+
+step s2-insert-1:
+    INSERT INTO write_concurrency_index SELECT (2*s)::text, s FROM generate_series(1,4) s;
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-insert-1: <... completed>
+ERROR:  duplicate key value violates unique constraint "write_concurrency_index_b_key"
+step s2-rollback:
+    ROLLBACK;
+
