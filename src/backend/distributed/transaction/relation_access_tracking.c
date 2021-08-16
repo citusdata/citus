@@ -227,12 +227,6 @@ PlacementAccessTypeToText(ShardPlacementAccessType accessType)
 static void
 RecordRelationAccessBase(Oid relationId, ShardPlacementAccessType accessType)
 {
-	/*
-	 * We call this only for reference tables, and we don't support partitioned
-	 * reference tables.
-	 */
-	Assert(!PartitionedTable(relationId) && !PartitionTable(relationId));
-
 	/* make sure that this is not a conflicting access */
 	CheckConflictingRelationAccesses(relationId, accessType);
 

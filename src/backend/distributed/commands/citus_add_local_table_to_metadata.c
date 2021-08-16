@@ -330,6 +330,17 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 										  attnumList);
 
 	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
+
+	/* if this table is partitioned table, add its partitions to metadata too */
+	if (PartitionedTable(relationId))
+	{
+		List *partitionList = PartitionList(relationId);
+		Oid partitionRelationId = InvalidOid;
+		foreach_oid(partitionRelationId, partitionList)
+		{
+			CreateCitusLocalTable(partitionRelationId, false);
+		}
+	}
 }
 
 
@@ -387,20 +398,14 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 							   "relationships", relationName)));
 	}
 
-	if (PartitionTable(relationId))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot add local table \"%s\" to metadata, local tables "
-							   "added to metadata cannot be partition of other tables ",
-							   relationName)));
-	}
 
 	char relationKind = get_rel_relkind(relationId);
-	if (!(relationKind == RELKIND_RELATION || relationKind == RELKIND_FOREIGN_TABLE))
+	if (!(relationKind == RELKIND_RELATION || relationKind == RELKIND_FOREIGN_TABLE || relationKind == RELKIND_PARTITIONED_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot add local table \"%s\" to metadata, only regular "
-							   "tables and foreign tables can be added to citus metadata ",
+							   "tables, foreign tables and partitioned tables can be "
+							   "added to citus metadata ",
 							   relationName)));
 	}
 
