@@ -732,6 +732,36 @@ GenerateAlterTableAttachPartitionCommand(Oid partitionTableId)
 
 
 /*
+ * GenerateAlterTableAttachPartitionCommand returns the necessary command to
+ * attach the given partition to its parent.
+ */
+char *
+GenerateAlterTableAttachPartitionToParentCommand(Oid partitionTableId,
+												 char *parentTableQualifiedName)
+{
+	StringInfo createPartitionCommand = makeStringInfo();
+
+
+	if (!PartitionTable(partitionTableId))
+	{
+		char *relationName = get_rel_name(partitionTableId);
+
+		ereport(ERROR, (errmsg("\"%s\" is not a partition", relationName)));
+	}
+
+	char *tableQualifiedName = generate_qualified_relation_name(partitionTableId);
+
+	char *partitionBoundCString = PartitionBound(partitionTableId);
+
+	appendStringInfo(createPartitionCommand, "ALTER TABLE %s ATTACH PARTITION %s %s;",
+					 parentTableQualifiedName, tableQualifiedName,
+					 partitionBoundCString);
+
+	return createPartitionCommand->data;
+}
+
+
+/*
  * This function heaviliy inspired from RelationBuildPartitionDesc()
  * which is avaliable in src/backend/catalog/partition.c.
  *

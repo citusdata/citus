@@ -24,6 +24,9 @@ extern List * PartitionList(Oid parentRelationId);
 extern char * GenerateDetachPartitionCommand(Oid partitionTableId);
 extern char * GenerateAttachShardPartitionCommand(ShardInterval *shardInterval);
 extern char * GenerateAlterTableAttachPartitionCommand(Oid partitionTableId);
+extern char * GenerateAlterTableAttachPartitionToParentCommand(Oid partitionTableId,
+															   char *
+															   parentTableQualifiedName);
 extern char * GeneratePartitioningInformation(Oid tableId);
 extern void FixPartitionConstraintsOnWorkers(Oid relationId);
 extern void FixLocalPartitionConstraints(Oid relationId, int64 shardId);

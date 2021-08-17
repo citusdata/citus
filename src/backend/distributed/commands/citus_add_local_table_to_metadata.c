@@ -47,6 +47,8 @@
 
 static void citus_add_local_table_to_metadata_internal(Oid relationId,
 													   bool cascadeViaForeignKeys);
+static void CreateChildLocalTablesIfRelationIsPartitioned(Oid shellRelationId,
+														  Oid shardRelationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
@@ -331,14 +333,40 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 
 	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
 
+	CreateChildLocalTablesIfRelationIsPartitioned(shellRelationId, shardRelationId);
+}
+
+
+/*
+ * CreateChildLocalTablesIfRelationIsPartitioned takes a relation id and creates
+ * Citus Local Tables for its partitions, if it's a partitioned table.
+ */
+static void
+CreateChildLocalTablesIfRelationIsPartitioned(Oid shellRelationId, Oid shardRelationId)
+{
 	/* if this table is partitioned table, add its partitions to metadata too */
-	if (PartitionedTable(relationId))
+	if (PartitionedTable(shardRelationId))
 	{
-		List *partitionList = PartitionList(relationId);
+		List *partitionList = PartitionList(shardRelationId);
 		Oid partitionRelationId = InvalidOid;
 		foreach_oid(partitionRelationId, partitionList)
 		{
+			/*
+			 * We get the parent shell relation name before creating Citus Local Table,
+			 * since it will be renamed later. Then we generate the command in form of
+			 * ALTER TABLE .. ATTACH PARTITION .., for attaching the shell child to the
+			 * shell parent later.
+			 */
+			char *qualifiedShellRelationName = generate_qualified_relation_name(
+				shellRelationId);
+			char *attachToParentCommand =
+				GenerateAlterTableAttachPartitionToParentCommand(partitionRelationId,
+																 qualifiedShellRelationName);
 			CreateCitusLocalTable(partitionRelationId, false);
+			char *detachPartitionCommand = GenerateDetachPartitionCommand(
+				partitionRelationId);
+			ExecuteAndLogUtilityCommandList(list_make2(detachPartitionCommand,
+													   attachToParentCommand));
 		}
 	}
 }
