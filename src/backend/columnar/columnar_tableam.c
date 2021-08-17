@@ -1306,7 +1306,8 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	if (!IsBootstrapProcessingMode() && !indexInfo->ii_Concurrent)
 	{
 		/* ignore lazy VACUUM's */
-		OldestXmin = GetOldestXmin(columnarRelation, PROCARRAY_FLAGS_VACUUM);
+		OldestXmin = GetOldestNonRemovableTransactionId_compat(columnarRelation,
+															   PROCARRAY_FLAGS_VACUUM);
 	}
 
 	Snapshot snapshot = { 0 };
