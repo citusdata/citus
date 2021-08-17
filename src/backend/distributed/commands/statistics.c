@@ -425,16 +425,18 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
  * GetExplicitStatisticsCommandList returns the list of DDL commands to create
  * or alter statistics that are explicitly created for the table with relationId.
  * This function gets called when distributing the table with relationId.
- * See comment of GetExplicitStatisticsIdList function.
  */
 List *
 GetExplicitStatisticsCommandList(Oid relationId)
 {
 	List *explicitStatisticsCommandList = NIL;
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	Relation relation = RelationIdGetRelation(relationId);
+	List *statisticsIdList = RelationGetStatExtList(relation);
+	RelationClose(relation);
 
-	List *statisticsIdList = GetExplicitStatisticsIdList(relationId);
+	/* generate fully-qualified names */
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	Oid statisticsId = InvalidOid;
 	foreach_oid(statisticsId, statisticsIdList)
@@ -564,48 +566,6 @@ GetAlterIndexStatisticsCommands(Oid indexOid)
 	}
 
 	return alterIndexStatisticsCommandList;
-}
-
-
-/*
- * GetExplicitStatisticsIdList returns a list of OIDs corresponding to the statistics
- * that are explicitly created on the relation with relationId. That means,
- * this function discards internal statistics implicitly created by postgres.
- */
-List *
-GetExplicitStatisticsIdList(Oid relationId)
-{
-	List *statisticsIdList = NIL;
-
-	Relation pgStatistics = table_open(StatisticExtRelationId, AccessShareLock);
-
-	int scanKeyCount = 1;
-	ScanKeyData scanKey[1];
-
-	ScanKeyInit(&scanKey[0], Anum_pg_statistic_ext_stxrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
-
-	bool useIndex = true;
-	SysScanDesc scanDescriptor = systable_beginscan(pgStatistics,
-													StatisticExtRelidIndexId,
-													useIndex, NULL, scanKeyCount,
-													scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
-	{
-		FormData_pg_statistic_ext *statisticsForm =
-			(FormData_pg_statistic_ext *) GETSTRUCT(heapTuple);
-		Oid statisticsId = statisticsForm->oid;
-		statisticsIdList = lappend_oid(statisticsIdList, statisticsId);
-
-		heapTuple = systable_getnext(scanDescriptor);
-	}
-
-	systable_endscan(scanDescriptor);
-	table_close(pgStatistics, NoLock);
-
-	return statisticsIdList;
 }
 
 

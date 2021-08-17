@@ -687,7 +687,10 @@ GetRenameShardIndexCommand(Oid indexOid, uint64 shardId)
 static void
 RenameShardRelationStatistics(Oid shardRelationId, uint64 shardId)
 {
-	List *statsOidList = GetExplicitStatisticsIdList(shardRelationId);
+	Relation shardRelation = RelationIdGetRelation(shardRelationId);
+	List *statsOidList = RelationGetStatExtList(shardRelation);
+	RelationClose(shardRelation);
+
 	List *statsCommandList = GetRenameStatsCommandList(statsOidList, shardId);
 
 	char *command = NULL;
