@@ -58,6 +58,8 @@
 #define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
 	SetTuplestoreDestReceiverParams(a, b, c, d, e, f)
 #define pgproc_statusflags_compat(pgproc) ((pgproc)->statusFlags)
+#define get_partition_parent_compat(a, b) get_partition_parent(a, b)
+#define RelationGetPartitionDesc_compat(a, b) RelationGetPartitionDesc(a, b)
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -89,6 +91,8 @@
 	SetTuplestoreDestReceiverParams(a, b, c, d)
 #define pgproc_statusflags_compat(pgproc) \
 	((&ProcGlobal->allPgXact[(pgproc)->pgprocno])->vacuumFlags)
+#define get_partition_parent_compat(a, b) get_partition_parent(a)
+#define RelationGetPartitionDesc_compat(a, b) RelationGetPartitionDesc(a)
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
