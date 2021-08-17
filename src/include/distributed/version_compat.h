@@ -57,6 +57,7 @@
 #define COPY_FRONTEND_COMPAT COPY_FRONTEND
 #define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
 	SetTuplestoreDestReceiverParams(a, b, c, d, e, f)
+#define pgproc_statusflags_compat(pgproc) ((pgproc)->statusFlags)
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -86,6 +87,8 @@
 #define COPY_FRONTEND_COMPAT COPY_NEW_FE
 #define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
 	SetTuplestoreDestReceiverParams(a, b, c, d)
+#define pgproc_statusflags_compat(pgproc) \
+	((&ProcGlobal->allPgXact[(pgproc)->pgprocno])->vacuumFlags)
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
