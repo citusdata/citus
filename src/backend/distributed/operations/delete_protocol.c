@@ -672,8 +672,8 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 			Expr *lessThanExpr = (Expr *) linitial(andExpr->args);
 			Expr *greaterThanExpr = (Expr *) lsecond(andExpr->args);
 
-			RestrictInfo *lessThanRestrictInfo = make_simple_restrictinfo(lessThanExpr);
-			RestrictInfo *greaterThanRestrictInfo = make_simple_restrictinfo(
+			RestrictInfo *lessThanRestrictInfo = make_simple_restrictinfo(NULL, lessThanExpr);
+			RestrictInfo *greaterThanRestrictInfo = make_simple_restrictinfo(NULL, 
 				greaterThanExpr);
 
 			restrictInfoList = lappend(restrictInfoList, lessThanRestrictInfo);
