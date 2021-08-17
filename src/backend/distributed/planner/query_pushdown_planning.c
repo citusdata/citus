@@ -25,6 +25,7 @@
 
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -91,6 +92,7 @@ static AttrNumber FindResnoForVarInTargetList(List *targetList, int varno, int v
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													Relids relids);
 static Var * PartitionColumnForPushedDownSubquery(Query *query);
+static bool SimpleAlterTableConstraintCheck(Query *query);
 
 
 /*
@@ -812,6 +814,18 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrelRelids))
 			{
 				/*
+				 * These constraints will be validated in worker nodes, so no
+				 * need to run them on coordinator. In fact, we disable their
+				 * execution: check CitusExecutorRun. We don't care whether
+				 * we can pushdown the subquery or not. Hence we simply
+				 * consider this as a supported Recurring Tuples Join.
+				 */
+				if (SimpleAlterTableConstraintCheck(plannerInfo->parse))
+				{
+					continue;
+				}
+
+				/*
 				 * Find the first (or only) recurring RTE to give a meaningful
 				 * error to the user.
 				 */
@@ -884,6 +898,37 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	}
 
 	return NULL;
+}
+
+
+/*
+ * SimpleAlterTableConstraintCheck returns if the given query is an ALTER TABLE
+ * constraint check query.
+ *
+ * Postgres uses SPI to execute these queries. To see examples of how these
+ * constraint check queries look like, see RI_Initial_Check() and RI_Fkey_check().
+ *
+ * For cases where the input query might be a SELECT on some catalog tables while
+ * an ALTER TABLE is in progress, use AlterTableConstraintCheck with QueryDesc
+ */
+static bool
+SimpleAlterTableConstraintCheck(Query *query)
+{
+	if (!AlterTableInProgress())
+	{
+		return false;
+	}
+
+	/*
+	 * These queries are one or more SELECT queries, where postgres checks
+	 * their results either for NULL values or existence of a row at all.
+	 */
+	if (query->commandType != CMD_SELECT)
+	{
+		return false;
+	}
+
+	return true;
 }
 
 

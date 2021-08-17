@@ -1303,7 +1303,29 @@ SELECT worker_partitioned_relation_total_size(oid) FROM pg_class WHERE relname L
  \c - - - :master_port
 DROP TABLE "events.Energy Added";
 
+-- test we skip the foreign key validation query on coordinator
+-- that happens when attaching a non-distributed partition to a distributed-partitioned table
+-- with a foreign key to another distributed table
+SET search_path = partitioning_schema;
+SET citus.shard_replication_factor = 1;
+CREATE TABLE another_distributed_table (x int primary key, y int);
+SELECT create_distributed_table('another_distributed_table','x');
+CREATE TABLE distributed_parent_table (
+  event_id serial NOT NULL REFERENCES another_distributed_table (x),
+  event_time timestamptz NOT NULL DEFAULT now())
+  PARTITION BY RANGE (event_time);
+SELECT create_distributed_table('distributed_parent_table', 'event_id');
+CREATE TABLE non_distributed_child_1 (event_id int NOT NULL, event_time timestamptz NOT NULL DEFAULT now());
+ALTER TABLE distributed_parent_table ATTACH PARTITION non_distributed_child_1 FOR VALUES FROM ('2021-06-30') TO ('2021-07-01');
+-- check DEFAULT partition behaves as expected
+CREATE TABLE non_distributed_child_2 (event_id int NOT NULL, event_time timestamptz NOT NULL DEFAULT now());
+ALTER TABLE distributed_parent_table ATTACH PARTITION non_distributed_child_2 DEFAULT;
+-- check adding another partition when default partition exists
+CREATE TABLE non_distributed_child_3 (event_id int NOT NULL, event_time timestamptz NOT NULL DEFAULT now());
+ALTER TABLE distributed_parent_table ATTACH PARTITION non_distributed_child_3 FOR VALUES FROM ('2021-07-30') TO ('2021-08-01');
+
 DROP SCHEMA partitioning_schema CASCADE;
+RESET search_path;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,
 	partitioning_hash_join_test,
