@@ -329,11 +329,13 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			}
 
 			/*
-			 * Close connections etc. Contrary to a successful transaction we reset the placement connection management
-			 * irregardless of state of the statemachine as recorded in CurrentCoordinatedTransactionState.
-			 * The hashmaps recording the connection management live a memory context higher compared to most of the
-			 * data referenced in the hashmap. This causes use after free errors when the contents are retained due to
-			 * an error caused before the CurrentCoordinatedTransactionState changed.
+			 * Close connections etc. Contrary to a successful transaction we reset the
+			 * placement connection management irregardless of state of the statemachine
+			 * as recorded in CurrentCoordinatedTransactionState.
+			 * The hashmaps recording the connection management live a memory context
+			 * higher compared to most of the data referenced in the hashmap. This causes
+			 * use after free errors when the contents are retained due to an error caused
+			 * before the CurrentCoordinatedTransactionState changed.
 			 */
 			ResetPlacementConnectionManagement();
 			AfterXactConnectionHandling(false);
