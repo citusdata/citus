@@ -461,9 +461,7 @@ IsProcessWaitingForSafeOperations(PGPROC *proc)
 		return false;
 	}
 
-	/* get the transaction that the backend associated with */
-	PGXACT *pgxact = &ProcGlobal->allPgXact[proc->pgprocno];
-	if (pgxact->vacuumFlags & PROC_IS_AUTOVACUUM)
+	if (pgproc_statusflags_compat(proc) & PROC_IS_AUTOVACUUM)
 	{
 		return true;
 	}
