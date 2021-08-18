@@ -22,6 +22,8 @@
 #define ExecSimpleRelationInsert_compat(a, b, c) \
 	ExecSimpleRelationInsert(a, b, c)
 #define modifyStateResultRelInfo(a) ((a)->resultRelInfo)
+#define index_insert_compat(a, b, c, d, e, f, g, h) \
+	index_insert(a, b, c, d, e, f, g, h)
 #else
 #define ColumnarProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	ColumnarProcessUtility(a, b, d, e, f, g, h)
@@ -31,6 +33,8 @@
 #define ExecSimpleRelationInsert_compat(a, b, c) \
 	ExecSimpleRelationInsert(b, c)
 #define modifyStateResultRelInfo(a) ((a)->estate->es_result_relation_info)
+#define index_insert_compat(a, b, c, d, e, f, g, h) \
+	index_insert(a, b, c, d, e, f, h)
 #endif
 
 #define ACLCHECK_OBJECT_TABLE OBJECT_TABLE
