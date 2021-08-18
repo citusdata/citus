@@ -490,23 +490,19 @@ GetExplicitStatisticsSchemaIdList(Oid relationId)
 {
 	List *schemaIdList = NIL;
 
-	Relation pgStatistics = table_open(StatisticExtRelationId, AccessShareLock);
+	Relation relation = RelationIdGetRelation(relationId);
+	List *statsIdList = RelationGetStatExtList(relation);
+	RelationClose(relation);
 
-	int scanKeyCount = 1;
-	ScanKeyData scanKey[1];
-
-	ScanKeyInit(&scanKey[0], Anum_pg_statistic_ext_stxrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
-
-	bool useIndex = true;
-	SysScanDesc scanDescriptor = systable_beginscan(pgStatistics,
-													StatisticExtRelidIndexId,
-													useIndex, NULL, scanKeyCount,
-													scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	Oid statsId = InvalidOid;
+	foreach_oid(statsId, statsIdList)
 	{
+		HeapTuple heapTuple = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statsId));
+		if (!HeapTupleIsValid(heapTuple))
+		{
+			ereport(ERROR, (errmsg("cache lookup failed for statistics "
+								   "object with oid %u", statsId)));
+		}
 		FormData_pg_statistic_ext *statisticsForm =
 			(FormData_pg_statistic_ext *) GETSTRUCT(heapTuple);
 
@@ -515,12 +511,9 @@ GetExplicitStatisticsSchemaIdList(Oid relationId)
 		{
 			schemaIdList = lappend_oid(schemaIdList, schemaId);
 		}
-
-		heapTuple = systable_getnext(scanDescriptor);
+		ReleaseSysCache(heapTuple);
 	}
 
-	systable_endscan(scanDescriptor);
-	table_close(pgStatistics, NoLock);
 
 	return schemaIdList;
 }
