@@ -138,6 +138,8 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 	if (!isStringList)
 	{
 		flags |= HASH_BLOBS;
+	}else {
+		flags |= HASH_STRINGS;
 	}
 
 	HTAB *itemSet = hash_create("ListToHashSet", capacity, &info, flags);
