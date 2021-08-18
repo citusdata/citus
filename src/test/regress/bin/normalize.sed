@@ -229,3 +229,4 @@ s/ERROR:  parallel workers for vacuum must/ERROR:  parallel vacuum degree must/g
 
 # ignore PL/pgSQL line numbers that differ on Mac builds
 s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g
+s/function array_cat_agg\(anycompatiblearray\)/function array_cat_agg\(anyarray\)/g
