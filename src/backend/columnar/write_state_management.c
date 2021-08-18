@@ -132,7 +132,7 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 				"Column Store Write State Management Context",
 				ALLOCSET_DEFAULT_SIZES);
 		HASHCTL info;
-		uint32 hashFlags = (HASH_ELEM | HASH_CONTEXT);
+		uint32 hashFlags = (HASH_ELEM | HASH_STRINGS | HASH_CONTEXT);
 		memset(&info, 0, sizeof(info));
 		info.keysize = sizeof(Oid);
 		info.entrysize = sizeof(WriteStateMapEntry);
