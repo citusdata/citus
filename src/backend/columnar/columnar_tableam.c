@@ -1568,8 +1568,8 @@ ColumnarReadMissingRowsIntoIndex(TableScanDesc scan, Relation indexRelation,
 		Relation columnarRelation = scan->rs_rd;
 		IndexUniqueCheck indexUniqueCheck =
 			indexInfo->ii_Unique ? UNIQUE_CHECK_YES : UNIQUE_CHECK_NO;
-		index_insert(indexRelation, indexValues, indexNulls, columnarItemPointer,
-					 columnarRelation, indexUniqueCheck, indexInfo);
+		index_insert_compat(indexRelation, indexValues, indexNulls, columnarItemPointer,
+							columnarRelation, indexUniqueCheck, false, indexInfo);
 
 		validateIndexState->tups_inserted += 1;
 	}
