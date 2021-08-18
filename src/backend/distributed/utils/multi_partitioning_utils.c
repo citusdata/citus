@@ -42,7 +42,7 @@
 #include "utils/rel.h"
 #include "utils/syscache.h"
 
-static char * PartitionBound(Oid partitionId);
+char * PartitionBound(Oid partitionId);
 static Relation try_relation_open_nolock(Oid relationId);
 static List * CreateFixPartitionConstraintsTaskList(Oid relationId);
 static List * WorkerFixPartitionConstraintCommandList(Oid relationId, uint64 shardId,
@@ -768,7 +768,7 @@ GenerateAlterTableAttachPartitionToParentCommand(Oid partitionTableId,
  * The function simply reads the pg_class and gets the partition bound.
  * Later, converts it to text format and returns.
  */
-static char *
+char *
 PartitionBound(Oid partitionId)
 {
 	bool isnull = false;

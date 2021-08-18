@@ -14,6 +14,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/index.h"
+#include "catalog/partition.h"
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
@@ -58,6 +59,9 @@ bool EnableLocalReferenceForeignKeys = true;
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
+static void FixParentsForCitusLocalTablePartitions(Oid shellRelationId, Oid
+												   shardRelationId,
+												   char *partitionBoundCString);
 static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
 	AlterTableStmt *alterTableStatement);
 static bool RelationIdListContainsCitusTableType(List *relationIdList,
@@ -359,10 +363,28 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		if (IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
 		{
 			/*
+			 * First get the relation name and schema id for the partition, to obtain the
+			 * shell partition id later, since CreateCitusLocalTable will rename it.
+			 */
+			char *relationName = get_rel_name(relationId);
+			Oid relationSchemaId = get_rel_namespace(relationId);
+			char *partitionBoundCString = PartitionBound(relationId);
+
+			/*
 			 * If the parent is a citus local table, we don't need distribution column.
 			 * We can do create a Citus Local Table with current table and early return.
 			 */
 			CreateCitusLocalTable(relationId, false);
+
+			/*
+			 * We now have it converted to Citus Local Table. But we should also
+			 * make sure that the shell partition is attached to the shell parent,
+			 * and the shard partition is attached to the shard parent.
+			 */
+			Oid shellRelationId = get_relname_relid(relationName, relationSchemaId);
+			Oid shardRelationId = relationId;
+			FixParentsForCitusLocalTablePartitions(shellRelationId, shardRelationId,
+												   partitionBoundCString);
 			return;
 		}
 
@@ -382,7 +404,44 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 
 
 /*
- * PreprocessAlterTableStmtAttachPartition takes AlterTableStmt object as
+ * FixParentsForCitusLocalTablePartitions Takes two relation ids, one for the shell
+ * partition, one for the shard partition. And takes the partition bound, which
+ * corresponds to  FOR VALUES FROM .. TO .. part of the query.
+ * Generates and executes the necessary ALTER TABLE .. DETACH PARTITION .. and
+ * ALTER TABLE .. ATTACH PARTITION .. commands to accomplish that.
+ */
+static void
+FixParentsForCitusLocalTablePartitions(Oid shellRelationId, Oid shardRelationId,
+									   char *partitionBoundCString)
+{
+	List *commands = NIL;
+	if (PartitionTable(shellRelationId))
+	{
+		commands = lappend(commands, GenerateDetachPartitionCommand(shellRelationId));
+	}
+
+	if (PartitionTable(shardRelationId))
+	{
+		commands = lappend(commands, GenerateDetachPartitionCommand(shardRelationId));
+	}
+
+	Oid shellParentId = get_partition_parent(shardRelationId);
+	char *shellParentQualifiedName = generate_qualified_relation_name(shellParentId);
+	char *shellPartitionQualifiedName = generate_qualified_relation_name(shellRelationId);
+
+	StringInfo createPartitionCommand = makeStringInfo();
+	appendStringInfo(createPartitionCommand, "ALTER TABLE %s ATTACH PARTITION %s %s;",
+					 shellParentQualifiedName, shellPartitionQualifiedName,
+					 partitionBoundCString);
+
+	commands = lappend(commands, createPartitionCommand->data);
+
+	ExecuteAndLogUtilityCommandList(commands);
+}
+
+
+/*
+ * PostprocessAlterTableStmtAttachPartition takes AlterTableStmt object as
  * parameter but it only processes into ALTER TABLE ... ATTACH PARTITION
  * commands and distributes the partition if necessary. There are four cases
  * to consider;

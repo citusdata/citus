@@ -333,6 +333,10 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 
 	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
 
+	/*
+	 * If it's a partitioned table, we need to create Citus Local Tables from its
+	 * partitions too.
+	 */
 	CreateChildLocalTablesIfRelationIsPartitioned(shellRelationId, shardRelationId);
 }
 
@@ -346,7 +350,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
  * the partition (child) shard tables successfully gets attached to the partitioned
  * (parent) shard table, since there is already a parent/child relationship between them.
  * However, the partition (child) shell tables are not attached to the partitioned
- * (parent) shell tables. So we need to generate and execute commands for DETACH + 
+ * (parent) shell tables. So we need to generate and execute commands for DETACH +
  * ATTACH to establish the correct relationship.
  */
 static void
@@ -381,7 +385,7 @@ CreateChildLocalTablesIfRelationIsPartitioned(Oid shellRelationId, Oid shardRela
 			 * parent shell table. Here we basically DETACH + ATTACH it and make sure
 			 * that the correct parent/child relationship is established between the
 			 * parent/child shell tables.
-			 */			
+			 */
 			char *detachPartitionCommand = GenerateDetachPartitionCommand(
 				partitionRelationId);
 			ExecuteAndLogUtilityCommandList(list_make2(detachPartitionCommand,
