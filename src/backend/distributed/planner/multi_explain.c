@@ -251,7 +251,13 @@ NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	/* explain the inner SELECT query */
 	IntoClause *into = NULL;
 	ParamListInfo params = NULL;
-	char *queryString = NULL;
+
+	/*
+	 * With PG14, we need to provide a string here,
+	 * for now we put an empty string, which is valid according to postgres.
+	 */
+	char *queryString = pstrdup("");
+
 	ExplainOneQuery(queryCopy, 0, into, es, queryString, params, NULL);
 
 	ExplainCloseGroup("Select Query", "Select Query", false, es);
@@ -278,7 +284,11 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		PlannedStmt *plan = subPlan->plan;
 		IntoClause *into = NULL;
 		ParamListInfo params = NULL;
-		char *queryString = NULL;
+		/*
+		 * With PG14, we need to provide a string here,
+	 	 * for now we put an empty string, which is valid according to postgres.
+		 */
+		char *queryString = pstrdup("");
 		instr_time planduration;
 		#if PG_VERSION_NUM >= PG_VERSION_13
 
