@@ -388,7 +388,6 @@ extern List * PreprocessAlterStatisticsOwnerStmt(Node *node, const char *querySt
 extern List * GetExplicitStatisticsCommandList(Oid relationId);
 extern List * GetExplicitStatisticsSchemaIdList(Oid relationId);
 extern List * GetAlterIndexStatisticsCommands(Oid indexOid);
-extern List * GetExplicitStatisticsIdList(Oid relationId);
 
 /* subscription.c - forward declarations */
 extern Node * ProcessCreateSubscriptionStmt(CreateSubscriptionStmt *createSubStmt);

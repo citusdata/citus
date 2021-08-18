@@ -69,6 +69,9 @@ static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerNam
 static void DropRelationTruncateTriggers(Oid relationId);
 static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static List * GetRenameStatsCommandList(List *statsOidList, uint64 shardId);
+static void AppendExplicitIndexIdsToList(Form_pg_index indexForm,
+										 List **explicitIndexIdList,
+										 int flags);
 static void DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelationId,
 																 Oid targetRelationId);
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
@@ -684,7 +687,10 @@ GetRenameShardIndexCommand(Oid indexOid, uint64 shardId)
 static void
 RenameShardRelationStatistics(Oid shardRelationId, uint64 shardId)
 {
-	List *statsOidList = GetExplicitStatisticsIdList(shardRelationId);
+	Relation shardRelation = RelationIdGetRelation(shardRelationId);
+	List *statsOidList = RelationGetStatExtList(shardRelation);
+	RelationClose(shardRelation);
+
 	List *statsCommandList = GetRenameStatsCommandList(statsOidList, shardId);
 
 	char *command = NULL;
@@ -834,51 +840,25 @@ GetDropTriggerCommand(Oid relationId, char *triggerName)
 List *
 GetExplicitIndexOidList(Oid relationId)
 {
-	int scanKeyCount = 1;
-	ScanKeyData scanKey[1];
+	/* flags are not applicable for AppendExplicitIndexIdsToList */
+	int flags = 0;
+	return ExecuteFunctionOnEachTableIndex(relationId, AppendExplicitIndexIdsToList,
+										   flags);
+}
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
-	Relation pgIndex = table_open(IndexRelationId, AccessShareLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_index_indrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
-
-	bool useIndex = true;
-	SysScanDesc scanDescriptor = systable_beginscan(pgIndex, IndexIndrelidIndexId,
-													useIndex, NULL, scanKeyCount,
-													scanKey);
-
-	List *indexOidList = NIL;
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+/*
+ * AppendExplicitIndexIdsToList adds the given index oid if it is
+ * explicitly created on its relation.
+ */
+static void
+AppendExplicitIndexIdsToList(Form_pg_index indexForm, List **explicitIndexIdList,
+							 int flags)
+{
+	if (!IndexImpliedByAConstraint(indexForm))
 	{
-		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
-
-		Oid indexId = indexForm->indexrelid;
-
-		bool indexImpliedByConstraint = IndexImpliedByAConstraint(indexForm);
-
-		/*
-		 * Skip the indexes that are not implied by explicitly executing
-		 * a CREATE INDEX command.
-		 */
-		if (!indexImpliedByConstraint)
-		{
-			indexOidList = lappend_oid(indexOidList, indexId);
-		}
-
-		heapTuple = systable_getnext(scanDescriptor);
+		*explicitIndexIdList = lappend_oid(*explicitIndexIdList, indexForm->indexrelid);
 	}
-
-	systable_endscan(scanDescriptor);
-	table_close(pgIndex, NoLock);
-
-	/* revert back to original search_path */
-	PopOverrideSearchPath();
-
-	return indexOidList;
 }
 
 
