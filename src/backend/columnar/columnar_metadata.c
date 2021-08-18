@@ -64,6 +64,7 @@ typedef struct
 {
 	Relation rel;
 	EState *estate;
+	ResultRelInfo *resultRelInfo;
 } ModifyState;
 
 /* RowNumberLookupMode to be used in StripeMetadataLookupRowNumber */
@@ -1314,12 +1315,20 @@ StartModifyRelation(Relation rel)
 {
 	EState *estate = create_estate_for_relation(rel);
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
+	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
+#else
+	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
+#endif
+
 	/* ExecSimpleRelationInsert, ... require caller to open indexes */
-	ExecOpenIndices(estate->es_result_relation_info, false);
+	ExecOpenIndices(resultRelInfo, false);
 
 	ModifyState *modifyState = palloc(sizeof(ModifyState));
 	modifyState->rel = rel;
 	modifyState->estate = estate;
+	modifyState->resultRelInfo = resultRelInfo;
 
 	return modifyState;
 }
@@ -1341,7 +1350,7 @@ InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values, bool *nulls)
 	ExecStoreHeapTuple(tuple, slot, false);
 
 	/* use ExecSimpleRelationInsert to enforce constraints */
-	ExecSimpleRelationInsert(state->estate, slot);
+	ExecSimpleRelationInsert_compat(state->resultRelInfo, state->estate, slot);
 }
 
 
@@ -1353,7 +1362,7 @@ static void
 DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple)
 {
 	EState *estate = state->estate;
-	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
+	ResultRelInfo *resultRelInfo = state->resultRelInfo;
 
 	ItemPointer tid = &(heapTuple->t_self);
 	simple_heap_delete(state->rel, tid);
@@ -1369,10 +1378,15 @@ DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple)
 static void
 FinishModifyRelation(ModifyState *state)
 {
-	ExecCloseIndices(state->estate->es_result_relation_info);
+	ExecCloseIndices(state->resultRelInfo);
 
 	AfterTriggerEndQuery(state->estate);
+#if PG_VERSION_NUM >= PG_VERSION_14
+	ExecCloseResultRelations(state->estate);
+	ExecCloseRangeTableRelations(state->estate);
+#else
 	ExecCleanUpTriggerState(state->estate);
+#endif
 	ExecResetTupleTable(state->estate->es_tupleTable, false);
 	FreeExecutorState(state->estate);
 
@@ -1400,13 +1414,6 @@ create_estate_for_relation(Relation rel)
 	rte->relkind = rel->rd_rel->relkind;
 	rte->rellockmode = AccessShareLock;
 	ExecInitRangeTable(estate, list_make1(rte));
-
-	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
-	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
-
-	estate->es_result_relations = resultRelInfo;
-	estate->es_num_result_relations = 1;
-	estate->es_result_relation_info = resultRelInfo;
 
 	estate->es_output_cid = GetCurrentCommandId(true);
 
