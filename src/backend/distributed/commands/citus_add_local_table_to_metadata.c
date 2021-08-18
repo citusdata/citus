@@ -340,6 +340,14 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 /*
  * CreateChildLocalTablesIfRelationIsPartitioned takes a relation id and creates
  * Citus Local Tables for its partitions, if it's a partitioned table.
+ * Here we have two parameters: shellRelationId is the id of the partitioned shell table.
+ * shardRelationId is the partitioned table which has the shard_id suffix appended.
+ * In this function, while creating Citus Local Tables from partition (child) tables,
+ * the partition (child) shard tables successfully gets attached to the partitioned
+ * (parent) shard table, since there is already a parent/child relationship between them.
+ * However, the partition (child) shell tables are not attached to the partitioned
+ * (parent) shell tables. So we need to generate and execute commands for DETACH + 
+ * ATTACH to establish the correct relationship.
  */
 static void
 CreateChildLocalTablesIfRelationIsPartitioned(Oid shellRelationId, Oid shardRelationId)
@@ -357,12 +365,23 @@ CreateChildLocalTablesIfRelationIsPartitioned(Oid shellRelationId, Oid shardRela
 			 * ALTER TABLE .. ATTACH PARTITION .., for attaching the shell child to the
 			 * shell parent later.
 			 */
-			char *qualifiedShellRelationName = generate_qualified_relation_name(
-				shellRelationId);
+			char *qualifiedShellRelationName =
+				generate_qualified_relation_name(shellRelationId);
 			char *attachToParentCommand =
 				GenerateAlterTableAttachPartitionToParentCommand(partitionRelationId,
 																 qualifiedShellRelationName);
+
+			/* here we call CreateCitusLocalTable for all partitions */
 			CreateCitusLocalTable(partitionRelationId, false);
+
+			/*
+			 * CreateCitusLocalTable has created a Citus Local Table for the partition.
+			 * It does this by renaming the partition and adding a shard_id suffix to it.
+			 * This process leaves a shell table behind, which is NOT attached to the
+			 * parent shell table. Here we basically DETACH + ATTACH it and make sure
+			 * that the correct parent/child relationship is established between the
+			 * parent/child shell tables.
+			 */			
 			char *detachPartitionCommand = GenerateDetachPartitionCommand(
 				partitionRelationId);
 			ExecuteAndLogUtilityCommandList(list_make2(detachPartitionCommand,
