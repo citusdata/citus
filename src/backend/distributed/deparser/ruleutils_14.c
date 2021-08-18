@@ -4625,9 +4625,9 @@ get_parameter(Param *param, deparse_context *context)
 				 */
 				foreach(lc, context->namespaces)
 				{
-					deparse_namespace *dpns = lfirst(lc);
+					deparse_namespace *dp_ns = lfirst(lc);
 
-					if (list_length(dpns->rtable_names) > 0)
+					if (list_length(dp_ns->rtable_names) > 0)
 					{
 						should_qualify = true;
 						break;
@@ -8001,12 +8001,12 @@ pg_get_statisticsobj_worker(Oid statextid, bool columns_only, bool missing_ok)
 	if (has_exprs)
 	{
 		Datum		exprsDatum;
-		bool		isnull;
+		bool		isNull;
 		char	   *exprsString;
 
 		exprsDatum = SysCacheGetAttr(STATEXTOID, statexttup,
-									 Anum_pg_statistic_ext_stxexprs, &isnull);
-		Assert(!isnull);
+									 Anum_pg_statistic_ext_stxexprs, &isNull);
+		Assert(!isNull);
 		exprsString = TextDatumGetCString(exprsDatum);
 		exprs = (List *) stringToNode(exprsString);
 		pfree(exprsString);
