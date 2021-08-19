@@ -81,13 +81,11 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Node Type": "Aggregate",
           "Strategy": "Hashed",
           "Partial Mode": "Simple",
-          "Parent Relationship": "Outer",
           "Parallel Aware": false,
           "Group Key": ["remote_scan.l_quantity"],
           "Plans": [
             {
               "Node Type": "Custom Scan",
-              "Parent Relationship": "Outer",
               "Custom Plan Provider": "Citus Adaptive",
               "Parallel Aware": false,
               "Distributed Query": {
@@ -109,7 +107,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                               "Plans": [
                                 {
                                   "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
                                   "Parallel Aware": false,
                                   "Relation Name": "lineitem_290000",
                                   "Alias": "lineitem"
@@ -154,7 +151,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Node-Type>Aggregate</Node-Type>
           <Strategy>Hashed</Strategy>
           <Partial-Mode>Simple</Partial-Mode>
-          <Parent-Relationship>Outer</Parent-Relationship>
           <Parallel-Aware>false</Parallel-Aware>
           <Group-Key>
             <Item>remote_scan.l_quantity</Item>
@@ -162,7 +158,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Plans>
             <Plan>
               <Node-Type>Custom Scan</Node-Type>
-              <Parent-Relationship>Outer</Parent-Relationship>
               <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
               <Parallel-Aware>false</Parallel-Aware>
               <Distributed-Query>
@@ -186,7 +181,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                               <Plans>
                                 <Plan>
                                   <Node-Type>Seq Scan</Node-Type>
-                                  <Parent-Relationship>Outer</Parent-Relationship>
                                   <Parallel-Aware>false</Parallel-Aware>
                                   <Relation-Name>lineitem_290000</Relation-Name>
                                   <Alias>lineitem</Alias>
@@ -226,13 +220,11 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
       - Node Type: "Aggregate"
         Strategy: "Hashed"
         Partial Mode: "Simple"
-        Parent Relationship: "Outer"
         Parallel Aware: false
         Group Key:
           - "remote_scan.l_quantity"
         Plans:
           - Node Type: "Custom Scan"
-            Parent Relationship: "Outer"
             Custom Plan Provider: "Citus Adaptive"
             Parallel Aware: false
             Distributed Query:
@@ -251,7 +243,6 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                             - "l_quantity"
                           Plans:
                             - Node Type: "Seq Scan"
-                              Parent Relationship: "Outer"
                               Parallel Aware: false
                               Relation Name: "lineitem_290000"
                               Alias: "lineitem"
@@ -1093,7 +1084,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       "Plans": [
         {
           "Node Type": "Custom Scan",
-          "Parent Relationship": "Outer",
           "Custom Plan Provider": "Citus Adaptive",
           "Parallel Aware": false,
           "Distributed Query": {
@@ -1142,7 +1132,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
       <Plans>
         <Plan>
           <Node-Type>Custom Scan</Node-Type>
-          <Parent-Relationship>Outer</Parent-Relationship>
           <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
           <Parallel-Aware>false</Parallel-Aware>
           <Distributed-Query>
@@ -1201,7 +1190,6 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     Parallel Aware: false
     Plans:
       - Node Type: "Custom Scan"
-        Parent Relationship: "Outer"
         Custom Plan Provider: "Citus Adaptive"
         Parallel Aware: false
         Distributed Query:
@@ -1284,14 +1272,14 @@ Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
 BEGIN;
-EXPLAIN EXECUTE multi_shard_query_param(5);
-Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+EXPLAIN (COSTS OFF) EXECUTE multi_shard_query_param(5);
+Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: One of 2
   ->  Task
         Node: host=localhost port=xxxxx dbname=regression
-        ->  Update on lineitem_290000 lineitem  (cost=0.00..176.00 rows=6000 width=140)
-              ->  Seq Scan on lineitem_290000 lineitem  (cost=0.00..176.00 rows=6000 width=140)
+        ->  Update on lineitem_290000 lineitem
+              ->  Seq Scan on lineitem_290000 lineitem
 ROLLBACK;
 BEGIN;
 EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE multi_shard_query_param(5);
@@ -2078,7 +2066,6 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT JSON) INSERT INT
                       "Plans": [
                         {
                           "Node Type": "Result",
-                          "Parent Relationship": "Member",
                           "Parallel Aware": false,
                           "Actual Rows": 1,
                           "Actual Loops": 1
@@ -2176,7 +2163,6 @@ EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off, FORMAT XML) INSERT INTO
                       <Plans>
                         <Plan>
                           <Node-Type>Result</Node-Type>
-                          <Parent-Relationship>Member</Parent-Relationship>
                           <Parallel-Aware>false</Parallel-Aware>
                           <Actual-Rows>1</Actual-Rows>
                           <Actual-Loops>1</Actual-Loops>
@@ -2784,14 +2770,14 @@ Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
 deallocate update_query;
 -- prepared deletes
 PREPARE delete_query AS DELETE FROM simple WHERE name=$1 OR name=$2;
-EXPLAIN EXECUTE delete_query('x', 'y');
-Custom Scan (Citus Adaptive)  (cost=0.00..0.00 rows=0 width=0)
+EXPLAIN (COSTS OFF) EXECUTE delete_query('x', 'y');
+Custom Scan (Citus Adaptive)
   Task Count: 2
   Tasks Shown: One of 2
   ->  Task
         Node: host=localhost port=xxxxx dbname=regression
-        ->  Delete on simple_570026 simple  (cost=0.00..29.05 rows=13 width=6)
-              ->  Seq Scan on simple_570026 simple  (cost=0.00..29.05 rows=13 width=6)
+        ->  Delete on simple_570026 simple
+              ->  Seq Scan on simple_570026 simple
                     Filter: ((name = 'x'::text) OR (name = 'y'::text))
 EXPLAIN :default_analyze_flags EXECUTE delete_query('x', 'y');
 Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
