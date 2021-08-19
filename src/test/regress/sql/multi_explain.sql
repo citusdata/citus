@@ -539,7 +539,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
 BEGIN;
-EXPLAIN EXECUTE multi_shard_query_param(5);
+EXPLAIN (COSTS OFF) EXECUTE multi_shard_query_param(5);
 ROLLBACK;
 BEGIN;
 EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE multi_shard_query_param(5);
@@ -990,7 +990,7 @@ deallocate update_query;
 
 -- prepared deletes
 PREPARE delete_query AS DELETE FROM simple WHERE name=$1 OR name=$2;
-EXPLAIN EXECUTE delete_query('x', 'y');
+EXPLAIN (COSTS OFF) EXECUTE delete_query('x', 'y');
 EXPLAIN :default_analyze_flags EXECUTE delete_query('x', 'y');
 deallocate delete_query;
 
