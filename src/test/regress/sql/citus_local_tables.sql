@@ -93,42 +93,6 @@ SELECT create_distributed_table('distributed_table', 'a');
 -- cannot create citus local table from an existing citus table
 SELECT citus_add_local_table_to_metadata('distributed_table');
 
--- partitioned table tests --
-
-CREATE TABLE partitioned_table(a int, b int) PARTITION BY RANGE (a);
-CREATE TABLE partitioned_table_1 PARTITION OF partitioned_table FOR VALUES FROM (0) TO (10);
-CREATE TABLE partitioned_table_2 PARTITION OF partitioned_table FOR VALUES FROM (10) TO (20);
-
--- cannot create partitioned citus local tables
-SELECT citus_add_local_table_to_metadata('partitioned_table');
-
-BEGIN;
-  CREATE TABLE citus_local_table PARTITION OF partitioned_table FOR VALUES FROM (20) TO (30);
-
-  -- cannot create citus local table as a partition of a local table
-  SELECT citus_add_local_table_to_metadata('citus_local_table');
-ROLLBACK;
-
-BEGIN;
-  CREATE TABLE citus_local_table (a int, b int);
-
-  SELECT citus_add_local_table_to_metadata('citus_local_table');
-
-  -- cannot create citus local table as a partition of a local table
-  -- via ALTER TABLE commands as well
-  ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
-ROLLBACK;
-
-BEGIN;
-  SELECT create_distributed_table('partitioned_table', 'a');
-
-  CREATE TABLE citus_local_table (a int, b int);
-  SELECT citus_add_local_table_to_metadata('citus_local_table');
-
-  -- cannot attach citus local table to a partitioned distributed table
-  ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
-ROLLBACK;
-
 -- show that we do not support inheritance relationships --
 
 CREATE TABLE parent_table (a int, b text);
