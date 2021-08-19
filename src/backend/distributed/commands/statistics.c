@@ -442,8 +442,8 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	foreach_oid(statisticsId, statisticsIdList)
 	{
 		/* we need create commands for already created stats before distribution */
-		char *createStatisticsCommand = pg_get_statisticsobj_worker(statisticsId,
-																	false, false);
+		char *createStatisticsCommand = pg_get_statisticsobj_worker_compat(statisticsId,
+																		   false, false);
 
 		explicitStatisticsCommandList =
 			lappend(explicitStatisticsCommandList,
