@@ -60,6 +60,8 @@
 #define pgproc_statusflags_compat(pgproc) ((pgproc)->statusFlags)
 #define get_partition_parent_compat(a, b) get_partition_parent(a, b)
 #define RelationGetPartitionDesc_compat(a, b) RelationGetPartitionDesc(a, b)
+#define make_simple_restrictinfo_compat(a, b) make_simple_restrictinfo(a, b)
+#define pull_varnos_compat(a, b) pull_varnos(a, b)
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -94,6 +96,8 @@
 #define get_partition_parent_compat(a, b) get_partition_parent(a)
 #define RelationGetPartitionDesc_compat(a, b) RelationGetPartitionDesc(a)
 #define PQ_LARGE_MESSAGE_LIMIT 0
+#define make_simple_restrictinfo_compat(a, b) make_simple_restrictinfo(b)
+#define pull_varnos_compat(a, b) pull_varnos(b)
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
