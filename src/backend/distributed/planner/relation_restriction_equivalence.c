@@ -2054,7 +2054,7 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		 * If the restriction involves multiple tables, we cannot add it to
 		 * input relation's expression list.
 		 */
-		Relids varnos = pull_varnos(NULL, (Node *) restrictionClause);
+		Relids varnos = pull_varnos_compat(NULL, (Node *) restrictionClause);
 		if (bms_num_members(varnos) != 1)
 		{
 			continue;
