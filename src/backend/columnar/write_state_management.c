@@ -16,6 +16,7 @@
 #include "access/tsmapi.h"
 #if PG_VERSION_NUM >= 130000
 #include "access/heaptoast.h"
+#include "common/hashfn.h"
 #else
 #include "access/tuptoaster.h"
 #endif
@@ -132,9 +133,10 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 				"Column Store Write State Management Context",
 				ALLOCSET_DEFAULT_SIZES);
 		HASHCTL info;
-		uint32 hashFlags = (HASH_ELEM | HASH_STRINGS | HASH_CONTEXT);
+		uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 		memset(&info, 0, sizeof(info));
 		info.keysize = sizeof(Oid);
+		info.hash = oid_hash;
 		info.entrysize = sizeof(WriteStateMapEntry);
 		info.hcxt = WriteStateContext;
 
