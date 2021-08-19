@@ -93,6 +93,7 @@
 	((&ProcGlobal->allPgXact[(pgproc)->pgprocno])->vacuumFlags)
 #define get_partition_parent_compat(a, b) get_partition_parent(a)
 #define RelationGetPartitionDesc_compat(a, b) RelationGetPartitionDesc(a)
+#define PQ_LARGE_MESSAGE_LIMIT 0
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
