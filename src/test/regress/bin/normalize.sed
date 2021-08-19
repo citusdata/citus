@@ -176,7 +176,7 @@ s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/
 /^DEBUG:  EventTriggerInvoke [0-9]+$/d
 
 # ignore DEBUG1 messages that Postgres generates
-/^DEBUG:  rehashing catalog cache id [0-9]+$/d
+/^DEBUG:  rehashing catalog cache id .*$/d
 
 # ignore JIT related messages
 /^DEBUG:  probing availability of JIT.*/d
@@ -229,3 +229,14 @@ s/ERROR:  parallel workers for vacuum must/ERROR:  parallel vacuum degree must/g
 
 # ignore PL/pgSQL line numbers that differ on Mac builds
 s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g
+
+# can be removed after dropping PG13 support
+s/ERROR:  parallel workers for vacuum must be between/ERROR:  parallel vacuum degree must be between/g
+s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
+s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
+s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
+/.*Query Identifier.*/d
+/.*Async-Capable.*/d
+/.*Async Capable.*/d
+/Parent Relationship/d
+/Parent-Relationship/d
