@@ -448,6 +448,10 @@ workflows:
           name: build-13
           pg_major: 13
           image_tag: '13.4'
+      - build:
+          name: build-14
+          pg_major: 14
+          image_tag: '14beta3-dev202108191715'   
 
       - check-style
       - check-sql-snapshots
