@@ -344,8 +344,6 @@ SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,maca
 (1 row)
 
 ALTER FUNCTION eq(macaddr,macaddr) SET "citus.setting;'" TO 'hello '' world';
-ERROR:  invalid configuration parameter name "citus.setting;'"
-DETAIL:  Custom parameter names must be two or more simple identifiers separated by dots.
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
  verify_function_is_same_on_workers
 ---------------------------------------------------------------------
@@ -353,8 +351,6 @@ SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,maca
 (1 row)
 
 ALTER FUNCTION eq(macaddr,macaddr) RESET "citus.setting;'";
-ERROR:  invalid configuration parameter name "citus.setting;'"
-DETAIL:  Custom parameter names must be two or more simple identifiers separated by dots.
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
  verify_function_is_same_on_workers
 ---------------------------------------------------------------------
@@ -546,8 +542,7 @@ SELECT * FROM run_command_on_workers('SELECT function_tests2.sum2(id) FROM (sele
 
 -- postgres doesn't accept parameter names in the regprocedure input
 SELECT create_distributed_function('eq_with_param_names(val1 macaddr, macaddr)', 'val1');
-ERROR:  syntax error at or near "macaddr"
-CONTEXT:  invalid type name "val1 macaddr"
+ERROR:  invalid type name "val1 macaddr"
 -- invalid distribution_arg_name
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='test');
 ERROR:  cannot distribute the function "eq_with_param_names" since the distribution argument is not valid
