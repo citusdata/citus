@@ -798,6 +798,9 @@ void
 GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLEventList,
 									   int indexFlags)
 {
+	/* generate fully-qualified names */
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
+
 	Oid indexId = indexForm->indexrelid;
 	bool indexImpliedByConstraint = IndexImpliedByAConstraint(indexForm);
 
@@ -845,6 +848,9 @@ GatherIndexAndConstraintDefinitionList(Form_pg_index indexForm, List **indexDDLE
 		*indexDDLEventList = list_concat(*indexDDLEventList,
 										 alterIndexStatisticsCommands);
 	}
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
 }
 
 

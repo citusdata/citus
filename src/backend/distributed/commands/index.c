@@ -306,37 +306,25 @@ ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcesso
 								int indexFlags)
 {
 	List *result = NIL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
-
-	/* open system catalog and scan all indexes that belong to this table */
-	Relation pgIndex = table_open(IndexRelationId, AccessShareLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_index_indrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgIndex,
-													IndexIndrelidIndexId, true, /* indexOK */
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	Relation relation = RelationIdGetRelation(relationId);
+	List *indexIdList = RelationGetIndexList(relation);
+	Oid indexId = InvalidOid;
+	foreach_oid(indexId, indexIdList)
 	{
-		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
-		pgIndexProcessor(indexForm, &result, indexFlags);
+		HeapTuple indexTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(indexId));
+		if (!HeapTupleIsValid(indexTuple))
+		{
+			ereport(ERROR, (errmsg("cache lookup failed for index with oid %u",
+								   indexId)));
+		}
 
-		heapTuple = systable_getnext(scanDescriptor);
+		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+		pgIndexProcessor(indexForm, &result, indexFlags);
+		ReleaseSysCache(indexTuple);
 	}
 
-	/* clean up scan and close system catalog */
-	systable_endscan(scanDescriptor);
-	table_close(pgIndex, AccessShareLock);
-
-	/* revert back to original search_path */
-	PopOverrideSearchPath();
-
+	RelationClose(relation);
 	return result;
 }
 

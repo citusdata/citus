@@ -888,16 +888,11 @@ GetIndexAccessMethodName(Oid indexId)
 	Oid indexAMId = indexForm->relam;
 	ReleaseSysCache(indexTuple);
 
-	/* fetch pg_am tuple of index' access method */
-	HeapTuple indexAMTuple = SearchSysCache1(AMOID, ObjectIdGetDatum(indexAMId));
-	if (!HeapTupleIsValid(indexAMTuple))
+	char *indexAmName = get_am_name(indexAMId);
+	if (!indexAmName)
 	{
 		ereport(ERROR, (errmsg("access method with oid %u does not exist", indexAMId)));
 	}
-
-	Form_pg_am indexAMForm = (Form_pg_am) GETSTRUCT(indexAMTuple);
-	char *indexAmName = pstrdup(indexAMForm->amname.data);
-	ReleaseSysCache(indexAMTuple);
 
 	return indexAmName;
 }
