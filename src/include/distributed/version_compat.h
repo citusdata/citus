@@ -62,6 +62,7 @@
 #define RelationGetPartitionDesc_compat(a, b) RelationGetPartitionDesc(a, b)
 #define make_simple_restrictinfo_compat(a, b) make_simple_restrictinfo(a, b)
 #define pull_varnos_compat(a, b) pull_varnos(a, b)
+#define pg_get_statisticsobj_worker_compat(a, b, c) pg_get_statisticsobj_worker(a, b, c)
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL_COMPAT F_NEXTVAL_OID
@@ -98,6 +99,7 @@
 #define PQ_LARGE_MESSAGE_LIMIT 0
 #define make_simple_restrictinfo_compat(a, b) make_simple_restrictinfo(b)
 #define pull_varnos_compat(a, b) pull_varnos(b)
+#define pg_get_statisticsobj_worker_compat(a, b, c) pg_get_statisticsobj_worker(a, c)
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_13
