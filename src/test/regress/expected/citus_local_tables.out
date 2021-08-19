@@ -159,11 +159,11 @@ BEGIN;
 (1 row)
 
   INSERT INTO citus_local_table_3 VALUES (1);
-NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.citus_local_table_3_1504024 (value) VALUES (1)
-NOTICE:  executing the command locally: UPDATE citus_local_tables_test_schema.citus_local_table_3_1504024 citus_local_table_3 SET value = (value OPERATOR(pg_catalog.+) 1)
+NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.citus_local_table_3_1504010 (value) VALUES (1)
+NOTICE:  executing the command locally: UPDATE citus_local_tables_test_schema.citus_local_table_3_1504010 citus_local_table_3 SET value = (value OPERATOR(pg_catalog.+) 1)
   -- show that trigger is executed only once, we should see "2" (not "3")
   SELECT * FROM citus_local_table_3;
-NOTICE:  executing the command locally: SELECT value FROM citus_local_tables_test_schema.citus_local_table_3_1504024 citus_local_table_3
+NOTICE:  executing the command locally: SELECT value FROM citus_local_tables_test_schema.citus_local_table_3_1504010 citus_local_table_3
  value
 ---------------------------------------------------------------------
      2
@@ -290,13 +290,13 @@ ERROR:  relation "citus_local_table_1" is a local table
 SELECT get_shard_id_for_distribution_column('citus_local_table_1', 'not_checking_this_arg_for_non_dist_tables');
  get_shard_id_for_distribution_column
 ---------------------------------------------------------------------
-                              1504027
+                              1504013
 (1 row)
 
 SELECT get_shard_id_for_distribution_column('citus_local_table_1');
  get_shard_id_for_distribution_column
 ---------------------------------------------------------------------
-                              1504027
+                              1504013
 (1 row)
 
 -- master_copy_shard_placement is not supported
@@ -308,7 +308,7 @@ BEGIN;
   SELECT undistribute_table('citus_local_table_1');
 NOTICE:  creating a new table for citus_local_tables_test_schema.citus_local_table_1
 NOTICE:  moving the data of citus_local_tables_test_schema.citus_local_table_1
-NOTICE:  executing the command locally: SELECT a FROM citus_local_tables_test_schema.citus_local_table_1_1504027 citus_local_table_1
+NOTICE:  executing the command locally: SELECT a FROM citus_local_tables_test_schema.citus_local_table_1_1504013 citus_local_table_1
 NOTICE:  dropping the old citus_local_tables_test_schema.citus_local_table_1
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
 NOTICE:  renaming the new table to citus_local_tables_test_schema.citus_local_table_1
@@ -351,7 +351,7 @@ SELECT citus_add_local_table_to_metadata('"CiTUS!LocalTables"."LocalTabLE.1!?!"'
 -- drop the table before creating it when the search path is set
 SET search_path to "CiTUS!LocalTables" ;
 DROP TABLE "LocalTabLE.1!?!";
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS "CiTUS!LocalTables"."LocalTabLE.1!?!_1504035" CASCADE
+NOTICE:  executing the command locally: DROP TABLE IF EXISTS "CiTUS!LocalTables"."LocalTabLE.1!?!_1504021" CASCADE
 -- have a custom type in the local table
 CREATE TYPE local_type AS (key int, value jsonb);
 -- create btree_gist for GiST index
@@ -401,10 +401,10 @@ SELECT citus_add_local_table_to_metadata('"LocalTabLE.1!?!9012345678901234567890
 -- create some objects after citus_add_local_table_to_metadata
 CREATE INDEX "my!Index2" ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
 NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
-NOTICE:  executing the command locally: CREATE  INDEX   "my!Index2_1504036" ON  "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504036" USING btree (id )  WITH (fillfactor = '90' )WHERE (id < 20)
+NOTICE:  executing the command locally: CREATE  INDEX   "my!Index2_1504022" ON  "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504022" USING btree (id )  WITH (fillfactor = '90' )WHERE (id < 20)
 CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
-NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_1504036 ON  "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504036" USING btree (id )
+NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_1504022 ON  "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504022" USING btree (id )
 ---------------------------------------------------------------------
 ---- utility command execution ----
 ---------------------------------------------------------------------
@@ -493,7 +493,7 @@ CREATE TABLE local_table_4 (
   b int references local_table_4(a));
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_tables_test_schema.local_table_4 ADD CONSTRAINT local_table_4_a_fkey FOREIGN KEY (a) REFERENCES citus_local_tables_test_schema.citus_local_table_1(a)')
 ALTER TABLE citus_local_table_1 ADD COLUMN b int NOT NULL;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504027, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD COLUMN b int NOT NULL;')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504013, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD COLUMN b int NOT NULL;')
 -- show that we added column with NOT NULL
 SELECT table_name, column_name, is_nullable
 FROM INFORMATION_SCHEMA.COLUMNS
@@ -502,11 +502,11 @@ ORDER BY 1;
          table_name          | column_name | is_nullable
 ---------------------------------------------------------------------
  citus_local_table_1         | b           | NO
- citus_local_table_1_1504027 | b           | NO
+ citus_local_table_1_1504013 | b           | NO
 (2 rows)
 
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT unique_a_b UNIQUE (a, b);
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504027, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT unique_a_b UNIQUE (a, b);')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504013, 'citus_local_tables_test_schema', 'ALTER TABLE citus_local_table_1 ADD CONSTRAINT unique_a_b UNIQUE (a, b);')
 -- show that we defined unique constraints
 SELECT conrelid::regclass, conname, conkey
 FROM pg_constraint
@@ -514,12 +514,12 @@ WHERE conrelid::regclass::text LIKE 'citus_local_table_1%' AND contype = 'u'
 ORDER BY 1;
           conrelid           |      conname       | conkey
 ---------------------------------------------------------------------
- citus_local_table_1_1504027 | unique_a_b_1504027 | {1,2}
+ citus_local_table_1_1504013 | unique_a_b_1504013 | {1,2}
  citus_local_table_1         | unique_a_b         | {1,2}
 (2 rows)
 
 CREATE UNIQUE INDEX citus_local_table_1_idx ON citus_local_table_1(b);
-NOTICE:  executing the command locally: CREATE UNIQUE INDEX   citus_local_table_1_idx_1504027 ON  citus_local_tables_test_schema.citus_local_table_1_1504027 USING btree (b )
+NOTICE:  executing the command locally: CREATE UNIQUE INDEX   citus_local_table_1_idx_1504013 ON  citus_local_tables_test_schema.citus_local_table_1_1504013 USING btree (b )
 -- show that we successfully defined the unique index
 SELECT indexrelid::regclass, indrelid::regclass, indkey
 FROM pg_index
@@ -528,7 +528,7 @@ ORDER BY 1;
      indexrelid     |          indrelid           | indkey
 ---------------------------------------------------------------------
  unique_a_b         | citus_local_table_1         | 1 2
- unique_a_b_1504027 | citus_local_table_1_1504027 | 1 2
+ unique_a_b_1504013 | citus_local_table_1_1504013 | 1 2
 (2 rows)
 
 -- test creating citus local table with an index from non-default schema
@@ -536,7 +536,7 @@ CREATE SCHEMA "test_\'index_schema";
 CREATE TABLE "test_\'index_schema".testindex (a int, b int);
 CREATE INDEX ind ON "test_\'index_schema".testindex (a);
 ALTER TABLE "test_\'index_schema".testindex ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504040, E'test_\\''index_schema', 1504037, 'citus_local_tables_test_schema', E'ALTER TABLE "test_\\''index_schema".testindex ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1504026, E'test_\\''index_schema', 1504023, 'citus_local_tables_test_schema', E'ALTER TABLE "test_\\''index_schema".testindex ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
 SELECT COUNT(*)=2 FROM pg_indexes WHERE tablename LIKE 'testindex%' AND indexname LIKE 'ind%';
  ?column?
 ---------------------------------------------------------------------
@@ -561,7 +561,7 @@ DROP TABLE citus_local_table_1, citus_local_table_2, distributed_table, local_ta
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.local_table_4_xxxxx CASCADE
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.reference_table_xxxxx CASCADE
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.local_table_xxxxx CASCADE
-NOTICE:  drop cascades to constraint fkey_c_to_local_1504027 on table citus_local_tables_test_schema.citus_local_table_1_1504027
+NOTICE:  drop cascades to constraint fkey_c_to_local_1504013 on table citus_local_tables_test_schema.citus_local_table_1_1504013
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
 -- test some other udf's with citus local tables
@@ -749,7 +749,7 @@ CREATE STATISTICS stx1 ON a, b FROM test_citus_local_table_with_stats;
 ALTER TABLE test_citus_local_table_with_stats ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE test_citus_local_table_with_stats ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);')
 CREATE STATISTICS "CiTUS!LocalTables"."Bad\'StatName" ON a, b FROM test_citus_local_table_with_stats;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504044, 'citus_local_tables_test_schema', E'CREATE STATISTICS "CiTUS!LocalTables"."Bad\\''StatName" ON a, b FROM citus_local_tables_test_schema.test_citus_local_table_with_stats')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1504030, 'citus_local_tables_test_schema', E'CREATE STATISTICS "CiTUS!LocalTables"."Bad\\''StatName" ON a, b FROM citus_local_tables_test_schema.test_citus_local_table_with_stats')
 SELECT COUNT(*)=4 FROM pg_statistic_ext WHERE stxname LIKE 'stx1%' or stxname LIKE 'Bad\\''StatName%' ;
  ?column?
 ---------------------------------------------------------------------
@@ -772,4 +772,4 @@ RESET client_min_messages;
 \set VERBOSITY terse
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;
-NOTICE:  drop cascades to 27 other objects
+NOTICE:  drop cascades to 26 other objects

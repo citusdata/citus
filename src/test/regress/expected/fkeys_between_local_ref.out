@@ -99,10 +99,6 @@ CREATE TABLE partitioned_table_1_100_200 PARTITION OF partitioned_table_1 FOR VA
 CREATE TABLE partitioned_table_1_200_300 PARTITION OF partitioned_table_1 FOR VALUES FROM (200) TO (300);
 INSERT INTO partitioned_table_1 SELECT i FROM generate_series(195, 205) i;
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES local_table_4(col_1);
--- now that we attached partitioned table to graph below errors out
--- since we cannot create citus local table from partitioned tables
-ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
-ERROR:  cannot add local table "partitioned_table_1" to metadata, only regular tables and foreign tables can be added to citus metadata
 ALTER TABLE partitioned_table_1 DROP CONSTRAINT fkey_8;
 BEGIN;
   -- now that we detached partitioned table from graph, succeeds
@@ -329,7 +325,7 @@ BEGIN;
 
   -- show that we validate foreign key constraints, errors out
   INSERT INTO local_table_5 VALUES (300);
-ERROR:  insert or update on table "local_table_5_1518070" violates foreign key constraint "local_table_5_col_1_fkey1_1518070"
+ERROR:  insert or update on table "local_table_5_1518066" violates foreign key constraint "local_table_5_col_1_fkey1_1518066"
 ROLLBACK;
 BEGIN;
   CREATE SCHEMA another_schema_fkeys_between_local_ref;
@@ -620,10 +616,6 @@ ORDER BY tablename;
  reference_table_1 | n          | t
 (7 rows)
 
--- this errors out as we don't support creating citus local
--- tables from partitioned tables
-CREATE TABLE part_local_table (col_1 INT REFERENCES reference_table_1(col_1)) PARTITION BY RANGE (col_1);
-ERROR:  cannot add local table "part_local_table" to metadata, only regular tables and foreign tables can be added to citus metadata
 -- they fail as col_99 does not exist
 CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_99) REFERENCES reference_table_1(col_1));
 ERROR:  column "col_99" referenced in foreign key constraint does not exist

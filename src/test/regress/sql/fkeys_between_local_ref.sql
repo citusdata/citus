@@ -83,10 +83,6 @@ INSERT INTO partitioned_table_1 SELECT i FROM generate_series(195, 205) i;
 
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES local_table_4(col_1);
 
--- now that we attached partitioned table to graph below errors out
--- since we cannot create citus local table from partitioned tables
-ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
-
 ALTER TABLE partitioned_table_1 DROP CONSTRAINT fkey_8;
 
 BEGIN;
@@ -404,10 +400,6 @@ SELECT create_distributed_table('local_table_6', 'col_1');
 SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
 WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
 ORDER BY tablename;
-
--- this errors out as we don't support creating citus local
--- tables from partitioned tables
-CREATE TABLE part_local_table (col_1 INT REFERENCES reference_table_1(col_1)) PARTITION BY RANGE (col_1);
 
 -- they fail as col_99 does not exist
 CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_99) REFERENCES reference_table_1(col_1));
