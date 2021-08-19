@@ -641,9 +641,26 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			{
 				targetEntryPartitionColumn = false;
 			}
-			else if (targetEntry->resno == partitionColumn->varattno)
+			else
 			{
-				targetEntryPartitionColumn = true;
+				if (commandType == CMD_UPDATE) {
+					/*
+					 * For 
+					 */
+					RangeTblEntry* resultRTE = ExtractResultRelationRTE(queryTree);
+					/*
+					 * FirstLowInvalidHeapAttributeNumber is added as an offset to rte->updatedCols.
+					 * So we substract that to get the column no for an updated column that matches
+					 * resultRTE->updatedcols.
+					 */
+					int updatedColNoWithOffset = partitionColumn->varattno - FirstLowInvalidHeapAttributeNumber;
+					if (bms_is_member(updatedColNoWithOffset, resultRTE->updatedCols)) {
+						targetEntryPartitionColumn = true;
+					}
+
+				}else if (targetEntry->resno == partitionColumn->varattno) {
+					targetEntryPartitionColumn = true;
+				}
 			}
 
 			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
@@ -662,6 +679,8 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 									 NULL, NULL);
 			}
 
+			//TODO:: targetEntry->resno is wrong here, we SHOULD think about 
+			//TargetEntryChangesValue for update case based on 86dc90056dfdbd9d1b891718d2e5614e3e432f35.
 			if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
 				TargetEntryChangesValue(targetEntry, partitionColumn,
 										queryTree->jointree))
