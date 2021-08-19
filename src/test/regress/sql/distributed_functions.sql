@@ -233,10 +233,6 @@ ALTER ROUTINE eq(macaddr,macaddr) SET client_min_messages TO debug;
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
 ALTER FUNCTION eq(macaddr,macaddr) RESET client_min_messages;
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
-ALTER FUNCTION eq(macaddr,macaddr) SET "citus.setting;'" TO 'hello '' world';
-SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
-ALTER FUNCTION eq(macaddr,macaddr) RESET "citus.setting;'";
-SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
 ALTER FUNCTION eq(macaddr,macaddr) SET search_path TO 'sch'';ma', public;
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
 ALTER FUNCTION eq(macaddr,macaddr) RESET search_path;
@@ -317,9 +313,6 @@ SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('0123456789ab','
 DROP AGGREGATE function_tests2.sum2(int);
 -- call should fail as aggregate should have been dropped
 SELECT * FROM run_command_on_workers('SELECT function_tests2.sum2(id) FROM (select 1 id, 2) subq;') ORDER BY 1,2;
-
--- postgres doesn't accept parameter names in the regprocedure input
-SELECT create_distributed_function('eq_with_param_names(val1 macaddr, macaddr)', 'val1');
 
 -- invalid distribution_arg_name
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='test');
