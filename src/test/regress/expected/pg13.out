@@ -228,39 +228,19 @@ INSERT INTO test_wal VALUES(3,33),(4,44),(5,55) RETURNING *;
 (10 rows)
 
 -- make sure WAL works in distributed subplans
+-- this test has different output for pg14 and here we mostly test that
+-- we don't get an error, hence we use explain_has_distributed_subplan.
+SELECT public.explain_has_distributed_subplan(
+$$
 EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
 WITH cte_1 AS (INSERT INTO test_wal VALUES(6,66),(7,77),(8,88) RETURNING *)
 SELECT * FROM cte_1;
-                                            QUERY PLAN
+$$
+);
+ explain_has_distributed_subplan
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
-   ->  Distributed Subplan XXX_1
-         Intermediate Data Size: 54 bytes
-         Result destination: Write locally
-         ->  Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
-               Task Count: 2
-               Tuple data received from nodes: 9 bytes
-               Tasks Shown: All
-               ->  Task
-                     Tuple data received from node: 6 bytes
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Insert on test_wal_65012 citus_table_alias (actual rows=2 loops=1)
-                           WAL: records=2 bytes=126
-                           ->  Values Scan on "*VALUES*" (actual rows=2 loops=1)
-               ->  Task
-                     Tuple data received from node: 3 bytes
-                     Node: host=localhost port=xxxxx dbname=regression
-                     ->  Insert on test_wal_65013 citus_table_alias (actual rows=1 loops=1)
-                           WAL: records=1 bytes=63
-                           ->  Result (actual rows=1 loops=1)
-   Task Count: 1
-   Tuple data received from nodes: 9 bytes
-   Tasks Shown: All
-   ->  Task
-         Tuple data received from node: 9 bytes
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Function Scan on read_intermediate_result intermediate_result (actual rows=3 loops=1)
-(27 rows)
+ t
+(1 row)
 
 SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;
