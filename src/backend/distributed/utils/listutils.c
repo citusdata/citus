@@ -138,9 +138,12 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 	if (!isStringList)
 	{
 		flags |= HASH_BLOBS;
-	}else {
+	}
+#if PG_VERSION_NUM >= PG_VERSION_14
+	else {
 		flags |= HASH_STRINGS;
 	}
+#endif
 
 	HTAB *itemSet = hash_create("ListToHashSet", capacity, &info, flags);
 
