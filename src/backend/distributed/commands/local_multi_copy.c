@@ -209,10 +209,8 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 	Oid shardOid = GetTableLocalShardOid(relationId, shardId);
 	Relation shard = table_open(shardOid, RowExclusiveLock);
 	ParseState *pState = make_parsestate(NULL);
-
-	/* p_rtable of pState is set so that we can check constraints. */
-	pState->p_rtable = CreateRangeTable(shard, ACL_INSERT);
-
+	(void) addRangeTableEntryForRelation(pState, shard, AccessShareLock,
+										 NULL, false, false);
 	CopyFromState_compat cstate = BeginCopyFrom_compat(pState, shard, NULL, NULL, false,
 													   ReadFromLocalBufferCallback,
 													   copyStatement->attlist,
