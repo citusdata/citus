@@ -386,7 +386,7 @@ step s1-drop: DROP TABLE upsert_hash;
 step s2-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k'; <waiting ...>
 step s1-commit: COMMIT;
 step s2-upsert: <... completed>
-error in steps s1-commit s2-upsert: ERROR:  relation "upsert_hash" does not exist
+ERROR:  relation "upsert_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM upsert_hash;
 ERROR:  relation "upsert_hash" does not exist
@@ -507,7 +507,7 @@ step s1-ddl-rename-column: ALTER TABLE upsert_hash RENAME data TO new_column;
 step s2-upsert: INSERT INTO upsert_hash VALUES(4, 'k') ON CONFLICT(id) DO UPDATE SET data = 'k'; <waiting ...>
 step s1-commit: COMMIT;
 step s2-upsert: <... completed>
-error in steps s1-commit s2-upsert: ERROR:  column "data" of relation "upsert_hash" does not exist
+ERROR:  column "data" of relation "upsert_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM upsert_hash;
 count

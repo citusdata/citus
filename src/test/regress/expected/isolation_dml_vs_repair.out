@@ -16,7 +16,7 @@ step s1-insertone:
 step s2-repair:
     SELECT master_copy_shard_placement((SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_dml_vs_repair'::regclass), 'localhost', 57638, 'localhost', 57637);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-repair: <... completed>
@@ -43,7 +43,7 @@ step s1-insertall:
 step s2-repair:
     SELECT master_copy_shard_placement((SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'test_dml_vs_repair'::regclass), 'localhost', 57638, 'localhost', 57637);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-repair: <... completed>
@@ -70,7 +70,7 @@ master_copy_shard_placement
 step s1-insertone:
     INSERT INTO test_dml_vs_repair VALUES(1, 1);
  <waiting ...>
-step s2-commit:
+step s2-commit: 
     COMMIT;
 
 step s1-insertone: <... completed>
@@ -118,7 +118,7 @@ master_copy_shard_placement
 step s1-prepared-insertone:
     EXECUTE insertone;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
     COMMIT;
 
 step s1-prepared-insertone: <... completed>
@@ -171,7 +171,7 @@ master_copy_shard_placement
 step s1-prepared-insertall:
     EXECUTE insertall;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
     COMMIT;
 
 step s1-prepared-insertall: <... completed>

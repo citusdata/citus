@@ -20,7 +20,7 @@ step s2-begin:
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -51,7 +51,7 @@ step s2-begin:
 step s2-delete-t1:
  DELETE FROM test_table_1_rf1 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-delete-t1: <... completed>
@@ -82,7 +82,7 @@ step s2-begin:
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -114,7 +114,7 @@ step s2-begin:
 step s2-update-rt:
  UPDATE ref_table SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-rt: <... completed>
@@ -217,7 +217,7 @@ step s2-select-from-t1-t2-for-update:
   ORDER BY 1
   FOR UPDATE;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-select-from-t1-t2-for-update: <... completed>
@@ -252,7 +252,7 @@ step s2-select-from-t1-t2-for-update:
   ORDER BY 1
   FOR UPDATE;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-select-from-t1-t2-for-update: <... completed>
@@ -283,7 +283,7 @@ step s2-begin:
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -314,7 +314,7 @@ step s2-begin:
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -341,7 +341,7 @@ step s2-begin:
 step s2-update-rt:
  UPDATE ref_table SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-rt: <... completed>
@@ -368,7 +368,7 @@ step s2-begin:
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -393,7 +393,7 @@ step s2-begin:
 step s2-update-rt:
  UPDATE ref_table SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-rt: <... completed>

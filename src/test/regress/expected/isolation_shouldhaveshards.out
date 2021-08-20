@@ -5,43 +5,43 @@ starting permutation: s1-add-second-node s1-begin s2-begin s2-create-distributed
 
 1
 step s1-add-second-node:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-create-distributed-table:
-	CREATE TABLE t1 (a int);
-	-- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ CREATE TABLE t1 (a int);
+ -- session needs to have replication factor set to 1, can't do in setup
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
 
 
 step s1-noshards:
-	SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
+ SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
  <waiting ...>
-step s2-commit:
-	COMMIT;
+step s2-commit: 
+ COMMIT;
 
 step s1-noshards: <... completed>
 master_set_node_property
 
 
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-shardcounts:
-	SELECT nodeport, count(*)
-	FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-	WHERE logicalrelid = 't1'::regclass GROUP BY nodeport ORDER BY nodeport;
+ SELECT nodeport, count(*)
+ FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+ WHERE logicalrelid = 't1'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 nodeport       count
 
@@ -57,43 +57,43 @@ starting permutation: s1-add-second-node s1-begin s2-begin s1-noshards s2-create
 
 1
 step s1-add-second-node:
-	SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 
 1
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-noshards:
-	SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
+ SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
 
 master_set_node_property
 
 
 step s2-create-distributed-table:
-	CREATE TABLE t1 (a int);
-	-- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+ CREATE TABLE t1 (a int);
+ -- session needs to have replication factor set to 1, can't do in setup
+ SET citus.shard_replication_factor TO 1;
+ SELECT create_distributed_table('t1', 'a');
  <waiting ...>
-step s1-commit:
-	COMMIT;
+step s1-commit: 
+ COMMIT;
 
 step s2-create-distributed-table: <... completed>
 create_distributed_table
 
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s2-shardcounts:
-	SELECT nodeport, count(*)
-	FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
-	WHERE logicalrelid = 't1'::regclass GROUP BY nodeport ORDER BY nodeport;
+ SELECT nodeport, count(*)
+ FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
+ WHERE logicalrelid = 't1'::regclass GROUP BY nodeport ORDER BY nodeport;
 
 nodeport       count
 
@@ -108,29 +108,29 @@ starting permutation: s1-begin s2-begin s1-noshards s2-update-node s1-commit s2-
 
 1
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-noshards:
-	SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
+ SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
 
 master_set_node_property
 
 
 step s2-update-node:
-	select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
+ select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
  <waiting ...>
-step s1-commit:
-	COMMIT;
+step s1-commit: 
+ COMMIT;
 
 step s2-update-node: <... completed>
 master_update_node
 
 
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 master_remove_node
 
@@ -141,27 +141,27 @@ starting permutation: s1-begin s2-begin s2-update-node s1-noshards s2-commit s1-
 
 1
 step s1-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-update-node:
-	select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
+ select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
 
 master_update_node
 
 
 step s1-noshards:
-	SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
+ SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
  <waiting ...>
-step s2-commit:
-	COMMIT;
+step s2-commit: 
+ COMMIT;
 
 step s1-noshards: <... completed>
-error in steps s2-commit s1-noshards: ERROR:  node at "localhost:xxxxx" does not exist
+ERROR:  node at "localhost:xxxxx" does not exist
 step s1-commit:
-	COMMIT;
+ COMMIT;
 
 master_remove_node
 

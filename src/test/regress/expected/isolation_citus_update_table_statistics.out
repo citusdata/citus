@@ -87,4 +87,4 @@ step s2-commit:
     COMMIT;
 
 step s1-drop-table: <... completed>
-error in steps s2-commit s1-drop-table: ERROR:  tuple concurrently deleted
+ERROR:  tuple concurrently deleted

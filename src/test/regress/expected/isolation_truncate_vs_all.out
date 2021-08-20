@@ -352,7 +352,7 @@ step s1-drop: DROP TABLE truncate_append;
 step s2-truncate: TRUNCATE truncate_append; <waiting ...>
 step s1-commit: COMMIT;
 step s2-truncate: <... completed>
-error in steps s1-commit s2-truncate: ERROR:  relation "truncate_append" does not exist
+ERROR:  relation "truncate_append" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM truncate_append;
 ERROR:  relation "truncate_append" does not exist

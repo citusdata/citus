@@ -21,7 +21,7 @@ step dist11-update:
 step dist13-update:
     UPDATE local_table SET y = 3 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges:
+step detector-dump-wait-edges: 
     SELECT
         waiting_node_id,
         waiting_transaction_num,
@@ -63,7 +63,7 @@ step local-update:
 step dist13-update:
     UPDATE local_table SET y = 3 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges:
+step detector-dump-wait-edges: 
     SELECT
         waiting_node_id,
         waiting_transaction_num,
@@ -112,10 +112,10 @@ step dist11-update:
 step local-update:
     UPDATE local_table SET y = 2 WHERE x = 1;
  <waiting ...>
-step dist13-update:
+step dist13-update: 
     UPDATE local_table SET y = 3 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges:
+step detector-dump-wait-edges: 
     SELECT
         waiting_node_id,
         waiting_transaction_num,

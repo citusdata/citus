@@ -61,14 +61,14 @@ pg_sleep
 step s2-update-1-on-worker:
   SELECT run_commands_on_session_level_connection_to_node('UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1');
  <waiting ...>
-step s1-update-2:
+step s1-update-2: 
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
 
+ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s2-update-1-on-worker: <... completed>
 run_commands_on_session_level_connection_to_node
 
 
-error in steps s1-update-2 s2-update-1-on-worker: ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s1-commit:
   COMMIT;
 

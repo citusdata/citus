@@ -655,7 +655,7 @@ step s1-drop: DROP TABLE update_hash;
 step s2-update: UPDATE update_hash SET data = 'l' WHERE id = 4; <waiting ...>
 step s1-commit: COMMIT;
 step s2-update: <... completed>
-error in steps s1-commit s2-update: ERROR:  relation "update_hash" does not exist
+ERROR:  relation "update_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM update_hash;
 ERROR:  relation "update_hash" does not exist
@@ -776,7 +776,7 @@ step s1-ddl-rename-column: ALTER TABLE update_hash RENAME data TO new_column;
 step s2-update: UPDATE update_hash SET data = 'l' WHERE id = 4; <waiting ...>
 step s1-commit: COMMIT;
 step s2-update: <... completed>
-error in steps s1-commit s2-update: ERROR:  column "data" of relation "update_hash" does not exist
+ERROR:  column "data" of relation "update_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count
@@ -913,7 +913,7 @@ step s1-drop: DROP TABLE update_hash;
 step s2-update-cte: WITH cte AS (UPDATE update_hash SET data = 'l' WHERE id = 4 RETURNING *) SELECT * FROM cte WHERE id = 4; <waiting ...>
 step s1-commit: COMMIT;
 step s2-update-cte: <... completed>
-error in steps s1-commit s2-update-cte: ERROR:  relation "update_hash" does not exist
+ERROR:  relation "update_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM update_hash;
 ERROR:  relation "update_hash" does not exist
@@ -1046,7 +1046,7 @@ step s1-ddl-rename-column: ALTER TABLE update_hash RENAME data TO new_column;
 step s2-update-cte: WITH cte AS (UPDATE update_hash SET data = 'l' WHERE id = 4 RETURNING *) SELECT * FROM cte WHERE id = 4; <waiting ...>
 step s1-commit: COMMIT;
 step s2-update-cte: <... completed>
-error in steps s1-commit s2-update-cte: ERROR:  column "data" of relation "update_hash" does not exist
+ERROR:  column "data" of relation "update_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM update_hash;
 count

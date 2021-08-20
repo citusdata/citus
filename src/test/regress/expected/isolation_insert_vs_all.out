@@ -366,7 +366,7 @@ step s1-drop: DROP TABLE insert_hash;
 step s2-insert: INSERT INTO insert_hash VALUES(7, 'k'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert: <... completed>
-error in steps s1-commit s2-insert: ERROR:  relation "insert_hash" does not exist
+ERROR:  relation "insert_hash" does not exist
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
 ERROR:  relation "insert_hash" does not exist
 
@@ -833,7 +833,7 @@ step s1-drop: DROP TABLE insert_hash;
 step s2-insert-multi-row: INSERT INTO insert_hash VALUES(7, 'k'), (8, 'l'), (9, 'm'); <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert-multi-row: <... completed>
-error in steps s1-commit s2-insert-multi-row: ERROR:  relation "insert_hash" does not exist
+ERROR:  relation "insert_hash" does not exist
 step s1-select-count: SELECT COUNT(*) FROM insert_hash;
 ERROR:  relation "insert_hash" does not exist
 
