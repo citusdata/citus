@@ -42,6 +42,10 @@
 #define VALID_BLOCKNUMBERS ((uint64) (MaxBlockNumber + 1))
 
 
+struct ColumnarScanDescData;
+typedef struct ColumnarScanDescData *ColumnarScanDesc;
+
+
 const TableAmRoutine * GetColumnarTableAmRoutine(void);
 extern void columnar_tableam_init(void);
 extern void columnar_tableam_finish(void);
@@ -51,7 +55,7 @@ extern TableScanDesc columnar_beginscan_extended(Relation relation, Snapshot sna
 												 ParallelTableScanDesc parallel_scan,
 												 uint32 flags, Bitmapset *attr_needed,
 												 List *scanQual);
-extern int64 ColumnarScanChunkGroupsFiltered(TableScanDesc scanDesc);
+extern int64 ColumnarScanChunkGroupsFiltered(ColumnarScanDesc columnarScanDesc);
 extern bool ColumnarSupportsIndexAM(char *indexAMName);
 extern bool IsColumnarTableAmTable(Oid relationId);
 extern TableDDLCommand * ColumnarGetTableOptionsDDL(Oid relationId);

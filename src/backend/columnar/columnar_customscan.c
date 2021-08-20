@@ -821,11 +821,11 @@ static void
 ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 							   ExplainState *es)
 {
-	TableScanDesc scanDesc = node->ss.ss_currentScanDesc;
+	ColumnarScanDesc columnarScanDesc = (ColumnarScanDesc) node->ss.ss_currentScanDesc;
 
-	if (scanDesc != NULL)
+	if (columnarScanDesc != NULL)
 	{
-		int64 chunkGroupsFiltered = ColumnarScanChunkGroupsFiltered(scanDesc);
+		int64 chunkGroupsFiltered = ColumnarScanChunkGroupsFiltered(columnarScanDesc);
 		ExplainPropertyInteger("Columnar Chunk Groups Removed by Filter", NULL,
 							   chunkGroupsFiltered, es);
 	}
