@@ -130,6 +130,22 @@ citus_add_local_table_to_metadata_internal(Oid relationId, bool cascadeViaForeig
 								  "to 'off' to disable this behavior")));
 	}
 
+	/*
+	 * If the relation is a partition, we need to convert all the partitioned table
+	 * to Citus Local Table. To do that, we call CreateCitusLocalTable with the parent
+	 * relation, instead of the child, since this will cause the parent and all the
+	 * partition child tables to become a Citus Local Table.
+	 */
+	if (PartitionTable(relationId))
+	{
+		Oid parentOid = PartitionParentOid(relationId);
+		if (OidIsValid(parentOid) && !IsCitusTable(parentOid))
+		{
+			CreateCitusLocalTable(parentOid, cascadeViaForeignKeys);
+			return;
+		}
+	}
+
 	CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
 }
 
