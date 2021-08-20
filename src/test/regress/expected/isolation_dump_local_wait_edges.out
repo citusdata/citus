@@ -6,14 +6,18 @@ step dist11-begin:
     SELECT assign_distributed_transaction_id(11, 1, '2017-01-01 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step dist13-begin:
     BEGIN;
     SELECT assign_distributed_transaction_id(13, 1, '2017-01-01 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step dist11-update:
     UPDATE local_table SET y = 1 WHERE x = 1;
@@ -21,7 +25,7 @@ step dist11-update:
 step dist13-update:
     UPDATE local_table SET y = 3 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges:
+step detector-dump-wait-edges: 
     SELECT
         waiting_node_id,
         waiting_transaction_num,
@@ -35,9 +39,11 @@ step detector-dump-wait-edges:
         blocking_transaction_num,
         blocking_transaction_waiting;
 
-waiting_node_idwaiting_transaction_numblocking_node_idblocking_transaction_numblocking_transaction_waiting
+waiting_node_id|waiting_transaction_num|blocking_node_id|blocking_transaction_num|blocking_transaction_waiting
+---------------------------------------------------------------------
+             13|                      1|              11|                       1|f
+(1 row)
 
-13             1              11             1              f
 step dist11-abort:
     ABORT;
 
@@ -55,7 +61,9 @@ step dist13-begin:
     SELECT assign_distributed_transaction_id(13, 1, '2017-01-01 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step local-update:
     UPDATE local_table SET y = 2 WHERE x = 1;
@@ -63,7 +71,7 @@ step local-update:
 step dist13-update:
     UPDATE local_table SET y = 3 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges:
+step detector-dump-wait-edges: 
     SELECT
         waiting_node_id,
         waiting_transaction_num,
@@ -77,9 +85,11 @@ step detector-dump-wait-edges:
         blocking_transaction_num,
         blocking_transaction_waiting;
 
-waiting_node_idwaiting_transaction_numblocking_node_idblocking_transaction_numblocking_transaction_waiting
+waiting_node_id|waiting_transaction_num|blocking_node_id|blocking_transaction_num|blocking_transaction_waiting
+---------------------------------------------------------------------
+             13|                      1|               0|                        |f
+(1 row)
 
-13             1              0                             f
 step local-abort:
     ABORT;
 
@@ -94,7 +104,9 @@ step dist11-begin:
     SELECT assign_distributed_transaction_id(11, 1, '2017-01-01 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step local-begin:
     BEGIN;
@@ -104,7 +116,9 @@ step dist13-begin:
     SELECT assign_distributed_transaction_id(13, 1, '2017-01-01 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step dist11-update:
     UPDATE local_table SET y = 1 WHERE x = 1;
@@ -112,10 +126,10 @@ step dist11-update:
 step local-update:
     UPDATE local_table SET y = 2 WHERE x = 1;
  <waiting ...>
-step dist13-update:
+step dist13-update: 
     UPDATE local_table SET y = 3 WHERE x = 1;
  <waiting ...>
-step detector-dump-wait-edges:
+step detector-dump-wait-edges: 
     SELECT
         waiting_node_id,
         waiting_transaction_num,
@@ -129,10 +143,12 @@ step detector-dump-wait-edges:
         blocking_transaction_num,
         blocking_transaction_waiting;
 
-waiting_node_idwaiting_transaction_numblocking_node_idblocking_transaction_numblocking_transaction_waiting
+waiting_node_id|waiting_transaction_num|blocking_node_id|blocking_transaction_num|blocking_transaction_waiting
+---------------------------------------------------------------------
+              0|                       |              11|                       1|f
+             13|                      1|               0|                        |t
+(2 rows)
 
-0                             11             1              f
-13             1              0                             t
 step dist11-abort:
     ABORT;
 

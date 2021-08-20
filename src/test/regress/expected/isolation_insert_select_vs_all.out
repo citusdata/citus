@@ -2,13 +2,15 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -16,18 +18,22 @@ step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-update-on-inserted s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -35,18 +41,22 @@ step s2-update-on-inserted: UPDATE insert_of_insert_select_hash SET data = 'l' W
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-delete-on-inserted s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -54,18 +64,22 @@ step s2-delete-on-inserted: DELETE FROM insert_of_insert_select_hash WHERE id = 
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-truncate-on-inserted s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -74,18 +88,22 @@ step s1-commit: COMMIT;
 step s2-truncate-on-inserted: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-drop-on-inserted s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -94,18 +112,22 @@ step s1-commit: COMMIT;
 step s2-drop-on-inserted: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-on-inserted s1-commit s1-select-count s1-show-indexes-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -114,23 +136,29 @@ step s1-commit: COMMIT;
 step s2-ddl-create-index-on-inserted: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,2)
 (localhost,57638,t,2)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-ddl-create-index-on-inserted s1-begin s1-insert-select s2-ddl-drop-index-on-inserted s1-commit s1-select-count s1-show-indexes-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-create-index-on-inserted: CREATE INDEX insert_of_insert_select_hash_index ON insert_of_insert_select_hash(id);
 step s1-begin: BEGIN;
@@ -140,23 +168,29 @@ step s1-commit: COMMIT;
 step s2-ddl-drop-index-on-inserted: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-concurrently-on-inserted s1-commit s1-select-count s1-show-indexes-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -165,23 +199,29 @@ step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently-on-inserted: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,2)
 (localhost,57638,t,2)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-add-column-on-inserted s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -190,23 +230,29 @@ step s1-commit: COMMIT;
 step s2-ddl-add-column-on-inserted: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-ddl-add-column-on-inserted s1-begin s1-insert-select s2-ddl-drop-column-on-inserted s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-add-column-on-inserted: ALTER TABLE insert_of_insert_select_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -216,23 +262,29 @@ step s1-commit: COMMIT;
 step s2-ddl-drop-column-on-inserted: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-rename-column-on-inserted s1-commit s1-select-count s1-show-columns-inserted s1-show-columns-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -241,50 +293,64 @@ step s1-commit: COMMIT;
 step s2-ddl-rename-column-on-inserted: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
+(2 rows)
+
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-table-size-on-inserted s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
 step s2-table-size-on-inserted: SELECT citus_total_relation_size('insert_of_insert_select_hash');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    65536
+(1 row)
 
-65536
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-master-modify-multiple-shards-on-inserted s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -292,18 +358,22 @@ step s2-master-modify-multiple-shards-on-inserted: DELETE FROM insert_of_insert_
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-master-drop-all-shards-on-inserted s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -311,24 +381,30 @@ step s2-master-drop-all-shards-on-inserted: SELECT citus_drop_all_shards('insert
 step s1-commit: COMMIT;
 step s2-master-drop-all-shards-on-inserted: <... completed>
 citus_drop_all_shards
+---------------------------------------------------------------------
+                    4
+(1 row)
 
-4
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-drop-on-inserted s1-create-non-distributed-table-on-inserted s1-initialize s1-begin s1-insert-select s2-distribute-table-on-inserted s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop-on-inserted: DROP TABLE insert_of_insert_select_hash;
 step s1-create-non-distributed-table-on-inserted: CREATE TABLE insert_of_insert_select_hash(id integer, data text);
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -336,22 +412,28 @@ step s2-distribute-table-on-inserted: SELECT create_distributed_table('insert_of
 step s1-commit: COMMIT;
 step s2-distribute-table-on-inserted: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-update-on-selected s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -359,18 +441,22 @@ step s2-update-on-selected: UPDATE select_of_insert_select_hash SET data = 'l' W
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-delete-on-selected s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -378,18 +464,22 @@ step s2-delete-on-selected: DELETE FROM select_of_insert_select_hash WHERE id = 
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+    9
+(1 row)
 
-9
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-truncate-on-selected s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -398,18 +488,22 @@ step s1-commit: COMMIT;
 step s2-truncate-on-selected: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-drop-on-selected s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -421,13 +515,15 @@ ERROR:  relation "select_of_insert_select_hash" does not exist
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-on-selected s1-commit s1-select-count s1-show-indexes-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -435,23 +531,29 @@ step s2-ddl-create-index-on-selected: CREATE INDEX select_of_insert_select_hash_
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,2)
 (localhost,57638,t,2)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-ddl-create-index-on-selected s1-begin s1-insert-select s2-ddl-drop-index-on-selected s1-commit s1-select-count s1-show-indexes-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-create-index-on-selected: CREATE INDEX select_of_insert_select_hash_index ON select_of_insert_select_hash(id);
 step s1-begin: BEGIN;
@@ -461,23 +563,29 @@ step s1-commit: COMMIT;
 step s2-ddl-drop-index-on-selected: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-create-index-concurrently-on-selected s1-commit s1-select-count s1-show-indexes-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -486,23 +594,29 @@ step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently-on-selected: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-add-column-on-selected s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -511,23 +625,29 @@ step s1-commit: COMMIT;
 step s2-ddl-add-column-on-selected: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-ddl-add-column-on-selected s1-begin s1-insert-select s2-ddl-drop-column-on-selected s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-add-column-on-selected: ALTER TABLE select_of_insert_select_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -537,23 +657,29 @@ step s2-ddl-drop-column-on-selected: ALTER TABLE select_of_insert_select_hash DR
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-ddl-rename-column-on-selected s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -562,45 +688,57 @@ step s1-commit: COMMIT;
 step s2-ddl-rename-column-on-selected: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-table-size-on-selected s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
 step s2-table-size-on-selected: SELECT citus_total_relation_size('select_of_insert_select_hash');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    65536
+(1 row)
 
-65536
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-master-modify-multiple-shards-on-selected s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -608,18 +746,22 @@ step s2-master-modify-multiple-shards-on-selected: DELETE FROM select_of_insert_
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-master-drop-all-shards-on-selected s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
@@ -627,46 +769,58 @@ step s2-master-drop-all-shards-on-selected: SELECT citus_drop_all_shards('select
 step s1-commit: COMMIT;
 step s2-master-drop-all-shards-on-selected: <... completed>
 citus_drop_all_shards
+---------------------------------------------------------------------
+                    4
+(1 row)
 
-4
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 
 starting permutation: s1-drop-on-selected s1-create-non-distributed-table-on-selected s1-initialize s1-begin s1-insert-select s2-distribute-table-on-selected s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop-on-selected: DROP TABLE select_of_insert_select_hash;
 step s1-create-non-distributed-table-on-selected: CREATE TABLE select_of_insert_select_hash(id integer, data text);
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;;
 step s2-distribute-table-on-selected: SELECT create_distributed_table('select_of_insert_select_hash', 'id');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-update-on-inserted s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-update-on-inserted: UPDATE insert_of_insert_select_hash SET data = 'l' WHERE id = 4;
@@ -674,18 +828,22 @@ step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-delete-on-inserted s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-delete-on-inserted: DELETE FROM insert_of_insert_select_hash WHERE id = 4;
@@ -693,18 +851,22 @@ step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-truncate-on-inserted s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-truncate-on-inserted: TRUNCATE insert_of_insert_select_hash;
@@ -713,39 +875,47 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-drop-on-inserted s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-drop-on-inserted: DROP TABLE insert_of_insert_select_hash;
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5; <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
-error in steps s1-commit s2-insert-select: ERROR:  relation "insert_of_insert_select_hash" does not exist
+ERROR:  relation "insert_of_insert_select_hash" does not exist
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-ddl-create-index-on-inserted s2-insert-select s1-commit s1-select-count s1-show-indexes-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-create-index-on-inserted: CREATE INDEX insert_of_insert_select_hash_index ON insert_of_insert_select_hash(id);
@@ -754,23 +924,29 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,2)
 (localhost,57638,t,2)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-ddl-create-index-on-inserted s1-begin s1-ddl-drop-index-on-inserted s2-insert-select s1-commit s1-select-count s1-show-indexes-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-create-index-on-inserted: CREATE INDEX insert_of_insert_select_hash_index ON insert_of_insert_select_hash(id);
 step s1-begin: BEGIN;
@@ -780,23 +956,29 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-inserted: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column-on-inserted s2-insert-select s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-add-column-on-inserted: ALTER TABLE insert_of_insert_select_hash ADD new_column int DEFAULT 0;
@@ -805,23 +987,29 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-ddl-add-column-on-inserted s1-begin s1-ddl-drop-column-on-inserted s2-insert-select s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-add-column-on-inserted: ALTER TABLE insert_of_insert_select_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -831,23 +1019,29 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column-on-inserted s2-insert-select s1-commit s1-select-count s1-show-columns-inserted
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-rename-column-on-inserted: ALTER TABLE insert_of_insert_select_hash RENAME data TO new_column;
@@ -856,45 +1050,57 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-inserted: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-table-size-on-inserted s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-table-size-on-inserted: SELECT citus_total_relation_size('insert_of_insert_select_hash');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    65536
+(1 row)
 
-65536
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards-on-inserted s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards-on-inserted: DELETE FROM insert_of_insert_select_hash;
@@ -902,67 +1108,83 @@ step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-master-drop-all-shards-on-inserted s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-master-drop-all-shards-on-inserted: SELECT citus_drop_all_shards('insert_of_insert_select_hash'::regclass, 'public', 'insert_of_insert_select_hash');
 citus_drop_all_shards
+---------------------------------------------------------------------
+                    4
+(1 row)
 
-4
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5; <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
-error in steps s1-commit s2-insert-select: ERROR:  could not find any shards into which to copy
+ERROR:  could not find any shards into which to copy
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-drop-on-inserted s1-create-non-distributed-table-on-inserted s1-initialize s1-begin s1-distribute-table-on-inserted s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop-on-inserted: DROP TABLE insert_of_insert_select_hash;
 step s1-create-non-distributed-table-on-inserted: CREATE TABLE insert_of_insert_select_hash(id integer, data text);
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-distribute-table-on-inserted: SELECT create_distributed_table('insert_of_insert_select_hash', 'id');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5; <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-update-on-selected s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-update-on-selected: UPDATE select_of_insert_select_hash SET data = 'l' WHERE id = 4;
@@ -970,18 +1192,22 @@ step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-delete-on-selected s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-delete-on-selected: DELETE FROM select_of_insert_select_hash WHERE id = 4;
@@ -989,18 +1215,22 @@ step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+    9
+(1 row)
 
-9
 
 starting permutation: s1-initialize s1-begin s1-truncate-on-selected s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-truncate-on-selected: TRUNCATE select_of_insert_select_hash;
@@ -1009,37 +1239,43 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 
 starting permutation: s1-initialize s1-begin s1-drop-on-selected s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-drop-on-selected: DROP TABLE select_of_insert_select_hash;
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5; <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
-error in steps s1-commit s2-insert-select: ERROR:  relation "select_of_insert_select_hash" does not exist
+ERROR:  relation "select_of_insert_select_hash" does not exist
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 ERROR:  relation "select_of_insert_select_hash" does not exist
 
 starting permutation: s1-initialize s1-begin s1-ddl-create-index-on-selected s2-insert-select s1-commit s1-select-count s1-show-indexes-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-create-index-on-selected: CREATE INDEX select_of_insert_select_hash_index ON select_of_insert_select_hash(id);
@@ -1047,23 +1283,29 @@ step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,2)
 (localhost,57638,t,2)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-ddl-create-index-on-selected s1-begin s1-ddl-drop-index-on-selected s2-insert-select s1-commit s1-select-count s1-show-indexes-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-create-index-on-selected: CREATE INDEX select_of_insert_select_hash_index ON select_of_insert_select_hash(id);
 step s1-begin: BEGIN;
@@ -1073,49 +1315,61 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-indexes-selected: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column-on-selected s2-insert-select s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-add-column-on-selected: ALTER TABLE select_of_insert_select_hash ADD new_column int DEFAULT 0;
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5; <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
-error in steps s1-commit s2-insert-select: ERROR:  INSERT has more expressions than target columns
+ERROR:  INSERT has more expressions than target columns
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-ddl-add-column-on-selected s1-begin s1-ddl-drop-column-on-selected s2-insert-select s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-ddl-add-column-on-selected: ALTER TABLE select_of_insert_select_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
@@ -1125,23 +1379,29 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column-on-selected s2-insert-select s1-commit s1-select-count s1-show-columns-selected
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-ddl-rename-column-on-selected: ALTER TABLE select_of_insert_select_hash RENAME data TO new_column;
@@ -1150,45 +1410,57 @@ step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 step s1-show-columns-selected: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
+(2 rows)
+
 
 starting permutation: s1-initialize s1-begin s1-table-size-on-selected s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-table-size-on-selected: SELECT citus_total_relation_size('select_of_insert_select_hash');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    65536
+(1 row)
 
-65536
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 
 starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards-on-selected s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards-on-selected: DELETE FROM select_of_insert_select_hash;
@@ -1196,52 +1468,66 @@ step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM se
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 
 starting permutation: s1-initialize s1-begin s1-master-drop-all-shards-on-selected s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-master-drop-all-shards-on-selected: SELECT citus_drop_all_shards('select_of_insert_select_hash'::regclass, 'public', 'select_of_insert_select_hash');
 citus_drop_all_shards
+---------------------------------------------------------------------
+                    4
+(1 row)
 
-4
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5; <waiting ...>
 step s1-commit: COMMIT;
 step s2-insert-select: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 
 starting permutation: s1-drop-on-selected s1-create-non-distributed-table-on-selected s1-initialize s1-begin s1-distribute-table-on-selected s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop-on-selected: DROP TABLE select_of_insert_select_hash;
 step s1-create-non-distributed-table-on-selected: CREATE TABLE select_of_insert_select_hash(id integer, data text);
 step s1-initialize:
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-	COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
-	COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+ COPY insert_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
+ COPY select_of_insert_select_hash FROM PROGRAM 'echo 5, a && echo 6, b && echo 7, c && echo 8, d && echo 9, e' WITH CSV;
 
 step s1-begin: BEGIN;
 step s1-distribute-table-on-selected: SELECT create_distributed_table('select_of_insert_select_hash', 'id');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-insert-select: INSERT INTO insert_of_insert_select_hash SELECT * FROM select_of_insert_select_hash ORDER BY 1, 2 LIMIT 5;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_of_insert_select_hash;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10

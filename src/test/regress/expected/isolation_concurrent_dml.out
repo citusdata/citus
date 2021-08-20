@@ -2,7 +2,9 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-insert s2-update s1-commit
 master_create_worker_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -13,14 +15,16 @@ step s1-insert:
 step s2-update:
     UPDATE test_concurrent_dml SET data = 'blarg' WHERE test_id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-update: <... completed>
 
 starting permutation: s1-insert s2-update
 master_create_worker_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-insert:
     INSERT INTO test_concurrent_dml VALUES(1);
@@ -31,7 +35,9 @@ step s2-update:
 
 starting permutation: s1-begin s1-multi-insert s2-update s1-commit
 master_create_worker_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -42,14 +48,16 @@ step s1-multi-insert:
 step s2-update:
     UPDATE test_concurrent_dml SET data = 'blarg' WHERE test_id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-update: <... completed>
 
 starting permutation: s1-begin s1-multi-insert s2-multi-insert-overlap s1-commit
 master_create_worker_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -66,7 +74,9 @@ step s1-commit:
 
 starting permutation: s1-begin s2-begin s1-multi-insert s2-multi-insert s1-commit s2-commit
 master_create_worker_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
