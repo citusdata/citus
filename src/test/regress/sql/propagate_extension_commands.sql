@@ -98,7 +98,8 @@ CREATE EXTENSION seg;
 
 -- show that the extension is created on existing worker
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'seg'$$);
-SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
+SELECT workers.result = pg_extension.extversion AS same_version 
+	FROM run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$) workers, pg_extension WHERE extname = 'seg';
 
 -- now create the reference table
 CREATE TABLE ref_table_2 (x seg);
@@ -144,7 +145,8 @@ SELECT 1 from master_add_node('localhost', :worker_2_port);
 
 -- show that the extension is created on both existing and new node
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'seg'$$);
-SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
+SELECT workers.result = pg_extension.extversion AS same_version 
+	FROM run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$) workers, pg_extension WHERE extname = 'seg';
 
 -- check for the unpackaged extension to be created correctly
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'dict_int'$$);
@@ -210,7 +212,8 @@ ROLLBACK;
 
 -- show that the CREATE EXTENSION command propagated even if the transaction
 -- block is rollbacked, that's a shortcoming of dependency creation logic
-SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
+SELECT COUNT(DISTINCT workers.result) 
+	FROM run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$) workers;
 
 -- drop the schema and all the objects
 DROP SCHEMA "extension'test" CASCADE;
