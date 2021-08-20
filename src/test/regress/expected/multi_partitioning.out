@@ -1616,194 +1616,6 @@ SELECT * FROM lockinfo;
 (20 rows)
 
 COMMIT;
--- test partition-wise join
-CREATE TABLE partitioning_hash_join_test(id int, subid int) PARTITION BY HASH(subid);
-CREATE TABLE partitioning_hash_join_test_0 PARTITION OF partitioning_hash_join_test FOR VALUES WITH (MODULUS 3, REMAINDER 0);
-CREATE TABLE partitioning_hash_join_test_1 PARTITION OF partitioning_hash_join_test FOR VALUES WITH (MODULUS 3, REMAINDER 1);
-CREATE TABLE partitioning_hash_join_test_2 PARTITION OF partitioning_hash_join_test FOR VALUES WITH (MODULUS 3, REMAINDER 2);
-SELECT create_distributed_table('partitioning_hash_join_test', 'id');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT success FROM run_command_on_workers('alter system set enable_mergejoin to off');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('alter system set enable_nestloop to off');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('alter system set enable_indexscan to off');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('alter system set enable_indexonlyscan to off');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('alter system set enable_partitionwise_join to off');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('select pg_reload_conf()');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-EXPLAIN (COSTS OFF)
-SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
-                                                                           QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 4
-   Tasks Shown: One of 4
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Hash Join
-               Hash Cond: ((partitioning_hash_join_test_xxx.id = partitioning_hash_test_xxx.id) AND (partitioning_hash_join_test_xxx.subid = partitioning_hash_test_xxx.subid))
-               ->  Append
-                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test_xxx
-                     ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_xxx
-                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_xxx
-               ->  Hash
-                     ->  Append
-                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test_xxx
-                           ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_xxx
-                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_xxx
-(16 rows)
-
--- set partition-wise join on and parallel to off
-SELECT success FROM run_command_on_workers('alter system set enable_partitionwise_join to on');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('select pg_reload_conf()');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SET enable_partitionwise_join TO on;
-ANALYZE partitioning_hash_test, partitioning_hash_join_test;
-EXPLAIN (COSTS OFF)
-SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id, subid);
-                                                                                  QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 4
-   Tasks Shown: One of 4
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Append
-               ->  Hash Join
-                     Hash Cond: ((partitioning_hash_join_test_xxx.id = partitioning_hash_test_xxx.id) AND (partitioning_hash_join_test_xxx.subid = partitioning_hash_test_xxx.subid))
-                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test_xxx
-                     ->  Hash
-                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test_xxx
-               ->  Hash Join
-                     Hash Cond: ((partitioning_hash_test_xxx.id = partitioning_hash_join_test_xxx.id) AND (partitioning_hash_test_xxx.subid = partitioning_hash_join_test_xxx.subid))
-                     ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_xxx
-                     ->  Hash
-                           ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_xxx
-               ->  Hash Join
-                     Hash Cond: ((partitioning_hash_join_test_xxx.id = partitioning_hash_test_xxx.id) AND (partitioning_hash_join_test_xxx.subid = partitioning_hash_test_xxx.subid))
-                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_xxx
-                     ->  Hash
-                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_xxx
-(21 rows)
-
--- note that partition-wise joins only work when partition key is in the join
--- following join does not have that, therefore join will not be pushed down to
--- partitions
-EXPLAIN (COSTS OFF)
-SELECT * FROM partitioning_hash_test JOIN partitioning_hash_join_test USING (id);
-                                               QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 4
-   Tasks Shown: One of 4
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Hash Join
-               Hash Cond: (partitioning_hash_join_test_xxx.id = partitioning_hash_test_xxx.id)
-               ->  Append
-                     ->  Seq Scan on partitioning_hash_join_test_0_1660133 partitioning_hash_join_test_xxx
-                     ->  Seq Scan on partitioning_hash_join_test_1_1660137 partitioning_hash_join_test_xxx
-                     ->  Seq Scan on partitioning_hash_join_test_2_1660141 partitioning_hash_join_test_xxx
-               ->  Hash
-                     ->  Append
-                           ->  Seq Scan on partitioning_hash_test_0_1660016 partitioning_hash_test_xxx
-                           ->  Seq Scan on partitioning_hash_test_1_1660020 partitioning_hash_test_xxx
-                           ->  Seq Scan on partitioning_hash_test_2_1660032 partitioning_hash_test_xxx
-(16 rows)
-
--- reset partition-wise join
-SELECT success FROM run_command_on_workers('alter system reset enable_partitionwise_join');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('alter system reset enable_mergejoin');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('alter system reset enable_nestloop');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('alter system reset enable_indexscan');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('alter system reset enable_indexonlyscan');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-SELECT success FROM run_command_on_workers('select pg_reload_conf()');
- success
----------------------------------------------------------------------
- t
- t
-(2 rows)
-
-RESET enable_partitionwise_join;
 DROP VIEW lockinfo;
 DROP TABLE
 IF EXISTS
@@ -2069,10 +1881,9 @@ SELECT fix_pre_citus10_partitioned_table_constraint_names();
 ---------------------------------------------------------------------
  partitioning_test
  "schema-test"
- public.partitioning_hash_join_test
  public.partitioning_hash_test
  public.partitioning_test_failure
-(5 rows)
+(4 rows)
 
 -- the following should fail
 SELECT fix_pre_citus10_partitioned_table_constraint_names('public.non_distributed_partitioned_table');
@@ -2214,7 +2025,6 @@ DROP SCHEMA partitioning_schema CASCADE;
 NOTICE:  drop cascades to table partitioning_schema."schema-test"
 DROP TABLE IF EXISTS
 	partitioning_hash_test,
-	partitioning_hash_join_test,
 	partitioning_test_failure,
 	non_distributed_partitioned_table,
 	partitioning_test_foreign_key;
