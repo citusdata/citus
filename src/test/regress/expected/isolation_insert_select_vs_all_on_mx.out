@@ -14,7 +14,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-colocated-insert-select:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -32,13 +32,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-colocated-insert-select:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -50,7 +50,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -62,7 +62,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -85,7 +85,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -103,13 +103,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-colocated-insert-select:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -121,7 +121,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -133,7 +133,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -156,7 +156,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-colocated-insert-select:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -174,13 +174,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -192,7 +192,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -204,7 +204,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -227,7 +227,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -245,13 +245,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -263,7 +263,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -275,7 +275,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -298,7 +298,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -316,13 +316,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-insert:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table VALUES (5, 50), (6, 60)')
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table VALUES (5, 50), (6, 60)')
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -334,7 +334,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -346,7 +346,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -369,7 +369,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -387,13 +387,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-select:
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table')
+ SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table')
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -405,7 +405,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -417,7 +417,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -440,7 +440,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-colocated-insert-select:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -464,7 +464,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -476,7 +476,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -488,7 +488,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -511,7 +511,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -535,7 +535,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -547,7 +547,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -559,7 +559,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -582,7 +582,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-colocated-insert-select:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -600,13 +600,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-copy:
-	SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
+ SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -618,7 +618,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -630,7 +630,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -653,7 +653,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -671,13 +671,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-copy:
-	SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
+ SELECT run_commands_on_session_level_connection_to_node('COPY dist_table FROM PROGRAM ''echo 5, 50 && echo 9, 90 && echo 10, 100''WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -689,7 +689,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -701,7 +701,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -724,29 +724,29 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-colocated-insert-select:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-coordinator-drop:
-	DROP TABLE dist_table;
+ DROP TABLE dist_table;
  <waiting ...>
-step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+step s1-commit-worker: 
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s2-coordinator-drop: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -758,7 +758,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 ERROR:  relation "dist_table" does not exist
 restore_isolation_tester_func
@@ -779,29 +779,29 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s2-coordinator-drop:
-	DROP TABLE dist_table;
+ DROP TABLE dist_table;
  <waiting ...>
-step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+step s1-commit-worker: 
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s2-coordinator-drop: <... completed>
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -813,7 +813,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 ERROR:  relation "dist_table" does not exist
 restore_isolation_tester_func
@@ -834,7 +834,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-colocated-insert-select:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT * FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -852,13 +852,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-select-for-update:
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+ SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -870,7 +870,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -882,7 +882,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 
@@ -905,7 +905,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-insert-select-via-coordinator:
-	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
+ SELECT run_commands_on_session_level_connection_to_node('INSERT INTO dist_table SELECT value, id FROM dist_table');
 
 run_commands_on_session_level_connection_to_node
 
@@ -923,13 +923,13 @@ run_commands_on_session_level_connection_to_node
 
 
 step s2-select-for-update:
-	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
+ SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM dist_table WHERE id = 5 FOR UPDATE');
 
 run_commands_on_session_level_connection_to_node
 
 
 step s1-commit-worker:
-	SELECT run_commands_on_session_level_connection_to_node('COMMIT');
+ SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 
 run_commands_on_session_level_connection_to_node
 
@@ -941,7 +941,7 @@ run_commands_on_session_level_connection_to_node
 
 
 step s1-stop-connection:
-	SELECT stop_session_level_connection_to_node();
+ SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 
@@ -953,7 +953,7 @@ stop_session_level_connection_to_node
 
 
 step s3-select-count:
-	SELECT COUNT(*) FROM dist_table;
+ SELECT COUNT(*) FROM dist_table;
 
 count
 

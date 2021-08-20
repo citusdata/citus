@@ -11,7 +11,7 @@ step s1-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
 step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index: <... completed>
-error in steps s1-commit s2-ddl-create-index: ERROR:  duplicate key value violates unique constraint "pg_class_relname_nsp_index"
+ERROR:  duplicate key value violates unique constraint "pg_class_relname_nsp_index"
 step s2-commit: COMMIT;
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
@@ -32,7 +32,7 @@ step s1-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
-error in steps s1-commit s2-ddl-create-index-concurrently: ERROR:  relation "ddl_hash_index" already exists
+ERROR:  relation "ddl_hash_index" already exists
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
 run_command_on_workers
 
@@ -268,7 +268,7 @@ step s1-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column;
 step s2-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-rename-column: <... completed>
-error in steps s1-commit s2-ddl-rename-column: ERROR:  column "data" does not exist
+ERROR:  column "data" does not exist
 step s2-commit: COMMIT;
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''ddl_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers

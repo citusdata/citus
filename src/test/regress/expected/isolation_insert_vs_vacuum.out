@@ -30,7 +30,7 @@ step s1-insert:
 step s2-vacuum-full:
     VACUUM FULL test_insert_vacuum;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-vacuum-full: <... completed>

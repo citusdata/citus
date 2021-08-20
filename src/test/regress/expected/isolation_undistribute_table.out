@@ -13,11 +13,11 @@ undistribute_table
 step s2-undistribute:
     SELECT undistribute_table('dist_table');
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-undistribute: <... completed>
-error in steps s1-commit s2-undistribute: ERROR:  cannot complete operation because no such table exists
+ERROR:  cannot complete operation because no such table exists
 
 starting permutation: s1-begin s1-undistribute s2-select s1-commit
 step s1-begin:
@@ -32,7 +32,7 @@ undistribute_table
 step s2-select:
     SELECT * FROM dist_table ORDER BY 1, 2;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-select: <... completed>
@@ -55,7 +55,7 @@ undistribute_table
 step s2-insert:
     INSERT INTO dist_table VALUES (7, 8), (9, 10);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-insert: <... completed>
@@ -83,7 +83,7 @@ undistribute_table
 step s2-insert-select:
     INSERT INTO dist_table SELECT * FROM dist_table;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-insert-select: <... completed>
@@ -112,7 +112,7 @@ undistribute_table
 step s2-delete:
     DELETE FROM dist_table WHERE a = 3;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-delete: <... completed>
@@ -137,7 +137,7 @@ undistribute_table
 step s2-copy:
     COPY dist_table FROM PROGRAM 'echo 11, 12 && echo 13, 14' WITH CSV;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-copy: <... completed>
@@ -165,7 +165,7 @@ undistribute_table
 step s2-drop:
     DROP TABLE dist_table;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-drop: <... completed>
@@ -187,7 +187,7 @@ undistribute_table
 step s2-truncate:
     TRUNCATE dist_table;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-truncate: <... completed>
@@ -210,7 +210,7 @@ undistribute_table
 step s2-select-for-update:
     SELECT * FROM dist_table WHERE a = 5 FOR UPDATE;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-select-for-update: <... completed>
@@ -231,7 +231,7 @@ undistribute_table
 step s2-create-index-concurrently:
     CREATE INDEX CONCURRENTLY idx ON dist_table (a);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-create-index-concurrently: <... completed>

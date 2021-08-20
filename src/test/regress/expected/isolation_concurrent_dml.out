@@ -13,7 +13,7 @@ step s1-insert:
 step s2-update:
     UPDATE test_concurrent_dml SET data = 'blarg' WHERE test_id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-update: <... completed>
@@ -42,7 +42,7 @@ step s1-multi-insert:
 step s2-update:
     UPDATE test_concurrent_dml SET data = 'blarg' WHERE test_id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-update: <... completed>

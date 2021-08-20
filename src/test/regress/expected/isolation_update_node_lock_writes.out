@@ -28,7 +28,7 @@ step s1-commit:
  COMMIT;
 
 step s2-insert: <... completed>
-error in steps s1-commit s2-insert: ERROR:  relation "public.update_node_102012" does not exist
+ERROR:  relation "public.update_node_102012" does not exist
 step s2-abort:
  ABORT;
 

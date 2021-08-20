@@ -286,7 +286,7 @@ step s1-drop: DROP TABLE delete_hash;
 step s2-delete: DELETE FROM delete_hash WHERE id = 4; <waiting ...>
 step s1-commit: COMMIT;
 step s2-delete: <... completed>
-error in steps s1-commit s2-delete: ERROR:  relation "delete_hash" does not exist
+ERROR:  relation "delete_hash" does not exist
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 ERROR:  relation "delete_hash" does not exist

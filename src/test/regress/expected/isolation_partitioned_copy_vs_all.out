@@ -433,7 +433,7 @@ step s1-drop: DROP TABLE partitioned_copy;
 step s2-copy: COPY partitioned_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
-error in steps s1-commit s2-copy: ERROR:  relation "partitioned_copy" does not exist
+ERROR:  relation "partitioned_copy" does not exist
 step s1-select-count: SELECT COUNT(*) FROM partitioned_copy;
 ERROR:  relation "partitioned_copy" does not exist
 
@@ -447,7 +447,7 @@ step s1-ddl-add-column: ALTER TABLE partitioned_copy ADD new_column int DEFAULT 
 step s2-copy: COPY partitioned_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
-error in steps s1-commit s2-copy: ERROR:  missing data for column "new_column"
+ERROR:  missing data for column "new_column"
 step s1-select-count: SELECT COUNT(*) FROM partitioned_copy;
 count
 
@@ -543,7 +543,7 @@ citus_drop_all_shards
 step s2-copy: COPY partitioned_copy FROM PROGRAM 'echo 5, f, 5 && echo 6, g, 6 && echo 7, h, 7 && echo 8, i, 8 && echo 9, j, 9' WITH CSV; <waiting ...>
 step s1-commit: COMMIT;
 step s2-copy: <... completed>
-error in steps s1-commit s2-copy: ERROR:  could not find any shards into which to copy
+ERROR:  could not find any shards into which to copy
 step s1-select-count: SELECT COUNT(*) FROM partitioned_copy;
 count
 

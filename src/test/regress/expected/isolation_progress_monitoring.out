@@ -45,13 +45,13 @@ pg_advisory_lock
 step s1-start-operation:
  SELECT sample_operation(1337, 10, -1);
  <waiting ...>
-step s2-start-operation:
+step s2-start-operation: 
  SELECT sample_operation(1337, 20, 2);
  <waiting ...>
-step s3-start-operation:
+step s3-start-operation: 
  SELECT sample_operation(3778, 30, 9);
  <waiting ...>
-step show-progress:
+step show-progress: 
  SELECT show_progress(1337);
  SELECT show_progress(3778);
 

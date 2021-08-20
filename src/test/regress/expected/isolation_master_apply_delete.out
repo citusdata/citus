@@ -5,18 +5,18 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-master_apply_delete_command_all_shard:
-   	SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0$$);
+    SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0$$);
 
 master_apply_delete_command
 
 1
 step s2-master_apply_delete_command_all_shard:
-   	SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0$$);
+    SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0$$);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-master_apply_delete_command_all_shard: <... completed>
@@ -24,7 +24,7 @@ master_apply_delete_command
 
 0
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-master_apply_delete_command_all_shard s2-master_apply_delete_command_row s1-commit s2-commit
@@ -32,18 +32,18 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-master_apply_delete_command_all_shard:
-   	SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0$$);
+    SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0$$);
 
 master_apply_delete_command
 
 1
 step s2-master_apply_delete_command_row:
-   	SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0 and id < 3$$);
+    SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0 and id < 3$$);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-master_apply_delete_command_row: <... completed>
@@ -51,7 +51,7 @@ master_apply_delete_command
 
 0
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-master_apply_delete_command_row s2-master_apply_delete_command_all_shard s1-commit s2-commit
@@ -59,18 +59,18 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-master_apply_delete_command_row:
-   	SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0 and id < 3$$);
+    SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0 and id < 3$$);
 
 master_apply_delete_command
 
 0
 step s2-master_apply_delete_command_all_shard:
-   	SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0$$);
+    SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0$$);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-master_apply_delete_command_all_shard: <... completed>
@@ -78,7 +78,7 @@ master_apply_delete_command
 
 1
 step s2-commit:
-	COMMIT;
+ COMMIT;
 
 
 starting permutation: s1-begin s2-begin s1-master_apply_delete_command_row s2-master_apply_delete_command_row s1-commit s2-commit
@@ -86,18 +86,18 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
-	BEGIN;
+ BEGIN;
 
 step s1-master_apply_delete_command_row:
-   	SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0 and id < 3$$);
+    SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0 and id < 3$$);
 
 master_apply_delete_command
 
 0
 step s2-master_apply_delete_command_row:
-   	SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0 and id < 3$$);
+    SELECT master_apply_delete_command($$DELETE FROM table_to_delete_from WHERE id >= 0 and id < 3$$);
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-master_apply_delete_command_row: <... completed>
@@ -105,5 +105,5 @@ master_apply_delete_command
 
 0
 step s2-commit:
-	COMMIT;
+ COMMIT;
 

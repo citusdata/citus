@@ -36,7 +36,7 @@ recover_prepared_transactions
 step s2-recover:
     SELECT recover_prepared_transactions();
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-recover: <... completed>
