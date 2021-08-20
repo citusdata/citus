@@ -1415,6 +1415,15 @@ create_estate_for_relation(Relation rel)
 	rte->rellockmode = AccessShareLock;
 	ExecInitRangeTable(estate, list_make1(rte));
 
+#if PG_VERSION_NUM < PG_VERSION_14
+	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
+	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
+
+	estate->es_result_relations = resultRelInfo;
+	estate->es_num_result_relations = 1;
+	estate->es_result_relation_info = resultRelInfo;
+#endif
+
 	estate->es_output_cid = GetCurrentCommandId(true);
 
 	/* Prepare to catch AFTER triggers. */
