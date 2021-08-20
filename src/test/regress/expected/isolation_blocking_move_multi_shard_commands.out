@@ -18,7 +18,9 @@ step s2-end:
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-end:
  COMMIT;
@@ -26,16 +28,20 @@ step s1-end:
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
 
-x              y
+  x|  y
+---------------------------------------------------------------------
+ 15| 15
+172|172
+(2 rows)
 
-15             15
-172            172
 step s1-get-shard-distribution:
     select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
 
-57638
 
 starting permutation: s1-begin s2-begin s2-upsert s1-move-placement s2-end s1-end s1-select s1-get-shard-distribution
 step s1-begin:
@@ -56,7 +62,9 @@ step s2-end:
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-end:
  COMMIT;
@@ -64,16 +72,20 @@ step s1-end:
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
 
-x              y
+  x|  y
+---------------------------------------------------------------------
+ 15| 16
+172|173
+(2 rows)
 
-15             16
-172            173
 step s1-get-shard-distribution:
     select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
 
-57638
 
 starting permutation: s1-insert s1-begin s2-begin s2-update s1-move-placement s2-end s1-end s1-select s1-get-shard-distribution
 step s1-insert:
@@ -96,7 +108,9 @@ step s2-end:
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-end:
  COMMIT;
@@ -104,16 +118,20 @@ step s1-end:
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
 
-x              y
+  x|  y
+---------------------------------------------------------------------
+ 15| 16
+172|173
+(2 rows)
 
-15             16
-172            173
 step s1-get-shard-distribution:
     select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
 
-57638
 
 starting permutation: s1-insert s1-begin s2-begin s2-delete s1-move-placement s2-end s1-end s1-select s1-get-shard-distribution
 step s1-insert:
@@ -136,7 +154,9 @@ step s2-end:
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-end:
  COMMIT;
@@ -144,14 +164,18 @@ step s1-end:
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 step s1-get-shard-distribution:
     select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
 
-57638
 
 starting permutation: s1-insert s1-begin s2-begin s2-select s1-move-placement s2-end s1-end s1-get-shard-distribution
 step s1-insert:
@@ -166,15 +190,19 @@ step s2-begin:
 step s2-select:
     SELECT * FROM logical_replicate_placement ORDER BY y;
 
-x              y
+  x|  y
+---------------------------------------------------------------------
+ 15| 15
+172|172
+(2 rows)
 
-15             15
-172            172
 step s1-move-placement:
   SELECT master_move_shard_placement(get_shard_id_for_distribution_column, 'localhost', 57637, 'localhost', 57638, shard_transfer_mode:='block_writes') FROM selected_shard;
 
 master_move_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-end:
  COMMIT;
@@ -186,8 +214,10 @@ step s1-get-shard-distribution:
     select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
 
-57638
 
 starting permutation: s1-begin s2-begin s2-copy s1-move-placement s2-end s1-end s1-select s1-get-shard-distribution
 step s1-begin:
@@ -207,7 +237,9 @@ step s2-end:
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-end:
  COMMIT;
@@ -215,20 +247,24 @@ step s1-end:
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
 
-x              y
+ x| y
+---------------------------------------------------------------------
+ 1| 1
+ 2| 2
+ 3| 3
+ 4| 4
+ 5| 5
+15|30
+(6 rows)
 
-1              1
-2              2
-3              3
-4              4
-5              5
-15             30
 step s1-get-shard-distribution:
     select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
 
-57638
 
 starting permutation: s1-insert s1-begin s2-begin s2-truncate s1-move-placement s2-end s1-end s1-select s1-get-shard-distribution
 step s1-insert:
@@ -251,7 +287,9 @@ step s2-end:
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-end:
  COMMIT;
@@ -259,14 +297,18 @@ step s1-end:
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 step s1-get-shard-distribution:
     select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
 
-57638
 
 starting permutation: s1-begin s2-begin s2-alter-table s1-move-placement s2-end s1-end s1-select s1-get-shard-distribution
 step s1-begin:
@@ -286,7 +328,9 @@ step s2-end:
 
 step s1-move-placement: <... completed>
 master_move_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-end:
  COMMIT;
@@ -294,11 +338,15 @@ step s1-end:
 step s1-select:
   SELECT * FROM logical_replicate_placement order by y;
 
-x              y              z
+x|y|z
+---------------------------------------------------------------------
+(0 rows)
 
 step s1-get-shard-distribution:
     select nodeport from pg_dist_placement inner join pg_dist_node on(pg_dist_placement.groupid = pg_dist_node.groupid) where shardstate != 4 and shardid in (SELECT * FROM selected_shard) order by nodeport;
 
 nodeport
+---------------------------------------------------------------------
+   57638
+(1 row)
 
-57638

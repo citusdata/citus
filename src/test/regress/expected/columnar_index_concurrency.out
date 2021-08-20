@@ -27,8 +27,10 @@ step s1-check-test-1-2:
     SELECT SUM(a)=30 FROM columnar_table WHERE a=5 OR a=25;
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-reset-table:
     DROP INDEX IF EXISTS idx_s2, conc_s2_idx, conc_unique_s2_idx, unique_idx_s2, conc_partial_s2_idx;
     TRUNCATE columnar_table;
@@ -60,8 +62,10 @@ step s1-check-test-1-2:
     SELECT SUM(a)=30 FROM columnar_table WHERE a=5 OR a=25;
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-reset-table:
     DROP INDEX IF EXISTS idx_s2, conc_s2_idx, conc_unique_s2_idx, unique_idx_s2, conc_partial_s2_idx;
     TRUNCATE columnar_table;
@@ -112,11 +116,15 @@ step s1-check-test-3:
     SELECT SUM(a)=55 FROM columnar_table WHERE a=5 OR a=15 OR a=35;
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-reset-table:
     DROP INDEX IF EXISTS idx_s2, conc_s2_idx, conc_unique_s2_idx, unique_idx_s2, conc_partial_s2_idx;
     TRUNCATE columnar_table;
@@ -176,11 +184,15 @@ step s1-check-test-4:
     SELECT SUM(a)=225 FROM columnar_table WHERE a=25 OR a=35 OR a=45 OR a=55 OR a=65;
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-reset-table:
     DROP INDEX IF EXISTS idx_s2, conc_s2_idx, conc_unique_s2_idx, unique_idx_s2, conc_partial_s2_idx;
     TRUNCATE columnar_table;
@@ -241,8 +253,10 @@ step s1-check-test-1-2:
     SELECT SUM(a)=30 FROM columnar_table WHERE a=5 OR a=25;
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-reset-table:
     DROP INDEX IF EXISTS idx_s2, conc_s2_idx, conc_unique_s2_idx, unique_idx_s2, conc_partial_s2_idx;
     TRUNCATE columnar_table;
@@ -296,11 +310,15 @@ step s1-check-test-3:
     SELECT SUM(a)=55 FROM columnar_table WHERE a=5 OR a=15 OR a=35;
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-reset-table:
     DROP INDEX IF EXISTS idx_s2, conc_s2_idx, conc_unique_s2_idx, unique_idx_s2, conc_partial_s2_idx;
     TRUNCATE columnar_table;
@@ -363,11 +381,15 @@ step s1-check-test-4:
     SELECT SUM(a)=225 FROM columnar_table WHERE a=25 OR a=35 OR a=45 OR a=55 OR a=65;
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-reset-table:
     DROP INDEX IF EXISTS idx_s2, conc_s2_idx, conc_unique_s2_idx, unique_idx_s2, conc_partial_s2_idx;
     TRUNCATE columnar_table;
@@ -392,7 +414,7 @@ step s1-commit:
     COMMIT;
 
 step s2-create-unique-index-concurrently: <... completed>
-error in steps s1-commit s2-create-unique-index-concurrently: ERROR:  could not create unique index "conc_unique_s2_idx"
+ERROR:  could not create unique index "conc_unique_s2_idx"
 step s1-reset-table:
     DROP INDEX IF EXISTS idx_s2, conc_s2_idx, conc_unique_s2_idx, unique_idx_s2, conc_partial_s2_idx;
     TRUNCATE columnar_table;
