@@ -1,6 +1,8 @@
 CREATE SCHEMA partition_wise_join;
 SET search_path to partition_wise_join;
 
+SET citus.next_shard_id TO 360147;
+
 CREATE TABLE partitioning_hash_test(id int, subid int) PARTITION BY HASH(subid);
 
 CREATE TABLE partitioning_hash_test_0 PARTITION OF partitioning_hash_test FOR VALUES WITH (MODULUS 3, REMAINDER 0);
