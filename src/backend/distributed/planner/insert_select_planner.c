@@ -747,7 +747,8 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 			continue;
 		}
 
-		shardRestrictionList = make_simple_restrictinfo(NULL, (Expr *) shardOpExpressions);
+		shardRestrictionList = make_simple_restrictinfo_compat(NULL,
+															   (Expr *) shardOpExpressions);
 		extendedBaseRestrictInfo = lappend(extendedBaseRestrictInfo,
 										   shardRestrictionList);
 
