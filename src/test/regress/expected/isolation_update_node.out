@@ -1,10 +1,12 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-update-node-1 s2-update-node-2 s1-commit s1-show-nodes
-nodeid         nodename       nodeport
+nodeid|nodename |nodeport
+---------------------------------------------------------------------
+    22|localhost|   57637
+    23|localhost|   57638
+(2 rows)
 
-22             localhost      57637
-23             localhost      57638
 step s1-begin:
  BEGIN;
 
@@ -15,8 +17,10 @@ step s1-update-node-1:
         58637);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-update-node-2:
     SELECT 1 FROM master_update_node(
         (select nodeid from pg_dist_node where nodeport = 57638),
@@ -28,25 +32,33 @@ step s1-commit:
 
 step s2-update-node-2: <... completed>
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-show-nodes:
     SELECT nodeid, nodename, nodeport, isactive
       FROM pg_dist_node
   ORDER BY nodename, nodeport;
 
-nodeid         nodename       nodeport       isactive
+nodeid|nodename |nodeport|isactive
+---------------------------------------------------------------------
+    22|localhost|   58637|t
+    23|localhost|   58638|t
+(2 rows)
 
-22             localhost      58637          t
-23             localhost      58638          t
-nodeid         nodename       nodeport
+nodeid|nodename|nodeport
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s1-begin s1-update-node-1 s2-begin s2-update-node-1 s1-commit s2-abort s1-show-nodes
-nodeid         nodename       nodeport
+nodeid|nodename |nodeport
+---------------------------------------------------------------------
+    24|localhost|   57637
+    25|localhost|   57638
+(2 rows)
 
-24             localhost      57637
-25             localhost      57638
 step s1-begin:
  BEGIN;
 
@@ -57,8 +69,10 @@ step s1-update-node-1:
         58637);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-begin:
  BEGIN;
 
@@ -73,8 +87,10 @@ step s1-commit:
 
 step s2-update-node-1: <... completed>
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-abort:
  ABORT;
 
@@ -83,18 +99,24 @@ step s1-show-nodes:
       FROM pg_dist_node
   ORDER BY nodename, nodeport;
 
-nodeid         nodename       nodeport       isactive
+nodeid|nodename |nodeport|isactive
+---------------------------------------------------------------------
+    25|localhost|   57638|t
+    24|localhost|   58637|t
+(2 rows)
 
-25             localhost      57638          t
-24             localhost      58637          t
-nodeid         nodename       nodeport
+nodeid|nodename|nodeport
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s1-begin s1-update-node-1 s2-start-metadata-sync-node-2 s1-commit s2-verify-metadata
-nodeid         nodename       nodeport
+nodeid|nodename |nodeport
+---------------------------------------------------------------------
+    26|localhost|   57637
+    27|localhost|   57638
+(2 rows)
 
-26             localhost      57637
-27             localhost      57638
 step s1-begin:
  BEGIN;
 
@@ -105,8 +127,10 @@ step s1-update-node-1:
         58637);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-start-metadata-sync-node-2:
     SELECT start_metadata_sync_to_node('localhost', 57638);
  <waiting ...>
@@ -115,7 +139,9 @@ step s1-commit:
 
 step s2-start-metadata-sync-node-2: <... completed>
 start_metadata_sync_to_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-verify-metadata:
     SELECT nodeid, groupid, nodename, nodeport FROM pg_dist_node ORDER BY nodeid;
@@ -124,27 +150,37 @@ step s2-verify-metadata:
         ARRAY['SELECT jsonb_agg(ROW(nodeid, groupid, nodename, nodeport) ORDER BY nodeid) FROM  pg_dist_node'],
         false);
 
-nodeid         groupid        nodename       nodeport
+nodeid|groupid|nodename |nodeport
+---------------------------------------------------------------------
+    26|     26|localhost|   58637
+    27|     27|localhost|   57638
+(2 rows)
 
-26             26             localhost      58637
-27             27             localhost      57638
 master_run_on_worker
-
+---------------------------------------------------------------------
 (localhost,57638,t,"[{""f1"": 26, ""f2"": 26, ""f3"": ""localhost"", ""f4"": 58637}, {""f1"": 27, ""f2"": 27, ""f3"": ""localhost"", ""f4"": 57638}]")
-nodeid         nodename       nodeport
+(1 row)
+
+nodeid|nodename|nodeport
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-create-table s1-begin s1-update-node-nonexistent s1-prepare-transaction s2-cache-prepared-statement s1-commit-prepared s2-execute-prepared s1-update-node-existent s2-drop-table
-nodeid         nodename       nodeport
+nodeid|nodename |nodeport
+---------------------------------------------------------------------
+    28|localhost|   57637
+    29|localhost|   57638
+(2 rows)
 
-28             localhost      57637
-29             localhost      57638
 step s2-create-table:
     CREATE TABLE test (a int);
     SELECT create_distributed_table('test','a');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
  BEGIN;
@@ -156,8 +192,10 @@ step s1-update-node-nonexistent:
         57637);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-prepare-transaction:
     PREPARE transaction 'label';
 
@@ -171,23 +209,35 @@ step s2-cache-prepared-statement:
     EXECUTE foo;
 
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 step s1-commit-prepared:
     COMMIT prepared 'label';
 
@@ -196,8 +246,10 @@ step s2-execute-prepared:
     EXECUTE foo;
 
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 step s1-update-node-existent:
     SELECT 1 FROM master_update_node(
         (select nodeid from pg_dist_node where nodeport = 57637),
@@ -205,10 +257,14 @@ step s1-update-node-existent:
         57637);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-drop-table:
     DROP TABLE test;
 
-nodeid         nodename       nodeport
+nodeid|nodename|nodeport
+---------------------------------------------------------------------
+(0 rows)
 

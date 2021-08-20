@@ -30,8 +30,10 @@ step s1-grant:
  GRANT ALL ON test_table TO test_user_2;
 
 bool_and
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-begin:
  BEGIN;
  SET ROLE test_user_1;
@@ -65,8 +67,10 @@ step s1-grant:
  GRANT ALL ON test_table TO test_user_2;
 
 bool_and
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-begin:
  BEGIN;
  SET ROLE test_user_1;
@@ -125,8 +129,10 @@ step s1-grant:
  GRANT ALL ON test_table TO test_user_2;
 
 bool_and
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-begin:
  BEGIN;
  SET ROLE test_user_1;
@@ -162,8 +168,10 @@ step s1-grant:
  GRANT ALL ON test_table TO test_user_2;
 
 bool_and
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-begin:
  BEGIN;
  SET ROLE test_user_1;
@@ -225,8 +233,10 @@ step s1-grant:
  GRANT ALL ON test_table TO test_user_2;
 
 bool_and
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-begin:
  BEGIN;
  SET ROLE test_user_1;
@@ -259,8 +269,10 @@ step s1-grant:
  GRANT ALL ON test_table TO test_user_2;
 
 bool_and
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-begin:
  BEGIN;
  SET ROLE test_user_1;

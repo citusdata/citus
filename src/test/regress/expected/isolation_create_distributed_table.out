@@ -11,7 +11,9 @@ step s1-create_distributed_table:
  SELECT create_distributed_table('table_to_distribute', 'id');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-create_distributed_table:
  SELECT create_distributed_table('table_to_distribute', 'id');
@@ -36,7 +38,9 @@ step s1-create_distributed_table:
  SELECT create_distributed_table('table_to_distribute', 'id');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-copy_to_local_table:
  COPY table_to_distribute FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3 && echo 4 && echo 5 && echo 6 && echo 7 && echo 8';
@@ -67,7 +71,9 @@ step s2-commit:
 
 step s1-create_distributed_table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit:
     COMMIT;
@@ -87,7 +93,9 @@ step s1-create_distributed_table:
  SELECT create_distributed_table('table_to_distribute', 'id');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-create_distributed_table:
  SELECT create_distributed_table('table_to_distribute', 'id');

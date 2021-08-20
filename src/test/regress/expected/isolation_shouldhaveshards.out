@@ -2,14 +2,18 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-add-second-node s1-begin s2-begin s2-create-distributed-table s1-noshards s2-commit s1-commit s2-shardcounts
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-add-second-node:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-begin:
  BEGIN;
 
@@ -23,7 +27,9 @@ step s2-create-distributed-table:
  SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-noshards:
  SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
@@ -33,7 +39,9 @@ step s2-commit:
 
 step s1-noshards: <... completed>
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit:
  COMMIT;
@@ -43,25 +51,33 @@ step s2-shardcounts:
  FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
  WHERE logicalrelid = 't1'::regclass GROUP BY nodeport ORDER BY nodeport;
 
-nodeport       count
+nodeport|count
+---------------------------------------------------------------------
+   57637|    2
+   57638|    2
+(2 rows)
 
-57637          2
-57638          2
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-add-second-node s1-begin s2-begin s1-noshards s2-create-distributed-table s1-commit s2-commit s2-shardcounts
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-add-second-node:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-begin:
  BEGIN;
 
@@ -72,7 +88,9 @@ step s1-noshards:
  SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-create-distributed-table:
  CREATE TABLE t1 (a int);
@@ -85,7 +103,9 @@ step s1-commit:
 
 step s2-create-distributed-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-commit:
  COMMIT;
@@ -95,18 +115,24 @@ step s2-shardcounts:
  FROM pg_dist_shard JOIN pg_dist_shard_placement USING (shardid)
  WHERE logicalrelid = 't1'::regclass GROUP BY nodeport ORDER BY nodeport;
 
-nodeport       count
+nodeport|count
+---------------------------------------------------------------------
+   57638|    4
+(1 row)
 
-57638          4
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-begin s2-begin s1-noshards s2-update-node s1-commit s2-commit
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-begin:
  BEGIN;
 
@@ -117,7 +143,9 @@ step s1-noshards:
  SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-update-node:
  select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
@@ -127,19 +155,25 @@ step s1-commit:
 
 step s2-update-node: <... completed>
 master_update_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-commit:
  COMMIT;
 
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-update-node s1-noshards s2-commit s1-commit
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-begin:
  BEGIN;
 
@@ -150,7 +184,9 @@ step s2-update-node:
  select * from master_update_node((select nodeid from pg_dist_node where nodeport = 57637), 'localhost', 57638)
 
 master_update_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-noshards:
  SELECT * from master_set_node_property('localhost', 57637, 'shouldhaveshards', false);
@@ -164,5 +200,7 @@ step s1-commit:
  COMMIT;
 
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 

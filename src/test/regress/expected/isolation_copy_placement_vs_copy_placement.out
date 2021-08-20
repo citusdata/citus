@@ -17,7 +17,9 @@ step s2-repair-placement:
  SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
 
 master_copy_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-repair-placement:
  SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
@@ -39,7 +41,9 @@ step s2-repair-placement:
  SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);
 
 master_copy_shard_placement
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-repair-placement:
  SELECT master_copy_shard_placement((SELECT * FROM selected_shard_for_test_table), 'localhost', 57637, 'localhost', 57638);

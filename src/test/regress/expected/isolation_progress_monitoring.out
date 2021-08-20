@@ -16,31 +16,49 @@ step take-locks:
  SELECT pg_advisory_lock(32);
 
 pg_advisory_lock
+---------------------------------------------------------------------
 
-
-pg_advisory_lock
-
-
-pg_advisory_lock
-
+(1 row)
 
 pg_advisory_lock
+---------------------------------------------------------------------
 
-
-pg_advisory_lock
-
-
-pg_advisory_lock
-
+(1 row)
 
 pg_advisory_lock
+---------------------------------------------------------------------
 
+(1 row)
 
 pg_advisory_lock
+---------------------------------------------------------------------
 
+(1 row)
 
 pg_advisory_lock
+---------------------------------------------------------------------
 
+(1 row)
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
+
+pg_advisory_lock
+---------------------------------------------------------------------
+
+(1 row)
 
 step s1-start-operation:
  SELECT sample_operation(1337, 10, -1);
@@ -56,15 +74,19 @@ step show-progress:
  SELECT show_progress(3778);
 
 show_progress
+---------------------------------------------------------------------
+(0,0)
+(1,0)
+(0,0)
+(1,0)
+(4 rows)
 
-(0,0)
-(1,0)
-(0,0)
-(1,0)
 show_progress
-
+---------------------------------------------------------------------
 (0,0)
 (1,0)
+(2 rows)
+
 step release-locks-1:
  -- Release the locks of first steps of sample operations
  SELECT pg_advisory_unlock(10);
@@ -72,28 +94,38 @@ step release-locks-1:
  SELECT pg_advisory_unlock(30);
 
 pg_advisory_unlock
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 pg_advisory_unlock
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 pg_advisory_unlock
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step show-progress:
  SELECT show_progress(1337);
  SELECT show_progress(3778);
 
 show_progress
-
+---------------------------------------------------------------------
 (0,-1)
 (1,0)
 (0,2)
 (1,0)
-show_progress
+(4 rows)
 
+show_progress
+---------------------------------------------------------------------
 (0,9)
 (1,0)
+(2 rows)
+
 step release-locks-2:
  -- Release the locks of second steps of sample operations
  SELECT pg_advisory_unlock(11);
@@ -101,28 +133,38 @@ step release-locks-2:
  SELECT pg_advisory_unlock(31);
 
 pg_advisory_unlock
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 pg_advisory_unlock
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 pg_advisory_unlock
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step show-progress:
  SELECT show_progress(1337);
  SELECT show_progress(3778);
 
 show_progress
-
+---------------------------------------------------------------------
 (0,-1)
 (1,-1)
 (0,2)
 (1,2)
-show_progress
+(4 rows)
 
+show_progress
+---------------------------------------------------------------------
 (0,9)
 (1,9)
+(2 rows)
+
 step release-locks-3:
  -- Release the locks of final steps of sample operations
  SELECT pg_advisory_unlock(12);
@@ -130,23 +172,35 @@ step release-locks-3:
  SELECT pg_advisory_unlock(32);
 
 pg_advisory_unlock
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 pg_advisory_unlock
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 pg_advisory_unlock
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-start-operation: <... completed>
 sample_operation
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-start-operation: <... completed>
 sample_operation
+---------------------------------------------------------------------
 
+(1 row)
 
 step s3-start-operation: <... completed>
 sample_operation
+---------------------------------------------------------------------
 
+(1 row)
 

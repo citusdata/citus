@@ -1,9 +1,11 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-add-node-2 s2-create-table-1 s1-commit s1-show-placements s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s1-begin:
  BEGIN;
 
@@ -11,8 +13,10 @@ step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-create-table-1:
  SET citus.shard_count TO 4;
  SET citus.shard_replication_factor TO 1;
@@ -24,7 +28,9 @@ step s1-commit:
 
 step s2-create-table-1: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-show-placements:
  SELECT
@@ -36,26 +42,34 @@ step s1-show-placements:
  ORDER BY
   nodename, nodeport;
 
-nodename       nodeport
+nodename |nodeport
+---------------------------------------------------------------------
+localhost|   57637
+localhost|   57637
+localhost|   57638
+localhost|   57638
+(4 rows)
 
-localhost      57637
-localhost      57637
-localhost      57638
-localhost      57638
 step s2-select:
  SELECT * FROM dist_table;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-begin s1-add-node-2 s2-create-table-1 s1-abort s1-show-placements s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s1-begin:
  BEGIN;
 
@@ -63,8 +77,10 @@ step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-create-table-1:
  SET citus.shard_count TO 4;
  SET citus.shard_replication_factor TO 1;
@@ -76,7 +92,9 @@ step s1-abort:
 
 step s2-create-table-1: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-show-placements:
  SELECT
@@ -88,25 +106,33 @@ step s1-show-placements:
  ORDER BY
   nodename, nodeport;
 
-nodename       nodeport
+nodename |nodeport
+---------------------------------------------------------------------
+localhost|   57637
+localhost|   57637
+localhost|   57637
+localhost|   57637
+(4 rows)
 
-localhost      57637
-localhost      57637
-localhost      57637
-localhost      57637
 step s2-select:
  SELECT * FROM dist_table;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s2-begin s2-create-table-1 s1-add-node-2 s2-commit s1-show-placements s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s2-begin:
  BEGIN;
 
@@ -117,7 +143,9 @@ step s2-create-table-1:
  SELECT create_distributed_table('dist_table', 'x');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
@@ -127,8 +155,10 @@ step s2-commit:
 
 step s1-add-node-2: <... completed>
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-show-placements:
  SELECT
   nodename, nodeport
@@ -139,32 +169,42 @@ step s1-show-placements:
  ORDER BY
   nodename, nodeport;
 
-nodename       nodeport
+nodename |nodeport
+---------------------------------------------------------------------
+localhost|   57637
+localhost|   57637
+localhost|   57637
+localhost|   57637
+(4 rows)
 
-localhost      57637
-localhost      57637
-localhost      57637
-localhost      57637
 step s2-select:
  SELECT * FROM dist_table;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-table-1 s1-commit s1-show-placements s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-begin:
  BEGIN;
 
@@ -172,7 +212,9 @@ step s1-remove-node-2:
  SELECT * FROM master_remove_node('localhost', 57638);
 
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-create-table-1:
  SET citus.shard_count TO 4;
@@ -185,7 +227,9 @@ step s1-commit:
 
 step s2-create-table-1: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-show-placements:
  SELECT
@@ -197,31 +241,41 @@ step s1-show-placements:
  ORDER BY
   nodename, nodeport;
 
-nodename       nodeport
+nodename |nodeport
+---------------------------------------------------------------------
+localhost|   57637
+localhost|   57637
+localhost|   57637
+localhost|   57637
+(4 rows)
 
-localhost      57637
-localhost      57637
-localhost      57637
-localhost      57637
 step s2-select:
  SELECT * FROM dist_table;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-table-1 s1-abort s1-show-placements s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-begin:
  BEGIN;
 
@@ -229,7 +283,9 @@ step s1-remove-node-2:
  SELECT * FROM master_remove_node('localhost', 57638);
 
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-create-table-1:
  SET citus.shard_count TO 4;
@@ -242,7 +298,9 @@ step s1-abort:
 
 step s2-create-table-1: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-show-placements:
  SELECT
@@ -254,32 +312,42 @@ step s1-show-placements:
  ORDER BY
   nodename, nodeport;
 
-nodename       nodeport
+nodename |nodeport
+---------------------------------------------------------------------
+localhost|   57637
+localhost|   57637
+localhost|   57638
+localhost|   57638
+(4 rows)
 
-localhost      57637
-localhost      57637
-localhost      57638
-localhost      57638
 step s2-select:
  SELECT * FROM dist_table;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-add-node-2 s2-begin s2-create-table-1 s1-remove-node-2 s2-commit s1-show-placements s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-begin:
  BEGIN;
 
@@ -290,7 +358,9 @@ step s2-create-table-1:
  SELECT create_distributed_table('dist_table', 'x');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-remove-node-2:
  SELECT * FROM master_remove_node('localhost', 57638);
@@ -310,32 +380,42 @@ step s1-show-placements:
  ORDER BY
   nodename, nodeport;
 
-nodename       nodeport
+nodename |nodeport
+---------------------------------------------------------------------
+localhost|   57637
+localhost|   57637
+localhost|   57638
+localhost|   57638
+(4 rows)
 
-localhost      57637
-localhost      57637
-localhost      57638
-localhost      57638
 step s2-select:
  SELECT * FROM dist_table;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-table-2 s1-commit s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-begin:
  BEGIN;
 
@@ -343,7 +423,9 @@ step s1-remove-node-2:
  SELECT * FROM master_remove_node('localhost', 57638);
 
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-create-table-2:
  SET citus.shard_count TO 4;
@@ -361,19 +443,25 @@ step s2-select:
 
 ERROR:  relation "dist_table" does not exist
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-add-node-2 s2-begin s2-create-table-2 s1-remove-node-2 s2-commit s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-begin:
  BEGIN;
 
@@ -384,7 +472,9 @@ step s2-create-table-2:
  SELECT create_distributed_table('dist_table', 'x');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-remove-node-2:
  SELECT * FROM master_remove_node('localhost', 57638);
@@ -397,23 +487,31 @@ ERROR:  cannot remove the primary node of a node group which has shard placement
 step s2-select:
  SELECT * FROM dist_table;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-add-node-2 s1-begin s1-remove-node-2 s2-create-append-table s1-commit s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-begin:
  BEGIN;
 
@@ -421,7 +519,9 @@ step s1-remove-node-2:
  SELECT * FROM master_remove_node('localhost', 57638);
 
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-create-append-table:
  SET citus.shard_replication_factor TO 1;
@@ -434,30 +534,42 @@ step s1-commit:
 
 step s2-create-append-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-select:
  SELECT * FROM dist_table;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-add-node-2 s2-begin s2-create-append-table s1-remove-node-2 s2-commit s2-select
-node_name      node_port
+node_name|node_port
+---------------------------------------------------------------------
+localhost|    57637
+(1 row)
 
-localhost      57637
 step s1-add-node-2:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-begin:
  BEGIN;
 
@@ -468,11 +580,15 @@ step s2-create-append-table:
  SELECT 1 FROM master_create_empty_shard('dist_table');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-remove-node-2:
  SELECT * FROM master_remove_node('localhost', 57638);
  <waiting ...>
@@ -484,9 +600,13 @@ ERROR:  cannot remove the primary node of a node group which has shard placement
 step s2-select:
  SELECT * FROM dist_table;
 
-x              y
+x|y
+---------------------------------------------------------------------
+(0 rows)
 
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
