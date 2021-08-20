@@ -199,7 +199,7 @@ step s1-add-node-1:
 (1 row)
 
 step s2-create-extension-with-schema1:
- CREATE extension seg with schema schema1;
+ CREATE extension seg with version "1.3" schema schema1;
  <waiting ...>
 step s1-commit: 
  COMMIT;
@@ -317,7 +317,7 @@ step s1-add-node-1:
 (1 row)
 
 step s1-create-extension-with-schema2:
- CREATE extension seg with schema schema2;
+ CREATE extension seg with version "1.3" schema schema2;
 
 step s1-begin:
  BEGIN;
@@ -399,7 +399,7 @@ step s1-remove-node-1:
 (1 row)
 
 step s2-create-extension-with-schema1:
- CREATE extension seg with schema schema1;
+ CREATE extension seg with version "1.3" schema schema1;
  <waiting ...>
 step s1-commit: 
  COMMIT;
@@ -674,7 +674,7 @@ step s2-begin:
  BEGIN;
 
 step s2-create-extension-with-schema1:
- CREATE extension seg with schema schema1;
+ CREATE extension seg with version "1.3" schema schema1;
 
 step s1-add-node-1:
  SELECT 1 FROM master_add_node('localhost', 57637);
@@ -742,7 +742,7 @@ step s2-add-node-1:
 (1 row)
 
 step s2-create-extension-with-schema2:
- CREATE extension seg with schema schema2;
+ CREATE extension seg with version "1.3" schema schema2;
 
 step s2-begin:
  BEGIN;
