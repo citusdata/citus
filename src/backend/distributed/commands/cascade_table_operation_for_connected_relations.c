@@ -34,7 +34,6 @@
 
 static void EnsureSequentialModeForCitusTableCascadeFunction(List *relationIdList);
 static void LockRelationsWithLockMode(List *relationIdList, LOCKMODE lockMode);
-static List * RemovePartitionRelationIds(List *relationIdList);
 static List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
 static void DropRelationIdListForeignKeys(List *relationIdList, int fKeyFlags);
 static List * GetRelationDropFkeyCommands(Oid relationId, int fKeyFlags);
@@ -148,30 +147,6 @@ ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList)
 						errhint("Remove non-inherited foreign keys from %s and "
 								"try operation again", partitionRelationQualifiedName)));
 	}
-}
-
-
-/*
- * RemovePartitionRelationIds returns a list of relation id's by removing
- * partition relation id's from given relationIdList.
- */
-static List *
-RemovePartitionRelationIds(List *relationIdList)
-{
-	List *nonPartitionRelationIdList = NIL;
-
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
-	{
-		if (PartitionTable(relationId))
-		{
-			continue;
-		}
-
-		nonPartitionRelationIdList = lappend_oid(nonPartitionRelationIdList, relationId);
-	}
-
-	return nonPartitionRelationIdList;
 }
 
 
