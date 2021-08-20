@@ -27,14 +27,16 @@ step s1-commit:
 step s2-select:
     SELECT * FROM test_vacuum_vs_insert;
 
-a              b
+a|b
+---------------------------------------------------------------------
+1|2
+2|4
+3|6
+1|2
+2|4
+3|6
+(6 rows)
 
-1              2
-2              4
-3              6
-1              2
-2              4
-3              6
 
 starting permutation: s1-insert s1-begin s1-insert s2-vacuum-full s1-commit s2-select
 step s1-insert:
@@ -49,7 +51,7 @@ step s1-insert:
 step s2-vacuum-full:
     VACUUM FULL VERBOSE test_vacuum_vs_insert;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 s2: INFO:  vacuuming "public.test_vacuum_vs_insert"
@@ -59,11 +61,13 @@ step s2-vacuum-full: <... completed>
 step s2-select:
     SELECT * FROM test_vacuum_vs_insert;
 
-a              b
+a|b
+---------------------------------------------------------------------
+1|2
+2|4
+3|6
+1|2
+2|4
+3|6
+(6 rows)
 
-1              2
-2              4
-3              6
-1              2
-2              4
-3              6
