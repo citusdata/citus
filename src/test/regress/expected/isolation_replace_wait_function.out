@@ -2,7 +2,9 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-insert-1 s2-insert s1-commit s2-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-insert-1:
   BEGIN;
@@ -21,5 +23,7 @@ step s2-commit:
   COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 

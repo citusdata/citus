@@ -2,179 +2,241 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -182,29 +244,39 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -212,33 +284,43 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -246,208 +328,284 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-insert s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-insert: INSERT INTO select_append VALUES(0, 'k', 0);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    6
+(1 row)
 
-6
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-insert-select: INSERT INTO select_append SELECT * FROM select_append;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-update s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-update: UPDATE select_append SET data = 'l' WHERE id = 0;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-delete s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-delete: DELETE FROM select_append WHERE id = 1;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-truncate s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-truncate: TRUNCATE select_append; <waiting ...>
 step s1-commit: COMMIT;
 step s2-truncate: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-drop s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-drop: DROP TABLE select_append; <waiting ...>
 step s1-commit: COMMIT;
 step s2-drop: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-create-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-router-select s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-ddl-drop-index: DROP INDEX select_append_index; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-index: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-disable-binary-protocol s1-router-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -456,290 +614,406 @@ step s1-disable-binary-protocol:
  SET citus.enable_binary_protocol TO false;
 
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY select_append_index ON select_append(id);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-add-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-router-select s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data       new_column
+id|data|int_data|new_column
+---------------------------------------------------------------------
+ 1| b  |       1|         0
+(1 row)
 
-1               b             1              0
 step s2-ddl-drop-column: ALTER TABLE select_append DROP new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-rename-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-table-size s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-table-size: SELECT citus_total_relation_size('select_append');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    32768
+(1 row)
 
-32768
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-router-select s2-master-modify-multiple-shards s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s2-master-modify-multiple-shards: DELETE FROM select_append;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-master-apply-delete-command s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s2-master-apply-delete-command: SELECT master_apply_delete_command('DELETE FROM select_append WHERE id <= 4;');
 master_apply_delete_command
+---------------------------------------------------------------------
+                          1
+(1 row)
 
-1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-master-drop-all-shards s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s2-master-drop-all-shards: SELECT citus_drop_all_shards('select_append'::regclass, 'public', 'append_copy');
 citus_drop_all_shards
+---------------------------------------------------------------------
+                    1
+(1 row)
 
-1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-begin s1-router-select s2-distribute-table s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop: DROP TABLE select_append;
 step s1-create-non-distributed-table: CREATE TABLE select_append(id integer, data text, int_data int);
 step s1-begin: BEGIN;
 step s1-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+(0 rows)
 
 step s2-distribute-table: SELECT create_distributed_table('select_append', 'id', 'append');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-insert s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO select_append VALUES(0, 'k', 0);
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    6
+(1 row)
 
-6
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO select_append SELECT * FROM select_append;
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-update s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-update: UPDATE select_append SET data = 'l' WHERE id = 0;
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-delete s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-delete: DELETE FROM select_append WHERE id = 1;
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-truncate s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -747,19 +1021,27 @@ step s1-truncate: TRUNCATE select_append;
 step s2-router-select: SELECT * FROM select_append WHERE id = 1; <waiting ...>
 step s1-commit: COMMIT;
 step s2-router-select: <... completed>
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+(0 rows)
 
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-drop s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -771,37 +1053,51 @@ ERROR:  relation "select_append" does not exist
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-router-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-router-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
@@ -810,25 +1106,35 @@ step s1-ddl-drop-index: DROP INDEX select_append_index;
 step s2-router-select: SELECT * FROM select_append WHERE id = 1; <waiting ...>
 step s1-commit: COMMIT;
 step s2-router-select: <... completed>
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-router-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -836,25 +1142,35 @@ step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s2-router-select: SELECT * FROM select_append WHERE id = 1; <waiting ...>
 step s1-commit: COMMIT;
 step s2-router-select: <... completed>
-id             data           int_data       new_column
+id|data|int_data|new_column
+---------------------------------------------------------------------
+ 1| b  |       1|         0
+(1 row)
 
-1               b             1              0
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-router-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
@@ -863,25 +1179,35 @@ step s1-ddl-drop-column: ALTER TABLE select_append DROP new_column;
 step s2-router-select: SELECT * FROM select_append WHERE id = 1; <waiting ...>
 step s1-commit: COMMIT;
 step s2-router-select: <... completed>
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-router-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -889,623 +1215,843 @@ step s1-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column;
 step s2-router-select: SELECT * FROM select_append WHERE id = 1; <waiting ...>
 step s1-commit: COMMIT;
 step s2-router-select: <... completed>
-id             new_column     int_data
+id|new_column|int_data
+---------------------------------------------------------------------
+ 1| b        |       1
+(1 row)
 
-1               b             1
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('select_append');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    32768
+(1 row)
 
-32768
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards: DELETE FROM select_append;
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 1| b  |       1
+(1 row)
 
-1               b             1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-master-apply-delete-command s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-master-apply-delete-command: SELECT master_apply_delete_command('DELETE FROM select_append WHERE id <= 4;');
 master_apply_delete_command
+---------------------------------------------------------------------
+                          1
+(1 row)
 
-1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-master-drop-all-shards s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-master-drop-all-shards: SELECT citus_drop_all_shards('select_append'::regclass, 'public', 'append_copy');
 citus_drop_all_shards
+---------------------------------------------------------------------
+                    1
+(1 row)
 
-1
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-begin s1-distribute-table s2-router-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop: DROP TABLE select_append;
 step s1-create-non-distributed-table: CREATE TABLE select_append(id integer, data text, int_data int);
 step s1-begin: BEGIN;
 step s1-distribute-table: SELECT create_distributed_table('select_append', 'id', 'append');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-router-select: SELECT * FROM select_append WHERE id = 1;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+(0 rows)
 
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-insert s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-insert: INSERT INTO select_append VALUES(0, 'k', 0);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    6
+(1 row)
 
-6
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-insert-select: INSERT INTO select_append SELECT * FROM select_append;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-update s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-update: UPDATE select_append SET data = 'l' WHERE id = 0;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-delete s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-delete: DELETE FROM select_append WHERE id = 1;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-truncate s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-truncate: TRUNCATE select_append; <waiting ...>
 step s1-commit: COMMIT;
 step s2-truncate: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-drop s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-drop: DROP TABLE select_append; <waiting ...>
 step s1-commit: COMMIT;
 step s2-drop: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-create-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-real-time-select s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-ddl-drop-index: DROP INDEX select_append_index; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-index: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY select_append_index ON select_append(id);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-add-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-real-time-select s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data       new_column
+id|data|int_data|new_column
+---------------------------------------------------------------------
+ 0| a  |       0|         0
+ 1| b  |       1|         0
+ 2| c  |       2|         0
+ 3| d  |       3|         0
+ 4| e  |       4|         0
+(5 rows)
 
-0               a             0              0
-1               b             1              0
-2               c             2              0
-3               d             3              0
-4               e             4              0
 step s2-ddl-drop-column: ALTER TABLE select_append DROP new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-rename-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-table-size s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-table-size: SELECT citus_total_relation_size('select_append');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    32768
+(1 row)
 
-32768
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-real-time-select s2-master-modify-multiple-shards s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s2-master-modify-multiple-shards: DELETE FROM select_append;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-begin s1-real-time-select s2-distribute-table s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop: DROP TABLE select_append;
 step s1-create-non-distributed-table: CREATE TABLE select_append(id integer, data text, int_data int);
 step s1-begin: BEGIN;
 step s1-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+(0 rows)
 
 step s2-distribute-table: SELECT create_distributed_table('select_append', 'id', 'append');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-insert s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert: INSERT INTO select_append VALUES(0, 'k', 0);
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    6
+(1 row)
 
-6
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-insert-select: INSERT INTO select_append SELECT * FROM select_append;
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-update s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-update: UPDATE select_append SET data = 'l' WHERE id = 0;
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-delete s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-delete: DELETE FROM select_append WHERE id = 1;
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-truncate s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1513,19 +2059,27 @@ step s1-truncate: TRUNCATE select_append;
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+(0 rows)
 
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-drop s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1537,41 +2091,55 @@ ERROR:  relation "select_append" does not exist
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-real-time-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-real-time-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
@@ -1580,29 +2148,39 @@ step s1-ddl-drop-index: DROP INDEX select_append_index;
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-real-time-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1610,29 +2188,39 @@ step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
-id             data           int_data       new_column
+id|data|int_data|new_column
+---------------------------------------------------------------------
+ 0| a  |       0|         0
+ 1| b  |       1|         0
+ 2| c  |       2|         0
+ 3| d  |       3|         0
+ 4| e  |       4|         0
+(5 rows)
 
-0               a             0              0
-1               b             1              0
-2               c             2              0
-3               d             3              0
-4               e             4              0
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-real-time-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
@@ -1641,29 +2229,39 @@ step s1-ddl-drop-column: ALTER TABLE select_append DROP new_column;
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-real-time-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1671,103 +2269,141 @@ step s1-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column;
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2; <waiting ...>
 step s1-commit: COMMIT;
 step s2-real-time-select: <... completed>
-id             new_column     int_data
+id|new_column|int_data
+---------------------------------------------------------------------
+ 0| a        |       0
+ 1| b        |       1
+ 2| c        |       2
+ 3| d        |       3
+ 4| e        |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('select_append');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    32768
+(1 row)
 
-32768
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-master-modify-multiple-shards: DELETE FROM select_append;
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0
+ 1| b  |       1
+ 2| c  |       2
+ 3| d  |       3
+ 4| e  |       4
+(5 rows)
 
-0               a             0
-1               b             1
-2               c             2
-3               d             3
-4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-begin s1-distribute-table s2-real-time-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop: DROP TABLE select_append;
 step s1-create-non-distributed-table: CREATE TABLE select_append(id integer, data text, int_data int);
 step s1-begin: BEGIN;
 step s1-distribute-table: SELECT create_distributed_table('select_append', 'id', 'append');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-real-time-select: SELECT * FROM select_append ORDER BY 1, 2;
-id             data           int_data
+id|data|int_data
+---------------------------------------------------------------------
+(0 rows)
 
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-insert s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1775,26 +2411,34 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-insert: INSERT INTO select_append VALUES(0, 'k', 0);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    6
+(1 row)
 
-6
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-insert-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1802,26 +2446,34 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-insert-select: INSERT INTO select_append SELECT * FROM select_append;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-update s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1829,26 +2481,34 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-update: UPDATE select_append SET data = 'l' WHERE id = 0;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-delete s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1856,26 +2516,34 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-delete: DELETE FROM select_append WHERE id = 1;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-truncate s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1883,27 +2551,35 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-truncate: TRUNCATE select_append; <waiting ...>
 step s1-commit: COMMIT;
 step s2-truncate: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-drop s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1911,25 +2587,31 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-drop: DROP TABLE select_append; <waiting ...>
 step s1-commit: COMMIT;
 step s2-drop: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-ddl-create-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -1937,31 +2619,41 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-adaptive-select s2-ddl-drop-index s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
@@ -1970,32 +2662,42 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-ddl-drop-index: DROP INDEX select_append_index; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-index: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2003,31 +2705,41 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY select_append_index ON select_append(id);
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-ddl-add-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2035,32 +2747,42 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-add-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-adaptive-select s2-ddl-drop-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
@@ -2069,32 +2791,42 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       new_column     id             data           int_data       new_column
+id|data|int_data|new_column|id|data|int_data|new_column
+---------------------------------------------------------------------
+ 0| a  |       0|         0| 0| a  |       0|         0
+ 1| b  |       1|         0| 1| b  |       1|         0
+ 2| c  |       2|         0| 2| c  |       2|         0
+ 3| d  |       3|         0| 3| d  |       3|         0
+ 4| e  |       4|         0| 4| e  |       4|         0
+(5 rows)
 
-0               a             0              0              0               a             0              0
-1               b             1              0              1               b             1              0
-2               c             2              0              2               c             2              0
-3               d             3              0              3               d             3              0
-4               e             4              0              4               e             4              0
 step s2-ddl-drop-column: ALTER TABLE select_append DROP new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-drop-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-ddl-rename-column s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2102,32 +2834,42 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-ddl-rename-column: ALTER TABLE select_append RENAME data TO new_column; <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-rename-column: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-table-size s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2135,29 +2877,39 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-table-size: SELECT citus_total_relation_size('select_append');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    32768
+(1 row)
 
-32768
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-adaptive-select s2-master-modify-multiple-shards s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2165,26 +2917,34 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s2-master-modify-multiple-shards: DELETE FROM select_append;
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-begin s1-adaptive-select s2-distribute-table s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop: DROP TABLE select_append;
 step s1-create-non-distributed-table: CREATE TABLE select_append(id integer, data text, int_data int);
@@ -2193,24 +2953,34 @@ step s1-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+(0 rows)
 
 step s2-distribute-table: SELECT create_distributed_table('select_append', 'id', 'append');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-insert s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2219,25 +2989,33 @@ step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    6
+(1 row)
 
-6
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-insert-select s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2246,25 +3024,33 @@ step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+   10
+(1 row)
 
-10
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-update s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2273,25 +3059,33 @@ step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-delete s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2300,25 +3094,33 @@ step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-truncate s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2329,19 +3131,27 @@ step s2-adaptive-select:
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-adaptive-select: <... completed>
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+(0 rows)
 
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-drop s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2356,12 +3166,16 @@ ERROR:  relation "select_append" does not exist
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 ERROR:  relation "select_append" does not exist
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-ddl-create-index s2-adaptive-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2370,30 +3184,40 @@ step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s1-ddl-drop-index s2-adaptive-select s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX select_append_index ON select_append(id);
@@ -2405,29 +3229,39 @@ step s2-adaptive-select:
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-adaptive-select: <... completed>
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_append%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-ddl-add-column s2-adaptive-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2438,29 +3272,39 @@ step s2-adaptive-select:
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-adaptive-select: <... completed>
-id             data           int_data       new_column     id             data           int_data       new_column
+id|data|int_data|new_column|id|data|int_data|new_column
+---------------------------------------------------------------------
+ 0| a  |       0|         0| 0| a  |       0|         0
+ 1| b  |       1|         0| 1| b  |       1|         0
+ 2| c  |       2|         0| 2| c  |       2|         0
+ 3| d  |       3|         0| 3| d  |       3|         0
+ 4| e  |       4|         0| 4| e  |       4|         0
+(5 rows)
 
-0               a             0              0              0               a             0              0
-1               b             1              0              1               b             1              0
-2               c             2              0              2               c             2              0
-3               d             3              0              3               d             3              0
-4               e             4              0              4               e             4              0
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s1-ddl-drop-column s2-adaptive-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE select_append ADD new_column int DEFAULT 0;
@@ -2472,29 +3316,39 @@ step s2-adaptive-select:
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-adaptive-select: <... completed>
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-ddl-rename-column s2-adaptive-select s1-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2505,59 +3359,79 @@ step s2-adaptive-select:
  <waiting ...>
 step s1-commit: COMMIT;
 step s2-adaptive-select: <... completed>
-id             new_column     int_data       id             new_column     int_data
+id|new_column|int_data|id|new_column|int_data
+---------------------------------------------------------------------
+ 0| a        |       0| 0| a        |       0
+ 1| b        |       1| 1| b        |       1
+ 2| c        |       2| 2| c        |       2
+ 3| d        |       3| 3| d        |       3
+ 4| e        |       4| 4| e        |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_append%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-table-size s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('select_append');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    32768
+(1 row)
 
-32768
 step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    5
+(1 row)
 
-5
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-master-modify-multiple-shards s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV;
 step s1-begin: BEGIN;
@@ -2566,44 +3440,60 @@ step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+ 0| a  |       0| 0| a  |       0
+ 1| b  |       1| 1| b  |       1
+ 2| c  |       2| 2| c  |       2
+ 3| d  |       3| 3| d  |       3
+ 4| e  |       4| 4| e  |       4
+(5 rows)
 
-0               a             0              0               a             0
-1               b             1              1               b             1
-2               c             2              2               c             2
-3               d             3              3               d             3
-4               e             4              4               e             4
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-begin s1-distribute-table s2-adaptive-select s1-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop: DROP TABLE select_append;
 step s1-create-non-distributed-table: CREATE TABLE select_append(id integer, data text, int_data int);
 step s1-begin: BEGIN;
 step s1-distribute-table: SELECT create_distributed_table('select_append', 'id', 'append');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-adaptive-select:
   SET citus.enable_repartition_joins TO ON;
  SELECT * FROM select_append AS t1 JOIN select_append AS t2 ON t1.id = t2.int_data ORDER BY 1, 2, 3, 4;
 
-id             data           int_data       id             data           int_data
+id|data|int_data|id|data|int_data
+---------------------------------------------------------------------
+(0 rows)
 
 step s1-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM select_append;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 

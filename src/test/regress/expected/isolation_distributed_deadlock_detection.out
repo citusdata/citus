@@ -20,8 +20,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s1-update-2:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
@@ -29,8 +31,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-update-1: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s1-update-2: <... completed>
@@ -61,8 +65,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s1-update-2-rep-2:
   UPDATE deadlock_detection_test_rep_2 SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
@@ -70,8 +76,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-update-1-rep-2: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s1-update-2-rep-2: <... completed>
@@ -108,8 +116,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s1-update-2:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
@@ -117,8 +127,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-update-1: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s1-update-2: <... completed>
@@ -149,8 +161,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s2-upsert-select-all:
  INSERT INTO deadlock_detection_test SELECT * FROM deadlock_detection_test ON CONFLICT(user_id) DO UPDATE SET some_val = deadlock_detection_test.some_val + 5 RETURNING *;
  <waiting ...>
@@ -158,8 +172,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-update-2: <... completed>
 step s2-upsert-select-all: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
@@ -190,8 +206,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s2-ddl:
  ALTER TABLE deadlock_detection_test ADD COLUMN test_col INT;
  <waiting ...>
@@ -199,8 +217,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-update-2: <... completed>
 step s2-ddl: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
@@ -234,8 +254,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-insert-dist-10: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s1-insert-local-10: <... completed>
@@ -269,8 +291,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-insert-ref-10: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s2-insert-ref-11: <... completed>
@@ -298,8 +322,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s2-update-1:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 1;
  <waiting ...>
@@ -310,8 +336,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-update-1: <... completed>
 step s1-insert-ref-10: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
@@ -345,8 +373,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s1-update-2:
   UPDATE deadlock_detection_test SET some_val = 1 WHERE user_id = 2;
  <waiting ...>
@@ -360,8 +390,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-update-3: <... completed>
 step s3-update-1: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
@@ -405,8 +437,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
  <waiting ...>
@@ -414,8 +448,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s3-update-2: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s2-update-3: <... completed>
@@ -459,8 +495,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s4-update-4:
   UPDATE deadlock_detection_test SET some_val = 4 WHERE user_id = 4;
 
@@ -471,8 +509,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s3-update-2: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s2-update-3: <... completed>
@@ -512,8 +552,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s2-update-2:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 2;
 
@@ -530,8 +572,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-update-3: <... completed>
 step s3-update-2: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
@@ -587,8 +631,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s4-update-1: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s1-update-4: <... completed>
@@ -605,8 +651,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s3-update-2: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step s2-update-3: <... completed>
@@ -658,8 +706,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s6-update-6:
   UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 6;
 
@@ -676,8 +726,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-update-5: <... completed>
 step s5-update-1: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
@@ -743,8 +795,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s2-update-3:
   UPDATE deadlock_detection_test SET some_val = 2 WHERE user_id = 3;
 
@@ -761,8 +815,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-update-2: <... completed>
 step s3-update-3: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
@@ -832,8 +888,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s6-update-6:
   UPDATE deadlock_detection_test SET some_val = 6 WHERE user_id = 6;
 
@@ -847,8 +905,10 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s5-update-6: <... completed>
 step s6-update-5: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
@@ -910,7 +970,9 @@ step s5-random-adv-lock:
   SELECT pg_advisory_xact_lock(8765);
 
 pg_advisory_xact_lock
+---------------------------------------------------------------------
 
+(1 row)
 
 step s4-random-adv-lock:
   SELECT pg_advisory_xact_lock(8765);
@@ -925,22 +987,28 @@ step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-update-3: <... completed>
 ERROR:  canceling the transaction since it was involved in a distributed deadlock
 step deadlock-checker-call:
   SELECT check_distributed_deadlocks();
 
 check_distributed_deadlocks
-
+---------------------------------------------------------------------
 f
+(1 row)
+
 step s5-commit:
   COMMIT;
 
 step s4-random-adv-lock: <... completed>
 pg_advisory_xact_lock
+---------------------------------------------------------------------
 
+(1 row)
 
 step s4-commit:
   COMMIT;

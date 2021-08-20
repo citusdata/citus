@@ -8,14 +8,18 @@ step s1-assign-transaction-id:
     SELECT assign_distributed_transaction_id(1, 1, '2015-01-01 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-get-all-transactions:
  SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
-initiator_node_identifiertransaction_numbertransaction_stamp
+initiator_node_identifier|transaction_number|transaction_stamp
+---------------------------------------------------------------------
+                        1|                 1|Wed Dec 31 16:00:00 2014 PST
+(1 row)
 
-1              1              Wed Dec 31 16:00:00 2014 PST
 step s2-begin:
     BEGIN;
 
@@ -23,14 +27,18 @@ step s2-assign-transaction-id:
     SELECT assign_distributed_transaction_id(2, 2, '2015-01-02 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-get-all-transactions:
  SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
-initiator_node_identifiertransaction_numbertransaction_stamp
+initiator_node_identifier|transaction_number|transaction_stamp
+---------------------------------------------------------------------
+                        2|                 2|Thu Jan 01 16:00:00 2015 PST
+(1 row)
 
-2              2              Thu Jan 01 16:00:00 2015 PST
 step s3-begin:
     BEGIN;
 
@@ -38,14 +46,18 @@ step s3-assign-transaction-id:
     SELECT assign_distributed_transaction_id(3, 3, '2015-01-03 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step s3-get-all-transactions:
  SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
-initiator_node_identifiertransaction_numbertransaction_stamp
+initiator_node_identifier|transaction_number|transaction_stamp
+---------------------------------------------------------------------
+                        3|                 3|Fri Jan 02 16:00:00 2015 PST
+(1 row)
 
-3              3              Fri Jan 02 16:00:00 2015 PST
 step s1-commit:
     COMMIT;
 
@@ -64,7 +76,9 @@ step s1-create-table:
  SELECT create_distributed_table('distributed_transaction_id_table', 'some_value');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -84,10 +98,12 @@ step s1-verify-current-xact-is-on-worker:
         $$) as remote
     ORDER BY remote.nodeport ASC;
 
-nodeport       xact_exists
+nodeport|xact_exists
+---------------------------------------------------------------------
+   57637|t
+   57638|t
+(2 rows)
 
-57637          t
-57638          t
 step s1-commit:
     COMMIT;
 
@@ -100,14 +116,18 @@ step s1-assign-transaction-id:
     SELECT assign_distributed_transaction_id(1, 1, '2015-01-01 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-has-transaction-number:
     SELECT transaction_number > 0 FROM get_current_transaction_id();
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-vacuum:
     VACUUM FULL pg_dist_partition;
 
@@ -115,8 +135,10 @@ step s1-has-transaction-number:
     SELECT transaction_number > 0 FROM get_current_transaction_id();
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-commit:
     COMMIT;
 

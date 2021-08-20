@@ -15,14 +15,18 @@ step s2-commit:
 
 step s1-create_distributed_table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-select:
  SELECT * FROM migration_table ORDER BY test_id;
 
-test_id        data
+test_id|data
+---------------------------------------------------------------------
+      1|hello
+(1 row)
 
-1              hello
 
 starting permutation: s1-begin s1-create_distributed_table s2-copy s1-commit s2-select
 step s1-begin:
@@ -32,7 +36,9 @@ step s1-create_distributed_table:
  SELECT create_distributed_table('migration_table', 'test_id');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-copy:
  COPY migration_table FROM PROGRAM 'echo 1,hello' WITH CSV;
@@ -44,9 +50,11 @@ step s2-copy: <... completed>
 step s2-select:
  SELECT * FROM migration_table ORDER BY test_id;
 
-test_id        data
+test_id|data
+---------------------------------------------------------------------
+      1|hello
+(1 row)
 
-1              hello
 
 starting permutation: s2-begin s2-insert s1-create_distributed_table s2-commit s2-select
 step s2-begin:
@@ -63,14 +71,18 @@ step s2-commit:
 
 step s1-create_distributed_table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-select:
  SELECT * FROM migration_table ORDER BY test_id;
 
-test_id        data
+test_id|data
+---------------------------------------------------------------------
+      1|hello
+(1 row)
 
-1              hello
 
 starting permutation: s1-begin s1-create_distributed_table s2-insert s1-commit s2-select
 step s1-begin:
@@ -80,7 +92,9 @@ step s1-create_distributed_table:
  SELECT create_distributed_table('migration_table', 'test_id');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-insert:
  INSERT INTO migration_table VALUES (1, 'hello');
@@ -92,9 +106,11 @@ step s2-insert: <... completed>
 step s2-select:
  SELECT * FROM migration_table ORDER BY test_id;
 
-test_id        data
+test_id|data
+---------------------------------------------------------------------
+      1|hello
+(1 row)
 
-1              hello
 
 starting permutation: s1-begin-serializable s2-copy s1-create_distributed_table s1-commit s2-select
 step s1-begin-serializable:
@@ -102,8 +118,10 @@ step s1-begin-serializable:
  SELECT 1;
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-copy:
  COPY migration_table FROM PROGRAM 'echo 1,hello' WITH CSV;
 
@@ -111,7 +129,9 @@ step s1-create_distributed_table:
  SELECT create_distributed_table('migration_table', 'test_id');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit:
  COMMIT;
@@ -119,9 +139,11 @@ step s1-commit:
 step s2-select:
  SELECT * FROM migration_table ORDER BY test_id;
 
-test_id        data
+test_id|data
+---------------------------------------------------------------------
+      1|hello
+(1 row)
 
-1              hello
 
 starting permutation: s1-begin-serializable s2-insert s1-create_distributed_table s1-commit s2-select
 step s1-begin-serializable:
@@ -129,8 +151,10 @@ step s1-begin-serializable:
  SELECT 1;
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-insert:
  INSERT INTO migration_table VALUES (1, 'hello');
 
@@ -138,7 +162,9 @@ step s1-create_distributed_table:
  SELECT create_distributed_table('migration_table', 'test_id');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit:
  COMMIT;
@@ -146,6 +172,8 @@ step s1-commit:
 step s2-select:
  SELECT * FROM migration_table ORDER BY test_id;
 
-test_id        data
+test_id|data
+---------------------------------------------------------------------
+      1|hello
+(1 row)
 
-1              hello

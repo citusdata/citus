@@ -2,7 +2,9 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-insert s2-vacuum-analyze s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -19,7 +21,9 @@ step s1-commit:
 
 starting permutation: s1-begin s1-insert s2-vacuum-full s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;

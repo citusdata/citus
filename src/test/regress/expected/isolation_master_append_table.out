@@ -16,8 +16,10 @@ step s1-master_append_table_to_shard:
   'table_to_append'::regclass::oid = logicalrelid;
 
 master_append_table_to_shard
+---------------------------------------------------------------------
+                   0.0426667
+(1 row)
 
-0.0426667
 step s2-master_append_table_to_shard:
     SELECT
      master_append_table_to_shard(shardid, 'table_to_be_appended', 'localhost', 57636)
@@ -31,8 +33,10 @@ step s1-commit:
 
 step s2-master_append_table_to_shard: <... completed>
 master_append_table_to_shard
+---------------------------------------------------------------------
+                       0.064
+(1 row)
 
-0.064
 step s2-commit:
  COMMIT;
 

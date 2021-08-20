@@ -2,7 +2,9 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-drop-table s2-citus-update-table-statistics s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -20,13 +22,17 @@ step s1-commit:
 step s2-citus-update-table-statistics: <... completed>
 s2: NOTICE:  relation with OID XXXX does not exist, skipping
 citus_update_table_statistics
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-begin s1-drop-table s2-citus-shards s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -42,12 +48,16 @@ step s1-commit:
 
 step s2-citus-shards: <... completed>
 result
+---------------------------------------------------------------------
+     1
+(1 row)
 
-1
 
 starting permutation: s2-begin s2-citus-shards s1-drop-table s2-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-begin:
     BEGIN;
@@ -56,8 +66,10 @@ step s2-citus-shards:
     SELECT 1 AS result FROM citus_shards GROUP BY result;
 
 result
+---------------------------------------------------------------------
+     1
+(1 row)
 
-1
 step s1-drop-table:
     DROP TABLE dist_table;
 
@@ -67,7 +79,9 @@ step s2-commit:
 
 starting permutation: s2-begin s2-citus-update-table-statistics s1-drop-table s2-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-begin:
     BEGIN;
@@ -77,8 +91,10 @@ step s2-citus-update-table-statistics:
     SELECT citus_update_table_statistics(logicalrelid) FROM pg_dist_partition;
 
 citus_update_table_statistics
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 step s1-drop-table:
     DROP TABLE dist_table;

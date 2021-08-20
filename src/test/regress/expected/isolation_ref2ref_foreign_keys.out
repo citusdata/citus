@@ -16,10 +16,12 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode         |count
+---------------------------------------------------------------------
+ExclusiveLock|    1
+ShareLock    |    1
+(2 rows)
 
-ExclusiveLock  1
-ShareLock      1
 step s1-rollback:
     ROLLBACK;
 
@@ -32,7 +34,9 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode|count
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-begin s2-delete-table-1 s1-view-locks s2-rollback s1-view-locks
@@ -48,10 +52,12 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode         |count
+---------------------------------------------------------------------
+ExclusiveLock|    1
+ShareLock    |    1
+(2 rows)
 
-ExclusiveLock  1
-ShareLock      1
 step s2-rollback:
     ROLLBACK;
 
@@ -61,7 +67,9 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode|count
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-begin s2-update-table-2 s1-view-locks s2-rollback s1-view-locks
@@ -77,10 +85,12 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode         |count
+---------------------------------------------------------------------
+ExclusiveLock|    2
+ShareLock    |    1
+(2 rows)
 
-ExclusiveLock  2
-ShareLock      1
 step s2-rollback:
     ROLLBACK;
 
@@ -90,7 +100,9 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode|count
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-begin s2-delete-table-2 s1-view-locks s2-rollback s1-view-locks
@@ -106,10 +118,12 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode         |count
+---------------------------------------------------------------------
+ExclusiveLock|    2
+ShareLock    |    1
+(2 rows)
 
-ExclusiveLock  2
-ShareLock      1
 step s2-rollback:
     ROLLBACK;
 
@@ -119,7 +133,9 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode|count
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-begin s2-update-table-3 s1-begin s1-view-locks s1-rollback s2-rollback s1-view-locks
@@ -138,10 +154,12 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode         |count
+---------------------------------------------------------------------
+ExclusiveLock|    3
+ShareLock    |    1
+(2 rows)
 
-ExclusiveLock  3
-ShareLock      1
 step s1-rollback:
     ROLLBACK;
 
@@ -154,7 +172,9 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode|count
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-begin s2-delete-table-3 s1-begin s1-view-locks s1-rollback s2-rollback s1-view-locks
@@ -173,10 +193,12 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode         |count
+---------------------------------------------------------------------
+ExclusiveLock|    3
+ShareLock    |    1
+(2 rows)
 
-ExclusiveLock  3
-ShareLock      1
 step s1-rollback:
     ROLLBACK;
 
@@ -189,7 +211,9 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode|count
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-begin s2-insert-table-1 s1-view-locks s2-rollback s1-view-locks
@@ -205,10 +229,12 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode            |count
+---------------------------------------------------------------------
+RowExclusiveLock|    1
+ShareLock       |    1
+(2 rows)
 
-RowExclusiveLock1
-ShareLock      1
 step s2-rollback:
     ROLLBACK;
 
@@ -218,7 +244,9 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode|count
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-begin s2-insert-table-2 s1-view-locks s2-rollback s1-view-locks
@@ -234,10 +262,12 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode            |count
+---------------------------------------------------------------------
+RowExclusiveLock|    2
+ShareLock       |    1
+(2 rows)
 
-RowExclusiveLock2
-ShareLock      1
 step s2-rollback:
     ROLLBACK;
 
@@ -247,7 +277,9 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode|count
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-begin s2-insert-table-3 s1-view-locks s2-rollback s1-view-locks
@@ -263,10 +295,12 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode            |count
+---------------------------------------------------------------------
+RowExclusiveLock|    3
+ShareLock       |    1
+(2 rows)
 
-RowExclusiveLock3
-ShareLock      1
 step s2-rollback:
     ROLLBACK;
 
@@ -276,7 +310,9 @@ step s1-view-locks:
     WHERE locktype='advisory'
     GROUP BY mode;
 
-mode           count
+mode|count
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s1-begin s2-begin s2-update-table-1 s1-delete-table-2 s2-commit s1-commit s1-select-table-2
@@ -302,10 +338,12 @@ step s1-commit:
 step s1-select-table-2:
     SELECT * FROM ref_table_2 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 3|    3
+ 5|    5
+(2 rows)
 
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-update-table-1 s1-insert-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
@@ -330,12 +368,14 @@ step s1-commit:
 step s1-select-table-2:
     SELECT * FROM ref_table_2 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    2
+ 3|    3
+ 5|    5
+ 7|    2
+(4 rows)
 
-1              2
-3              3
-5              5
-7              2
 
 starting permutation: s1-begin s2-begin s2-update-table-1 s1-update-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
@@ -360,11 +400,13 @@ step s1-commit:
 step s1-select-table-2:
     SELECT * FROM ref_table_2 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 0|    2
+ 3|    3
+ 5|    5
+(3 rows)
 
-0              2
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-delete-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
@@ -389,10 +431,12 @@ step s1-commit:
 step s1-select-table-2:
     SELECT * FROM ref_table_2 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 3|    3
+ 5|    5
+(2 rows)
 
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-insert-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
@@ -418,10 +462,12 @@ step s1-commit:
 step s1-select-table-2:
     SELECT * FROM ref_table_2 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 3|    3
+ 5|    5
+(2 rows)
 
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-update-table-2 s2-commit s1-commit s1-select-table-2
 step s1-begin:
@@ -446,10 +492,12 @@ step s1-commit:
 step s1-select-table-2:
     SELECT * FROM ref_table_2 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 3|    3
+ 5|    5
+(2 rows)
 
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-delete-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
@@ -469,6 +517,8 @@ step s2-commit:
 
 step s1-delete-table-3: <... completed>
 id
+--
+(0 rows)
 
 step s1-commit:
     COMMIT;
@@ -476,10 +526,12 @@ step s1-commit:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 3|    3
+ 5|    5
+(2 rows)
 
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-insert-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
@@ -505,10 +557,12 @@ step s1-commit:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 3|    3
+ 5|    5
+(2 rows)
 
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-delete-table-1 s1-update-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
@@ -528,6 +582,8 @@ step s2-commit:
 
 step s1-update-table-3: <... completed>
 id
+--
+(0 rows)
 
 step s1-commit:
     COMMIT;
@@ -535,10 +591,12 @@ step s1-commit:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 3|    3
+ 5|    5
+(2 rows)
 
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-update-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
@@ -558,19 +616,23 @@ step s2-commit:
 
 step s1-update-table-3: <... completed>
 id
+--
+ 2
+(1 row)
 
-2
 step s1-commit:
     COMMIT;
 
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 2|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-2              1
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s1-update-table-3 s2-insert-table-1 s1-commit s2-commit s1-select-table-3
 step s1-begin:
@@ -583,8 +645,10 @@ step s1-update-table-3:
     UPDATE ref_table_3 SET id = 2 WHERE value = 1 RETURNING id;
 
 id
+--
+ 2
+(1 row)
 
-2
 step s2-insert-table-1:
     INSERT INTO ref_table_1 VALUES (7, 7);
  <waiting ...>
@@ -598,11 +662,13 @@ step s2-commit:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 2|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-2              1
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-update-table-2 s2-commit s1-commit s1-select-table-3
 step s1-begin:
@@ -627,11 +693,13 @@ step s1-commit:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s1-update-table-2 s2-insert-table-1 s1-commit s2-commit s1-select-table-3
 step s1-begin:
@@ -656,11 +724,13 @@ step s2-commit:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-insert-table-2 s1-update-table-3 s2-commit s1-commit s1-select-table-3
 step s1-begin:
@@ -680,19 +750,23 @@ step s2-commit:
 
 step s1-update-table-3: <... completed>
 id
+--
+ 2
+(1 row)
 
-2
 step s1-commit:
     COMMIT;
 
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 2|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-2              1
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s1-update-table-3 s2-insert-table-2 s1-commit s2-commit s1-select-table-3
 step s1-begin:
@@ -705,8 +779,10 @@ step s1-update-table-3:
     UPDATE ref_table_3 SET id = 2 WHERE value = 1 RETURNING id;
 
 id
+--
+ 2
+(1 row)
 
-2
 step s2-insert-table-2:
     INSERT INTO ref_table_2 VALUES (7, 5);
  <waiting ...>
@@ -720,11 +796,13 @@ step s2-commit:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 2|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-2              1
-3              3
-5              5
 
 starting permutation: s1-begin s2-begin s2-insert-table-1 s1-select-table-1 s2-commit s1-commit
 step s1-begin:
@@ -739,11 +817,13 @@ step s2-insert-table-1:
 step s1-select-table-1:
     SELECT * FROM ref_table_1 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 step s2-commit:
     COMMIT;
 
@@ -764,11 +844,13 @@ step s2-insert-table-1:
 step s1-select-table-2:
     SELECT * FROM ref_table_2 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 step s2-commit:
     COMMIT;
 
@@ -789,11 +871,13 @@ step s2-insert-table-1:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 step s2-commit:
     COMMIT;
 
@@ -814,11 +898,13 @@ step s2-delete-table-2:
 step s1-select-table-1:
     SELECT * FROM ref_table_1 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 step s2-commit:
     COMMIT;
 
@@ -839,11 +925,13 @@ step s2-delete-table-2:
 step s1-select-table-2:
     SELECT * FROM ref_table_2 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 step s2-commit:
     COMMIT;
 
@@ -864,11 +952,13 @@ step s2-delete-table-2:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 step s2-commit:
     COMMIT;
 
@@ -889,11 +979,13 @@ step s2-update-table-3:
 step s1-select-table-1:
     SELECT * FROM ref_table_1 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 step s2-commit:
     COMMIT;
 
@@ -914,11 +1006,13 @@ step s2-update-table-3:
 step s1-select-table-2:
     SELECT * FROM ref_table_2 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 step s2-commit:
     COMMIT;
 
@@ -939,11 +1033,13 @@ step s2-update-table-3:
 step s1-select-table-3:
     SELECT * FROM ref_table_3 ORDER BY id, value;
 
-id             value
+id|value
+---------------------------------------------------------------------
+ 1|    1
+ 3|    3
+ 5|    5
+(3 rows)
 
-1              1
-3              3
-5              5
 step s2-commit:
     COMMIT;
 

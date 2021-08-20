@@ -2,8 +2,10 @@ Parsed test spec with 3 sessions
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -20,36 +22,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -58,8 +78,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-public-schema:
     SET search_path TO public;
 
@@ -74,7 +96,9 @@ step s1-commit:
 
 step s2-create-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -90,40 +114,58 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -140,36 +182,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -181,8 +241,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-public-schema:
     SET search_path TO public;
 
@@ -197,7 +259,9 @@ step s1-commit:
 
 step s2-create-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-commit:
  COMMIT;
@@ -216,40 +280,58 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-public-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -266,36 +348,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -313,7 +413,9 @@ step s2-create-table:
  SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
@@ -323,8 +425,10 @@ step s2-commit:
 
 step s1-add-worker: <... completed>
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-commit:
     COMMIT;
 
@@ -342,40 +446,58 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -392,36 +514,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -430,8 +570,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
@@ -447,7 +589,9 @@ step s1-commit:
 
 step s2-create-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -463,41 +607,59 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
+(4 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -514,36 +676,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -555,8 +735,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
@@ -572,7 +754,9 @@ step s1-commit:
 
 step s2-create-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-commit:
  COMMIT;
@@ -591,41 +775,59 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
+(4 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -642,36 +844,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -690,7 +910,9 @@ step s2-create-table:
  SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
@@ -700,8 +922,10 @@ step s2-commit:
 
 step s1-add-worker: <... completed>
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-commit:
     COMMIT;
 
@@ -719,41 +943,59 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
+(4 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-begin s3-begin s1-add-worker s2-create-table s3-use-schema s3-create-table s1-commit s2-commit s3-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -770,36 +1012,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-create-schema:
     CREATE SCHEMA myschema;
@@ -818,8 +1078,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-create-table:
  CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
@@ -840,14 +1102,18 @@ step s1-commit:
 
 step s2-create-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-commit:
  COMMIT;
 
 step s3-create-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s3-commit:
  COMMIT;
@@ -866,41 +1132,59 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
+(4 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-add-worker s2-create-schema s2-begin s3-begin s3-use-schema s2-create-table s3-create-table s2-commit s3-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -917,43 +1201,63 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
@@ -974,7 +1278,9 @@ step s2-create-table:
  SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s3-create-table:
  CREATE TABLE t2 (a int, b int);
@@ -987,7 +1293,9 @@ step s2-commit:
 
 step s3-create-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s3-commit:
  COMMIT;
@@ -1006,41 +1314,59 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
+(4 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s3-begin s1-add-worker s2-create-schema s3-create-schema2 s2-create-table s3-create-table s1-commit s3-commit s2-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -1057,36 +1383,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -1101,8 +1445,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-create-schema:
     CREATE SCHEMA myschema;
     SET search_path TO myschema;
@@ -1128,11 +1474,15 @@ step s1-commit:
 
 step s2-create-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s3-create-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s3-commit:
  COMMIT;
@@ -1154,42 +1504,60 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{myschema2},{})
 (schema,{public},{})
+(5 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-type s1-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -1206,36 +1574,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -1244,8 +1630,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-public-schema:
     SET search_path TO public;
 
@@ -1270,41 +1658,59 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 (type,{public.tt1},{})
+(4 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-create-type s1-add-worker s1-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -1321,36 +1727,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -1365,8 +1789,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-commit:
     COMMIT;
 
@@ -1384,41 +1810,59 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
 (type,{public.tt1},{})
+(4 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-type s2-create-table-with-type s1-add-worker s2-commit s1-commit s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -1435,36 +1879,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -1486,7 +1948,9 @@ step s2-create-table-with-type:
  SELECT create_distributed_table('t1', 'a');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
@@ -1496,8 +1960,10 @@ step s2-commit:
 
 step s1-add-worker: <... completed>
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-commit:
     COMMIT;
 
@@ -1515,42 +1981,60 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
 (type,{myschema.tt1},{})
+(5 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-begin s2-commit s3-wait-for-metadata-sync s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -1567,36 +2051,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -1605,8 +2107,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-public-schema:
     SET search_path TO public;
 
@@ -1619,7 +2123,9 @@ step s1-commit:
 
 step s2-distribute-function: <... completed>
 create_distributed_function
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-begin:
  BEGIN;
@@ -1631,7 +2137,9 @@ step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -1647,41 +2155,59 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (function,"{public,add}","{integer,integer}")
 (role,{postgres},{})
 (schema,{public},{})
+(4 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-distribute-function s2-begin s2-commit s3-wait-for-metadata-sync s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -1698,36 +2224,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -1740,7 +2284,9 @@ step s2-distribute-function:
     SELECT create_distributed_function('add(INT,INT)', '$1');
 
 create_distributed_function
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-begin:
  BEGIN;
@@ -1752,14 +2298,18 @@ step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-commit:
     COMMIT;
 
@@ -1767,7 +2317,9 @@ step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -1783,41 +2335,59 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (function,"{public,add}","{integer,integer}")
 (role,{postgres},{})
 (schema,{public},{})
+(4 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 
 
 starting permutation: s1-print-distributed-objects s2-begin s2-create-schema s2-distribute-function s2-commit s3-wait-for-metadata-sync s1-begin s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
@@ -1834,36 +2404,54 @@ step s1-print-distributed-objects:
     SELECT master_remove_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
+(3 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-begin:
  BEGIN;
@@ -1877,7 +2465,9 @@ step s2-distribute-function:
     SELECT create_distributed_function('add(INT,INT)', '$1');
 
 create_distributed_function
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-commit:
  COMMIT;
@@ -1886,7 +2476,9 @@ step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -1895,8 +2487,10 @@ step s1-add-worker:
  SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s1-commit:
     COMMIT;
 
@@ -1904,7 +2498,9 @@ step s3-wait-for-metadata-sync:
     SELECT public.wait_until_metadata_sync(5000);
 
 wait_until_metadata_sync
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
@@ -1920,34 +2516,50 @@ step s2-print-distributed-objects:
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
 pg_identify_object_as_address
-
+---------------------------------------------------------------------
 (database,{regression},{})
 (function,"{myschema,add}","{integer,integer}")
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
+(5 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
+(2 rows)
+
 count
+---------------------------------------------------------------------
+    1
+(1 row)
 
-1
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,1)
 (localhost,57638,t,1)
+(2 rows)
+
 master_remove_node
+---------------------------------------------------------------------
 
 
+(2 rows)
 

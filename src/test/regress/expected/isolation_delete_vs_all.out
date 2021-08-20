@@ -2,7 +2,9 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-delete s1-commit s2-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -14,15 +16,21 @@ step s2-delete: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-truncate s1-commit s2-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -34,15 +42,21 @@ step s2-truncate: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-drop s1-commit s2-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -55,12 +69,16 @@ step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 ERROR:  relation "delete_hash" does not exist
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-ddl-create-index s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -72,20 +90,28 @@ step s2-ddl-create-index: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''delete_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,2)
 (localhost,57638,t,2)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-delete s2-ddl-drop-index s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX delete_hash_index ON delete_hash(id);
@@ -98,20 +124,28 @@ step s2-ddl-drop-index: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''delete_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s1-delete s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -121,20 +155,28 @@ step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''delete_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,2)
 (localhost,57638,t,2)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-ddl-add-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -146,20 +188,28 @@ step s2-ddl-add-column: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''delete_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-delete s2-ddl-drop-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE delete_hash ADD new_column int DEFAULT 0;
@@ -172,20 +222,28 @@ step s2-ddl-drop-column: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''delete_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-ddl-rename-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -197,20 +255,28 @@ step s2-ddl-rename-column: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''delete_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-delete s2-table-size s1-commit s2-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -218,21 +284,29 @@ step s2-begin: BEGIN;
 step s1-delete: DELETE FROM delete_hash WHERE id = 4;
 step s2-table-size: SELECT citus_total_relation_size('delete_hash');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    57344
+(1 row)
 
-57344
 step s1-commit: COMMIT;
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-delete s2-distribute-table s1-commit s2-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop: DROP TABLE delete_hash;
 step s1-create-non-distributed-table: CREATE TABLE delete_hash(id integer, data text); COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
@@ -244,20 +318,28 @@ step s2-distribute-table: SELECT create_distributed_table('delete_hash', 'id'); 
 step s1-commit: COMMIT;
 step s2-distribute-table: <... completed>
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    8
+(1 row)
 
-8
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-truncate s2-delete s1-commit s2-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -269,15 +351,21 @@ step s2-delete: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    0
+(1 row)
 
-0
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-delete s1-commit s2-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -291,12 +379,16 @@ step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 ERROR:  relation "delete_hash" does not exist
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-delete s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -308,20 +400,28 @@ step s2-delete: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''delete_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,2)
 (localhost,57638,t,2)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl-drop-index s2-delete s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-create-index: CREATE INDEX delete_hash_index ON delete_hash(id);
@@ -334,20 +434,28 @@ step s2-delete: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''delete_hash%''');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,0)
 (localhost,57638,t,0)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-delete s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -359,20 +467,28 @@ step s2-delete: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''delete_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-drop-column s2-delete s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-ddl-add-column: ALTER TABLE delete_hash ADD new_column int DEFAULT 0;
@@ -385,20 +501,28 @@ step s2-delete: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''delete_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,"")
 (localhost,57638,t,"")
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-delete s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
@@ -410,42 +534,58 @@ step s2-delete: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 step s1-show-columns: SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''delete_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1');
 run_command_on_workers
-
+---------------------------------------------------------------------
 (localhost,57637,t,new_column)
 (localhost,57638,t,new_column)
-restore_isolation_tester_func
+(2 rows)
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-delete s1-commit s2-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-initialize: COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('delete_hash');
 citus_total_relation_size
+---------------------------------------------------------------------
+                    57344
+(1 row)
 
-57344
 step s2-delete: DELETE FROM delete_hash WHERE id = 4;
 step s1-commit: COMMIT;
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    4
+(1 row)
 
-4
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-distribute-table s2-delete s1-commit s2-commit s1-select-count
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-drop: DROP TABLE delete_hash;
 step s1-create-non-distributed-table: CREATE TABLE delete_hash(id integer, data text); COPY delete_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
@@ -454,7 +594,9 @@ step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-distribute-table: SELECT create_distributed_table('delete_hash', 'id');
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-delete: DELETE FROM delete_hash WHERE id = 4; <waiting ...>
 step s1-commit: COMMIT;
@@ -462,8 +604,12 @@ step s2-delete: <... completed>
 step s2-commit: COMMIT;
 step s1-select-count: SELECT COUNT(*) FROM delete_hash;
 count
+---------------------------------------------------------------------
+    8
+(1 row)
 
-8
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
