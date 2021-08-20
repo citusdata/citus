@@ -25,6 +25,7 @@
 
 #include "pg_version_constants.h"
 
+#include "distributed/adaptive_executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_clauses.h"
 #include "distributed/citus_custom_scan.h"
@@ -264,11 +265,11 @@ CitusExecScan(CustomScanState *node)
 {
 	CitusScanState *scanState = (CitusScanState *) node;
 
-	if (!scanState->finishedRemoteScan)
+	if (!scanState->executionStarted)
 	{
 		bool isMultiTaskPlan = IsMultiTaskPlan(scanState->distributedPlan);
 
-		AdaptiveExecutor(scanState);
+		AdaptiveExecutorStart(scanState);
 
 		if (!scanState->distributedPlan->disableTrackingQueryCounters)
 		{
@@ -282,10 +283,21 @@ CitusExecScan(CustomScanState *node)
 			}
 		}
 
-		scanState->finishedRemoteScan = true;
+		scanState->executionStarted = true;
 	}
 
-	return ReturnTupleFromTuplestore(scanState);
+	TupleTableSlot *resultSlot = ReturnTupleFromTuplestore(scanState);
+	if (TupIsNull(resultSlot) && !scanState->finishedRemoteScan)
+	{
+		/* clear the tuple store for the next batch */
+		tuplestore_clear(scanState->tuplestorestate);
+
+		scanState->finishedRemoteScan = AdaptiveExecutorRun(scanState);
+
+		resultSlot = ReturnTupleFromTuplestore(scanState);
+	}
+
+	return resultSlot;
 }
 
 
@@ -723,6 +735,7 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 
 	scanState->finishedPreScan = false;
 	scanState->finishedRemoteScan = false;
+	scanState->executionStarted = false;
 
 	return (Node *) scanState;
 }

@@ -16,6 +16,8 @@
 #include "distributed/distributed_planner.h"
 #include "distributed/multi_server_executor.h"
 
+struct DistributedExecution;
+
 typedef struct CitusScanState
 {
 	CustomScanState customScanState;  /* underlying custom scan node */
@@ -27,7 +29,11 @@ typedef struct CitusScanState
 	DistributedPlan *distributedPlan; /* distributed execution plan */
 	MultiExecutorType executorType;   /* distributed executor type */
 	bool finishedRemoteScan;          /* flag to check if remote scan is finished */
+	bool executionStarted;            /* flag to check whether execution started */
 	Tuplestorestate *tuplestorestate; /* tuple store to store distributed results */
+
+	/* execution state when using adaptive executor */
+	struct DistributedExecution *execution;
 } CitusScanState;
 
 
