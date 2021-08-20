@@ -18,7 +18,10 @@
 
 extern Oid CitusTimeseriesTablesRelationId(void);
 extern Oid TimeseriesNamespaceId(void);
-extern bool CheckIntervalAlignmentWithThresholds(Interval *partitionInterval, Interval *compressionThreshold, Interval *retentionThreshold);
-extern bool CheckIntervalAlignnmentWithPartitionKey(PartitionKey partitionKey, Interval *partitionInterval);
+extern bool CheckIntervalAlignmentWithThresholds(Interval *partitionInterval,
+												 Interval *compressionThreshold,
+												 Interval *retentionThreshold);
+extern bool CheckIntervalAlignnmentWithPartitionKey(PartitionKey partitionKey,
+													Interval *partitionInterval);
 
 #endif /* TIMESERIES_UTILS_H_ */

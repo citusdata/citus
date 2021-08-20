@@ -33,14 +33,17 @@
 Oid
 CitusTimeseriesTablesRelationId()
 {
-	Oid relationId = get_relname_relid("citus_timeseries_tables", TimeseriesNamespaceId());
+	Oid relationId = get_relname_relid("citus_timeseries_tables",
+									   TimeseriesNamespaceId());
 	if (relationId == InvalidOid)
 	{
-		ereport(ERROR, (errmsg("cache lookup failed for citus_timeseries_tables, called too early?")));
+		ereport(ERROR, (errmsg(
+							"cache lookup failed for citus_timeseries_tables, called too early?")));
 	}
 
 	return relationId;
 }
+
 
 /*
  * TimeseriesNamespaceId returns namespace id of the schema we store timeseries
@@ -52,25 +55,38 @@ TimeseriesNamespaceId()
 	return get_namespace_oid("citus_timeseries", false);
 }
 
+
 /*
  * Compare partition interval, compression threshold and retenetion threshold. Note that
  * compression threshold or retention threshold can be null.
  */
 bool
-CheckIntervalAlignmentWithThresholds(Interval *partitionInterval, Interval *compressionThreshold, Interval *retentionThreshold)
+CheckIntervalAlignmentWithThresholds(Interval *partitionInterval,
+									 Interval *compressionThreshold,
+									 Interval *retentionThreshold)
 {
-	bool compressionGreaterThanInterval = compressionThreshold == NULL ? true : INTERVAL_TO_SEC(compressionThreshold) > INTERVAL_TO_SEC(partitionInterval);
-	bool retentionGreaterThanInterval = retentionThreshold == NULL ? true : INTERVAL_TO_SEC(retentionThreshold) > INTERVAL_TO_SEC(partitionInterval);
-	bool retentionGreaterThanCompression = compressionThreshold == NULL || retentionThreshold == NULL ? true : INTERVAL_TO_SEC(retentionThreshold) > INTERVAL_TO_SEC(compressionThreshold);
+	bool compressionGreaterThanInterval = compressionThreshold == NULL ? true :
+										  INTERVAL_TO_SEC(compressionThreshold) >
+										  INTERVAL_TO_SEC(partitionInterval);
+	bool retentionGreaterThanInterval = retentionThreshold == NULL ? true :
+										INTERVAL_TO_SEC(retentionThreshold) >
+										INTERVAL_TO_SEC(partitionInterval);
+	bool retentionGreaterThanCompression = compressionThreshold == NULL ||
+										   retentionThreshold == NULL ? true :
+										   INTERVAL_TO_SEC(retentionThreshold) >
+										   INTERVAL_TO_SEC(compressionThreshold);
 
-	return compressionGreaterThanInterval && retentionGreaterThanInterval && retentionGreaterThanCompression;
+	return compressionGreaterThanInterval && retentionGreaterThanInterval &&
+		   retentionGreaterThanCompression;
 }
+
 
 /*
  * Check whether the given partition interval aligns with the partition column of the table.
  */
 bool
-CheckIntervalAlignnmentWithPartitionKey(PartitionKey partitionKey, Interval *partitionInterval)
+CheckIntervalAlignnmentWithPartitionKey(PartitionKey partitionKey,
+										Interval *partitionInterval)
 {
 	Oid partTypeId;
 	HeapTuple typeTuple;
@@ -81,15 +97,15 @@ CheckIntervalAlignnmentWithPartitionKey(PartitionKey partitionKey, Interval *par
 	typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
 	ReleaseSysCache(typeTuple);
 
-	if(strncmp(typeForm->typname.data, "date", NAMEDATALEN) == 0)
+	if (strncmp(typeForm->typname.data, "date", NAMEDATALEN) == 0)
 	{
 		if (partitionInterval->time == 0)
 		{
 			return true;
 		}
 	}
-	else if(strncmp(typeForm->typname.data, "timestamp", NAMEDATALEN) == 0 ||
-			strncmp(typeForm->typname.data, "timestamptz", NAMEDATALEN) == 0)
+	else if (strncmp(typeForm->typname.data, "timestamp", NAMEDATALEN) == 0 ||
+			 strncmp(typeForm->typname.data, "timestamptz", NAMEDATALEN) == 0)
 	{
 		return true;
 	}
