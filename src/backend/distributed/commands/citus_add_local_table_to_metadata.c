@@ -48,7 +48,8 @@
 static void citus_add_local_table_to_metadata_internal(Oid relationId,
 													   bool cascadeViaForeignKeys);
 static void CreateChildLocalTablesIfRelationIsPartitioned(Oid shellRelationId,
-														  Oid shardRelationId);
+														  Oid shardRelationId,
+														  bool cascadeViaForeignKeys);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
@@ -266,24 +267,6 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		 */
 		return;
 	}
-	else if (tableHasExternalForeignKeys)
-	{
-		/*
-		 * We do not allow creating citus local table if the table is involved in a
-		 * foreign key relationship with "any other table". Note that we allow self
-		 * references.
-		 */
-		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("relation %s is involved in a foreign key "
-							   "relationship with another table", qualifiedRelationName),
-						errhint("Use cascade_via_foreign_keys option to add "
-								"all the relations involved in a foreign key "
-								"relationship with %s to citus metadata by "
-								"executing SELECT citus_add_local_table_to_metadata($$%s$$, "
-								"cascade_via_foreign_keys=>true)",
-								qualifiedRelationName, qualifiedRelationName)));
-	}
 
 	ObjectAddress tableAddress = { 0 };
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
@@ -353,7 +336,8 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	 * If it's a partitioned table, we need to create Citus Local Tables from its
 	 * partitions too.
 	 */
-	CreateChildLocalTablesIfRelationIsPartitioned(shellRelationId, shardRelationId);
+	CreateChildLocalTablesIfRelationIsPartitioned(shellRelationId, shardRelationId,
+												  cascadeViaForeignKeys);
 }
 
 
@@ -370,7 +354,8 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
  * ATTACH to establish the correct relationship.
  */
 static void
-CreateChildLocalTablesIfRelationIsPartitioned(Oid shellRelationId, Oid shardRelationId)
+CreateChildLocalTablesIfRelationIsPartitioned(Oid shellRelationId, Oid shardRelationId,
+											  bool cascadeViaForeignKeys)
 {
 	/* if this table is partitioned table, add its partitions to metadata too */
 	if (PartitionedTable(shardRelationId))
@@ -392,7 +377,7 @@ CreateChildLocalTablesIfRelationIsPartitioned(Oid shellRelationId, Oid shardRela
 																 qualifiedShellRelationName);
 
 			/* here we call CreateCitusLocalTable for all partitions */
-			CreateCitusLocalTable(partitionRelationId, false);
+			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys);
 
 			/*
 			 * CreateCitusLocalTable has created a Citus Local Table for the partition.

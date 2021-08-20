@@ -504,7 +504,7 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			}
 
 			/* if parent of this table is distributed, distribute this table too */
-			if (IsCitusTable(relationId) &&
+			if (IsCitusTableType(relationId, DISTRIBUTED_TABLE) &&
 				!IsCitusTable(partitionRelationId))
 			{
 				Var *distributionColumn = DistPartitionKeyOrError(relationId);

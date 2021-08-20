@@ -75,31 +75,15 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 	LockRelationsWithLockMode(fKeyConnectedRelationIdList, lockMode);
 
 	/*
-	 * Before removing any partition relations, we should error out here if any
-	 * of connected relations is a partition table involved in a foreign key that
-	 * is not inherited from its parent table.
-	 * We should handle this case here as we remove partition relations in this
-	 * function	before ExecuteCascadeOperationForRelationIdList.
-	 */
-	ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(fKeyConnectedRelationIdList);
-
-	/*
-	 * We shouldn't cascade through foreign keys on partition tables as citus
-	 * table functions already have their own logics to handle partition relations.
-	 */
-	List *nonPartitionRelationIdList =
-		RemovePartitionRelationIds(fKeyConnectedRelationIdList);
-
-	/*
 	 * Our foreign key subgraph can have distributed tables which might already
 	 * be modified in current transaction. So switch to sequential execution
 	 * before executing any ddl's to prevent erroring out later in this function.
 	 */
-	EnsureSequentialModeForCitusTableCascadeFunction(nonPartitionRelationIdList);
+	EnsureSequentialModeForCitusTableCascadeFunction(fKeyConnectedRelationIdList);
 
 	/* store foreign key creation commands before dropping them */
 	List *fKeyCreationCommands =
-		GetFKeyCreationCommandsForRelationIdList(nonPartitionRelationIdList);
+		GetFKeyCreationCommandsForRelationIdList(fKeyConnectedRelationIdList);
 
 	/*
 	 * Note that here we only drop referencing foreign keys for each relation.
@@ -107,8 +91,8 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 	 * relations' referencing foreign keys.
 	 */
 	int fKeyFlags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
-	DropRelationIdListForeignKeys(nonPartitionRelationIdList, fKeyFlags);
-	ExecuteCascadeOperationForRelationIdList(nonPartitionRelationIdList,
+	DropRelationIdListForeignKeys(fKeyConnectedRelationIdList, fKeyFlags);
+	ExecuteCascadeOperationForRelationIdList(fKeyConnectedRelationIdList,
 											 cascadeOperationType);
 
 	/* now recreate foreign keys on tables */
