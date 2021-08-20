@@ -8,18 +8,20 @@ step s2-delete-from-source: DELETE FROM source_table;
 step s1-end: END;
 step s2-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(10 rows)
 
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100
 
 starting permutation: s1-begin s2-begin s1-repartitioned-insert-select s2-update-source s1-end s2-end s1-select-target
 step s1-begin: BEGIN;
@@ -29,18 +31,20 @@ step s2-update-source: UPDATE source_table SET b = 50 - b;
 step s1-end: END;
 step s2-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(10 rows)
 
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100
 
 starting permutation: s1-begin s2-begin s1-repartitioned-insert-select s2-insert-into-source s1-end s2-end s1-select-target
 step s1-begin: BEGIN;
@@ -50,18 +54,20 @@ step s2-insert-into-source: INSERT INTO source_table VALUES (0, 0);
 step s1-end: END;
 step s2-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(10 rows)
 
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100
 
 starting permutation: s1-begin s2-begin s2-delete-from-source s1-repartitioned-insert-select s1-end s2-end s1-select-target
 step s1-begin: BEGIN;
@@ -71,18 +77,20 @@ step s1-repartitioned-insert-select: INSERT INTO target_table SELECT * FROM sour
 step s1-end: END;
 step s2-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(10 rows)
 
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100
 
 starting permutation: s1-begin s2-begin s2-update-source s1-repartitioned-insert-select s1-end s2-end s1-select-target
 step s1-begin: BEGIN;
@@ -92,18 +100,20 @@ step s1-repartitioned-insert-select: INSERT INTO target_table SELECT * FROM sour
 step s1-end: END;
 step s2-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(10 rows)
 
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100
 
 starting permutation: s1-begin s2-begin s2-insert-into-source s1-repartitioned-insert-select s1-end s2-end s1-select-target
 step s1-begin: BEGIN;
@@ -113,18 +123,20 @@ step s1-repartitioned-insert-select: INSERT INTO target_table SELECT * FROM sour
 step s1-end: END;
 step s2-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(10 rows)
 
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100
 
 starting permutation: s1-begin s2-begin s1-repartitioned-insert-select s2-delete-from-target s1-end s2-end s1-select-target
 step s1-begin: BEGIN;
@@ -135,7 +147,9 @@ step s1-end: END;
 step s2-delete-from-target: <... completed>
 step s2-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+a|b
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s1-begin s2-begin s1-repartitioned-insert-select s2-update-target s1-end s2-end s1-select-target
@@ -147,18 +161,20 @@ step s1-end: END;
 step s2-update-target: <... completed>
 step s2-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 1| 49
+ 2| 46
+ 3| 41
+ 4| 34
+ 5| 25
+ 6| 14
+ 7|  1
+ 8|-14
+ 9|-31
+10|-50
+(10 rows)
 
-1              49
-2              46
-3              41
-4              34
-5              25
-6              14
-7              1
-8              -14
-9              -31
-10             -50
 
 starting permutation: s1-begin s2-begin s1-repartitioned-insert-select s2-insert-into-target s1-end s2-end s1-select-target
 step s1-begin: BEGIN;
@@ -168,19 +184,21 @@ step s2-insert-into-target: INSERT INTO target_table VALUES (0, 0);
 step s1-end: END;
 step s2-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 0|  0
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(11 rows)
 
-0              0
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100
 
 starting permutation: s1-begin s2-begin s2-delete-from-target s1-repartitioned-insert-select s2-end s1-end s1-select-target
 step s1-begin: BEGIN;
@@ -191,18 +209,20 @@ step s2-end: END;
 step s1-repartitioned-insert-select: <... completed>
 step s1-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(10 rows)
 
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100
 
 starting permutation: s1-begin s2-begin s2-update-target s1-repartitioned-insert-select s2-end s1-end s1-select-target
 step s1-begin: BEGIN;
@@ -213,18 +233,20 @@ step s2-end: END;
 step s1-repartitioned-insert-select: <... completed>
 step s1-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(10 rows)
 
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100
 
 starting permutation: s1-begin s2-begin s2-insert-into-target s1-repartitioned-insert-select s2-end s1-end s1-select-target
 step s1-begin: BEGIN;
@@ -234,16 +256,18 @@ step s1-repartitioned-insert-select: INSERT INTO target_table SELECT * FROM sour
 step s2-end: END;
 step s1-end: END;
 step s1-select-target: SELECT * FROM target_table ORDER BY a;
-a              b
+ a|  b
+---------------------------------------------------------------------
+ 0|  0
+ 1|  1
+ 2|  4
+ 3|  9
+ 4| 16
+ 5| 25
+ 6| 36
+ 7| 49
+ 8| 64
+ 9| 81
+10|100
+(11 rows)
 
-0              0
-1              1
-2              4
-3              9
-4              16
-5              25
-6              36
-7              49
-8              64
-9              81
-10             100

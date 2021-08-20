@@ -8,14 +8,18 @@ step s1-assign-transaction-id:
     SELECT assign_distributed_transaction_id(1, 1, '2015-01-01 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-get-all-transactions:
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+ SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
-initiator_node_identifiertransaction_numbertransaction_stamp
+initiator_node_identifier|transaction_number|transaction_stamp
+---------------------------------------------------------------------
+                        1|                 1|Wed Dec 31 16:00:00 2014 PST
+(1 row)
 
-1              1              Wed Dec 31 16:00:00 2014 PST
 step s2-begin:
     BEGIN;
 
@@ -23,14 +27,18 @@ step s2-assign-transaction-id:
     SELECT assign_distributed_transaction_id(2, 2, '2015-01-02 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-get-all-transactions:
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+ SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
-initiator_node_identifiertransaction_numbertransaction_stamp
+initiator_node_identifier|transaction_number|transaction_stamp
+---------------------------------------------------------------------
+                        2|                 2|Thu Jan 01 16:00:00 2015 PST
+(1 row)
 
-2              2              Thu Jan 01 16:00:00 2015 PST
 step s3-begin:
     BEGIN;
 
@@ -38,14 +46,18 @@ step s3-assign-transaction-id:
     SELECT assign_distributed_transaction_id(3, 3, '2015-01-03 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step s3-get-all-transactions:
-	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+ SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
-initiator_node_identifiertransaction_numbertransaction_stamp
+initiator_node_identifier|transaction_number|transaction_stamp
+---------------------------------------------------------------------
+                        3|                 3|Fri Jan 02 16:00:00 2015 PST
+(1 row)
 
-3              3              Fri Jan 02 16:00:00 2015 PST
 step s1-commit:
     COMMIT;
 
@@ -58,36 +70,40 @@ step s3-commit:
 
 starting permutation: s1-create-table s1-begin s1-insert s1-verify-current-xact-is-on-worker s1-commit
 step s1-create-table:
-	-- some tests also use distributed table
-	CREATE TABLE distributed_transaction_id_table(some_value int, other_value int);
-	SET citus.shard_count TO 4;
-	SELECT create_distributed_table('distributed_transaction_id_table', 'some_value');
+ -- some tests also use distributed table
+ CREATE TABLE distributed_transaction_id_table(some_value int, other_value int);
+ SET citus.shard_count TO 4;
+ SELECT create_distributed_table('distributed_transaction_id_table', 'some_value');
 
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
 
 step s1-insert:
-	INSERT INTO distributed_transaction_id_table VALUES (1, 1);
+ INSERT INTO distributed_transaction_id_table VALUES (1, 1);
 
 step s1-verify-current-xact-is-on-worker:
-	SELECT
-	    remote.nodeport,
-	    remote.result = row(xact.initiator_node_identifier, xact.transaction_number)::text AS xact_exists
-	FROM
-	    get_current_transaction_id() as xact,
-	    run_command_on_workers($$
-	        SELECT row(initiator_node_identifier, transaction_number)
+ SELECT
+     remote.nodeport,
+     remote.result = row(xact.initiator_node_identifier, xact.transaction_number)::text AS xact_exists
+ FROM
+     get_current_transaction_id() as xact,
+     run_command_on_workers($$
+         SELECT row(initiator_node_identifier, transaction_number)
             FROM get_all_active_transactions();
         $$) as remote
     ORDER BY remote.nodeport ASC;
 
-nodeport       xact_exists
+nodeport|xact_exists
+---------------------------------------------------------------------
+   57637|t
+   57638|t
+(2 rows)
 
-57637          t
-57638          t
 step s1-commit:
     COMMIT;
 
@@ -100,14 +116,18 @@ step s1-assign-transaction-id:
     SELECT assign_distributed_transaction_id(1, 1, '2015-01-01 00:00:00+0');
 
 assign_distributed_transaction_id
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-has-transaction-number:
     SELECT transaction_number > 0 FROM get_current_transaction_id();
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s2-vacuum:
     VACUUM FULL pg_dist_partition;
 
@@ -115,8 +135,10 @@ step s1-has-transaction-number:
     SELECT transaction_number > 0 FROM get_current_transaction_id();
 
 ?column?
-
+---------------------------------------------------------------------
 t
+(1 row)
+
 step s1-commit:
     COMMIT;
 
