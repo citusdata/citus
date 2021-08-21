@@ -161,10 +161,11 @@ SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHE
  (localhost,57637,t,1)
 (1 row)
 
-SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
- run_command_on_workers
+SELECT workers.result = pg_extension.extversion AS same_version
+	FROM run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$) workers, pg_extension WHERE extname = 'seg';
+ same_version
 ---------------------------------------------------------------------
- (localhost,57637,t,1.3)
+ t
 (1 row)
 
 -- now create the reference table
@@ -253,11 +254,12 @@ SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHE
  (localhost,57638,t,1)
 (2 rows)
 
-SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
- run_command_on_workers
+SELECT workers.result = pg_extension.extversion AS same_version
+	FROM run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$) workers, pg_extension WHERE extname = 'seg';
+ same_version
 ---------------------------------------------------------------------
- (localhost,57637,t,1.3)
- (localhost,57638,t,1.3)
+ t
+ t
 (2 rows)
 
 -- check for the unpackaged extension to be created correctly
@@ -375,12 +377,12 @@ BEGIN;
 ROLLBACK;
 -- show that the CREATE EXTENSION command propagated even if the transaction
 -- block is rollbacked, that's a shortcoming of dependency creation logic
-SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$);
- run_command_on_workers
+SELECT COUNT(DISTINCT workers.result)
+	FROM run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'seg'$$) workers;
+ count
 ---------------------------------------------------------------------
- (localhost,57637,t,1.3)
- (localhost,57638,t,1.3)
-(2 rows)
+     1
+(1 row)
 
 -- drop the schema and all the objects
 DROP SCHEMA "extension'test" CASCADE;
