@@ -11,6 +11,8 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
@@ -63,6 +65,9 @@
 #include "utils/json.h"
 #include "utils/lsyscache.h"
 #include "utils/snapmgr.h"
+#if PG_VERSION_NUM >= PG_VERSION_14
+#include "utils/queryjumble.h"
+#endif
 
 
 /* Config variables that enable printing distributed query plans */
@@ -1251,10 +1256,17 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 
 	/* plan the query */
 	PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
-
+#if PG_VERSION_NUM >= PG_VERSION_14	
+	if (compute_query_id != COMPUTE_QUERY_ID_ON) {
+		/*
+		 * We don't want to emit the query identifier in explain output.
+		 * By default queryId is already 0.
+		 */
+		plan->queryId = 0;
+	}
+#endif
 	INSTR_TIME_SET_CURRENT(planduration);
 	INSTR_TIME_SUBTRACT(planduration, planstart);
-
 	#if PG_VERSION_NUM >= PG_VERSION_13
 
 	/* calc differences of buffer counters. */
