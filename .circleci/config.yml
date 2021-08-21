@@ -691,11 +691,8 @@ workflows:
       - test-citus-upgrade:
           name: test-12_check-citus-upgrade
           pg_major: 12
-          image_tag: '12.8'
           requires: [build-12]
-
       - ch_benchmark:
-          requires: [build-13]
           filters:
             branches:
               only:
