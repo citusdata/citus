@@ -189,11 +189,12 @@ InitiateTimeseriesTablePartitions(Oid relationId)
 		SPI_finish();
 	}
 
-	// TODO: If result is not true, error out! (Check metadata tables after erroring out!)
+	/* TODO: If result is not true, error out! (Check metadata tables after erroring out!) */
 
 	SPI_execute(initiateTimeseriesPartitionsCommand->data, readOnly, 0);
 	SPI_finish();
 }
+
 
 /*
  * Add tuples for the given table to the citus_timeseries_tables using given params

@@ -20,5 +20,5 @@ GRANT SELECT ON ALL tables IN SCHEMA citus_timeseries TO PUBLIC;
 
 RESET search_path;
 
--- Add trigger to delete from here
--- Add trigger to unschedule cron jobs in future
+-- TODO: Add trigger to delete from here
+-- TODO: Add trigger to unschedule cron jobs in future
