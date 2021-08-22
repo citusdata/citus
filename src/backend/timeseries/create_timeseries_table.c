@@ -104,25 +104,12 @@ ErrorIfNotSuitableToConvertTimeseriesTable(Oid relationId, Interval *partitionIn
 										   Interval *compressionThresholdInterval,
 										   Interval *retentionThresholdInterval)
 {
-	Relation pgPartitionedTableRelation;
-	PartitionKey partitionKey;
+	Relation pgPartitionedTableRelation = table_open(relationId, AccessShareLock);
+	PartitionKey partitionKey = RelationGetPartitionKey(pgPartitionedTableRelation);
 
-	if (!TableEmpty(relationId))
-	{
-		ereport(ERROR, (errmsg("non-empty tables can not be converted to "
-							   "timeseries table")));
-	}
-
-	if (!PartitionedTable(relationId))
-	{
-		ereport(ERROR, (errmsg("non-partitioned tables can not be converted "
-							   "to timeseries table")));
-	}
-
-	pgPartitionedTableRelation = table_open(relationId, AccessShareLock);
-	partitionKey = RelationGetPartitionKey(pgPartitionedTableRelation);
-
-	if (partitionKey->strategy != PARTITION_STRATEGY_RANGE)
+	/* Table related checks */
+	if (!PartitionedTable(relationId) || partitionKey->strategy !=
+		PARTITION_STRATEGY_RANGE)
 	{
 		ereport(ERROR, (errmsg("table must be partitioned by range to convert "
 							   "it to timeseries table")));
@@ -134,6 +121,13 @@ ErrorIfNotSuitableToConvertTimeseriesTable(Oid relationId, Interval *partitionIn
 							   "convert it to timeseries table")));
 	}
 
+	if (!TableEmpty(relationId))
+	{
+		ereport(ERROR, (errmsg("table must be empty to convert it to "
+							   "timeseries table")));
+	}
+
+	/* Timeseries parameter related checks */
 	if (!CheckIntervalAlignmentWithThresholds(partitionInterval,
 											  compressionThresholdInterval,
 											  retentionThresholdInterval))
