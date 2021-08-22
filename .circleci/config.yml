@@ -443,7 +443,7 @@ workflows:
       - build:
           name: build-13
           pg_major: 13
-          image_tag: '13.4-dev202108201746'
+          image_tag: '13.4-dev202108220635'
 
       - check-style
       - check-sql-snapshots
@@ -592,7 +592,7 @@ workflows:
           name: 'test-13_check-failure'
           pg_major: 13
           image: citus/failtester
-          image_tag: '13.4-dev202108201746'
+          image_tag: '13.4-dev202108220635'
           make: check-failure
           requires: [build-13]
 
