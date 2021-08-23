@@ -32,8 +32,6 @@
 #include "distributed/resource_lock.h"
 #include "timeseries/timeseries_utils.h"
 
-#define Natts_citus_timeseries_tables 6
-
 PG_FUNCTION_INFO_V1(create_timeseries_table);
 
 static void InitiateTimeseriesTablePartitions(Oid relationId);

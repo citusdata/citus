@@ -22,11 +22,6 @@
 
 #include "timeseries/timeseries_utils.h"
 
-#define INTERVAL_TO_SEC(ivp) \
-	(((double) (ivp)->time) / ((double) USECS_PER_SEC) + \
-	 (ivp)->day * (24.0 * SECS_PER_HOUR) + \
-	 (ivp)->month * (30.0 * SECS_PER_DAY))
-
 /*
  * Get the relation id for citus_timeseries_tables metadata table
  */
@@ -37,8 +32,8 @@ CitusTimeseriesTablesRelationId()
 									   TimeseriesNamespaceId());
 	if (relationId == InvalidOid)
 	{
-		ereport(ERROR, (errmsg(
-							"cache lookup failed for citus_timeseries_tables, called too early?")));
+		ereport(ERROR, (errmsg("cache lookup failed for citus_timeseries_tables,"
+							   "called too early?")));
 	}
 
 	return relationId;
