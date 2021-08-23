@@ -1133,6 +1133,23 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 	Node *arbiterWhere = queryTree->onConflict->arbiterWhere;
 	Node *onConflictWhere = queryTree->onConflict->onConflictWhere;
 
+
+	bool setTargetEntryPartitionColumn = false;
+
+	if (partitionColumn) {
+		RangeTblEntry* resultRTE = ExtractResultRelationRTE(queryTree);
+		/*
+			* FirstLowInvalidHeapAttributeNumber is added as an offset to rte->updatedCols.
+			* So we substract that to get the column no for an updated column that matches
+			* resultRTE->updatedcols.
+			*/
+		int updatedColNoWithOffset = partitionColumn->varattno - FirstLowInvalidHeapAttributeNumber;
+		if (bms_is_member(updatedColNoWithOffset, resultRTE->updatedCols)) {
+			setTargetEntryPartitionColumn = true;
+		}
+	}
+
+
 	/*
 	 * onConflictSet is expanded via expand_targetlist() on the standard planner.
 	 * This ends up adding all the columns to the onConflictSet even if the user
