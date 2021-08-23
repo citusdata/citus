@@ -438,6 +438,12 @@ push(@pgOptions, "wal_receiver_status_interval=1");
 # src/backend/replication/logical/launcher.c.
 push(@pgOptions, "wal_retrieve_retry_interval=1000");
 
+# disable compute_query_id so that we don't get Query Identifiers
+# in explain outputs
+if ($majorversion >= "14") {
+    push(@pgOptions, "compute_query_id=off");
+}
+
 # Citus options set for the tests
 push(@pgOptions, "citus.shard_count=4");
 push(@pgOptions, "citus.max_adaptive_executor_pool_size=4");
