@@ -6,8 +6,9 @@ SET search_path TO citus_timeseries;
 CREATE TABLE citus_timeseries_tables (
     logicalrelid regclass NOT NULL PRIMARY KEY,
     partitioninterval INTERVAL NOT NULL,
-    premakeintervalcount INT NOT NULL,
     postmakeintervalcount INT NOT NULL,
+    premakeintervalcount INT,
+    startfrom timestamptz,
     compressionthreshold INTERVAL,
     retentionthreshold INTERVAL
 );
@@ -19,6 +20,3 @@ GRANT USAGE ON SCHEMA citus_timeseries TO PUBLIC;
 GRANT SELECT ON ALL tables IN SCHEMA citus_timeseries TO PUBLIC;
 
 RESET search_path;
-
--- TODO: Add trigger to delete from here
--- TODO: Add trigger to unschedule cron jobs in future

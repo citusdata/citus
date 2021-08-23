@@ -32,12 +32,15 @@
 #include "distributed/resource_lock.h"
 #include "timeseries/timeseries_utils.h"
 
+#define default_premake_interval_count 7
+
 PG_FUNCTION_INFO_V1(create_timeseries_table);
 
-static void InitiateTimeseriesTablePartitions(Oid relationId);
+static void InitiateTimeseriesTablePartitions(Oid relationId, bool useStartFrom);
 static void InsertIntoCitusTimeseriesTables(Oid relationId, Interval *partitionInterval,
-											int preMakePartitionCount,
-											int postMakePartitionCount,
+											int postMakePartitionCount, int
+											preMakePartitionCount,
+											TimestampTz startFrom,
 											Interval *compressionThresholdInterval,
 											Interval *retentionThresholdInterval);
 static void ErrorIfNotSuitableToConvertTimeseriesTable(Oid relationId,
@@ -59,35 +62,61 @@ create_timeseries_table(PG_FUNCTION_ARGS)
 
 	if (PG_ARGISNULL(0) || PG_ARGISNULL(1))
 	{
+		ereport(ERROR, (errmsg("table name and partition interval "
+							   "must be provided")));
 		PG_RETURN_VOID();
+	}
+
+	if (!PG_ARGISNULL(3) && !PG_ARGISNULL(4))
+	{
+		ereport(ERROR, (errmsg("either premakeintervalcount or startfrom "
+							   "should be provided")));
 	}
 
 	Oid relationId = PG_GETARG_OID(0);
 	Interval *partitionInterval = PG_GETARG_INTERVAL_P(1);
-	int preMakePartitionCount = PG_GETARG_INT32(2);
-	int postMakePartitionCount = PG_GETARG_INT32(3);
+	int postMakePartitionCount = PG_GETARG_INT32(2);
+	int preMakePartitionCount = 0;
+	TimestampTz startFrom = 0;
 	Interval *compressionThresholdInterval = NULL;
 	Interval *retentionThresholdInterval = NULL;
+	bool useStartFrom = false;
 
-	if (!PG_ARGISNULL(4))
+	if (!PG_ARGISNULL(3))
 	{
-		compressionThresholdInterval = DatumGetIntervalP(PG_GETARG_DATUM(4));
+		preMakePartitionCount = DatumGetInt32(PG_GETARG_DATUM(3));
 	}
+	else if (!PG_ARGISNULL(4))
+	{
+		startFrom = DatumGetTimestampTz(PG_GETARG_DATUM(4));
+		useStartFrom = true;
+	}
+	else
+	{
+		preMakePartitionCount = default_premake_interval_count;
+	}
+
 
 	if (!PG_ARGISNULL(5))
 	{
-		retentionThresholdInterval = DatumGetIntervalP(PG_GETARG_DATUM(5));
+		compressionThresholdInterval = DatumGetIntervalP(PG_GETARG_DATUM(5));
+	}
+
+	if (!PG_ARGISNULL(6))
+	{
+		retentionThresholdInterval = DatumGetIntervalP(PG_GETARG_DATUM(6));
 	}
 
 	ErrorIfNotSuitableToConvertTimeseriesTable(relationId, partitionInterval,
 											   compressionThresholdInterval,
 											   retentionThresholdInterval);
 
-	InsertIntoCitusTimeseriesTables(relationId, partitionInterval, preMakePartitionCount,
-									postMakePartitionCount, compressionThresholdInterval,
+	InsertIntoCitusTimeseriesTables(relationId, partitionInterval, postMakePartitionCount,
+									preMakePartitionCount, startFrom,
+									compressionThresholdInterval,
 									retentionThresholdInterval);
 
-	InitiateTimeseriesTablePartitions(relationId);
+	InitiateTimeseriesTablePartitions(relationId, useStartFrom);
 
 	PG_RETURN_VOID();
 }
@@ -165,13 +194,22 @@ ErrorIfNotSuitableToConvertTimeseriesTable(Oid relationId, Interval *partitionIn
  * create_missing_partitions
  */
 static void
-InitiateTimeseriesTablePartitions(Oid relationId)
+InitiateTimeseriesTablePartitions(Oid relationId, bool useStartFrom)
 {
 	bool readOnly = false;
 	StringInfo initiateTimeseriesPartitionsCommand = makeStringInfo();
-	appendStringInfo(initiateTimeseriesPartitionsCommand,
-					 "SELECT create_missing_partitions(logicalrelid, now() + partitioninterval * postmakeintervalcount, now() - partitioninterval * premakeintervalcount) from citus_timeseries.citus_timeseries_tables WHERE logicalrelid = %d;",
-					 relationId);
+	if (useStartFrom)
+	{
+		appendStringInfo(initiateTimeseriesPartitionsCommand,
+						 "SELECT create_missing_partitions(logicalrelid, now() + partitioninterval * postmakeintervalcount, startfrom) from citus_timeseries.citus_timeseries_tables WHERE logicalrelid = %d;",
+						 relationId);
+	}
+	else
+	{
+		appendStringInfo(initiateTimeseriesPartitionsCommand,
+						 "SELECT create_missing_partitions(logicalrelid, now() + partitioninterval * postmakeintervalcount, now() - partitioninterval * premakeintervalcount) from citus_timeseries.citus_timeseries_tables WHERE logicalrelid = %d;",
+						 relationId);
+	}
 
 	int spiConnectionResult = SPI_connect();
 	if (spiConnectionResult != SPI_OK_CONNECT)
@@ -192,8 +230,9 @@ InitiateTimeseriesTablePartitions(Oid relationId)
  * Add tuples for the given table to the citus_timeseries_tables using given params
  */
 static void
-InsertIntoCitusTimeseriesTables(Oid relationId, Interval *partitionInterval, int
-								preMakePartitionCount, int postMakePartitionCount,
+InsertIntoCitusTimeseriesTables(Oid relationId, Interval *partitionInterval,
+								int postMakePartitionCount, int preMakePartitionCount,
+								TimestampTz startFrom,
 								Interval *compressionThresholdInterval,
 								Interval *retentionThresholdInterval)
 {
@@ -203,30 +242,38 @@ InsertIntoCitusTimeseriesTables(Oid relationId, Interval *partitionInterval, int
 	Relation citusTimeseriesTable = table_open(CitusTimeseriesTablesRelationId(),
 											   RowExclusiveLock);
 
-	memset(newValues, 0, sizeof(newValues));
 	memset(isNulls, false, sizeof(isNulls));
 
 	newValues[0] = ObjectIdGetDatum(relationId);
 	newValues[1] = IntervalPGetDatum(partitionInterval);
-	newValues[2] = Int32GetDatum(preMakePartitionCount);
-	newValues[3] = Int32GetDatum(postMakePartitionCount);
+	newValues[2] = Int32GetDatum(postMakePartitionCount);
+	newValues[3] = Int32GetDatum(preMakePartitionCount);
 
-	if (compressionThresholdInterval != NULL)
+	if (startFrom != 0)
 	{
-		newValues[4] = IntervalPGetDatum(compressionThresholdInterval);
+		newValues[4] = TimestampTzGetDatum(startFrom);
 	}
 	else
 	{
 		isNulls[4] = true;
 	}
 
-	if (retentionThresholdInterval != NULL)
+	if (compressionThresholdInterval != NULL)
 	{
-		newValues[5] = IntervalPGetDatum(retentionThresholdInterval);
+		newValues[5] = IntervalPGetDatum(compressionThresholdInterval);
 	}
 	else
 	{
 		isNulls[5] = true;
+	}
+
+	if (retentionThresholdInterval != NULL)
+	{
+		newValues[6] = IntervalPGetDatum(retentionThresholdInterval);
+	}
+	else
+	{
+		isNulls[6] = true;
 	}
 
 	HeapTuple newTuple = heap_form_tuple(RelationGetDescr(citusTimeseriesTable),
