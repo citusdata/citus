@@ -372,9 +372,9 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 			{
 				if (!IsCitusTable(relationId))
 				{
-					/* 
-					 * If it's a partition, we want whole partitioned table to become a 
-					 * Citus Local Table. For that, we start conversion from the parent. 
+					/*
+					 * If it's a partition, we want whole partitioned table to become a
+					 * Citus Local Table. For that, we start conversion from the parent.
 					 */
 					if (PartitionTable(relationId))
 					{
