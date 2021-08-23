@@ -191,15 +191,29 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -255,9 +269,15 @@ BEGIN;
 SET LOCAL client_min_messages TO WARNING;
 ALTER TABLE test_table DROP COLUMN new_column;
 ROLLBACK;
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- now cancel just after the worker sends response to
 -- but Postgres doesn't accepts interrupts during COMMIT and ROLLBACK
@@ -413,7 +433,10 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection not open
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -781,7 +804,10 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection not open
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
