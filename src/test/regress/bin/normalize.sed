@@ -235,7 +235,6 @@ s/ERROR:  parallel workers for vacuum must be between/ERROR:  parallel vacuum de
 s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
 s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
 s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
-/.*Query Identifier.*/d
 /.*Async-Capable.*/d
 /.*Async Capable.*/d
 /Parent Relationship/d
