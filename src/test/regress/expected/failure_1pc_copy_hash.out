@@ -16,7 +16,6 @@ CREATE TABLE copy_test (key int, value int);
 SELECT create_distributed_table('copy_test', 'key');
  create_distributed_table
 ---------------------------------------------------------------------
-(0,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(default_transaction_read_only=off)', 'ParameterStatus(in_hot_standby=off)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=postgres)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=postgres)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
 
 (1 row)
 
