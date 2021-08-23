@@ -372,7 +372,22 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 			{
 				if (!IsCitusTable(relationId))
 				{
-					CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+					/* 
+					 * If it's a partition, we want whole partitioned table to become a 
+					 * Citus Local Table. For that, we start conversion from the parent. 
+					 */
+					if (PartitionTable(relationId))
+					{
+						Oid parentOid = PartitionParentOid(relationId);
+						if (OidIsValid(parentOid) && !IsCitusTable(parentOid))
+						{
+							CreateCitusLocalTable(parentOid, cascadeViaForeignKeys);
+						}
+					}
+					else
+					{
+						CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+					}
 				}
 
 				break;
