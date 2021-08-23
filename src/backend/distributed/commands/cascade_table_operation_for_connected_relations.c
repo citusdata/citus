@@ -26,6 +26,7 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -414,16 +415,29 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 					 */
 					if (PartitionTable(relationId))
 					{
+						/*
+						 * Here we also need to check if the parent is a shard or not.
+						 * Because when creating Citus Local Tables from partitioned
+						 * tables, the parent recursively calls the creation function
+						 * for partitions. If one of those partitions have some foreign
+						 * key, we will be checking this. In that case, since the
+						 * attach/detach commands are not executed yet, the parent table
+						 * will be a shard here (see the rename/create trick at
+						 * CreateCitusLocalTable function). Because of that we should not
+						 * call CreateCitusLocalTable for the parent again. Instead,
+						 * we should call it for the partition table to successfully
+						 * complete the conversion.
+						 */
 						Oid parentOid = PartitionParentOid(relationId);
-						if (OidIsValid(parentOid) && !IsCitusTable(parentOid))
+						if (OidIsValid(parentOid) && !IsCitusTable(parentOid) &&
+							!RelationIsAKnownShard(parentOid))
 						{
 							CreateCitusLocalTable(parentOid, cascadeViaForeignKeys);
+							break;
 						}
 					}
-					else
-					{
-						CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
-					}
+
+					CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
 				}
 
 				break;
