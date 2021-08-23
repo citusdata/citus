@@ -12,6 +12,8 @@
  */
 #include "postgres.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
@@ -231,7 +233,25 @@ AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt)
 	appendStringInfoString(buf, ")");
 }
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+static void
+AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
+{
+	StatsElem *column = NULL;
 
+	foreach_ptr(column, stmt->exprs)
+	{
+		const char *columnName = quote_identifier(column->name);
+
+		appendStringInfoString(buf, columnName);
+
+		if (column != llast(stmt->exprs))
+		{
+			appendStringInfoString(buf, ", ");
+		}
+	}
+}
+#else
 static void
 AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 {
@@ -257,7 +277,7 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 		}
 	}
 }
-
+#endif
 
 static void
 AppendTableName(StringInfo buf, CreateStatsStmt *stmt)
