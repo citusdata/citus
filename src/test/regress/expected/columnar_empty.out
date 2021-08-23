@@ -54,19 +54,19 @@ select count(*) from t_compressed;
 
 -- check storage
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t_compressed');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  1 |                   1 |           16336
+             2 |             0 |                  1 |                   1
 (1 row)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t_uncompressed');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  1 |                   1 |           16336
+             2 |             0 |                  1 |                   1
 (1 row)
 
 -- explain
@@ -104,19 +104,19 @@ vacuum full t_compressed;
 vacuum full t_uncompressed;
 -- check storage
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t_compressed');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  1 |                   1 |           16336
+             2 |             0 |                  1 |                   1
 (1 row)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t_uncompressed');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  1 |                   1 |           16336
+             2 |             0 |                  1 |                   1
 (1 row)
 
 -- analyze
@@ -130,19 +130,19 @@ alter table t_uncompressed alter column a type text;
 alter table t_compressed alter column a type text;
 -- check storage
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t_compressed');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  1 |                   1 |           16336
+             2 |             0 |                  1 |                   1
 (1 row)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t_uncompressed');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  1 |                   1 |           16336
+             2 |             0 |                  1 |                   1
 (1 row)
 
 -- verify cost of scanning an empty table is zero, not NaN

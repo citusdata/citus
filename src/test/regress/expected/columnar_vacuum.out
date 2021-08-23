@@ -26,11 +26,11 @@ SELECT count(*) FROM t_stripes;
 (1 row)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  4 |              450001 |           32756
+             2 |             0 |                  4 |              450001
 (1 row)
 
 -- vacuum full should merge stripes together
@@ -54,11 +54,11 @@ SELECT count(*) FROM t_stripes;
 (1 row)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  2 |              150001 |           16584
+             2 |             0 |                  2 |              150001
 (1 row)
 
 -- test the case when all data cannot fit into a single stripe
@@ -83,11 +83,11 @@ SELECT count(*) FROM t_stripes;
 
 VACUUM FULL t;
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  4 |                3001 |           53382
+             2 |             0 |                  4 |                3001
 (1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
@@ -115,12 +115,12 @@ FROM columnar.chunk a, pg_class b
 WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
  stripe_num | attr_num | chunk_group_num | ?column? | ?column?
 ---------------------------------------------------------------------
-        1 |      1 |       0 | f        | f
-        1 |      2 |       0 | f        | f
-        2 |      1 |       0 | f        | f
-        2 |      2 |       0 | f        | f
-        3 |      1 |       0 | f        | f
-        3 |      2 |       0 | f        | f
+          1 |        1 |               0 | f        | f
+          1 |        2 |               0 | f        | f
+          2 |        1 |               0 | f        | f
+          2 |        2 |               0 | f        | f
+          3 |        1 |               0 | f        | f
+          3 |        2 |               0 | f        | f
 (6 rows)
 
 VACUUM FULL t;
@@ -129,12 +129,12 @@ FROM columnar.chunk a, pg_class b
 WHERE a.storage_id = columnar_test_helpers.columnar_relation_storageid(b.oid) AND b.relname='t' ORDER BY 1, 2, 3;
  stripe_num | attr_num | chunk_group_num | ?column? | ?column?
 ---------------------------------------------------------------------
-        1 |      1 |       0 | t        | t
-        1 |      2 |       0 | f        | f
-        2 |      1 |       0 | t        | t
-        2 |      2 |       0 | f        | f
-        3 |      1 |       0 | t        | t
-        3 |      2 |       0 | f        | f
+          1 |        1 |               0 | t        | t
+          1 |        2 |               0 | f        | f
+          2 |        1 |               0 | t        | t
+          2 |        2 |               0 | f        | f
+          3 |        1 |               0 | t        | t
+          3 |        2 |               0 | f        | f
 (6 rows)
 
 -- Make sure we cleaned-up the transient table metadata after VACUUM FULL commands
@@ -240,11 +240,11 @@ total row count: 5530, stripe count: 5, average rows per stripe: 1106
 chunk count: 7, containing data for dropped columns: 0, none compressed: 5, pglz compressed: 2
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                 16 |               21001 |           50686
+             2 |             0 |                 16 |               21001
 (1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;

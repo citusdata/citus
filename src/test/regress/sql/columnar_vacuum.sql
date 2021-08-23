@@ -18,7 +18,7 @@ SELECT sum(a), sum(b) FROM t;
 SELECT count(*) FROM t_stripes;
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
 
 -- vacuum full should merge stripes together
@@ -30,7 +30,7 @@ SELECT sum(a), sum(b) FROM t;
 SELECT count(*) FROM t_stripes;
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
 
 -- test the case when all data cannot fit into a single stripe
@@ -43,7 +43,7 @@ SELECT count(*) FROM t_stripes;
 VACUUM FULL t;
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
@@ -108,7 +108,7 @@ COMMIT;
 
 VACUUM VERBOSE t;
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
