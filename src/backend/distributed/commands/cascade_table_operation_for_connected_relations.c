@@ -32,6 +32,7 @@
 #include "utils/syscache.h"
 
 
+static List * RemovePartitionRelationIds(List *relationIdList);
 static void EnsureSequentialModeForCitusTableCascadeFunction(List *relationIdList);
 static void LockRelationsWithLockMode(List *relationIdList, LOCKMODE lockMode);
 static List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
@@ -72,6 +73,17 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 	}
 
 	LockRelationsWithLockMode(fKeyConnectedRelationIdList, lockMode);
+
+	/*
+	 * We shouldn't cascade through foreign keys on partition tables, unless the
+	 * operation is creating Citus Local Tables, as citus
+	 * table functions already have their own logics to handle partition relations.
+	 */
+	if (cascadeOperationType != CASCADE_FKEY_ADD_LOCAL_TABLE_TO_METADATA)
+	{
+		fKeyConnectedRelationIdList =
+			RemovePartitionRelationIds(fKeyConnectedRelationIdList);
+	}
 
 	/*
 	 * Our foreign key subgraph can have distributed tables which might already
@@ -147,6 +159,30 @@ ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList)
 						errhint("Remove non-inherited foreign keys from %s and "
 								"try operation again", partitionRelationQualifiedName)));
 	}
+}
+
+
+/*
+ * RemovePartitionRelationIds returns a list of relation id's by removing
+ * partition relation id's from given relationIdList.
+ */
+static List *
+RemovePartitionRelationIds(List *relationIdList)
+{
+	List *nonPartitionRelationIdList = NIL;
+
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIdList)
+	{
+		if (PartitionTable(relationId))
+		{
+			continue;
+		}
+
+		nonPartitionRelationIdList = lappend_oid(nonPartitionRelationIdList, relationId);
+	}
+
+	return nonPartitionRelationIdList;
 }
 
 
