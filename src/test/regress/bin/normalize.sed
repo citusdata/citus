@@ -240,3 +240,4 @@ s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not all
 /Parent Relationship/d
 /Parent-Relationship/d
 s/function array_cat_agg\(anycompatiblearray\)/function array_cat_agg\(anyarray\)/g
+s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
