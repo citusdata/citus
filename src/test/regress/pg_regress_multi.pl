@@ -420,8 +420,13 @@ if (-e $hll_control)
 }
 push(@pgOptions, "shared_preload_libraries='${sharedPreloadLibraries}'");
 
-# Avoid parallelism to stabilize explain plans
-push(@pgOptions, "max_parallel_workers_per_gather=0");
+if ($vanillatest) {
+    # use the default used in vanilla tests
+    push(@pgOptions, "max_parallel_workers_per_gather=2");
+}else {
+    # Avoid parallelism to stabilize explain plans
+    push(@pgOptions, "max_parallel_workers_per_gather=0");
+}
 
 # Help with debugging
 push(@pgOptions, "log_error_verbosity = 'verbose'");
