@@ -86,9 +86,9 @@ SELECT citus_add_local_table_to_metadata('citus_local_table_2');
 
 -- also create indexes on them
 CREATE INDEX citus_local_table_1_idx ON citus_local_table_1(a);
-NOTICE:  executing the command locally: CREATE  INDEX   citus_local_table_1_idx_1504001 ON citus_local_tables_test_schema.citus_local_table_1_1504001 USING btree (a )
+NOTICE:  executing the command locally: CREATE  INDEX   citus_local_table_1_idx_1504001 ON  citus_local_tables_test_schema.citus_local_table_1_1504001 USING btree (a )
 CREATE INDEX citus_local_table_2_idx ON citus_local_table_2(a);
-NOTICE:  executing the command locally: CREATE  INDEX   citus_local_table_2_idx_1504002 ON citus_local_tables_test_schema.citus_local_table_2_1504002 USING btree (a )
+NOTICE:  executing the command locally: CREATE  INDEX   citus_local_table_2_idx_1504002 ON  citus_local_tables_test_schema.citus_local_table_2_1504002 USING btree (a )
 -- drop them for next tests
 DROP TABLE citus_local_table_1, citus_local_table_2;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_2_xxxxx CASCADE
@@ -416,10 +416,10 @@ NOTICE:  identifier "LocalTabLE.1!?!90123456789012345678901234567890123456789012
 CREATE UNIQUE INDEX uniqueIndex ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" (id);
 NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
 -- ingest some data before citus_add_local_table_to_metadata
+set client_min_messages to ERROR;
 INSERT INTO "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" VALUES (1, 1, (1, row_to_json(row(1,1)))::local_type, row_to_json(row(1,1), true)),
                                      (2, 1, (2, row_to_json(row(2,2)))::local_type, row_to_json(row(2,2), 'false'));
-NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
-NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
+reset client_min_messages;
 -- create a replica identity before citus_add_local_table_to_metadata
 ALTER TABLE "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" REPLICA IDENTITY USING INDEX uniqueIndex;
 NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
@@ -445,10 +445,10 @@ SELECT citus_add_local_table_to_metadata('"LocalTabLE.1!?!9012345678901234567890
 -- create some objects after citus_add_local_table_to_metadata
 CREATE INDEX "my!Index2" ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
 NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
-NOTICE:  executing the command locally: CREATE  INDEX   "my!Index2_1504036" ON "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504036" USING btree (id )  WITH (fillfactor = '90' )WHERE (id < 20)
+NOTICE:  executing the command locally: CREATE  INDEX   "my!Index2_1504036" ON  "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504036" USING btree (id )  WITH (fillfactor = '90' )WHERE (id < 20)
 CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
-NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_1504036 ON "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504036" USING btree (id )
+NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_1504036 ON  "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504036" USING btree (id )
 ---------------------------------------------------------------------
 ---- utility command execution ----
 ---------------------------------------------------------------------
@@ -563,7 +563,7 @@ ORDER BY 1;
 (2 rows)
 
 CREATE UNIQUE INDEX citus_local_table_1_idx ON citus_local_table_1(b);
-NOTICE:  executing the command locally: CREATE UNIQUE INDEX   citus_local_table_1_idx_1504027 ON citus_local_tables_test_schema.citus_local_table_1_1504027 USING btree (b )
+NOTICE:  executing the command locally: CREATE UNIQUE INDEX   citus_local_table_1_idx_1504027 ON  citus_local_tables_test_schema.citus_local_table_1_1504027 USING btree (b )
 -- show that we successfully defined the unique index
 SELECT indexrelid::regclass, indrelid::regclass, indkey
 FROM pg_index
@@ -621,7 +621,7 @@ SELECT citus_add_local_table_to_metadata('citus_local_table_4');
 INSERT INTO citus_local_table_4 VALUES (1), (2), (3);
 NOTICE:  executing the command locally: INSERT INTO citus_local_tables_test_schema.citus_local_table_4_xxxx AS citus_table_alias (a) VALUES (1), (2), (3)
 CREATE INDEX citus_local_table_4_idx ON citus_local_table_4(a);
-NOTICE:  executing the command locally: CREATE  INDEX   citus_local_table_4_idx_xxxxxx ON citus_local_tables_test_schema.citus_local_table_4_xxxx USING btree (a )
+NOTICE:  executing the command locally: CREATE  INDEX   citus_local_table_4_idx_xxxxxx ON  citus_local_tables_test_schema.citus_local_table_4_xxxx USING btree (a )
 SELECT citus_table_size('citus_local_table_4');
  citus_table_size
 ---------------------------------------------------------------------
@@ -677,7 +677,7 @@ FROM pg_dist_partition WHERE logicalrelid = 'citus_local_table_4'::regclass;
 (1 row)
 
 SELECT column_name_to_column('citus_local_table_4', 'a');
-                                                 column_name_to_column
+                                                  column_name_to_column
 ---------------------------------------------------------------------
  {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}
 (1 row)
