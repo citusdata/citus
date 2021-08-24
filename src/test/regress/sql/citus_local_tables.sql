@@ -315,9 +315,10 @@ CREATE INDEX "my!Index1" ON "LocalTabLE.1!?!901234567890123456789012345678901234
 CREATE UNIQUE INDEX uniqueIndex ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" (id);
 
 -- ingest some data before citus_add_local_table_to_metadata
+set client_min_messages to ERROR;
 INSERT INTO "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" VALUES (1, 1, (1, row_to_json(row(1,1)))::local_type, row_to_json(row(1,1), true)),
                                      (2, 1, (2, row_to_json(row(2,2)))::local_type, row_to_json(row(2,2), 'false'));
-
+reset client_min_messages;
 -- create a replica identity before citus_add_local_table_to_metadata
 ALTER TABLE "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" REPLICA IDENTITY USING INDEX uniqueIndex;
 
