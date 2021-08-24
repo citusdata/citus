@@ -678,6 +678,13 @@ workflows:
           requires: [build-12,build-13]
 
       - test-pg-upgrade:
+          name: 'test-12-14_check-pg-upgrade'
+          old_pg_major: 12
+          new_pg_major: 14
+          image_tag: '12-13-14-dev202108191715'
+          requires: [build-12,build-14]
+
+      - test-pg-upgrade:
           name: 'test-13-14_check-pg-upgrade'
           old_pg_major: 13
           new_pg_major: 14
