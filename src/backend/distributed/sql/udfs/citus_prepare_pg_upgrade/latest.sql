@@ -9,6 +9,7 @@ BEGIN
         objid IN (SELECT oid FROM pg_proc WHERE proname = 'array_cat_agg') AND 
         refobjid IN (select oid from pg_extension where extname = 'citus');
     DROP AGGREGATE IF EXISTS array_cat_agg(anyarray);
+    DROP AGGREGATE IF EXISTS array_cat_agg(anycompatiblearray);
     --
     -- Drop existing backup tables
     --
