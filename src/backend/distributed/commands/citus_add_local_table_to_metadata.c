@@ -267,6 +267,24 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		 */
 		return;
 	}
+	else if (tableHasExternalForeignKeys)
+	{
+		/*
+		 * We do not allow creating citus local table if the table is involved in a
+		 * foreign key relationship with "any other table". Note that we allow self
+		 * references.
+		 */
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("relation %s is involved in a foreign key "
+							   "relationship with another table", qualifiedRelationName),
+						errhint("Use cascade_via_foreign_keys option to add "
+								"all the relations involved in a foreign key "
+								"relationship with %s to citus metadata by "
+								"executing SELECT citus_add_local_table_to_metadata($$%s$$, "
+								"cascade_via_foreign_keys=>true)",
+								qualifiedRelationName, qualifiedRelationName)));
+	}
 
 	ObjectAddress tableAddress = { 0 };
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
