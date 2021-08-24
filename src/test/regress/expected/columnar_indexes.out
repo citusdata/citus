@@ -20,11 +20,11 @@ REINDEX INDEX CONCURRENTLY t_idx;
 Indexes:
     "t_idx" btree (a, b)
 
-explain insert into t values (1, 2);
-                   QUERY PLAN
+explain (COSTS OFF) insert into t values (1, 2);
+  QUERY PLAN
 ---------------------------------------------------------------------
- Insert on t  (cost=0.00..0.01 rows=1 width=8)
-   ->  Result  (cost=0.00..0.01 rows=1 width=8)
+ Insert on t
+   ->  Result
 (2 rows)
 
 insert into t values (1, 2);
@@ -34,11 +34,11 @@ SELECT * FROM t;
  1 | 2
 (1 row)
 
-explain insert into t values (1, 2);
-                   QUERY PLAN
+explain (COSTS OFF) insert into t values (1, 2);
+  QUERY PLAN
 ---------------------------------------------------------------------
- Insert on t  (cost=0.00..0.01 rows=1 width=8)
-   ->  Result  (cost=0.00..0.01 rows=1 width=8)
+ Insert on t
+   ->  Result
 (2 rows)
 
 insert into t values (3, 4);
