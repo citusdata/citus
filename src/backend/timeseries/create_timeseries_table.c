@@ -52,8 +52,8 @@ static void ErrorIfNotSuitableToConvertTimeseriesTable(Oid relationId,
 
 /*
  * create_timeseries_table gets a table name, partition interval
- * optional pre and post make partition counts, compression and retention threshold
- * then it creates a timeseries table.
+ * optional post and pre make interval count, start_from time,
+ * compression and retention threshold then it creates a timeseries table.
  */
 Datum
 create_timeseries_table(PG_FUNCTION_ARGS)
@@ -69,8 +69,10 @@ create_timeseries_table(PG_FUNCTION_ARGS)
 
 	if (!PG_ARGISNULL(3) && !PG_ARGISNULL(4))
 	{
-		ereport(ERROR, (errmsg("either premakeintervalcount or startfrom "
+		ereport(ERROR, (errmsg("either premake_interval_count or start_from "
 							   "should be provided")));
+
+		PG_RETURN_VOID();
 	}
 
 	Oid relationId = PG_GETARG_OID(0);
@@ -135,8 +137,8 @@ ErrorIfNotSuitableToConvertTimeseriesTable(Oid relationId, Interval *partitionIn
 	PartitionKey partitionKey = RelationGetPartitionKey(pgPartitionedTableRelation);
 
 	/* Table related checks */
-	if (!PartitionedTable(relationId) || partitionKey->strategy !=
-		PARTITION_STRATEGY_RANGE)
+	if (!PartitionedTable(relationId) ||
+		partitionKey->strategy != PARTITION_STRATEGY_RANGE)
 	{
 		ereport(ERROR, (errmsg("table must be partitioned by range to convert "
 							   "it to timeseries table")));
@@ -224,8 +226,6 @@ InitiateTimeseriesTablePartitions(Oid relationId, bool useStartFrom)
 								 "initiate timeseries table partitions")));
 		SPI_finish();
 	}
-
-	/* TODO: If result is not true, error out! (Check metadata tables after erroring out!) */
 
 	SPI_execute(initiateTimeseriesPartitionsCommand->data, readOnly, 0);
 	SPI_finish();
