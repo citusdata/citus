@@ -198,6 +198,12 @@ InitiateTimeseriesTablePartitions(Oid relationId, bool useStartFrom)
 {
 	bool readOnly = false;
 	StringInfo initiateTimeseriesPartitionsCommand = makeStringInfo();
+
+	/*
+	 * Since making the right calculation via C is much more complex and
+	 * we will call that function once to create timeseries table, we
+	 * are using SPI call.
+	 */
 	if (useStartFrom)
 	{
 		appendStringInfo(initiateTimeseriesPartitionsCommand,

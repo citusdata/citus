@@ -25,6 +25,10 @@
 #define Anum_citus_timeseries_table_compression_threshold 6
 #define Anum_citus_timeseries_table_retention_threshold 7
 
+/*
+ * Taken from the Postgres code. Postgres' uses that conversion
+ * for internal interval conparison.
+ */
 #define INTERVAL_TO_SEC(ivp) \
 	(((double) (ivp)->time) / ((double) USECS_PER_SEC) + \
 	 (ivp)->day * (24.0 * SECS_PER_HOUR) + \
