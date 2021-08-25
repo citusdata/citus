@@ -497,11 +497,128 @@ SELECT COUNT(*)=4 FROM pg_statistic_ext WHERE stxname LIKE 'stx1%' or stxname LI
 -- by another table
 \set VERBOSITY default
 SET client_min_messages TO DEBUG1;
-
 TRUNCATE referenced_table CASCADE;
 
 RESET client_min_messages;
 \set VERBOSITY terse
+
+-- test for partitioned tables
+SET client_min_messages TO ERROR;
+-- verify we can convert partitioned tables into Citus Local Tables
+CREATE TABLE partitioned (user_id int, time timestamp with time zone, data jsonb, PRIMARY KEY (user_id, time )) PARTITION BY RANGE ("time");
+CREATE TABLE partition1 PARTITION OF partitioned FOR VALUES FROM ('2018-04-13 00:00:00+00') TO ('2018-04-14 00:00:00+00');
+CREATE TABLE partition2 PARTITION OF partitioned FOR VALUES FROM ('2018-04-14 00:00:00+00') TO ('2018-04-15 00:00:00+00');
+SELECT citus_add_local_table_to_metadata('partitioned');
+-- partitions added after the conversion get converted into CLT as well
+CREATE TABLE partition3 PARTITION OF partitioned FOR VALUES FROM ('2018-04-15 00:00:00+00') TO ('2018-04-16 00:00:00+00');
+SELECT
+    nmsp_parent.nspname AS parent_schema,
+    parent.relname      AS parent,
+    nmsp_child.nspname  AS child_schema,
+    child.relname       AS child
+FROM pg_inherits
+    JOIN pg_class parent            ON pg_inherits.inhparent = parent.oid
+    JOIN pg_class child             ON pg_inherits.inhrelid   = child.oid
+    JOIN pg_namespace nmsp_parent   ON nmsp_parent.oid  = parent.relnamespace
+    JOIN pg_namespace nmsp_child    ON nmsp_child.oid   = child.relnamespace
+WHERE parent.relname LIKE '%partition%'
+ORDER BY child;
+-- undistribute succesfully
+SELECT undistribute_table('partitioned');
+
+-- verify table is undistributed
+SELECT relname FROM pg_class WHERE relname LIKE 'partition3%' ORDER BY relname;
+
+-- drop successfully
+DROP TABLE partitioned;
+
+-- if there's a foreign key from one of the partitions to some other table
+-- we need to convert the external table as well as all of the partitioned table
+CREATE TABLE cas_1 (a INT UNIQUE);
+CREATE TABLE cas_par (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE cas_par_1 PARTITION OF cas_par FOR VALUES FROM (1) TO (4);
+CREATE TABLE cas_par_2 PARTITION OF cas_par FOR VALUES FROM (5) TO (8);
+ALTER TABLE cas_par_1 ADD CONSTRAINT fkey_from_par_1 FOREIGN KEY (a) REFERENCES cas_1(a);
+SELECT citus_add_local_table_to_metadata('cas_par', cascade_via_foreign_keys=>true);
+
+-- verify we successfully convert partitioned table to citus local tables
+SELECT
+    nmsp_parent.nspname AS parent_schema,
+    parent.relname      AS parent,
+    nmsp_child.nspname  AS child_schema,
+    child.relname       AS child
+FROM pg_inherits
+    JOIN pg_class parent            ON pg_inherits.inhparent = parent.oid
+    JOIN pg_class child             ON pg_inherits.inhrelid   = child.oid
+    JOIN pg_namespace nmsp_parent   ON nmsp_parent.oid  = parent.relnamespace
+    JOIN pg_namespace nmsp_child    ON nmsp_child.oid   = child.relnamespace
+WHERE parent.relname LIKE '%cas%'
+ORDER BY child;
+
+-- verify we successfully create foreign keys
+SELECT
+    tc.table_schema, 
+    tc.constraint_name, 
+    tc.table_name, 
+    ccu.table_schema AS foreign_table_schema,
+    ccu.table_name AS foreign_table_name
+FROM 
+    information_schema.table_constraints AS tc 
+    JOIN information_schema.key_column_usage AS kcu
+      ON tc.constraint_name = kcu.constraint_name
+      AND tc.table_schema = kcu.table_schema
+    JOIN information_schema.constraint_column_usage AS ccu
+      ON ccu.constraint_name = tc.constraint_name
+      AND ccu.table_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name LIKE 'cas_1%'
+ORDER BY ccu.table_name;
+
+-- drop successfully
+DROP TABLE cas_par;
+
+-- try the same starting from the external table
+-- we should make sure the cascade works in both ways
+CREATE TABLE cas_par (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE cas_par_1 PARTITION OF cas_par FOR VALUES FROM (1) TO (4);
+CREATE TABLE cas_par_2 PARTITION OF cas_par FOR VALUES FROM (5) TO (8);
+ALTER TABLE cas_par_1 ADD CONSTRAINT fkey_from_par_1 FOREIGN KEY (a) REFERENCES cas_1(a);
+SELECT citus_add_local_table_to_metadata('cas_1', cascade_via_foreign_keys=>true);
+
+-- verify we successfully convert partitioned table to citus local tables
+SELECT
+    nmsp_parent.nspname AS parent_schema,
+    parent.relname      AS parent,
+    nmsp_child.nspname  AS child_schema,
+    child.relname       AS child
+FROM pg_inherits
+    JOIN pg_class parent            ON pg_inherits.inhparent = parent.oid
+    JOIN pg_class child             ON pg_inherits.inhrelid   = child.oid
+    JOIN pg_namespace nmsp_parent   ON nmsp_parent.oid  = parent.relnamespace
+    JOIN pg_namespace nmsp_child    ON nmsp_child.oid   = child.relnamespace
+WHERE parent.relname LIKE '%cas%'
+ORDER BY child;
+
+-- verify we successfully create foreign keys
+SELECT
+    tc.table_schema, 
+    tc.constraint_name, 
+    tc.table_name, 
+    ccu.table_schema AS foreign_table_schema,
+    ccu.table_name AS foreign_table_name
+FROM 
+    information_schema.table_constraints AS tc 
+    JOIN information_schema.key_column_usage AS kcu
+      ON tc.constraint_name = kcu.constraint_name
+      AND tc.table_schema = kcu.table_schema
+    JOIN information_schema.constraint_column_usage AS ccu
+      ON ccu.constraint_name = tc.constraint_name
+      AND ccu.table_schema = tc.table_schema
+WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name LIKE 'cas_1%'
+ORDER BY ccu.table_name;
+
+-- drop successfully
+DROP TABLE cas_par;
+DROP TABLE cas_1;
 
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;
