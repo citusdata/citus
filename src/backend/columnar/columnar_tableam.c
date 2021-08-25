@@ -1751,61 +1751,6 @@ columnar_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate,
 
 
 static void
-ColumnarXactCallback(XactEvent event, void *arg)
-{
-	switch (event)
-	{
-		case XACT_EVENT_COMMIT:
-		case XACT_EVENT_PARALLEL_COMMIT:
-		case XACT_EVENT_PREPARE:
-		{
-			/* nothing to do */
-			break;
-		}
-
-		case XACT_EVENT_ABORT:
-		case XACT_EVENT_PARALLEL_ABORT:
-		{
-			break;
-		}
-
-		case XACT_EVENT_PRE_COMMIT:
-		case XACT_EVENT_PARALLEL_PRE_COMMIT:
-		case XACT_EVENT_PRE_PREPARE:
-		{
-			break;
-		}
-	}
-}
-
-
-static void
-ColumnarSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
-						SubTransactionId parentSubid, void *arg)
-{
-	switch (event)
-	{
-		case SUBXACT_EVENT_START_SUB:
-		case SUBXACT_EVENT_COMMIT_SUB:
-		{
-			/* nothing to do */
-			break;
-		}
-
-		case SUBXACT_EVENT_ABORT_SUB:
-		{
-			break;
-		}
-
-		case SUBXACT_EVENT_PRE_COMMIT_SUB:
-		{
-			break;
-		}
-	}
-}
-
-
-static void
 ColumnarExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	ColumnarExecLevelPush();
@@ -1868,9 +1813,6 @@ ColumnarExecutorFinish(QueryDesc *queryDesc)
 void
 columnar_tableam_init()
 {
-	RegisterXactCallback(ColumnarXactCallback, NULL);
-	RegisterSubXactCallback(ColumnarSubXactCallback, NULL);
-
 	PrevObjectAccessHook = object_access_hook;
 	object_access_hook = ColumnarTableAMObjectAccessHook;
 
