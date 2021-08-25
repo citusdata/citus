@@ -313,6 +313,10 @@ jobs:
           path: src/test/regress/regression.diffs
           when: on_fail
       - store_artifacts:
+          name: 'Save results'
+          path: src/test/regress/results/
+          when: on_fail
+      - store_artifacts:
           name: 'Save core dumps'
           path: /tmp/core_dumps
           when: on_fail
