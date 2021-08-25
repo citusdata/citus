@@ -63,7 +63,7 @@ typedef struct DDLJob
 } DDLJob;
 
 
-extern void multi_ProcessUtility(PlannedStmt * pstmt, const char *queryString,
+extern void multi_ProcessUtility(PlannedStmt *pstmt, const char *queryString,
 #if PG_VERSION_NUM >= PG_VERSION_14
 								 bool readOnlyTree,
 #endif
