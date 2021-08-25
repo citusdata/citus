@@ -244,6 +244,7 @@ SELECT * FROM citus_local_table ORDER BY a;
 INSERT INTO local VALUES (1, 1);
 ERROR:  cannot execute INSERT in a read-only transaction
 INSERT INTO local SELECT a, b FROM the_table;
+ERROR:  cannot execute INSERT in a read-only transaction
 -- we shouldn't be able to create local tables
 CREATE TEMP TABLE local_copy_of_the_table AS SELECT * FROM the_table;
 ERROR:  cannot execute CREATE TABLE AS in a read-only transaction
