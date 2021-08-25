@@ -2026,6 +2026,13 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 						   params, queryEnv, dest, completionTag);
 
 	ColumnarExecLevelPop();
+
+	/*
+	 * The command counter was already incremented by
+	 * standard_ProcessUtility(), but we need to do so again in case any
+	 * additional writes were performed by ColumnarExecLevelPop().
+	 */
+	CommandCounterIncrement();
 }
 
 
