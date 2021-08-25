@@ -140,7 +140,8 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 		flags |= HASH_BLOBS;
 	}
 #if PG_VERSION_NUM >= PG_VERSION_14
-	else {
+	else
+	{
 		flags |= HASH_STRINGS;
 	}
 #endif

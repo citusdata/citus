@@ -286,9 +286,10 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		PlannedStmt *plan = subPlan->plan;
 		IntoClause *into = NULL;
 		ParamListInfo params = NULL;
+
 		/*
 		 * With PG14, we need to provide a string here,
-	 	 * for now we put an empty string, which is valid according to postgres.
+		 * for now we put an empty string, which is valid according to postgres.
 		 */
 		char *queryString = pstrdup("");
 		instr_time planduration;
