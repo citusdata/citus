@@ -123,6 +123,7 @@ static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 static ExecutorStart_hook_type PrevExecutorStartHook = NULL;
 static ExecutorFinish_hook_type PrevExecutorFinishHook = NULL;
 
+static HTAB *ColumnarCopier = NULL;
 static ColumnarExecLevel *ColumnarExecLevelStack = NULL;
 static MemoryContext ColumnarWriterContext = NULL;
 
@@ -577,9 +578,18 @@ GetWriteState(Relation relation, TupleDesc tupdesc, bool iscopy)
 													  ALLOCSET_DEFAULT_SIZES);
 	}
 
-	ColumnarExecLevel *level = ColumnarExecLevelStack;
+	HTAB **hashtablep;
+	if (iscopy)
+	{
+		hashtablep = &ColumnarCopier;
+	}
+	else
+	{
+		ColumnarExecLevel *level = ColumnarExecLevelStack;
+		hashtablep = &level->hashtable;
+	}
 
-	if (level->hashtable == NULL)
+	if (*hashtablep == NULL)
 	{
 		HASHCTL info;
 		uint32 hashFlags = (HASH_ELEM | HASH_CONTEXT);
@@ -588,22 +598,23 @@ GetWriteState(Relation relation, TupleDesc tupdesc, bool iscopy)
 		info.entrysize = sizeof(ColumnarWriterEntry);
 		info.hcxt = ColumnarWriterContext;
 
-		level->hashtable = hash_create("columnar writers",
-									   64, &info, hashFlags);
+		*hashtablep = hash_create("columnar writers", 64, &info, hashFlags);
 	}
 
 	bool found;
 	ColumnarWriterEntry *entry = hash_search(
-		level->hashtable, &relation->rd_node, HASH_ENTER, &found);
+		*hashtablep, &relation->rd_node, HASH_ENTER, &found);
 
 	if (!found)
 	{
 		ColumnarOptions columnarOptions = { 0 };
 		ReadColumnarOptions(relation->rd_id, &columnarOptions);
 
+		MemoryContext oldContext = MemoryContextSwitchTo(ColumnarWriterContext);
 		entry->writeState = ColumnarBeginWrite(relation->rd_node,
 											   columnarOptions,
 											   tupdesc);
+		MemoryContextSwitchTo(oldContext);
 	}
 
 	return entry->writeState;
@@ -1772,7 +1783,8 @@ ColumnarExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	PrevExecutorStartHook(queryDesc, eflags);
 
-	ColumnarExecLevel *level = palloc0(sizeof(ColumnarExecLevel));
+	ColumnarExecLevel *level = MemoryContextAllocZero(TopMemoryContext,
+													  sizeof(ColumnarExecLevel));
 	/* initialize hashtable lazily */
 	level->next = ColumnarExecLevelStack;
 	ColumnarExecLevelStack = level;
@@ -1784,6 +1796,11 @@ ColumnarFlushWriters(HTAB *hashtable)
 {
 	HASH_SEQ_STATUS status;
 	ColumnarWriterEntry *entry;
+
+	if (hashtable == NULL)
+	{
+		return;
+	}
 
 	hash_seq_init(&status, hashtable);
 	while ((entry = hash_seq_search(&status)) != 0)
@@ -1800,11 +1817,10 @@ ColumnarExecutorFinish(QueryDesc *queryDesc)
 	ColumnarExecLevel *level = ColumnarExecLevelStack;
 
 	Assert(level != NULL);
-	if (level->hashtable != NULL)
-	{
-		ColumnarFlushWriters(level->hashtable);
-	}
+
+	ColumnarFlushWriters(level->hashtable);
 	ColumnarExecLevelStack = level->next;
+	pfree(level);
 
 	PrevExecutorFinishHook(queryDesc);
 }
@@ -2025,6 +2041,9 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 	PrevProcessUtilityHook(pstmt, queryString, context,
 						   params, queryEnv, dest, completionTag);
+
+	ColumnarFlushWriters(ColumnarCopier);
+	ColumnarCopier = NULL;
 }
 
 
