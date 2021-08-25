@@ -69,6 +69,7 @@
 
 typedef struct ColumnarExecLevel
 {
+	int depth;
 	HTAB *hashtable;
 	struct ColumnarExecLevel *next; /* next higher level */
 } ColumnarExecLevel;
@@ -124,6 +125,7 @@ static ExecutorStart_hook_type PrevExecutorStartHook = NULL;
 static ExecutorFinish_hook_type PrevExecutorFinishHook = NULL;
 
 static HTAB *ColumnarCopier = NULL;
+static int ColumnarExecDepth = 0;
 static ColumnarExecLevel *ColumnarExecLevelStack = NULL;
 static MemoryContext ColumnarWriterContext = NULL;
 
@@ -568,15 +570,39 @@ GetWriteContextForDebug(void)
 }
 
 
-static ColumnarWriteState *
-GetWriteState(Relation relation, TupleDesc tupdesc, bool iscopy)
+static void
+AllocateWriterContext(void)
 {
 	if (ColumnarWriterContext == NULL)
 	{
-		ColumnarWriterContext = AllocSetContextCreate(TopMemoryContext,
-													  "Columnar Writers Memory Context",
-													  ALLOCSET_DEFAULT_SIZES);
+		ColumnarWriterContext = AllocSetContextCreate(
+			TopMemoryContext, "Columnar Writer Memory Context",
+			ALLOCSET_DEFAULT_SIZES);
 	}
+}
+
+
+static ColumnarExecLevel *
+GetCurrentExecLevel()
+{
+	if (ColumnarExecLevelStack == NULL ||
+		ColumnarExecLevelStack->depth != ColumnarExecDepth)
+	{
+		ColumnarExecLevel *newLevel = MemoryContextAllocZero(
+			ColumnarWriterContext, sizeof(ColumnarExecLevel));
+
+		newLevel->depth = ColumnarExecDepth;
+		newLevel->next = ColumnarExecLevelStack;
+		ColumnarExecLevelStack = newLevel;
+	}
+
+	return ColumnarExecLevelStack;
+}
+
+static HTAB *
+GetWriterHashTable(bool iscopy)
+{
+	AllocateWriterContext();
 
 	HTAB **hashtablep;
 	if (iscopy)
@@ -585,7 +611,7 @@ GetWriteState(Relation relation, TupleDesc tupdesc, bool iscopy)
 	}
 	else
 	{
-		ColumnarExecLevel *level = ColumnarExecLevelStack;
+		ColumnarExecLevel *level = GetCurrentExecLevel();
 		hashtablep = &level->hashtable;
 	}
 
@@ -601,15 +627,25 @@ GetWriteState(Relation relation, TupleDesc tupdesc, bool iscopy)
 		*hashtablep = hash_create("columnar writers", 64, &info, hashFlags);
 	}
 
+	return *hashtablep;
+}
+
+static ColumnarWriteState *
+GetWriteState(Relation relation, TupleDesc tupdesc, bool iscopy)
+{
+	HTAB *hashtable = GetWriterHashTable(iscopy);
+
 	bool found;
 	ColumnarWriterEntry *entry = hash_search(
-		*hashtablep, &relation->rd_node, HASH_ENTER, &found);
+		hashtable, &relation->rd_node, HASH_ENTER, &found);
 
 	if (!found)
 	{
 		ColumnarOptions columnarOptions = { 0 };
 		ReadColumnarOptions(relation->rd_id, &columnarOptions);
 
+		/* if we have a hash table, the memory context must exist */
+		Assert(ColumnarWriterContext != NULL);
 		MemoryContext oldContext = MemoryContextSwitchTo(ColumnarWriterContext);
 		entry->writeState = ColumnarBeginWrite(relation->rd_node,
 											   columnarOptions,
@@ -1783,11 +1819,7 @@ ColumnarExecutorStart(QueryDesc *queryDesc, int eflags)
 {
 	PrevExecutorStartHook(queryDesc, eflags);
 
-	ColumnarExecLevel *level = MemoryContextAllocZero(TopMemoryContext,
-													  sizeof(ColumnarExecLevel));
-	/* initialize hashtable lazily */
-	level->next = ColumnarExecLevelStack;
-	ColumnarExecLevelStack = level;
+	ColumnarExecDepth++;
 }
 
 
@@ -1814,13 +1846,18 @@ ColumnarFlushWriters(HTAB *hashtable)
 static void
 ColumnarExecutorFinish(QueryDesc *queryDesc)
 {
-	ColumnarExecLevel *level = ColumnarExecLevelStack;
+	Assert(ColumnarExecDepth > 0);
 
-	Assert(level != NULL);
+	if (ColumnarExecLevelStack != NULL &&
+		ColumnarExecLevelStack->depth == ColumnarExecDepth)
+	{
+		ColumnarExecLevel *level = ColumnarExecLevelStack;
+		ColumnarExecLevelStack = ColumnarExecLevelStack->next;
+		ColumnarFlushWriters(level->hashtable);
+		pfree(level);
+	}
 
-	ColumnarFlushWriters(level->hashtable);
-	ColumnarExecLevelStack = level->next;
-	pfree(level);
+	ColumnarExecDepth--;
 
 	PrevExecutorFinishHook(queryDesc);
 }
