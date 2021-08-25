@@ -233,6 +233,7 @@ AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt)
 	appendStringInfoString(buf, ")");
 }
 
+
 #if PG_VERSION_NUM >= PG_VERSION_14
 static void
 AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
@@ -259,6 +260,8 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 		}
 	}
 }
+
+
 #else
 static void
 AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
@@ -285,6 +288,8 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 		}
 	}
 }
+
+
 #endif
 
 static void

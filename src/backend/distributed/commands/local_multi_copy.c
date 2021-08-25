@@ -212,9 +212,9 @@ DoLocalCopy(StringInfo buffer, Oid relationId, int64 shardId, CopyStmt *copyStat
 	(void) addRangeTableEntryForRelation(pState, shard, AccessShareLock,
 										 NULL, false, false);
 	CopyFromState cstate = BeginCopyFrom_compat(pState, shard, NULL, NULL, false,
-													   ReadFromLocalBufferCallback,
-													   copyStatement->attlist,
-													   copyStatement->options);
+												ReadFromLocalBufferCallback,
+												copyStatement->attlist,
+												copyStatement->options);
 	CopyFrom(cstate);
 	EndCopyFrom(cstate);
 

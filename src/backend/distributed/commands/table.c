@@ -2448,16 +2448,16 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 #if PG_VERSION_NUM >= PG_VERSION_14
 			case AT_SetCompression:
 #endif
-			{
-				/*
-				 * We will not perform any special check for:
-				 * ALTER TABLE .. ALTER COLUMN .. SET NOT NULL
-				 * ALTER TABLE .. REPLICA IDENTITY ..
-				 * ALTER TABLE .. VALIDATE CONSTRAINT ..
-				 * ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
-				 */
-				break;
-			}
+				{
+					/*
+					 * We will not perform any special check for:
+					 * ALTER TABLE .. ALTER COLUMN .. SET NOT NULL
+					 * ALTER TABLE .. REPLICA IDENTITY ..
+					 * ALTER TABLE .. VALIDATE CONSTRAINT ..
+					 * ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
+					 */
+					break;
+				}
 
 			case AT_SetRelOptions:  /* SET (...) */
 			case AT_ResetRelOptions:    /* RESET (...) */

@@ -50,7 +50,7 @@ FunctionOidExtended(const char *schemaName, const char *functionName, int argume
 		argumentCount,
 		argumentList,
 		findVariadics,
-		findDefaults, 
+		findDefaults,
 		false,
 		true);
 

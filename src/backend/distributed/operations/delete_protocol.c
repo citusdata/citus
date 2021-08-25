@@ -688,7 +688,6 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 	Assert(deleteCriteria != NULL);
 	List *deleteCriteriaList = list_make1(deleteCriteria);
 
-	
 
 	/* walk over shard list and check if shards can be dropped */
 	ShardInterval *shardInterval = NULL;

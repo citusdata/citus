@@ -810,15 +810,21 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 	}
 }
 
+
 /*
  * IsReindexWithParam_compat returns true if the given parameter
  * exists for the given reindexStmt.
  */
-bool IsReindexWithParam_compat(ReindexStmt* reindexStmt, char* param) {
+bool
+IsReindexWithParam_compat(ReindexStmt *reindexStmt, char *param)
+{
 #if PG_VERSION_NUM < PG_VERSION_14
-	if (strcmp(param, "concurrently") == 0) {
+	if (strcmp(param, "concurrently") == 0)
+	{
 		return reindexStmt->concurrent;
-	}else if (strcmp(param, "verbose") == 0) {
+	}
+	else if (strcmp(param, "verbose") == 0)
+	{
 		return reindexStmt->options & REINDEXOPT_VERBOSE;
 	}
 	return false;
@@ -831,10 +837,9 @@ bool IsReindexWithParam_compat(ReindexStmt* reindexStmt, char* param) {
 			return defGetBoolean(opt);
 		}
 	}
-	return false;	
+	return false;
 #endif
-
-} 
+}
 
 
 /*
@@ -1292,6 +1297,7 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 				   quote_identifier(spec->rolename) :
 				   spec->rolename;
 		}
+
 		#if PG_VERSION_NUM >= PG_VERSION_14
 		case ROLESPEC_CURRENT_ROLE:
 		#endif
