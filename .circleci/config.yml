@@ -387,7 +387,7 @@ jobs:
 
   check-merge-to-enterprise:
     docker:
-      - image: citus/extbuilder:13.2
+      - image: citus/extbuilder:13.4-dev202108201746
     working_directory: /home/circleci/project
     steps:
       - checkout
