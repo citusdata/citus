@@ -1136,15 +1136,19 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 
 	bool setTargetEntryPartitionColumn = false;
 
-	if (partitionColumn) {
-		RangeTblEntry* resultRTE = ExtractResultRelationRTE(queryTree);
+	if (partitionColumn)
+	{
+		RangeTblEntry *resultRTE = ExtractResultRelationRTE(queryTree);
+
 		/*
-			* FirstLowInvalidHeapAttributeNumber is added as an offset to rte->updatedCols.
-			* So we substract that to get the column no for an updated column that matches
-			* resultRTE->updatedcols.
-			*/
-		int updatedColNoWithOffset = partitionColumn->varattno - FirstLowInvalidHeapAttributeNumber;
-		if (bms_is_member(updatedColNoWithOffset, resultRTE->updatedCols)) {
+		 * FirstLowInvalidHeapAttributeNumber is added as an offset to rte->updatedCols.
+		 * So we substract that to get the column no for an updated column that matches
+		 * resultRTE->updatedcols.
+		 */
+		int updatedColNoWithOffset = partitionColumn->varattno -
+									 FirstLowInvalidHeapAttributeNumber;
+		if (bms_is_member(updatedColNoWithOffset, resultRTE->updatedCols))
+		{
 			setTargetEntryPartitionColumn = true;
 		}
 	}

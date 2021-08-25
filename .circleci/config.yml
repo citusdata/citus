@@ -451,7 +451,7 @@ workflows:
       - build:
           name: build-14
           pg_major: 14
-          image_tag: '14beta3-dev202108191715'   
+          image_tag: '14beta3-dev202108191715'
 
       - check-style
       - check-sql-snapshots
