@@ -225,5 +225,7 @@ s/^(DEBUG:  the index name on the shards of the partition is too long, switching
 # normalize errors for not being able to connect to a non-existing host
 s/could not translate host name "foobar" to address: .*$/could not translate host name "foobar" to address: <system specific error>/g
 
+s/ERROR:  parallel workers for vacuum must/ERROR:  parallel vacuum degree must/g
+
 # ignore PL/pgSQL line numbers that differ on Mac builds
 s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g
