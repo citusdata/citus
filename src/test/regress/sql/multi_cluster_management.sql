@@ -15,6 +15,9 @@ SELECT master_get_active_worker_nodes();
 -- try to add a node that is already in the cluster
 SELECT * FROM master_add_node('localhost', :worker_1_port);
 
+-- make sure that when there are no distributed tables, we don't crash.
+SELECT 1 FROM get_rebalance_table_shards_plan();
+
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
 

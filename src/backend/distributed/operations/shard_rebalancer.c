@@ -1753,6 +1753,11 @@ RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
 	List *shardPlacementList = NIL;
 	List *placementUpdateList = NIL;
 
+	if (list_length(shardPlacementListList) == 0)
+	{
+		return NIL;
+	}
+
 	foreach_ptr(shardPlacementList, shardPlacementListList)
 	{
 		state = InitRebalanceState(workerNodeList, shardPlacementList,
