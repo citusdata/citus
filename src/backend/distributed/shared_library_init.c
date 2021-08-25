@@ -1323,6 +1323,18 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.metadata_sync_to_new_nodes",
+		gettext_noop("Enables metadata syncing on newly added nodes."),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "metadata syncing to nodes that are added or updated "
+					 "by citus_add_node UDF."),
+		&MetadataSyncToNewNodes,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.multi_shard_commit_protocol",
 		gettext_noop("Sets the commit protocol for commands modifying multiple shards."),

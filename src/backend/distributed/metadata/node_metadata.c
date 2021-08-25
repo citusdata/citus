@@ -65,6 +65,8 @@ int GroupSize = 1;
 
 /* config variable managed via guc.c */
 char *CurrentCluster = "default";
+bool MetadataSyncToNewNodes = false;
+
 
 /*
  * Config variable to control whether we should replicate reference tables on
@@ -269,6 +271,12 @@ citus_add_node(PG_FUNCTION_ARGS)
 	if (!nodeAlreadyExists)
 	{
 		ActivateNode(nodeNameString, nodePort);
+	}
+
+	if (MetadataSyncToNewNodes)
+	{
+		ereport(WARNING, (errmsg("You can not use this yet")));
+		StartMetadataSyncToNode(nodeNameString, nodePort);
 	}
 
 	PG_RETURN_INT32(nodeId);

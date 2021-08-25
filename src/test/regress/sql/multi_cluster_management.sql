@@ -341,6 +341,17 @@ SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
 SELECT master_update_node(:worker_1_node, 'localhost', :worker_1_port);
 SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
 
+-- check that we can make metadata syncing default on new nodes
+SET citus.metadata_sync_to_new_nodes TO on;
+SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
+SELECT master_remove_node('localhost', :worker_2_port);
+
+SELECT master_add_node('localhost', :worker_2_port, groupId := :worker_2_group);
+SELECT metadatasynced FROM pg_dist_node WHERE nodeport = :worker_2_port;
+
+-- cleanup
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+RESET citus.metadata_sync_to_new_nodes;
 
 SET citus.shard_replication_factor TO 1;
 

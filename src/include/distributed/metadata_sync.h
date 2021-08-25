@@ -17,6 +17,7 @@
 #include "nodes/pg_list.h"
 
 /* config variables */
+extern bool MetadataSyncToNewNodes;
 extern int MetadataSyncInterval;
 extern int MetadataSyncRetryInterval;
 
