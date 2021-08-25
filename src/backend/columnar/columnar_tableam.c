@@ -67,6 +67,18 @@
 #define VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL 50       /* ms */
 #define VACUUM_TRUNCATE_LOCK_TIMEOUT 4500               /* ms */
 
+typedef struct ColumnarExecLevel
+{
+	HTAB *hashtable;
+	struct ColumnarExecLevel *next; /* next higher level */
+} ColumnarExecLevel;
+
+typedef struct ColumnarWriterEntry
+{
+	RelFileNode relfilenode;
+	ColumnarWriteState *writeState;
+} ColumnarWriterEntry;
+
 /*
  * ColumnarScanDescData is the scan state passed between beginscan(),
  * getnextslot(), rescan(), and endscan() calls.
@@ -108,6 +120,11 @@ typedef struct IndexFetchColumnarData
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
 static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
+static ExecutorStart_hook_type PrevExecutorStartHook = NULL;
+static ExecutorFinish_hook_type PrevExecutorFinishHook = NULL;
+
+static ColumnarExecLevel *ColumnarExecLevelStack = NULL;
+static MemoryContext ColumnarWriterContext = NULL;
 
 /* forward declaration for static functions */
 static MemoryContext CreateColumnarScanMemoryContext(void);
@@ -191,8 +208,6 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 							ParallelTableScanDesc parallel_scan,
 							uint32 flags, Bitmapset *attr_needed, List *scanQual)
 {
-	Oid relfilenode = relation->rd_node.relNode;
-
 	/*
 	 * A memory context to use for scan-wide data, including the lazily
 	 * initialized read state. We assume that beginscan is called in a
@@ -220,14 +235,6 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 	scan->attr_needed = bms_copy(attr_needed);
 	scan->scanQual = copyObject(scanQual);
 	scan->scanContext = scanContext;
-
-	if (PendingWritesInUpperTransactions(relfilenode, GetCurrentSubTransactionId()))
-	{
-		elog(ERROR,
-			 "cannot read from table when there is unflushed data in upper transactions");
-	}
-
-	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -421,16 +428,6 @@ columnar_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 static IndexFetchTableData *
 columnar_index_fetch_begin(Relation rel)
 {
-	Oid relfilenode = rel->rd_node.relNode;
-	if (PendingWritesInUpperTransactions(relfilenode, GetCurrentSubTransactionId()))
-	{
-		/* XXX: maybe we can just flush the data and continue */
-		elog(ERROR, "cannot read from index when there is unflushed data in "
-					"upper transactions");
-	}
-
-	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
-
 	MemoryContext scanContext = CreateColumnarScanMemoryContext();
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
 
@@ -563,6 +560,56 @@ columnar_compute_xid_horizon_for_tuples(Relation rel,
 }
 
 
+MemoryContext
+GetWriteContextForDebug(void)
+{
+	return ColumnarWriterContext;
+}
+
+
+static ColumnarWriteState *
+GetWriteState(Relation relation, TupleDesc tupdesc, bool iscopy)
+{
+	if (ColumnarWriterContext == NULL)
+	{
+		ColumnarWriterContext = AllocSetContextCreate(TopMemoryContext,
+													  "Columnar Writers Memory Context",
+													  ALLOCSET_DEFAULT_SIZES);
+	}
+
+	ColumnarExecLevel *level = ColumnarExecLevelStack;
+
+	if (level->hashtable == NULL)
+	{
+		HASHCTL info;
+		uint32 hashFlags = (HASH_ELEM | HASH_CONTEXT);
+		memset(&info, 0, sizeof(info));
+		info.keysize = sizeof(RelFileNode);
+		info.entrysize = sizeof(ColumnarWriterEntry);
+		info.hcxt = ColumnarWriterContext;
+
+		level->hashtable = hash_create("columnar writers",
+									   64, &info, hashFlags);
+	}
+
+	bool found;
+	ColumnarWriterEntry *entry = hash_search(
+		level->hashtable, &relation->rd_node, HASH_ENTER, &found);
+
+	if (!found)
+	{
+		ColumnarOptions columnarOptions = { 0 };
+		ReadColumnarOptions(relation->rd_id, &columnarOptions);
+
+		entry->writeState = ColumnarBeginWrite(relation->rd_node,
+											   columnarOptions,
+											   tupdesc);
+	}
+
+	return entry->writeState;
+}
+
+
 static void
 columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 					  int options, BulkInsertState bistate)
@@ -571,9 +618,8 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	 * columnar_init_write_state allocates the write state in a longer
 	 * lasting context, so no need to worry about it.
 	 */
-	ColumnarWriteState *writeState = columnar_init_write_state(relation,
-															   RelationGetDescr(relation),
-															   GetCurrentSubTransactionId());
+	ColumnarWriteState *writeState = GetWriteState(relation, RelationGetDescr(relation), false);
+
 	MemoryContext oldContext = MemoryContextSwitchTo(ColumnarWritePerTupleContext(
 														 writeState));
 
@@ -613,9 +659,8 @@ static void
 columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					  CommandId cid, int options, BulkInsertState bistate)
 {
-	ColumnarWriteState *writeState = columnar_init_write_state(relation,
-															   RelationGetDescr(relation),
-															   GetCurrentSubTransactionId());
+	ColumnarWriteState *writeState = GetWriteState(relation,
+												   RelationGetDescr(relation), true);
 
 	ColumnarCheckLogicalReplication(relation);
 
@@ -701,8 +746,6 @@ columnar_relation_set_new_filenode(Relation rel,
 	 */
 	if (rel->rd_node.relNode != newrnode->relNode)
 	{
-		MarkRelfilenodeDropped(rel->rd_node.relNode, GetCurrentSubTransactionId());
-
 		DeleteMetadataRows(rel->rd_node);
 	}
 
@@ -723,8 +766,6 @@ static void
 columnar_relation_nontransactional_truncate(Relation rel)
 {
 	RelFileNode relfilenode = rel->rd_node;
-
-	NonTransactionDropWriteState(relfilenode.relNode);
 
 	/* Delete old relfilenode metadata */
 	DeleteMetadataRows(relfilenode);
@@ -1687,7 +1728,6 @@ ColumnarXactCallback(XactEvent event, void *arg)
 		case XACT_EVENT_ABORT:
 		case XACT_EVENT_PARALLEL_ABORT:
 		{
-			DiscardWriteStateForAllRels(GetCurrentSubTransactionId(), 0);
 			break;
 		}
 
@@ -1695,7 +1735,6 @@ ColumnarXactCallback(XactEvent event, void *arg)
 		case XACT_EVENT_PARALLEL_PRE_COMMIT:
 		case XACT_EVENT_PRE_PREPARE:
 		{
-			FlushWriteStateForAllRels(GetCurrentSubTransactionId(), 0);
 			break;
 		}
 	}
@@ -1717,16 +1756,57 @@ ColumnarSubXactCallback(SubXactEvent event, SubTransactionId mySubid,
 
 		case SUBXACT_EVENT_ABORT_SUB:
 		{
-			DiscardWriteStateForAllRels(mySubid, parentSubid);
 			break;
 		}
 
 		case SUBXACT_EVENT_PRE_COMMIT_SUB:
 		{
-			FlushWriteStateForAllRels(mySubid, parentSubid);
 			break;
 		}
 	}
+}
+
+
+static void
+ColumnarExecutorStart(QueryDesc *queryDesc, int eflags)
+{
+	PrevExecutorStartHook(queryDesc, eflags);
+
+	ColumnarExecLevel *level = palloc0(sizeof(ColumnarExecLevel));
+	/* initialize hashtable lazily */
+	level->next = ColumnarExecLevelStack;
+	ColumnarExecLevelStack = level;
+}
+
+
+static void
+ColumnarFlushWriters(HTAB *hashtable)
+{
+	HASH_SEQ_STATUS status;
+	ColumnarWriterEntry *entry;
+
+	hash_seq_init(&status, hashtable);
+	while ((entry = hash_seq_search(&status)) != 0)
+	{
+		ColumnarEndWrite(entry->writeState);
+	}
+	hash_destroy(hashtable);
+}
+
+
+static void
+ColumnarExecutorFinish(QueryDesc *queryDesc)
+{
+	ColumnarExecLevel *level = ColumnarExecLevelStack;
+
+	Assert(level != NULL);
+	if (level->hashtable != NULL)
+	{
+		ColumnarFlushWriters(level->hashtable);
+	}
+	ColumnarExecLevelStack = level->next;
+
+	PrevExecutorFinishHook(queryDesc);
 }
 
 
@@ -1743,6 +1823,14 @@ columnar_tableam_init()
 							 ProcessUtility_hook :
 							 standard_ProcessUtility;
 	ProcessUtility_hook = ColumnarProcessUtility;
+
+	PrevExecutorStartHook = ExecutorStart_hook ?
+		ExecutorStart_hook : standard_ExecutorStart;
+	ExecutorStart_hook = ColumnarExecutorStart;
+
+	PrevExecutorFinishHook = ExecutorFinish_hook ?
+		ExecutorFinish_hook : standard_ExecutorFinish;
+	ExecutorFinish_hook = ColumnarExecutorFinish;
 
 	columnar_customscan_init();
 
@@ -1823,8 +1911,6 @@ ColumnarTableDropHook(Oid relid)
 
 		DeleteMetadataRows(relfilenode);
 		DeleteColumnarTableOptions(rel->rd_id, true);
-
-		MarkRelfilenodeDropped(relfilenode.relNode, GetCurrentSubTransactionId());
 
 		/* keep the lock since we did physical changes to the relation */
 		table_close(rel, NoLock);
