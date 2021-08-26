@@ -32,8 +32,6 @@
 
 #if PG_VERSION_NUM >= PG_VERSION_14
 #define AlterTableStmtObjType(a) ((a)->objtype)
-#define F_NEXTVAL_COMPAT F_NEXTVAL
-#define ROLE_MONITOR_COMPAT ROLE_PG_MONITOR
 #define STATUS_WAITING_COMPAT PROC_WAIT_STATUS_WAITING
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a, b)
 #define getObjectIdentity_compat(a, b) getObjectIdentity(a, b)
@@ -65,8 +63,8 @@
 #define pg_get_statisticsobj_worker_compat(a, b, c) pg_get_statisticsobj_worker(a, b, c)
 #else
 #define AlterTableStmtObjType(a) ((a)->relkind)
-#define F_NEXTVAL_COMPAT F_NEXTVAL_OID
-#define ROLE_MONITOR_COMPAT DEFAULT_ROLE_MONITOR
+#define F_NEXTVAL F_NEXTVAL_OID
+#define ROLE_PG_MONITOR DEFAULT_ROLE_MONITOR
 #define STATUS_WAITING_COMPAT STATUS_WAITING
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a)
 #define getObjectIdentity_compat(a, b) getObjectIdentity(a)
