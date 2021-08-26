@@ -773,7 +773,7 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterTableStmt:
 		{
 			AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-			switch (AlterTableStmtObjType(stmt))
+			switch (AlterTableStmtObjType_compat(stmt))
 			{
 				case OBJECT_TYPE:
 				{
