@@ -7,6 +7,56 @@ SELECT substring(:'server_version', '\d+')::int > 13 AS server_version_above_thi
 \endif
 create schema pg14;
 set search_path to pg14;
+SET citus.next_shard_id TO 980000;
+SET citus.shard_count TO 2;
+-- test the new vacuum option, process_toast
+CREATE TABLE t1 (a int);
+SELECT create_distributed_table('t1','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.log_remote_commands TO ON;
+VACUUM (FULL) t1;
+NOTICE:  issuing VACUUM (FULL) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (FULL, PROCESS_TOAST) t1;
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (FULL, PROCESS_TOAST true) t1;
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+VACUUM (FULL, PROCESS_TOAST false) t1;
+ERROR:  PROCESS_TOAST required with VACUUM FULL
+VACUUM (PROCESS_TOAST false) t1;
+NOTICE:  issuing VACUUM pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM pg14.t1_980000
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing VACUUM pg14.t1_980001
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SET citus.log_remote_commands TO OFF;
 create table dist(a int, b int);
 select create_distributed_table('dist','a');
  create_distributed_table
@@ -23,14 +73,6 @@ reindex(TABLESPACE test_tablespace) index idx;
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -58,14 +100,6 @@ NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT
@@ -74,14 +108,6 @@ reindex(TABLESPACE test_tablespace, verbose false) index idx ;
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -100,14 +126,6 @@ INFO:  index "idx" was reindexed
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

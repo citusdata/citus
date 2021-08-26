@@ -9,6 +9,20 @@ SELECT substring(:'server_version', '\d+')::int > 13 AS server_version_above_thi
 create schema pg14;
 set search_path to pg14;
 
+SET citus.next_shard_id TO 980000;
+SET citus.shard_count TO 2;
+
+-- test the new vacuum option, process_toast
+CREATE TABLE t1 (a int);
+SELECT create_distributed_table('t1','a');
+SET citus.log_remote_commands TO ON;
+VACUUM (FULL) t1;
+VACUUM (FULL, PROCESS_TOAST) t1;
+VACUUM (FULL, PROCESS_TOAST true) t1;
+VACUUM (FULL, PROCESS_TOAST false) t1;
+VACUUM (PROCESS_TOAST false) t1;
+SET citus.log_remote_commands TO OFF;
+
 create table dist(a int, b int);
 select create_distributed_table('dist','a');
 create index idx on dist(a);
@@ -27,7 +41,4 @@ set citus.log_remote_commands to off;
 
 set client_min_messages to error;
 drop schema pg14 cascade;
-
-
-
 
