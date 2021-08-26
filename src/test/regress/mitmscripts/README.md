@@ -25,7 +25,7 @@ Once you've installed it:
 
 ```bash
 $ cd src/test/regress
-$ pipenv --python 3.6 --python=`which python3`
+$ pipenv --python 3.6 --python=`which python3.6`
 $ pipenv install  # there's already a Pipfile.lock in src/test/regress with packages
 $ pipenv shell  # this enters the virtual environment, putting mitmproxy onto $PATH
 ```
