@@ -117,7 +117,7 @@ step "s1-add-node"
 
 step "s1-remove-node"
 {
-	SELECT master_remove_node('localhost', 9999);
+	SELECT citus_remove_node('localhost', 9999);
 }
 
 step "s1-commit"
@@ -163,10 +163,10 @@ permutation "s1-begin" "s1-recover" "s2-create-restore" "s1-commit"
 // verify that citus_create_restore_point is blocked by concurrent DROP TABLE
 permutation "s1-begin" "s1-drop" "s2-create-restore" "s1-commit"
 
-// verify that citus_create_restore_point is blocked by concurrent master_add_node
+// verify that citus_create_restore_point is blocked by concurrent citus_add_node
 permutation "s1-begin" "s1-add-node" "s2-create-restore" "s1-commit"
 
-// verify that citus_create_restore_point is blocked by concurrent master_remove_node
+// verify that citus_create_restore_point is blocked by concurrent citus_remove_node
 permutation "s1-begin" "s1-remove-node" "s2-create-restore" "s1-commit"
 
 // verify that citus_create_restore_point is blocked by concurrent citus_create_restore_point

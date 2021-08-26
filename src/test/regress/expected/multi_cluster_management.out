@@ -4,7 +4,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1;
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 -- Tests functions related to cluster membership
 -- add the nodes to the cluster
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -12,7 +12,7 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
         1
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -29,8 +29,8 @@ SELECT master_get_active_worker_nodes();
 (2 rows)
 
 -- try to add a node that is already in the cluster
-SELECT * FROM master_add_node('localhost', :worker_1_port);
- master_add_node
+SELECT * FROM citus_add_node('localhost', :worker_1_port);
+ citus_add_node
 ---------------------------------------------------------------------
                1
 (1 row)
@@ -44,8 +44,8 @@ SELECT master_get_active_worker_nodes();
 (2 rows)
 
 -- try to remove a node (with no placements)
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -58,7 +58,7 @@ SELECT master_get_active_worker_nodes();
 (1 row)
 
 -- try to disable a node with no placements see that node is removed
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -117,7 +117,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 (8 rows)
 
 -- try to remove a node with active placements and see that node removal is failed
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 ERROR:  cannot remove the primary node of a node group which has shard placements
 HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
 SELECT master_get_active_worker_nodes();
@@ -184,10 +184,10 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION citus_add_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION citus_remove_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_metadata_user;
 -- Removing public schema from pg_dist_object because it breaks the next tests
 DELETE FROM citus.pg_dist_object WHERE objid = 'public'::regnamespace::oid;
@@ -199,10 +199,10 @@ SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
 ERROR:  permission denied for function master_activate_node
 SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
 ERROR:  permission denied for function master_disable_node
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
-ERROR:  permission denied for function master_remove_node
-SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
-ERROR:  permission denied for function master_add_node
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port + 1);
+ERROR:  permission denied for function citus_remove_node
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port + 1);
+ERROR:  permission denied for function citus_add_node
 SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_2_port);
 ERROR:  permission denied for function master_add_secondary_node
 SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -231,13 +231,13 @@ SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
         1
 (1 row)
 
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port + 1);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port + 1);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -287,7 +287,7 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
 (1 row)
 
 -- try to remove a node with active placements and see that node removal is failed
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 ERROR:  cannot remove the primary node of a node group which has shard placements
 HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
 -- mark all placements in the candidate node as inactive
@@ -307,7 +307,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 (8 rows)
 
 -- try to remove a node with only inactive placements and see that removal still fails
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 ERROR:  cannot remove the primary node of a node group which has shard placements
 HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
 SELECT master_get_active_worker_nodes();
@@ -380,8 +380,8 @@ SELECT logicalrelid, shardid, shardstate, nodename, nodeport FROM pg_dist_shard_
 
 SELECT * INTO removed_placements FROM pg_dist_placement WHERE shardstate = 4;
 -- try to remove a node with only to be deleted placements and see that removal succeeds
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -392,10 +392,10 @@ SELECT master_get_active_worker_nodes();
  (localhost,57637)
 (1 row)
 
-SELECT master_add_node('localhost', :worker_2_port, groupId := :worker_2_group);
+SELECT citus_add_node('localhost', :worker_2_port, groupId := :worker_2_group);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
- master_add_node
+ citus_add_node
 ---------------------------------------------------------------------
                7
 (1 row)
@@ -403,7 +403,7 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
 -- put removed placements back for testing purposes(in practice we wouldn't have only old placements for a shard)
 INSERT INTO pg_dist_placement SELECT * FROM removed_placements;
 -- clean-up
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -422,23 +422,23 @@ DELETE FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT * FROM cluster_management_test;
 ERROR:  there is a shard placement in node group 3 but there are no nodes in that group
 -- clean-up
-SELECT master_add_node('localhost', :worker_2_port) AS new_node \gset
+SELECT citus_add_node('localhost', :worker_2_port) AS new_node \gset
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
 SELECT groupid AS new_group FROM pg_dist_node WHERE nodeid = :new_node \gset
 UPDATE pg_dist_placement SET groupid = :new_group WHERE groupid = :worker_2_group;
 -- test that you are allowed to remove secondary nodes even if there are placements
-SELECT 1 FROM master_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
+SELECT 1 FROM citus_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 ERROR:  cannot remove the primary node of a node group which has shard placements
 HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
-SELECT master_remove_node('localhost', 9990);
- master_remove_node
+SELECT citus_remove_node('localhost', 9990);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -446,8 +446,8 @@ SELECT master_remove_node('localhost', 9990);
 -- clean-up
 DROP TABLE cluster_management_test;
 -- check that adding/removing nodes are propagated to nodes with metadata
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -458,7 +458,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -474,8 +474,8 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 (1 row)
 
 \c - - - :master_port
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -496,7 +496,7 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -514,9 +514,9 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 -- check that removing two nodes in the same transaction works
 SELECT
-	master_remove_node('localhost', :worker_1_port),
-	master_remove_node('localhost', :worker_2_port);
- master_remove_node | master_remove_node
+	citus_remove_node('localhost', :worker_1_port),
+	citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node | citus_remove_node
 ---------------------------------------------------------------------
                     |
 (1 row)
@@ -529,13 +529,13 @@ SELECT count(1) FROM pg_dist_node;
 
 -- check that adding two nodes in the same transaction works
 SELECT
-	master_add_node('localhost', :worker_1_port),
-	master_add_node('localhost', :worker_2_port);
+	citus_add_node('localhost', :worker_1_port),
+	citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
- master_add_node | master_add_node
+ citus_add_node | citus_add_node
 ---------------------------------------------------------------------
               12 |              13
 (1 row)
@@ -549,13 +549,13 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 
 -- check that mixed add/remove node commands work fine inside transaction
 BEGIN;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -563,8 +563,8 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
         1
 (1 row)
 
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -582,7 +582,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 (1 row)
 
 BEGIN;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -590,13 +590,13 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
         1
 (1 row)
 
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -620,14 +620,14 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 
 \c - - - :master_port
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
-SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
- master_remove_node
+SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
+ citus_remove_node
 ---------------------------------------------------------------------
 
 
 (2 rows)
 
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -635,7 +635,7 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
         1
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -645,14 +645,14 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
 
 -- check that a distributed table can be created after adding a node in a transaction
 SET citus.shard_count TO 4;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 BEGIN;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -713,21 +713,21 @@ NOTICE:  dropping metadata on the node (localhost,57638)
 (1 row)
 
 -- check that you can't add a primary to a non-default cluster
-SELECT master_add_node('localhost', 9999, nodecluster => 'olap');
+SELECT citus_add_node('localhost', 9999, nodecluster => 'olap');
 ERROR:  primaries must be added to the default cluster
 -- check that you can't add more than one primary to a group
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
-SELECT master_add_node('localhost', 9999, groupid => :worker_1_group, noderole => 'primary');
+SELECT citus_add_node('localhost', 9999, groupid => :worker_1_group, noderole => 'primary');
 ERROR:  group 14 already has a primary node
 -- check that you can add secondaries and unavailable nodes to a group
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
-SELECT 1 FROM master_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
+SELECT 1 FROM citus_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', 9997, groupid => :worker_1_group, noderole => 'unavailable');
+SELECT 1 FROM citus_add_node('localhost', 9997, groupid => :worker_1_group, noderole => 'unavailable');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -759,8 +759,8 @@ SELECT master_disable_node('localhost', 9999);
 
 (1 row)
 
-SELECT master_remove_node('localhost', 9999);
- master_remove_node
+SELECT citus_remove_node('localhost', 9999);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -785,21 +785,21 @@ ERROR:  new row for relation "pg_dist_node" violates check constraint "primaries
 DETAIL:  Failing row contains (17, 14, localhost, 57637, default, f, t, primary, olap, f, t).
 -- check that you /can/ add a secondary node to a non-default cluster
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
-SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
- master_add_node
+SELECT citus_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
+ citus_add_node
 ---------------------------------------------------------------------
               26
 (1 row)
 
 -- check that super-long cluster names are truncated
-SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole => 'secondary', nodecluster=>
+SELECT citus_add_node('localhost', 8887, groupid => :worker_1_group, noderole => 'secondary', nodecluster=>
 	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
 	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
 	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
 	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
 	'overflow'
 );
- master_add_node
+ citus_add_node
 ---------------------------------------------------------------------
               27
 (1 row)

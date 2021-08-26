@@ -20,7 +20,7 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid BETWEEN 1370000 AND 1380000;
 -- remove a node for testing purposes
 CREATE TABLE tmp_shard_placement AS SELECT * FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
 DELETE FROM pg_dist_shard_placement WHERE nodeport = :worker_2_port;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 
 -- test adding new node with no reference tables
@@ -28,7 +28,7 @@ SELECT master_remove_node('localhost', :worker_2_port);
 -- verify there is no node with nodeport = :worker_2_port before adding the node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 -- verify node is added
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -43,7 +43,7 @@ WHERE
 
 
 -- test adding new node with a reference table which does not have any healthy placement
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 -- verify there is no node with nodeport = :worker_2_port before adding the node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -52,7 +52,7 @@ CREATE TABLE replicate_reference_table_unhealthy(column1 int);
 SELECT create_reference_table('replicate_reference_table_unhealthy');
 UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid = 1370000;
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 -- verify node is not added
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
@@ -72,7 +72,7 @@ DROP TABLE replicate_reference_table_unhealthy;
 CREATE TABLE replicate_reference_table_valid(column1 int);
 SELECT create_reference_table('replicate_reference_table_valid');
 
--- status before master_add_node
+-- status before citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -87,9 +87,9 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
--- status after master_add_node
+-- status after citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -107,7 +107,7 @@ WHERE colocationid IN
 
 -- test add same node twice
 
--- status before master_add_node
+-- status before citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -122,9 +122,9 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_valid'::regclass);
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
--- status after master_add_node
+-- status after citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -143,12 +143,12 @@ DROP TABLE replicate_reference_table_valid;
 
 
 -- test replicating a reference table when a new node added in TRANSACTION + ROLLBACK
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE replicate_reference_table_rollback(column1 int);
 SELECT create_reference_table('replicate_reference_table_rollback');
 
--- status before master_add_node
+-- status before citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -164,10 +164,10 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_rollback'::regclass);
 
 BEGIN;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 ROLLBACK;
 
--- status after master_add_node
+-- status after citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -189,7 +189,7 @@ DROP TABLE replicate_reference_table_rollback;
 CREATE TABLE replicate_reference_table_commit(column1 int);
 SELECT create_reference_table('replicate_reference_table_commit');
 
--- status before master_add_node
+-- status before citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -205,10 +205,10 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_commit'::regclass);
 
 BEGIN;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 COMMIT;
 
--- status after master_add_node
+-- status after citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -227,7 +227,7 @@ DROP TABLE replicate_reference_table_commit;
 
 
 -- test adding new node + upgrading another hash distributed table to reference table + creating new reference table in TRANSACTION
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE replicate_reference_table_reference_one(column1 int);
 SELECT create_reference_table('replicate_reference_table_reference_one');
@@ -237,7 +237,7 @@ SET citus.shard_replication_factor TO 1;
 
 CREATE TABLE replicate_reference_table_reference_two(column1 int);
 
--- status before master_add_node
+-- status before citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -262,11 +262,11 @@ WHERE
 ORDER BY logicalrelid;
 
 SET client_min_messages TO WARNING;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 SELECT create_reference_table('replicate_reference_table_reference_two');
 RESET client_min_messages;
 
--- status after master_add_node
+-- status after citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -295,14 +295,14 @@ DROP TABLE replicate_reference_table_reference_two;
 
 
 -- test inserting a value then adding a new node in a transaction
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE replicate_reference_table_insert(column1 int);
 SELECT create_reference_table('replicate_reference_table_insert');
 
 BEGIN;
 INSERT INTO replicate_reference_table_insert VALUES(1);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 ROLLBACK;
 
 DROP TABLE replicate_reference_table_insert;
@@ -321,7 +321,7 @@ COPY replicate_reference_table_copy FROM STDIN;
 4
 5
 \.
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 ROLLBACK;
 
 RESET citus.enable_local_execution;
@@ -335,7 +335,7 @@ SELECT create_reference_table('replicate_reference_table_ddl');
 
 BEGIN;
 ALTER TABLE replicate_reference_table_ddl ADD column2 int;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 ROLLBACK;
 
 DROP TABLE replicate_reference_table_ddl;
@@ -345,7 +345,7 @@ DROP TABLE replicate_reference_table_ddl;
 CREATE TABLE replicate_reference_table_drop(column1 int);
 SELECT create_reference_table('replicate_reference_table_drop');
 
--- status before master_add_node
+-- status before citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -361,11 +361,11 @@ WHERE colocationid IN
      WHERE logicalrelid = 'replicate_reference_table_drop'::regclass);
 
 BEGIN;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 DROP TABLE replicate_reference_table_drop;
 COMMIT;
 
--- status after master_add_node
+-- status after citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -377,13 +377,13 @@ ORDER BY shardid, nodeport;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 1370009;
 
 -- test adding a node while there is a reference table at another schema
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 CREATE SCHEMA replicate_reference_table_schema;
 CREATE TABLE replicate_reference_table_schema.table1(column1 int);
 SELECT create_reference_table('replicate_reference_table_schema.table1');
 
--- status before master_add_node
+-- status before citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -398,9 +398,9 @@ WHERE colocationid IN
      FROM pg_dist_partition
      WHERE logicalrelid = 'replicate_reference_table_schema.table1'::regclass);
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
--- status after master_add_node
+-- status after citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -420,7 +420,7 @@ DROP SCHEMA replicate_reference_table_schema CASCADE;
 
 
 -- test adding a node when there are foreign keys between reference tables
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE ref_table_1(id int primary key, v int);
 CREATE TABLE ref_table_2(id int primary key, v int references ref_table_1(id));
@@ -430,7 +430,7 @@ SELECT create_reference_table('ref_table_1'),
        create_reference_table('ref_table_2'),
        create_reference_table('ref_table_3');
 
--- status before master_add_node
+-- status before citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -439,9 +439,9 @@ WHERE
     nodeport = :worker_2_port
 ORDER BY shardid, nodeport;
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
--- status after master_add_node
+-- status after citus_add_node
 SELECT
     shardid, shardstate, shardlength, nodename, nodeport
 FROM
@@ -456,7 +456,7 @@ SELECT run_command_on_workers('select count(*) from pg_constraint where contype=
 DROP TABLE ref_table_1, ref_table_2, ref_table_3;
 
 -- do some tests with inactive node
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE initially_not_replicated_reference_table (key int);
 SELECT create_reference_table('initially_not_replicated_reference_table');
@@ -495,13 +495,13 @@ WHERE
     AND nodeport != :master_port
 ORDER BY 1,4,5;
 
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE ref_table(a int);
 SELECT create_reference_table('ref_table');
 INSERT INTO ref_table SELECT * FROM generate_series(1, 10);
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 -- verify we cannot replicate reference tables in a transaction modifying pg_dist_node
 BEGIN;
@@ -548,7 +548,7 @@ SELECT shardid AS ref_table_shard FROM pg_dist_shard WHERE logicalrelid = 'ref_t
 SELECT count(*) AS ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard \gset
 
 -- remove reference table replica from worker 2
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 
 SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
 
@@ -556,24 +556,24 @@ SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shard
 CREATE TABLE range_table(a int);
 SELECT create_distributed_table('range_table', 'a', 'range');
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
 SELECT 1 FROM master_create_empty_shard('range_table');
 SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
 
 DROP TABLE range_table;
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 
 -- test setting citus.replicate_reference_tables_on_activate to on
--- master_add_node
+-- citus_add_node
 SET citus.replicate_reference_tables_on_activate TO on;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
 
 -- master_activate_node
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
 
 SELECT count(*) - :ref_table_placements FROM pg_dist_shard_placement WHERE shardid = :ref_table_shard;
@@ -587,8 +587,8 @@ SELECT min(result) = max(result) AS consistent FROM run_command_on_placements('r
 -- test that metadata is synced when master_copy_shard_placement replicates
 -- reference table shards
 SET citus.replicate_reference_tables_on_activate TO off;
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 SET citus.shard_replication_factor TO 1;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
@@ -605,8 +605,8 @@ FROM run_command_on_workers('SELECT count(*) FROM pg_dist_placement a, pg_dist_s
 WHERE nodeport=:worker_1_port;
 
 -- test that metadata is synced on replicate_reference_tables
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 SELECT replicate_reference_tables();
 
@@ -646,12 +646,12 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SET citus.replicate_reference_tables_on_activate TO off;
 SET citus.shard_replication_factor TO 1;
 
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE ref (a int primary key, b int);
 SELECT create_reference_table('ref');
 CREATE TABLE test (x int, y int references ref(a));
-select 1 FROM master_add_node('localhost', :worker_2_port);
+select 1 FROM citus_add_node('localhost', :worker_2_port);
 BEGIN;
 DROP TABLE test;
 CREATE TABLE test (x int, y int references ref(a));
@@ -669,7 +669,7 @@ DECLARE
 BEGIN
 errors_received := 0;
         BEGIN
-		SELECT master_add_node('invalid-node-name', 9999);
+		SELECT citus_add_node('invalid-node-name', 9999);
         EXCEPTION WHEN OTHERS THEN
                 IF SQLERRM LIKE 'connection to the remote node%%' THEN
                         errors_received := errors_received + 1;

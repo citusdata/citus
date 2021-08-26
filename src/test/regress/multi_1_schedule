@@ -266,7 +266,7 @@ test: multi_foreign_key_relation_graph
 
 # ----------
 # multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes
-# multi_remove_node_reference_table tests metadata changes after master_remove_node
+# multi_remove_node_reference_table tests metadata changes after citus_remove_node
 # ----------
 test: multi_replicate_reference_table
 test: multi_remove_node_reference_table

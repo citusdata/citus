@@ -6,7 +6,7 @@ CREATE SCHEMA undistribute_table_cascade_mx;
 SET search_path TO undistribute_table_cascade_mx;
 SET client_min_messages to ERROR;
 -- ensure that coordinator is added to pg_dist_node
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
  ?column?
 ---------------------------------------------------------------------
         1

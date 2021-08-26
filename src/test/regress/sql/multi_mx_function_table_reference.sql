@@ -18,7 +18,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 -- remove worker 2, so we can add it after we have created some functions that caused
 -- problems
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 -- reproduction case as described in #3378
 CREATE TABLE zoop_table (x int, y decimal(4, 4));
@@ -42,7 +42,7 @@ $$;
 SELECT create_distributed_function('zoop(int)', '$1');
 
 -- now add the worker back, this triggers function distribution which should not fail.
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 SELECT public.wait_until_metadata_sync(30000);
 
 -- verify typmod of zoop_table.b was propagated
@@ -90,4 +90,4 @@ DROP SCHEMA function_table_reference CASCADE;
 -- make sure the worker is added at the end irregardless of anything failing to not make
 -- subsequent tests fail as well. All artifacts created during this test should have been
 -- dropped by the drop cascade above.
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);

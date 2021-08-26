@@ -37,8 +37,8 @@ $$);
 (2 rows)
 
 -- remove a node to verify addition later
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -72,7 +72,7 @@ $$);
 -- turn off propagation to verify it does _not_ propagate to new nodes when turned off
 SET citus.enable_alter_database_owner TO off;
 -- add back second node to verify the owner of the database was set accordingly
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -94,14 +94,14 @@ $$);
 
 -- turn on propagation to verify it does propagate to new nodes when enabled
 SET citus.enable_alter_database_owner TO on;
-SELECT master_remove_node('localhost', :worker_2_port); -- remove so we can re add with propagation on
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port); -- remove so we can re add with propagation on
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- add back second node to verify the owner of the database was set accordingly
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1

@@ -3,7 +3,7 @@
 CREATE TABLE the_table (a int, b int, z bigserial);
 SELECT create_distributed_table('the_table', 'a');
 
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 
 CREATE TABLE reference_table (a int, b int, z bigserial);
 SELECT create_reference_table('reference_table');
@@ -155,4 +155,4 @@ SELECT * FROM citus_local_table ORDER BY a;
 DROP TABLE the_table;
 DROP TABLE reference_table;
 DROP TABLE citus_local_table;
-SELECT master_remove_node('localhost', :master_port);
+SELECT citus_remove_node('localhost', :master_port);

@@ -80,7 +80,7 @@ def run_pg_regress(pg_path, pg_srcdir, port, schedule):
 
 def add_workers(pg_path):
     for port in WORKER_PORTS:
-        command = "SELECT * from master_add_node('localhost', {port});".format(
+        command = "SELECT * from citus_add_node('localhost', {port});".format(
             port=port)
         utils.psql(pg_path, NODE_PORTS[COORDINATOR_NAME], command)
 

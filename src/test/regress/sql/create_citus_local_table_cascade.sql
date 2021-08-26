@@ -9,7 +9,7 @@ SET search_path TO citus_add_local_table_to_metadata_cascade;
 SET client_min_messages to ERROR;
 
 -- ensure that coordinator is added to pg_dist_node
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 
 CREATE TABLE local_table_1 (col_1 INT UNIQUE);
 CREATE TABLE local_table_2 (col_1 INT UNIQUE);

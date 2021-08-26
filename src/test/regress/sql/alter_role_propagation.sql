@@ -9,11 +9,11 @@ SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcr
 ALTER ROLE CURRENT_USER WITH CONNECTION LIMIT 66 VALID UNTIL '2032-05-05' PASSWORD 'password456';
 SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
-SELECT master_remove_node('localhost', :worker_1_port);
+SELECT citus_remove_node('localhost', :worker_1_port);
 ALTER ROLE CURRENT_USER WITH CONNECTION LIMIT 0 VALID UNTIL '2052-05-05' PASSWORD 'password789';
 SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = 'alter_role_1';
 SELECT run_command_on_workers($$SELECT row(rolname, rolsuper, rolinherit,  rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls, rolconnlimit, rolpassword, EXTRACT (year FROM rolvaliduntil)) FROM pg_authid WHERE rolname = current_user$$);
 
@@ -24,7 +24,7 @@ SELECT run_command_on_workers('SHOW enable_indexonlyscan');
 SELECT run_command_on_workers('SHOW enable_hashagg');
 
 -- remove 1 node to verify settings are copied when the node gets added back
-SELECT master_remove_node('localhost', :worker_1_port);
+SELECT citus_remove_node('localhost', :worker_1_port);
 
 -- change a setting for all users
 ALTER ROLE ALL SET enable_hashjoin TO FALSE;
@@ -45,7 +45,7 @@ ALTER ROLE ALL SET public.myguc TO "Hello, World";
 ALTER ROLE CURRENT_USER SET lc_messages TO 'C';
 
 -- add worker and check all settings are copied
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 SELECT run_command_on_workers('SHOW enable_hashjoin');
 SELECT run_command_on_workers('SHOW enable_indexonlyscan');
 SELECT run_command_on_workers('SHOW enable_hashagg');
@@ -83,9 +83,9 @@ DROP DATABASE "REGRESSION";
 -- make sure alter role set is not propagated when the feature is deliberately turned off
 SET citus.enable_alter_role_set_propagation TO off;
 -- remove 1 node to verify settings are NOT copied when the node gets added back
-SELECT master_remove_node('localhost', :worker_1_port);
+SELECT citus_remove_node('localhost', :worker_1_port);
 ALTER ROLE ALL SET enable_hashjoin TO FALSE;
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 SELECT run_command_on_workers('SHOW enable_hashjoin');
 ALTER ROLE ALL RESET enable_hashjoin;
 SELECT run_command_on_workers('SHOW enable_hashjoin');

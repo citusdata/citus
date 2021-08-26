@@ -19,7 +19,7 @@ SELECT run_command_on_workers($$
 $$);
 
 -- remove a node to verify addition later
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 -- verify we can change the owner of a database
 ALTER DATABASE regression OWNER TO database_owner_1;
@@ -44,7 +44,7 @@ $$);
 SET citus.enable_alter_database_owner TO off;
 
 -- add back second node to verify the owner of the database was set accordingly
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 -- list the owners of the current database on all nodes, should reflect on newly added node
 SELECT run_command_on_workers($$
@@ -57,10 +57,10 @@ $$);
 
 -- turn on propagation to verify it does propagate to new nodes when enabled
 SET citus.enable_alter_database_owner TO on;
-SELECT master_remove_node('localhost', :worker_2_port); -- remove so we can re add with propagation on
+SELECT citus_remove_node('localhost', :worker_2_port); -- remove so we can re add with propagation on
 
 -- add back second node to verify the owner of the database was set accordingly
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 -- list the owners of the current database on all nodes, should reflect on newly added node
 SELECT run_command_on_workers($$

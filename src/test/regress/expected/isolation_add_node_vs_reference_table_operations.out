@@ -16,7 +16,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -42,7 +42,7 @@ nodeport|success|result
    57637|t      |    10
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -68,7 +68,7 @@ step s2-copy-to-reference-table:
  COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -91,7 +91,7 @@ nodeport|success|result
    57637|t      |    10
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -114,7 +114,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -140,7 +140,7 @@ nodeport|success|result
    57637|t      |     6
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -166,7 +166,7 @@ step s2-insert-to-reference-table:
  INSERT INTO test_reference_table VALUES (6);
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -189,7 +189,7 @@ nodeport|success|result
    57637|t      |     6
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -212,7 +212,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -239,7 +239,7 @@ nodeport|success|result
    57637|t      |     1
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -265,7 +265,7 @@ step s2-ddl-on-reference-table:
  CREATE INDEX reference_index ON test_reference_table(test_id);
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -289,7 +289,7 @@ nodeport|success|result
    57637|t      |     1
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -312,7 +312,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -345,7 +345,7 @@ nodeport|success|result
    57638|t      |     1
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -376,7 +376,7 @@ create_reference_table
 (1 row)
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -400,7 +400,7 @@ nodeport|success|result
    57637|t      |     1
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -420,7 +420,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -446,7 +446,7 @@ nodeport|success|result
    57637|t      |     5
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -469,7 +469,7 @@ step s2-copy-to-reference-table:
  COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -492,7 +492,7 @@ nodeport|success|result
    57637|t      |     5
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -512,7 +512,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -538,7 +538,7 @@ nodeport|success|result
    57637|t      |     1
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -561,7 +561,7 @@ step s2-insert-to-reference-table:
  INSERT INTO test_reference_table VALUES (6);
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -584,7 +584,7 @@ nodeport|success|result
    57637|t      |     1
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -604,7 +604,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -631,7 +631,7 @@ nodeport|success|result
    57637|t      |     1
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -654,7 +654,7 @@ step s2-ddl-on-reference-table:
  CREATE INDEX reference_index ON test_reference_table(test_id);
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -678,7 +678,7 @@ nodeport|success|result
    57637|t      |     1
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -698,7 +698,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -731,7 +731,7 @@ nodeport|success|result
    57638|t      |     1
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -759,7 +759,7 @@ create_reference_table
 (1 row)
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -783,7 +783,7 @@ nodeport|success|result
    57637|t      |     1
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -803,7 +803,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -831,7 +831,7 @@ nodeport|success|result
    57638|t      |     5
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -854,7 +854,7 @@ step s2-copy-to-reference-table:
  COPY test_reference_table FROM PROGRAM 'echo 1 && echo 2 && echo 3 && echo 4 && echo 5';
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -879,7 +879,7 @@ nodeport|success|result
    57638|t      |     5
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -899,7 +899,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -927,7 +927,7 @@ nodeport|success|result
    57638|t      |     1
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -950,7 +950,7 @@ step s2-insert-to-reference-table:
  INSERT INTO test_reference_table VALUES (6);
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -975,7 +975,7 @@ nodeport|success|result
    57638|t      |     1
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -995,7 +995,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1023,7 +1023,7 @@ nodeport|success|result
    57638|t      |     1
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -1046,7 +1046,7 @@ step s2-ddl-on-reference-table:
  CREATE INDEX reference_index ON test_reference_table(test_id);
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -1071,7 +1071,7 @@ nodeport|success|result
    57638|t      |     1
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -1091,7 +1091,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1124,7 +1124,7 @@ nodeport|success|result
    57638|t      |     1
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -1152,7 +1152,7 @@ create_reference_table
 (1 row)
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -1177,7 +1177,7 @@ nodeport|success|result
    57638|t      |     1
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -1194,7 +1194,7 @@ step s1-do-not-replicate-on-activate:
  SET citus.replicate_reference_tables_on_activate TO off;
 
 step s1-add-second-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1227,7 +1227,7 @@ replicate_reference_tables
 step s2-commit:
  COMMIT;
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 

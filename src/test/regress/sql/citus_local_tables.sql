@@ -14,7 +14,7 @@ SET search_path TO citus_local_tables_test_schema;
 
 -- ensure that coordinator is added to pg_dist_node
 SET client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
 CREATE TABLE citus_local_table_1 (a int);
@@ -23,12 +23,12 @@ CREATE TABLE citus_local_table_1 (a int);
 SELECT citus_add_local_table_to_metadata('citus_local_table_1');
 
 -- try to remove coordinator and observe failure as there exist a citus local table
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 DROP TABLE citus_local_table_1;
 
 -- this should work now as the citus local table is dropped
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 CREATE TABLE citus_local_table_1 (a int primary key);
 
@@ -37,7 +37,7 @@ SELECT citus_add_local_table_to_metadata('citus_local_table_1');
 
 -- let coordinator have citus local tables again for next tests
 set client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
 BEGIN;

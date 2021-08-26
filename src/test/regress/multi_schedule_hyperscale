@@ -214,7 +214,7 @@ test: multi_foreign_key
 # ----------
 #  tests for upgrade_reference_table UDF
 #  tests replicating reference tables to new nodes after we add new nodes
-#  tests metadata changes after master_remove_node
+#  tests metadata changes after citus_remove_node
 # ----------
 
 # --------

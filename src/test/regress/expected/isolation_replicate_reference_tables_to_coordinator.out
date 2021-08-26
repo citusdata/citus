@@ -53,7 +53,7 @@ step s1-end:
 step s2-end:
     END;
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -118,7 +118,7 @@ step s2-end:
 step s1-end:
     END;
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -160,7 +160,7 @@ step s1-end:
 step s2-end:
     END;
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

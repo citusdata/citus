@@ -1,6 +1,6 @@
 setup
 {
-    SELECT 1 FROM master_add_node('localhost', 57637);
+    SELECT 1 FROM citus_add_node('localhost', 57637);
 
     SET citus.shard_replication_factor TO 1;
     CREATE TABLE update_node(id integer primary key, f1 text);
@@ -12,7 +12,7 @@ teardown
     RESET citus.shard_replication_factor;
     DROP TABLE update_node CASCADE;
 
-    SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+    SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
     SELECT nodeid, nodename, nodeport from pg_dist_node;
 }
 

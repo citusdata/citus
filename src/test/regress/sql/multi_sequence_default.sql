@@ -380,5 +380,5 @@ SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA sequence_default CASCADE;
 SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT master_remove_node('localhost', :master_port);
+SELECT citus_remove_node('localhost', :master_port);
 SET search_path TO public;

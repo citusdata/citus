@@ -3,7 +3,7 @@ SET search_path TO mx_coordinator_shouldhaveshards;
 
 SET citus.shard_replication_factor to 1;
 SET client_min_messages TO WARNING;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 RESET client_min_messages;
 
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
@@ -90,4 +90,4 @@ SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhavesha
 SET client_min_messages TO ERROR;
 DROP SCHEMA mx_coordinator_shouldhaveshards CASCADE;
 
-SELECT master_remove_node('localhost', :master_port);
+SELECT citus_remove_node('localhost', :master_port);

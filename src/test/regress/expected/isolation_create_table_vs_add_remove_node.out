@@ -10,7 +10,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -57,7 +57,7 @@ x|y
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -74,7 +74,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -121,7 +121,7 @@ x|y
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -148,7 +148,7 @@ create_distributed_table
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -184,7 +184,7 @@ x|y
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -198,7 +198,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -209,9 +209,9 @@ step s1-begin:
  BEGIN;
 
 step s1-remove-node-2:
- SELECT * FROM master_remove_node('localhost', 57638);
+ SELECT * FROM citus_remove_node('localhost', 57638);
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -256,7 +256,7 @@ x|y
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -269,7 +269,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -280,9 +280,9 @@ step s1-begin:
  BEGIN;
 
 step s1-remove-node-2:
- SELECT * FROM master_remove_node('localhost', 57638);
+ SELECT * FROM citus_remove_node('localhost', 57638);
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -327,7 +327,7 @@ x|y
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -341,7 +341,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -363,7 +363,7 @@ create_distributed_table
 (1 row)
 
 step s1-remove-node-2:
- SELECT * FROM master_remove_node('localhost', 57638);
+ SELECT * FROM citus_remove_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -395,7 +395,7 @@ x|y
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -409,7 +409,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -420,9 +420,9 @@ step s1-begin:
  BEGIN;
 
 step s1-remove-node-2:
- SELECT * FROM master_remove_node('localhost', 57638);
+ SELECT * FROM citus_remove_node('localhost', 57638);
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -442,7 +442,7 @@ step s2-select:
  SELECT * FROM dist_table;
 
 ERROR:  relation "dist_table" does not exist
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -455,7 +455,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -477,7 +477,7 @@ create_distributed_table
 (1 row)
 
 step s1-remove-node-2:
- SELECT * FROM master_remove_node('localhost', 57638);
+ SELECT * FROM citus_remove_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -491,7 +491,7 @@ x|y
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -505,7 +505,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -516,9 +516,9 @@ step s1-begin:
  BEGIN;
 
 step s1-remove-node-2:
- SELECT * FROM master_remove_node('localhost', 57638);
+ SELECT * FROM citus_remove_node('localhost', 57638);
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -550,7 +550,7 @@ x|y
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -563,7 +563,7 @@ localhost|    57637
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -590,7 +590,7 @@ create_distributed_table
 (1 row)
 
 step s1-remove-node-2:
- SELECT * FROM master_remove_node('localhost', 57638);
+ SELECT * FROM citus_remove_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -604,7 +604,7 @@ x|y
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 

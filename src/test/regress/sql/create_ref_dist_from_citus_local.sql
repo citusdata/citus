@@ -9,7 +9,7 @@ SET search_path TO create_ref_dist_from_citus_local;
 SET client_min_messages to ERROR;
 
 -- ensure that coordinator is added to pg_dist_node
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 
 CREATE TABLE citus_local_table_1 (col_1 INT UNIQUE);
 CREATE TABLE citus_local_table_2 (col_1 INT UNIQUE);

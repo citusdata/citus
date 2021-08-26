@@ -10,7 +10,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -18,13 +18,13 @@ step s1-add-node-1:
 (1 row)
 
 step s2-remove-node-1:
- SELECT * FROM master_remove_node('localhost', 57637);
+ SELECT * FROM citus_remove_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
  COMMIT;
 
 step s2-remove-node-1: <... completed>
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -36,7 +36,7 @@ nodename|nodeport|isactive
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -51,7 +51,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -59,7 +59,7 @@ step s1-add-node-1:
 (1 row)
 
 step s2-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s1-commit: 
  COMMIT;
@@ -79,7 +79,7 @@ localhost|   57637|t
 localhost|   57638|t
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -96,7 +96,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -104,7 +104,7 @@ step s1-add-node-1:
 (1 row)
 
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
  COMMIT;
@@ -123,7 +123,7 @@ nodename |nodeport|isactive
 localhost|   57637|t
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -139,7 +139,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -147,7 +147,7 @@ step s1-add-node-1:
 (1 row)
 
 step s2-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s1-abort: 
  ABORT;
@@ -166,7 +166,7 @@ nodename |nodeport|isactive
 localhost|   57638|t
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -182,7 +182,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -190,7 +190,7 @@ step s1-add-node-1:
 (1 row)
 
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
  <waiting ...>
 step s1-abort: 
  ABORT;
@@ -209,7 +209,7 @@ nodename |nodeport|isactive
 localhost|   57637|t
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -222,7 +222,7 @@ starting permutation: s1-add-node-1 s1-add-node-2 s1-begin s1-remove-node-1 s2-r
 (1 row)
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -230,7 +230,7 @@ step s1-add-node-1:
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -241,21 +241,21 @@ step s1-begin:
  BEGIN;
 
 step s1-remove-node-1:
- SELECT * FROM master_remove_node('localhost', 57637);
+ SELECT * FROM citus_remove_node('localhost', 57637);
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 step s2-remove-node-2:
- SELECT * FROM master_remove_node('localhost', 57638);
+ SELECT * FROM citus_remove_node('localhost', 57638);
  <waiting ...>
 step s1-commit: 
  COMMIT;
 
 step s2-remove-node-2: <... completed>
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -267,7 +267,7 @@ nodename|nodeport|isactive
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -279,7 +279,7 @@ starting permutation: s1-add-node-1 s1-begin s1-remove-node-1 s2-remove-node-1 s
 (1 row)
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -290,15 +290,15 @@ step s1-begin:
  BEGIN;
 
 step s1-remove-node-1:
- SELECT * FROM master_remove_node('localhost', 57637);
+ SELECT * FROM citus_remove_node('localhost', 57637);
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 step s2-remove-node-1:
- SELECT * FROM master_remove_node('localhost', 57637);
+ SELECT * FROM citus_remove_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
  COMMIT;
@@ -312,7 +312,7 @@ nodename|nodeport|isactive
 ---------------------------------------------------------------------
 (0 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -324,7 +324,7 @@ starting permutation: s1-add-node-1 s1-begin s1-activate-node-1 s2-activate-node
 (1 row)
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -362,7 +362,7 @@ nodename |nodeport|isactive
 localhost|   57637|t
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -375,7 +375,7 @@ starting permutation: s1-add-node-1 s1-begin s1-disable-node-1 s2-disable-node-1
 (1 row)
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -413,7 +413,7 @@ nodename |nodeport|isactive
 localhost|   57637|f
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -464,7 +464,7 @@ nodename |nodeport|isactive
 localhost|   57637|t
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -515,7 +515,7 @@ nodename |nodeport|isactive
 localhost|   57637|f
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -528,7 +528,7 @@ starting permutation: s1-add-node-1 s1-begin s1-disable-node-1 s2-activate-node-
 (1 row)
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -566,7 +566,7 @@ nodename |nodeport|isactive
 localhost|   57637|t
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -579,7 +579,7 @@ starting permutation: s1-add-node-1 s1-begin s1-activate-node-1 s2-disable-node-
 (1 row)
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -617,7 +617,7 @@ nodename |nodeport|isactive
 localhost|   57637|f
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -668,7 +668,7 @@ nodename |nodeport|isactive
 localhost|   57637|t
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -719,7 +719,7 @@ nodename |nodeport|isactive
 localhost|   57637|f
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -770,7 +770,7 @@ nodename |nodeport|isactive
 localhost|   57637|f
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -783,7 +783,7 @@ starting permutation: s1-add-node-1 s1-begin s1-disable-node-1 s2-disable-node-1
 (1 row)
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -821,7 +821,7 @@ nodename |nodeport|isactive
 localhost|   57637|f
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

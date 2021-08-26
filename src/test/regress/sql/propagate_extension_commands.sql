@@ -91,7 +91,7 @@ DROP EXTENSION seg CASCADE;
 -- before remove, first remove the existing relations (due to the other tests)
 
 DROP SCHEMA "extension'test" CASCADE;
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
 
 -- then create the extension
 CREATE EXTENSION seg;
@@ -140,7 +140,7 @@ SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHE
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'dict_int'$$);
 
 -- and add the other node
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
 
 -- show that the extension is created on both existing and new node
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'seg'$$);
@@ -222,7 +222,7 @@ CREATE SCHEMA "extension'test";
 SET search_path TO "extension'test";
 
 -- remove the node, we'll add back again
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
 
 -- now, create a type that depends on another type, which
 -- finally depends on an extension
@@ -243,7 +243,7 @@ BEGIN;
 COMMIT;
 
 -- add the node back
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
 
 -- make sure that both extensions are created on both nodes
 SELECT count(*) FROM citus.pg_dist_object WHERE objid IN (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));

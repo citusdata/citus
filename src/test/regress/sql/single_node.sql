@@ -16,7 +16,7 @@ SELECT 1 FROM master_disable_node('localhost', :master_port);
 
 RESET client_min_messages;
 
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 SELECT count(*) FROM pg_dist_node;
 
@@ -30,7 +30,7 @@ SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, met
 DROP TABLE ref;
 
 -- remove the coordinator to try again with create_reference_table
-SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
 
 CREATE TABLE loc(x int, y int);
 SELECT citus_add_local_table_to_metadata('loc');
@@ -40,7 +40,7 @@ SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, met
 DROP TABLE loc;
 
 -- remove the coordinator to try again with create_distributed_table
-SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
 
 -- verify the coordinator gets auto added with the localhost guc
 ALTER SYSTEM SET citus.local_hostname TO '127.0.0.1'; --although not a hostname, should work for connecting locally
@@ -53,7 +53,7 @@ SELECT create_distributed_table('test','x');
 SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
 DROP TABLE test;
 -- remove the coordinator to try again
-SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
 
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
@@ -65,18 +65,18 @@ SELECT create_distributed_table('test','x');
 SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
 
 -- cannot add workers with specific IP as long as I have a placeholder coordinator record
-SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+SELECT 1 FROM citus_add_node('127.0.0.1', :worker_1_port);
 
 -- adding localhost workers is ok
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
-SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
 
 -- set the coordinator host to something different than localhost
 SELECT 1 FROM citus_set_coordinator_host('127.0.0.1');
 
 -- adding workers with specific IP is ok now
-SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
-SELECT 1 FROM master_remove_node('127.0.0.1', :worker_1_port);
+SELECT 1 FROM citus_add_node('127.0.0.1', :worker_1_port);
+SELECT 1 FROM citus_remove_node('127.0.0.1', :worker_1_port);
 
 -- set the coordinator host back to localhost for the remainder of tests
 SELECT 1 FROM citus_set_coordinator_host('localhost');
@@ -1017,12 +1017,12 @@ SELECT pg_reload_conf();
 SET client_min_messages TO error;
 
 -- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 -- Cleanup
 DROP SCHEMA single_node CASCADE;
 -- Remove the coordinator again
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 -- restart nodeid sequence so that multi_cluster_management still has the same
 -- nodeids
 ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 1;

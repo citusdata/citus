@@ -19,7 +19,7 @@ SELECT create_distributed_table('dist_table_test', 'a');
 CREATE TABLE postgres_table_test(a int primary key);
 -- make sure that all rebalance operations works fine when
 -- reference tables are replicated to the coordinator
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
 NOTICE:  Replicating reference table "ref_table_test" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------
@@ -2074,7 +2074,7 @@ SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaves
 
 DROP TABLE tab;
 -- we don't need the coordinator on pg_dist_node anymore
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2103,7 +2103,7 @@ SELECT create_reference_table('ref_table');
 
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2133,7 +2133,7 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
      3
 (1 row)
 
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2147,7 +2147,7 @@ SELECT master_create_distributed_table('rebalance_test_table', 'int_column', 'ap
 (1 row)
 
 CALL create_unbalanced_shards('rebalance_test_table');
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2173,7 +2173,7 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 (1 row)
 
 DROP TABLE dist_table_test_3, rebalance_test_table, ref_table;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2188,7 +2188,7 @@ CREATE TABLE r1 (a int PRIMARY KEY, b int);
 CREATE TABLE r2 (a int, b int);
 -- we remove worker 2 before creating the tables, this will allow us to have an active
 -- node without the reference tables
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2215,7 +2215,7 @@ SELECT create_reference_table('r2');
 -- add data so to actually copy data when forcing logical replication for reference tables
 INSERT INTO r1 VALUES (1,2), (3,4);
 INSERT INTO r2 VALUES (1,2), (3,4);
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2239,7 +2239,7 @@ SELECT count(*) FROM pg_dist_partition;
 
 -- verify a system having only reference tables will copy the reference tables when
 -- executing the rebalancer
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2252,7 +2252,7 @@ SELECT create_reference_table('r1');
 
 (1 row)
 
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2292,7 +2292,7 @@ DROP TABLE r1;
 -- lastly we need to verify that reference tables are copied before the replication factor
 -- of other tables is increased. Without the copy of reference tables the replication might
 -- fail.
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2312,7 +2312,7 @@ SELECT create_reference_table('r1');
 
 (1 row)
 
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1

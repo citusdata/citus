@@ -127,17 +127,17 @@ SELECT count(*) FROM mx_table;
 SELECT 1 FROM master_add_inactive_node('localhost', 5432);
 SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
--- master_remove_node
+-- citus_remove_node
 \c - - - :master_port
 DROP INDEX mx_test_uniq_index;
 SELECT 1 FROM master_add_inactive_node('localhost', 5432);
 
 \c - - - :worker_1_port
-SELECT master_remove_node('localhost', 5432);
+SELECT citus_remove_node('localhost', 5432);
 SELECT count(1) FROM pg_dist_node WHERE nodename='localhost' AND nodeport=5432;
 
 \c - - - :master_port
-SELECT master_remove_node('localhost', 5432);
+SELECT citus_remove_node('localhost', 5432);
 
 \c - - - :worker_1_port
 

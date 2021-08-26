@@ -1,6 +1,6 @@
 setup
 {
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM citus_add_node('localhost', 57638);
 
 	create schema if not exists schema1;
 	create schema if not exists schema2;
@@ -9,7 +9,7 @@ setup
 
 teardown
 {
-  SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+  SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
 session "s1"
@@ -21,12 +21,12 @@ step "s1-begin"
 
 step "s1-add-node-1"
 {
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM citus_add_node('localhost', 57637);
 }
 
 step "s1-remove-node-1"
 {
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM citus_remove_node('localhost', 57637);
 }
 
 step "s1-commit"
@@ -57,7 +57,7 @@ step "s2-begin"
 
 step "s2-add-node-1"
 {
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM citus_add_node('localhost', 57637);
 }
 
 step "s2-create-extension-version-11"
@@ -102,7 +102,7 @@ step "s2-commit"
 
 step "s2-remove-node-1"
 {
-	SELECT 1 FROM master_remove_node('localhost', 57637);
+	SELECT 1 FROM citus_remove_node('localhost', 57637);
 }
 
 // master_//_node vs extension command

@@ -429,7 +429,7 @@ ORDER BY conname;
 
 -- test different table types
 SET client_min_messages to WARNING;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId := 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId := 0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -801,7 +801,7 @@ DEBUG:  pathlist hook for columnar table am
 RESET client_min_messages;
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1

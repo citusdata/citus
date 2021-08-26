@@ -18,7 +18,7 @@ WHERE tablename=logicalrelid::regclass::text AND
 
 -- remove coordinator if it is added to pg_dist_node and test
 -- behavior when coordinator is not added to metadata
-SELECT COUNT(master_remove_node(nodename, nodeport)) < 2
+SELECT COUNT(citus_remove_node(nodename, nodeport)) < 2
 FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:master_port;
 
 create table ref (a int primary key);
@@ -47,7 +47,7 @@ drop table if exists ref, ref2, other cascade;
 
 
 -- add coordinator to pg_dist_node for rest of the tests
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 
 CREATE TABLE local_table_1 (col_1 INT UNIQUE);
 CREATE TABLE local_table_2 (col_1 INT UNIQUE);

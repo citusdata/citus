@@ -1,12 +1,12 @@
 \c - - - :master_port
 -- do some setup
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -78,7 +78,7 @@ SELECT * FROM the_table;
 ERROR:  node group does not have a secondary node
 -- add the secondary nodes and try again, the SELECT statement should work this time
 \c -reuse-previous=off regression - - :master_port
-SELECT 1 FROM master_add_node('localhost', :follower_worker_1_port,
+SELECT 1 FROM citus_add_node('localhost', :follower_worker_1_port,
   groupid => (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_1_port),
   noderole => 'secondary');
  ?column?
@@ -86,7 +86,7 @@ SELECT 1 FROM master_add_node('localhost', :follower_worker_1_port,
         1
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :follower_worker_2_port,
+SELECT 1 FROM citus_add_node('localhost', :follower_worker_2_port,
   groupid => (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port),
   noderole => 'secondary');
  ?column?

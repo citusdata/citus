@@ -212,7 +212,7 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 
 BEGIN;
-  SELECT master_add_node('localhost', :master_port, groupId=>0);
+  SELECT citus_add_node('localhost', :master_port, groupId=>0);
   CREATE TABLE citus_local_table (a int);
   SELECT create_citus_local_table('citus_local_table');
 
@@ -522,7 +522,7 @@ CREATE DATABASE another;
 \c another
 CREATE EXTENSION citus;
 SET citus.enable_object_propagation TO off; -- prevent distributed transactions during add node
-SELECT FROM master_add_node('localhost', :worker_1_port);
+SELECT FROM citus_add_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
 CREATE EXTENSION citus;

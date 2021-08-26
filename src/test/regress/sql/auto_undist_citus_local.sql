@@ -6,7 +6,7 @@ SET search_path TO drop_fkey_cascade;
 SET client_min_messages TO WARNING;
 SET citus.next_shard_id TO 1810000;
 
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 
 -- show that DROP CONSTRAINT cascades to undistributing citus_local_table
 CREATE TABLE citus_local_table(l1 int);

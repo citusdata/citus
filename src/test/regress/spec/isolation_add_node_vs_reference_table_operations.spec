@@ -3,7 +3,7 @@
 setup
 {
 	SET citus.shard_replication_factor to 1;
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM citus_add_node('localhost', 57637);
 
 	CREATE TABLE test_reference_table (test_id integer);
 	CREATE TABLE test_reference_table_2 (test_id integer);
@@ -19,7 +19,7 @@ teardown
 	DROP TABLE IF EXISTS test_reference_table;
 	DROP TABLE IF EXISTS test_reference_table_2;
 	DROP TABLE IF EXISTS test_table;
-	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+	SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
 session "s1"
@@ -41,7 +41,7 @@ step "s1-do-not-replicate-on-activate"
 
 step "s1-add-second-worker"
 {
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM citus_add_node('localhost', 57638);
 }
 
 step "s1-drop-reference-table"

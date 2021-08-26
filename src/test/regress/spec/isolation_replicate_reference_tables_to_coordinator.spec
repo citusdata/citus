@@ -3,7 +3,7 @@ setup
   SELECT citus_internal.replace_isolation_tester_func();
   SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
-  SELECT master_add_node('localhost', 57636);
+  SELECT citus_add_node('localhost', 57636);
 
   CREATE TABLE ref_table(a int primary key);
   SELECT create_reference_table('ref_table');
@@ -17,7 +17,7 @@ teardown
 {
   SELECT citus_internal.restore_isolation_tester_func();
   DROP TABLE ref_table, dist_table;
-  SELECT master_remove_node('localhost', 57636);
+  SELECT citus_remove_node('localhost', 57636);
 }
 
 session "s1"

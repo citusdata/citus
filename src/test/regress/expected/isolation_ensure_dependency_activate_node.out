@@ -7,7 +7,7 @@ starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-pub
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -19,7 +19,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -66,7 +66,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -75,7 +75,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -153,7 +153,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -167,7 +167,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-work
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -179,7 +179,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -226,7 +226,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -238,7 +238,7 @@ step s2-begin:
  BEGIN;
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -319,7 +319,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -333,7 +333,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-public-s
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -345,7 +345,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -392,7 +392,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -418,7 +418,7 @@ create_distributed_table
 (1 row)
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -485,7 +485,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -499,7 +499,7 @@ starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-cre
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -511,7 +511,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -558,7 +558,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -567,7 +567,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -647,7 +647,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -661,7 +661,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-work
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -673,7 +673,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -720,7 +720,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -732,7 +732,7 @@ step s2-begin:
  BEGIN;
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -815,7 +815,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -829,7 +829,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-s
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -841,7 +841,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -888,7 +888,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -915,7 +915,7 @@ create_distributed_table
 (1 row)
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -983,7 +983,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -997,7 +997,7 @@ starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1009,7 +1009,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1056,7 +1056,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1075,7 +1075,7 @@ step s3-begin:
  BEGIN;
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1172,7 +1172,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -1186,7 +1186,7 @@ starting permutation: s1-print-distributed-objects s1-add-worker s2-create-schem
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1198,7 +1198,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1245,13 +1245,13 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1354,7 +1354,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -1368,7 +1368,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s3-begin s1
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1380,7 +1380,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1427,7 +1427,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1442,7 +1442,7 @@ step s3-begin:
  BEGIN;
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1545,7 +1545,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -1559,7 +1559,7 @@ starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-pub
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1571,7 +1571,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1618,7 +1618,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1627,7 +1627,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1698,7 +1698,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -1712,7 +1712,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1724,7 +1724,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1771,7 +1771,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1786,7 +1786,7 @@ step s2-create-type:
  CREATE TYPE tt1 AS (a int, b int);
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1850,7 +1850,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -1864,7 +1864,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-s
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -1876,7 +1876,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -1923,7 +1923,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1953,7 +1953,7 @@ create_distributed_table
 (1 row)
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -2022,7 +2022,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -2036,7 +2036,7 @@ starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-pub
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -2048,7 +2048,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -2095,7 +2095,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -2104,7 +2104,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -2195,7 +2195,7 @@ run_command_on_workers
 (localhost,57638,t,1)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -2209,7 +2209,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -2221,7 +2221,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -2268,7 +2268,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -2303,7 +2303,7 @@ wait_until_metadata_sync
 (1 row)
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -2375,7 +2375,7 @@ run_command_on_workers
 (localhost,57638,t,1)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -2389,7 +2389,7 @@ starting permutation: s1-print-distributed-objects s2-begin s2-create-schema s2-
 (1 row)
 
 step s1-print-distributed-objects:
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
@@ -2401,7 +2401,7 @@ step s1-print-distributed-objects:
     -- print if the function has been created
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -2448,7 +2448,7 @@ run_command_on_workers
 (localhost,57638,t,0)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -2484,7 +2484,7 @@ step s1-begin:
     BEGIN;
 
 step s1-add-worker:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -2557,7 +2557,7 @@ run_command_on_workers
 (localhost,57638,t,1)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 

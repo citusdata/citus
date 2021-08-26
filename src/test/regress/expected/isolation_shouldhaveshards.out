@@ -7,7 +7,7 @@ starting permutation: s1-add-second-node s1-begin s2-begin s2-create-distributed
 (1 row)
 
 step s1-add-second-node:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -57,7 +57,7 @@ nodeport|count
    57638|    2
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -71,7 +71,7 @@ starting permutation: s1-add-second-node s1-begin s2-begin s1-noshards s2-create
 (1 row)
 
 step s1-add-second-node:
- SELECT 1 FROM master_add_node('localhost', 57638);
+ SELECT 1 FROM citus_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -120,7 +120,7 @@ nodeport|count
    57638|    4
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -162,7 +162,7 @@ master_update_node
 step s2-commit:
  COMMIT;
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -199,7 +199,7 @@ ERROR:  node at "localhost:xxxxx" does not exist
 step s1-commit:
  COMMIT;
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

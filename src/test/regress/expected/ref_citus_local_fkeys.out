@@ -7,7 +7,7 @@ CREATE SCHEMA ref_citus_local_fkeys;
 SET search_path TO ref_citus_local_fkeys;
 -- ensure that coordinator is added to pg_dist_node
 SET client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -130,7 +130,7 @@ NOTICE:  executing the command locally: DROP TABLE IF EXISTS ref_citus_local_fke
 -- first remove worker_2 to test the behavior when replicating a
 -- reference table that has a foreign key to a citus local table
 -- to a new node
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -197,7 +197,7 @@ ERROR:  insert or update on table "reference_table_1506007" violates foreign key
 -- enable the worker_2 to show that we don't try to set up the foreign keys
 -- between reference tables and citus local tables in worker_2 placements of
 -- the reference tables
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "reference_table" to the node localhost:xxxxx
  ?column?
 ---------------------------------------------------------------------

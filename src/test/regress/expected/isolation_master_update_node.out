@@ -24,7 +24,7 @@ master_update_node
 (1 row)
 
 step s2-abort: ABORT;
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -60,7 +60,7 @@ server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 

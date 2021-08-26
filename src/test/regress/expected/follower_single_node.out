@@ -7,7 +7,7 @@ SET search_path TO single_node;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 93630500;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -238,7 +238,7 @@ ERROR:  node group 0 does not have a secondary node
 -- should work this time
 \c -reuse-previous=off regression - - :master_port
 SET search_path TO single_node;
-SELECT 1 FROM master_add_node('localhost', :follower_master_port, groupid => 0, noderole => 'secondary');
+SELECT 1 FROM citus_add_node('localhost', :follower_master_port, groupid => 0, noderole => 'secondary');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -392,14 +392,14 @@ SET search_path TO single_node;
 SET client_min_messages TO WARNING;
 DROP SCHEMA single_node CASCADE;
 -- Remove the coordinator again
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 -- Remove the secondary coordinator again
-SELECT 1 FROM master_remove_node('localhost', :follower_master_port);
+SELECT 1 FROM citus_remove_node('localhost', :follower_master_port);
  ?column?
 ---------------------------------------------------------------------
         1

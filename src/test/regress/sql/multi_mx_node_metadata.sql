@@ -51,7 +51,7 @@ begin
 end$$ LANGUAGE plpgsql;
 
 -- add a node to the cluster
-SELECT master_add_node('localhost', :worker_1_port) As nodeid_1 \gset
+SELECT citus_add_node('localhost', :worker_1_port) As nodeid_1 \gset
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
 
 -- create couple of tables
@@ -170,7 +170,7 @@ SELECT create_reference_table('some_ref_table');
 INSERT INTO some_ref_table (a) SELECT i FROM generate_series(0,10)i;
 
 BEGIN;
-	SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
+	SELECT citus_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
 	SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
 
   -- and modifications can be read from any worker in the same transaction
@@ -355,7 +355,7 @@ CREATE EXTENSION citus;
 
 \c db_to_drop - - :master_port
 CREATE EXTENSION citus;
-SELECT master_add_node('localhost', :worker_1_port);
+SELECT citus_add_node('localhost', :worker_1_port);
 UPDATE pg_dist_node SET hasmetadata = true;
 
 SELECT master_update_node(nodeid, 'localhost', 12345) FROM pg_dist_node;
@@ -380,7 +380,7 @@ DROP SEQUENCE sequence CASCADE;
 DROP TABLE ref_table;
 DROP TABLE reference_table;
 TRUNCATE pg_dist_colocation;
-SELECT count(*) FROM (SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node) t;
+SELECT count(*) FROM (SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node) t;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;

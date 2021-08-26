@@ -5,7 +5,7 @@ SET citus.next_shard_id TO 1220000;
 -- verify we recover transactions which do DML on coordinator placements
 -- properly.
 SET client_min_messages TO ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 RESET client_min_messages;
 
 -- enforce 1 connection per placement since
@@ -261,4 +261,4 @@ DROP TABLE test_recovery_single;
 DROP TABLE test_2pcskip;
 DROP TABLE test_reference;
 
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);

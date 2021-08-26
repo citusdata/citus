@@ -12,7 +12,7 @@ SET citus.enable_alter_role_propagation TO ON;
 -- alter role for other than the extension owner works in enterprise, output differs accordingly
 ALTER ROLE reprefuser WITH CREATEDB;
 
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 
 -- test that coordinator pg_dist_node entry is synced to the workers
 SELECT wait_until_metadata_sync(30000);
@@ -157,7 +157,7 @@ alter table distributed_table ALTER COLUMN value_1 TYPE int;
 SET client_min_messages TO error;
 
 DROP TABLE distributed_table, referece_table, local_fkey_table;
-SELECT master_remove_node('localhost', :master_port);
+SELECT citus_remove_node('localhost', :master_port);
 
 -- test that coordinator pg_dist_node entry was removed from the workers
 SELECT wait_until_metadata_sync(30000);

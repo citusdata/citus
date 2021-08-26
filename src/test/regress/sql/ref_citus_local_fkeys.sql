@@ -10,7 +10,7 @@ SET search_path TO ref_citus_local_fkeys;
 
 -- ensure that coordinator is added to pg_dist_node
 SET client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
 -- create test tables
@@ -85,7 +85,7 @@ DROP TABLE citus_local_table, reference_table;
 -- first remove worker_2 to test the behavior when replicating a
 -- reference table that has a foreign key to a citus local table
 -- to a new node
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port);
 
 -- create test tables
 CREATE TABLE citus_local_table(l1 int primary key);
@@ -128,7 +128,7 @@ INSERT INTO reference_table VALUES (4);
 -- enable the worker_2 to show that we don't try to set up the foreign keys
 -- between reference tables and citus local tables in worker_2 placements of
 -- the reference tables
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 -- show that we support drop constraint
 BEGIN;

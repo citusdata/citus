@@ -6,7 +6,7 @@ SET citus.next_shard_id TO 1503000;
 
 -- idempotently add node to allow this test to run without add_coordinator
 SET client_min_messages TO WARNING;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 RESET client_min_messages;
 
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);

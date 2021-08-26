@@ -10,7 +10,7 @@ SET search_path TO undistribute_table_cascade_mx;
 SET client_min_messages to ERROR;
 
 -- ensure that coordinator is added to pg_dist_node
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 
 -- ensure that we sync metadata to worker 1 & 2
 SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_1_port);

@@ -25,8 +25,8 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 -- SET client_min_messages TO log;
 -- remove worker 2, so we can add it after we have created some functions that caused
 -- problems
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -60,7 +60,7 @@ SELECT create_distributed_function('zoop(int)', '$1');
 (1 row)
 
 -- now add the worker back, this triggers function distribution which should not fail.
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -167,7 +167,7 @@ drop cascades to function my_group_id()
 -- make sure the worker is added at the end irregardless of anything failing to not make
 -- subsequent tests fail as well. All artifacts created during this test should have been
 -- dropped by the drop cascade above.
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1

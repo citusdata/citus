@@ -7,15 +7,15 @@ setup
     LANGUAGE C STRICT VOLATILE
     AS 'citus', $$wait_until_metadata_sync$$;
 
-    SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
-    SELECT 1 FROM master_add_node('localhost', 57637);
+    SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
+    SELECT 1 FROM citus_add_node('localhost', 57637);
 }
 
 // ensure that both nodes exists for the remaining of the isolation tests
 teardown
 {
-    SELECT 1 FROM master_add_node('localhost', 57637);
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57637);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
 
     -- schema drops are not cascaded
     SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
@@ -30,7 +30,7 @@ teardown
     DROP TYPE IF EXISTS tt1 CASCADE;
     DROP FUNCTION IF EXISTS add(INT,INT) CASCADE;
 
-    SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+    SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
 session "s1"
@@ -42,7 +42,7 @@ step "s1-begin"
 
 step "s1-add-worker"
 {
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM citus_add_node('localhost', 57638);
 }
 
 step "s1-commit"
@@ -54,7 +54,7 @@ step "s1-commit"
 // on that node as well. After counting objects is done we remove the node again.
 step "s1-print-distributed-objects"
 {
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
 
     -- print an overview of all distributed objects
     SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
@@ -71,7 +71,7 @@ step "s1-print-distributed-objects"
     SELECT count(*) FROM pg_proc WHERE proname='add';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='add';$$);
 
-    SELECT master_remove_node('localhost', 57638);
+    SELECT citus_remove_node('localhost', 57638);
 }
 
 session "s2"

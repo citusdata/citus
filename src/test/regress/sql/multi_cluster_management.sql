@@ -6,26 +6,26 @@ SET citus.enable_object_propagation TO off; -- prevent object propagation on add
 -- Tests functions related to cluster membership
 
 -- add the nodes to the cluster
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
 
 -- try to add a node that is already in the cluster
-SELECT * FROM master_add_node('localhost', :worker_1_port);
+SELECT * FROM citus_add_node('localhost', :worker_1_port);
 
 -- get the active nodes
 SELECT master_get_active_worker_nodes();
 
 -- try to remove a node (with no placements)
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 -- verify that the node has been deleted
 SELECT master_get_active_worker_nodes();
 
 -- try to disable a node with no placements see that node is removed
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 SELECT master_disable_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
@@ -46,7 +46,7 @@ SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
 
 -- try to remove a node with active placements and see that node removal is failed
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- insert a row so that master_disable_node() exercises closing connections
@@ -74,10 +74,10 @@ CREATE USER non_super_user;
 CREATE USER node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION citus_add_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION citus_remove_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_metadata_user;
 
 -- Removing public schema from pg_dist_object because it breaks the next tests
@@ -88,8 +88,8 @@ SET ROLE non_super_user;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_2_port);
 SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
@@ -100,8 +100,8 @@ BEGIN;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM citus_remove_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_2_port);
 SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
@@ -117,7 +117,7 @@ SELECT master_get_active_worker_nodes();
 SELECT * FROM master_activate_node('localhost', :worker_2_port);
 
 -- try to remove a node with active placements and see that node removal is failed
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 -- mark all placements in the candidate node as inactive
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
@@ -125,7 +125,7 @@ UPDATE pg_dist_placement SET shardstate=3 WHERE groupid=:worker_2_group;
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
 
 -- try to remove a node with only inactive placements and see that removal still fails
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
 -- mark all placements in the candidate node as to be deleted
@@ -140,15 +140,15 @@ SELECT logicalrelid, shardid, shardstate, nodename, nodeport FROM pg_dist_shard_
 
 SELECT * INTO removed_placements FROM pg_dist_placement WHERE shardstate = 4;
 -- try to remove a node with only to be deleted placements and see that removal succeeds
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
-SELECT master_add_node('localhost', :worker_2_port, groupId := :worker_2_group);
+SELECT citus_add_node('localhost', :worker_2_port, groupId := :worker_2_group);
 -- put removed placements back for testing purposes(in practice we wouldn't have only old placements for a shard)
 INSERT INTO pg_dist_placement SELECT * FROM removed_placements;
 
 -- clean-up
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 UPDATE pg_dist_placement SET shardstate=1 WHERE groupid=:worker_2_group;
 SET client_min_messages TO ERROR;
 DROP TABLE cluster_management_test_colocated;
@@ -163,26 +163,26 @@ DELETE FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT * FROM cluster_management_test;
 
 -- clean-up
-SELECT master_add_node('localhost', :worker_2_port) AS new_node \gset
+SELECT citus_add_node('localhost', :worker_2_port) AS new_node \gset
 SELECT groupid AS new_group FROM pg_dist_node WHERE nodeid = :new_node \gset
 UPDATE pg_dist_placement SET groupid = :new_group WHERE groupid = :worker_2_group;
 
 -- test that you are allowed to remove secondary nodes even if there are placements
-SELECT 1 FROM master_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
-SELECT master_remove_node('localhost', :worker_2_port);
-SELECT master_remove_node('localhost', 9990);
+SELECT 1 FROM citus_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
+SELECT citus_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', 9990);
 
 -- clean-up
 DROP TABLE cluster_management_test;
 
 -- check that adding/removing nodes are propagated to nodes with metadata
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
@@ -190,7 +190,7 @@ SET citus.enable_object_propagation TO off; -- prevent object propagation on add
 
 -- check that added nodes are not propagated to nodes without metadata
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
@@ -198,30 +198,30 @@ SET citus.enable_object_propagation TO off; -- prevent object propagation on add
 
 -- check that removing two nodes in the same transaction works
 SELECT
-	master_remove_node('localhost', :worker_1_port),
-	master_remove_node('localhost', :worker_2_port);
+	citus_remove_node('localhost', :worker_1_port),
+	citus_remove_node('localhost', :worker_2_port);
 SELECT count(1) FROM pg_dist_node;
 
 -- check that adding two nodes in the same transaction works
 SELECT
-	master_add_node('localhost', :worker_1_port),
-	master_add_node('localhost', :worker_2_port);
+	citus_add_node('localhost', :worker_1_port),
+	citus_add_node('localhost', :worker_2_port);
 SELECT * FROM pg_dist_node ORDER BY nodeid;
 
 -- check that mixed add/remove node commands work fine inside transaction
 BEGIN;
-SELECT master_remove_node('localhost', :worker_2_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 COMMIT;
 
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 BEGIN;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-SELECT master_remove_node('localhost', :worker_2_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 COMMIT;
 
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
@@ -231,16 +231,16 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 \c - - - :master_port
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
-SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 -- check that a distributed table can be created after adding a node in a transaction
 SET citus.shard_count TO 4;
 
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 BEGIN;
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 CREATE TABLE temp(col1 text, col2 int);
 SELECT create_distributed_table('temp', 'col1');
 INSERT INTO temp VALUES ('row1', 1);
@@ -271,16 +271,16 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 -- check that you can't add a primary to a non-default cluster
-SELECT master_add_node('localhost', 9999, nodecluster => 'olap');
+SELECT citus_add_node('localhost', 9999, nodecluster => 'olap');
 
 -- check that you can't add more than one primary to a group
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
-SELECT master_add_node('localhost', 9999, groupid => :worker_1_group, noderole => 'primary');
+SELECT citus_add_node('localhost', 9999, groupid => :worker_1_group, noderole => 'primary');
 
 -- check that you can add secondaries and unavailable nodes to a group
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
-SELECT 1 FROM master_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
-SELECT 1 FROM master_add_node('localhost', 9997, groupid => :worker_1_group, noderole => 'unavailable');
+SELECT 1 FROM citus_add_node('localhost', 9998, groupid => :worker_1_group, noderole => 'secondary');
+SELECT 1 FROM citus_add_node('localhost', 9997, groupid => :worker_1_group, noderole => 'unavailable');
 -- add_inactive_node also works with secondaries
 SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_group, noderole => 'secondary');
 
@@ -288,7 +288,7 @@ SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_g
 SELECT master_add_inactive_node('localhost', 9999, groupid => :worker_2_group, nodecluster => 'olap', noderole => 'secondary');
 SELECT master_activate_node('localhost', 9999);
 SELECT master_disable_node('localhost', 9999);
-SELECT master_remove_node('localhost', 9999);
+SELECT citus_remove_node('localhost', 9999);
 
 -- check that you can't manually add two primaries to a group
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole)
@@ -304,10 +304,10 @@ UPDATE pg_dist_node SET nodecluster = 'olap'
 
 -- check that you /can/ add a secondary node to a non-default cluster
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
-SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
+SELECT citus_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary', nodecluster=> 'olap');
 
 -- check that super-long cluster names are truncated
-SELECT master_add_node('localhost', 8887, groupid => :worker_1_group, noderole => 'secondary', nodecluster=>
+SELECT citus_add_node('localhost', 8887, groupid => :worker_1_group, noderole => 'secondary', nodecluster=>
 	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
 	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'
 	'thisisasixtyfourcharacterstringrepeatedfourtimestomake256chars.'

@@ -1,6 +1,6 @@
 setup
 {
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM citus_add_node('localhost', 57637);
 	SELECT * FROM master_get_active_worker_nodes() ORDER BY node_name, node_port;
 }
 
@@ -8,7 +8,7 @@ teardown
 {
 	DROP TABLE IF EXISTS dist_table;
 
-	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+	SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
 session "s1"
@@ -20,12 +20,12 @@ step "s1-begin"
 
 step "s1-add-node-2"
 {
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM citus_add_node('localhost', 57638);
 }
 
 step "s1-remove-node-2"
 {
-	SELECT * FROM master_remove_node('localhost', 57638);
+	SELECT * FROM citus_remove_node('localhost', 57638);
 }
 
 step "s1-abort"

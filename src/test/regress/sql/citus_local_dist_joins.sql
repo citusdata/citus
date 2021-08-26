@@ -2,7 +2,7 @@ CREATE SCHEMA citus_local_dist_joins;
 SET search_path TO citus_local_dist_joins;
 
 SET client_min_messages to ERROR;
-SELECT master_add_node('localhost', :master_port, groupId => 0) AS coordinator_nodeid \gset
+SELECT citus_add_node('localhost', :master_port, groupId => 0) AS coordinator_nodeid \gset
 
 
 CREATE TABLE citus_local(key int, value text);
@@ -253,6 +253,6 @@ USING (key);
 
 SET client_min_messages to ERROR;
 DROP TABLE citus_local;
-SELECT master_remove_node('localhost', :master_port);
+SELECT citus_remove_node('localhost', :master_port);
 \set VERBOSITY terse
 DROP SCHEMA citus_local_dist_joins CASCADE;

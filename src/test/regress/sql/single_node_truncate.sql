@@ -57,7 +57,7 @@ DROP VIEW table_sizes;
 DROP SCHEMA single_node_truncate CASCADE;
 
 -- Remove the coordinator
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 -- restart nodeid sequence so that multi_cluster_management still has the same
 -- nodeids
 ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART 1;

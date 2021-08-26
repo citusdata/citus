@@ -10,7 +10,7 @@ SET search_path TO citus_local_tables_mx;
 
 -- ensure that coordinator is added to pg_dist_node
 SET client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
 --------------

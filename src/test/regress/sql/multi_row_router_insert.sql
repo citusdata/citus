@@ -9,7 +9,7 @@ CREATE SCHEMA multi_row_router_insert;
 SET search_path TO multi_row_router_insert;
 
 SET client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
 -- when using local execution, multi-row & router inserts works fine

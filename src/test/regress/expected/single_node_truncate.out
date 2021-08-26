@@ -136,7 +136,7 @@ DROP TABLE ref, dist, citus_local;
 DROP VIEW table_sizes;
 DROP SCHEMA single_node_truncate CASCADE;
 -- Remove the coordinator
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1

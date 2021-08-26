@@ -366,12 +366,12 @@ ORDER BY
 SET client_min_messages TO WARNING;
 
 -- try using the coordinator as a worker and then dropping the table
-SELECT 1 FROM master_add_node('localhost', :master_port);
+SELECT 1 FROM citus_add_node('localhost', :master_port);
 CREATE TABLE citus_local (id serial, k int);
 SELECT create_distributed_table('citus_local', 'id');
 INSERT INTO citus_local (k) VALUES (2);
 DROP TABLE citus_local;
-SELECT master_remove_node('localhost', :master_port);
+SELECT citus_remove_node('localhost', :master_port);
 
 -- clean the workspace
 DROP TABLE transactional_drop_shards, transactional_drop_reference;

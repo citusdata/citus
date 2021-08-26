@@ -204,8 +204,8 @@ SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
 
 -- Ensure it works when run on a secondary node
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
-SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary');
- master_add_node
+SELECT citus_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary');
+ citus_add_node
 ---------------------------------------------------------------------
                4
 (1 row)
@@ -1187,8 +1187,8 @@ CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_partition;
 SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1216,8 +1216,8 @@ SELECT create_distributed_table('mx_table', 'a');
 (1 row)
 
 \c - postgres - :master_port
-SELECT master_add_node('localhost', :worker_2_port);
- master_add_node
+SELECT citus_add_node('localhost', :worker_2_port);
+ citus_add_node
 ---------------------------------------------------------------------
                6
 (1 row)
@@ -1398,7 +1398,7 @@ SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
 ---------------------------------------------------------------------
 (0 rows)
 
--- Check that master_add_node propagates the metadata about new placements of a reference table
+-- Check that citus_add_node propagates the metadata about new placements of a reference table
 \c - - - :master_port
 SELECT groupid AS old_worker_2_group
   FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
@@ -1406,8 +1406,8 @@ CREATE TABLE tmp_placement AS
   SELECT * FROM pg_dist_placement WHERE groupid = :old_worker_2_group;
 DELETE FROM pg_dist_placement
   WHERE groupid = :old_worker_2_group;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -1437,9 +1437,9 @@ WHERE logicalrelid='mx_ref'::regclass;
 (1 row)
 
 \c - - - :master_port
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT citus_add_node('localhost', :worker_2_port);
 NOTICE:  Replicating reference table "mx_ref" to the node localhost:xxxxx
- master_add_node
+ citus_add_node
 ---------------------------------------------------------------------
                7
 (1 row)
@@ -1571,7 +1571,7 @@ HINT:  If the node is up, wait until metadata gets synced to it and try again.
 ALTER TABLE dist_table_1 ADD COLUMN b int;
 ERROR:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If the node is up, wait until metadata gets synced to it and try again.
-SELECT master_add_node('localhost', :master_port, groupid => 0);
+SELECT citus_add_node('localhost', :master_port, groupid => 0);
 ERROR:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If the node is up, wait until metadata gets synced to it and try again.
 SELECT master_disable_node('localhost', :worker_1_port);
@@ -1582,10 +1582,10 @@ SELECT master_disable_node('localhost', :worker_2_port);
 ERROR:  Disabling localhost:xxxxx failed
 DETAIL:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
-SELECT master_remove_node('localhost', :worker_1_port);
+SELECT citus_remove_node('localhost', :worker_1_port);
 ERROR:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If the node is up, wait until metadata gets synced to it and try again.
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 ERROR:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If the node is up, wait until metadata gets synced to it and try again.
 -- master_update_node should succeed
@@ -1611,8 +1611,8 @@ SELECT pg_reload_conf();
 (1 row)
 
 UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
-SELECT master_add_node('localhost', :worker_2_port);
- master_add_node
+SELECT citus_add_node('localhost', :worker_2_port);
+ citus_add_node
 ---------------------------------------------------------------------
                7
 (1 row)

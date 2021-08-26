@@ -9,7 +9,7 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 93630500;
 
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
 
 CREATE TABLE test(x int, y int);
@@ -107,7 +107,7 @@ SELECT * FROM test WHERE x = 1;
 \c -reuse-previous=off regression - - :master_port
 SET search_path TO single_node;
 
-SELECT 1 FROM master_add_node('localhost', :follower_master_port, groupid => 0, noderole => 'secondary');
+SELECT 1 FROM citus_add_node('localhost', :follower_master_port, groupid => 0, noderole => 'secondary');
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
 
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always'"
@@ -175,6 +175,6 @@ SET search_path TO single_node;
 SET client_min_messages TO WARNING;
 DROP SCHEMA single_node CASCADE;
 -- Remove the coordinator again
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 -- Remove the secondary coordinator again
-SELECT 1 FROM master_remove_node('localhost', :follower_master_port);
+SELECT 1 FROM citus_remove_node('localhost', :follower_master_port);

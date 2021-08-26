@@ -2,8 +2,8 @@
 
 -- do some setup
 
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
 
 CREATE TABLE the_table (a int, b int);
 SELECT create_distributed_table('the_table', 'a');
@@ -56,10 +56,10 @@ SELECT * FROM the_table;
 
 \c -reuse-previous=off regression - - :master_port
 
-SELECT 1 FROM master_add_node('localhost', :follower_worker_1_port,
+SELECT 1 FROM citus_add_node('localhost', :follower_worker_1_port,
   groupid => (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_1_port),
   noderole => 'secondary');
-SELECT 1 FROM master_add_node('localhost', :follower_worker_2_port,
+SELECT 1 FROM citus_add_node('localhost', :follower_worker_2_port,
   groupid => (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port),
   noderole => 'secondary');
 

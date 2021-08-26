@@ -232,9 +232,9 @@ step s1-begin:
  SET citus.multi_shard_commit_protocol TO '2pc';
 
 step s1-remove-node:
- SELECT master_remove_node('localhost', 9999);
+ SELECT citus_remove_node('localhost', 9999);
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

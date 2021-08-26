@@ -91,7 +91,7 @@ SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
 
 -- Ensure it works when run on a secondary node
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
-SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary');
+SELECT citus_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary');
 SELECT start_metadata_sync_to_node('localhost', 8888);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
 SELECT stop_metadata_sync_to_node('localhost', 8888);
@@ -529,7 +529,7 @@ CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_partition;
 SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
  -- the master user needs superuser permissions to change the replication model
 CREATE USER mx_user WITH SUPERUSER;
@@ -545,7 +545,7 @@ SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('mx_table', 'a');
 
 \c - postgres - :master_port
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT citus_add_node('localhost', :worker_2_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 \c - mx_user - :worker_1_port
@@ -642,7 +642,7 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT * FROM pg_dist_shard WHERE shardid=:ref_table_shardid;
 SELECT * FROM pg_dist_shard_placement WHERE shardid=:ref_table_shardid;
 
--- Check that master_add_node propagates the metadata about new placements of a reference table
+-- Check that citus_add_node propagates the metadata about new placements of a reference table
 \c - - - :master_port
 SELECT groupid AS old_worker_2_group
   FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
@@ -650,7 +650,7 @@ CREATE TABLE tmp_placement AS
   SELECT * FROM pg_dist_placement WHERE groupid = :old_worker_2_group;
 DELETE FROM pg_dist_placement
   WHERE groupid = :old_worker_2_group;
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 CREATE TABLE mx_ref (col_1 int, col_2 text);
 SELECT create_reference_table('mx_ref');
 
@@ -664,7 +664,7 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
 
 \c - - - :master_port
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT citus_add_node('localhost', :worker_2_port);
 
 SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
@@ -738,11 +738,11 @@ SELECT create_reference_table('dist_table_2');
 
 ALTER TABLE dist_table_1 ADD COLUMN b int;
 
-SELECT master_add_node('localhost', :master_port, groupid => 0);
+SELECT citus_add_node('localhost', :master_port, groupid => 0);
 SELECT master_disable_node('localhost', :worker_1_port);
 SELECT master_disable_node('localhost', :worker_2_port);
-SELECT master_remove_node('localhost', :worker_1_port);
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_1_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 
 -- master_update_node should succeed
 SELECT nodeid AS worker_2_nodeid FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
@@ -755,7 +755,7 @@ SELECT pg_reload_conf();
 
 UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
 
-SELECT master_add_node('localhost', :worker_2_port);
+SELECT citus_add_node('localhost', :worker_2_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 
 CREATE SEQUENCE mx_test_sequence_0;

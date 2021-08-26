@@ -160,7 +160,7 @@ ORDER BY conname;
 
 -- test different table types
 SET client_min_messages to WARNING;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId := 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId := 0);
 SET client_min_messages to DEFAULT;
 CREATE TABLE table_type_dist (a INT);
 SELECT create_distributed_table('table_type_dist', 'a');
@@ -266,4 +266,4 @@ RESET client_min_messages;
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);

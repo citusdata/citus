@@ -16,7 +16,7 @@ SELECT run_command_on_workers('CREATE USER reprefuser WITH LOGIN');
 SET citus.enable_alter_role_propagation TO ON;
 -- alter role for other than the extension owner works in enterprise, output differs accordingly
 ALTER ROLE reprefuser WITH CREATEDB;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -302,8 +302,8 @@ alter table distributed_table ALTER COLUMN value_1 TYPE bigint;
 alter table distributed_table ALTER COLUMN value_1 TYPE int;
 SET client_min_messages TO error;
 DROP TABLE distributed_table, referece_table, local_fkey_table;
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

@@ -2,7 +2,7 @@ CREATE SCHEMA "Mx Regular User";
 SET search_path TO "Mx Regular User";
 
 -- add coordinator in idempotent way
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
 -- sync the metadata to both nodes
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);

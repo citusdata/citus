@@ -2,20 +2,20 @@
 // add single one of the nodes for the purpose of the test
 setup
 {
-	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
+	SELECT 1 FROM citus_add_node('localhost', 57637);
 }
 
 teardown
 {
     DROP TABLE IF EXISTS t1 CASCADE;
-	SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+	SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
 session "s1"
 
 step "s1-add-second-node" {
-	SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM citus_add_node('localhost', 57638);
 }
 
 step "s1-begin"

@@ -789,8 +789,8 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
 (1 row)
 
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

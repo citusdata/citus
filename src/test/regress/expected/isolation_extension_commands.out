@@ -5,7 +5,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -54,7 +54,7 @@ run_command_on_workers
 (localhost,57638,t,public)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -66,7 +66,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -115,7 +115,7 @@ run_command_on_workers
 (localhost,57638,t,public)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -124,7 +124,7 @@ master_remove_node
 
 starting permutation: s1-add-node-1 s1-begin s1-remove-node-1 s2-drop-extension s1-commit s1-print
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -135,7 +135,7 @@ step s1-begin:
  BEGIN;
 
 step s1-remove-node-1:
- SELECT 1 FROM master_remove_node('localhost', 57637);
+ SELECT 1 FROM citus_remove_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -180,7 +180,7 @@ run_command_on_workers
 (localhost,57638,t,"")
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -191,7 +191,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -240,7 +240,7 @@ run_command_on_workers
 (localhost,57638,t,schema1)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -252,7 +252,7 @@ step s1-begin:
  BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -300,7 +300,7 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -309,7 +309,7 @@ master_remove_node
 
 starting permutation: s1-add-node-1 s1-create-extension-with-schema2 s1-begin s1-remove-node-1 s2-alter-extension-set-schema3 s1-commit s1-print
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -323,7 +323,7 @@ step s1-begin:
  BEGIN;
 
 step s1-remove-node-1:
- SELECT 1 FROM master_remove_node('localhost', 57637);
+ SELECT 1 FROM citus_remove_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -369,7 +369,7 @@ run_command_on_workers
 (localhost,57638,t,schema3)
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -377,7 +377,7 @@ master_remove_node
 
 starting permutation: s1-add-node-1 s2-drop-extension s1-begin s1-remove-node-1 s2-create-extension-with-schema1 s1-commit s1-print
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -391,7 +391,7 @@ step s1-begin:
  BEGIN;
 
 step s1-remove-node-1:
- SELECT 1 FROM master_remove_node('localhost', 57637);
+ SELECT 1 FROM citus_remove_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -437,7 +437,7 @@ run_command_on_workers
 (localhost,57638,t,schema1)
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -445,7 +445,7 @@ master_remove_node
 
 starting permutation: s2-add-node-1 s2-drop-extension s2-remove-node-1 s2-begin s2-create-extension-version-11 s1-add-node-1 s2-commit s1-print
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -456,7 +456,7 @@ step s2-drop-extension:
  drop extension seg;
 
 step s2-remove-node-1:
- SELECT 1 FROM master_remove_node('localhost', 57637);
+ SELECT 1 FROM citus_remove_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -470,7 +470,7 @@ step s2-create-extension-version-11:
  CREATE extension seg VERSION "1.1";
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -515,7 +515,7 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -527,7 +527,7 @@ step s2-drop-extension:
  drop extension seg;
 
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -538,7 +538,7 @@ step s2-create-extension-version-11:
  CREATE extension seg VERSION "1.1";
 
 step s2-remove-node-1:
- SELECT 1 FROM master_remove_node('localhost', 57637);
+ SELECT 1 FROM citus_remove_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -552,7 +552,7 @@ step s2-alter-extension-update-to-version-12:
  ALTER extension seg update to "1.2";
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -598,7 +598,7 @@ run_command_on_workers
 (localhost,57638,t,public)
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -607,7 +607,7 @@ master_remove_node
 
 starting permutation: s2-add-node-1 s2-begin s2-drop-extension s1-remove-node-1 s2-commit s1-print
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -621,7 +621,7 @@ step s2-drop-extension:
  drop extension seg;
 
 step s1-remove-node-1:
- SELECT 1 FROM master_remove_node('localhost', 57637);
+ SELECT 1 FROM citus_remove_node('localhost', 57637);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -663,7 +663,7 @@ run_command_on_workers
 (localhost,57638,t,"")
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -677,7 +677,7 @@ step s2-create-extension-with-schema1:
  CREATE extension seg with schema schema1;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -722,7 +722,7 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -734,7 +734,7 @@ step s2-drop-extension:
  drop extension seg;
 
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -751,7 +751,7 @@ step s2-alter-extension-version-13:
  ALTER extension seg update to "1.3";
 
 step s1-remove-node-1:
- SELECT 1 FROM master_remove_node('localhost', 57637);
+ SELECT 1 FROM citus_remove_node('localhost', 57637);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -794,7 +794,7 @@ run_command_on_workers
 (localhost,57638,t,schema2)
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -805,7 +805,7 @@ step s2-drop-extension:
  drop extension seg;
 
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -819,7 +819,7 @@ step s2-create-extension-version-11:
  CREATE extension seg VERSION "1.1";
 
 step s1-remove-node-1:
- SELECT 1 FROM master_remove_node('localhost', 57637);
+ SELECT 1 FROM citus_remove_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -861,7 +861,7 @@ run_command_on_workers
 (localhost,57638,t,"")
 (1 row)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -872,7 +872,7 @@ step s2-drop-extension:
  drop extension seg;
 
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -883,7 +883,7 @@ step s2-create-extension-version-11:
  CREATE extension seg VERSION "1.1";
 
 step s2-remove-node-1:
- SELECT 1 FROM master_remove_node('localhost', 57637);
+ SELECT 1 FROM citus_remove_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -897,7 +897,7 @@ step s2-drop-extension:
  drop extension seg;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+ SELECT 1 FROM citus_add_node('localhost', 57637);
  <waiting ...>
 step s2-commit: 
  COMMIT;
@@ -942,7 +942,7 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 

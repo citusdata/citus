@@ -17,7 +17,7 @@ SET search_path TO local_commands_test_schema;
 
 -- let coordinator have distributed table shards/placements
 set client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 RESET client_min_messages;
 
 SELECT master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);

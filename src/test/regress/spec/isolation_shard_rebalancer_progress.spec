@@ -5,7 +5,7 @@ setup
 	select setval('pg_dist_shardid_seq', GREATEST(1500000, nextval('pg_dist_shardid_seq')));
 	SET citus.shard_count TO 4;
 	SET citus.shard_replication_factor TO 1;
-	SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM citus_add_node('localhost', 57637);
 	SELECT master_set_node_property('localhost', 57638, 'shouldhaveshards', false);
 	CREATE TABLE colocated1 (test_id integer NOT NULL, data text);
 	SELECT create_distributed_table('colocated1', 'test_id', 'hash', 'none');

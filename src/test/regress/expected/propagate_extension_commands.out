@@ -146,7 +146,7 @@ DROP EXTENSION seg CASCADE;
 -- but as we have only 2 ports in postgresql tests, let's remove one of the nodes first
 -- before remove, first remove the existing relations (due to the other tests)
 DROP SCHEMA "extension'test" CASCADE;
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -240,7 +240,7 @@ SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extnam
 (1 row)
 
 -- and add the other node
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -390,7 +390,7 @@ CREATE SCHEMA "extension'test";
 -- use  a schema name with escape character
 SET search_path TO "extension'test";
 -- remove the node, we'll add back again
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -421,7 +421,7 @@ BEGIN;
 
 COMMIT;
 -- add the node back
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1

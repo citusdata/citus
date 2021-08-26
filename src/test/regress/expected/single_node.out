@@ -19,7 +19,7 @@ SELECT 1 FROM master_disable_node('localhost', :master_port);
 ERROR:  Disabling localhost:xxxxx failed
 DETAIL:  cannot change "isactive" field of the coordinator node
 RESET client_min_messages;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -47,8 +47,8 @@ SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, met
 
 DROP TABLE ref;
 -- remove the coordinator to try again with create_reference_table
-SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
- master_remove_node
+SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -68,8 +68,8 @@ SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, met
 
 DROP TABLE loc;
 -- remove the coordinator to try again with create_distributed_table
-SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
- master_remove_node
+SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -103,8 +103,8 @@ SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, met
 
 DROP TABLE test;
 -- remove the coordinator to try again
-SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
- master_remove_node
+SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node WHERE groupid = 0;
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -136,12 +136,12 @@ SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, met
 (1 row)
 
 -- cannot add workers with specific IP as long as I have a placeholder coordinator record
-SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+SELECT 1 FROM citus_add_node('127.0.0.1', :worker_1_port);
 ERROR:  cannot add a worker node when the coordinator hostname is set to localhost
 DETAIL:  Worker nodes need to be able to connect to the coordinator to transfer data.
 HINT:  Use SELECT citus_set_coordinator_host('<hostname>') to configure the coordinator hostname
 -- adding localhost workers is ok
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 NOTICE:  shards are still on the coordinator after adding the new node
 HINT:  Use SELECT rebalance_table_shards(); to balance shards data between workers and coordinator or SELECT citus_drain_node('localhost',57636); to permanently move shards away from the coordinator.
  ?column?
@@ -149,7 +149,7 @@ HINT:  Use SELECT rebalance_table_shards(); to balance shards data between worke
         1
 (1 row)
 
-SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_remove_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -163,7 +163,7 @@ SELECT 1 FROM citus_set_coordinator_host('127.0.0.1');
 (1 row)
 
 -- adding workers with specific IP is ok now
-SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+SELECT 1 FROM citus_add_node('127.0.0.1', :worker_1_port);
 NOTICE:  shards are still on the coordinator after adding the new node
 HINT:  Use SELECT rebalance_table_shards(); to balance shards data between workers and coordinator or SELECT citus_drain_node('127.0.0.1',57636); to permanently move shards away from the coordinator.
  ?column?
@@ -171,7 +171,7 @@ HINT:  Use SELECT rebalance_table_shards(); to balance shards data between worke
         1
 (1 row)
 
-SELECT 1 FROM master_remove_node('127.0.0.1', :worker_1_port);
+SELECT 1 FROM citus_remove_node('127.0.0.1', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -2102,13 +2102,13 @@ SELECT pg_reload_conf();
 -- suppress notices
 SET client_min_messages TO error;
 -- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 ERROR:  cannot remove the last worker node because there are reference tables and it would cause data loss on reference tables
 HINT:  To proceed, either drop the reference tables or use undistribute_table() function to convert them to local tables
 -- Cleanup
 DROP SCHEMA single_node CASCADE;
 -- Remove the coordinator again
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1

@@ -305,7 +305,7 @@ DROP TABLE table_option_reference, table_option_reference_2;
 SET citus.shard_replication_factor TO 1;
 
 -- test options on a citus local table
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 CREATE TABLE table_option_citus_local (a int, b text) USING columnar;
 SELECT citus_add_local_table_to_metadata('table_option_citus_local');
 
@@ -401,7 +401,7 @@ SELECT * FROM pg_dist_partition WHERE logicalrelid = 'table_option_citus_local':
 SELECT compression FROM columnar.options WHERE regclass = 'table_option_citus_local'::regclass;
 
 DROP TABLE table_option_citus_local, table_option_citus_local_2;
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 -- verify reference table with no columns can be created
 -- https://github.com/citusdata/citus/issues/4608

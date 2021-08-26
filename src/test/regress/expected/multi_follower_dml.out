@@ -6,7 +6,7 @@ SELECT create_distributed_table('the_table', 'a');
 
 (1 row)
 
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid => 0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -273,8 +273,8 @@ ERROR:  there is a shard placement in node group 0 but there are no nodes in tha
 DROP TABLE the_table;
 DROP TABLE reference_table;
 DROP TABLE citus_local_table;
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

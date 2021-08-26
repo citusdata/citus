@@ -1,5 +1,5 @@
 --
--- failure_add_disable_node tests master_add_node, master_remove_node
+-- failure_add_disable_node tests citus_add_node, citus_remove_node
 -- master_activate_node for failures.
 -- master_disable_node and master_add_inactive_node can not be
 -- tested as they don't create network activity
@@ -63,12 +63,12 @@ FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
 WHERE s.logicalrelid = 'user_table'::regclass
 ORDER BY placementid;
 
--- master_remove_node fails when there are shards on that worker
-SELECT master_remove_node('localhost', :worker_2_proxy_port);
+-- citus_remove_node fails when there are shards on that worker
+SELECT citus_remove_node('localhost', :worker_2_proxy_port);
 
 -- drop event table and re-run remove
 DROP TABLE event_table;
-SELECT master_remove_node('localhost', :worker_2_proxy_port);
+SELECT citus_remove_node('localhost', :worker_2_proxy_port);
 
 -- verify node is removed
 SELECT * FROM master_get_active_worker_nodes()
@@ -84,7 +84,7 @@ ORDER BY placementid;
 -- be injected failure through network
 SELECT master_add_inactive_node('localhost', :worker_2_proxy_port);
 
-SELECT master_remove_node('localhost', :worker_2_proxy_port);
+SELECT citus_remove_node('localhost', :worker_2_proxy_port);
 
 SELECT shardid, shardstate
 FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
@@ -93,7 +93,7 @@ ORDER BY placementid;
 
 -- reset cluster to original state
 SELECT citus.mitmproxy('conn.allow()');
-SELECT master_add_node('localhost', :worker_2_proxy_port);
+SELECT citus_add_node('localhost', :worker_2_proxy_port);
 
 -- verify node is added
 SELECT * FROM master_get_active_worker_nodes()
@@ -105,7 +105,7 @@ WHERE s.logicalrelid = 'user_table'::regclass
 ORDER BY placementid;
 
 SELECT citus.mitmproxy('conn.allow()');
-SELECT master_add_node('localhost', :worker_1_port);
+SELECT citus_add_node('localhost', :worker_1_port);
 
 -- verify node is added
 SELECT * FROM master_get_active_worker_nodes()

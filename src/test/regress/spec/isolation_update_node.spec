@@ -1,14 +1,14 @@
 setup
 {
-    SELECT 1 FROM master_add_node('localhost', 57637);
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57637);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
 
     SELECT nodeid, nodename, nodeport from pg_dist_node;
 }
 
 teardown
 {
-    SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+    SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
     SELECT nodeid, nodename, nodeport from pg_dist_node;
 }
 

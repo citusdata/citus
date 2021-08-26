@@ -24,7 +24,7 @@ master_update_node
 (1 row)
 
 step s2-abort: ABORT;
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 
@@ -59,7 +59,7 @@ FATAL:  terminating connection due to administrator command
 FATAL:  terminating connection due to administrator command
 SSL connection has been closed unexpectedly
 
-master_remove_node
+citus_remove_node
 ---------------------------------------------------------------------
 
 

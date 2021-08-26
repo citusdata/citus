@@ -1,7 +1,7 @@
 setup
 {
-    SELECT 1 FROM master_add_node('localhost', 57637);
-    SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM citus_add_node('localhost', 57637);
+    SELECT 1 FROM citus_add_node('localhost', 57638);
 
     CREATE TABLE t1(a int);
     SELECT create_distributed_table('t1','a');
@@ -12,7 +12,7 @@ teardown
     DROP TABLE t1;
 
     -- remove the nodes again
-    SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
+    SELECT citus_remove_node(nodename, nodeport) FROM pg_dist_node;
 }
 
 session "s1"

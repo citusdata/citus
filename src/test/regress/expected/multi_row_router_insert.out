@@ -6,7 +6,7 @@ SET citus.log_local_commands TO ON;
 CREATE SCHEMA multi_row_router_insert;
 SET search_path TO multi_row_router_insert;
 SET client_min_messages to ERROR;
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
  ?column?
 ---------------------------------------------------------------------
         1

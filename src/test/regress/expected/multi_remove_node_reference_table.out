@@ -1,7 +1,7 @@
 --
 -- MULTI_REMOVE_NODE_REFERENCE_TABLE
 --
--- Tests that check the metadata after master_remove_node.
+-- Tests that check the metadata after citus_remove_node.
 SET citus.next_shard_id TO 1380000;
 SET citus.replicate_reference_tables_on_activate TO off;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1380000;
@@ -18,7 +18,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 (1 row)
 
 -- remove non-existing node
-SELECT master_remove_node('localhost', 55555);
+SELECT citus_remove_node('localhost', 55555);
 ERROR:  node at "localhost:xxxxx" does not exist
 -- remove a node with no reference tables
 -- verify node exist before removal
@@ -37,8 +37,8 @@ SELECT create_distributed_table('recovery_test','x');
 (1 row)
 
 DROP TABLE recovery_test;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -63,10 +63,10 @@ SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 (1 row)
 
 -- re-add the node for next tests
-SELECT master_add_node('localhost', :worker_2_port) AS worker_2_nodeid \gset
+SELECT citus_add_node('localhost', :worker_2_port) AS worker_2_nodeid \gset
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeid=:worker_2_nodeid \gset
 -- add a secondary to check we don't attempt to replicate the table to it
-SELECT 1 FROM master_add_node('localhost', 9000, groupid=>:worker_2_group, noderole=>'secondary');
+SELECT 1 FROM citus_add_node('localhost', 9000, groupid=>:worker_2_group, noderole=>'secondary');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -81,7 +81,7 @@ SELECT create_reference_table('remove_node_reference_table');
 (1 row)
 
 -- make sure when we add a secondary we don't attempt to add placements to it
-SELECT 1 FROM master_add_node('localhost', 9001, groupid=>:worker_2_group, noderole=>'secondary');
+SELECT 1 FROM citus_add_node('localhost', 9001, groupid=>:worker_2_group, noderole=>'secondary');
  ?column?
 ---------------------------------------------------------------------
         1
@@ -126,8 +126,8 @@ SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
 (1 row)
 
 -- make sure when we remove a secondary we don't remove any placements
-SELECT master_remove_node('localhost', 9001);
- master_remove_node
+SELECT citus_remove_node('localhost', 9001);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -138,7 +138,7 @@ SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
      1
 (1 row)
 
--- status before master_remove_node
+-- status before citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -186,13 +186,13 @@ WHERE
 (1 row)
 
 \c - - - :master_port
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
--- status after master_remove_node
+-- status after citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -220,7 +220,7 @@ WHERE colocationid IN
           1 |                -1 |                      0
 (1 row)
 
-SELECT master_remove_node('localhost', :worker_1_port);
+SELECT citus_remove_node('localhost', :worker_1_port);
 ERROR:  cannot remove the last worker node because there are reference tables and it would cause data loss on reference tables
 HINT:  To proceed, either drop the reference tables or use undistribute_table() function to convert them to local tables
 \c - - - :worker_1_port
@@ -243,10 +243,10 @@ WHERE
 \c - - - :master_port
 SET citus.replicate_reference_tables_on_activate TO off;
 -- remove same node twice
-SELECT master_remove_node('localhost', :worker_2_port);
+SELECT citus_remove_node('localhost', :worker_2_port);
 ERROR:  node at "localhost:xxxxx" does not exist
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -259,21 +259,21 @@ SELECT master_disable_node('localhost', :worker_2_port);
 
 (1 row)
 
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 -- re-add the node for the next test
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 -- remove node in a transaction and ROLLBACK
--- status before master_remove_node
+-- status before citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -320,14 +320,14 @@ WHERE
 
 \c - - - :master_port
 BEGIN;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 ROLLBACK;
--- status after master_remove_node
+-- status after citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -374,7 +374,7 @@ WHERE
 
 \c - - - :master_port
 -- remove node in a transaction and COMMIT
--- status before master_remove_node
+-- status before citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -421,14 +421,14 @@ WHERE
 
 \c - - - :master_port
 BEGIN;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 COMMIT;
--- status after master_remove_node
+-- status after citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -476,14 +476,14 @@ WHERE
 \c - - - :master_port
 SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 -- test inserting a value then removing a node in a transaction
--- status before master_remove_node
+-- status before citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -531,14 +531,14 @@ WHERE
 \c - - - :master_port
 BEGIN;
 INSERT INTO remove_node_reference_table VALUES(1);
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 COMMIT;
--- status after master_remove_node
+-- status after citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -599,14 +599,14 @@ SELECT * FROM remove_node_reference_table;
 \c - - - :master_port
 SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 -- test executing DDL command then removing a node in a transaction
--- status before master_remove_node
+-- status before citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -654,14 +654,14 @@ WHERE
 \c - - - :master_port
 BEGIN;
 ALTER TABLE remove_node_reference_table ADD column2 int;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 COMMIT;
--- status after master_remove_node
+-- status after citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -718,14 +718,14 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.remove_
 (2 rows)
 
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
 -- test DROP table after removing a node in a transaction
--- status before master_remove_node
+-- status before citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -754,15 +754,15 @@ WHERE colocationid IN
 (1 row)
 
 BEGIN;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 DROP TABLE remove_node_reference_table;
 COMMIT;
--- status after master_remove_node
+-- status after citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -785,7 +785,7 @@ SELECT * FROM pg_dist_colocation WHERE colocationid = 1380000;
 (0 rows)
 
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -808,7 +808,7 @@ SELECT create_reference_table('remove_node_reference_table_schema.table1');
 
 (1 row)
 
--- status before master_remove_node
+-- status before citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -862,13 +862,13 @@ ORDER BY
 (2 rows)
 
 \c - - - :master_port
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
--- status after master_remove_node
+-- status after citus_remove_node
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
  count
 ---------------------------------------------------------------------
@@ -916,7 +916,7 @@ WHERE
 \c - - - :master_port
 SET citus.replicate_reference_tables_on_activate TO off;
 -- re-add the node for next tests
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1

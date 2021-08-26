@@ -214,8 +214,8 @@ SELECT run_command_on_coordinator_and_workers('DROP SCHEMA non_dist_schema');
 -- test if the grantors are propagated correctly
 -- first remove one of the worker nodes
 SET citus.shard_replication_factor TO 1;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -257,7 +257,7 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER 
 
 \c - - - :master_port
 -- add the previously removed node
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -361,8 +361,8 @@ SELECT run_command_on_coordinator_and_workers('DROP SCHEMA dist_schema CASCADE')
 -- test grants on public schema
 -- first remove one of the worker nodes
 SET citus.shard_replication_factor TO 1;
-SELECT master_remove_node('localhost', :worker_2_port);
- master_remove_node
+SELECT citus_remove_node('localhost', :worker_2_port);
+ citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
@@ -396,7 +396,7 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'public' ORDER BY nspna
 
 \c - - - :master_port
 -- add the previously removed node
-SELECT 1 FROM master_add_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_add_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1

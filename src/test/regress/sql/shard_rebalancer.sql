@@ -11,7 +11,7 @@ CREATE TABLE postgres_table_test(a int primary key);
 
 -- make sure that all rebalance operations works fine when
 -- reference tables are replicated to the coordinator
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
 
 -- should just be noops even if we add the coordinator to the pg_dist_node
 SELECT rebalance_table_shards('dist_table_test');
@@ -1211,7 +1211,7 @@ DROP TABLE tab;
 
 
 -- we don't need the coordinator on pg_dist_node anymore
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 
 --
@@ -1232,7 +1232,7 @@ SELECT create_distributed_table('dist_table_test_3', 'a');
 CREATE TABLE ref_table(a int);
 SELECT create_reference_table('ref_table');
 
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
 
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
@@ -1247,14 +1247,14 @@ SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shar
 
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 CREATE TABLE rebalance_test_table(int_column int);
 SELECT master_create_distributed_table('rebalance_test_table', 'int_column', 'append');
 
 CALL create_unbalanced_shards('rebalance_test_table');
 
-SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
 
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
@@ -1265,7 +1265,7 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 
 DROP TABLE dist_table_test_3, rebalance_test_table, ref_table;
 
-SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
 
 -- reference table 2 will not have a replica identity, causing the rebalancer to not work
 -- when ran in the default mode. Instead we need to change the shard transfer mode to make
@@ -1279,7 +1279,7 @@ CREATE TABLE r2 (a int, b int);
 -- we remove worker 2 before creating the tables, this will allow us to have an active
 -- node without the reference tables
 
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
 
 SELECT create_distributed_table('t1','a');
 SELECT create_reference_table('r1');
@@ -1289,7 +1289,7 @@ SELECT create_reference_table('r2');
 INSERT INTO r1 VALUES (1,2), (3,4);
 INSERT INTO r2 VALUES (1,2), (3,4);
 
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
 
 SELECT rebalance_table_shards();
 CALL citus_cleanup_orphaned_shards();
@@ -1303,12 +1303,12 @@ SELECT count(*) FROM pg_dist_partition;
 -- verify a system having only reference tables will copy the reference tables when
 -- executing the rebalancer
 
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
 SELECT create_reference_table('r1');
 
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
 
 -- count the number of placements for the reference table to verify it is not available on
 -- all nodes
@@ -1335,14 +1335,14 @@ DROP TABLE r1;
 -- of other tables is increased. Without the copy of reference tables the replication might
 -- fail.
 
-SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT 1 from citus_remove_node('localhost', :worker_2_port);
 
 CREATE TABLE t1 (a int PRIMARY KEY, b int);
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
 SELECT create_distributed_table('t1', 'a');
 SELECT create_reference_table('r1');
 
-SELECT 1 from master_add_node('localhost', :worker_2_port);
+SELECT 1 from citus_add_node('localhost', :worker_2_port);
 
 -- count the number of placements for the reference table to verify it is not available on
 -- all nodes
