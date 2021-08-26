@@ -32,7 +32,6 @@
 
 #if PG_VERSION_NUM >= PG_VERSION_14
 #define AlterTableStmtObjType(a) ((a)->objtype)
-#define STATUS_WAITING_COMPAT PROC_WAIT_STATUS_WAITING
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a, b)
 #define getObjectIdentity_compat(a, b) getObjectIdentity(a, b)
 
@@ -65,7 +64,7 @@
 #define AlterTableStmtObjType(a) ((a)->relkind)
 #define F_NEXTVAL F_NEXTVAL_OID
 #define ROLE_PG_MONITOR DEFAULT_ROLE_MONITOR
-#define STATUS_WAITING_COMPAT STATUS_WAITING
+#define PROC_WAIT_STATUS_WAITING STATUS_WAITING
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a)
 #define getObjectIdentity_compat(a, b) getObjectIdentity(a)
 
