@@ -15,11 +15,11 @@ SELECT count(*) FROM t;
 (1 row)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  1 |              150001 |           16336
+             2 |             0 |                  1 |              150001
 (1 row)
 
 -- check stripe metadata also have been rolled-back
@@ -55,11 +55,11 @@ SELECT count(*) FROM t;  -- force flush
 SAVEPOINT s1;
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  3 |              600001 |           24606
+             2 |             0 |                  3 |              600001
 (1 row)
 
 SELECT count(*) FROM t;
@@ -85,11 +85,11 @@ SELECT count(*) FROM t;
 INSERT INTO t SELECT i, i+1 FROM generate_series(1, 10) i;
 COMMIT;
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('t');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  5 |              750001 |           40942
+             2 |             0 |                  5 |              750001
 (1 row)
 
 SELECT count(*) FROM t;

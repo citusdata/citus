@@ -369,7 +369,7 @@ SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nod
 \c - - - :master_port
 -- verify that mx workers are updated when disabling/activating nodes
 SELECT citus_disable_node('localhost', :worker_1_port);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT master_activate_node('localhost', 57637) to activate this node back.
+NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 57637) to activate this node back.
  citus_disable_node
 ---------------------------------------------------------------------
 

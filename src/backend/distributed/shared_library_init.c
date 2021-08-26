@@ -1895,7 +1895,8 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslcompression",
 		"sslcrl",
 		"sslmode",
-		"sslrootcert"
+		"sslrootcert",
+		"tcp_user_timeout",
 	};
 	char *errorMsg = NULL;
 	bool conninfoValid = CheckConninfo(*newval, allowedConninfoKeywords,

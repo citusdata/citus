@@ -44,20 +44,20 @@ SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 (1 row)
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('columnar_truncate_test');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  2 |              150001 |           16438
+             2 |             0 |                  2 |              150001
 (1 row)
 
 TRUNCATE TABLE columnar_truncate_test;
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('columnar_truncate_test');
- version_major | version_minor | reserved_stripe_id | reserved_row_number | reserved_offset
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                  1 |                   1 |           16336
+             2 |             0 |                  1 |                   1
 (1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;

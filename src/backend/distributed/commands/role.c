@@ -143,7 +143,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 

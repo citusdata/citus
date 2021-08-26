@@ -28,13 +28,13 @@ SELECT * FROM columnar_truncate_test;
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('columnar_truncate_test');
 
 TRUNCATE TABLE columnar_truncate_test;
 
 select
-  version_major, version_minor, reserved_stripe_id, reserved_row_number, reserved_offset
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
   from columnar_test_helpers.columnar_storage_info('columnar_truncate_test');
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;

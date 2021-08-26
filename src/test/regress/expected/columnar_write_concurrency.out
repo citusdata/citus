@@ -16,19 +16,23 @@ step s2-insert:
 step s1-select:
     SELECT * FROM test_insert_concurrency ORDER BY a;
 
-a              b
+a|b
+---------------------------------------------------------------------
+1|2
+2|4
+3|6
+(3 rows)
 
-1              2
-2              4
-3              6
 step s2-select:
     SELECT * FROM test_insert_concurrency ORDER BY a;
 
-a              b
+a| b
+---------------------------------------------------------------------
+4| 8
+5|10
+6|12
+(3 rows)
 
-4              8
-5              10
-6              12
 step s1-commit:
     COMMIT;
 
@@ -38,14 +42,16 @@ step s2-commit:
 step s1-select:
     SELECT * FROM test_insert_concurrency ORDER BY a;
 
-a              b
+a| b
+---------------------------------------------------------------------
+1| 2
+2| 4
+3| 6
+4| 8
+5|10
+6|12
+(6 rows)
 
-1              2
-2              4
-3              6
-4              8
-5              10
-6              12
 
 starting permutation: s1-begin s2-begin s1-copy s2-insert s1-select s2-select s1-commit s2-commit s1-select
 step s1-begin:
@@ -63,19 +69,23 @@ step s2-insert:
 step s1-select:
     SELECT * FROM test_insert_concurrency ORDER BY a;
 
-a              b
+ a|b
+---------------------------------------------------------------------
+11|
+12|
+13|
+(3 rows)
 
-11
-12
-13
 step s2-select:
     SELECT * FROM test_insert_concurrency ORDER BY a;
 
-a              b
+a| b
+---------------------------------------------------------------------
+4| 8
+5|10
+6|12
+(3 rows)
 
-4              8
-5              10
-6              12
 step s1-commit:
     COMMIT;
 
@@ -85,14 +95,16 @@ step s2-commit:
 step s1-select:
     SELECT * FROM test_insert_concurrency ORDER BY a;
 
-a              b
+ a| b
+---------------------------------------------------------------------
+ 4| 8
+ 5|10
+ 6|12
+11|
+12|
+13|
+(6 rows)
 
-4              8
-5              10
-6              12
-11
-12
-13
 
 starting permutation: s1-begin s2-begin s2-insert s1-copy s1-select s2-select s1-commit s2-commit s1-select
 step s1-begin:
@@ -110,19 +122,23 @@ step s1-copy:
 step s1-select:
     SELECT * FROM test_insert_concurrency ORDER BY a;
 
-a              b
+ a|b
+---------------------------------------------------------------------
+11|
+12|
+13|
+(3 rows)
 
-11
-12
-13
 step s2-select:
     SELECT * FROM test_insert_concurrency ORDER BY a;
 
-a              b
+a| b
+---------------------------------------------------------------------
+4| 8
+5|10
+6|12
+(3 rows)
 
-4              8
-5              10
-6              12
 step s1-commit:
     COMMIT;
 
@@ -132,14 +148,16 @@ step s2-commit:
 step s1-select:
     SELECT * FROM test_insert_concurrency ORDER BY a;
 
-a              b
+ a| b
+---------------------------------------------------------------------
+ 4| 8
+ 5|10
+ 6|12
+11|
+12|
+13|
+(6 rows)
 
-4              8
-5              10
-6              12
-11
-12
-13
 
 starting permutation: s1-truncate s1-begin s1-insert-10000-rows s2-begin s2-insert s2-commit s1-commit s1-verify-metadata
 step s1-truncate:
@@ -180,5 +198,7 @@ step s1-verify-metadata:
     FROM test_insert_concurrency_stripes;
 
 stripe_metadata_for_test_insert_concurrency_ok
-
+---------------------------------------------------------------------
 t
+(1 row)
+
