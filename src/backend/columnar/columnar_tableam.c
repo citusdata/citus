@@ -1935,7 +1935,6 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 					   DestReceiver *dest,
 					   QueryCompletionCompat *completionTag)
 {
-	Node *parsetree;
 
 #if PG_VERSION_NUM >= PG_VERSION_14
 	if (readOnlyTree)
@@ -1944,7 +1943,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 	}
 #endif
 
-	parsetree = pstmt->utilityStmt;
+	Node *parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, IndexStmt))
 	{
