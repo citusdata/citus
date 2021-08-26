@@ -78,6 +78,7 @@ static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
 static void simple_quote_literal(StringInfo buf, const char *val);
 static char * flatten_reloptions(Oid relid);
+static void AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer);
 
 
 /*
@@ -755,11 +756,7 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 	}
 
 	appendStringInfoString(buffer, "REINDEX ");
-
-	if (IsReindexWithParam_compat(reindexStmt, "verbose"))
-	{
-		appendStringInfoString(buffer, "(VERBOSE) ");
-	}
+	AddVacuumParams(reindexStmt, buffer);
 
 	switch (reindexStmt->kind)
 	{
@@ -799,6 +796,49 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 							 quote_identifier(reindexStmt->name));
 			break;
 		}
+	}
+}
+
+
+/*
+ * AddVacuumParams adds vacuum params to the given buffer.
+ */
+static void
+AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
+{
+	StringInfo temp = makeStringInfo();
+	if (IsReindexWithParam_compat(reindexStmt, "verbose"))
+	{
+		appendStringInfoString(temp, "VERBOSE");
+	}
+#if PG_VERSION_NUM >= PG_VERSION_14
+	char *tableSpaceName = NULL;
+	DefElem *opt = NULL;
+	foreach_ptr(opt, reindexStmt->params)
+	{
+		if (strcmp(opt->defname, "tablespace") == 0)
+		{
+			tableSpaceName = defGetString(opt);
+			break;
+		}
+	}
+
+	if (tableSpaceName)
+	{
+		if (temp->len > 0)
+		{
+			appendStringInfo(temp, ", TABLESPACE %s", tableSpaceName);
+		}
+		else
+		{
+			appendStringInfo(temp, "TABLESPACE %s", tableSpaceName);
+		}
+	}
+#endif
+
+	if (temp->len > 0)
+	{
+		appendStringInfo(buffer, "(%s) ", temp->data);
 	}
 }
 
