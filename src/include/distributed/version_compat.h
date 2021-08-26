@@ -41,7 +41,6 @@
 	FuncnameGetCandidates(a, b, c, d, e, f, g)
 #define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, b, c, d)
 #define IsReindexWithParam_compat(reindex, param) IsReindexWithParam(reindex, param)
-#define CopyFromState_compat CopyFromState
 #define BeginCopyFrom_compat(a, b, c, d, e, f, g, h) BeginCopyFrom(a, b, c, d, e, f, g, h)
 #define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	standard_ProcessUtility(a, b, c, d, e, f, g, h)
@@ -77,7 +76,7 @@
 	((strcmp(param, "concurrently") == 0) ? ((reindex)->concurrent) : \
 	 ((strcmp(param, "verbose") == 0) ? ((reindex)->options == REINDEXOPT_VERBOSE) : \
 	  false))
-#define CopyFromState_compat CopyState
+#define CopyFromState CopyState
 #define BeginCopyFrom_compat(a, b, c, d, e, f, g, h) BeginCopyFrom(a, b, d, e, f, g, h)
 #define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	standard_ProcessUtility(a, b, d, e, f, g, h)
