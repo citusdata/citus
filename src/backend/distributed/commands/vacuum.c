@@ -39,8 +39,8 @@
 typedef struct CitusVacuumParams
 {
 	int options;
-	VacOptValue_compat truncate;
-	VacOptValue_compat index_cleanup;
+	VacOptValue truncate;
+	VacOptValue index_cleanup;
 
 	#if PG_VERSION_NUM >= PG_VERSION_13
 	int nworkers;
@@ -346,8 +346,8 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 
 	/* if no flags remain, exit early */
 	if (vacuumFlags == 0 &&
-		vacuumParams.truncate == VACOPTVALUE_UNSPECIFIED_COMPAT &&
-		vacuumParams.index_cleanup == VACOPTVALUE_UNSPECIFIED_COMPAT
+		vacuumParams.truncate == VACOPTVALUE_UNSPECIFIED &&
+		vacuumParams.index_cleanup == VACOPTVALUE_UNSPECIFIED
 #if PG_VERSION_NUM >= PG_VERSION_13
 		&& vacuumParams.nworkers == VACUUM_PARALLEL_NOTSET
 #endif
@@ -389,18 +389,18 @@ DeparseVacuumStmtPrefix(CitusVacuumParams vacuumParams)
 		appendStringInfoString(vacuumPrefix, "SKIP_LOCKED,");
 	}
 
-	if (vacuumParams.truncate != VACOPTVALUE_UNSPECIFIED_COMPAT)
+	if (vacuumParams.truncate != VACOPTVALUE_UNSPECIFIED)
 	{
 		appendStringInfoString(vacuumPrefix,
-							   vacuumParams.truncate == VACOPTVALUE_ENABLED_COMPAT ?
+							   vacuumParams.truncate == VACOPTVALUE_ENABLED ?
 							   "TRUNCATE," : "TRUNCATE false,"
 							   );
 	}
 
-	if (vacuumParams.index_cleanup != VACOPTVALUE_UNSPECIFIED_COMPAT)
+	if (vacuumParams.index_cleanup != VACOPTVALUE_UNSPECIFIED)
 	{
 		appendStringInfoString(vacuumPrefix,
-							   vacuumParams.index_cleanup == VACOPTVALUE_ENABLED_COMPAT ?
+							   vacuumParams.index_cleanup == VACOPTVALUE_ENABLED ?
 							   "INDEX_CLEANUP," : "INDEX_CLEANUP false,"
 							   );
 	}
@@ -506,8 +506,8 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 	bool disable_page_skipping = false;
 
 	/* Set default value */
-	params.index_cleanup = VACOPTVALUE_UNSPECIFIED_COMPAT;
-	params.truncate = VACOPTVALUE_UNSPECIFIED_COMPAT;
+	params.index_cleanup = VACOPTVALUE_UNSPECIFIED;
+	params.truncate = VACOPTVALUE_UNSPECIFIED;
 	#if PG_VERSION_NUM >= PG_VERSION_13
 	params.nworkers = VACUUM_PARALLEL_NOTSET;
 	#endif
@@ -551,13 +551,13 @@ VacuumStmtParams(VacuumStmt *vacstmt)
 		}
 		else if (strcmp(opt->defname, "index_cleanup") == 0)
 		{
-			params.index_cleanup = defGetBoolean(opt) ? VACOPTVALUE_ENABLED_COMPAT :
-								   VACOPTVALUE_DISABLED_COMPAT;
+			params.index_cleanup = defGetBoolean(opt) ? VACOPTVALUE_ENABLED :
+								   VACOPTVALUE_DISABLED;
 		}
 		else if (strcmp(opt->defname, "truncate") == 0)
 		{
-			params.truncate = defGetBoolean(opt) ? VACOPTVALUE_ENABLED_COMPAT :
-							  VACOPTVALUE_DISABLED_COMPAT;
+			params.truncate = defGetBoolean(opt) ? VACOPTVALUE_ENABLED :
+							  VACOPTVALUE_DISABLED;
 		}
 		#if PG_VERSION_NUM >= PG_VERSION_13
 		else if (strcmp(opt->defname, "parallel") == 0)
