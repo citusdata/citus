@@ -1,0 +1,646 @@
+-- Show get_missing_partition_ranges function can be only callede for timeseries tables
+CREATE TABLE date_partitioned_table(
+    measureid integer,
+    eventdate date,
+    measure_data integer) PARTITION BY RANGE(eventdate);
+SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '15 days');
+ERROR:  date_partitioned_table must be timeseries table
+CONTEXT:  PL/pgSQL function get_missing_partition_ranges(regclass,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_missing_partitions(regclass,timestamp with time zone,timestamp with time zone) line 22 at FOR over SELECT rows
+-- Create missing partitions for various ranges on date partitioned table
+BEGIN;
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '15 days');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('day', now()) - from_value::date as from_diff,
+        date_trunc('day', now()) - to_value::date as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'date_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff   |    to_diff
+---------------------------------------------------------------------
+ @ 15 days ago | @ 16 days ago
+ @ 14 days ago | @ 15 days ago
+ @ 13 days ago | @ 14 days ago
+ @ 12 days ago | @ 13 days ago
+ @ 11 days ago | @ 12 days ago
+ @ 10 days ago | @ 11 days ago
+ @ 9 days ago  | @ 10 days ago
+ @ 8 days ago  | @ 9 days ago
+ @ 7 days ago  | @ 8 days ago
+ @ 6 days ago  | @ 7 days ago
+ @ 5 days ago  | @ 6 days ago
+ @ 4 days ago  | @ 5 days ago
+ @ 3 days ago  | @ 4 days ago
+ @ 2 days ago  | @ 3 days ago
+ @ 1 day ago   | @ 2 days ago
+ @ 0           | @ 1 day ago
+ @ 1 day       | @ 0
+ @ 2 days      | @ 1 day
+ @ 3 days      | @ 2 days
+ @ 4 days      | @ 3 days
+ @ 5 days      | @ 4 days
+ @ 6 days      | @ 5 days
+ @ 7 days      | @ 6 days
+(23 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '10 days', now() + INTERVAL '10 days');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('day', now()) - from_value::date as from_diff,
+        date_trunc('day', now()) - to_value::date as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'date_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff   |    to_diff
+---------------------------------------------------------------------
+ @ 10 days ago | @ 11 days ago
+ @ 9 days ago  | @ 10 days ago
+ @ 8 days ago  | @ 9 days ago
+ @ 7 days ago  | @ 8 days ago
+ @ 6 days ago  | @ 7 days ago
+ @ 5 days ago  | @ 6 days ago
+ @ 4 days ago  | @ 5 days ago
+ @ 3 days ago  | @ 4 days ago
+ @ 2 days ago  | @ 3 days ago
+ @ 1 day ago   | @ 2 days ago
+ @ 0           | @ 1 day ago
+ @ 1 day       | @ 0
+ @ 2 days      | @ 1 day
+ @ 3 days      | @ 2 days
+ @ 4 days      | @ 3 days
+ @ 5 days      | @ 4 days
+ @ 6 days      | @ 5 days
+ @ 7 days      | @ 6 days
+(18 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '5 days');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '45 days', now() + INTERVAL '45 days');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('day', now()) - from_value::date as from_diff,
+        date_trunc('day', now()) - to_value::date as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'date_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff   |    to_diff
+---------------------------------------------------------------------
+ @ 45 days ago | @ 50 days ago
+ @ 40 days ago | @ 45 days ago
+ @ 35 days ago | @ 40 days ago
+ @ 30 days ago | @ 35 days ago
+ @ 25 days ago | @ 30 days ago
+ @ 20 days ago | @ 25 days ago
+ @ 15 days ago | @ 20 days ago
+ @ 10 days ago | @ 15 days ago
+ @ 5 days ago  | @ 10 days ago
+ @ 0           | @ 5 days ago
+ @ 5 days      | @ 0
+ @ 10 days     | @ 5 days
+ @ 15 days     | @ 10 days
+ @ 20 days     | @ 15 days
+ @ 25 days     | @ 20 days
+ @ 30 days     | @ 25 days
+ @ 35 days     | @ 30 days
+(17 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 week');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '65 days', now() + INTERVAL '65 days');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('day', now()) - from_value::date as from_diff,
+        date_trunc('day', now()) - to_value::date as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'date_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff   |    to_diff
+---------------------------------------------------------------------
+ @ 60 days ago | @ 67 days ago
+ @ 53 days ago | @ 60 days ago
+ @ 46 days ago | @ 53 days ago
+ @ 39 days ago | @ 46 days ago
+ @ 32 days ago | @ 39 days ago
+ @ 25 days ago | @ 32 days ago
+ @ 18 days ago | @ 25 days ago
+ @ 11 days ago | @ 18 days ago
+ @ 4 days ago  | @ 11 days ago
+ @ 3 days      | @ 4 days ago
+ @ 10 days     | @ 3 days
+ @ 17 days     | @ 10 days
+ @ 24 days     | @ 17 days
+ @ 31 days     | @ 24 days
+ @ 38 days     | @ 31 days
+ @ 45 days     | @ 38 days
+ @ 52 days     | @ 45 days
+(17 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '5 days', now() + INTERVAL '5 days');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('day', now()) - from_value::date as from_diff,
+        date_trunc('day', now()) - to_value::date as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'date_partitioned_table'::regclass
+    ORDER BY 1,2;
+  from_diff   |   to_diff
+---------------------------------------------------------------------
+ @ 7 days ago | @ 8 days ago
+ @ 6 days ago | @ 7 days ago
+ @ 5 days ago | @ 6 days ago
+ @ 4 days ago | @ 5 days ago
+ @ 3 days ago | @ 4 days ago
+ @ 2 days ago | @ 3 days ago
+ @ 1 day ago  | @ 2 days ago
+ @ 0          | @ 1 day ago
+ @ 1 day      | @ 0
+ @ 2 days     | @ 1 day
+ @ 3 days     | @ 2 days
+ @ 4 days     | @ 3 days
+ @ 5 days     | @ 4 days
+ @ 6 days     | @ 5 days
+ @ 7 days     | @ 6 days
+(15 rows)
+
+ROLLBACK;
+DROP TABLE date_partitioned_table;
+-- Create missing partitions for various ranges on timestamptz partitioned table
+CREATE TABLE tstz_partitioned_table(
+    measureid integer,
+    eventdatetime timestamp with time zone,
+    measure_data integer) PARTITION BY RANGE(eventdatetime);
+BEGIN;
+    SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 hour');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '1 day');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('hour', now()) - from_value::timestamp with time zone as from_diff,
+        date_trunc('hour', now()) - to_value::timestamp with time zone as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'tstz_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff    |      to_diff
+---------------------------------------------------------------------
+ @ 1 day ago    | @ 1 day 1 hour ago
+ @ 23 hours ago | @ 1 day ago
+ @ 22 hours ago | @ 23 hours ago
+ @ 21 hours ago | @ 22 hours ago
+ @ 20 hours ago | @ 21 hours ago
+ @ 19 hours ago | @ 20 hours ago
+ @ 18 hours ago | @ 19 hours ago
+ @ 17 hours ago | @ 18 hours ago
+ @ 16 hours ago | @ 17 hours ago
+ @ 15 hours ago | @ 16 hours ago
+ @ 14 hours ago | @ 15 hours ago
+ @ 13 hours ago | @ 14 hours ago
+ @ 12 hours ago | @ 13 hours ago
+ @ 11 hours ago | @ 12 hours ago
+ @ 10 hours ago | @ 11 hours ago
+ @ 9 hours ago  | @ 10 hours ago
+ @ 8 hours ago  | @ 9 hours ago
+ @ 7 hours ago  | @ 8 hours ago
+ @ 6 hours ago  | @ 7 hours ago
+ @ 5 hours ago  | @ 6 hours ago
+ @ 4 hours ago  | @ 5 hours ago
+ @ 3 hours ago  | @ 4 hours ago
+ @ 2 hours ago  | @ 3 hours ago
+ @ 1 hour ago   | @ 2 hours ago
+ @ 0            | @ 1 hour ago
+ @ 1 hour       | @ 0
+ @ 2 hours      | @ 1 hour
+ @ 3 hours      | @ 2 hours
+ @ 4 hours      | @ 3 hours
+ @ 5 hours      | @ 4 hours
+ @ 6 hours      | @ 5 hours
+ @ 7 hours      | @ 6 hours
+(32 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 hour');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('hour', now()) - from_value::timestamp with time zone as from_diff,
+        date_trunc('hour', now()) - to_value::timestamp with time zone as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'tstz_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff    |      to_diff
+---------------------------------------------------------------------
+ @ 1 day ago    | @ 1 day 1 hour ago
+ @ 23 hours ago | @ 1 day ago
+ @ 22 hours ago | @ 23 hours ago
+ @ 21 hours ago | @ 22 hours ago
+ @ 20 hours ago | @ 21 hours ago
+ @ 19 hours ago | @ 20 hours ago
+ @ 18 hours ago | @ 19 hours ago
+ @ 17 hours ago | @ 18 hours ago
+ @ 16 hours ago | @ 17 hours ago
+ @ 15 hours ago | @ 16 hours ago
+ @ 14 hours ago | @ 15 hours ago
+ @ 13 hours ago | @ 14 hours ago
+ @ 12 hours ago | @ 13 hours ago
+ @ 11 hours ago | @ 12 hours ago
+ @ 10 hours ago | @ 11 hours ago
+ @ 9 hours ago  | @ 10 hours ago
+ @ 8 hours ago  | @ 9 hours ago
+ @ 7 hours ago  | @ 8 hours ago
+ @ 6 hours ago  | @ 7 hours ago
+ @ 5 hours ago  | @ 6 hours ago
+ @ 4 hours ago  | @ 5 hours ago
+ @ 3 hours ago  | @ 4 hours ago
+ @ 2 hours ago  | @ 3 hours ago
+ @ 1 hour ago   | @ 2 hours ago
+ @ 0            | @ 1 hour ago
+ @ 1 hour       | @ 0
+ @ 2 hours      | @ 1 hour
+ @ 3 hours      | @ 2 hours
+ @ 4 hours      | @ 3 hours
+ @ 5 hours      | @ 4 hours
+ @ 6 hours      | @ 5 hours
+ @ 7 hours      | @ 6 hours
+ @ 8 hours      | @ 7 hours
+ @ 9 hours      | @ 8 hours
+ @ 10 hours     | @ 9 hours
+ @ 11 hours     | @ 10 hours
+ @ 12 hours     | @ 11 hours
+ @ 13 hours     | @ 12 hours
+ @ 14 hours     | @ 13 hours
+ @ 15 hours     | @ 14 hours
+ @ 16 hours     | @ 15 hours
+ @ 17 hours     | @ 16 hours
+ @ 18 hours     | @ 17 hours
+ @ 19 hours     | @ 18 hours
+ @ 20 hours     | @ 19 hours
+ @ 21 hours     | @ 20 hours
+ @ 22 hours     | @ 21 hours
+ @ 23 hours     | @ 22 hours
+ @ 1 day        | @ 23 hours
+(49 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '6 hours');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('hour', now()) - from_value::timestamp with time zone as from_diff,
+        date_trunc('hour', now()) - to_value::timestamp with time zone as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'tstz_partitioned_table'::regclass
+    ORDER BY 1,2;
+      from_diff       |       to_diff
+---------------------------------------------------------------------
+ @ 1 day 18 hours ago | @ 2 days ago
+ @ 1 day 12 hours ago | @ 1 day 18 hours ago
+ @ 1 day 6 hours ago  | @ 1 day 12 hours ago
+ @ 1 day ago          | @ 1 day 6 hours ago
+ @ 18 hours ago       | @ 1 day ago
+ @ 12 hours ago       | @ 18 hours ago
+ @ 6 hours ago        | @ 12 hours ago
+ @ 0                  | @ 6 hours ago
+ @ 6 hours            | @ 0
+ @ 12 hours           | @ 6 hours
+ @ 18 hours           | @ 12 hours
+ @ 1 day              | @ 18 hours
+ @ 1 day 6 hours      | @ 1 day
+ @ 1 day 12 hours     | @ 1 day 6 hours
+ @ 1 day 18 hours     | @ 1 day 12 hours
+(15 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 day');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '5 days', now() - INTERVAL '5 days');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('day', now()) - from_value::timestamp with time zone as from_diff,
+        date_trunc('day', now()) - to_value::timestamp with time zone as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'tstz_partitioned_table'::regclass;
+  from_diff   |   to_diff
+---------------------------------------------------------------------
+ @ 6 days     | @ 5 days
+ @ 1 day ago  | @ 2 days ago
+ @ 3 days     | @ 2 days
+ @ 4 days ago | @ 5 days ago
+ @ 5 days     | @ 4 days
+ @ 2 days ago | @ 3 days ago
+ @ 4 days     | @ 3 days
+ @ 3 days ago | @ 4 days ago
+ @ 7 days     | @ 6 days
+ @ 0          | @ 1 day ago
+ @ 7 days ago | @ 8 days ago
+ @ 2 days     | @ 1 day
+ @ 5 days ago | @ 6 days ago
+ @ 1 day      | @ 0
+ @ 6 days ago | @ 7 days ago
+(15 rows)
+
+ROLLBACK;
+DROP TABLE tstz_partitioned_table;
+-- Show range values for timestamp without time zone partitioned table
+CREATE TABLE tswtz_partitioned_table(
+    measureid integer,
+    eventdatetime timestamp without time zone,
+    measure_data integer) PARTITION BY RANGE(eventdatetime);
+BEGIN;
+    SELECT create_timeseries_table('tswtz_partitioned_table', INTERVAL '1 hour');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '1 day');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('hour', now()) - from_value::timestamp without time zone as from_diff,
+        date_trunc('hour', now()) - to_value::timestamp without time zone as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'tswtz_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff    |      to_diff
+---------------------------------------------------------------------
+ @ 1 day ago    | @ 1 day 1 hour ago
+ @ 23 hours ago | @ 1 day ago
+ @ 22 hours ago | @ 23 hours ago
+ @ 21 hours ago | @ 22 hours ago
+ @ 20 hours ago | @ 21 hours ago
+ @ 19 hours ago | @ 20 hours ago
+ @ 18 hours ago | @ 19 hours ago
+ @ 17 hours ago | @ 18 hours ago
+ @ 16 hours ago | @ 17 hours ago
+ @ 15 hours ago | @ 16 hours ago
+ @ 14 hours ago | @ 15 hours ago
+ @ 13 hours ago | @ 14 hours ago
+ @ 12 hours ago | @ 13 hours ago
+ @ 11 hours ago | @ 12 hours ago
+ @ 10 hours ago | @ 11 hours ago
+ @ 9 hours ago  | @ 10 hours ago
+ @ 8 hours ago  | @ 9 hours ago
+ @ 7 hours ago  | @ 8 hours ago
+ @ 6 hours ago  | @ 7 hours ago
+ @ 5 hours ago  | @ 6 hours ago
+ @ 4 hours ago  | @ 5 hours ago
+ @ 3 hours ago  | @ 4 hours ago
+ @ 2 hours ago  | @ 3 hours ago
+ @ 1 hour ago   | @ 2 hours ago
+ @ 0            | @ 1 hour ago
+ @ 1 hour       | @ 0
+ @ 2 hours      | @ 1 hour
+ @ 3 hours      | @ 2 hours
+ @ 4 hours      | @ 3 hours
+ @ 5 hours      | @ 4 hours
+ @ 6 hours      | @ 5 hours
+ @ 7 hours      | @ 6 hours
+(32 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('tswtz_partitioned_table', INTERVAL '1 hour');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('hour', now()) - from_value::timestamp without time zone as from_diff,
+        date_trunc('hour', now()) - to_value::timestamp without time zone as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'tswtz_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff    |      to_diff
+---------------------------------------------------------------------
+ @ 1 day ago    | @ 1 day 1 hour ago
+ @ 23 hours ago | @ 1 day ago
+ @ 22 hours ago | @ 23 hours ago
+ @ 21 hours ago | @ 22 hours ago
+ @ 20 hours ago | @ 21 hours ago
+ @ 19 hours ago | @ 20 hours ago
+ @ 18 hours ago | @ 19 hours ago
+ @ 17 hours ago | @ 18 hours ago
+ @ 16 hours ago | @ 17 hours ago
+ @ 15 hours ago | @ 16 hours ago
+ @ 14 hours ago | @ 15 hours ago
+ @ 13 hours ago | @ 14 hours ago
+ @ 12 hours ago | @ 13 hours ago
+ @ 11 hours ago | @ 12 hours ago
+ @ 10 hours ago | @ 11 hours ago
+ @ 9 hours ago  | @ 10 hours ago
+ @ 8 hours ago  | @ 9 hours ago
+ @ 7 hours ago  | @ 8 hours ago
+ @ 6 hours ago  | @ 7 hours ago
+ @ 5 hours ago  | @ 6 hours ago
+ @ 4 hours ago  | @ 5 hours ago
+ @ 3 hours ago  | @ 4 hours ago
+ @ 2 hours ago  | @ 3 hours ago
+ @ 1 hour ago   | @ 2 hours ago
+ @ 0            | @ 1 hour ago
+ @ 1 hour       | @ 0
+ @ 2 hours      | @ 1 hour
+ @ 3 hours      | @ 2 hours
+ @ 4 hours      | @ 3 hours
+ @ 5 hours      | @ 4 hours
+ @ 6 hours      | @ 5 hours
+ @ 7 hours      | @ 6 hours
+ @ 8 hours      | @ 7 hours
+ @ 9 hours      | @ 8 hours
+ @ 10 hours     | @ 9 hours
+ @ 11 hours     | @ 10 hours
+ @ 12 hours     | @ 11 hours
+ @ 13 hours     | @ 12 hours
+ @ 14 hours     | @ 13 hours
+ @ 15 hours     | @ 14 hours
+ @ 16 hours     | @ 15 hours
+ @ 17 hours     | @ 16 hours
+ @ 18 hours     | @ 17 hours
+ @ 19 hours     | @ 18 hours
+ @ 20 hours     | @ 19 hours
+ @ 21 hours     | @ 20 hours
+ @ 22 hours     | @ 21 hours
+ @ 23 hours     | @ 22 hours
+ @ 1 day        | @ 23 hours
+(49 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('tswtz_partitioned_table', INTERVAL '6 hours');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('hour', now()) - from_value::timestamp without time zone as from_diff,
+        date_trunc('hour', now()) - to_value::timestamp without time zone as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'tswtz_partitioned_table'::regclass
+    ORDER BY 1,2;
+      from_diff       |       to_diff
+---------------------------------------------------------------------
+ @ 1 day 18 hours ago | @ 2 days ago
+ @ 1 day 12 hours ago | @ 1 day 18 hours ago
+ @ 1 day 6 hours ago  | @ 1 day 12 hours ago
+ @ 1 day ago          | @ 1 day 6 hours ago
+ @ 18 hours ago       | @ 1 day ago
+ @ 12 hours ago       | @ 18 hours ago
+ @ 6 hours ago        | @ 12 hours ago
+ @ 0                  | @ 6 hours ago
+ @ 6 hours            | @ 0
+ @ 12 hours           | @ 6 hours
+ @ 18 hours           | @ 12 hours
+ @ 1 day              | @ 18 hours
+ @ 1 day 6 hours      | @ 1 day
+ @ 1 day 12 hours     | @ 1 day 6 hours
+ @ 1 day 18 hours     | @ 1 day 12 hours
+(15 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('tswtz_partitioned_table', INTERVAL '1 day');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '5 days', now() - INTERVAL '5 days');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('day', now()) - from_value::timestamp without time zone as from_diff,
+        date_trunc('day', now()) - to_value::timestamp without time zone as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'tswtz_partitioned_table'::regclass
+    ORDER BY 1,2;
+  from_diff   |   to_diff
+---------------------------------------------------------------------
+ @ 7 days ago | @ 8 days ago
+ @ 6 days ago | @ 7 days ago
+ @ 5 days ago | @ 6 days ago
+ @ 4 days ago | @ 5 days ago
+ @ 3 days ago | @ 4 days ago
+ @ 2 days ago | @ 3 days ago
+ @ 1 day ago  | @ 2 days ago
+ @ 0          | @ 1 day ago
+ @ 1 day      | @ 0
+ @ 2 days     | @ 1 day
+ @ 3 days     | @ 2 days
+ @ 4 days     | @ 3 days
+ @ 5 days     | @ 4 days
+ @ 6 days     | @ 5 days
+ @ 7 days     | @ 6 days
+(15 rows)
+
+ROLLBACK;
+DROP TABLE tswtz_partitioned_table;

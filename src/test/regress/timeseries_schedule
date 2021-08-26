@@ -4,3 +4,4 @@ test: multi_test_catalog_views
 
 test: timeseries_create_drop_timeseries_table
 test: timeseries_get_missing_partition_ranges
+test: timeseries_create_missing_partitions

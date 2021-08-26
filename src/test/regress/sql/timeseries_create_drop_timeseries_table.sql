@@ -57,23 +57,23 @@ SELECT create_timeseries_table('date_partitioned_table', INTERVAL '3 hours');
 SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day 15 minutes');
 
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '2 days');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '2 days');
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 week');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 week');
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month');
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month 15 weeks 3 days');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month 15 weeks 3 days');
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 year 1 month 15 weeks 3 days');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 year 1 month 15 weeks 3 days');
 ROLLBACK;
 
 DROP TABLE date_partitioned_table;
@@ -92,11 +92,11 @@ SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 wee
 SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', retention_threshold => INTERVAL '5 days');
 
 BEGIN;
-SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', compression_threshold => INTERVAL '10 days');
+    SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', compression_threshold => INTERVAL '10 days');
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', compression_threshold => INTERVAL '10 days', retention_threshold => INTERVAL '15 days');
+    SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', compression_threshold => INTERVAL '10 days', retention_threshold => INTERVAL '15 days');
 ROLLBACK;
 
 DROP TABLE ts_comp_date_partitioned_table;
@@ -112,11 +112,11 @@ SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '2 hou
 SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '2 hours', retention_threshold => INTERVAL '1 hour');
 
 BEGIN;
-SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '2 hours', compression_threshold => INTERVAL '6 hours');
+    SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '2 hours', compression_threshold => INTERVAL '6 hours');
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '90 minutes', compression_threshold => INTERVAL '180 minutes', retention_threshold => INTERVAL '360 minutes');
+    SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '90 minutes', compression_threshold => INTERVAL '180 minutes', retention_threshold => INTERVAL '360 minutes');
 ROLLBACK;
 
 DROP TABLE ts_comp_tstz_partitioned_table;
@@ -130,11 +130,11 @@ CREATE TABLE param_test_partitioned_table(
 SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', premake_interval_count => 7, start_from => now());
 
 BEGIN;
-SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', premake_interval_count => 7);
+    SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', premake_interval_count => 7);
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', start_from => now());
+    SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', start_from => now());
 ROLLBACK;
 
 DROP TABLE param_test_partitioned_table;
@@ -146,31 +146,31 @@ CREATE TABLE count_test_partitioned_table(
     measure_data integer) PARTITION BY RANGE(eventdatetime);
 
 BEGIN;
-SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '1 minute', postmake_interval_count => 0, premake_interval_count => 0);
-SELECT count(*)
-FROM pg_catalog.time_partitions
-WHERE parent_table = 'count_test_partitioned_table'::regclass;
+    SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '1 minute', postmake_interval_count => 0, premake_interval_count => 0);
+    SELECT count(*)
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'count_test_partitioned_table'::regclass;
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '1 hour', postmake_interval_count => 0, premake_interval_count => 5);
-SELECT count(*)
-FROM pg_catalog.time_partitions
-WHERE parent_table = 'count_test_partitioned_table'::regclass;
+    SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '1 hour', postmake_interval_count => 0, premake_interval_count => 5);
+    SELECT count(*)
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'count_test_partitioned_table'::regclass;
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '2 weeks', postmake_interval_count => 5, premake_interval_count => 0);
-SELECT count(*)
-FROM pg_catalog.time_partitions
-WHERE parent_table = 'count_test_partitioned_table'::regclass;
+    SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '2 weeks', postmake_interval_count => 5, premake_interval_count => 0);
+    SELECT count(*)
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'count_test_partitioned_table'::regclass;
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '2 months', postmake_interval_count => 3, premake_interval_count => 4);
-SELECT count(*)
-FROM pg_catalog.time_partitions
-WHERE parent_table = 'count_test_partitioned_table'::regclass;
+    SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '2 months', postmake_interval_count => 3, premake_interval_count => 4);
+    SELECT count(*)
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'count_test_partitioned_table'::regclass;
 ROLLBACK;
 
 DROP TABLE count_test_partitioned_table;
@@ -182,39 +182,39 @@ CREATE TABLE range_check_test_partitioned_table(
     measure_data integer) PARTITION BY RANGE(eventdatetime);
 
 BEGIN;
-SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 hour');
-SELECT partition, 
-       date_trunc('hour',now()) - from_value::timestamptz as from_diff,
-       date_trunc('hour', now()) - to_value::timestamptz as to_diff 
-FROM pg_catalog.time_partitions 
-ORDER BY 1;
+    SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 hour');
+    SELECT partition, 
+        date_trunc('hour',now()) - from_value::timestamptz as from_diff,
+        date_trunc('hour', now()) - to_value::timestamptz as to_diff 
+    FROM pg_catalog.time_partitions 
+    ORDER BY 1;
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 day', postmake_interval_count => 5);
-SELECT partition, 
-       date_trunc('day',now()) - from_value::timestamptz as from_diff,
-       date_trunc('day', now()) - to_value::timestamptz as to_diff 
-FROM pg_catalog.time_partitions 
-ORDER BY 1;
+    SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 day', postmake_interval_count => 5);
+    SELECT partition, 
+        date_trunc('day',now()) - from_value::timestamptz as from_diff,
+        date_trunc('day', now()) - to_value::timestamptz as to_diff 
+    FROM pg_catalog.time_partitions 
+    ORDER BY 1;
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', premake_interval_count => 3);
-SELECT partition, 
-       date_trunc('week',now()) - from_value::timestamptz as from_diff,
-       date_trunc('week', now()) - to_value::timestamptz as to_diff 
-FROM pg_catalog.time_partitions 
-ORDER BY 1;
+    SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', premake_interval_count => 3);
+    SELECT partition, 
+        date_trunc('week',now()) - from_value::timestamptz as from_diff,
+        date_trunc('week', now()) - to_value::timestamptz as to_diff 
+    FROM pg_catalog.time_partitions 
+    ORDER BY 1;
 ROLLBACK;
 
 BEGIN;
-SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', start_from => now() - INTERVAL '4 weeks');
-SELECT partition, 
-       date_trunc('week',now()) - from_value::timestamptz as from_diff,
-       date_trunc('week', now()) - to_value::timestamptz as to_diff 
-FROM pg_catalog.time_partitions 
-ORDER BY 1;
+    SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', start_from => now() - INTERVAL '4 weeks');
+    SELECT partition, 
+        date_trunc('week',now()) - from_value::timestamptz as from_diff,
+        date_trunc('week', now()) - to_value::timestamptz as to_diff 
+    FROM pg_catalog.time_partitions 
+    ORDER BY 1;
 ROLLBACK;
 
 -- Check drop table
@@ -229,12 +229,12 @@ DROP TABLE drop_check_test_partitioned_table;
 SELECT * FROM citus_timeseries.citus_timeseries_tables;
 
 BEGIN;
-CREATE TABLE drop_check_test_partitioned_table(
-    measureid integer,
-    eventdatetime timestamp with time zone,
-    measure_data integer) PARTITION BY RANGE(eventdatetime);
-SELECT create_timeseries_table('drop_check_test_partitioned_table', INTERVAL '2 hours');
-SELECT * FROM citus_timeseries.citus_timeseries_tables;
-DROP TABLE drop_check_test_partitioned_table;
-SELECT * FROM citus_timeseries.citus_timeseries_tables;
+    CREATE TABLE drop_check_test_partitioned_table(
+        measureid integer,
+        eventdatetime timestamp with time zone,
+        measure_data integer) PARTITION BY RANGE(eventdatetime);
+    SELECT create_timeseries_table('drop_check_test_partitioned_table', INTERVAL '2 hours');
+    SELECT * FROM citus_timeseries.citus_timeseries_tables;
+    DROP TABLE drop_check_test_partitioned_table;
+    SELECT * FROM citus_timeseries.citus_timeseries_tables;
 COMMIT;
