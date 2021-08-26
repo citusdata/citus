@@ -130,7 +130,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	uint64 shardId = shardInterval->shardId;
 
 	/*
-	 * We only take an access share lock, otherwise we'll hold up master_add_node.
+	 * We only take an access share lock, otherwise we'll hold up citus_add_node.
 	 * In case of create_reference_table() where we don't want concurrent writes
 	 * to pg_dist_node, we have already acquired ShareLock on pg_dist_node.
 	 */
