@@ -126,7 +126,7 @@ void
 QualifyAlterTypeStmt(Node *node)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType(stmt) == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
 
 	if (stmt->relation->schemaname == NULL)
 	{

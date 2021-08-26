@@ -32,7 +32,7 @@ void
 QualifyAlterSequenceOwnerStmt(Node *node)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(AlterTableStmtObjType(stmt) == OBJECT_SEQUENCE);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_SEQUENCE);
 
 	RangeVar *seq = stmt->relation;
 
