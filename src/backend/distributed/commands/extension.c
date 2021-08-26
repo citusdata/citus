@@ -152,9 +152,9 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will have the extension, because they will
-	 * either get it now, or get it in master_add_node after this transaction finishes and
+	 * either get it now, or get it in citus_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
@@ -265,9 +265,9 @@ PreprocessDropExtensionStmt(Node *node, const char *queryString,
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will drop the extension, because they will
-	 * either get it now, or get it in master_add_node after this transaction finishes and
+	 * either get it now, or get it in citus_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
@@ -401,7 +401,7 @@ PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString,
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will update the extension schema after
 	 * this transaction finishes and the pg_dist_object record becomes visible.
 	 */
@@ -469,9 +469,9 @@ PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString,
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will update the extension version, because
-	 * they will either get it now, or get it in master_add_node after this transaction
+	 * they will either get it now, or get it in citus_add_node after this transaction
 	 * finishes and the pg_dist_object record becomes visible.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
