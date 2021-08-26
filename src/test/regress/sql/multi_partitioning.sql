@@ -1303,6 +1303,55 @@ SELECT worker_partitioned_relation_total_size(oid) FROM pg_class WHERE relname L
  \c - - - :master_port
 DROP TABLE "events.Energy Added";
 
+-- test expire_old_time_partitions
+-- test with date partitioned table
+CREATE TABLE date_partitioned_table_to_exp (event_date date, event int) partition by range (event_date);
+SELECT create_distributed_table('date_partitioned_table_to_exp', 'event');
+
+CREATE TABLE date_partitioned_table_to_exp_d00 PARTITION OF date_partitioned_table_to_exp FOR VALUES FROM ('2000-01-01') TO ('2009-12-31');
+CREATE TABLE date_partitioned_table_to_exp_d10 PARTITION OF date_partitioned_table_to_exp FOR VALUES FROM ('2010-01-01') TO ('2019-12-31');
+CREATE TABLE date_partitioned_table_to_exp_d20 PARTITION OF date_partitioned_table_to_exp FOR VALUES FROM ('2020-01-01') TO ('2029-12-31');
+INSERT INTO date_partitioned_table_to_exp VALUES ('2005-01-01', 1);
+INSERT INTO date_partitioned_table_to_exp VALUES ('2015-01-01', 2);
+INSERT INTO date_partitioned_table_to_exp VALUES ('2025-01-01', 3);
+
+\set VERBOSITY terse
+
+-- expire no partitions
+CALL expire_old_time_partitions('date_partitioned_table_to_exp', '1999-01-01');
+SELECT partition FROM time_partitions WHERE parent_table = 'date_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+
+-- expire 2 old partitions
+CALL expire_old_time_partitions('date_partitioned_table_to_exp', '2021-01-01');
+SELECT partition FROM time_partitions WHERE parent_table = 'date_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+
+\set VERBOSITY default
+DROP TABLE date_partitioned_table_to_exp;
+
+-- test with timestamptz partitioned table
+CREATE TABLE tstz_partitioned_table_to_exp (event_time timestamptz, event int) partition by range (event_time);
+SELECT create_distributed_table('tstz_partitioned_table_to_exp', 'event');
+
+CREATE TABLE tstz_partitioned_table_to_exp_d0 PARTITION OF tstz_partitioned_table_to_exp FOR VALUES FROM ('2021-01-01 02:00:00+00') TO ('2021-01-01 06:00:00+00');
+CREATE TABLE tstz_partitioned_table_to_exp_d1 PARTITION OF tstz_partitioned_table_to_exp FOR VALUES FROM ('2021-01-01 06:00:00+00') TO ('2021-01-01 10:00:00+00');
+CREATE TABLE tstz_partitioned_table_to_exp_d2 PARTITION OF tstz_partitioned_table_to_exp FOR VALUES FROM ('2021-01-01 10:00:00+00') TO ('2021-01-01 14:00:00+00');
+INSERT INTO tstz_partitioned_table_to_exp VALUES ('2021-01-01 03:00:00+00', 1);
+INSERT INTO tstz_partitioned_table_to_exp VALUES ('2021-01-01 09:00:00+00', 2);
+INSERT INTO tstz_partitioned_table_to_exp VALUES ('2021-01-01 13:00:00+00', 3);
+
+\set VERBOSITY terse
+
+-- expire no partitions
+CALL expire_old_time_partitions('tstz_partitioned_table_to_exp', '2021-01-01 01:00:00+00');
+SELECT partition FROM time_partitions WHERE parent_table = 'tstz_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+
+-- expire 2 old partitions
+CALL expire_old_time_partitions('tstz_partitioned_table_to_exp', '2021-01-01 12:00:00+00');
+SELECT partition FROM time_partitions WHERE parent_table = 'tstz_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+
+\set VERBOSITY default
+DROP TABLE tstz_partitioned_table_to_exp;
+
 DROP SCHEMA partitioning_schema CASCADE;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,

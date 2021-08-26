@@ -120,6 +120,7 @@ ORDER BY 1;
  function distributed_tables_colocated(regclass,regclass)
  function dump_global_wait_edges()
  function dump_local_wait_edges()
+ function expire_old_time_partitions(regclass, timestamp with time zone)
  function fetch_intermediate_results(text[],text,integer)
  function fix_pre_citus10_partitioned_table_constraint_names()
  function fix_pre_citus10_partitioned_table_constraint_names(regclass)
@@ -254,5 +255,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(238 rows)
+(239 rows)
 
