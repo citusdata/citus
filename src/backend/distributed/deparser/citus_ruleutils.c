@@ -1062,7 +1062,7 @@ contain_nextval_expression_walker(Node *node, void *context)
 	{
 		FuncExpr *funcExpr = (FuncExpr *) node;
 
-		if (funcExpr->funcid == F_NEXTVAL_COMPAT)
+		if (funcExpr->funcid == F_NEXTVAL)
 		{
 			return true;
 		}
