@@ -1935,7 +1935,6 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 					   DestReceiver *dest,
 					   QueryCompletionCompat *completionTag)
 {
-
 #if PG_VERSION_NUM >= PG_VERSION_14
 	if (readOnlyTree)
 	{

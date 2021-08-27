@@ -31,7 +31,7 @@ BEGIN
      * Citus extension, so we create that dependency here.
      * We are not using:
      *  ALTER EXENSION citus DROP/CREATE AGGREGATE array_cat_agg
-     * because we don't have an easy way to check if the aggregate 
+     * because we don't have an easy way to check if the aggregate
      * exists with anyarray type or anycompatiblearray type.
      */
     INSERT INTO pg_depend
