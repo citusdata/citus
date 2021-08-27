@@ -1275,6 +1275,8 @@ simple_quote_literal(StringInfo buf, const char *val)
  *
  * CURRENT_USER - resolved to the user name of the current role being used
  * SESSION_USER - resolved to the user name of the user that opened the session
+ * CURRENT_ROLE - same as CURRENT_USER, resolved to the user name of the current role being used
+ * Postgres treats CURRENT_ROLE is equivalent to CURRENT_USER, and we follow the same approach.
  *
  * withQuoteIdentifier is used, because if the results will be used in a query the quotes are needed but if not there
  * should not be extra quotes.
@@ -1290,7 +1292,9 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 				   quote_identifier(spec->rolename) :
 				   spec->rolename;
 		}
-
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		case ROLESPEC_CURRENT_ROLE:
+		#endif
 		case ROLESPEC_CURRENT_USER:
 		{
 			return withQuoteIdentifier ?
