@@ -116,8 +116,11 @@ ORDER BY 1;
  function create_distributed_function(regprocedure,text,text)
  function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
  function create_intermediate_result(text,text)
+ function create_missing_partitions(regclass,timestamp with time zone,timestamp with time zone)
  function create_reference_table(regclass)
+ function create_timeseries_table(regclass,interval,integer,integer,timestamp with time zone,interval,interval)
  function distributed_tables_colocated(regclass,regclass)
+ function drop_timeseries_table(regclass)
  function dump_global_wait_edges()
  function dump_local_wait_edges()
  function fetch_intermediate_results(text[],text,integer)
@@ -128,6 +131,7 @@ ORDER BY 1;
  function get_colocated_table_array(regclass)
  function get_current_transaction_id()
  function get_global_active_transactions()
+ function get_missing_partition_ranges(regclass,timestamp with time zone,timestamp with time zone)
  function get_rebalance_progress()
  function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name,real)
  function get_shard_id_for_distribution_column(regclass,"any")
@@ -217,6 +221,7 @@ ORDER BY 1;
  function worker_save_query_explain_analyze(text,jsonb)
  schema citus
  schema citus_internal
+ schema citus_timeseries
  schema columnar
  sequence columnar.storageid_seq
  sequence pg_dist_colocationid_seq
@@ -225,6 +230,7 @@ ORDER BY 1;
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
  table citus.pg_dist_object
+ table citus_timeseries.citus_timeseries_tables
  table columnar.chunk
  table columnar.chunk_group
  table columnar.options
@@ -254,5 +260,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(238 rows)
+(244 rows)
 

@@ -10,7 +10,7 @@ SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '15 
 BEGIN;
     SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day');
     SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '15 days');
-    SELECT 
+    SELECT
         date_trunc('day', now()) - from_value::date as from_diff,
         date_trunc('day', now()) - to_value::date as to_diff
     FROM pg_catalog.time_partitions
@@ -21,7 +21,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day');
     SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '10 days', now() + INTERVAL '10 days');
-    SELECT 
+    SELECT
         date_trunc('day', now()) - from_value::date as from_diff,
         date_trunc('day', now()) - to_value::date as to_diff
     FROM pg_catalog.time_partitions
@@ -32,7 +32,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('date_partitioned_table', INTERVAL '5 days');
     SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '45 days', now() + INTERVAL '45 days');
-    SELECT 
+    SELECT
         date_trunc('day', now()) - from_value::date as from_diff,
         date_trunc('day', now()) - to_value::date as to_diff
     FROM pg_catalog.time_partitions
@@ -43,7 +43,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 week');
     SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '65 days', now() + INTERVAL '65 days');
-    SELECT 
+    SELECT
         date_trunc('day', now()) - from_value::date as from_diff,
         date_trunc('day', now()) - to_value::date as to_diff
     FROM pg_catalog.time_partitions
@@ -54,7 +54,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day');
     SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '5 days', now() + INTERVAL '5 days');
-    SELECT 
+    SELECT
         date_trunc('day', now()) - from_value::date as from_diff,
         date_trunc('day', now()) - to_value::date as to_diff
     FROM pg_catalog.time_partitions
@@ -73,7 +73,7 @@ CREATE TABLE tstz_partitioned_table(
 BEGIN;
     SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 hour');
     SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '1 day');
-    SELECT 
+    SELECT
         date_trunc('hour', now()) - from_value::timestamp with time zone as from_diff,
         date_trunc('hour', now()) - to_value::timestamp with time zone as to_diff
     FROM pg_catalog.time_partitions
@@ -84,7 +84,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 hour');
     SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
-    SELECT 
+    SELECT
         date_trunc('hour', now()) - from_value::timestamp with time zone as from_diff,
         date_trunc('hour', now()) - to_value::timestamp with time zone as to_diff
     FROM pg_catalog.time_partitions
@@ -95,7 +95,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '6 hours');
     SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
-    SELECT 
+    SELECT
         date_trunc('hour', now()) - from_value::timestamp with time zone as from_diff,
         date_trunc('hour', now()) - to_value::timestamp with time zone as to_diff
     FROM pg_catalog.time_partitions
@@ -106,7 +106,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 day');
     SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '5 days', now() - INTERVAL '5 days');
-    SELECT 
+    SELECT
         date_trunc('day', now()) - from_value::timestamp with time zone as from_diff,
         date_trunc('day', now()) - to_value::timestamp with time zone as to_diff
     FROM pg_catalog.time_partitions
@@ -124,7 +124,7 @@ CREATE TABLE tswtz_partitioned_table(
 BEGIN;
     SELECT create_timeseries_table('tswtz_partitioned_table', INTERVAL '1 hour');
     SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '1 day');
-    SELECT 
+    SELECT
         date_trunc('hour', now()) - from_value::timestamp without time zone as from_diff,
         date_trunc('hour', now()) - to_value::timestamp without time zone as to_diff
     FROM pg_catalog.time_partitions
@@ -135,7 +135,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('tswtz_partitioned_table', INTERVAL '1 hour');
     SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
-    SELECT 
+    SELECT
         date_trunc('hour', now()) - from_value::timestamp without time zone as from_diff,
         date_trunc('hour', now()) - to_value::timestamp without time zone as to_diff
     FROM pg_catalog.time_partitions
@@ -146,7 +146,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('tswtz_partitioned_table', INTERVAL '6 hours');
     SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
-    SELECT 
+    SELECT
         date_trunc('hour', now()) - from_value::timestamp without time zone as from_diff,
         date_trunc('hour', now()) - to_value::timestamp without time zone as to_diff
     FROM pg_catalog.time_partitions
@@ -157,7 +157,7 @@ ROLLBACK;
 BEGIN;
     SELECT create_timeseries_table('tswtz_partitioned_table', INTERVAL '1 day');
     SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '5 days', now() - INTERVAL '5 days');
-    SELECT 
+    SELECT
         date_trunc('day', now()) - from_value::timestamp without time zone as from_diff,
         date_trunc('day', now()) - to_value::timestamp without time zone as to_diff
     FROM pg_catalog.time_partitions

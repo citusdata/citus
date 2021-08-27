@@ -78,7 +78,7 @@ ROLLBACK;
 
 DROP TABLE date_partitioned_table;
 
--- 2) retention threshold must be greater than compression threshold and 
+-- 2) retention threshold must be greater than compression threshold and
 -- compresstion threshold must be greater than partition interval
 
 -- With date partitioned table
@@ -183,37 +183,37 @@ CREATE TABLE range_check_test_partitioned_table(
 
 BEGIN;
     SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 hour');
-    SELECT partition, 
+    SELECT partition,
         date_trunc('hour',now()) - from_value::timestamptz as from_diff,
-        date_trunc('hour', now()) - to_value::timestamptz as to_diff 
-    FROM pg_catalog.time_partitions 
+        date_trunc('hour', now()) - to_value::timestamptz as to_diff
+    FROM pg_catalog.time_partitions
     ORDER BY 1;
 ROLLBACK;
 
 BEGIN;
     SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 day', postmake_interval_count => 5);
-    SELECT partition, 
+    SELECT partition,
         date_trunc('day',now()) - from_value::timestamptz as from_diff,
-        date_trunc('day', now()) - to_value::timestamptz as to_diff 
-    FROM pg_catalog.time_partitions 
+        date_trunc('day', now()) - to_value::timestamptz as to_diff
+    FROM pg_catalog.time_partitions
     ORDER BY 1;
 ROLLBACK;
 
 BEGIN;
     SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', premake_interval_count => 3);
-    SELECT partition, 
+    SELECT partition,
         date_trunc('week',now()) - from_value::timestamptz as from_diff,
-        date_trunc('week', now()) - to_value::timestamptz as to_diff 
-    FROM pg_catalog.time_partitions 
+        date_trunc('week', now()) - to_value::timestamptz as to_diff
+    FROM pg_catalog.time_partitions
     ORDER BY 1;
 ROLLBACK;
 
 BEGIN;
     SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', start_from => now() - INTERVAL '4 weeks');
-    SELECT partition, 
+    SELECT partition,
         date_trunc('week',now()) - from_value::timestamptz as from_diff,
-        date_trunc('week', now()) - to_value::timestamptz as to_diff 
-    FROM pg_catalog.time_partitions 
+        date_trunc('week', now()) - to_value::timestamptz as to_diff
+    FROM pg_catalog.time_partitions
     ORDER BY 1;
 ROLLBACK;
 

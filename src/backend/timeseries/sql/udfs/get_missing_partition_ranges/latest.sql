@@ -111,7 +111,8 @@ BEGIN
          * Since partition interval can be given as, we are converting all variables to timestamptz to make sure
          * that we are comparing same type of parameters
          */
-        PERFORM * FROM pg_catalog.time_partitions WHERE from_value::timestamptz = current_range_from_value::timestamptz AND to_value::timestamptz = current_range_to_value::timestamptz;
+        PERFORM * FROM pg_catalog.time_partitions
+        WHERE from_value::timestamptz = current_range_from_value::timestamptz AND to_value::timestamptz = current_range_to_value::timestamptz;
         IF found THEN
             current_range_from_value := current_range_to_value;
             current_range_to_value := current_range_to_value + table_partition_interval;
@@ -122,7 +123,7 @@ BEGIN
          * Check whether any other partition covers from_value or to_value
          * That means some partitions have been created manually and we must error out.
          */
-        PERFORM * FROM pg_catalog.time_partitions 
+        PERFORM * FROM pg_catalog.time_partitions
         WHERE (current_range_from_value::timestamptz > from_value::timestamptz AND current_range_from_value < to_value::timestamptz) OR
               (current_range_to_value::timestamptz > from_value::timestamptz AND current_range_to_value::timestamptz < to_value::timestamptz);
         IF found THEN
