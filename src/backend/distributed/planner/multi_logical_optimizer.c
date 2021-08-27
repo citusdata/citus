@@ -1890,7 +1890,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		if (aggregateType == AGGREGATE_ARRAY_AGG)
 		{
 #if PG_VERSION_NUM >= PG_VERSION_14
-			newMasterAggregate->aggargtypes = list_make1_oid(workerReturnType);
+			newMasterAggregate->aggargtypes = list_make1_oid(ANYCOMPATIBLEARRAYOID);
 #else
 			newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
 #endif
