@@ -135,16 +135,16 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 	info.entrysize = keySize;
 	info.hcxt = CurrentMemoryContext;
 
-	if (!isStringList)
+	if (isStringList)
+	{
+#if PG_VERSION_NUM >= PG_VERSION_14
+		flags |= HASH_STRINGS;
+#endif
+	}
+	else
 	{
 		flags |= HASH_BLOBS;
 	}
-#if PG_VERSION_NUM >= PG_VERSION_14
-	else
-	{
-		flags |= HASH_STRINGS;
-	}
-#endif
 
 	HTAB *itemSet = hash_create("ListToHashSet", capacity, &info, flags);
 
