@@ -799,6 +799,32 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 	}
 }
 
+/*
+ * IsReindexWithParam_compat returns true if the given parameter
+ * exists for the given reindexStmt.
+ */
+bool IsReindexWithParam_compat(ReindexStmt* reindexStmt, char* param) {
+#if PG_VERSION_NUM < PG_VERSION_14
+	if (strcmp(param, "concurrently") == 0) {
+		return reindexStmt->concurrent;
+	}else if (strcmp(param, "verbose") == 0) {
+		return reindexStmt->options & REINDEXOPT_VERBOSE;
+	}
+	return false;
+#else
+	DefElem *opt = NULL;
+	foreach_ptr(opt, reindexStmt->params)
+	{
+		if (strcmp(opt->defname, param) == 0)
+		{
+			return defGetBoolean(opt);
+		}
+	}
+	return false;	
+#endif
+
+} 
+
 
 /*
  * AddVacuumParams adds vacuum params to the given buffer.
@@ -1279,29 +1305,3 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 		}
 	}
 }
-
-
-#if PG_VERSION_NUM >= PG_VERSION_14
-
-/*
- * IsReindexWithParam searches the ReindexStmt's params for paramName
- * and returns true if it exists and value of param is true and returns
- * false otherwise
- */
-bool
-IsReindexWithParam(ReindexStmt *stmt, char *paramName)
-{
-	ListCell *lc;
-	foreach(lc, stmt->params)
-	{
-		DefElem *opt = (DefElem *) lfirst(lc);
-		if (strcmp(opt->defname, paramName) == 0)
-		{
-			return defGetBoolean(opt);
-		}
-	}
-	return false;
-}
-
-
-#endif

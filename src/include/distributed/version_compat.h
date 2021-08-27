@@ -40,7 +40,6 @@
 #define FuncnameGetCandidates_compat(a, b, c, d, e, f, g) \
 	FuncnameGetCandidates(a, b, c, d, e, f, g)
 #define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, b, c, d)
-#define IsReindexWithParam_compat(reindex, param) IsReindexWithParam(reindex, param)
 #define BeginCopyFrom_compat(a, b, c, d, e, f, g, h) BeginCopyFrom(a, b, c, d, e, f, g, h)
 #define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	standard_ProcessUtility(a, b, c, d, e, f, g, h)
@@ -71,10 +70,6 @@
 #define VACOPTVALUE_UNSPECIFIED VACOPT_TERNARY_DEFAULT
 #define VACOPTVALUE_DISABLED VACOPT_TERNARY_DISABLED
 #define VACOPTVALUE_ENABLED VACOPT_TERNARY_ENABLED
-#define IsReindexWithParam_compat(reindex, param) \
-	((strcmp(param, "concurrently") == 0) ? ((reindex)->concurrent) : \
-	 ((strcmp(param, "verbose") == 0) ? ((reindex)->options == REINDEXOPT_VERBOSE) : \
-	  false))
 #define CopyFromState CopyState
 #define BeginCopyFrom_compat(a, b, c, d, e, f, g, h) BeginCopyFrom(a, b, d, e, f, g, h)
 #define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
