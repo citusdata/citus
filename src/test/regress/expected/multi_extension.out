@@ -806,7 +806,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                         | function citus_internal_update_relation_colocation(oid,integer) void
                                                         | function create_missing_partitions(regclass,timestamp with time zone,timestamp with time zone) boolean
                                                         | function create_timeseries_table(regclass,interval,integer,integer,timestamp with time zone,interval,interval) void
-                                                        | function drop_timeseries_table(regclass) void
+                                                        | function drop_timeseries_table_metadata(regclass) void
                                                         | function get_missing_partition_ranges(regclass,timestamp with time zone,timestamp with time zone) TABLE(range_from_value text, range_to_value text)
                                                         | function stop_metadata_sync_to_node(text,integer,boolean) void
                                                         | schema timeseries

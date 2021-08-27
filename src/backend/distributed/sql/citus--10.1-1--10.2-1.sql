@@ -19,6 +19,6 @@ ALTER TABLE pg_catalog.pg_dist_placement ADD CONSTRAINT placement_shardid_groupi
 #include "udfs/citus_drop_trigger/10.2-1.sql"
 #include "../../timeseries/sql/timeseries--10.1-1--10.2-1.sql"
 #include "../../timeseries/sql/udfs/create_timeseries_table/10.2-1.sql"
-#include "../../timeseries/sql/udfs/drop_timeseries_table/10.2-1.sql"
+#include "../../timeseries/sql/udfs/drop_timeseries_table_metadata/10.2-1.sql"
 #include "../../timeseries/sql/udfs/create_missing_partitions/10.2-1.sql"
 #include "../../timeseries/sql/udfs/get_missing_partition_ranges/10.2-1.sql"

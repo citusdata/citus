@@ -120,7 +120,7 @@ ORDER BY 1;
  function create_reference_table(regclass)
  function create_timeseries_table(regclass,interval,integer,integer,timestamp with time zone,interval,interval)
  function distributed_tables_colocated(regclass,regclass)
- function drop_timeseries_table(regclass)
+ function drop_timeseries_table_metadata(regclass)
  function dump_global_wait_edges()
  function dump_local_wait_edges()
  function fetch_intermediate_results(text[],text,integer)

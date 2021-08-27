@@ -24,7 +24,7 @@ BEGIN
         PERFORM master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name);
         PERFORM citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name);
         PERFORM master_remove_partition_metadata(v_obj.objid, v_obj.schema_name, v_obj.object_name);
-        PERFORM drop_timeseries_table(v_obj.objid);
+        PERFORM drop_timeseries_table_metadata(v_obj.objid);
     END LOOP;
 
     -- remove entries from citus.pg_dist_object for all dropped root (objsubid = 0) objects

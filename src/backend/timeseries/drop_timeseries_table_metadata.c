@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * drop_timeseries_table.c
+ * drop_timeseries_table_metadata.c
  *	  Routines related to the drop of timeseries tables.
  *
  * Copyright (c) Citus Data, Inc.
@@ -23,17 +23,17 @@
 #include "distributed/metadata_cache.h"
 #include "timeseries/timeseries_utils.h"
 
-PG_FUNCTION_INFO_V1(drop_timeseries_table);
+PG_FUNCTION_INFO_V1(drop_timeseries_table_metadata);
 
 /*
- * drop_timeseries_table gets the table oid, then it drops
+ * drop_timeseries_table_metadata gets the table oid, then it drops
  * all the metadata related to it. Note that this function doesn't
  * drop any partitions or any data of the given table.
  *
  * TODO: Add unscheduling for automated jobs as well.
  */
 Datum
-drop_timeseries_table(PG_FUNCTION_ARGS)
+drop_timeseries_table_metadata(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
