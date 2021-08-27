@@ -33,6 +33,7 @@
 	 (ivp)->month * (30.0 * SECS_PER_DAY))
 
 extern Oid CitusTimeseriesTablesRelationId(void);
+extern Oid CitusTimeseriesTablesPKeyIndexRelationId(void);
 extern Oid TimeseriesNamespaceId(void);
 extern bool CheckIntervalAlignmentWithThresholds(Interval *partitionInterval,
 												 Interval *compressionThreshold,

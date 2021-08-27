@@ -24,7 +24,7 @@ BEGIN
 
     SELECT partitioninterval
     INTO table_partition_interval
-    FROM citus_timeseries.citus_timeseries_tables
+    FROM timeseries.tables
     WHERE logicalrelid = table_name;
 
     IF NOT found THEN

@@ -46,15 +46,16 @@ drop_timeseries_table(PG_FUNCTION_ARGS)
 
 	ScanKeyData relIdKey[1];
 	Relation timeseriesRelation = table_open(CitusTimeseriesTablesRelationId(),
-											 AccessShareLock);
+											 RowExclusiveLock);
+	Oid pkeyOid = CitusTimeseriesTablesPKeyIndexRelationId();
 
 	ScanKeyInit(&relIdKey[0],
 				Anum_citus_timeseries_table_relation_id,
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(relationId));
 
-	SysScanDesc timeseriesRelScan = systable_beginscan(timeseriesRelation, InvalidOid,
-													   false, NULL, 1, relIdKey);
+	SysScanDesc timeseriesRelScan = systable_beginscan(timeseriesRelation, pkeyOid,
+													   true, NULL, 1, relIdKey);
 	HeapTuple timeseriesTuple = systable_getnext(timeseriesRelScan);
 
 	if (HeapTupleIsValid(timeseriesTuple))

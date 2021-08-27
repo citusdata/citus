@@ -380,14 +380,14 @@ SELECT create_timeseries_table('drop_check_test_partitioned_table', INTERVAL '2 
 
 (1 row)
 
-SELECT * FROM citus_timeseries.citus_timeseries_tables;
+SELECT * FROM timeseries.tables;
            logicalrelid            | partitioninterval | postmakeintervalcount | premakeintervalcount | startfrom | compressionthreshold | retentionthreshold
 ---------------------------------------------------------------------
  drop_check_test_partitioned_table | @ 2 hours         |                     7 |                    7 |           |                      |
 (1 row)
 
 DROP TABLE drop_check_test_partitioned_table;
-SELECT * FROM citus_timeseries.citus_timeseries_tables;
+SELECT * FROM timeseries.tables;
  logicalrelid | partitioninterval | postmakeintervalcount | premakeintervalcount | startfrom | compressionthreshold | retentionthreshold
 ---------------------------------------------------------------------
 (0 rows)
@@ -403,14 +403,14 @@ SELECT create_timeseries_table('drop_check_test_partitioned_table', INTERVAL '2 
 
 (1 row)
 
-SELECT * FROM citus_timeseries.citus_timeseries_tables;
+SELECT * FROM timeseries.tables;
            logicalrelid            | partitioninterval | postmakeintervalcount | premakeintervalcount | startfrom | compressionthreshold | retentionthreshold
 ---------------------------------------------------------------------
  drop_check_test_partitioned_table | @ 2 hours         |                     7 |                    7 |           |                      |
 (1 row)
 
 DROP TABLE drop_check_test_partitioned_table;
-SELECT * FROM citus_timeseries.citus_timeseries_tables;
+SELECT * FROM timeseries.tables;
  logicalrelid | partitioninterval | postmakeintervalcount | premakeintervalcount | startfrom | compressionthreshold | retentionthreshold
 ---------------------------------------------------------------------
 (0 rows)

@@ -192,7 +192,7 @@ ErrorIfNotSuitableToConvertTimeseriesTable(Oid relationId, Interval *partitionIn
 
 /*
  * Create the initial pre and post make partitions for the given relation id
- * by getting the related information from citus_timeseries_tables and utilizing
+ * by getting the related information from timeseries.tables and utilizing
  * create_missing_partitions
  */
 static void
@@ -209,13 +209,25 @@ InitiateTimeseriesTablePartitions(Oid relationId, bool useStartFrom)
 	if (useStartFrom)
 	{
 		appendStringInfo(initiateTimeseriesPartitionsCommand,
-						 "SELECT create_missing_partitions(logicalrelid, now() + partitioninterval * postmakeintervalcount, startfrom) from citus_timeseries.citus_timeseries_tables WHERE logicalrelid = %d;",
+						 "SELECT "
+						 "pg_catalog.create_missing_partitions("
+						 "logicalrelid,"
+						 "now() + partitioninterval * postmakeintervalcount,"
+						 "startfrom) "
+						 "FROM timeseries.tables "
+						 "WHERE logicalrelid = %d;",
 						 relationId);
 	}
 	else
 	{
 		appendStringInfo(initiateTimeseriesPartitionsCommand,
-						 "SELECT create_missing_partitions(logicalrelid, now() + partitioninterval * postmakeintervalcount, now() - partitioninterval * premakeintervalcount) from citus_timeseries.citus_timeseries_tables WHERE logicalrelid = %d;",
+						 "SELECT "
+						 "pg_catalog.create_missing_partitions("
+						 "logicalrelid,"
+						 "now() + partitioninterval * postmakeintervalcount,"
+						 "now() - partitioninterval * premakeintervalcount) "
+						 "FROM timeseries.tables "
+						 "WHERE logicalrelid = %d;",
 						 relationId);
 	}
 
@@ -233,7 +245,7 @@ InitiateTimeseriesTablePartitions(Oid relationId, bool useStartFrom)
 
 
 /*
- * Add tuples for the given table to the citus_timeseries_tables using given params
+ * Add tuples for the given table to the timeseries.tables using given params
  */
 static void
 InsertIntoCitusTimeseriesTables(Oid relationId, Interval *partitionInterval,

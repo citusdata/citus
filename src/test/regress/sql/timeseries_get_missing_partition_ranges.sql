@@ -80,7 +80,7 @@ ROLLBACK;
 
 BEGIN;
     SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '6 hours');
-    SELECT 
+    SELECT
         date_trunc('hour', now()) - range_from_value::timestamp with time zone as from_diff,
         date_trunc('hour', now()) - range_to_value::timestamp with time zone as to_diff
     FROM get_missing_partition_ranges('tstz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day')

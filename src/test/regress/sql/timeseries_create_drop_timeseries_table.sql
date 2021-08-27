@@ -224,9 +224,9 @@ CREATE TABLE drop_check_test_partitioned_table(
     measure_data integer) PARTITION BY RANGE(eventdatetime);
 
 SELECT create_timeseries_table('drop_check_test_partitioned_table', INTERVAL '2 hours');
-SELECT * FROM citus_timeseries.citus_timeseries_tables;
+SELECT * FROM timeseries.tables;
 DROP TABLE drop_check_test_partitioned_table;
-SELECT * FROM citus_timeseries.citus_timeseries_tables;
+SELECT * FROM timeseries.tables;
 
 BEGIN;
     CREATE TABLE drop_check_test_partitioned_table(
@@ -234,7 +234,7 @@ BEGIN;
         eventdatetime timestamp with time zone,
         measure_data integer) PARTITION BY RANGE(eventdatetime);
     SELECT create_timeseries_table('drop_check_test_partitioned_table', INTERVAL '2 hours');
-    SELECT * FROM citus_timeseries.citus_timeseries_tables;
+    SELECT * FROM timeseries.tables;
     DROP TABLE drop_check_test_partitioned_table;
-    SELECT * FROM citus_timeseries.citus_timeseries_tables;
+    SELECT * FROM timeseries.tables;
 COMMIT;

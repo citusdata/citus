@@ -23,20 +23,30 @@
 #include "timeseries/timeseries_utils.h"
 
 /*
- * Get the relation id for citus_timeseries_tables metadata table
+ * Get the relation id for timeseries.tables metadata table
  */
 Oid
 CitusTimeseriesTablesRelationId()
 {
-	Oid relationId = get_relname_relid("citus_timeseries_tables",
+	Oid relationId = get_relname_relid("tables",
 									   TimeseriesNamespaceId());
 	if (relationId == InvalidOid)
 	{
-		ereport(ERROR, (errmsg("cache lookup failed for citus_timeseries_tables,"
+		ereport(ERROR, (errmsg("cache lookup failed for timeseries tables,"
 							   "called too early?")));
 	}
 
 	return relationId;
+}
+
+
+/*
+ * CitusTimeseriesTablesPKeyIndexRelationId returns relation id of timeseries.tables_pkey.
+ */
+Oid
+CitusTimeseriesTablesPKeyIndexRelationId()
+{
+	return get_relname_relid("tables_pkey", TimeseriesNamespaceId());
 }
 
 
@@ -47,7 +57,7 @@ CitusTimeseriesTablesRelationId()
 Oid
 TimeseriesNamespaceId()
 {
-	return get_namespace_oid("citus_timeseries", false);
+	return get_namespace_oid("timeseries", false);
 }
 
 
@@ -83,13 +93,9 @@ bool
 CheckIntervalAlignnmentWithPartitionKey(PartitionKey partitionKey,
 										Interval *partitionInterval)
 {
-	Oid partTypeId;
-	HeapTuple typeTuple;
-	Form_pg_type typeForm;
-
-	partTypeId = partitionKey->parttypid[0];
-	typeTuple = SearchSysCache1(TYPEOID, partTypeId);
-	typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
+	Oid partTypeId = partitionKey->parttypid[0];
+	HeapTuple typeTuple = SearchSysCache1(TYPEOID, partTypeId);
+	Form_pg_type typeForm = (Form_pg_type) GETSTRUCT(typeTuple);
 	ReleaseSysCache(typeTuple);
 
 	if (strncmp(typeForm->typname.data, "date", NAMEDATALEN) == 0)

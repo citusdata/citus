@@ -230,7 +230,7 @@ ORDER BY 1;
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
  table citus.pg_dist_object
- table citus_timeseries.citus_timeseries_tables
+ table timeseries.tables
  table columnar.chunk
  table columnar.chunk_group
  table columnar.options
