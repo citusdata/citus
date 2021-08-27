@@ -59,12 +59,12 @@ create-symbolic-link:
 	ln -fsn $(citus_abs_srcdir)/expected $(citus_abs_srcdir)/build/
 
 create-tablespaces:
-	rm -rf $(citus_abs_srcdir)/data/ts1
-	mkdir -p $(citus_abs_srcdir)/data/ts1
-	rm -rf $(citus_abs_srcdir)/data/ts0
-	mkdir -p $(citus_abs_srcdir)/data/ts0
-	rm -rf $(citus_abs_srcdir)/data/ts2
-	mkdir -p $(citus_abs_srcdir)/data/ts2
+	rm -rf $(citus_abs_srcdir)/tmp_check/ts1
+	mkdir -p $(citus_abs_srcdir)/tmp_check/ts1
+	rm -rf $(citus_abs_srcdir)/tmp_check/ts0
+	mkdir -p $(citus_abs_srcdir)/tmp_check/ts0
+	rm -rf $(citus_abs_srcdir)/tmp_check/ts2
+	mkdir -p $(citus_abs_srcdir)/tmp_check/ts2
 
 # How this target works:
 # cpp is used before running isolation tests to preprocess spec files.
