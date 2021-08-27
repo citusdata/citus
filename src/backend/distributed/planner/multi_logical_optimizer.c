@@ -1890,6 +1890,12 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		if (aggregateType == AGGREGATE_ARRAY_AGG)
 		{
 #if PG_VERSION_NUM >= PG_VERSION_14
+			/*
+			 * Postgres expects the type of the array here such as INT4ARRAYOID.
+			 * Hence we set it to workerReturnType. If we set this to 
+			 * ANYCOMPATIBLEARRAYOID then we will get the following error:
+			 * "argument declared anycompatiblearray is not an array but type anycompatiblearray"
+			 */
 			newMasterAggregate->aggargtypes = list_make1_oid(workerReturnType);
 #else
 			newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
