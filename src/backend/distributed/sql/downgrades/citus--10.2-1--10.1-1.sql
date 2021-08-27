@@ -1,6 +1,7 @@
 -- citus--10.2-1--10.1-1
 
 #include "../../../columnar/sql/downgrades/columnar--10.2-1--10.1-1.sql"
+#include "../../../timeseries/sql/downgrades/timeseries--10.2-1--10.1-1.sql"
 
 DROP FUNCTION pg_catalog.stop_metadata_sync_to_node(text, integer, bool);
 

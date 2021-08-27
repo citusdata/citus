@@ -221,8 +221,8 @@ ORDER BY 1;
  function worker_save_query_explain_analyze(text,jsonb)
  schema citus
  schema citus_internal
- schema citus_timeseries
  schema columnar
+ schema timeseries
  sequence columnar.storageid_seq
  sequence pg_dist_colocationid_seq
  sequence pg_dist_groupid_seq
@@ -230,7 +230,6 @@ ORDER BY 1;
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
  table citus.pg_dist_object
- table timeseries.tables
  table columnar.chunk
  table columnar.chunk_group
  table columnar.options
@@ -246,6 +245,7 @@ ORDER BY 1;
  table pg_dist_rebalance_strategy
  table pg_dist_shard
  table pg_dist_transaction
+ table timeseries.tables
  type citus.distribution_type
  type citus.shard_transfer_mode
  type citus_copy_format
