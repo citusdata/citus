@@ -59,11 +59,11 @@ create-symbolic-link:
 	ln -fsn $(citus_abs_srcdir)/expected $(citus_abs_srcdir)/build/
 
 create-tablespaces:
-	rm -r $(citus_abs_srcdir)/data/ts1
+	rm -rf $(citus_abs_srcdir)/data/ts1
 	mkdir -p $(citus_abs_srcdir)/data/ts1
-	rm -r $(citus_abs_srcdir)/data/ts0
+	rm -rf $(citus_abs_srcdir)/data/ts0
 	mkdir -p $(citus_abs_srcdir)/data/ts0
-	rm -r $(citus_abs_srcdir)/data/ts2
+	rm -rf $(citus_abs_srcdir)/data/ts2
 	mkdir -p $(citus_abs_srcdir)/data/ts2
 
 # How this target works:
