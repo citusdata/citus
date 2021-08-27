@@ -142,6 +142,20 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- should error saying table space doesn't exist
 reindex(TABLESPACE test_tablespace1) index idx;
 ERROR:  tablespace "test_tablespace1" does not exist
+reset citus.log_remote_commands;
+-- CREATE STATISTICS only allow simple column references
+CREATE TABLE tbl1(a timestamp, b int);
+SELECT create_distributed_table('tbl1','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- the last one should error out
+CREATE STATISTICS s1 (dependencies) ON a, b FROM tbl1;
+CREATE STATISTICS s2 (mcv) ON a, b FROM tbl1;
+CREATE STATISTICS s3 (ndistinct) ON date_trunc('month', a), date_trunc('day', a) FROM tbl1;
+ERROR:  only simple column references are allowed in CREATE STATISTICS
 set citus.log_remote_commands to off;
 set client_min_messages to error;
 drop schema pg14 cascade;
