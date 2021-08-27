@@ -64,9 +64,7 @@ typedef struct
 {
 	Relation rel;
 	EState *estate;
-#if PG_VERSION_NUM >= PG_VERSION_14
 	ResultRelInfo *resultRelInfo;
-#endif
 } ModifyState;
 
 /* RowNumberLookupMode to be used in StripeMetadataLookupRowNumber */
@@ -1147,12 +1145,8 @@ StartModifyRelation(Relation rel)
 {
 	EState *estate = create_estate_for_relation(rel);
 
-#if PG_VERSION_NUM >= PG_VERSION_14
 	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
 	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
-#else
-	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
-#endif
 
 	/* ExecSimpleRelationInsert, ... require caller to open indexes */
 	ExecOpenIndices(resultRelInfo, false);
@@ -1160,9 +1154,7 @@ StartModifyRelation(Relation rel)
 	ModifyState *modifyState = palloc(sizeof(ModifyState));
 	modifyState->rel = rel;
 	modifyState->estate = estate;
-#if PG_VERSION_NUM >= PG_VERSION_14
 	modifyState->resultRelInfo = resultRelInfo;
-#endif
 
 	return modifyState;
 }
