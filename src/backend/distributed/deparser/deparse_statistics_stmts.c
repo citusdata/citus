@@ -242,7 +242,7 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 
 	foreach_ptr(column, stmt->exprs)
 	{
-		char *columnName = quote_identifier(column->name);
+		const char *columnName = quote_identifier(column->name);
 
 		appendStringInfoString(buf, columnName);
 
