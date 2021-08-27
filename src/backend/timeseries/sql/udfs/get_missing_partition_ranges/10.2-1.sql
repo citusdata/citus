@@ -1,11 +1,10 @@
 CREATE OR REPLACE FUNCTION pg_catalog.get_missing_partition_ranges(
-		table_name regclass,
-        to_date timestamptz,
-        start_from timestamptz DEFAULT NULL)
+    table_name regclass,
+    to_date timestamptz,
+    start_from timestamptz DEFAULT NULL)
 returns table(
     range_from_value text,
-    range_to_value text
-)
+    range_to_value text)
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -48,7 +47,8 @@ BEGIN
             INTO current_range_from_value, current_range_to_value
             FROM pg_catalog.time_partitions
             WHERE parent_table = table_name
-            ORDER BY from_value::timestamptz;
+            ORDER BY from_value::timestamptz ASC
+            LIMIT 1;
 
             WHILE current_range_from_value > start_from LOOP
                  current_range_from_value := current_range_from_value - table_partition_interval;
@@ -92,7 +92,8 @@ BEGIN
         INTO current_range_from_value, current_range_to_value
         FROM pg_catalog.time_partitions
         WHERE parent_table = table_name
-        ORDER BY from_value::timestamptz;
+        ORDER BY from_value::timestamptz ASC
+        LIMIT 1;
     END IF;
 
     /*
@@ -148,7 +149,7 @@ BEGIN
 END;
 $$;
 COMMENT ON FUNCTION pg_catalog.create_missing_partitions(
-		table_name regclass,
-        to_date timestamptz,
-        start_from timestamptz)
+	table_name regclass,
+    to_date timestamptz,
+    start_from timestamptz)
 IS 'create missing partitions for the given timeseries table';

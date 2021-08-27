@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION pg_catalog.create_missing_partitions(
-		table_name regclass,
-        to_date timestamptz,
-        start_from timestamptz DEFAULT NULL)
+    table_name regclass,
+    to_date timestamptz,
+    start_from timestamptz DEFAULT NULL)
 returns boolean
 LANGUAGE plpgsql
 AS $$
@@ -38,7 +38,7 @@ BEGIN
 END;
 $$;
 COMMENT ON FUNCTION pg_catalog.create_missing_partitions(
-		table_name regclass,
-        to_date timestamptz,
-        start_from timestamptz)
+    table_name regclass,
+    to_date timestamptz,
+    start_from timestamptz)
 IS 'create missing partitions for the given timeseries table and range';

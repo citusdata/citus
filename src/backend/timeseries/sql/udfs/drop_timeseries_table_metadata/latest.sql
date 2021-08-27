@@ -6,4 +6,4 @@ AS 'MODULE_PATHNAME', 'drop_timeseries_table_metadata';
 
 COMMENT ON FUNCTION pg_catalog.drop_timeseries_table_metadata(
     logicalrelid regclass)
-IS 'drop a citus timeseries table''s metadata';
+IS 'drops citus timeseries table''s metadata';

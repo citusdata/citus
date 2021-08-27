@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.create_timeseries_table(
     premake_interval_count int DEFAULT NULL,
     start_from timestamptz DEFAULT NULL,
     compression_threshold INTERVAL DEFAULT NULL,
-    retention_threshold INTERVAL DEFAULT NULL) -- can change the order with compression, raise a message about dropping data
+    retention_threshold INTERVAL DEFAULT NULL)
     RETURNS void
     LANGUAGE C
 AS 'MODULE_PATHNAME', 'create_timeseries_table';
@@ -20,5 +20,3 @@ COMMENT ON FUNCTION pg_catalog.create_timeseries_table(
     compression_threshold INTERVAL,
     retention_threshold INTERVAL)
 IS 'creates a citus timeseries table which will be autopartitioned';
-
--- TODO: Add note about alter won't change existing tables
