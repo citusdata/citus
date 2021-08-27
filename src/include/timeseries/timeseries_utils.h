@@ -13,8 +13,6 @@
 #define TIMESERIES_UTILS_H_
 
 #include "postgres.h"
-#include "server/datatype/timestamp.h"
-#include "server/partitioning/partdefs.h"
 
 #define Natts_citus_timeseries_tables 7
 #define Anum_citus_timeseries_table_relation_id 1
