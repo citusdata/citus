@@ -3,6 +3,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.get_missing_partition_ranges(
     to_date timestamptz,
     start_from timestamptz DEFAULT NULL)
 returns table(
+    partition_name text,
     range_from_value text,
     range_to_value text)
 LANGUAGE plpgsql
@@ -13,6 +14,11 @@ DECLARE
     table_partition_column_type_name text;
     current_range_from_value timestamptz := NULL;
     current_range_to_value timestamptz := NULL;
+    current_range_from_value_text text;
+    current_range_to_value_text text;
+    current_range_from_value_text_in_table_name text;
+    current_range_to_value_text_in_table_name text;
+    max_table_name_length int;
 BEGIN
     /*
      * First check whether such timeseries table exists. If not, error out.
@@ -49,6 +55,13 @@ BEGIN
             WHERE parent_table = table_name
             ORDER BY from_value::timestamptz ASC
             LIMIT 1;
+
+            /*
+             * start_from must be less than the existing initial value
+             */
+            IF start_from >= current_range_from_value THEN
+                RAISE 'given start_from value must be before any of the existing partition ranges';
+            END IF;
 
             WHILE current_range_from_value > start_from LOOP
                  current_range_from_value := current_range_from_value - table_partition_interval;
@@ -106,6 +119,11 @@ BEGIN
     WHERE attrelid = table_name::oid
     AND attnum = (select partattrs[0] from pg_partitioned_table where partrelid = table_name::oid);
 
+    SELECT max_val
+    INTO max_table_name_length
+    FROM pg_settings
+    WHERE name = 'max_identifier_length';
+
     WHILE current_range_from_value < to_date LOOP
         /*
          * Check whether partition with given range has already been created
@@ -113,7 +131,10 @@ BEGIN
          * that we are comparing same type of parameters
          */
         PERFORM * FROM pg_catalog.time_partitions
-        WHERE from_value::timestamptz = current_range_from_value::timestamptz AND to_value::timestamptz = current_range_to_value::timestamptz;
+        WHERE
+            from_value::timestamptz = current_range_from_value::timestamptz AND
+            to_value::timestamptz = current_range_to_value::timestamptz AND
+            parent_table = table_name;
         IF found THEN
             current_range_from_value := current_range_to_value;
             current_range_to_value := current_range_to_value + table_partition_interval;
@@ -125,21 +146,44 @@ BEGIN
          * That means some partitions have been created manually and we must error out.
          */
         PERFORM * FROM pg_catalog.time_partitions
-        WHERE (current_range_from_value::timestamptz > from_value::timestamptz AND current_range_from_value < to_value::timestamptz) OR
-              (current_range_to_value::timestamptz > from_value::timestamptz AND current_range_to_value::timestamptz < to_value::timestamptz);
+        WHERE
+            ((current_range_from_value::timestamptz > from_value::timestamptz AND current_range_from_value < to_value::timestamptz) OR
+            (current_range_to_value::timestamptz > from_value::timestamptz AND current_range_to_value::timestamptz < to_value::timestamptz)) AND
+            parent_table = table_name;
         IF found THEN
             RAISE 'For the table % manual partition(s) has been created, Please remove them to continue using that table as timeseries table', table_name;
         END IF;
 
         IF table_partition_column_type_name = 'date' THEN
-            RETURN QUERY SELECT current_range_from_value::date::text, current_range_to_value::date::text;
+            SELECT current_range_from_value::date::text INTO current_range_from_value_text;
+            SELECT current_range_to_value::date::text INTO current_range_to_value_text;
+            SELECT to_char(current_range_from_value, 'YYYY_MM_DD') INTO current_range_from_value_text_in_table_name;
+            SELECT to_char(current_range_to_value, 'YYYY_MM_DD') INTO current_range_to_value_text_in_table_name;
         ELSIF table_partition_column_type_name = 'timestamp without time zone' THEN
-            RETURN QUERY SELECT current_range_from_value::timestamp::text, current_range_to_value::timestamp::text;
+            SELECT current_range_from_value::timestamp::text INTO current_range_from_value_text;
+            SELECT current_range_to_value::timestamp::text INTO current_range_to_value_text;
+            SELECT to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_from_value_text_in_table_name;
+            SELECT to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_to_value_text_in_table_name;
         ELSIF table_partition_column_type_name = 'timestamp with time zone' THEN
-            RETURN QUERY SELECT current_range_from_value::timestamptz::text, current_range_to_value::timestamptz::text;
+            SELECT current_range_from_value::timestamptz::text INTO current_range_from_value_text;
+            SELECT current_range_to_value::timestamptz::text INTO current_range_to_value_text;
+            SELECT translate(to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS_TZ'), '+', '') INTO current_range_from_value_text_in_table_name;
+            SELECT translate(to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS_TZ'), '+', '') INTO current_range_to_value_text_in_table_name;
         ELSE
             RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
         END IF;
+
+        /*
+         * Use range values within the name of partition to have unique partition names. We need to
+         * convert values which are not proper for table to '_'.
+         */
+        RETURN QUERY
+        SELECT
+            substring(table_name::text, 0, max_table_name_length - length(current_range_from_value_text_in_table_name) - length(current_range_to_value_text_in_table_name) - 1) || '_' ||
+            current_range_from_value_text_in_table_name || '_' ||
+            current_range_to_value_text_in_table_name,
+            current_range_from_value_text,
+            current_range_to_value_text;
 
         current_range_from_value := current_range_to_value;
         current_range_to_value := current_range_to_value + table_partition_interval;
