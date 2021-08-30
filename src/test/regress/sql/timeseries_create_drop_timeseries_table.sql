@@ -79,7 +79,7 @@ ROLLBACK;
 DROP TABLE date_partitioned_table;
 
 -- 2) retention threshold must be greater than compression threshold and
--- compresstion threshold must be greater than partition interval
+-- compression threshold must be greater than partition interval
 
 -- With date partitioned table
 CREATE TABLE ts_comp_date_partitioned_table(

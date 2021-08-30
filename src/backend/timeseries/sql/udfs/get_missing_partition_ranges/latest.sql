@@ -16,8 +16,8 @@ DECLARE
     current_range_to_value timestamptz := NULL;
     current_range_from_value_text text;
     current_range_to_value_text text;
-    current_range_from_value_text_in_table_name text;
-    current_range_to_value_text_in_table_name text;
+    current_range_from_value_text_in_partition_name text;
+    current_range_to_value_text_in_partition_name text;
     max_table_name_length int;
 BEGIN
     /*
@@ -56,9 +56,6 @@ BEGIN
             ORDER BY from_value::timestamptz ASC
             LIMIT 1;
 
-            /*
-             * start_from must be less than the existing initial value
-             */
             IF start_from >= current_range_from_value THEN
                 RAISE 'given start_from value must be before any of the existing partition ranges';
             END IF;
@@ -119,6 +116,9 @@ BEGIN
     WHERE attrelid = table_name::oid
     AND attnum = (select partattrs[0] from pg_partitioned_table where partrelid = table_name::oid);
 
+    /*
+     * Get max_table_name_length to use it while finding partitions' name
+     */
     SELECT max_val
     INTO max_table_name_length
     FROM pg_settings
@@ -127,8 +127,8 @@ BEGIN
     WHILE current_range_from_value < to_date LOOP
         /*
          * Check whether partition with given range has already been created
-         * Since partition interval can be given as, we are converting all variables to timestamptz to make sure
-         * that we are comparing same type of parameters
+         * Since partition interval can be given with different types, we are converting
+         * all variables to timestamptz to make sure that we are comparing same type of parameters
          */
         PERFORM * FROM pg_catalog.time_partitions
         WHERE
@@ -154,34 +154,34 @@ BEGIN
             RAISE 'For the table % manual partition(s) has been created, Please remove them to continue using that table as timeseries table', table_name;
         END IF;
 
-        IF table_partition_column_type_name = 'date' THEN
-            SELECT current_range_from_value::date::text INTO current_range_from_value_text;
-            SELECT current_range_to_value::date::text INTO current_range_to_value_text;
-            SELECT to_char(current_range_from_value, 'YYYY_MM_DD') INTO current_range_from_value_text_in_table_name;
-            SELECT to_char(current_range_to_value, 'YYYY_MM_DD') INTO current_range_to_value_text_in_table_name;
-        ELSIF table_partition_column_type_name = 'timestamp without time zone' THEN
-            SELECT current_range_from_value::timestamp::text INTO current_range_from_value_text;
-            SELECT current_range_to_value::timestamp::text INTO current_range_to_value_text;
-            SELECT to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_from_value_text_in_table_name;
-            SELECT to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_to_value_text_in_table_name;
-        ELSIF table_partition_column_type_name = 'timestamp with time zone' THEN
-            SELECT current_range_from_value::timestamptz::text INTO current_range_from_value_text;
-            SELECT current_range_to_value::timestamptz::text INTO current_range_to_value_text;
-            SELECT translate(to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS_TZ'), '+', '') INTO current_range_from_value_text_in_table_name;
-            SELECT translate(to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS_TZ'), '+', '') INTO current_range_to_value_text_in_table_name;
-        ELSE
-            RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
-        END IF;
-
         /*
          * Use range values within the name of partition to have unique partition names. We need to
          * convert values which are not proper for table to '_'.
          */
+        IF table_partition_column_type_name = 'date' THEN
+            SELECT current_range_from_value::date::text INTO current_range_from_value_text;
+            SELECT current_range_to_value::date::text INTO current_range_to_value_text;
+            SELECT to_char(current_range_from_value, 'YYYY_MM_DD') INTO current_range_from_value_text_in_partition_name;
+            SELECT to_char(current_range_to_value, 'YYYY_MM_DD') INTO current_range_to_value_text_in_partition_name;
+        ELSIF table_partition_column_type_name = 'timestamp without time zone' THEN
+            SELECT current_range_from_value::timestamp::text INTO current_range_from_value_text;
+            SELECT current_range_to_value::timestamp::text INTO current_range_to_value_text;
+            SELECT to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_from_value_text_in_partition_name;
+            SELECT to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_to_value_text_in_partition_name;
+        ELSIF table_partition_column_type_name = 'timestamp with time zone' THEN
+            SELECT current_range_from_value::timestamptz::text INTO current_range_from_value_text;
+            SELECT current_range_to_value::timestamptz::text INTO current_range_to_value_text;
+            SELECT translate(to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS_TZ'), '+', '') INTO current_range_from_value_text_in_partition_name;
+            SELECT translate(to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS_TZ'), '+', '') INTO current_range_to_value_text_in_partition_name;
+        ELSE
+            RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
+        END IF;
+
         RETURN QUERY
         SELECT
-            substring(table_name::text, 0, max_table_name_length - length(current_range_from_value_text_in_table_name) - length(current_range_to_value_text_in_table_name) - 1) || '_' ||
-            current_range_from_value_text_in_table_name || '_' ||
-            current_range_to_value_text_in_table_name,
+            substring(table_name::text, 0, max_table_name_length - length(current_range_from_value_text_in_partition_name) - length(current_range_to_value_text_in_partition_name) - 1) || '_' ||
+            current_range_from_value_text_in_partition_name || '_' ||
+            current_range_to_value_text_in_partition_name,
             current_range_from_value_text,
             current_range_to_value_text;
 

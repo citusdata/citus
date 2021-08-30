@@ -42,10 +42,10 @@ ROLLBACK;
 
 BEGIN;
     SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 week');
-    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '65 days', now() + INTERVAL '65 days');
+    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '85 days', now() + INTERVAL '85 days');
     SELECT
-        date_trunc('day', now()) - from_value::date as from_diff,
-        date_trunc('day', now()) - to_value::date as to_diff
+        date_trunc('week', now()) - from_value::date as from_diff,
+        date_trunc('week', now()) - to_value::date as to_diff
     FROM pg_catalog.time_partitions
     WHERE parent_table = 'date_partitioned_table'::regclass
     ORDER BY 1,2;
