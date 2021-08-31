@@ -814,50 +814,6 @@ NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_xxxxx CASCADE
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_xxxxx CASCADE
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_xxxxx CASCADE
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500197" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500200" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500203" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500206" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500209" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500212" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500215" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500218" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500221" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500224" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2012_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2012_1500227" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500229" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500232" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500235" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500238" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500241" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500244" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500247" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500250" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500253" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500256" does not exist, skipping
-NOTICE:  executing the command locally: DROP TABLE IF EXISTS local_commands_test_schema.partitioning_test_2013_xxxxx CASCADE
-NOTICE:  table "partitioning_test_2013_1500259" does not exist, skipping
 ROLLBACK;
 -- below should be executed via remote connections
 TRUNCATE partitioning_test;

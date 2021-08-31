@@ -51,7 +51,7 @@ ORDER BY 1;
  function citus_dist_shard_cache_invalidate()
  function citus_dist_stat_activity()
  function citus_drain_node(text,integer,citus.shard_transfer_mode,name)
- function citus_drop_all_shards(regclass,text,text)
+ function citus_drop_all_shards(regclass,text,text,boolean)
  function citus_drop_trigger()
  function citus_executor_name(integer)
  function citus_extradata_container(internal)

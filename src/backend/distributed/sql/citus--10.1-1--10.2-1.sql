@@ -16,3 +16,15 @@ ALTER TABLE pg_catalog.pg_dist_placement ADD CONSTRAINT placement_shardid_groupi
 #include "udfs/citus_internal_update_placement_metadata/10.2-1.sql";
 #include "udfs/citus_internal_delete_shard_metadata/10.2-1.sql";
 #include "udfs/citus_internal_update_relation_colocation/10.2-1.sql";
+
+DROP FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text);
+CREATE FUNCTION pg_catalog.citus_drop_all_shards(logicalrelid regclass,
+                                                 schema_name text,
+                                                 table_name text,
+                                                 drop_shards_metadata_only boolean default false)
+    RETURNS integer
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$citus_drop_all_shards$$;
+COMMENT ON FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text, boolean)
+    IS 'drop all shards in a relation and update metadata';
+#include "udfs/citus_drop_trigger/10.2-1.sql";

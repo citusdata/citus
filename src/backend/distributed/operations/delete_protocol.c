@@ -75,7 +75,7 @@ static void CheckPartitionColumn(Oid relationId, Node *whereClause);
 static List * ShardsMatchingDeleteCriteria(Oid relationId, List *shardList,
 										   Node *deleteCriteria);
 static int DropShards(Oid relationId, char *schemaName, char *relationName,
-					  List *deletableShardIntervalList);
+					  List *deletableShardIntervalList, bool dropShardsMetadataOnly);
 static List * DropTaskList(Oid relationId, char *schemaName, char *relationName,
 						   List *deletableShardIntervalList);
 static void ExecuteDropShardPlacementCommandRemotely(ShardPlacement *shardPlacement,
@@ -193,8 +193,10 @@ master_apply_delete_command(PG_FUNCTION_ARGS)
 																  deleteCriteria);
 	}
 
+	bool dropShardsMetadataOnly = false;
 	int droppedShardCount = DropShards(relationId, schemaName, relationName,
-									   deletableShardIntervalList);
+									   deletableShardIntervalList,
+									   dropShardsMetadataOnly);
 
 	PG_RETURN_INT32(droppedShardCount);
 }
@@ -213,6 +215,7 @@ citus_drop_all_shards(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *relationNameText = PG_GETARG_TEXT_P(2);
+	bool dropShardsMetadataOnly = PG_GETARG_BOOL(3);
 
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *relationName = text_to_cstring(relationNameText);
@@ -239,7 +242,7 @@ citus_drop_all_shards(PG_FUNCTION_ARGS)
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	int droppedShardCount = DropShards(relationId, schemaName, relationName,
-									   shardIntervalList);
+									   shardIntervalList, dropShardsMetadataOnly);
 
 	PG_RETURN_INT32(droppedShardCount);
 }
@@ -251,7 +254,25 @@ citus_drop_all_shards(PG_FUNCTION_ARGS)
 Datum
 master_drop_all_shards(PG_FUNCTION_ARGS)
 {
-	return citus_drop_all_shards(fcinfo);
+	Oid relationId = PG_GETARG_OID(0);
+	text *schemaNameText = PG_GETARG_TEXT_P(1);
+	text *relationNameText = PG_GETARG_TEXT_P(2);
+	bool dropShardsMetadataOnly = false;
+
+	LOCAL_FCINFO(local_fcinfo, 4);
+
+	InitFunctionCallInfoData(*local_fcinfo, NULL, 4, InvalidOid, NULL, NULL);
+
+	local_fcinfo->args[0].value = ObjectIdGetDatum(relationId);
+	local_fcinfo->args[0].isnull = false;
+	local_fcinfo->args[1].value = PointerGetDatum(schemaNameText);
+	local_fcinfo->args[1].isnull = false;
+	local_fcinfo->args[2].value = PointerGetDatum(relationNameText);
+	local_fcinfo->args[2].isnull = false;
+	local_fcinfo->args[3].value = BoolGetDatum(dropShardsMetadataOnly);
+	local_fcinfo->args[3].isnull = false;
+
+	return citus_drop_all_shards(local_fcinfo);
 }
 
 
@@ -299,10 +320,13 @@ CheckTableSchemaNameForDrop(Oid relationId, char **schemaName, char **tableName)
  *
  * We mark shard placements that we couldn't drop as to be deleted later, but
  * we do delete the shard metadadata.
+ *
+ * If dropShardsMetadataOnly is true, then we don't send remote commands to drop the shards:
+ * we only remove pg_dist_placement and pg_dist_shard rows.
  */
 static int
 DropShards(Oid relationId, char *schemaName, char *relationName,
-		   List *deletableShardIntervalList)
+		   List *deletableShardIntervalList, bool dropShardsMetadataOnly)
 {
 	Assert(OidIsValid(relationId));
 	Assert(schemaName != NULL);
@@ -345,51 +369,58 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 
 			bool isLocalShardPlacement = (shardPlacementGroupId == localGroupId);
 
-			if (isLocalShardPlacement && DropSchemaOrDBInProgress() &&
-				localGroupId == COORDINATOR_GROUP_ID)
-			{
-				/*
-				 * The active DROP SCHEMA/DATABASE ... CASCADE will drop the
-				 * shard, if we try to drop it over another connection, we will
-				 * get into a distributed deadlock. Hence, just delete the shard
-				 * placement metadata and skip it for now.
-				 */
-				DeleteShardPlacementRow(shardPlacementId);
-				continue;
-			}
+			/*
+			 * If this variable is true, that means the active DROP SCHEMA/DATABASE ... CASCADE
+			 * will drop the shard. If we try to drop it over another connection, we will
+			 * get into a distributed deadlock. Hence, if this variable is true we should just
+			 * delete the shard placement metadata and skip dropping the shard for now.
+			 */
+			bool skipIfDropSchemaOrDBInProgress = isLocalShardPlacement &&
+												  DropSchemaOrDBInProgress() &&
+												  localGroupId == COORDINATOR_GROUP_ID;
 
 			/*
-			 * If it is a local placement of a distributed table or a reference table,
-			 * then execute the DROP command locally.
+			 * We want to send commands to drop shards when both
+			 * skipIfDropSchemaOrDBInProgress and dropShardsMetadataOnly are false.
 			 */
-			if (isLocalShardPlacement && shouldExecuteTasksLocally)
-			{
-				List *singleTaskList = list_make1(task);
+			bool applyRemoteShardsDrop =
+				!skipIfDropSchemaOrDBInProgress && !dropShardsMetadataOnly;
 
-				ExecuteLocalUtilityTaskList(singleTaskList);
-			}
-			else
+			if (applyRemoteShardsDrop)
 			{
 				/*
-				 * Either it was not a local placement or we could not use
-				 * local execution even if it was a local placement.
-				 * If it is the second case, then it is possibly because in
-				 * current transaction, some commands or queries connected
-				 * to local group as well.
-				 *
-				 * Regardless of the node is a remote node or the current node,
-				 * try to open a new connection (or use an existing one) to
-				 * connect to that node to drop the shard placement over that
-				 * remote connection.
+				 * If it is a local placement of a distributed table or a reference table,
+				 * then execute the DROP command locally.
 				 */
-				const char *dropShardPlacementCommand = TaskQueryString(task);
-				ExecuteDropShardPlacementCommandRemotely(shardPlacement,
-														 relationName,
-														 dropShardPlacementCommand);
-
-				if (isLocalShardPlacement)
+				if (isLocalShardPlacement && shouldExecuteTasksLocally)
 				{
-					SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
+					List *singleTaskList = list_make1(task);
+
+					ExecuteLocalUtilityTaskList(singleTaskList);
+				}
+				else
+				{
+					/*
+					 * Either it was not a local placement or we could not use
+					 * local execution even if it was a local placement.
+					 * If it is the second case, then it is possibly because in
+					 * current transaction, some commands or queries connected
+					 * to local group as well.
+					 *
+					 * Regardless of the node is a remote node or the current node,
+					 * try to open a new connection (or use an existing one) to
+					 * connect to that node to drop the shard placement over that
+					 * remote connection.
+					 */
+					const char *dropShardPlacementCommand = TaskQueryString(task);
+					ExecuteDropShardPlacementCommandRemotely(shardPlacement,
+															 relationName,
+															 dropShardPlacementCommand);
+
+					if (isLocalShardPlacement)
+					{
+						SetLocalExecutionStatus(LOCAL_EXECUTION_DISABLED);
+					}
 				}
 			}
 
