@@ -808,9 +808,11 @@ CoordinatedRemoteTransactionsPrepare(void)
 		if (transaction->transactionState != REMOTE_TRANS_PREPARING)
 		{
 			/*
-			 * Verify that the connection didn't modify any placement
+			 * Verify that either the transaction failed, hence we couldn't prepare
+			 * or the connection didn't modify any placement
 			 */
-			Assert(!ConnectionModifiedPlacement(connection));
+			Assert(transaction->transactionFailed ||
+				   !ConnectionModifiedPlacement(connection));
 			continue;
 		}
 
