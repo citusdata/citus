@@ -139,7 +139,8 @@ static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
 static bool MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context);
 static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
-									FromExpr *joinTree);
+									FromExpr *joinTree,
+									AttrNumber attNumber);
 static Job * RouterInsertJob(Query *originalQuery);
 static void ErrorIfNoShardsExist(CitusTableCacheEntry *cacheEntry);
 static DeferredErrorMessage * DeferErrorIfModifyView(Query *queryTree);
@@ -634,23 +635,41 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 		foreach(targetEntryCell, queryTree->targetList)
 		{
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-			bool targetEntryPartitionColumn = false;
-
-			/* reference tables do not have partition column */
-			if (partitionColumn == NULL)
-			{
-				targetEntryPartitionColumn = false;
-			}
-			else if (targetEntry->resno == partitionColumn->varattno)
-			{
-				targetEntryPartitionColumn = true;
-			}
 
 			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
 			if (targetEntry->resjunk)
 			{
 				continue;
 			}
+
+			bool targetEntryPartitionColumn = false;
+			AttrNumber attNumber = 0;
+
+			/* reference tables do not have partition column */
+			if (partitionColumn == NULL)
+			{
+				targetEntryPartitionColumn = false;
+			}
+			else
+			{
+				if (commandType == CMD_UPDATE)
+				{
+					if (targetEntry->resname)
+					{
+						attNumber = get_attnum(resultRelationId, targetEntry->resname);
+					}
+				}
+				else
+				{
+					attNumber = targetEntry->resno;
+				}
+
+				if (attNumber == partitionColumn->varattno)
+				{
+					targetEntryPartitionColumn = true;
+				}
+			}
+
 
 			if (commandType == CMD_UPDATE &&
 				FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
@@ -664,7 +683,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 			if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
 				TargetEntryChangesValue(targetEntry, partitionColumn,
-										queryTree->jointree))
+										queryTree->jointree, attNumber))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "modifying the partition value of rows is not "
@@ -1134,11 +1153,20 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 		{
 			setTargetEntryPartitionColumn = false;
 		}
-		else if (setTargetEntry->resno == partitionColumn->varattno)
+		else
 		{
-			setTargetEntryPartitionColumn = true;
-		}
+			Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
 
+			AttrNumber attNumber = 0;
+			if (setTargetEntry->resname)
+			{
+				attNumber = get_attnum(resultRelationId, setTargetEntry->resname);
+				if (attNumber == partitionColumn->varattno)
+				{
+					setTargetEntryPartitionColumn = true;
+				}
+			}
+		}
 		if (setTargetEntryPartitionColumn)
 		{
 			Expr *setExpr = setTargetEntry->expr;
@@ -1517,12 +1545,13 @@ MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context)
  * tree, or the target entry sets a different column.
  */
 static bool
-TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree)
+TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree,
+						AttrNumber attNumber)
 {
 	bool isColumnValueChanged = true;
 	Expr *setExpr = targetEntry->expr;
 
-	if (targetEntry->resno != column->varattno)
+	if (attNumber != column->varattno)
 	{
 		/* target entry of the form SET some_other_col = <x> */
 		isColumnValueChanged = false;
