@@ -634,23 +634,41 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 		foreach(targetEntryCell, queryTree->targetList)
 		{
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-			bool targetEntryPartitionColumn = false;
-
-			/* reference tables do not have partition column */
-			if (partitionColumn == NULL)
-			{
-				targetEntryPartitionColumn = false;
-			}
-			else if (targetEntry->resno == partitionColumn->varattno)
-			{
-				targetEntryPartitionColumn = true;
-			}
 
 			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
 			if (targetEntry->resjunk)
 			{
 				continue;
 			}
+
+			bool targetEntryPartitionColumn = false;
+			AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
+
+			/* reference tables do not have partition column */
+			if (partitionColumn == NULL)
+			{
+				targetEntryPartitionColumn = false;
+			}
+			else
+			{
+				if (commandType == CMD_UPDATE)
+				{
+					/*
+					 * Note that it is not possible to give an alias to
+					 * UPDATE table SET ...
+					 */
+					if (targetEntry->resname)
+					{
+						targetColumnAttrNumber = get_attnum(resultRelationId,
+															targetEntry->resname);
+						if (targetColumnAttrNumber == partitionColumn->varattno)
+						{
+							targetEntryPartitionColumn = true;
+						}
+					}
+				}
+			}
+
 
 			if (commandType == CMD_UPDATE &&
 				FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
@@ -1134,11 +1152,21 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 		{
 			setTargetEntryPartitionColumn = false;
 		}
-		else if (setTargetEntry->resno == partitionColumn->varattno)
+		else
 		{
-			setTargetEntryPartitionColumn = true;
-		}
+			Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
 
+			AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
+			if (setTargetEntry->resname)
+			{
+				targetColumnAttrNumber = get_attnum(resultRelationId,
+													setTargetEntry->resname);
+				if (targetColumnAttrNumber == partitionColumn->varattno)
+				{
+					setTargetEntryPartitionColumn = true;
+				}
+			}
+		}
 		if (setTargetEntryPartitionColumn)
 		{
 			Expr *setExpr = setTargetEntry->expr;
@@ -1522,12 +1550,7 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 	bool isColumnValueChanged = true;
 	Expr *setExpr = targetEntry->expr;
 
-	if (targetEntry->resno != column->varattno)
-	{
-		/* target entry of the form SET some_other_col = <x> */
-		isColumnValueChanged = false;
-	}
-	else if (IsA(setExpr, Var))
+	if (IsA(setExpr, Var))
 	{
 		Var *newValue = (Var *) setExpr;
 		if (newValue->varattno == column->varattno)
