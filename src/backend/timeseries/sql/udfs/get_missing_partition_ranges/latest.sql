@@ -111,7 +111,8 @@ BEGIN
      * Since we already check that timeseries tables have single column to partition the table
      * we can directly get the 0th element of the partattrs column
      */
-    SELECT atttypid::regtype::text INTO table_partition_column_type_name
+    SELECT atttypid::regtype::text
+    INTO table_partition_column_type_name
     FROM pg_attribute
     WHERE attrelid = table_name::oid
     AND attnum = (select partattrs[0] from pg_partitioned_table where partrelid = table_name::oid);
@@ -151,7 +152,9 @@ BEGIN
             (current_range_to_value::timestamptz > from_value::timestamptz AND current_range_to_value::timestamptz < to_value::timestamptz)) AND
             parent_table = table_name;
         IF found THEN
-            RAISE 'For the table % manual partition(s) has been created, Please remove them to continue using that table as timeseries table', table_name;
+            RAISE 'Partition with the range from % to % has been created manually. Please remove all manually created partitions to use the table as timeseries table',
+            current_range_from_value::text,
+            current_range_to_value::text;
         END IF;
 
         /*
@@ -171,8 +174,8 @@ BEGIN
         ELSIF table_partition_column_type_name = 'timestamp with time zone' THEN
             SELECT current_range_from_value::timestamptz::text INTO current_range_from_value_text;
             SELECT current_range_to_value::timestamptz::text INTO current_range_to_value_text;
-            SELECT translate(to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS_TZ'), '+', '') INTO current_range_from_value_text_in_partition_name;
-            SELECT translate(to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS_TZ'), '+', '') INTO current_range_to_value_text_in_partition_name;
+            SELECT to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_from_value_text_in_partition_name;
+            SELECT to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_to_value_text_in_partition_name;
         ELSE
             RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
         END IF;

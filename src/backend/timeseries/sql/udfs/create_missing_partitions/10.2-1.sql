@@ -22,7 +22,7 @@ BEGIN
         SELECT *
         FROM get_missing_partition_ranges(table_name, to_date, start_from)
     LOOP
-        EXECUTE format('CREATE TABLE %I PARTITION OF %I FOR VALUES FROM (''%I'') TO (''%I'')', missing_partition_record.partition_name, table_name::text, missing_partition_record.range_from_value, missing_partition_record.range_to_value);
+        EXECUTE format('CREATE TABLE %s PARTITION OF %s FOR VALUES FROM (''%s'') TO (''%s'')', missing_partition_record.partition_name, table_name::text, missing_partition_record.range_from_value, missing_partition_record.range_to_value);
     END LOOP;
 
     RETURN true;

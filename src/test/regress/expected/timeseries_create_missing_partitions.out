@@ -6,7 +6,7 @@ CREATE TABLE date_partitioned_table(
 SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '15 days');
 ERROR:  date_partitioned_table must be timeseries table
 CONTEXT:  PL/pgSQL function get_missing_partition_ranges(regclass,timestamp with time zone,timestamp with time zone) line XX at RAISE
-PL/pgSQL function create_missing_partitions(regclass,timestamp with time zone,timestamp with time zone) line 22 at FOR over SELECT rows
+PL/pgSQL function create_missing_partitions(regclass,timestamp with time zone,timestamp with time zone) line 15 at FOR over SELECT rows
 -- Create missing partitions for various ranges on date partitioned table
 BEGIN;
     SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day');
@@ -62,7 +62,7 @@ BEGIN;
 
 (1 row)
 
-    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '10 days', now() + INTERVAL '10 days');
+    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '10 days', now() - INTERVAL '10 days');
  create_missing_partitions
 ---------------------------------------------------------------------
  t
@@ -94,7 +94,10 @@ BEGIN;
  @ 5 days      | @ 4 days
  @ 6 days      | @ 5 days
  @ 7 days      | @ 6 days
-(18 rows)
+ @ 8 days      | @ 7 days
+ @ 9 days      | @ 8 days
+ @ 10 days     | @ 9 days
+(21 rows)
 
 ROLLBACK;
 BEGIN;
@@ -104,7 +107,7 @@ BEGIN;
 
 (1 row)
 
-    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '45 days', now() + INTERVAL '45 days');
+    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '45 days', now() - INTERVAL '45 days');
  create_missing_partitions
 ---------------------------------------------------------------------
  t
@@ -135,50 +138,12 @@ BEGIN;
  @ 25 days     | @ 20 days
  @ 30 days     | @ 25 days
  @ 35 days     | @ 30 days
-(17 rows)
+ @ 40 days     | @ 35 days
+ @ 45 days     | @ 40 days
+(19 rows)
 
 ROLLBACK;
-BEGIN;
-    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 week');
- create_timeseries_table
----------------------------------------------------------------------
-
-(1 row)
-
-    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '65 days', now() + INTERVAL '65 days');
- create_missing_partitions
----------------------------------------------------------------------
- t
-(1 row)
-
-    SELECT
-        date_trunc('day', now()) - from_value::date as from_diff,
-        date_trunc('day', now()) - to_value::date as to_diff
-    FROM pg_catalog.time_partitions
-    WHERE parent_table = 'date_partitioned_table'::regclass
-    ORDER BY 1,2;
-   from_diff   |    to_diff
----------------------------------------------------------------------
- @ 60 days ago | @ 67 days ago
- @ 53 days ago | @ 60 days ago
- @ 46 days ago | @ 53 days ago
- @ 39 days ago | @ 46 days ago
- @ 32 days ago | @ 39 days ago
- @ 25 days ago | @ 32 days ago
- @ 18 days ago | @ 25 days ago
- @ 11 days ago | @ 18 days ago
- @ 4 days ago  | @ 11 days ago
- @ 3 days      | @ 4 days ago
- @ 10 days     | @ 3 days
- @ 17 days     | @ 10 days
- @ 24 days     | @ 17 days
- @ 31 days     | @ 24 days
- @ 38 days     | @ 31 days
- @ 45 days     | @ 38 days
- @ 52 days     | @ 45 days
-(17 rows)
-
-ROLLBACK;
+-- Show start from date must be before any of existing partition ranges
 BEGIN;
     SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day');
  create_timeseries_table
@@ -186,37 +151,17 @@ BEGIN;
 
 (1 row)
 
-    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '5 days', now() + INTERVAL '5 days');
- create_missing_partitions
----------------------------------------------------------------------
- t
-(1 row)
-
+    SELECT create_missing_partitions('date_partitioned_table', now() + INTERVAL '5 days', now() - INTERVAL '5 days');
+ERROR:  given start_from value must be before any of the existing partition ranges
+CONTEXT:  PL/pgSQL function get_missing_partition_ranges(regclass,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_missing_partitions(regclass,timestamp with time zone,timestamp with time zone) line 15 at FOR over SELECT rows
     SELECT
         date_trunc('day', now()) - from_value::date as from_diff,
         date_trunc('day', now()) - to_value::date as to_diff
     FROM pg_catalog.time_partitions
     WHERE parent_table = 'date_partitioned_table'::regclass
     ORDER BY 1,2;
-  from_diff   |   to_diff
----------------------------------------------------------------------
- @ 7 days ago | @ 8 days ago
- @ 6 days ago | @ 7 days ago
- @ 5 days ago | @ 6 days ago
- @ 4 days ago | @ 5 days ago
- @ 3 days ago | @ 4 days ago
- @ 2 days ago | @ 3 days ago
- @ 1 day ago  | @ 2 days ago
- @ 0          | @ 1 day ago
- @ 1 day      | @ 0
- @ 2 days     | @ 1 day
- @ 3 days     | @ 2 days
- @ 4 days     | @ 3 days
- @ 5 days     | @ 4 days
- @ 6 days     | @ 5 days
- @ 7 days     | @ 6 days
-(15 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 DROP TABLE date_partitioned_table;
 -- Create missing partitions for various ranges on timestamptz partitioned table
@@ -360,7 +305,7 @@ BEGIN;
 
 (1 row)
 
-    SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
+    SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '5 days', now() - INTERVAL '5 days');
  create_missing_partitions
 ---------------------------------------------------------------------
  t
@@ -372,26 +317,53 @@ BEGIN;
     FROM pg_catalog.time_partitions
     WHERE parent_table = 'tstz_partitioned_table'::regclass
     ORDER BY 1,2;
-      from_diff       |       to_diff
+       from_diff       |        to_diff
 ---------------------------------------------------------------------
- @ 1 day 18 hours ago | @ 2 days ago
- @ 1 day 12 hours ago | @ 1 day 18 hours ago
- @ 1 day 6 hours ago  | @ 1 day 12 hours ago
- @ 1 day ago          | @ 1 day 6 hours ago
- @ 18 hours ago       | @ 1 day ago
- @ 12 hours ago       | @ 18 hours ago
- @ 6 hours ago        | @ 12 hours ago
- @ 0                  | @ 6 hours ago
- @ 6 hours            | @ 0
- @ 12 hours           | @ 6 hours
- @ 18 hours           | @ 12 hours
- @ 1 day              | @ 18 hours
- @ 1 day 6 hours      | @ 1 day
- @ 1 day 12 hours     | @ 1 day 6 hours
- @ 1 day 18 hours     | @ 1 day 12 hours
-(15 rows)
+ @ 5 days ago          | @ 5 days 6 hours ago
+ @ 4 days 18 hours ago | @ 5 days ago
+ @ 4 days 12 hours ago | @ 4 days 18 hours ago
+ @ 4 days 6 hours ago  | @ 4 days 12 hours ago
+ @ 4 days ago          | @ 4 days 6 hours ago
+ @ 3 days 18 hours ago | @ 4 days ago
+ @ 3 days 12 hours ago | @ 3 days 18 hours ago
+ @ 3 days 6 hours ago  | @ 3 days 12 hours ago
+ @ 3 days ago          | @ 3 days 6 hours ago
+ @ 2 days 18 hours ago | @ 3 days ago
+ @ 2 days 12 hours ago | @ 2 days 18 hours ago
+ @ 2 days 6 hours ago  | @ 2 days 12 hours ago
+ @ 2 days ago          | @ 2 days 6 hours ago
+ @ 1 day 18 hours ago  | @ 2 days ago
+ @ 1 day 12 hours ago  | @ 1 day 18 hours ago
+ @ 1 day 6 hours ago   | @ 1 day 12 hours ago
+ @ 1 day ago           | @ 1 day 6 hours ago
+ @ 18 hours ago        | @ 1 day ago
+ @ 12 hours ago        | @ 18 hours ago
+ @ 6 hours ago         | @ 12 hours ago
+ @ 0                   | @ 6 hours ago
+ @ 6 hours             | @ 0
+ @ 12 hours            | @ 6 hours
+ @ 18 hours            | @ 12 hours
+ @ 1 day               | @ 18 hours
+ @ 1 day 6 hours       | @ 1 day
+ @ 1 day 12 hours      | @ 1 day 6 hours
+ @ 1 day 18 hours      | @ 1 day 12 hours
+ @ 2 days              | @ 1 day 18 hours
+ @ 2 days 6 hours      | @ 2 days
+ @ 2 days 12 hours     | @ 2 days 6 hours
+ @ 2 days 18 hours     | @ 2 days 12 hours
+ @ 3 days              | @ 2 days 18 hours
+ @ 3 days 6 hours      | @ 3 days
+ @ 3 days 12 hours     | @ 3 days 6 hours
+ @ 3 days 18 hours     | @ 3 days 12 hours
+ @ 4 days              | @ 3 days 18 hours
+ @ 4 days 6 hours      | @ 4 days
+ @ 4 days 12 hours     | @ 4 days 6 hours
+ @ 4 days 18 hours     | @ 4 days 12 hours
+ @ 5 days              | @ 4 days 18 hours
+(41 rows)
 
 ROLLBACK;
+-- Show start from date must be before any of existing partition ranges
 BEGIN;
     SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 day');
  create_timeseries_table
@@ -400,35 +372,15 @@ BEGIN;
 (1 row)
 
     SELECT create_missing_partitions('tstz_partitioned_table', now() + INTERVAL '5 days', now() - INTERVAL '5 days');
- create_missing_partitions
----------------------------------------------------------------------
- t
-(1 row)
-
+ERROR:  given start_from value must be before any of the existing partition ranges
+CONTEXT:  PL/pgSQL function get_missing_partition_ranges(regclass,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_missing_partitions(regclass,timestamp with time zone,timestamp with time zone) line 15 at FOR over SELECT rows
     SELECT
         date_trunc('day', now()) - from_value::timestamp with time zone as from_diff,
         date_trunc('day', now()) - to_value::timestamp with time zone as to_diff
     FROM pg_catalog.time_partitions
     WHERE parent_table = 'tstz_partitioned_table'::regclass;
-  from_diff   |   to_diff
----------------------------------------------------------------------
- @ 6 days     | @ 5 days
- @ 1 day ago  | @ 2 days ago
- @ 3 days     | @ 2 days
- @ 4 days ago | @ 5 days ago
- @ 5 days     | @ 4 days
- @ 2 days ago | @ 3 days ago
- @ 4 days     | @ 3 days
- @ 3 days ago | @ 4 days ago
- @ 7 days     | @ 6 days
- @ 0          | @ 1 day ago
- @ 7 days ago | @ 8 days ago
- @ 2 days     | @ 1 day
- @ 5 days ago | @ 6 days ago
- @ 1 day      | @ 0
- @ 6 days ago | @ 7 days ago
-(15 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 DROP TABLE tstz_partitioned_table;
 -- Show range values for timestamp without time zone partitioned table
@@ -572,7 +524,7 @@ BEGIN;
 
 (1 row)
 
-    SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '1 day', now() - INTERVAL '1 day');
+    SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '5 days', now() - INTERVAL '5 days');
  create_missing_partitions
 ---------------------------------------------------------------------
  t
@@ -584,26 +536,53 @@ BEGIN;
     FROM pg_catalog.time_partitions
     WHERE parent_table = 'tswtz_partitioned_table'::regclass
     ORDER BY 1,2;
-      from_diff       |       to_diff
+       from_diff       |        to_diff
 ---------------------------------------------------------------------
- @ 1 day 18 hours ago | @ 2 days ago
- @ 1 day 12 hours ago | @ 1 day 18 hours ago
- @ 1 day 6 hours ago  | @ 1 day 12 hours ago
- @ 1 day ago          | @ 1 day 6 hours ago
- @ 18 hours ago       | @ 1 day ago
- @ 12 hours ago       | @ 18 hours ago
- @ 6 hours ago        | @ 12 hours ago
- @ 0                  | @ 6 hours ago
- @ 6 hours            | @ 0
- @ 12 hours           | @ 6 hours
- @ 18 hours           | @ 12 hours
- @ 1 day              | @ 18 hours
- @ 1 day 6 hours      | @ 1 day
- @ 1 day 12 hours     | @ 1 day 6 hours
- @ 1 day 18 hours     | @ 1 day 12 hours
-(15 rows)
+ @ 5 days ago          | @ 5 days 6 hours ago
+ @ 4 days 18 hours ago | @ 5 days ago
+ @ 4 days 12 hours ago | @ 4 days 18 hours ago
+ @ 4 days 6 hours ago  | @ 4 days 12 hours ago
+ @ 4 days ago          | @ 4 days 6 hours ago
+ @ 3 days 18 hours ago | @ 4 days ago
+ @ 3 days 12 hours ago | @ 3 days 18 hours ago
+ @ 3 days 6 hours ago  | @ 3 days 12 hours ago
+ @ 3 days ago          | @ 3 days 6 hours ago
+ @ 2 days 18 hours ago | @ 3 days ago
+ @ 2 days 12 hours ago | @ 2 days 18 hours ago
+ @ 2 days 6 hours ago  | @ 2 days 12 hours ago
+ @ 2 days ago          | @ 2 days 6 hours ago
+ @ 1 day 18 hours ago  | @ 2 days ago
+ @ 1 day 12 hours ago  | @ 1 day 18 hours ago
+ @ 1 day 6 hours ago   | @ 1 day 12 hours ago
+ @ 1 day ago           | @ 1 day 6 hours ago
+ @ 18 hours ago        | @ 1 day ago
+ @ 12 hours ago        | @ 18 hours ago
+ @ 6 hours ago         | @ 12 hours ago
+ @ 0                   | @ 6 hours ago
+ @ 6 hours             | @ 0
+ @ 12 hours            | @ 6 hours
+ @ 18 hours            | @ 12 hours
+ @ 1 day               | @ 18 hours
+ @ 1 day 6 hours       | @ 1 day
+ @ 1 day 12 hours      | @ 1 day 6 hours
+ @ 1 day 18 hours      | @ 1 day 12 hours
+ @ 2 days              | @ 1 day 18 hours
+ @ 2 days 6 hours      | @ 2 days
+ @ 2 days 12 hours     | @ 2 days 6 hours
+ @ 2 days 18 hours     | @ 2 days 12 hours
+ @ 3 days              | @ 2 days 18 hours
+ @ 3 days 6 hours      | @ 3 days
+ @ 3 days 12 hours     | @ 3 days 6 hours
+ @ 3 days 18 hours     | @ 3 days 12 hours
+ @ 4 days              | @ 3 days 18 hours
+ @ 4 days 6 hours      | @ 4 days
+ @ 4 days 12 hours     | @ 4 days 6 hours
+ @ 4 days 18 hours     | @ 4 days 12 hours
+ @ 5 days              | @ 4 days 18 hours
+(41 rows)
 
 ROLLBACK;
+-- Show start from date must be before any of existing partition ranges
 BEGIN;
     SELECT create_timeseries_table('tswtz_partitioned_table', INTERVAL '1 day');
  create_timeseries_table
@@ -612,35 +591,263 @@ BEGIN;
 (1 row)
 
     SELECT create_missing_partitions('tswtz_partitioned_table', now() + INTERVAL '5 days', now() - INTERVAL '5 days');
- create_missing_partitions
----------------------------------------------------------------------
- t
-(1 row)
-
+ERROR:  given start_from value must be before any of the existing partition ranges
+CONTEXT:  PL/pgSQL function get_missing_partition_ranges(regclass,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_missing_partitions(regclass,timestamp with time zone,timestamp with time zone) line 15 at FOR over SELECT rows
     SELECT
         date_trunc('day', now()) - from_value::timestamp without time zone as from_diff,
         date_trunc('day', now()) - to_value::timestamp without time zone as to_diff
     FROM pg_catalog.time_partitions
     WHERE parent_table = 'tswtz_partitioned_table'::regclass
     ORDER BY 1,2;
-  from_diff   |   to_diff
----------------------------------------------------------------------
- @ 7 days ago | @ 8 days ago
- @ 6 days ago | @ 7 days ago
- @ 5 days ago | @ 6 days ago
- @ 4 days ago | @ 5 days ago
- @ 3 days ago | @ 4 days ago
- @ 2 days ago | @ 3 days ago
- @ 1 day ago  | @ 2 days ago
- @ 0          | @ 1 day ago
- @ 1 day      | @ 0
- @ 2 days     | @ 1 day
- @ 3 days     | @ 2 days
- @ 4 days     | @ 3 days
- @ 5 days     | @ 4 days
- @ 6 days     | @ 5 days
- @ 7 days     | @ 6 days
-(15 rows)
-
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 DROP TABLE tswtz_partitioned_table;
+-- Create missing partitions for a table with schema given
+CREATE SCHEMA timeseries_test_schema;
+CREATE TABLE timeseries_test_schema.schema_test_partitioned_table(
+    measureid integer,
+    eventdate date,
+    measure_data integer) PARTITION BY RANGE(eventdate);
+BEGIN;
+    SELECT create_timeseries_table('timeseries_test_schema.schema_test_partitioned_table', INTERVAL '1 day');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('timeseries_test_schema.schema_test_partitioned_table', now() + INTERVAL '15 days');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('day', now()) - from_value::date as from_diff,
+        date_trunc('day', now()) - to_value::date as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'timeseries_test_schema.schema_test_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff   |    to_diff
+---------------------------------------------------------------------
+ @ 15 days ago | @ 16 days ago
+ @ 14 days ago | @ 15 days ago
+ @ 13 days ago | @ 14 days ago
+ @ 12 days ago | @ 13 days ago
+ @ 11 days ago | @ 12 days ago
+ @ 10 days ago | @ 11 days ago
+ @ 9 days ago  | @ 10 days ago
+ @ 8 days ago  | @ 9 days ago
+ @ 7 days ago  | @ 8 days ago
+ @ 6 days ago  | @ 7 days ago
+ @ 5 days ago  | @ 6 days ago
+ @ 4 days ago  | @ 5 days ago
+ @ 3 days ago  | @ 4 days ago
+ @ 2 days ago  | @ 3 days ago
+ @ 1 day ago   | @ 2 days ago
+ @ 0           | @ 1 day ago
+ @ 1 day       | @ 0
+ @ 2 days      | @ 1 day
+ @ 3 days      | @ 2 days
+ @ 4 days      | @ 3 days
+ @ 5 days      | @ 4 days
+ @ 6 days      | @ 5 days
+ @ 7 days      | @ 6 days
+(23 rows)
+
+ROLLBACK;
+BEGIN;
+    SELECT create_timeseries_table('timeseries_test_schema.schema_test_partitioned_table', INTERVAL '1 day');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('timeseries_test_schema.schema_test_partitioned_table', now() + INTERVAL '10 days', now() - INTERVAL '10 days');
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT
+        date_trunc('day', now()) - from_value::date as from_diff,
+        date_trunc('day', now()) - to_value::date as to_diff
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'timeseries_test_schema.schema_test_partitioned_table'::regclass
+    ORDER BY 1,2;
+   from_diff   |    to_diff
+---------------------------------------------------------------------
+ @ 10 days ago | @ 11 days ago
+ @ 9 days ago  | @ 10 days ago
+ @ 8 days ago  | @ 9 days ago
+ @ 7 days ago  | @ 8 days ago
+ @ 6 days ago  | @ 7 days ago
+ @ 5 days ago  | @ 6 days ago
+ @ 4 days ago  | @ 5 days ago
+ @ 3 days ago  | @ 4 days ago
+ @ 2 days ago  | @ 3 days ago
+ @ 1 day ago   | @ 2 days ago
+ @ 0           | @ 1 day ago
+ @ 1 day       | @ 0
+ @ 2 days      | @ 1 day
+ @ 3 days      | @ 2 days
+ @ 4 days      | @ 3 days
+ @ 5 days      | @ 4 days
+ @ 6 days      | @ 5 days
+ @ 7 days      | @ 6 days
+ @ 8 days      | @ 7 days
+ @ 9 days      | @ 8 days
+ @ 10 days     | @ 9 days
+(21 rows)
+
+ROLLBACK;
+DROP TABLE timeseries_test_schema.schema_test_partitioned_table;
+DROP SCHEMA timeseries_test_schema;
+-- Test with absolute time results
+CREATE TABLE absolute_times_partitioned_table(
+    measureid integer,
+    eventdate date,
+    measure_data integer) PARTITION BY RANGE(eventdate);
+BEGIN;
+    SELECT create_timeseries_table('absolute_times_partitioned_table', INTERVAL '1 month');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT create_missing_partitions('absolute_times_partitioned_table', '2030-01-01'::date, '2020-01-01'::date);
+ create_missing_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+    SELECT *
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'absolute_times_partitioned_table'::regclass
+    ORDER BY 1,2,3;
+           parent_table           | partition_column |                       partition                        | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_01_01_2021_02_01 | 01-01-2021 | 02-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_02_01_2021_03_01 | 02-01-2021 | 03-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_03_01_2021_04_01 | 03-01-2021 | 04-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_04_01_2021_05_01 | 04-01-2021 | 05-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_05_01_2021_06_01 | 05-01-2021 | 06-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_06_01_2021_07_01 | 06-01-2021 | 07-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_07_01_2021_08_01 | 07-01-2021 | 08-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_08_01_2021_09_01 | 08-01-2021 | 09-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_09_01_2021_10_01 | 09-01-2021 | 10-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_10_01_2021_11_01 | 10-01-2021 | 11-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_11_01_2021_12_01 | 11-01-2021 | 12-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_12_01_2022_01_01 | 12-01-2021 | 01-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_01_01_2022_02_01 | 01-01-2022 | 02-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_02_01_2022_03_01 | 02-01-2022 | 03-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_03_01_2022_04_01 | 03-01-2022 | 04-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_01_01_2020_02_01 | 01-01-2020 | 02-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_02_01_2020_03_01 | 02-01-2020 | 03-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_03_01_2020_04_01 | 03-01-2020 | 04-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_04_01_2020_05_01 | 04-01-2020 | 05-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_05_01_2020_06_01 | 05-01-2020 | 06-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_06_01_2020_07_01 | 06-01-2020 | 07-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_07_01_2020_08_01 | 07-01-2020 | 08-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_08_01_2020_09_01 | 08-01-2020 | 09-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_09_01_2020_10_01 | 09-01-2020 | 10-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_10_01_2020_11_01 | 10-01-2020 | 11-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_11_01_2020_12_01 | 11-01-2020 | 12-01-2020 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_12_01_2021_01_01 | 12-01-2020 | 01-01-2021 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_04_01_2022_05_01 | 04-01-2022 | 05-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_05_01_2022_06_01 | 05-01-2022 | 06-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_06_01_2022_07_01 | 06-01-2022 | 07-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_07_01_2022_08_01 | 07-01-2022 | 08-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_08_01_2022_09_01 | 08-01-2022 | 09-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_09_01_2022_10_01 | 09-01-2022 | 10-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_10_01_2022_11_01 | 10-01-2022 | 11-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_11_01_2022_12_01 | 11-01-2022 | 12-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_12_01_2023_01_01 | 12-01-2022 | 01-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_01_01_2023_02_01 | 01-01-2023 | 02-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_02_01_2023_03_01 | 02-01-2023 | 03-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_03_01_2023_04_01 | 03-01-2023 | 04-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_04_01_2023_05_01 | 04-01-2023 | 05-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_05_01_2023_06_01 | 05-01-2023 | 06-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_06_01_2023_07_01 | 06-01-2023 | 07-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_07_01_2023_08_01 | 07-01-2023 | 08-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_08_01_2023_09_01 | 08-01-2023 | 09-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_09_01_2023_10_01 | 09-01-2023 | 10-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_10_01_2023_11_01 | 10-01-2023 | 11-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_11_01_2023_12_01 | 11-01-2023 | 12-01-2023 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2023_12_01_2024_01_01 | 12-01-2023 | 01-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_01_01_2024_02_01 | 01-01-2024 | 02-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_02_01_2024_03_01 | 02-01-2024 | 03-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_03_01_2024_04_01 | 03-01-2024 | 04-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_04_01_2024_05_01 | 04-01-2024 | 05-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_05_01_2024_06_01 | 05-01-2024 | 06-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_06_01_2024_07_01 | 06-01-2024 | 07-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_07_01_2024_08_01 | 07-01-2024 | 08-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_08_01_2024_09_01 | 08-01-2024 | 09-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_09_01_2024_10_01 | 09-01-2024 | 10-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_10_01_2024_11_01 | 10-01-2024 | 11-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_11_01_2024_12_01 | 11-01-2024 | 12-01-2024 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2024_12_01_2025_01_01 | 12-01-2024 | 01-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_01_01_2025_02_01 | 01-01-2025 | 02-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_02_01_2025_03_01 | 02-01-2025 | 03-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_03_01_2025_04_01 | 03-01-2025 | 04-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_04_01_2025_05_01 | 04-01-2025 | 05-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_05_01_2025_06_01 | 05-01-2025 | 06-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_06_01_2025_07_01 | 06-01-2025 | 07-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_07_01_2025_08_01 | 07-01-2025 | 08-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_08_01_2025_09_01 | 08-01-2025 | 09-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_09_01_2025_10_01 | 09-01-2025 | 10-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_10_01_2025_11_01 | 10-01-2025 | 11-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_11_01_2025_12_01 | 11-01-2025 | 12-01-2025 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2025_12_01_2026_01_01 | 12-01-2025 | 01-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_01_01_2026_02_01 | 01-01-2026 | 02-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_02_01_2026_03_01 | 02-01-2026 | 03-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_03_01_2026_04_01 | 03-01-2026 | 04-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_04_01_2026_05_01 | 04-01-2026 | 05-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_05_01_2026_06_01 | 05-01-2026 | 06-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_06_01_2026_07_01 | 06-01-2026 | 07-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_07_01_2026_08_01 | 07-01-2026 | 08-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_08_01_2026_09_01 | 08-01-2026 | 09-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_09_01_2026_10_01 | 09-01-2026 | 10-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_10_01_2026_11_01 | 10-01-2026 | 11-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_11_01_2026_12_01 | 11-01-2026 | 12-01-2026 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2026_12_01_2027_01_01 | 12-01-2026 | 01-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_01_01_2027_02_01 | 01-01-2027 | 02-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_02_01_2027_03_01 | 02-01-2027 | 03-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_03_01_2027_04_01 | 03-01-2027 | 04-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_04_01_2027_05_01 | 04-01-2027 | 05-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_05_01_2027_06_01 | 05-01-2027 | 06-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_06_01_2027_07_01 | 06-01-2027 | 07-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_07_01_2027_08_01 | 07-01-2027 | 08-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_08_01_2027_09_01 | 08-01-2027 | 09-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_09_01_2027_10_01 | 09-01-2027 | 10-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_10_01_2027_11_01 | 10-01-2027 | 11-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_11_01_2027_12_01 | 11-01-2027 | 12-01-2027 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2027_12_01_2028_01_01 | 12-01-2027 | 01-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_01_01_2028_02_01 | 01-01-2028 | 02-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_02_01_2028_03_01 | 02-01-2028 | 03-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_03_01_2028_04_01 | 03-01-2028 | 04-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_04_01_2028_05_01 | 04-01-2028 | 05-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_05_01_2028_06_01 | 05-01-2028 | 06-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_06_01_2028_07_01 | 06-01-2028 | 07-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_07_01_2028_08_01 | 07-01-2028 | 08-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_08_01_2028_09_01 | 08-01-2028 | 09-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_09_01_2028_10_01 | 09-01-2028 | 10-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_10_01_2028_11_01 | 10-01-2028 | 11-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_11_01_2028_12_01 | 11-01-2028 | 12-01-2028 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2028_12_01_2029_01_01 | 12-01-2028 | 01-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_01_01_2029_02_01 | 01-01-2029 | 02-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_02_01_2029_03_01 | 02-01-2029 | 03-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_03_01_2029_04_01 | 03-01-2029 | 04-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_04_01_2029_05_01 | 04-01-2029 | 05-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_05_01_2029_06_01 | 05-01-2029 | 06-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_06_01_2029_07_01 | 06-01-2029 | 07-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_07_01_2029_08_01 | 07-01-2029 | 08-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_08_01_2029_09_01 | 08-01-2029 | 09-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_09_01_2029_10_01 | 09-01-2029 | 10-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_10_01_2029_11_01 | 10-01-2029 | 11-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_11_01_2029_12_01 | 11-01-2029 | 12-01-2029 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2029_12_01_2030_01_01 | 12-01-2029 | 01-01-2030 | heap
+(120 rows)
+
+ROLLBACK;
+DROP TABLE absolute_times_partitioned_table;

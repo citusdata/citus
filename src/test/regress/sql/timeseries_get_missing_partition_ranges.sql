@@ -141,7 +141,7 @@ BEGIN;
     ORDER BY 1,2;
 ROLLBACK;
 
-SET timezone TO 'WET';
+SET timezone TO 'Indian/Cocos';
 
 BEGIN;
     SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 hour');
@@ -161,7 +161,7 @@ BEGIN;
     ORDER BY 1,2;
 ROLLBACK;
 
-SET timezone TO 'IOT';
+SET timezone TO 'Japan';
 
 BEGIN;
     SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 hour');
