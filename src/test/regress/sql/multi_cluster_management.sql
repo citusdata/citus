@@ -38,6 +38,15 @@ BEGIN;
 SET citus.replication_model to 'statement';
 ROLLBACK;
 
+-- check that the rebalancer works even if there are no distributed tables
+SELECT * FROM get_rebalance_table_shards_plan();
+SELECT * FROM rebalance_table_shards();
+
+-- TODO: Figure out why this is necessary, rebalance_table_shards shouldn't
+-- insert stuff into pg_dist_colocation
+TRUNCATE pg_dist_colocation;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
+
 SELECT * FROM citus_activate_node('localhost', :worker_2_port);
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
