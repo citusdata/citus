@@ -139,8 +139,7 @@ static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
 static bool MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context);
 static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
-									FromExpr *joinTree,
-									AttrNumber attNumber);
+									FromExpr *joinTree);
 static Job * RouterInsertJob(Query *originalQuery);
 static void ErrorIfNoShardsExist(CitusTableCacheEntry *cacheEntry);
 static DeferredErrorMessage * DeferErrorIfModifyView(Query *queryTree);
@@ -643,7 +642,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			}
 
 			bool targetEntryPartitionColumn = false;
-			AttrNumber attNumber = 0;
+			AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
 
 			/* reference tables do not have partition column */
 			if (partitionColumn == NULL)
@@ -654,19 +653,19 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			{
 				if (commandType == CMD_UPDATE)
 				{
+					/*
+					 * Note that it is not possible to give an alias to
+					 * UPDATE table SET ...
+					 */
 					if (targetEntry->resname)
 					{
-						attNumber = get_attnum(resultRelationId, targetEntry->resname);
+						targetColumnAttrNumber = get_attnum(resultRelationId,
+															targetEntry->resname);
+						if (targetColumnAttrNumber == partitionColumn->varattno)
+						{
+							targetEntryPartitionColumn = true;
+						}
 					}
-				}
-				else
-				{
-					attNumber = targetEntry->resno;
-				}
-
-				if (attNumber == partitionColumn->varattno)
-				{
-					targetEntryPartitionColumn = true;
 				}
 			}
 
@@ -683,7 +682,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 
 			if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
 				TargetEntryChangesValue(targetEntry, partitionColumn,
-										queryTree->jointree, attNumber))
+										queryTree->jointree))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "modifying the partition value of rows is not "
@@ -1157,11 +1156,12 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 		{
 			Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
 
-			AttrNumber attNumber = 0;
+			AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
 			if (setTargetEntry->resname)
 			{
-				attNumber = get_attnum(resultRelationId, setTargetEntry->resname);
-				if (attNumber == partitionColumn->varattno)
+				targetColumnAttrNumber = get_attnum(resultRelationId,
+													setTargetEntry->resname);
+				if (targetColumnAttrNumber == partitionColumn->varattno)
 				{
 					setTargetEntryPartitionColumn = true;
 				}
@@ -1545,18 +1545,12 @@ MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context)
  * tree, or the target entry sets a different column.
  */
 static bool
-TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree,
-						AttrNumber attNumber)
+TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree)
 {
 	bool isColumnValueChanged = true;
 	Expr *setExpr = targetEntry->expr;
 
-	if (attNumber != column->varattno)
-	{
-		/* target entry of the form SET some_other_col = <x> */
-		isColumnValueChanged = false;
-	}
-	else if (IsA(setExpr, Var))
+	if (IsA(setExpr, Var))
 	{
 		Var *newValue = (Var *) setExpr;
 		if (newValue->varattno == column->varattno)
