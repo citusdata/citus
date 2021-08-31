@@ -182,7 +182,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("you cannot sync metadata to a non-existent node"),
-						errhint("First, add the node with SELECT master_add_node"
+						errhint("First, add the node with SELECT citus_add_node"
 								"(%s,%d)", escapedNodeName, nodePort)));
 	}
 
@@ -191,7 +191,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("you cannot sync metadata to an inactive node"),
 						errhint("First, activate the node with "
-								"SELECT master_activate_node(%s,%d)",
+								"SELECT citus_activate_node(%s,%d)",
 								escapedNodeName, nodePort)));
 	}
 

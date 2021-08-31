@@ -159,7 +159,7 @@ HINT:  To proceed, either drop the distributed tables or use undistribute_table(
 -- try to disable a node with active placements see that node is removed
 -- observe that a notification is displayed
 SELECT master_disable_node('localhost', :worker_2_port);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT master_activate_node('localhost', 57638) to activate this node back.
+NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 57638) to activate this node back.
  master_disable_node
 ---------------------------------------------------------------------
 
@@ -186,7 +186,7 @@ NOTICE:  Replicating reference table "test_reference_table" to the node localhos
 
 DROP TABLE test_reference_table;
 SELECT master_disable_node('localhost', :worker_2_port);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT master_activate_node('localhost', 57638) to activate this node back.
+NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 57638) to activate this node back.
  master_disable_node
 ---------------------------------------------------------------------
 

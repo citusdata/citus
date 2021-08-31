@@ -36,7 +36,7 @@ SELECT citus.dump_network_traffic();
 ---------------------------------------------------------------------
  (0,coordinator,"[initial message]")
  (0,worker,"['AuthenticationOk()', 'ParameterStatus(application_name=citus)', 'ParameterStatus(client_encoding=UTF8)', 'ParameterStatus(DateStyle=ISO, MDY)', 'ParameterStatus(integer_datetimes=on)', 'ParameterStatus(IntervalStyle=postgres)', 'ParameterStatus(is_superuser=on)', 'ParameterStatus(server_encoding=UTF8)', 'ParameterStatus(server_version=XXX)', 'ParameterStatus(session_authorization=postgres)', 'ParameterStatus(standard_conforming_strings=on)', 'ParameterStatus(TimeZone=XXX)', 'BackendKeyData(XXX)', 'ReadyForQuery(state=idle)']")
- (0,coordinator,"[""Query(query=SELECT worker_apply_shard_ddl_command (100400, 'CREATE TABLE public.copy_test (key integer, value integer)'))""]")
+ (0,coordinator,"[""Query(query=SELECT worker_apply_shard_ddl_command (100400, 'CREATE TABLE public.copy_test (key integer, value integer) '))""]")
  (0,worker,"[""RowDescription(fieldcount=1,fields=['F(name=worker_apply_shard_ddl_command,tableoid=0,colattrnum=0,typoid=2278,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=idle)']")
  (0,coordinator,"[""Query(query=SELECT worker_apply_shard_ddl_command (100400, 'ALTER TABLE public.copy_test OWNER TO postgres'))""]")
  (0,worker,"[""RowDescription(fieldcount=1,fields=['F(name=worker_apply_shard_ddl_command,tableoid=0,colattrnum=0,typoid=2278,typlen=4,typmod=-1,format_code=0)'])"", 'DataRow(columncount=1,columns=[""C(length=0,value=b\\'\\')""])', 'CommandComplete(command=SELECT 1)', 'ReadyForQuery(state=idle)']")
@@ -98,7 +98,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="assign_distributed_transaction_id").
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
@@ -208,7 +211,10 @@ WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
@@ -238,7 +244,10 @@ WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
@@ -264,10 +273,17 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 (1 row)
 
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM pg_dist_shard s, pg_dist_shard_placement p
   WHERE (s.shardid = p.shardid) AND s.logicalrelid = 'copy_test'::regclass

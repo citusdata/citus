@@ -2,7 +2,9 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-update-node-1 s2-begin s2-insert s1-commit s2-abort
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
  BEGIN;
@@ -14,8 +16,10 @@ step s1-update-node-1:
         57638);
 
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
 step s2-begin:
  BEGIN;
 
@@ -28,16 +32,20 @@ step s1-commit:
  COMMIT;
 
 step s2-insert: <... completed>
-error in steps s1-commit s2-insert: ERROR:  relation "public.update_node_102012" does not exist
+ERROR:  relation "public.update_node_102012" does not exist
 step s2-abort:
  ABORT;
 
-nodeid         nodename       nodeport
+nodeid|nodename|nodeport
+---------------------------------------------------------------------
+(0 rows)
 
 
 starting permutation: s2-begin s2-insert s1-update-node-1 s2-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-begin:
  BEGIN;
@@ -58,7 +66,11 @@ step s2-commit:
 
 step s1-update-node-1: <... completed>
 ?column?
+---------------------------------------------------------------------
+       1
+(1 row)
 
-1
-nodeid         nodename       nodeport
+nodeid|nodename|nodeport
+---------------------------------------------------------------------
+(0 rows)
 

@@ -380,7 +380,7 @@ master_add_secondary_node(PG_FUNCTION_ARGS)
  * node should not have any active placements.
  * This function also deletes all reference table placements belong to the given node from
  * pg_dist_placement, but it does not drop actual placement at the node. In the case of
- * re-adding the node, master_add_node first drops and re-creates the reference tables.
+ * re-adding the node, citus_add_node first drops and re-creates the reference tables.
  */
 Datum
 citus_remove_node(PG_FUNCTION_ARGS)
@@ -446,7 +446,7 @@ citus_disable_node(PG_FUNCTION_ARGS)
 				ereport(NOTICE, (errmsg(
 									 "Node %s:%d has active shard placements. Some queries "
 									 "may fail after this operation. Use "
-									 "SELECT master_activate_node('%s', %d) to activate this "
+									 "SELECT citus_activate_node('%s', %d) to activate this "
 									 "node back.",
 									 workerNode->workerName, nodePort,
 									 workerNode->workerName,
