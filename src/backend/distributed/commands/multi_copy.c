@@ -50,6 +50,7 @@
 #include "postgres.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
+#include "pgstat.h"
 
 #include <arpa/inet.h> /* for htons */
 #include <netinet/in.h> /* for htons */
@@ -560,7 +561,11 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 
 		dest->receiveSlot(tupleTableSlot, dest);
 
-		processedRowCount += 1;
+		++processedRowCount;
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+		pgstat_progress_update_param(PROGRESS_COPY_TUPLES_PROCESSED, processedRowCount);
+#endif
 	}
 
 	EndCopyFrom(copyState);
@@ -741,6 +746,10 @@ CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, O
 		}
 
 		processedRowCount += 1;
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+		pgstat_progress_update_param(PROGRESS_COPY_TUPLES_PROCESSED, processedRowCount);
+#endif
 	}
 
 	/*
@@ -2984,6 +2993,13 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, c
 			{
 				if (copyStatement->whereClause)
 				{
+					/*
+					 * Update progress reporting for tuples progressed so that the
+					 * progress is reflected on pg_stat_progress_copy. Citus currently
+					 * does not support COPY .. WHERE clause so TUPLES_EXCLUDED is not
+					 * handled. When we remove this check, we should implement progress
+					 * reporting as well.
+					 */
 					ereport(ERROR, (errmsg(
 										"Citus does not support COPY FROM with WHERE")));
 				}
@@ -3148,6 +3164,7 @@ CitusCopyTo(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 			PQclear(result);
 
 			tuplesSent += ForwardCopyDataFromConnection(copyOutState, connection);
+
 			break;
 		}
 
