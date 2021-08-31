@@ -139,7 +139,8 @@ static bool MasterIrreducibleExpression(Node *expression, bool *varArgument,
 static bool MasterIrreducibleExpressionWalker(Node *expression, WalkerState *state);
 static bool MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context);
 static bool TargetEntryChangesValue(TargetEntry *targetEntry, Var *column,
-									FromExpr *joinTree);
+									FromExpr *joinTree,
+									AttrNumber attNumber);
 static Job * RouterInsertJob(Query *originalQuery);
 static void ErrorIfNoShardsExist(CitusTableCacheEntry *cacheEntry);
 static DeferredErrorMessage * DeferErrorIfModifyView(Query *queryTree);
@@ -634,7 +635,14 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 		foreach(targetEntryCell, queryTree->targetList)
 		{
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
+			if (targetEntry->resjunk)
+			{
+				continue;
+			}
+
 			bool targetEntryPartitionColumn = false;
+			AttrNumber attNumber = 0;
 
 			/* reference tables do not have partition column */
 			if (partitionColumn == NULL)
@@ -645,34 +653,20 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			{
 				if (commandType == CMD_UPDATE)
 				{
-					/*
-					 * For
-					 */
-					RangeTblEntry *resultRTE = ExtractResultRelationRTE(queryTree);
-
-					/*
-					 * FirstLowInvalidHeapAttributeNumber is added as an offset to rte->updatedCols.
-					 * So we substract that to get the column no for an updated column that matches
-					 * resultRTE->updatedcols.
-					 */
-					int updatedColNoWithOffset = partitionColumn->varattno -
-												 FirstLowInvalidHeapAttributeNumber;
-					if (bms_is_member(updatedColNoWithOffset, resultRTE->updatedCols))
-					{
-						targetEntryPartitionColumn = true;
+					if (targetEntry->resname) {
+						attNumber = get_attnum(resultRelationId, targetEntry->resname);
 					}
+				}else {
+					attNumber = targetEntry->resno;
 				}
-				else if (targetEntry->resno == partitionColumn->varattno)
+				
+				if (attNumber == partitionColumn->varattno)
 				{
 					targetEntryPartitionColumn = true;
 				}
 			}
 
-			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
-			if (targetEntry->resjunk)
-			{
-				continue;
-			}
+
 
 			if (commandType == CMD_UPDATE &&
 				FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
@@ -688,7 +682,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			/*TargetEntryChangesValue for update case based on 86dc90056dfdbd9d1b891718d2e5614e3e432f35. */
 			if (commandType == CMD_UPDATE && targetEntryPartitionColumn &&
 				TargetEntryChangesValue(targetEntry, partitionColumn,
-										queryTree->jointree))
+										queryTree->jointree, attNumber))
 			{
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "modifying the partition value of rows is not "
@@ -1140,26 +1134,6 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 	Node *onConflictWhere = queryTree->onConflict->onConflictWhere;
 
 
-	bool setTargetEntryPartitionColumn = false;
-
-	if (partitionColumn)
-	{
-		RangeTblEntry *resultRTE = ExtractResultRelationRTE(queryTree);
-
-		/*
-		 * FirstLowInvalidHeapAttributeNumber is added as an offset to rte->updatedCols.
-		 * So we substract that to get the column no for an updated column that matches
-		 * resultRTE->updatedcols.
-		 */
-		int updatedColNoWithOffset = partitionColumn->varattno -
-									 FirstLowInvalidHeapAttributeNumber;
-		if (bms_is_member(updatedColNoWithOffset, resultRTE->updatedCols))
-		{
-			setTargetEntryPartitionColumn = true;
-		}
-	}
-
-
 	/*
 	 * onConflictSet is expanded via expand_targetlist() on the standard planner.
 	 * This ends up adding all the columns to the onConflictSet even if the user
@@ -1172,6 +1146,16 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 	foreach(setTargetCell, onConflictSet)
 	{
 		TargetEntry *setTargetEntry = (TargetEntry *) lfirst(setTargetCell);
+		bool setTargetEntryPartitionColumn = false;
+		Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
+
+		AttrNumber attNumber = 0;
+		if (partitionColumn && setTargetEntry->resname) {
+			attNumber = get_attnum(resultRelationId, setTargetEntry->resname);
+			if (attNumber == partitionColumn->varattno) {
+				setTargetEntryPartitionColumn = true;
+			}
+		}
 
 		if (setTargetEntryPartitionColumn)
 		{
@@ -1551,12 +1535,12 @@ MasterIrreducibleExpressionFunctionChecker(Oid func_id, void *context)
  * tree, or the target entry sets a different column.
  */
 static bool
-TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree)
+TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTree, AttrNumber attNumber)
 {
 	bool isColumnValueChanged = true;
 	Expr *setExpr = targetEntry->expr;
 
-	if (targetEntry->resno != column->varattno)
+	if (attNumber != column->varattno)
 	{
 		/* target entry of the form SET some_other_col = <x> */
 		isColumnValueChanged = false;
