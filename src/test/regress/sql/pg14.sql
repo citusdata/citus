@@ -39,6 +39,18 @@ reindex(verbose, TABLESPACE test_tablespace) index idx ;
 reindex(TABLESPACE test_tablespace1) index idx;
 set citus.log_remote_commands to off;
 
+-- error out in case of ALTER TABLE .. DETACH PARTITION .. CONCURRENTLY/FINALIZE
+-- only if it's a distributed partitioned table
+CREATE TABLE par (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE par_1 PARTITION OF par FOR VALUES FROM (1) TO (4);
+CREATE TABLE par_2 PARTITION OF par FOR VALUES FROM (5) TO (8);
+-- works as it's not distributed
+ALTER TABLE par DETACH PARTITION par_1 CONCURRENTLY;
+-- errors out
+SELECT create_distributed_table('par','a');
+ALTER TABLE par DETACH PARTITION par_2 CONCURRENTLY;
+ALTER TABLE par DETACH PARTITION par_2 FINALIZE;
+
 set client_min_messages to error;
 drop schema pg14 cascade;
 
