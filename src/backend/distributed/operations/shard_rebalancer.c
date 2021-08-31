@@ -1806,16 +1806,21 @@ RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
 		hash_destroy(state->placementsHash);
 	}
 
+	int64 ignoredMoves = 0;
+	foreach_ptr(state, rebalanceStates)
+	{
+		ignoredMoves += state->ignoredMoves;
+	}
 
-	if (state->ignoredMoves > 0)
+	if (ignoredMoves > 0)
 	{
 		if (MaxRebalancerLoggedIgnoredMoves == -1 ||
-			state->ignoredMoves <= MaxRebalancerLoggedIgnoredMoves)
+			ignoredMoves <= MaxRebalancerLoggedIgnoredMoves)
 		{
 			ereport(NOTICE, (
 						errmsg(
 							"Ignored %ld moves, all of which are shown in notices above",
-							state->ignoredMoves
+							ignoredMoves
 							),
 						errhint(
 							"If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (%g).",
@@ -1827,7 +1832,7 @@ RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
 			ereport(NOTICE, (
 						errmsg(
 							"Ignored %ld moves, %d of which are shown in notices above",
-							state->ignoredMoves,
+							ignoredMoves,
 							MaxRebalancerLoggedIgnoredMoves
 							),
 						errhint(
