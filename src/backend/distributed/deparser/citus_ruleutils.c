@@ -22,6 +22,9 @@
 #include "access/skey.h"
 #include "access/stratnum.h"
 #include "access/sysattr.h"
+#if PG_VERSION_NUM >= PG_VERSION_14
+#include "access/toast_compression.h"
+#endif
 #include "access/tupdesc.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
@@ -381,6 +384,14 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 			{
 				appendStringInfoString(&buffer, " NOT NULL");
 			}
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+			if (CompressionMethodIsValid(attributeForm->attcompression))
+			{
+				appendStringInfo(&buffer, " COMPRESSION %s",
+								 GetCompressionMethodName(attributeForm->attcompression));
+			}
+#endif
 
 			if (attributeForm->attcollation != InvalidOid &&
 				attributeForm->attcollation != DEFAULT_COLLATION_OID)
