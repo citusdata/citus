@@ -634,7 +634,6 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 		foreach(targetEntryCell, queryTree->targetList)
 		{
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-
 			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
 			if (targetEntry->resjunk)
 			{
@@ -1132,26 +1131,6 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 	List *onConflictSet = queryTree->onConflict->onConflictSet;
 	Node *arbiterWhere = queryTree->onConflict->arbiterWhere;
 	Node *onConflictWhere = queryTree->onConflict->onConflictWhere;
-
-
-	bool setTargetEntryPartitionColumn = false;
-
-	if (partitionColumn)
-	{
-		RangeTblEntry *resultRTE = ExtractResultRelationRTE(queryTree);
-
-		/*
-		 * FirstLowInvalidHeapAttributeNumber is added as an offset to rte->updatedCols.
-		 * So we substract that to get the column no for an updated column that matches
-		 * resultRTE->updatedcols.
-		 */
-		int updatedColNoWithOffset = partitionColumn->varattno -
-									 FirstLowInvalidHeapAttributeNumber;
-		if (bms_is_member(updatedColNoWithOffset, resultRTE->updatedCols))
-		{
-			setTargetEntryPartitionColumn = true;
-		}
-	}
 
 
 	/*

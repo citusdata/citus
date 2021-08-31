@@ -17,7 +17,6 @@ UPDATE test SET c = c, d = c;
 UPDATE test SET c = c, d = 5, e = 3;
 
 
-
 INSERT INTO test (c,d) VALUES(3,4) ON CONFLICT(c) DO UPDATE SET c=7;
 INSERT INTO test (c,d) VALUES(3,4) ON CONFLICT(c) DO UPDATE SET d=7;
 INSERT INTO test (c,d) VALUES(3,4) ON CONFLICT(c) DO UPDATE SET a=7;
