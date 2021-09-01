@@ -47,11 +47,11 @@ ROLLBACK;
 -- Show that table must not have manual partitions
 BEGIN;
     SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day');
-    CREATE TABLE date_partitioned_table_manual_partition PARTITION OF date_partitioned_table FOR VALUES FROM (now() + INTERVAL '15 days') TO (now() + INTERVAL '30 days');
+    CREATE TABLE date_partitioned_table_manual_partition PARTITION OF date_partitioned_table FOR VALUES FROM '2030-01-01'::date TO '2040-01-01'::date;
     SELECT
         date_trunc('day', now()) - range_from_value::date as from_diff,
         date_trunc('day', now()) - range_to_value::date as to_diff
-    FROM get_missing_partition_ranges('date_partitioned_table', now() + INTERVAL '20 days', now() - INTERVAL '20 days')
+    FROM get_missing_partition_ranges('date_partitioned_table', '2031-01-01'::date, '2021-01-01'::date)
     ORDER BY 1,2;
 ROLLBACK;
 
@@ -112,11 +112,11 @@ ROLLBACK;
 -- Show that table must not have manual partitions
 BEGIN;
     SELECT create_timeseries_table('tstz_partitioned_table', INTERVAL '1 day');
-    CREATE TABLE tstz_partitioned_table_manual_partition PARTITION OF tstz_partitioned_table FOR VALUES FROM (now() + INTERVAL '15 days') TO (now() + INTERVAL '30 days');
+    CREATE TABLE tstz_partitioned_table_manual_partition PARTITION OF tstz_partitioned_table FOR VALUES FROM '2030-01-01'::timestamptz TO '2040-01-01'::timestamptz;
     SELECT
         date_trunc('day', now()) - range_from_value::timestamp with time zone as from_diff,
         date_trunc('day', now()) - range_to_value::timestamp with time zone as to_diff
-    FROM get_missing_partition_ranges('tstz_partitioned_table', now() + INTERVAL '20 days', now() - INTERVAL '20 days')
+    FROM get_missing_partition_ranges('tstz_partitioned_table', '2031-01-01'::timestamptz, '2021-01-01'::timestamptz)
     ORDER BY 1,2;
 ROLLBACK;
 

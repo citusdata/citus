@@ -12,6 +12,8 @@ DECLARE
     current_partition_count int;
     table_partition_interval INTERVAL;
     table_partition_column_type_name text;
+    manual_partition_from_value_text text;
+    manual_partition_to_value_text text;
     current_range_from_value timestamptz := NULL;
     current_range_to_value timestamptz := NULL;
     current_range_from_value_text text;
@@ -146,15 +148,18 @@ BEGIN
          * Check whether any other partition covers from_value or to_value
          * That means some partitions have been created manually and we must error out.
          */
-        PERFORM * FROM pg_catalog.time_partitions
+        SELECT from_value::text, to_value::text
+        INTO manual_partition_from_value_text, manual_partition_to_value_text
+        FROM pg_catalog.time_partitions
         WHERE
             ((current_range_from_value::timestamptz > from_value::timestamptz AND current_range_from_value < to_value::timestamptz) OR
             (current_range_to_value::timestamptz > from_value::timestamptz AND current_range_to_value::timestamptz < to_value::timestamptz)) AND
             parent_table = table_name;
+
         IF found THEN
             RAISE 'Partition with the range from % to % has been created manually. Please remove all manually created partitions to use the table as timeseries table',
-            current_range_from_value::text,
-            current_range_to_value::text;
+            manual_partition_from_value_text,
+            manual_partition_to_value_text;
         END IF;
 
         /*

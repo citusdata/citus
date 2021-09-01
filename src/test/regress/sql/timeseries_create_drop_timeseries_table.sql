@@ -238,3 +238,30 @@ BEGIN;
     DROP TABLE drop_check_test_partitioned_table;
     SELECT * FROM timeseries.tables;
 COMMIT;
+
+-- Check distributed partitioned table
+CREATE TABLE distributed_partitioned_table(
+    measureid integer,
+    eventdate date,
+    measure_data integer) PARTITION BY RANGE(eventdate);
+
+SELECT create_distributed_table('distributed_partitioned_table', 'measureid');
+SELECT create_timeseries_table('distributed_partitioned_table', INTERVAL '1 day');
+SELECT * FROM timeseries.tables;
+
+-- We should have 512 shards since we have 15 partitions and 1 parent table
+SELECT count(*)
+FROM pg_dist_shard
+WHERE logicalrelid::text LIKE 'distributed_partitioned_table%';
+
+DROP TABLE distributed_partitioned_table;
+SELECT * FROM timeseries.tables;
+
+-- Show that partitioned reference tables are not supported
+CREATE TABLE partitioned_reference_table(
+    measureid integer,
+    eventdate date,
+    measure_data integer) PARTITION BY RANGE(eventdate);
+
+SELECT create_reference_table('partitioned_reference_table');
+DROP TABLE partitioned_reference_table;

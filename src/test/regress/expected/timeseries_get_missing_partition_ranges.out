@@ -110,14 +110,14 @@ BEGIN;
 
 (1 row)
 
-    CREATE TABLE date_partitioned_table_manual_partition PARTITION OF date_partitioned_table FOR VALUES FROM (now() + INTERVAL '15 days') TO (now() + INTERVAL '30 days');
+    CREATE TABLE date_partitioned_table_manual_partition PARTITION OF date_partitioned_table FOR VALUES FROM '2030-01-01'::date TO '2040-01-01'::date;
+ERROR:  syntax error at or near "'2030-01-01'"
     SELECT
         date_trunc('day', now()) - range_from_value::date as from_diff,
         date_trunc('day', now()) - range_to_value::date as to_diff
-    FROM get_missing_partition_ranges('date_partitioned_table', now() + INTERVAL '20 days', now() - INTERVAL '20 days')
+    FROM get_missing_partition_ranges('date_partitioned_table', '2031-01-01'::date, '2021-01-01'::date)
     ORDER BY 1,2;
-ERROR:  Partition with the range from Wed Sep 15 00:00:00 2021 PDT to Thu Sep 16 00:00:00 2021 PDT has been created manually. Please remove all manually created partitions to use the table as timeseries table
-CONTEXT:  PL/pgSQL function get_missing_partition_ranges(regclass,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 DROP TABLE date_partitioned_table;
 -- Show range values for timestamptz partitioned table
@@ -300,14 +300,14 @@ BEGIN;
 
 (1 row)
 
-    CREATE TABLE tstz_partitioned_table_manual_partition PARTITION OF tstz_partitioned_table FOR VALUES FROM (now() + INTERVAL '15 days') TO (now() + INTERVAL '30 days');
+    CREATE TABLE tstz_partitioned_table_manual_partition PARTITION OF tstz_partitioned_table FOR VALUES FROM '2030-01-01'::timestamptz TO '2040-01-01'::timestamptz;
+ERROR:  syntax error at or near "'2030-01-01'"
     SELECT
         date_trunc('day', now()) - range_from_value::timestamp with time zone as from_diff,
         date_trunc('day', now()) - range_to_value::timestamp with time zone as to_diff
-    FROM get_missing_partition_ranges('tstz_partitioned_table', now() + INTERVAL '20 days', now() - INTERVAL '20 days')
+    FROM get_missing_partition_ranges('tstz_partitioned_table', '2031-01-01'::timestamptz, '2021-01-01'::timestamptz)
     ORDER BY 1,2;
-ERROR:  Partition with the range from Wed Sep 15 00:00:00 2021 PDT to Thu Sep 16 00:00:00 2021 PDT has been created manually. Please remove all manually created partitions to use the table as timeseries table
-CONTEXT:  PL/pgSQL function get_missing_partition_ranges(regclass,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
 -- Test with different time zones
 SET timezone TO 'UTC';

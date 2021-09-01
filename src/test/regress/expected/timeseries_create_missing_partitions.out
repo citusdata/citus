@@ -724,10 +724,9 @@ BEGIN;
     SELECT *
     FROM pg_catalog.time_partitions
     WHERE parent_table = 'absolute_times_partitioned_table'::regclass
-    ORDER BY 1,2,3;
+    ORDER BY 3;
            parent_table           | partition_column |                       partition                        | from_value |  to_value  | access_method
 ---------------------------------------------------------------------
- absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_01_01_2021_02_01 | 01-01-2021 | 02-01-2021 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_02_01_2021_03_01 | 02-01-2021 | 03-01-2021 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_03_01_2021_04_01 | 03-01-2021 | 04-01-2021 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_04_01_2021_05_01 | 04-01-2021 | 05-01-2021 | heap
@@ -742,6 +741,7 @@ BEGIN;
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_01_01_2022_02_01 | 01-01-2022 | 02-01-2022 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_02_01_2022_03_01 | 02-01-2022 | 03-01-2022 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_03_01_2022_04_01 | 03-01-2022 | 04-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_04_01_2022_05_01 | 04-01-2022 | 05-01-2022 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_01_01_2020_02_01 | 01-01-2020 | 02-01-2020 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_02_01_2020_03_01 | 02-01-2020 | 03-01-2020 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_03_01_2020_04_01 | 03-01-2020 | 04-01-2020 | heap
@@ -754,7 +754,7 @@ BEGIN;
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_10_01_2020_11_01 | 10-01-2020 | 11-01-2020 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_11_01_2020_12_01 | 11-01-2020 | 12-01-2020 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2020_12_01_2021_01_01 | 12-01-2020 | 01-01-2021 | heap
- absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_04_01_2022_05_01 | 04-01-2022 | 05-01-2022 | heap
+ absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2021_01_01_2021_02_01 | 01-01-2021 | 02-01-2021 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_05_01_2022_06_01 | 05-01-2022 | 06-01-2022 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_06_01_2022_07_01 | 06-01-2022 | 07-01-2022 | heap
  absolute_times_partitioned_table | eventdate        | absolute_times_partitioned_table_2022_07_01_2022_08_01 | 07-01-2022 | 08-01-2022 | heap

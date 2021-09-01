@@ -53,7 +53,7 @@ ERROR:  partition interval for table partitioned on date must be multiple days
 SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 day 15 minutes');
 ERROR:  partition interval for table partitioned on date must be multiple days
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '2 days');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '2 days');
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -61,7 +61,7 @@ SELECT create_timeseries_table('date_partitioned_table', INTERVAL '2 days');
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 week');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 week');
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -69,7 +69,7 @@ SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 week');
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month');
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -77,7 +77,7 @@ SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month');
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month 15 weeks 3 days');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month 15 weeks 3 days');
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -85,7 +85,7 @@ SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 month 15 we
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 year 1 month 15 weeks 3 days');
+    SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 year 1 month 15 weeks 3 days');
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -94,7 +94,7 @@ SELECT create_timeseries_table('date_partitioned_table', INTERVAL '1 year 1 mont
 ROLLBACK;
 DROP TABLE date_partitioned_table;
 -- 2) retention threshold must be greater than compression threshold and
--- compresstion threshold must be greater than partition interval
+-- compression threshold must be greater than partition interval
 -- With date partitioned table
 CREATE TABLE ts_comp_date_partitioned_table(
     measureid integer,
@@ -107,7 +107,7 @@ ERROR:  retention threshold must be greater than compression threshold and compr
 SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', retention_threshold => INTERVAL '5 days');
 ERROR:  retention threshold must be greater than compression threshold and compression threshold must be greater than partition interval
 BEGIN;
-SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', compression_threshold => INTERVAL '10 days');
+    SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', compression_threshold => INTERVAL '10 days');
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -115,7 +115,7 @@ SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 wee
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', compression_threshold => INTERVAL '10 days', retention_threshold => INTERVAL '15 days');
+    SELECT create_timeseries_table('ts_comp_date_partitioned_table', INTERVAL '1 week', compression_threshold => INTERVAL '10 days', retention_threshold => INTERVAL '15 days');
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -135,7 +135,7 @@ ERROR:  retention threshold must be greater than compression threshold and compr
 SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '2 hours', retention_threshold => INTERVAL '1 hour');
 ERROR:  retention threshold must be greater than compression threshold and compression threshold must be greater than partition interval
 BEGIN;
-SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '2 hours', compression_threshold => INTERVAL '6 hours');
+    SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '2 hours', compression_threshold => INTERVAL '6 hours');
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -143,7 +143,7 @@ SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '2 hou
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '90 minutes', compression_threshold => INTERVAL '180 minutes', retention_threshold => INTERVAL '360 minutes');
+    SELECT create_timeseries_table('ts_comp_tstz_partitioned_table', INTERVAL '90 minutes', compression_threshold => INTERVAL '180 minutes', retention_threshold => INTERVAL '360 minutes');
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -159,7 +159,7 @@ CREATE TABLE param_test_partitioned_table(
 SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', premake_interval_count => 7, start_from => now());
 ERROR:  either premake_interval_count or start_from should be provided
 BEGIN;
-SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', premake_interval_count => 7);
+    SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', premake_interval_count => 7);
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -167,7 +167,7 @@ SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minu
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', start_from => now());
+    SELECT create_timeseries_table('param_test_partitioned_table', INTERVAL '90 minutes', start_from => now());
  create_timeseries_table
 ---------------------------------------------------------------------
 
@@ -181,15 +181,15 @@ CREATE TABLE count_test_partitioned_table(
     eventdatetime timestamp with time zone,
     measure_data integer) PARTITION BY RANGE(eventdatetime);
 BEGIN;
-SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '1 minute', postmake_interval_count => 0, premake_interval_count => 0);
+    SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '1 minute', postmake_interval_count => 0, premake_interval_count => 0);
  create_timeseries_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT count(*)
-FROM pg_catalog.time_partitions
-WHERE parent_table = 'count_test_partitioned_table'::regclass;
+    SELECT count(*)
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'count_test_partitioned_table'::regclass;
  count
 ---------------------------------------------------------------------
      1
@@ -197,15 +197,15 @@ WHERE parent_table = 'count_test_partitioned_table'::regclass;
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '1 hour', postmake_interval_count => 0, premake_interval_count => 5);
+    SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '1 hour', postmake_interval_count => 0, premake_interval_count => 5);
  create_timeseries_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT count(*)
-FROM pg_catalog.time_partitions
-WHERE parent_table = 'count_test_partitioned_table'::regclass;
+    SELECT count(*)
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'count_test_partitioned_table'::regclass;
  count
 ---------------------------------------------------------------------
      6
@@ -213,15 +213,15 @@ WHERE parent_table = 'count_test_partitioned_table'::regclass;
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '2 weeks', postmake_interval_count => 5, premake_interval_count => 0);
+    SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '2 weeks', postmake_interval_count => 5, premake_interval_count => 0);
  create_timeseries_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT count(*)
-FROM pg_catalog.time_partitions
-WHERE parent_table = 'count_test_partitioned_table'::regclass;
+    SELECT count(*)
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'count_test_partitioned_table'::regclass;
  count
 ---------------------------------------------------------------------
      6
@@ -229,15 +229,15 @@ WHERE parent_table = 'count_test_partitioned_table'::regclass;
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '2 months', postmake_interval_count => 3, premake_interval_count => 4);
+    SELECT create_timeseries_table('count_test_partitioned_table', INTERVAL '2 months', postmake_interval_count => 3, premake_interval_count => 4);
  create_timeseries_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT count(*)
-FROM pg_catalog.time_partitions
-WHERE parent_table = 'count_test_partitioned_table'::regclass;
+    SELECT count(*)
+    FROM pg_catalog.time_partitions
+    WHERE parent_table = 'count_test_partitioned_table'::regclass;
  count
 ---------------------------------------------------------------------
      8
@@ -251,121 +251,121 @@ CREATE TABLE range_check_test_partitioned_table(
     eventdatetime timestamp with time zone,
     measure_data integer) PARTITION BY RANGE(eventdatetime);
 BEGIN;
-SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 hour');
+    SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 hour');
  create_timeseries_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT partition,
-       date_trunc('hour',now()) - from_value::timestamptz as from_diff,
-       date_trunc('hour', now()) - to_value::timestamptz as to_diff
-FROM pg_catalog.time_partitions
-ORDER BY 1;
-               partition               |   from_diff   |    to_diff
+    SELECT partition,
+        date_trunc('hour',now()) - from_value::timestamptz as from_diff,
+        date_trunc('hour', now()) - to_value::timestamptz as to_diff
+    FROM pg_catalog.time_partitions
+    ORDER BY 1;
+                            partition                            |   from_diff   |    to_diff
 ---------------------------------------------------------------------
- range_check_test_partitioned_table_0  | @ 7 hours     | @ 6 hours
- range_check_test_partitioned_table_1  | @ 6 hours     | @ 5 hours
- range_check_test_partitioned_table_2  | @ 5 hours     | @ 4 hours
- range_check_test_partitioned_table_3  | @ 4 hours     | @ 3 hours
- range_check_test_partitioned_table_4  | @ 3 hours     | @ 2 hours
- range_check_test_partitioned_table_5  | @ 2 hours     | @ 1 hour
- range_check_test_partitioned_table_6  | @ 1 hour      | @ 0
- range_check_test_partitioned_table_7  | @ 0           | @ 1 hour ago
- range_check_test_partitioned_table_8  | @ 1 hour ago  | @ 2 hours ago
- range_check_test_partitioned_table_9  | @ 2 hours ago | @ 3 hours ago
- range_check_test_partitioned_table_10 | @ 3 hours ago | @ 4 hours ago
- range_check_test_partitioned_table_11 | @ 4 hours ago | @ 5 hours ago
- range_check_test_partitioned_table_12 | @ 5 hours ago | @ 6 hours ago
- range_check_test_partitioned_table_13 | @ 6 hours ago | @ 7 hours ago
- range_check_test_partitioned_table_14 | @ 7 hours ago | @ 8 hours ago
+ range_check_test_partit_2021_08_31_20_00_00_2021_08_31_21_00_00 | @ 7 hours     | @ 6 hours
+ range_check_test_partit_2021_08_31_21_00_00_2021_08_31_22_00_00 | @ 6 hours     | @ 5 hours
+ range_check_test_partit_2021_08_31_22_00_00_2021_08_31_23_00_00 | @ 5 hours     | @ 4 hours
+ range_check_test_partit_2021_08_31_23_00_00_2021_09_01_00_00_00 | @ 4 hours     | @ 3 hours
+ range_check_test_partit_2021_09_01_00_00_00_2021_09_01_01_00_00 | @ 3 hours     | @ 2 hours
+ range_check_test_partit_2021_09_01_01_00_00_2021_09_01_02_00_00 | @ 2 hours     | @ 1 hour
+ range_check_test_partit_2021_09_01_02_00_00_2021_09_01_03_00_00 | @ 1 hour      | @ 0
+ range_check_test_partit_2021_09_01_03_00_00_2021_09_01_04_00_00 | @ 0           | @ 1 hour ago
+ range_check_test_partit_2021_09_01_04_00_00_2021_09_01_05_00_00 | @ 1 hour ago  | @ 2 hours ago
+ range_check_test_partit_2021_09_01_05_00_00_2021_09_01_06_00_00 | @ 2 hours ago | @ 3 hours ago
+ range_check_test_partit_2021_09_01_06_00_00_2021_09_01_07_00_00 | @ 3 hours ago | @ 4 hours ago
+ range_check_test_partit_2021_09_01_07_00_00_2021_09_01_08_00_00 | @ 4 hours ago | @ 5 hours ago
+ range_check_test_partit_2021_09_01_08_00_00_2021_09_01_09_00_00 | @ 5 hours ago | @ 6 hours ago
+ range_check_test_partit_2021_09_01_09_00_00_2021_09_01_10_00_00 | @ 6 hours ago | @ 7 hours ago
+ range_check_test_partit_2021_09_01_10_00_00_2021_09_01_11_00_00 | @ 7 hours ago | @ 8 hours ago
 (15 rows)
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 day', postmake_interval_count => 5);
+    SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 day', postmake_interval_count => 5);
  create_timeseries_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT partition,
-       date_trunc('day',now()) - from_value::timestamptz as from_diff,
-       date_trunc('day', now()) - to_value::timestamptz as to_diff
-FROM pg_catalog.time_partitions
-ORDER BY 1;
-               partition               |  from_diff   |   to_diff
+    SELECT partition,
+        date_trunc('day',now()) - from_value::timestamptz as from_diff,
+        date_trunc('day', now()) - to_value::timestamptz as to_diff
+    FROM pg_catalog.time_partitions
+    ORDER BY 1;
+                            partition                            |  from_diff   |   to_diff
 ---------------------------------------------------------------------
- range_check_test_partitioned_table_0  | @ 7 days     | @ 6 days
- range_check_test_partitioned_table_1  | @ 6 days     | @ 5 days
- range_check_test_partitioned_table_2  | @ 5 days     | @ 4 days
- range_check_test_partitioned_table_3  | @ 4 days     | @ 3 days
- range_check_test_partitioned_table_4  | @ 3 days     | @ 2 days
- range_check_test_partitioned_table_5  | @ 2 days     | @ 1 day
- range_check_test_partitioned_table_6  | @ 1 day      | @ 0
- range_check_test_partitioned_table_7  | @ 0          | @ 1 day ago
- range_check_test_partitioned_table_8  | @ 1 day ago  | @ 2 days ago
- range_check_test_partitioned_table_9  | @ 2 days ago | @ 3 days ago
- range_check_test_partitioned_table_10 | @ 3 days ago | @ 4 days ago
- range_check_test_partitioned_table_11 | @ 4 days ago | @ 5 days ago
- range_check_test_partitioned_table_12 | @ 5 days ago | @ 6 days ago
+ range_check_test_partit_2021_08_25_00_00_00_2021_08_26_00_00_00 | @ 7 days     | @ 6 days
+ range_check_test_partit_2021_08_26_00_00_00_2021_08_27_00_00_00 | @ 6 days     | @ 5 days
+ range_check_test_partit_2021_08_27_00_00_00_2021_08_28_00_00_00 | @ 5 days     | @ 4 days
+ range_check_test_partit_2021_08_28_00_00_00_2021_08_29_00_00_00 | @ 4 days     | @ 3 days
+ range_check_test_partit_2021_08_29_00_00_00_2021_08_30_00_00_00 | @ 3 days     | @ 2 days
+ range_check_test_partit_2021_08_30_00_00_00_2021_08_31_00_00_00 | @ 2 days     | @ 1 day
+ range_check_test_partit_2021_08_31_00_00_00_2021_09_01_00_00_00 | @ 1 day      | @ 0
+ range_check_test_partit_2021_09_01_00_00_00_2021_09_02_00_00_00 | @ 0          | @ 1 day ago
+ range_check_test_partit_2021_09_02_00_00_00_2021_09_03_00_00_00 | @ 1 day ago  | @ 2 days ago
+ range_check_test_partit_2021_09_03_00_00_00_2021_09_04_00_00_00 | @ 2 days ago | @ 3 days ago
+ range_check_test_partit_2021_09_04_00_00_00_2021_09_05_00_00_00 | @ 3 days ago | @ 4 days ago
+ range_check_test_partit_2021_09_05_00_00_00_2021_09_06_00_00_00 | @ 4 days ago | @ 5 days ago
+ range_check_test_partit_2021_09_06_00_00_00_2021_09_07_00_00_00 | @ 5 days ago | @ 6 days ago
 (13 rows)
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', premake_interval_count => 3);
+    SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', premake_interval_count => 3);
  create_timeseries_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT partition,
-       date_trunc('week',now()) - from_value::timestamptz as from_diff,
-       date_trunc('week', now()) - to_value::timestamptz as to_diff
-FROM pg_catalog.time_partitions
-ORDER BY 1;
-               partition               |   from_diff   |    to_diff
+    SELECT partition,
+        date_trunc('week',now()) - from_value::timestamptz as from_diff,
+        date_trunc('week', now()) - to_value::timestamptz as to_diff
+    FROM pg_catalog.time_partitions
+    ORDER BY 1;
+                            partition                            |   from_diff   |    to_diff
 ---------------------------------------------------------------------
- range_check_test_partitioned_table_0  | @ 21 days     | @ 14 days
- range_check_test_partitioned_table_1  | @ 14 days     | @ 7 days
- range_check_test_partitioned_table_2  | @ 7 days      | @ 0
- range_check_test_partitioned_table_3  | @ 0           | @ 7 days ago
- range_check_test_partitioned_table_4  | @ 7 days ago  | @ 14 days ago
- range_check_test_partitioned_table_5  | @ 14 days ago | @ 21 days ago
- range_check_test_partitioned_table_6  | @ 21 days ago | @ 28 days ago
- range_check_test_partitioned_table_7  | @ 28 days ago | @ 35 days ago
- range_check_test_partitioned_table_8  | @ 35 days ago | @ 42 days ago
- range_check_test_partitioned_table_9  | @ 42 days ago | @ 49 days ago
- range_check_test_partitioned_table_10 | @ 49 days ago | @ 56 days ago
+ range_check_test_partit_2021_08_09_00_00_00_2021_08_16_00_00_00 | @ 21 days     | @ 14 days
+ range_check_test_partit_2021_08_16_00_00_00_2021_08_23_00_00_00 | @ 14 days     | @ 7 days
+ range_check_test_partit_2021_08_23_00_00_00_2021_08_30_00_00_00 | @ 7 days      | @ 0
+ range_check_test_partit_2021_08_30_00_00_00_2021_09_06_00_00_00 | @ 0           | @ 7 days ago
+ range_check_test_partit_2021_09_06_00_00_00_2021_09_13_00_00_00 | @ 7 days ago  | @ 14 days ago
+ range_check_test_partit_2021_09_13_00_00_00_2021_09_20_00_00_00 | @ 14 days ago | @ 21 days ago
+ range_check_test_partit_2021_09_20_00_00_00_2021_09_27_00_00_00 | @ 21 days ago | @ 28 days ago
+ range_check_test_partit_2021_09_27_00_00_00_2021_10_04_00_00_00 | @ 28 days ago | @ 35 days ago
+ range_check_test_partit_2021_10_04_00_00_00_2021_10_11_00_00_00 | @ 35 days ago | @ 42 days ago
+ range_check_test_partit_2021_10_11_00_00_00_2021_10_18_00_00_00 | @ 42 days ago | @ 49 days ago
+ range_check_test_partit_2021_10_18_00_00_00_2021_10_25_00_00_00 | @ 49 days ago | @ 56 days ago
 (11 rows)
 
 ROLLBACK;
 BEGIN;
-SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', start_from => now() - INTERVAL '4 weeks');
+    SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', start_from => now() - INTERVAL '4 weeks');
  create_timeseries_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT partition,
-       date_trunc('week',now()) - from_value::timestamptz as from_diff,
-       date_trunc('week', now()) - to_value::timestamptz as to_diff
-FROM pg_catalog.time_partitions
-ORDER BY 1;
-               partition               |   from_diff   |    to_diff
+    SELECT partition,
+        date_trunc('week',now()) - from_value::timestamptz as from_diff,
+        date_trunc('week', now()) - to_value::timestamptz as to_diff
+    FROM pg_catalog.time_partitions
+    ORDER BY 1;
+                            partition                            |   from_diff   |    to_diff
 ---------------------------------------------------------------------
- range_check_test_partitioned_table_0  | @ 28 days     | @ 21 days
- range_check_test_partitioned_table_1  | @ 21 days     | @ 14 days
- range_check_test_partitioned_table_2  | @ 14 days     | @ 7 days
- range_check_test_partitioned_table_3  | @ 7 days      | @ 0
- range_check_test_partitioned_table_4  | @ 0           | @ 7 days ago
- range_check_test_partitioned_table_5  | @ 7 days ago  | @ 14 days ago
- range_check_test_partitioned_table_6  | @ 14 days ago | @ 21 days ago
- range_check_test_partitioned_table_7  | @ 21 days ago | @ 28 days ago
- range_check_test_partitioned_table_8  | @ 28 days ago | @ 35 days ago
- range_check_test_partitioned_table_9  | @ 35 days ago | @ 42 days ago
- range_check_test_partitioned_table_10 | @ 42 days ago | @ 49 days ago
- range_check_test_partitioned_table_11 | @ 49 days ago | @ 56 days ago
+ range_check_test_partit_2021_08_02_00_00_00_2021_08_09_00_00_00 | @ 28 days     | @ 21 days
+ range_check_test_partit_2021_08_09_00_00_00_2021_08_16_00_00_00 | @ 21 days     | @ 14 days
+ range_check_test_partit_2021_08_16_00_00_00_2021_08_23_00_00_00 | @ 14 days     | @ 7 days
+ range_check_test_partit_2021_08_23_00_00_00_2021_08_30_00_00_00 | @ 7 days      | @ 0
+ range_check_test_partit_2021_08_30_00_00_00_2021_09_06_00_00_00 | @ 0           | @ 7 days ago
+ range_check_test_partit_2021_09_06_00_00_00_2021_09_13_00_00_00 | @ 7 days ago  | @ 14 days ago
+ range_check_test_partit_2021_09_13_00_00_00_2021_09_20_00_00_00 | @ 14 days ago | @ 21 days ago
+ range_check_test_partit_2021_09_20_00_00_00_2021_09_27_00_00_00 | @ 21 days ago | @ 28 days ago
+ range_check_test_partit_2021_09_27_00_00_00_2021_10_04_00_00_00 | @ 28 days ago | @ 35 days ago
+ range_check_test_partit_2021_10_04_00_00_00_2021_10_11_00_00_00 | @ 35 days ago | @ 42 days ago
+ range_check_test_partit_2021_10_11_00_00_00_2021_10_18_00_00_00 | @ 42 days ago | @ 49 days ago
+ range_check_test_partit_2021_10_18_00_00_00_2021_10_25_00_00_00 | @ 49 days ago | @ 56 days ago
 (12 rows)
 
 ROLLBACK;
@@ -393,26 +393,72 @@ SELECT * FROM timeseries.tables;
 (0 rows)
 
 BEGIN;
-CREATE TABLE drop_check_test_partitioned_table(
+    CREATE TABLE drop_check_test_partitioned_table(
+        measureid integer,
+        eventdatetime timestamp with time zone,
+        measure_data integer) PARTITION BY RANGE(eventdatetime);
+    SELECT create_timeseries_table('drop_check_test_partitioned_table', INTERVAL '2 hours');
+ create_timeseries_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    SELECT * FROM timeseries.tables;
+           logicalrelid            | partitioninterval | postmakeintervalcount | premakeintervalcount | startfrom | compressionthreshold | retentionthreshold
+---------------------------------------------------------------------
+ drop_check_test_partitioned_table | @ 2 hours         |                     7 |                    7 |           |                      |
+(1 row)
+
+    DROP TABLE drop_check_test_partitioned_table;
+    SELECT * FROM timeseries.tables;
+ logicalrelid | partitioninterval | postmakeintervalcount | premakeintervalcount | startfrom | compressionthreshold | retentionthreshold
+---------------------------------------------------------------------
+(0 rows)
+
+COMMIT;
+-- Check distributed partitioned table
+CREATE TABLE distributed_partitioned_table(
     measureid integer,
-    eventdatetime timestamp with time zone,
-    measure_data integer) PARTITION BY RANGE(eventdatetime);
-SELECT create_timeseries_table('drop_check_test_partitioned_table', INTERVAL '2 hours');
+    eventdate date,
+    measure_data integer) PARTITION BY RANGE(eventdate);
+SELECT create_distributed_table('distributed_partitioned_table', 'measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_timeseries_table('distributed_partitioned_table', INTERVAL '1 day');
  create_timeseries_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT * FROM timeseries.tables;
-           logicalrelid            | partitioninterval | postmakeintervalcount | premakeintervalcount | startfrom | compressionthreshold | retentionthreshold
+         logicalrelid          | partitioninterval | postmakeintervalcount | premakeintervalcount | startfrom | compressionthreshold | retentionthreshold
 ---------------------------------------------------------------------
- drop_check_test_partitioned_table | @ 2 hours         |                     7 |                    7 |           |                      |
+ distributed_partitioned_table | @ 1 day           |                     7 |                    7 |           |                      |
 (1 row)
 
-DROP TABLE drop_check_test_partitioned_table;
+-- We should have 512 shards since we have 15 partitions and 1 parent table
+SELECT count(*)
+FROM pg_dist_shard
+WHERE logicalrelid::text LIKE 'distributed_partitioned_table%';
+ count
+---------------------------------------------------------------------
+    64
+(1 row)
+
+DROP TABLE distributed_partitioned_table;
 SELECT * FROM timeseries.tables;
  logicalrelid | partitioninterval | postmakeintervalcount | premakeintervalcount | startfrom | compressionthreshold | retentionthreshold
 ---------------------------------------------------------------------
 (0 rows)
 
-COMMIT;
+-- Show that partitioned reference tables are not supported
+CREATE TABLE partitioned_reference_table(
+    measureid integer,
+    eventdate date,
+    measure_data integer) PARTITION BY RANGE(eventdate);
+SELECT create_reference_table('partitioned_reference_table');
+ERROR:  distributing partitioned tables in only supported for hash-distributed tables
+DROP TABLE partitioned_reference_table;

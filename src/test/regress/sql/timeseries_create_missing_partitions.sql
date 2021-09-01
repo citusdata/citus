@@ -205,7 +205,7 @@ BEGIN;
     SELECT *
     FROM pg_catalog.time_partitions
     WHERE parent_table = 'absolute_times_partitioned_table'::regclass
-    ORDER BY 1,2,3;
+    ORDER BY 3;
 ROLLBACK;
 
 DROP TABLE absolute_times_partitioned_table;
