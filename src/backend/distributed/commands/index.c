@@ -589,6 +589,13 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 
 		if (isCitusRelation)
 		{
+			if (PartitionedTable(relationId))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("REINDEX TABLE queries on distributed partitioned "
+									   "tables are not supported")));
+			}
+
 			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 			ddlJob->targetRelationId = relationId;
 			ddlJob->concurrentIndexCmd = IsReindexWithParam_compat(reindexStatement,
