@@ -2433,12 +2433,16 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_ReplicaIdentity:
 			case AT_ValidateConstraint:
 			case AT_DropConstraint: /* we do the check for invalidation in AlterTableDropsForeignKey */
+#if PG_VERSION_NUM >= PG_VERSION_14
+			case AT_SetCompression:
+#endif
 			{
 				/*
 				 * We will not perform any special check for:
 				 * ALTER TABLE .. ALTER COLUMN .. SET NOT NULL
 				 * ALTER TABLE .. REPLICA IDENTITY ..
 				 * ALTER TABLE .. VALIDATE CONSTRAINT ..
+				 * ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
 				 */
 				break;
 			}
