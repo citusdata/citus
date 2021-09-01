@@ -408,10 +408,15 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 	{
 		if (alterTableCommand->subtype == AT_AttachPartition)
 		{
-			Oid relationId = AlterTableLookupRelation(alterTableStatement, NoLock);
+			/*
+			 * We acquire the lock on the parent and child as we are in the pre-process
+			 * and want to ensure we acquire the locks in the same order with Postgres
+			 */
+			LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+			Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 			PartitionCmd *partitionCommand = (PartitionCmd *) alterTableCommand->def;
 			bool partitionMissingOk = false;
-			Oid partitionRelationId = RangeVarGetRelid(partitionCommand->name, NoLock,
+			Oid partitionRelationId = RangeVarGetRelid(partitionCommand->name, lockmode,
 													   partitionMissingOk);
 
 			/*
