@@ -2368,6 +2368,15 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+			case AT_DetachPartitionFinalize:
+			{
+				ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. FINALIZE "
+									   "commands are currently unsupported.")));
+				break;
+			}
+
+#endif
 			case AT_DetachPartition:
 			{
 				/* we only allow partitioning commands if they are only subcommand */
@@ -2379,7 +2388,16 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									errhint("You can issue each subcommand "
 											"separately.")));
 				}
+				#if PG_VERSION_NUM >= PG_VERSION_14
+				PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
 
+				if (partitionCommand->concurrent)
+				{
+					ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. "
+										   "CONCURRENTLY commands are currently "
+										   "unsupported.")));
+				}
+				#endif
 				ErrorIfCitusLocalTablePartitionCommand(command, relationId);
 
 				break;
