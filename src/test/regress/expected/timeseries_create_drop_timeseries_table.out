@@ -257,28 +257,28 @@ BEGIN;
 
 (1 row)
 
-    SELECT partition,
+    SELECT
         date_trunc('hour',now()) - from_value::timestamptz as from_diff,
         date_trunc('hour', now()) - to_value::timestamptz as to_diff
     FROM pg_catalog.time_partitions
     ORDER BY 1;
-                            partition                            |   from_diff   |    to_diff
+   from_diff   |    to_diff
 ---------------------------------------------------------------------
- range_check_test_partit_2021_08_31_20_00_00_2021_08_31_21_00_00 | @ 7 hours     | @ 6 hours
- range_check_test_partit_2021_08_31_21_00_00_2021_08_31_22_00_00 | @ 6 hours     | @ 5 hours
- range_check_test_partit_2021_08_31_22_00_00_2021_08_31_23_00_00 | @ 5 hours     | @ 4 hours
- range_check_test_partit_2021_08_31_23_00_00_2021_09_01_00_00_00 | @ 4 hours     | @ 3 hours
- range_check_test_partit_2021_09_01_00_00_00_2021_09_01_01_00_00 | @ 3 hours     | @ 2 hours
- range_check_test_partit_2021_09_01_01_00_00_2021_09_01_02_00_00 | @ 2 hours     | @ 1 hour
- range_check_test_partit_2021_09_01_02_00_00_2021_09_01_03_00_00 | @ 1 hour      | @ 0
- range_check_test_partit_2021_09_01_03_00_00_2021_09_01_04_00_00 | @ 0           | @ 1 hour ago
- range_check_test_partit_2021_09_01_04_00_00_2021_09_01_05_00_00 | @ 1 hour ago  | @ 2 hours ago
- range_check_test_partit_2021_09_01_05_00_00_2021_09_01_06_00_00 | @ 2 hours ago | @ 3 hours ago
- range_check_test_partit_2021_09_01_06_00_00_2021_09_01_07_00_00 | @ 3 hours ago | @ 4 hours ago
- range_check_test_partit_2021_09_01_07_00_00_2021_09_01_08_00_00 | @ 4 hours ago | @ 5 hours ago
- range_check_test_partit_2021_09_01_08_00_00_2021_09_01_09_00_00 | @ 5 hours ago | @ 6 hours ago
- range_check_test_partit_2021_09_01_09_00_00_2021_09_01_10_00_00 | @ 6 hours ago | @ 7 hours ago
- range_check_test_partit_2021_09_01_10_00_00_2021_09_01_11_00_00 | @ 7 hours ago | @ 8 hours ago
+ @ 7 hours ago | @ 8 hours ago
+ @ 6 hours ago | @ 7 hours ago
+ @ 5 hours ago | @ 6 hours ago
+ @ 4 hours ago | @ 5 hours ago
+ @ 3 hours ago | @ 4 hours ago
+ @ 2 hours ago | @ 3 hours ago
+ @ 1 hour ago  | @ 2 hours ago
+ @ 0           | @ 1 hour ago
+ @ 1 hour      | @ 0
+ @ 2 hours     | @ 1 hour
+ @ 3 hours     | @ 2 hours
+ @ 4 hours     | @ 3 hours
+ @ 5 hours     | @ 4 hours
+ @ 6 hours     | @ 5 hours
+ @ 7 hours     | @ 6 hours
 (15 rows)
 
 ROLLBACK;
@@ -294,21 +294,21 @@ BEGIN;
         date_trunc('day', now()) - to_value::timestamptz as to_diff
     FROM pg_catalog.time_partitions
     ORDER BY 1;
-                            partition                            |  from_diff   |   to_diff
+                   partition                    |  from_diff   |   to_diff
 ---------------------------------------------------------------------
- range_check_test_partit_2021_08_25_00_00_00_2021_08_26_00_00_00 | @ 7 days     | @ 6 days
- range_check_test_partit_2021_08_26_00_00_00_2021_08_27_00_00_00 | @ 6 days     | @ 5 days
- range_check_test_partit_2021_08_27_00_00_00_2021_08_28_00_00_00 | @ 5 days     | @ 4 days
- range_check_test_partit_2021_08_28_00_00_00_2021_08_29_00_00_00 | @ 4 days     | @ 3 days
- range_check_test_partit_2021_08_29_00_00_00_2021_08_30_00_00_00 | @ 3 days     | @ 2 days
- range_check_test_partit_2021_08_30_00_00_00_2021_08_31_00_00_00 | @ 2 days     | @ 1 day
- range_check_test_partit_2021_08_31_00_00_00_2021_09_01_00_00_00 | @ 1 day      | @ 0
- range_check_test_partit_2021_09_01_00_00_00_2021_09_02_00_00_00 | @ 0          | @ 1 day ago
- range_check_test_partit_2021_09_02_00_00_00_2021_09_03_00_00_00 | @ 1 day ago  | @ 2 days ago
- range_check_test_partit_2021_09_03_00_00_00_2021_09_04_00_00_00 | @ 2 days ago | @ 3 days ago
- range_check_test_partit_2021_09_04_00_00_00_2021_09_05_00_00_00 | @ 3 days ago | @ 4 days ago
- range_check_test_partit_2021_09_05_00_00_00_2021_09_06_00_00_00 | @ 4 days ago | @ 5 days ago
- range_check_test_partit_2021_09_06_00_00_00_2021_09_07_00_00_00 | @ 5 days ago | @ 6 days ago
+ range_check_test_partitioned_table_p2021_08_25 | @ 7 days     | @ 6 days
+ range_check_test_partitioned_table_p2021_08_26 | @ 6 days     | @ 5 days
+ range_check_test_partitioned_table_p2021_08_27 | @ 5 days     | @ 4 days
+ range_check_test_partitioned_table_p2021_08_28 | @ 4 days     | @ 3 days
+ range_check_test_partitioned_table_p2021_08_29 | @ 3 days     | @ 2 days
+ range_check_test_partitioned_table_p2021_08_30 | @ 2 days     | @ 1 day
+ range_check_test_partitioned_table_p2021_08_31 | @ 1 day      | @ 0
+ range_check_test_partitioned_table_p2021_09_01 | @ 0          | @ 1 day ago
+ range_check_test_partitioned_table_p2021_09_02 | @ 1 day ago  | @ 2 days ago
+ range_check_test_partitioned_table_p2021_09_03 | @ 2 days ago | @ 3 days ago
+ range_check_test_partitioned_table_p2021_09_04 | @ 3 days ago | @ 4 days ago
+ range_check_test_partitioned_table_p2021_09_05 | @ 4 days ago | @ 5 days ago
+ range_check_test_partitioned_table_p2021_09_06 | @ 5 days ago | @ 6 days ago
 (13 rows)
 
 ROLLBACK;
@@ -319,24 +319,24 @@ BEGIN;
 
 (1 row)
 
-    SELECT partition,
+    SELECT
         date_trunc('week',now()) - from_value::timestamptz as from_diff,
         date_trunc('week', now()) - to_value::timestamptz as to_diff
     FROM pg_catalog.time_partitions
     ORDER BY 1;
-                            partition                            |   from_diff   |    to_diff
+   from_diff   |    to_diff
 ---------------------------------------------------------------------
- range_check_test_partit_2021_08_09_00_00_00_2021_08_16_00_00_00 | @ 21 days     | @ 14 days
- range_check_test_partit_2021_08_16_00_00_00_2021_08_23_00_00_00 | @ 14 days     | @ 7 days
- range_check_test_partit_2021_08_23_00_00_00_2021_08_30_00_00_00 | @ 7 days      | @ 0
- range_check_test_partit_2021_08_30_00_00_00_2021_09_06_00_00_00 | @ 0           | @ 7 days ago
- range_check_test_partit_2021_09_06_00_00_00_2021_09_13_00_00_00 | @ 7 days ago  | @ 14 days ago
- range_check_test_partit_2021_09_13_00_00_00_2021_09_20_00_00_00 | @ 14 days ago | @ 21 days ago
- range_check_test_partit_2021_09_20_00_00_00_2021_09_27_00_00_00 | @ 21 days ago | @ 28 days ago
- range_check_test_partit_2021_09_27_00_00_00_2021_10_04_00_00_00 | @ 28 days ago | @ 35 days ago
- range_check_test_partit_2021_10_04_00_00_00_2021_10_11_00_00_00 | @ 35 days ago | @ 42 days ago
- range_check_test_partit_2021_10_11_00_00_00_2021_10_18_00_00_00 | @ 42 days ago | @ 49 days ago
- range_check_test_partit_2021_10_18_00_00_00_2021_10_25_00_00_00 | @ 49 days ago | @ 56 days ago
+ @ 49 days ago | @ 56 days ago
+ @ 42 days ago | @ 49 days ago
+ @ 35 days ago | @ 42 days ago
+ @ 28 days ago | @ 35 days ago
+ @ 21 days ago | @ 28 days ago
+ @ 14 days ago | @ 21 days ago
+ @ 7 days ago  | @ 14 days ago
+ @ 0           | @ 7 days ago
+ @ 7 days      | @ 0
+ @ 14 days     | @ 7 days
+ @ 21 days     | @ 14 days
 (11 rows)
 
 ROLLBACK;
@@ -347,25 +347,25 @@ BEGIN;
 
 (1 row)
 
-    SELECT partition,
+    SELECT
         date_trunc('week',now()) - from_value::timestamptz as from_diff,
         date_trunc('week', now()) - to_value::timestamptz as to_diff
     FROM pg_catalog.time_partitions
     ORDER BY 1;
-                            partition                            |   from_diff   |    to_diff
+   from_diff   |    to_diff
 ---------------------------------------------------------------------
- range_check_test_partit_2021_08_02_00_00_00_2021_08_09_00_00_00 | @ 28 days     | @ 21 days
- range_check_test_partit_2021_08_09_00_00_00_2021_08_16_00_00_00 | @ 21 days     | @ 14 days
- range_check_test_partit_2021_08_16_00_00_00_2021_08_23_00_00_00 | @ 14 days     | @ 7 days
- range_check_test_partit_2021_08_23_00_00_00_2021_08_30_00_00_00 | @ 7 days      | @ 0
- range_check_test_partit_2021_08_30_00_00_00_2021_09_06_00_00_00 | @ 0           | @ 7 days ago
- range_check_test_partit_2021_09_06_00_00_00_2021_09_13_00_00_00 | @ 7 days ago  | @ 14 days ago
- range_check_test_partit_2021_09_13_00_00_00_2021_09_20_00_00_00 | @ 14 days ago | @ 21 days ago
- range_check_test_partit_2021_09_20_00_00_00_2021_09_27_00_00_00 | @ 21 days ago | @ 28 days ago
- range_check_test_partit_2021_09_27_00_00_00_2021_10_04_00_00_00 | @ 28 days ago | @ 35 days ago
- range_check_test_partit_2021_10_04_00_00_00_2021_10_11_00_00_00 | @ 35 days ago | @ 42 days ago
- range_check_test_partit_2021_10_11_00_00_00_2021_10_18_00_00_00 | @ 42 days ago | @ 49 days ago
- range_check_test_partit_2021_10_18_00_00_00_2021_10_25_00_00_00 | @ 49 days ago | @ 56 days ago
+ @ 49 days ago | @ 56 days ago
+ @ 42 days ago | @ 49 days ago
+ @ 35 days ago | @ 42 days ago
+ @ 28 days ago | @ 35 days ago
+ @ 21 days ago | @ 28 days ago
+ @ 14 days ago | @ 21 days ago
+ @ 7 days ago  | @ 14 days ago
+ @ 0           | @ 7 days ago
+ @ 7 days      | @ 0
+ @ 14 days     | @ 7 days
+ @ 21 days     | @ 14 days
+ @ 28 days     | @ 21 days
 (12 rows)
 
 ROLLBACK;

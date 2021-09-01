@@ -18,8 +18,7 @@ DECLARE
     current_range_to_value timestamptz := NULL;
     current_range_from_value_text text;
     current_range_to_value_text text;
-    current_range_from_value_text_in_partition_name text;
-    current_range_to_value_text_in_partition_name text;
+    datetime_string_format text;
     max_table_name_length int;
 BEGIN
     /*
@@ -127,6 +126,32 @@ BEGIN
     FROM pg_settings
     WHERE name = 'max_identifier_length';
 
+    -- Follow the same naming schema with pg_partman
+    -- to allow easy migration
+    datetime_string_format := 'YYYY';
+    IF table_partition_interval < '1 year' THEN
+        IF table_partition_interval = INTERVAL '3 months' THEN
+            datetime_string_format = 'YYYY"q"Q';
+        ELSE
+            datetime_string_format := datetime_string_format || '_MM';
+        END IF;
+
+        IF table_partition_interval < '1 month' THEN
+            IF table_partition_interval = INTERVAL '1 week' THEN
+                datetime_string_format := 'IYYY"w"IW';
+            ELSE
+                datetime_string_format := datetime_string_format || '_DD';
+            END IF;
+
+            IF table_partition_interval < '1 day' THEN
+                datetime_string_format := datetime_string_format || '_HH24MI';
+                IF table_partition_interval < '1 minute' THEN
+                    datetime_string_format := datetime_string_format || 'SS';
+                END IF;
+            END IF;
+        END IF;
+    END IF;
+
     WHILE current_range_from_value < to_date LOOP
         /*
          * Check whether partition with given range has already been created
@@ -169,27 +194,20 @@ BEGIN
         IF table_partition_column_type_name = 'date' THEN
             SELECT current_range_from_value::date::text INTO current_range_from_value_text;
             SELECT current_range_to_value::date::text INTO current_range_to_value_text;
-            SELECT to_char(current_range_from_value, 'YYYY_MM_DD') INTO current_range_from_value_text_in_partition_name;
-            SELECT to_char(current_range_to_value, 'YYYY_MM_DD') INTO current_range_to_value_text_in_partition_name;
         ELSIF table_partition_column_type_name = 'timestamp without time zone' THEN
             SELECT current_range_from_value::timestamp::text INTO current_range_from_value_text;
             SELECT current_range_to_value::timestamp::text INTO current_range_to_value_text;
-            SELECT to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_from_value_text_in_partition_name;
-            SELECT to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_to_value_text_in_partition_name;
         ELSIF table_partition_column_type_name = 'timestamp with time zone' THEN
             SELECT current_range_from_value::timestamptz::text INTO current_range_from_value_text;
             SELECT current_range_to_value::timestamptz::text INTO current_range_to_value_text;
-            SELECT to_char(current_range_from_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_from_value_text_in_partition_name;
-            SELECT to_char(current_range_to_value, 'YYYY_MM_DD_HH24_MI_SS') INTO current_range_to_value_text_in_partition_name;
         ELSE
             RAISE 'type of the partition column of the table % must be date, timestamp or timestamptz', table_name;
         END IF;
 
         RETURN QUERY
         SELECT
-            substring(table_name::text, 0, max_table_name_length - length(current_range_from_value_text_in_partition_name) - length(current_range_to_value_text_in_partition_name) - 1) || '_' ||
-            current_range_from_value_text_in_partition_name || '_' ||
-            current_range_to_value_text_in_partition_name,
+            substring(table_name::text, 0, max_table_name_length - length(to_char(current_range_from_value, datetime_string_format)) - 1) || '_p' ||
+            to_char(current_range_from_value, datetime_string_format),
             current_range_from_value_text,
             current_range_to_value_text;
 

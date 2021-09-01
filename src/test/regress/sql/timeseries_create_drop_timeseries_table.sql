@@ -183,7 +183,7 @@ CREATE TABLE range_check_test_partitioned_table(
 
 BEGIN;
     SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 hour');
-    SELECT partition,
+    SELECT
         date_trunc('hour',now()) - from_value::timestamptz as from_diff,
         date_trunc('hour', now()) - to_value::timestamptz as to_diff
     FROM pg_catalog.time_partitions
@@ -201,7 +201,7 @@ ROLLBACK;
 
 BEGIN;
     SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', premake_interval_count => 3);
-    SELECT partition,
+    SELECT
         date_trunc('week',now()) - from_value::timestamptz as from_diff,
         date_trunc('week', now()) - to_value::timestamptz as to_diff
     FROM pg_catalog.time_partitions
@@ -210,7 +210,7 @@ ROLLBACK;
 
 BEGIN;
     SELECT create_timeseries_table('range_check_test_partitioned_table', INTERVAL '1 week', start_from => now() - INTERVAL '4 weeks');
-    SELECT partition,
+    SELECT
         date_trunc('week',now()) - from_value::timestamptz as from_diff,
         date_trunc('week', now()) - to_value::timestamptz as to_diff
     FROM pg_catalog.time_partitions
