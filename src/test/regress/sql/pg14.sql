@@ -59,5 +59,25 @@ SELECT create_distributed_table('par','a');
 ALTER TABLE par DETACH PARTITION par_2 CONCURRENTLY;
 ALTER TABLE par DETACH PARTITION par_2 FINALIZE;
 
+
+-- test column compression propagation in distribution
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE col_compression (a TEXT COMPRESSION pglz, b TEXT);
+SELECT create_distributed_table('col_compression', 'a', shard_count:=4);
+
+SELECT attname || ' ' || attcompression AS column_compression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'col\_compression%' AND attnum > 0 ORDER BY 1;
+SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
+SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+)$$);
+
+-- test column compression propagation in rebalance
+SELECT shardid INTO moving_shard FROM citus_shards WHERE table_name='col_compression'::regclass AND nodeport=:worker_1_port LIMIT 1;
+SELECT citus_move_shard_placement((SELECT * FROM moving_shard), :'public_worker_1_host', :worker_1_port, :'public_worker_2_host', :worker_2_port);
+SELECT rebalance_table_shards('col_compression', rebalance_strategy := 'by_shard_count');
+CALL citus_cleanup_orphaned_shards();
+SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
+SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+)$$) ORDER BY length(result);
+
 set client_min_messages to error;
 drop schema pg14 cascade;
