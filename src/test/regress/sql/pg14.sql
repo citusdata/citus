@@ -77,7 +77,30 @@ SELECT rebalance_table_shards('col_compression', rebalance_strategy := 'by_shard
 CALL citus_cleanup_orphaned_shards();
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
 SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
-)$$) ORDER BY length(result);
+)$$);
+
+-- test propagation of ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
+ALTER TABLE col_compression ALTER COLUMN b SET COMPRESSION pglz;
+ALTER TABLE col_compression ALTER COLUMN a SET COMPRESSION default;
+SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
+SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+)$$);
+
+-- test propagation of ALTER TABLE .. ADD COLUMN .. COMPRESSION ..
+ALTER TABLE col_compression ADD COLUMN c TEXT COMPRESSION pglz;
+SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
+SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
+)$$);
+
+-- test attaching to a partitioned table with column compression
+CREATE TABLE col_comp_par (a TEXT COMPRESSION pglz, b TEXT) PARTITION BY RANGE (a);
+SELECT create_distributed_table('col_comp_par', 'a');
+
+CREATE TABLE col_comp_par_1 PARTITION OF col_comp_par FOR VALUES FROM ('abc') TO ('def');
+
+SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
+SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_comp\_par\_1\_%' AND attnum > 0 ORDER BY 1
+)$$);
 
 RESET citus.multi_shard_modify_mode;
 
