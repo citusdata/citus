@@ -237,5 +237,17 @@ SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE x.i > 1 ORDER BY 1,2,3,4;
 -- ORDER BY is not supported for json and this returns 1 row, so it is okay.
 SELECT row_to_json(x.*) FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE J1_TBL.t = 'one';
 
+-- we don't support REINDEX TABLE queries on distributed partitioned tables
+CREATE TABLE dist_part_table (a int) PARTITION BY RANGE (a);
+CREATE TABLE dist_part_table_1 PARTITION OF dist_part_table FOR VALUES FROM (1) TO (5);
+CREATE TABLE dist_part_table_2 PARTITION OF dist_part_table FOR VALUES FROM (5) TO (10);
+SELECT create_distributed_table('dist_part_table', 'a');
+CREATE INDEX dist_part_idx ON dist_part_table(a);
+
+REINDEX TABLE dist_part_table;
+
+-- but we support REINDEXing partitions
+REINDEX TABLE dist_part_table_1;
+
 set client_min_messages to error;
 drop schema pg14 cascade;
