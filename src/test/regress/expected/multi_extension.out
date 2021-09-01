@@ -804,8 +804,9 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                         | function citus_internal_delete_shard_metadata(bigint) void
                                                         | function citus_internal_update_placement_metadata(bigint,integer,integer) void
                                                         | function citus_internal_update_relation_colocation(oid,integer) void
+                                                        | function expire_old_time_partitions(regclass,timestamp with time zone)
                                                         | function stop_metadata_sync_to_node(text,integer,boolean) void
-(10 rows)
+(11 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
