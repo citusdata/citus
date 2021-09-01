@@ -9,6 +9,9 @@ SET citus.next_shard_id TO 570000;
 SET citus.explain_distributed_queries TO on;
 SET citus.enable_repartition_joins to ON;
 
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
+
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)
 RETURNS jsonb

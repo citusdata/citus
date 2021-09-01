@@ -383,7 +383,7 @@ SELECT broadcast_intermediate_result('stored_squares_1',
 -- query the intermediate result in a router query using text format
 SELECT * FROM interesting_squares JOIN (
   SELECT * FROM
-    read_intermediate_results(ARRAY['stored_squares_1', 'stored_squares_2'], 'binary') AS res (x int, x2 int, z intermediate_results.square_type)
+    read_intermediate_results(ARRAY['stored_squares_1', 'stored_squares_2'], 'text') AS res (x int, x2 int, z intermediate_results.square_type)
 ) squares
 ON (squares.x::text = interested_in) WHERE user_id = 'jon' ORDER BY 1,2;
  user_id | interested_in | x | x2 |   z

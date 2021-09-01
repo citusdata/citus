@@ -1,7 +1,7 @@
 SET citus.shard_count = 2;
 SET citus.next_shard_id TO 4754000;
 CREATE SCHEMA binary_protocol;
-SET search_path TO binary_protocol;
+SET search_path TO binary_protocol, public;
 SET citus.enable_binary_protocol = TRUE;
 CREATE TABLE t(id int);
 SELECT create_distributed_table('t', 'id');
@@ -48,8 +48,6 @@ SELECT id, id, id, id, id,
  10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10 | 10
 (10 rows)
 
--- EXPLAIN ANALYZE is currently forced to use text protocol. Once that is
--- changed the numbers reported should change.
 EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM t ORDER BY 1;
                             QUERY PLAN
 ---------------------------------------------------------------------
@@ -58,10 +56,10 @@ EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM 
    Sort Method: quicksort  Memory: 25kB
    ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
          Task Count: 2
-         Tuple data received from nodes: 11 bytes
+         Tuple data received from nodes: 40 bytes
          Tasks Shown: One of 2
          ->  Task
-               Tuple data received from node: 8 bytes
+               Tuple data received from node: 28 bytes
                Node: host=localhost port=xxxxx dbname=regression
                ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
 (11 rows)
@@ -75,14 +73,14 @@ EXPLAIN (ANALYZE TRUE, TIMING FALSE, COSTS FALSE, SUMMARY FALSE) SELECT id FROM 
    Sort Method: quicksort  Memory: 25kB
    ->  Custom Scan (Citus Adaptive) (actual rows=10 loops=1)
          Task Count: 2
-         Tuple data received from nodes: 11 bytes
+         Tuple data received from nodes: 40 bytes
          Tasks Shown: All
          ->  Task
-               Tuple data received from node: 8 bytes
+               Tuple data received from node: 28 bytes
                Node: host=localhost port=xxxxx dbname=regression
                ->  Seq Scan on t_4754000 t (actual rows=7 loops=1)
          ->  Task
-               Tuple data received from node: 3 bytes
+               Tuple data received from node: 12 bytes
                Node: host=localhost port=xxxxx dbname=regression
                ->  Seq Scan on t_4754001 t (actual rows=3 loops=1)
 (15 rows)
@@ -123,7 +121,7 @@ CREATE TYPE composite_type AS (
 CREATE TABLE composite_type_table
 (
     id bigserial,
-    col composite_type[]
+    col composite_type
 );
 SELECT create_distributed_table('composite_type_table', 'id');
  create_distributed_table
@@ -131,33 +129,81 @@ SELECT create_distributed_table('composite_type_table', 'id');
 
 (1 row)
 
-INSERT INTO composite_type_table(col) VALUES  (ARRAY[(1, 2)::composite_type]);
-SELECT * FROM composite_type_table;
- id |    col
----------------------------------------------------------------------
-  1 | {"(1,2)"}
-(1 row)
-
 CREATE TYPE nested_composite_type AS (
     a composite_type,
     b composite_type
 );
-CREATE TABLE nested_composite_type_table
-(
-    id bigserial,
-    col nested_composite_type
-);
-SELECT create_distributed_table('nested_composite_type_table', 'id');
- create_distributed_table
+select run_command_on_master_and_workers($$CREATE DOMAIN binary_protocol.composite_type_domain AS binary_protocol.composite_type$$);
+ run_command_on_master_and_workers
 ---------------------------------------------------------------------
 
 (1 row)
 
-INSERT INTO nested_composite_type_table(col) VALUES  (((1, 2), (3,4))::nested_composite_type);
-SELECT * FROM nested_composite_type_table;
- id |        col
+select run_command_on_master_and_workers($$CREATE DOMAIN binary_protocol.nested_composite_type_domain AS binary_protocol.nested_composite_type$$);
+ run_command_on_master_and_workers
 ---------------------------------------------------------------------
-  1 | ("(1,2)","(3,4)")
+
+(1 row)
+
+INSERT INTO composite_type_table(col) VALUES  ((1, 2)::composite_type);
+SELECT col FROM composite_type_table;
+  col
+---------------------------------------------------------------------
+ (1,2)
+(1 row)
+
+SELECT col::composite_type_domain FROM composite_type_table;
+  col
+---------------------------------------------------------------------
+ (1,2)
+(1 row)
+
+SELECT (col, col) FROM composite_type_table;
+        row
+---------------------------------------------------------------------
+ ("(1,2)","(1,2)")
+(1 row)
+
+SELECT (col, col)::nested_composite_type FROM composite_type_table;
+        row
+---------------------------------------------------------------------
+ ("(1,2)","(1,2)")
+(1 row)
+
+SELECT (col, col)::nested_composite_type_domain FROM composite_type_table;
+        row
+---------------------------------------------------------------------
+ ("(1,2)","(1,2)")
+(1 row)
+
+SELECT ARRAY[col] FROM composite_type_table;
+   array
+---------------------------------------------------------------------
+ {"(1,2)"}
+(1 row)
+
+SELECT ARRAY[col::composite_type_domain] FROM composite_type_table;
+   array
+---------------------------------------------------------------------
+ {"(1,2)"}
+(1 row)
+
+SELECT ARRAY[(col, col)] FROM composite_type_table;
+           array
+---------------------------------------------------------------------
+ {"(\"(1,2)\",\"(1,2)\")"}
+(1 row)
+
+SELECT ARRAY[(col, col)::nested_composite_type] FROM composite_type_table;
+           array
+---------------------------------------------------------------------
+ {"(\"(1,2)\",\"(1,2)\")"}
+(1 row)
+
+SELECT ARRAY[(col, col)::nested_composite_type_domain] FROM composite_type_table;
+           array
+---------------------------------------------------------------------
+ {"(\"(1,2)\",\"(1,2)\")"}
 (1 row)
 
 CREATE TABLE binaryless_builtin (
@@ -170,11 +216,81 @@ SELECT create_reference_table('binaryless_builtin');
 
 (1 row)
 
-INSERT INTO binaryless_builtin VALUES ('user postgres=r/postgres', 'test');
-SELECT * FROM binaryless_builtin;
-        col1         | col2
+CREATE TYPE binaryless_composite_type AS (
+    a aclitem,
+    b aclitem
+);
+select run_command_on_master_and_workers($$CREATE DOMAIN binary_protocol.binaryless_domain AS aclitem$$);
+ run_command_on_master_and_workers
 ---------------------------------------------------------------------
- postgres=r/postgres | test
+
+(1 row)
+
+select run_command_on_master_and_workers($$CREATE DOMAIN binary_protocol.binaryless_composite_domain AS binary_protocol.binaryless_composite_type$$);
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO binaryless_builtin VALUES ('user postgres=r/postgres', 'test');
+SELECT col1 FROM binaryless_builtin;
+        col1
+---------------------------------------------------------------------
+ postgres=r/postgres
+(1 row)
+
+SELECT col1::binaryless_domain FROM binaryless_builtin;
+        col1
+---------------------------------------------------------------------
+ postgres=r/postgres
+(1 row)
+
+SELECT (col1, col1) FROM binaryless_builtin;
+                    row
+---------------------------------------------------------------------
+ (postgres=r/postgres,postgres=r/postgres)
+(1 row)
+
+SELECT (col1, col1)::binaryless_composite_type FROM binaryless_builtin;
+                    row
+---------------------------------------------------------------------
+ (postgres=r/postgres,postgres=r/postgres)
+(1 row)
+
+SELECT (col1, col1)::binaryless_composite_domain FROM binaryless_builtin;
+                    row
+---------------------------------------------------------------------
+ (postgres=r/postgres,postgres=r/postgres)
+(1 row)
+
+SELECT ARRAY[col1] FROM binaryless_builtin;
+         array
+---------------------------------------------------------------------
+ {postgres=r/postgres}
+(1 row)
+
+SELECT ARRAY[col1::binaryless_domain] FROM binaryless_builtin;
+         array
+---------------------------------------------------------------------
+ {postgres=r/postgres}
+(1 row)
+
+SELECT ARRAY[(col1, col1)] FROM binaryless_builtin;
+                     array
+---------------------------------------------------------------------
+ {"(postgres=r/postgres,postgres=r/postgres)"}
+(1 row)
+
+SELECT ARRAY[(col1, col1)::binaryless_composite_type] FROM binaryless_builtin;
+                     array
+---------------------------------------------------------------------
+ {"(postgres=r/postgres,postgres=r/postgres)"}
+(1 row)
+
+SELECT ARRAY[(col1, col1)::binaryless_composite_domain] FROM binaryless_builtin;
+                     array
+---------------------------------------------------------------------
+ {"(postgres=r/postgres,postgres=r/postgres)"}
 (1 row)
 
 CREATE TABLE test_table_1(id int, val1 int);
@@ -203,6 +319,5 @@ ORDER BY 1, 2;
   3 |    3
 (3 rows)
 
-\set VERBOSITY terse
+SET client_min_messages TO WARNING;
 DROP SCHEMA binary_protocol CASCADE;
-NOTICE:  drop cascades to 8 other objects

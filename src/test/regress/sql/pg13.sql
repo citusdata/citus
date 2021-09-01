@@ -14,6 +14,9 @@ SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 2;
 SET citus.next_shard_id TO 65000;
 
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
+
 CREATE TABLE dist_table (name char, age int);
 CREATE INDEX name_index on dist_table(name);
 

@@ -129,6 +129,10 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT foo."?column?
 -- we reset the client min_messages here to avoid adding an alternative output
 -- for pg14 as the output slightly differs.
 RESET client_min_messages;
+-- Set binary protocol temporarily to true always, to get consistent float
+-- output across PG versions.
+-- This is a no-op for PG_VERSION_NUM >= 14
+SET citus.enable_binary_protocol = TRUE;
 -- Expressions inside the aggregates
 -- parts of the query is inspired by TPCH queries
 SELECT
@@ -172,10 +176,13 @@ FROM
     ORDER BY 1 DESC;
            avg           |      cnt_1       |       cnt_2        | cnt_3 | sum_1 | l_year | pos | count_pay
 ---------------------------------------------------------------------
- 30.14666771571734992301 | 3308.14619815793 | 2.5000000000000000 |       |    31 |   2017 |   0 |         1
+ 30.14666771571734992301 | 3308.14619815794 | 2.5000000000000000 |       |    31 |   2017 |   0 |         1
 (1 row)
 
 SET client_min_messages TO DEBUG1;
+-- Reset binary protocol back after temporaribly changing it
+-- This is a no-op for PG_VERSION_NUM >= 14
+RESET citus.enable_binary_protocol;
 -- Multiple columns in GROUP BYs
 -- foo needs to be recursively planned, bar can be pushded down
 SELECT

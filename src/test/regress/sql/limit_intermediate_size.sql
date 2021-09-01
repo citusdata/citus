@@ -1,5 +1,10 @@
 SET citus.enable_repartition_joins to ON;
 
+-- The intermediate result limits chosen below are based on text sizes of the
+-- intermediate results. This is a no-op for PG_VERSION_NUM < 14, because the
+-- default is false there.
+SET citus.enable_binary_protocol = FALSE;
+
 SET citus.max_intermediate_result_size TO 2;
 -- should fail because the copy size is ~4kB for each cte
 WITH cte AS MATERIALIZED

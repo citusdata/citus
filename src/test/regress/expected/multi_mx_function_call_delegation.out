@@ -230,8 +230,6 @@ DEBUG:  pushing down the function call
  (S,S)
 (1 row)
 
--- this is fixed with pg14 and this will fail prior to
--- pg 14
 SET citus.enable_binary_protocol = TRUE;
 select mx_call_func_custom_types('S', 'A');
 DEBUG:  pushing down the function call

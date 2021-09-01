@@ -102,6 +102,7 @@
 #include "libpq/pqformat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "parser/parse_type.h"
 #if PG_VERSION_NUM >= PG_VERSION_13
 #include "tcop/cmdtag.h"
 #endif
@@ -998,9 +999,8 @@ CanUseBinaryCopyFormatForTargetList(List *targetEntryList)
 
 /*
  * CanUseBinaryCopyFormatForType determines whether it is safe to use the
- * binary copy format for the given type. The binary copy format cannot
- * be used for arrays or composite types that contain user-defined types,
- * or when there is no binary output function defined.
+ * binary copy format for the given type. See contents of the function for
+ * details of when it's safe to use binary copy.
  */
 bool
 CanUseBinaryCopyFormatForType(Oid typeId)
@@ -1015,14 +1015,79 @@ CanUseBinaryCopyFormatForType(Oid typeId)
 		return false;
 	}
 
-	if (typeId >= FirstNormalObjectId)
+	/*
+	 * A row type can contain any types, possibly types that don't have
+	 * the binary input and output functions defined.
+	 */
+	if (type_is_rowtype(typeId))
 	{
-		char typeCategory = '\0';
-		bool typePreferred = false;
+		/*
+		 * TODO: Inspect the types inside the record and check if all of them
+		 * can be binary encoded. If so, it's safe to use binary encoding.
+		 *
+		 * IMPORTANT: When implementing this todo keep the following in mind:
+		 *
+		 * In PG versions before PG14 the record_recv function would error out
+		 * more than necessary.
+		 *
+		 * It errors out when any of the columns in the row have a type oid
+		 * that doesn't match with the oid in the received data. This happens
+		 * pretty much always for non built in types, because their oids differ
+		 * between postgres intallations. So for those Postgres versions we
+		 * would need a check like the following for each column:
+		 *
+		 * if (columnType >= FirstNormalObjectId) {
+		 *     return false
+		 * }
+		 */
+		return false;
+	}
 
-		get_type_category_preferred(typeId, &typeCategory, &typePreferred);
-		if (typeCategory == TYPCATEGORY_ARRAY ||
-			typeCategory == TYPCATEGORY_COMPOSITE)
+	HeapTuple typeTup = typeidType(typeId);
+	Form_pg_type type = (Form_pg_type) GETSTRUCT(typeTup);
+	Oid elementType = type->typelem;
+#if PG_VERSION_NUM < PG_VERSION_14
+	char typeCategory = type->typcategory;
+#endif
+	ReleaseSysCache(typeTup);
+
+#if PG_VERSION_NUM < PG_VERSION_14
+
+	/*
+	 * In PG versions before PG14 the array_recv function would error out more
+	 * than necessary.
+	 *
+	 * It errors out when the element type its oids don't match with the oid in
+	 * the received data. This happens pretty much always for non built in
+	 * types, because their oids differ between postgres intallations. So we
+	 * skip binary encoding when the element type is a non built in type.
+	 */
+	if (typeCategory == TYPCATEGORY_ARRAY && elementType >= FirstNormalObjectId)
+	{
+		return false;
+	}
+#endif
+
+	/*
+	 * Any type that is a wrapper around an element type (e.g. arrays and
+	 * ranges) require the element type to also has support for binary
+	 * encoding.
+	 */
+	if (elementType != InvalidOid)
+	{
+		if (!CanUseBinaryCopyFormatForType(elementType))
+		{
+			return false;
+		}
+	}
+
+	/*
+	 * For domains, make sure that the underlying type can be binary copied.
+	 */
+	Oid baseTypeId = getBaseType(typeId);
+	if (typeId != baseTypeId)
+	{
+		if (!CanUseBinaryCopyFormatForType(baseTypeId))
 		{
 			return false;
 		}

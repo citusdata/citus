@@ -10,6 +10,8 @@ set search_path to test_pg13;
 SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 2;
 SET citus.next_shard_id TO 65000;
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
 CREATE TABLE dist_table (name char, age int);
 CREATE INDEX name_index on dist_table(name);
 SELECT create_distributed_table('dist_table', 'name');
@@ -217,10 +219,10 @@ INSERT INTO test_wal VALUES(3,33),(4,44),(5,55) RETURNING *;
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=3 loops=1)
    Task Count: 1
-   Tuple data received from nodes: 9 bytes
+   Tuple data received from nodes: 24 bytes
    Tasks Shown: All
    ->  Task
-         Tuple data received from node: 9 bytes
+         Tuple data received from node: 24 bytes
          Node: host=localhost port=xxxxx dbname=regression
          ->  Insert on test_wal_65012 citus_table_alias (actual rows=3 loops=1)
                WAL: records=3 bytes=189
