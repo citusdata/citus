@@ -11,6 +11,9 @@
 #include "access/multixact.h"
 #include "access/rewriteheap.h"
 #include "access/tableam.h"
+#if PG_VERSION_NUM >= 140000
+#include "access/toast_compression.h"
+#endif
 #include "access/tsmapi.h"
 #if PG_VERSION_NUM >= 130000
 #include "access/detoast.h"
@@ -27,6 +30,7 @@
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
 #include "commands/progress.h"
+#include "commands/tablecmds.h"
 #include "commands/vacuum.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
@@ -66,6 +70,13 @@
  */
 #define VACUUM_TRUNCATE_LOCK_WAIT_INTERVAL 50       /* ms */
 #define VACUUM_TRUNCATE_LOCK_TIMEOUT 4500               /* ms */
+
+#define COLUMNAR_PG_COMPRESSION_NOTICE_MSG \
+	"since columnar tableAM already compresses columns in large chunks, " \
+	"using built-in postgres compression might not bring additional " \
+	"compression benefits, see \"alter_columnar_table_set\" function and " \
+	"\"compression\" & \"compression_level\" arguments to use the " \
+	"compression functionality provided by columnarAM"
 
 /*
  * ColumnarScanDescData is the scan state passed between beginscan(),
@@ -113,6 +124,8 @@ static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 static MemoryContext CreateColumnarScanMemoryContext(void);
 static void ColumnarTableDropHook(Oid tgid);
 static void ColumnarTriggerCreateHook(Oid tgid);
+static void ColumnarTableCreateHook(Oid relationId);
+static bool RelationUsesPgColumnCompression(Oid relationId);
 static void ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId,
 											Oid objectId, int subId,
 											void *arg);
@@ -126,6 +139,8 @@ static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   struct QueryEnvironment *queryEnv,
 								   DestReceiver *dest,
 								   QueryCompletionCompat *completionTag);
+static bool AlterTableSetsPgCompressionForColumnarTable(AlterTableStmt *
+														alterTableStatement);
 static bool ConditionalLockRelationWithTimeout(Relation rel, LOCKMODE lockMode,
 											   int timeout, int retryInterval);
 static List * NeededColumnsList(TupleDesc tupdesc, Bitmapset *attr_needed);
@@ -1981,6 +1996,61 @@ ColumnarTriggerCreateHook(Oid tgid)
 
 
 /*
+ * ColumnarTableCreateHook is called by ObjectAccessHook to perform the
+ * operations that should be done after creating a columnar table.
+ */
+static void
+ColumnarTableCreateHook(Oid relationId)
+{
+	if (!IsColumnarTableAmTable(relationId))
+	{
+		return;
+	}
+
+	if (RelationUsesPgColumnCompression(relationId))
+	{
+		ereport(NOTICE, (errmsg(COLUMNAR_PG_COMPRESSION_NOTICE_MSG)));
+	}
+}
+
+
+/*
+ * RelationUsesPgColumnCompression returns true if given relation uses
+ * built-in column compression for any columns.
+ *
+ * Note that this is different than the column compression functionality
+ * provided by columnarAM.
+ */
+static bool
+RelationUsesPgColumnCompression(Oid relationId)
+{
+	bool relationUsesPgColumnCompression = false;
+
+#if PG_VERSION_NUM >= 140000
+	Relation relation = RelationIdGetRelation(relationId);
+	TupleDesc tupleDescriptor = RelationGetDescr(relation);
+	for (int columnIndex = 0; columnIndex < tupleDescriptor->natts; columnIndex++)
+	{
+		Form_pg_attribute attributeForm = TupleDescAttr(tupleDescriptor, columnIndex);
+		if (attributeForm->attisdropped)
+		{
+			continue;
+		}
+		else if (CompressionMethodIsValid(attributeForm->attcompression))
+		{
+			relationUsesPgColumnCompression = true;
+			break;
+		}
+	}
+
+	RelationClose(relation);
+#endif
+
+	return relationUsesPgColumnCompression;
+}
+
+
+/*
  * Capture create/drop events and dispatch to the proper action.
  */
 static void
@@ -2000,6 +2070,10 @@ ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid object
 	else if (access == OAT_POST_CREATE && classId == TriggerRelationId)
 	{
 		ColumnarTriggerCreateHook(objectId);
+	}
+	else if (access == OAT_POST_CREATE && classId == RelationRelationId && subId == 0)
+	{
+		ColumnarTableCreateHook(objectId);
 	}
 }
 
@@ -2050,6 +2124,12 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
 								  params, queryEnv, dest, completionTag);
+
+	if (IsA(parsetree, AlterTableStmt) &&
+		AlterTableSetsPgCompressionForColumnarTable((AlterTableStmt *) parsetree))
+	{
+		ereport(NOTICE, (errmsg(COLUMNAR_PG_COMPRESSION_NOTICE_MSG)));
+	}
 }
 
 
@@ -2062,6 +2142,42 @@ ColumnarSupportsIndexAM(char *indexAMName)
 {
 	return strncmp(indexAMName, "btree", NAMEDATALEN) == 0 ||
 		   strncmp(indexAMName, "hash", NAMEDATALEN) == 0;
+}
+
+
+/*
+ * AlterTableSetsPgCompressionForColumnarTable returns true if given
+ * AlterTable command either adds a column with built-in column compression
+ * or enables it for an existing column of a columnar table.
+ */
+static bool
+AlterTableSetsPgCompressionForColumnarTable(AlterTableStmt *alterTableStatement)
+{
+#if PG_VERSION_NUM >= PG_VERSION_14
+
+	LOCKMODE lockMode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockMode);
+	if (!IsColumnarTableAmTable(relationId))
+	{
+		return false;
+	}
+
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, alterTableStatement->cmds)
+	{
+		if (command->subtype == AT_SetCompression)
+		{
+			return true;
+		}
+		else if (command->subtype == AT_AddColumn &&
+				 ((ColumnDef *) command->def)->compression)
+		{
+			return true;
+		}
+	}
+#endif
+
+	return false;
 }
 
 

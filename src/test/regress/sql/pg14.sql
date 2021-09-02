@@ -272,5 +272,52 @@ REINDEX TABLE dist_part_table;
 -- but we support REINDEXing partitions
 REINDEX TABLE dist_part_table_1;
 
+--
+-- Show that we print a nice notice message if we are using
+-- built-in column compression for a columnar table.
+--
+
+CREATE TABLE heap_table (comp_text_1 TEXT COMPRESSION pglz);
+CREATE TABLE parent_heap_table (a INT, b TEXT COMPRESSION pglz) PARTITION BY RANGE(a);
+
+-- doensn't inherit column compression from other table
+CREATE TABLE columnar_table_1 (LIKE heap_table) USING columnar;
+CREATE TABLE columnar_table_5 USING columnar AS TABLE heap_table;
+
+CREATE TABLE columnar_partition PARTITION OF parent_heap_table FOR VALUES FROM (5) TO (8) USING columnar;
+CREATE TABLE columnar_table_6 (plain_int_col INT) INHERITS (heap_table) USING columnar;
+CREATE TABLE columnar_table_2 (LIKE heap_table INCLUDING ALL) USING columnar;
+VACUUM FULL columnar_table_2;
+ALTER TABLE columnar_table_6 ALTER COLUMN plain_int_col TYPE bigint;
+
+-- wouldn't print the notice message when dropping filenode
+TRUNCATE columnar_table_2;
+
+-- doensn't print such a notice message for an uncompressed column
+ALTER TABLE columnar_table_2 ADD COLUMN plain_text_1 TEXT;
+
+ALTER TABLE columnar_table_2 ADD COLUMN comp_text_2 TEXT COMPRESSION pglz;
+ALTER TABLE columnar_table_2 ALTER COLUMN plain_text_1 SET COMPRESSION pglz;
+
+-- prints notice message even if we already had enabled compression for that column
+ALTER TABLE columnar_table_2 ALTER COLUMN plain_text_1 SET COMPRESSION pglz;
+
+-- wouldn't print the notice message since it will fail
+ALTER TABLE columnar_table_2 ADD COLUMN comp_text_2 TEXT COMPRESSION pglz;
+
+-- doensn't inherit column compression from other table
+-- but defines such a column itself
+CREATE TABLE columnar_table_3 (LIKE heap_table, comp_text_2 TEXT COMPRESSION pglz) USING columnar;
+
+-- wouldn't print the notice message since it will fail
+CREATE TABLE columnar_table_4 (LIKE heap_table, comp_text_1 TEXT COMPRESSION pglz) USING columnar;
+
+CREATE TABLE columnar_table_7 (a INT, b TEXT COMPRESSION pglz) USING columnar;
+
+-- wouldn't print the notice message since we are dropping or already
+-- dropped the compressed column
+ALTER TABLE columnar_table_7 DROP COLUMN b;
+ALTER TABLE columnar_table_7 ALTER COLUMN a TYPE bigint;
+
 set client_min_messages to error;
 drop schema pg14 cascade;
