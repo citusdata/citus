@@ -244,7 +244,7 @@ select
   from columnar_test_helpers.columnar_storage_info('t');
  version_major | version_minor | reserved_stripe_id | reserved_row_number
 ---------------------------------------------------------------------
-             2 |             0 |                 16 |               21001
+             2 |             0 |                 18 |               21001
 (1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;

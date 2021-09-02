@@ -53,7 +53,7 @@ extern uint64 ColumnarStorageGetReservedOffset(Relation rel, bool force);
 
 extern uint64 ColumnarStorageReserveData(Relation rel, uint64 amount);
 extern uint64 ColumnarStorageReserveRowNumber(Relation rel, uint64 nrows);
-extern uint64 ColumnarStorageReserveStripe(Relation rel);
+extern uint64 ColumnarStorageReserveStripeId(Relation rel);
 
 extern void ColumnarStorageRead(Relation rel, uint64 logicalOffset,
 								char *data, uint32 amount);

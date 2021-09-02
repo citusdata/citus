@@ -38,6 +38,10 @@
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
 
+#define UNEXPECTED_STRIPE_READ_ERR_MSG \
+	"attempted to read an unexpected stripe while reading columnar " \
+	"table %s, stripe with id=" UINT64_FORMAT " is not flushed"
+
 typedef struct ChunkGroupReadState
 {
 	int64 currentRow;
@@ -115,6 +119,7 @@ static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relatio
 										 MemoryContext stripeReadContext,
 										 Snapshot snapshot);
 static void AdvanceStripeRead(ColumnarReadState *readState);
+static bool SnapshotMightSeeUnflushedStripes(Snapshot snapshot);
 static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
 							  bool *columnNulls);
 static ChunkGroupReadState * BeginChunkGroupRead(StripeBuffers *stripeBuffers, int
@@ -281,6 +286,18 @@ ColumnarReadRowByRowNumber(ColumnarReadState *readState,
 		{
 			/* no such row exists */
 			return false;
+		}
+
+		if (!StripeIsFlushed(stripeMetadata))
+		{
+			/*
+			 * Callers are expected to skip stripes that are not flushed to
+			 * disk yet or should wait for the writer xact to commit or abort,
+			 * but let's be on the safe side.
+			 */
+			ereport(ERROR, (errmsg(UNEXPECTED_STRIPE_READ_ERR_MSG,
+								   RelationGetRelationName(columnarRelation),
+								   stripeMetadata->id)));
 		}
 
 		/* do the cleanup before reading a new stripe */
@@ -562,10 +579,62 @@ AdvanceStripeRead(ColumnarReadState *readState)
 	readState->currentStripeMetadata = FindNextStripeByRowNumber(readState->relation,
 																 lastReadRowNumber,
 																 readState->snapshot);
+
+	if (readState->currentStripeMetadata &&
+		!StripeIsFlushed(readState->currentStripeMetadata) &&
+		!SnapshotMightSeeUnflushedStripes(readState->snapshot))
+	{
+		/*
+		 * To be on the safe side, error out if we don't expect to encounter
+		 * with an un-flushed stripe. Otherwise, we will skip such stripes
+		 * until finding a flushed one.
+		 */
+		ereport(ERROR, (errmsg(UNEXPECTED_STRIPE_READ_ERR_MSG,
+							   RelationGetRelationName(readState->relation),
+							   readState->currentStripeMetadata->id)));
+	}
+
+	while (readState->currentStripeMetadata &&
+		   !StripeIsFlushed(readState->currentStripeMetadata))
+	{
+		readState->currentStripeMetadata =
+			FindNextStripeByRowNumber(readState->relation,
+									  readState->currentStripeMetadata->firstRowNumber,
+									  readState->snapshot);
+	}
+
 	readState->stripeReadState = NULL;
 	MemoryContextReset(readState->stripeReadContext);
 
 	MemoryContextSwitchTo(oldContext);
+}
+
+
+/*
+ * SnapshotMightSeeUnflushedStripes returns true if given snapshot is
+ * expected to see un-flushed stripes either because of other backends'
+ * pending writes or aborted transactions.
+ */
+static bool
+SnapshotMightSeeUnflushedStripes(Snapshot snapshot)
+{
+	if (snapshot == InvalidSnapshot)
+	{
+		return false;
+	}
+
+	switch (snapshot->snapshot_type)
+	{
+		case SNAPSHOT_ANY:
+		case SNAPSHOT_DIRTY:
+		case SNAPSHOT_NON_VACUUMABLE:
+		{
+			return true;
+		}
+
+		default:
+			return false;
+	}
 }
 
 
