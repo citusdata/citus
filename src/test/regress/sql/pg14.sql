@@ -193,5 +193,49 @@ update test_jsonb_subscript set test_json = NULL where id = 3;
 update test_jsonb_subscript set test_json[0] = '1';
 select * from test_jsonb_subscript ORDER BY 1,2;
 
+-- JOIN ALIAS
+CREATE TABLE J1_TBL (
+  i integer,
+  j integer,
+  t text
+);
+CREATE TABLE J2_TBL (
+  i integer,
+  k integer
+);
+INSERT INTO J1_TBL VALUES (1, 4, 'one');
+INSERT INTO J1_TBL VALUES (2, 3, 'two');
+INSERT INTO J1_TBL VALUES (3, 2, 'three');
+INSERT INTO J1_TBL VALUES (4, 1, 'four');
+INSERT INTO J1_TBL VALUES (5, 0, 'five');
+INSERT INTO J1_TBL VALUES (6, 6, 'six');
+INSERT INTO J1_TBL VALUES (7, 7, 'seven');
+INSERT INTO J1_TBL VALUES (8, 8, 'eight');
+INSERT INTO J1_TBL VALUES (0, NULL, 'zero');
+INSERT INTO J2_TBL VALUES (1, -1);
+INSERT INTO J2_TBL VALUES (2, 2);
+INSERT INTO J2_TBL VALUES (3, -3);
+INSERT INTO J2_TBL VALUES (2, 4);
+INSERT INTO J2_TBL VALUES (5, -5);
+INSERT INTO J2_TBL VALUES (5, -5);
+INSERT INTO J2_TBL VALUES (0, NULL);
+
+SELECT create_distributed_table('J1_TBL','i');
+SELECT create_distributed_table('J2_TBL','i');
+
+-- test join using aliases
+SELECT * FROM J1_TBL JOIN J2_TBL USING (i) WHERE J1_TBL.t = 'one' ORDER BY 1,2,3,4;  -- ok
+SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE J1_TBL.t = 'one' ORDER BY 1,2,3,4;  -- ok
+SELECT * FROM (J1_TBL JOIN J2_TBL USING (i)) AS x WHERE J1_TBL.t = 'one' ORDER BY 1,2,3,4;  -- error
+SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE x.i = 1 ORDER BY 1,2,3,4;  -- ok
+SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE x.t = 'one' ORDER BY 1,2,3,4;  -- error
+SELECT * FROM (J1_TBL JOIN J2_TBL USING (i) AS x) AS xx WHERE x.i = 1 ORDER BY 1,2,3,4;  -- error (XXX could use better hint)
+SELECT * FROM J1_TBL a1 JOIN J2_TBL a2 USING (i) AS a1 ORDER BY 1,2,3,4;  -- error
+SELECT x.* FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE J1_TBL.t = 'one' ORDER BY 1;
+SELECT ROW(x.*) FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE J1_TBL.t = 'one' ORDER BY 1;
+SELECT * FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE x.i > 1 ORDER BY 1,2,3,4;
+-- ORDER BY is not supported for json and this returns 1 row, so it is okay.
+SELECT row_to_json(x.*) FROM J1_TBL JOIN J2_TBL USING (i) AS x WHERE J1_TBL.t = 'one';
+
 set client_min_messages to error;
 drop schema pg14 cascade;
