@@ -443,6 +443,17 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		PreprocessTruncateStatement((TruncateStmt *) parsetree);
 	}
 
+	/*
+	 * We only process ALTER TABLE ... ATTACH PARTITION commands in the function below
+	 * and distribute the partition if necessary.
+	 */
+	if (IsA(parsetree, AlterTableStmt))
+	{
+		AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
+
+		PreprocessAlterTableStmtAttachPartition(alterTableStatement, queryString);
+	}
+
 	/* only generate worker DDLJobs if propagation is enabled */
 	const DistributeObjectOps *ops = NULL;
 	if (EnableDDLPropagation)
@@ -609,17 +620,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		CreateStmt *createStatement = (CreateStmt *) parsetree;
 
 		PostprocessCreateTableStmt(createStatement, queryString);
-	}
-
-	/*
-	 * We only process ALTER TABLE ... ATTACH PARTITION commands in the function below
-	 * and distribute the partition if necessary.
-	 */
-	if (IsA(parsetree, AlterTableStmt))
-	{
-		AlterTableStmt *alterTableStatement = (AlterTableStmt *) parsetree;
-
-		PostprocessAlterTableStmtAttachPartition(alterTableStatement, queryString);
 	}
 
 	/* after local command has completed, finish by executing worker DDLJobs, if any */

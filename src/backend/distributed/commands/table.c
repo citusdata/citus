@@ -372,7 +372,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 
 
 /*
- * PostprocessAlterTableStmtAttachPartition takes AlterTableStmt object as
+ * PreprocessAlterTableStmtAttachPartition takes AlterTableStmt object as
  * parameter but it only processes into ALTER TABLE ... ATTACH PARTITION
  * commands and distributes the partition if necessary. There are four cases
  * to consider;
@@ -399,8 +399,8 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
  * ATTACH PARTITION OF command.
  */
 List *
-PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
-										 const char *queryString)
+PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
+										const char *queryString)
 {
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *alterTableCommand = NULL;
@@ -408,10 +408,15 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 	{
 		if (alterTableCommand->subtype == AT_AttachPartition)
 		{
-			Oid relationId = AlterTableLookupRelation(alterTableStatement, NoLock);
+			/*
+			 * We acquire the lock on the parent and child as we are in the pre-process
+			 * and want to ensure we acquire the locks in the same order with Postgres
+			 */
+			LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+			Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
 			PartitionCmd *partitionCommand = (PartitionCmd *) alterTableCommand->def;
 			bool partitionMissingOk = false;
-			Oid partitionRelationId = RangeVarGetRelid(partitionCommand->name, NoLock,
+			Oid partitionRelationId = RangeVarGetRelid(partitionCommand->name, lockmode,
 													   partitionMissingOk);
 
 			/*
@@ -434,6 +439,13 @@ PostprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 				!IsCitusTable(partitionRelationId))
 			{
 				Var *distributionColumn = DistPartitionKeyOrError(relationId);
+				char *distributionColumnName = ColumnToColumnName(relationId,
+																  nodeToString(
+																	  distributionColumn));
+				distributionColumn = FindColumnWithNameOnTargetRelation(relationId,
+																		distributionColumnName,
+																		partitionRelationId);
+
 				char distributionMethod = DISTRIBUTE_BY_HASH;
 				char *parentRelationName = generate_qualified_relation_name(relationId);
 				bool viaDeprecatedAPI = false;
