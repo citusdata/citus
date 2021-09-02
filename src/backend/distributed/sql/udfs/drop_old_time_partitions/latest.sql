@@ -1,5 +1,5 @@
 -- Heavily inspired by the procedure alter_old_partitions_set_access_method
-CREATE OR REPLACE PROCEDURE pg_catalog.expire_old_time_partitions(
+CREATE OR REPLACE PROCEDURE pg_catalog.drop_old_time_partitions(
 		parent_table_name regclass,
 		older_than timestamptz)
 LANGUAGE plpgsql
@@ -28,12 +28,12 @@ BEGIN
 		ORDER BY to_value::timestamptz
     LOOP
         RAISE NOTICE 'dropping % with start time % and end time %', r.partition, r.from_value, r.to_value;
-        EXECUTE format('DROP TABLE %I', r.partition);
+        EXECUTE format('DROP TABLE %s', r.partition);
         COMMIT;
     END LOOP;
 END;
 $$;
-COMMENT ON PROCEDURE pg_catalog.expire_old_time_partitions(
+COMMENT ON PROCEDURE pg_catalog.drop_old_time_partitions(
 		parent_table_name regclass,
 		older_than timestamptz)
 IS 'drop old partitions of a time-partitioned table';
