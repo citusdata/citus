@@ -123,5 +123,25 @@ RESET client_min_messages;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
+-- ALTER STATISTICS .. OWNER TO CURRENT_ROLE
+CREATE TABLE st1 (a int, b int);
+CREATE STATISTICS role_s1 ON a, b FROM st1;
+SELECT create_distributed_table('st1','a');
+ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
+SET citus.enable_ddl_propagation TO off; -- for enterprise
+CREATE ROLE role_1 WITH LOGIN SUPERUSER;
+SET citus.enable_ddl_propagation TO on;
+SELECT run_command_on_workers($$CREATE ROLE role_1 WITH LOGIN SUPERUSER;$$);
+ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
+SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
+SET ROLE role_1;
+ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
+SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
+SET ROLE postgres;
+ALTER STATISTICS role_s1 OWNER TO CURRENT_USER;
+SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
+SET ROLE to NONE;
+ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
+SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
 set client_min_messages to error;
 drop schema pg14 cascade;
