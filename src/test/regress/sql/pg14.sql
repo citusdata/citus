@@ -79,5 +79,49 @@ SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
 SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$) ORDER BY length(result);
 
+RESET citus.multi_shard_modify_mode;
+
+-- test procedure OUT parameters with procedure pushdown
+CREATE TABLE test_proc_table (a int);
+
+create or replace procedure proc_pushdown(dist_key integer, OUT created int4[], OUT res_out text)
+language plpgsql
+as $$
+DECLARE
+    res INT := 0;
+begin
+    INSERT INTO pg14.test_proc_table VALUES (dist_key);
+    SELECT count(*) INTO res FROM pg14.test_proc_table;
+    created := created || res;
+    PERFORM array_prepend(res, created);
+    res_out := res::text;
+    commit;
+end;$$;
+
+-- show the behaviour before distributing
+CALL proc_pushdown(1, NULL, NULL);
+CALL proc_pushdown(1, ARRAY[2000,1], 'AAAA');
+
+SELECT create_distributed_table('test_proc_table', 'a');
+SELECT create_distributed_function('proc_pushdown(integer)', 'dist_key', 'test_proc_table' );
+
+-- make sure that metadata is synced, it may take few seconds
+CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+SELECT wait_until_metadata_sync(30000);
+SELECT bool_and(hasmetadata) FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port);
+
+-- still, we do not pushdown procedures with OUT parameters
+SET client_min_messages TO DEBUG1;
+CALL proc_pushdown(1, NULL, NULL);
+CALL proc_pushdown(1, ARRAY[2000,1], 'AAAA');
+RESET client_min_messages;
+
+-- we don't need metadata syncing anymore
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+
 set client_min_messages to error;
 drop schema pg14 cascade;
