@@ -320,5 +320,62 @@ NOTICE:  dropping metadata on the node (localhost,57638)
 
 (1 row)
 
+-- ALTER STATISTICS .. OWNER TO CURRENT_ROLE
+CREATE TABLE st1 (a int, b int);
+CREATE STATISTICS role_s1 ON a, b FROM st1;
+SELECT create_distributed_table('st1','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
+SET citus.enable_ddl_propagation TO off; -- for enterprise
+CREATE ROLE role_1 WITH LOGIN SUPERUSER;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SET citus.enable_ddl_propagation TO on;
+SELECT run_command_on_workers($$CREATE ROLE role_1 WITH LOGIN SUPERUSER;$$);
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
+SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
+    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,postgres)
+ (localhost,57638,t,postgres)
+(2 rows)
+
+SET ROLE role_1;
+ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
+SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
+   run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,role_1)
+ (localhost,57638,t,role_1)
+(2 rows)
+
+SET ROLE postgres;
+ALTER STATISTICS role_s1 OWNER TO CURRENT_USER;
+SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
+    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,postgres)
+ (localhost,57638,t,postgres)
+(2 rows)
+
+SET ROLE to NONE;
+ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
+SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
+    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,postgres)
+ (localhost,57638,t,postgres)
+(2 rows)
+
 set client_min_messages to error;
 drop schema pg14 cascade;
