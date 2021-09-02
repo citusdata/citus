@@ -1192,7 +1192,7 @@ static void
 DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple)
 {
 	EState *estate = state->estate;
-	ResultRelInfo *resultRelInfo = modifyStateResultRelInfo_compat(state);
+	ResultRelInfo *resultRelInfo = state->resultRelInfo;
 
 	ItemPointer tid = &(heapTuple->t_self);
 	simple_heap_delete(state->rel, tid);
@@ -1208,7 +1208,7 @@ DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple)
 static void
 FinishModifyRelation(ModifyState *state)
 {
-	ExecCloseIndices(modifyStateResultRelInfo_compat(state));
+	ExecCloseIndices(state->resultRelInfo);
 
 	AfterTriggerEndQuery(state->estate);
 #if PG_VERSION_NUM >= PG_VERSION_14

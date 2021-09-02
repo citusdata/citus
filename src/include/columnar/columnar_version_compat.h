@@ -23,7 +23,6 @@
 	GetOldestNonRemovableTransactionId(a)
 #define ExecSimpleRelationInsert_compat(a, b, c) \
 	ExecSimpleRelationInsert(a, b, c)
-#define modifyStateResultRelInfo_compat(a) ((a)->resultRelInfo)
 #define index_insert_compat(a, b, c, d, e, f, g, h) \
 	index_insert(a, b, c, d, e, f, g, h)
 #else
@@ -34,7 +33,6 @@
 #define GetOldestNonRemovableTransactionId_compat(a, b) GetOldestXmin(a, b)
 #define ExecSimpleRelationInsert_compat(a, b, c) \
 	ExecSimpleRelationInsert(b, c)
-#define modifyStateResultRelInfo_compat(a) ((a)->estate->es_result_relation_info)
 #define index_insert_compat(a, b, c, d, e, f, g, h) \
 	index_insert(a, b, c, d, e, f, h)
 #endif
