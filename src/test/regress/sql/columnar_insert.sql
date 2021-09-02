@@ -2,6 +2,9 @@
 -- Testing insert on columnar tables.
 --
 
+CREATE SCHEMA columnar_insert;
+SET search_path TO columnar_insert;
+
 CREATE TABLE test_insert_command (a int) USING columnar;
 
 -- test single row inserts fail
@@ -152,4 +155,51 @@ SELECT relname, stripe_num, chunk_group_num, row_count FROM columnar.chunk_group
 WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
 
-DROP TABLE zero_col;
+CREATE TABLE selfinsert(x int) USING columnar;
+
+SELECT alter_columnar_table_set('selfinsert', stripe_row_limit => 1000);
+
+BEGIN;
+  INSERT INTO selfinsert SELECT generate_series(1,1010);
+  INSERT INTO selfinsert SELECT * FROM selfinsert;
+
+  SELECT SUM(x)=1021110 FROM selfinsert;
+ROLLBACK;
+
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+  INSERT INTO selfinsert SELECT generate_series(1,1010);
+  INSERT INTO selfinsert SELECT * FROM selfinsert;
+
+  SELECT SUM(x)=1021110 FROM selfinsert;
+ROLLBACK;
+
+INSERT INTO selfinsert SELECT generate_series(1,1010);
+INSERT INTO selfinsert SELECT * FROM selfinsert;
+
+SELECT SUM(x)=1021110 FROM selfinsert;
+
+CREATE TABLE selfconflict (f1 int PRIMARY KEY, f2 int) USING columnar;
+
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+  INSERT INTO selfconflict VALUES (2,1), (2,2);
+COMMIT;
+
+SELECT COUNT(*)=0 FROM selfconflict;
+
+CREATE TABLE flush_create_index(a int, b int) USING columnar;
+BEGIN;
+  INSERT INTO flush_create_index VALUES (5, 10);
+
+  SET enable_seqscan TO OFF;
+  SET columnar.enable_custom_scan TO OFF;
+  SET enable_indexscan TO ON;
+
+  CREATE INDEX ON flush_create_index(a);
+
+  SELECT a FROM flush_create_index WHERE a=5;
+ROLLBACK;
+
+RESET search_path;
+SET client_min_messages TO WARNING;
+DROP SCHEMA columnar_insert CASCADE;
+
