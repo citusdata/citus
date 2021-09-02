@@ -85,6 +85,7 @@ static void ColumnarScan_EndCustomScan(CustomScanState *node);
 static void ColumnarScan_ReScanCustomScan(CustomScanState *node);
 static void ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 										   ExplainState *es);
+static Bitmapset * ColumnarAttrNeeded(ScanState *ss);
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
@@ -671,6 +672,12 @@ ColumnarScan_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int ef
 }
 
 
+/*
+ * ColumnarAttrNeeded returns a list of AttrNumber's for the ones that are
+ * needed during columnar custom scan.
+ * Throws an error if finds a Var referencing to an attribute not supported
+ * by ColumnarScan.
+ */
 static Bitmapset *
 ColumnarAttrNeeded(ScanState *ss)
 {
