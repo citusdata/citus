@@ -74,13 +74,15 @@ explain (costs off, summary off, timing off) select * from t_uncompressed;
                   QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t_uncompressed
-(1 row)
+   Columnar Projected Columns: a
+(2 rows)
 
 explain (costs off, summary off, timing off) select * from t_compressed;
                  QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t_compressed
-(1 row)
+   Columnar Projected Columns: a
+(2 rows)
 
 -- vacuum
 vacuum verbose t_compressed;
@@ -150,13 +152,15 @@ explain table t_uncompressed;
                                    QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t_uncompressed  (cost=0.00..0.00 rows=1 width=32)
-(1 row)
+   Columnar Projected Columns: a
+(2 rows)
 
 explain table t_compressed;
                                   QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t_compressed  (cost=0.00..0.00 rows=1 width=32)
-(1 row)
+   Columnar Projected Columns: a
+(2 rows)
 
 -- drop
 drop table t_compressed;

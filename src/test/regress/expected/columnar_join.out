@@ -23,15 +23,36 @@ SELECT count(*)
 FROM users
 JOIN things ON (users.id = things.user_id)
 WHERE things.id > 299990;
-                    QUERY PLAN
+                      QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
    ->  Nested Loop
          Join Filter: (users.id = things.user_id)
          ->  Custom Scan (ColumnarScan) on things
                Filter: (id > 299990)
+               Columnar Projected Columns: id, user_id
          ->  Custom Scan (ColumnarScan) on users
-(6 rows)
+               Columnar Projected Columns: id
+(8 rows)
+
+EXPLAIN (COSTS OFF)
+SELECT u1.id, u2.id, COUNT(u2.*)
+FROM users u1
+JOIN users u2 ON (u1.id::text = u2.name)
+WHERE u2.id > 299990
+GROUP BY u1.id, u2.id;
+                     QUERY PLAN
+---------------------------------------------------------------------
+ HashAggregate
+   Group Key: u1.id, u2.id
+   ->  Nested Loop
+         Join Filter: ((u1.id)::text = u2.name)
+         ->  Custom Scan (ColumnarScan) on users u2
+               Filter: (id > 299990)
+               Columnar Projected Columns: id, name
+         ->  Custom Scan (ColumnarScan) on users u1
+               Columnar Projected Columns: id
+(9 rows)
 
 SET client_min_messages TO warning;
 DROP SCHEMA am_columnar_join CASCADE;

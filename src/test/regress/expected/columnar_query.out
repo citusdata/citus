@@ -137,11 +137,14 @@ explain (costs off, summary off) select * from
 ---------------------------------------------------------------------
  Nested Loop Left Join
    ->  Custom Scan (ColumnarScan) on int8_tbl_columnar a
+         Columnar Projected Columns: q1, q2
    ->  Nested Loop
          ->  Custom Scan (ColumnarScan) on int8_tbl_columnar b
                Filter: (a.q2 = q1)
+               Columnar Projected Columns: q1
          ->  Custom Scan (ColumnarScan) on int8_tbl_columnar c
-(6 rows)
+               Columnar Projected Columns: q1
+(9 rows)
 
 explain (costs off, summary off)
   SELECT COUNT(*) FROM INT8_TBL_columnar t1 JOIN
@@ -153,9 +156,11 @@ explain (costs off, summary off)
    ->  Hash Join
          Hash Cond: (t2.q1 = t1.q1)
          ->  Custom Scan (ColumnarScan) on int8_tbl_columnar t2
+               Columnar Projected Columns: q1
          ->  Hash
                ->  Custom Scan (ColumnarScan) on int8_tbl_columnar t1
-(6 rows)
+                     Columnar Projected Columns: q1
+(8 rows)
 
 CREATE TABLE INT8_TBL_heap (LIKE INT8_TBL_columnar) ;
 INSERT INTO INT8_TBL_heap SELECT * FROM INT8_TBL_columnar;

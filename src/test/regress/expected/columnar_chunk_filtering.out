@@ -128,7 +128,8 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
    Filter: (i > 123456)
    Rows Removed by Filter: 3457
    Columnar Chunk Groups Removed by Filter: 12
-(4 rows)
+   Columnar Projected Columns: i
+(5 rows)
 
 SET columnar.enable_qual_pushdown = false;
 EXPLAIN (analyze on, costs off, timing off, summary off)
@@ -139,7 +140,8 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
    Filter: (i > 123456)
    Rows Removed by Filter: 123457
    Columnar Chunk Groups Removed by Filter: 0
-(4 rows)
+   Columnar Projected Columns: i
+(5 rows)
 
 SET columnar.enable_qual_pushdown TO DEFAULT;
 -- https://github.com/citusdata/citus/issues/4555
@@ -154,7 +156,8 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
    Filter: (i > 180000)
    Rows Removed by Filter: 1
    Columnar Chunk Groups Removed by Filter: 18
-(4 rows)
+   Columnar Projected Columns: i
+(5 rows)
 
 DROP TABLE simple_chunk_filtering;
 CREATE TABLE multi_column_chunk_filtering(a int, b int) USING columnar;
@@ -168,7 +171,8 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
          Filter: (a > 50000)
          Rows Removed by Filter: 1
          Columnar Chunk Groups Removed by Filter: 5
-(5 rows)
+         Columnar Projected Columns: a
+(6 rows)
 
 EXPLAIN (analyze on, costs off, timing off, summary off)
   SELECT count(*) FROM multi_column_chunk_filtering WHERE a > 50000 AND b > 50000;
@@ -179,9 +183,115 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
          Filter: ((a > 50000) AND (b > 50000))
          Rows Removed by Filter: 1
          Columnar Chunk Groups Removed by Filter: 5
+         Columnar Projected Columns: a, b
+(6 rows)
+
+-- make next tests faster
+TRUNCATE multi_column_chunk_filtering;
+INSERT INTO multi_column_chunk_filtering SELECT generate_series(0,5);
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT b FROM multi_column_chunk_filtering WHERE a > 50000 AND b > 50000;
+                                     QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on multi_column_chunk_filtering (actual rows=0 loops=1)
+   Filter: ((a > 50000) AND (b > 50000))
+   Columnar Chunk Groups Removed by Filter: 1
+   Columnar Projected Columns: a, b
+(4 rows)
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT b, a FROM multi_column_chunk_filtering WHERE b > 50000;
+                                     QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on multi_column_chunk_filtering (actual rows=0 loops=1)
+   Filter: (b > 50000)
+   Rows Removed by Filter: 6
+   Columnar Chunk Groups Removed by Filter: 0
+   Columnar Projected Columns: a, b
 (5 rows)
 
-DROP TABLE multi_column_chunk_filtering;
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT FROM multi_column_chunk_filtering WHERE a > 50000;
+                                     QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on multi_column_chunk_filtering (actual rows=0 loops=1)
+   Filter: (a > 50000)
+   Columnar Chunk Groups Removed by Filter: 1
+   Columnar Projected Columns: a
+(4 rows)
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT FROM multi_column_chunk_filtering;
+                                     QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on multi_column_chunk_filtering (actual rows=6 loops=1)
+   Columnar Chunk Groups Removed by Filter: 0
+   Columnar Projected Columns: <columnar optimized out all columns>
+(3 rows)
+
+BEGIN;
+  ALTER TABLE multi_column_chunk_filtering DROP COLUMN a;
+  ALTER TABLE multi_column_chunk_filtering DROP COLUMN b;
+  EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT * FROM multi_column_chunk_filtering;
+                                     QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on multi_column_chunk_filtering (actual rows=6 loops=1)
+   Columnar Chunk Groups Removed by Filter: 0
+   Columnar Projected Columns: <columnar optimized out all columns>
+(3 rows)
+
+ROLLBACK;
+CREATE TABLE another_columnar_table(x int, y int) USING columnar;
+INSERT INTO another_columnar_table SELECT generate_series(0,5);
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT a, y FROM multi_column_chunk_filtering, another_columnar_table WHERE x > 1;
+                                        QUERY PLAN
+---------------------------------------------------------------------
+ Nested Loop (actual rows=24 loops=1)
+   ->  Custom Scan (ColumnarScan) on another_columnar_table (actual rows=4 loops=1)
+         Filter: (x > 1)
+         Rows Removed by Filter: 2
+         Columnar Chunk Groups Removed by Filter: 0
+         Columnar Projected Columns: x, y
+   ->  Custom Scan (ColumnarScan) on multi_column_chunk_filtering (actual rows=6 loops=4)
+         Columnar Chunk Groups Removed by Filter: 0
+         Columnar Projected Columns: a
+(9 rows)
+
+EXPLAIN (costs off, timing off, summary off)
+  SELECT y, * FROM another_columnar_table;
+                      QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on another_columnar_table
+   Columnar Projected Columns: x, y
+(2 rows)
+
+EXPLAIN (costs off, timing off, summary off)
+  SELECT *, x FROM another_columnar_table;
+                      QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on another_columnar_table
+   Columnar Projected Columns: x, y
+(2 rows)
+
+EXPLAIN (costs off, timing off, summary off)
+  SELECT y, another_columnar_table FROM another_columnar_table;
+                      QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on another_columnar_table
+   Columnar Projected Columns: x, y
+(2 rows)
+
+EXPLAIN (costs off, timing off, summary off)
+  SELECT another_columnar_table, x FROM another_columnar_table;
+                      QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (ColumnarScan) on another_columnar_table
+   Columnar Projected Columns: x, y
+(2 rows)
+
+DROP TABLE multi_column_chunk_filtering, another_columnar_table;
 --
 -- https://github.com/citusdata/citus/issues/4780
 --
