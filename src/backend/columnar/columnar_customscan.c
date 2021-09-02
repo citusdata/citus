@@ -17,6 +17,7 @@
 #include "access/amapi.h"
 #include "access/skey.h"
 #include "nodes/extensible.h"
+#include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
 #include "nodes/plannodes.h"
 #include "optimizer/cost.h"
@@ -25,6 +26,7 @@
 #include "optimizer/paths.h"
 #include "optimizer/restrictinfo.h"
 #include "utils/relcache.h"
+#include "utils/ruleutils.h"
 #include "utils/spccache.h"
 
 #include "columnar/columnar.h"
@@ -85,6 +87,9 @@ static void ColumnarScan_EndCustomScan(CustomScanState *node);
 static void ColumnarScan_ReScanCustomScan(CustomScanState *node);
 static void ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 										   ExplainState *es);
+static const char * ColumnarScanProjectedColumnsStr(ColumnarScanState *columnarScanState,
+													List *ancestors, ExplainState *es);
+static List * ColumnarVarNeeded(ColumnarScanState *columnarScanState);
 static Bitmapset * ColumnarAttrNeeded(ScanState *ss);
 
 /* saved hook value in case of unload */
@@ -836,4 +841,107 @@ ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 		ExplainPropertyInteger("Columnar Chunk Groups Removed by Filter", NULL,
 							   chunkGroupsFiltered, es);
 	}
+
+	ColumnarScanState *columnarScanState = (ColumnarScanState *) node;
+	const char *projectedColumnsStr =
+		ColumnarScanProjectedColumnsStr(columnarScanState, ancestors, es);
+	ExplainPropertyText("Columnar Projected Columns", projectedColumnsStr, es);
+}
+
+
+/*
+ * ColumnarScanProjectedColumnsStr generates projected column string for
+ * explain output.
+ */
+static const char *
+ColumnarScanProjectedColumnsStr(ColumnarScanState *columnarScanState, List *ancestors,
+								ExplainState *es)
+{
+	ScanState *scanState = &columnarScanState->custom_scanstate.ss;
+
+	List *neededVarList = ColumnarVarNeeded(columnarScanState);
+	if (list_length(neededVarList) == 0)
+	{
+		return "<columnar optimized out all columns>";
+	}
+
+#if PG_VERSION_NUM >= 130000
+	List *context =
+		set_deparse_context_plan(es->deparse_cxt, scanState->ps.plan, ancestors);
+#else
+	List *context =
+		set_deparse_context_planstate(es->deparse_cxt, (Node *) &scanState->ps,
+									  ancestors);
+#endif
+
+	bool useTableNamePrefix = false;
+	bool showImplicitCast = false;
+	return deparse_expression((Node *) neededVarList, context,
+							  useTableNamePrefix, showImplicitCast);
+}
+
+
+/*
+ * ColumnarVarNeeded returns a list of Var objects for the ones that are
+ * needed during columnar custom scan.
+ * Throws an error if finds a Var referencing to an attribute not supported
+ * by ColumnarScan.
+ */
+static List *
+ColumnarVarNeeded(ColumnarScanState *columnarScanState)
+{
+	ScanState *scanState = &columnarScanState->custom_scanstate.ss;
+
+	List *varList = NIL;
+
+	Bitmapset *neededAttrSet = ColumnarAttrNeeded(scanState);
+	int bmsMember = -1;
+	while ((bmsMember = bms_next_member(neededAttrSet, bmsMember)) >= 0)
+	{
+		Relation columnarRelation = scanState->ss_currentRelation;
+
+		/* neededAttrSet already represents 0-indexed attribute numbers */
+		Form_pg_attribute columnForm =
+			TupleDescAttr(RelationGetDescr(columnarRelation), bmsMember);
+		if (columnForm->attisdropped)
+		{
+			ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN),
+							errmsg("cannot explain column with attrNum=%d "
+								   "of columnar table %s since it is dropped",
+								   bmsMember + 1,
+								   RelationGetRelationName(columnarRelation))));
+		}
+		else if (columnForm->attnum <= 0)
+		{
+			/*
+			 * ColumnarAttrNeeded should have already thrown an error for
+			 * system columns. Similarly, it should have already expanded
+			 * whole-row references to individual attributes.
+			 */
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("cannot explain column with attrNum=%d "
+								   "of columnar table %s since it is either "
+								   "a system column or a whole-row "
+								   "reference", columnForm->attnum,
+								   RelationGetRelationName(columnarRelation))));
+		}
+
+
+		/*
+		 * varlevelsup is used to figure out the (query) level of the Var
+		 * that we are investigating. Since we are dealing with a particular
+		 * relation, it is useless here.
+		 */
+		Index varlevelsup = 0;
+
+		CustomScanState *customScanState = (CustomScanState *) columnarScanState;
+		CustomScan *customScan = (CustomScan *) customScanState->ss.ps.plan;
+		Index scanrelid = customScan->scan.scanrelid;
+		Var *var = makeVar(scanrelid, columnForm->attnum, columnForm->atttypid,
+						   columnForm->atttypmod, columnForm->attcollation,
+						   varlevelsup);
+		varList = lappend(varList, var);
+	}
+
+	return varList;
 }

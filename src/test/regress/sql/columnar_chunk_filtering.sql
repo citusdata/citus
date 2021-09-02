@@ -100,7 +100,48 @@ EXPLAIN (analyze on, costs off, timing off, summary off)
 EXPLAIN (analyze on, costs off, timing off, summary off)
   SELECT count(*) FROM multi_column_chunk_filtering WHERE a > 50000 AND b > 50000;
 
-DROP TABLE multi_column_chunk_filtering;
+-- make next tests faster
+TRUNCATE multi_column_chunk_filtering;
+INSERT INTO multi_column_chunk_filtering SELECT generate_series(0,5);
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT b FROM multi_column_chunk_filtering WHERE a > 50000 AND b > 50000;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT b, a FROM multi_column_chunk_filtering WHERE b > 50000;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT FROM multi_column_chunk_filtering WHERE a > 50000;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT FROM multi_column_chunk_filtering;
+
+BEGIN;
+  ALTER TABLE multi_column_chunk_filtering DROP COLUMN a;
+  ALTER TABLE multi_column_chunk_filtering DROP COLUMN b;
+  EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT * FROM multi_column_chunk_filtering;
+ROLLBACK;
+
+CREATE TABLE another_columnar_table(x int, y int) USING columnar;
+INSERT INTO another_columnar_table SELECT generate_series(0,5);
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+  SELECT a, y FROM multi_column_chunk_filtering, another_columnar_table WHERE x > 1;
+
+EXPLAIN (costs off, timing off, summary off)
+  SELECT y, * FROM another_columnar_table;
+
+EXPLAIN (costs off, timing off, summary off)
+  SELECT *, x FROM another_columnar_table;
+
+EXPLAIN (costs off, timing off, summary off)
+  SELECT y, another_columnar_table FROM another_columnar_table;
+
+EXPLAIN (costs off, timing off, summary off)
+  SELECT another_columnar_table, x FROM another_columnar_table;
+
+DROP TABLE multi_column_chunk_filtering, another_columnar_table;
 
 --
 -- https://github.com/citusdata/citus/issues/4780

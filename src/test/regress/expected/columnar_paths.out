@@ -241,6 +241,7 @@ WHERE ct_1.a < 3000;
    CTE cte
      ->  Custom Scan (ColumnarScan) on full_correlated
            Filter: (a > 1)
+           Columnar Projected Columns: a, d
    ->  Nested Loop Left Join
          ->  Hash Join
                Hash Cond: (cte.d = ht_1.a)
@@ -253,7 +254,7 @@ WHERE ct_1.a < 3000;
                                  Index Cond: (a = ct_1.d)
          ->  Index Only Scan using heap_table_btree on heap_table ht_2
                Index Cond: (a = ct_1.c)
-(16 rows)
+(17 rows)
 
 -- same query but columnar custom scan is disabled
 BEGIN;
@@ -297,6 +298,7 @@ WHERE w2.a = 123;
    Merge Cond: (w2.d = w1.a)
    CTE w
      ->  Custom Scan (ColumnarScan) on full_correlated
+           Columnar Projected Columns: a, b, c, d
    ->  Sort
          Sort Key: w2.d
          ->  CTE Scan on w w2
@@ -305,7 +307,7 @@ WHERE w2.a = 123;
          ->  Sort
                Sort Key: w1.a
                ->  CTE Scan on w w1
-(12 rows)
+(13 rows)
 
 -- use index
 EXPLAIN (COSTS OFF) WITH w AS NOT MATERIALIZED (SELECT * FROM full_correlated)
@@ -344,6 +346,7 @@ LIMIT 100;
                                        Sort Key: full_correlated.b DESC
                                        ->  Custom Scan (ColumnarScan) on full_correlated
                                              Filter: (a > 2)
+                                             Columnar Projected Columns: a, b
                      ->  Materialize
                            ->  Limit
                                  ->  GroupAggregate
@@ -361,7 +364,7 @@ LIMIT 100;
                                              Filter: (sum(full_correlated_2.a) > 10)
                                              ->  Index Scan using full_correlated_btree on full_correlated full_correlated_2
                                                    Index Cond: (a > 2)
-(31 rows)
+(32 rows)
 
 DROP INDEX full_correlated_btree;
 CREATE INDEX full_correlated_hash ON full_correlated USING hash(a);

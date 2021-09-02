@@ -413,5 +413,24 @@ ALTER TABLE zero_col ADD COLUMN a int;
 INSERT INTO zero_col SELECT i FROM generate_series(1, 10) i;
 select result from run_command_on_placements('zero_col', 'select count(*) from %s');
 
+CREATE TABLE weird_col_explain (
+  "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" INT,
+  "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!" INT)
+USING columnar;
+SELECT create_distributed_table('weird_col_explain', 'bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb''bbbbbbbbbbbbbbbbbbbbb''''bbbbbbbb');
+
+EXPLAIN (COSTS OFF, SUMMARY OFF)
+SELECT * FROM weird_col_explain;
+
+EXPLAIN (COSTS OFF, SUMMARY OFF)
+SELECT *, "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb"
+FROM weird_col_explain
+WHERE "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" * 2 >
+      "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!";
+
+-- should not project any columns
+EXPLAIN (COSTS OFF, SUMMARY OFF)
+SELECT COUNT(*) FROM weird_col_explain;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_citus_integration CASCADE;

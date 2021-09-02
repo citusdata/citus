@@ -24,5 +24,12 @@ FROM users
 JOIN things ON (users.id = things.user_id)
 WHERE things.id > 299990;
 
+EXPLAIN (COSTS OFF)
+SELECT u1.id, u2.id, COUNT(u2.*)
+FROM users u1
+JOIN users u2 ON (u1.id::text = u2.name)
+WHERE u2.id > 299990
+GROUP BY u1.id, u2.id;
+
 SET client_min_messages TO warning;
 DROP SCHEMA am_columnar_join CASCADE;

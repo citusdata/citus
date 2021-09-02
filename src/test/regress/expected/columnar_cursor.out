@@ -11,7 +11,8 @@ EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM test_curs
    Filter: (a = 25)
    Rows Removed by Filter: 9899
    Columnar Chunk Groups Removed by Filter: 1
-(4 rows)
+   Columnar Projected Columns: a, b
+(5 rows)
 
 BEGIN;
 DECLARE a_25 SCROLL CURSOR
@@ -112,7 +113,8 @@ EXPLAIN (analyze on, costs off, timing off, summary off) SELECT * FROM test_curs
    Filter: (a > 25)
    Rows Removed by Filter: 2626
    Columnar Chunk Groups Removed by Filter: 0
-(4 rows)
+   Columnar Projected Columns: a, b
+(5 rows)
 
 BEGIN;
 DECLARE a_25 SCROLL CURSOR

@@ -1093,5 +1093,63 @@ select result from run_command_on_placements('zero_col', 'select count(*) from %
  10
 (2 rows)
 
+CREATE TABLE weird_col_explain (
+  "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" INT,
+  "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!" INT)
+USING columnar;
+NOTICE:  identifier "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!" will be truncated to "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'"
+SELECT create_distributed_table('weird_col_explain', 'bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb''bbbbbbbbbbbbbbbbbbbbb''''bbbbbbbb');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+EXPLAIN (COSTS OFF, SUMMARY OFF)
+SELECT * FROM weird_col_explain;
+                                                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Custom Scan (ColumnarScan) on weird_col_explain_20090021 weird_col_explain
+               Columnar Projected Columns: "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb", "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'"
+(7 rows)
+
+EXPLAIN (COSTS OFF, SUMMARY OFF)
+SELECT *, "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb"
+FROM weird_col_explain
+WHERE "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" * 2 >
+      "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!";
+NOTICE:  identifier "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'!" will be truncated to "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'"
+                                                                                   QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus Adaptive)
+   Task Count: 4
+   Tasks Shown: One of 4
+   ->  Task
+         Node: host=localhost port=xxxxx dbname=regression
+         ->  Custom Scan (ColumnarScan) on weird_col_explain_20090021 weird_col_explain
+               Filter: (("bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb" * 2) > "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'")
+               Columnar Projected Columns: "bbbbbbbbbbbbbbbbbbbbbbbbb\!bbbb'bbbbbbbbbbbbbbbbbbbbb''bbbbbbbb", "aaaaaaaaaaaa$aaaaaa$$aaaaaaaaaaaaaaaaaaaaaaaaaaaaa'aaaaaaaa'$a'"
+(8 rows)
+
+-- should not project any columns
+EXPLAIN (COSTS OFF, SUMMARY OFF)
+SELECT COUNT(*) FROM weird_col_explain;
+                                             QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Aggregate
+                     ->  Custom Scan (ColumnarScan) on weird_col_explain_20090021 weird_col_explain
+                           Columnar Projected Columns: <columnar optimized out all columns>
+(9 rows)
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_citus_integration CASCADE;

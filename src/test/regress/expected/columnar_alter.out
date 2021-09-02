@@ -304,10 +304,11 @@ SELECT count(*) FROM zero_col_columnar;
 (1 row)
 
 EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
-                   QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on zero_col_columnar
-(1 row)
+   Columnar Projected Columns: <columnar optimized out all columns>
+(2 rows)
 
 INSERT INTO zero_col_columnar DEFAULT VALUES;
 INSERT INTO zero_col_columnar DEFAULT VALUES;
@@ -323,10 +324,11 @@ SELECT count(*) FROM zero_col_columnar;
 (1 row)
 
 EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
-                   QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on zero_col_columnar
-(1 row)
+   Columnar Projected Columns: <columnar optimized out all columns>
+(2 rows)
 
 VACUUM VERBOSE zero_col_columnar;
 INFO:  statistics for "zero_col_columnar":
