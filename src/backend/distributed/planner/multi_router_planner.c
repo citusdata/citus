@@ -634,6 +634,7 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 		foreach(targetEntryCell, queryTree->targetList)
 		{
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
+
 			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
 			if (targetEntry->resjunk)
 			{
