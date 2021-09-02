@@ -143,5 +143,55 @@ SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELEC
 SET ROLE to NONE;
 ALTER STATISTICS role_s1 OWNER TO CURRENT_ROLE;
 SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELECT stxowner FROM pg_statistic_ext WHERE stxname LIKE 'role\_s1%');$$);
+create TABLE test_jsonb_subscript (
+       id int,
+       test_json jsonb
+);
+
+SELECT create_distributed_table('test_jsonb_subscript', 'id');
+
+insert into test_jsonb_subscript values
+(1, '{}'), -- empty jsonb
+(2, '{"key": "value"}'); -- jsonb with data
+
+-- update empty jsonb
+update test_jsonb_subscript set test_json['a'] = '1' where id = 1;
+select * from test_jsonb_subscript ORDER BY 1,2;
+
+-- update jsonb with some data
+update test_jsonb_subscript set test_json['a'] = '1' where id = 2;
+select * from test_jsonb_subscript ORDER BY 1,2;
+
+-- replace jsonb
+update test_jsonb_subscript set test_json['a'] = '"test"';
+select * from test_jsonb_subscript ORDER BY 1,2;
+
+-- replace by object
+update test_jsonb_subscript set test_json['a'] = '{"b": 1}'::jsonb;
+select * from test_jsonb_subscript ORDER BY 1,2;
+
+-- replace by array
+update test_jsonb_subscript set test_json['a'] = '[1, 2, 3]'::jsonb;
+select * from test_jsonb_subscript ORDER BY 1,2;
+
+-- use jsonb subscription in where clause
+select * from test_jsonb_subscript where test_json['key'] = '"value"' ORDER BY 1,2;
+select * from test_jsonb_subscript where test_json['key_doesnt_exists'] = '"value"' ORDER BY 1,2;
+select * from test_jsonb_subscript where test_json['key'] = '"wrong_value"' ORDER BY 1,2;
+
+-- NULL
+update test_jsonb_subscript set test_json[NULL] = '1';
+update test_jsonb_subscript set test_json['another_key'] = NULL;
+select * from test_jsonb_subscript ORDER BY 1,2;
+
+-- NULL as jsonb source
+insert into test_jsonb_subscript values (3, NULL);
+update test_jsonb_subscript set test_json['a'] = '1' where id = 3;
+select * from test_jsonb_subscript ORDER BY 1,2;
+
+update test_jsonb_subscript set test_json = NULL where id = 3;
+update test_jsonb_subscript set test_json[0] = '1';
+select * from test_jsonb_subscript ORDER BY 1,2;
+
 set client_min_messages to error;
 drop schema pg14 cascade;

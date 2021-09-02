@@ -377,5 +377,113 @@ SELECT run_command_on_workers($$SELECT rolname FROM pg_roles WHERE oid IN (SELEC
  (localhost,57638,t,postgres)
 (2 rows)
 
+create TABLE test_jsonb_subscript (
+       id int,
+       test_json jsonb
+);
+SELECT create_distributed_table('test_jsonb_subscript', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into test_jsonb_subscript values
+(1, '{}'), -- empty jsonb
+(2, '{"key": "value"}'); -- jsonb with data
+-- update empty jsonb
+update test_jsonb_subscript set test_json['a'] = '1' where id = 1;
+select * from test_jsonb_subscript ORDER BY 1,2;
+ id |    test_json
+---------------------------------------------------------------------
+  1 | {"a": 1}
+  2 | {"key": "value"}
+(2 rows)
+
+-- update jsonb with some data
+update test_jsonb_subscript set test_json['a'] = '1' where id = 2;
+select * from test_jsonb_subscript ORDER BY 1,2;
+ id |        test_json
+---------------------------------------------------------------------
+  1 | {"a": 1}
+  2 | {"a": 1, "key": "value"}
+(2 rows)
+
+-- replace jsonb
+update test_jsonb_subscript set test_json['a'] = '"test"';
+select * from test_jsonb_subscript ORDER BY 1,2;
+ id |           test_json
+---------------------------------------------------------------------
+  1 | {"a": "test"}
+  2 | {"a": "test", "key": "value"}
+(2 rows)
+
+-- replace by object
+update test_jsonb_subscript set test_json['a'] = '{"b": 1}'::jsonb;
+select * from test_jsonb_subscript ORDER BY 1,2;
+ id |            test_json
+---------------------------------------------------------------------
+  1 | {"a": {"b": 1}}
+  2 | {"a": {"b": 1}, "key": "value"}
+(2 rows)
+
+-- replace by array
+update test_jsonb_subscript set test_json['a'] = '[1, 2, 3]'::jsonb;
+select * from test_jsonb_subscript ORDER BY 1,2;
+ id |            test_json
+---------------------------------------------------------------------
+  1 | {"a": [1, 2, 3]}
+  2 | {"a": [1, 2, 3], "key": "value"}
+(2 rows)
+
+-- use jsonb subscription in where clause
+select * from test_jsonb_subscript where test_json['key'] = '"value"' ORDER BY 1,2;
+ id |            test_json
+---------------------------------------------------------------------
+  2 | {"a": [1, 2, 3], "key": "value"}
+(1 row)
+
+select * from test_jsonb_subscript where test_json['key_doesnt_exists'] = '"value"' ORDER BY 1,2;
+ id | test_json
+---------------------------------------------------------------------
+(0 rows)
+
+select * from test_jsonb_subscript where test_json['key'] = '"wrong_value"' ORDER BY 1,2;
+ id | test_json
+---------------------------------------------------------------------
+(0 rows)
+
+-- NULL
+update test_jsonb_subscript set test_json[NULL] = '1';
+ERROR:  jsonb subscript in assignment must not be null
+CONTEXT:  while executing command on localhost:xxxxx
+update test_jsonb_subscript set test_json['another_key'] = NULL;
+select * from test_jsonb_subscript ORDER BY 1,2;
+ id |                       test_json
+---------------------------------------------------------------------
+  1 | {"a": [1, 2, 3], "another_key": null}
+  2 | {"a": [1, 2, 3], "key": "value", "another_key": null}
+(2 rows)
+
+-- NULL as jsonb source
+insert into test_jsonb_subscript values (3, NULL);
+update test_jsonb_subscript set test_json['a'] = '1' where id = 3;
+select * from test_jsonb_subscript ORDER BY 1,2;
+ id |                       test_json
+---------------------------------------------------------------------
+  1 | {"a": [1, 2, 3], "another_key": null}
+  2 | {"a": [1, 2, 3], "key": "value", "another_key": null}
+  3 | {"a": 1}
+(3 rows)
+
+update test_jsonb_subscript set test_json = NULL where id = 3;
+update test_jsonb_subscript set test_json[0] = '1';
+select * from test_jsonb_subscript ORDER BY 1,2;
+ id |                           test_json
+---------------------------------------------------------------------
+  1 | {"0": 1, "a": [1, 2, 3], "another_key": null}
+  2 | {"0": 1, "a": [1, 2, 3], "key": "value", "another_key": null}
+  3 | [1]
+(3 rows)
+
 set client_min_messages to error;
 drop schema pg14 cascade;
