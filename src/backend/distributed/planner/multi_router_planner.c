@@ -158,6 +158,10 @@ static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
 static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(
 	Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
+#if PG_VERSION_NUM >= PG_VERSION_14
+static DeferredErrorMessage * ErrorIfQueryHasCTEWithSearchClause(Query *queryTree);
+static bool ContainsSearchClauseWalker(Node *node);
+#endif
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
 static ShardPlacement * CreateLocalDummyPlacement();
@@ -1069,6 +1073,15 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 			return errorMessage;
 		}
 	}
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+	DeferredErrorMessage *CTEWithSearchClauseError =
+		ErrorIfQueryHasCTEWithSearchClause(originalQuery);
+	if (CTEWithSearchClauseError != NULL)
+	{
+		return CTEWithSearchClauseError;
+	}
+#endif
 
 	return NULL;
 }
@@ -3623,6 +3636,15 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 							 NULL, NULL);
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+	DeferredErrorMessage *CTEWithSearchClauseError =
+		ErrorIfQueryHasCTEWithSearchClause(query);
+	if (CTEWithSearchClauseError != NULL)
+	{
+		return CTEWithSearchClauseError;
+	}
+#endif
+
 	return ErrorIfQueryHasUnroutableModifyingCTE(query);
 }
 
@@ -3754,6 +3776,57 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 	/* everything OK */
 	return NULL;
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+
+/*
+ * ErrorIfQueryHasCTEWithSearchClause checks if the query contains any common table
+ * expressions with search clause and errors out if it does.
+ */
+static DeferredErrorMessage *
+ErrorIfQueryHasCTEWithSearchClause(Query *queryTree)
+{
+	if (ContainsSearchClauseWalker((Node *) queryTree))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "CTEs with search clauses are not supported",
+							 NULL, NULL);
+	}
+	return NULL;
+}
+
+
+/*
+ * ContainsSearchClauseWalker walks over the node and finds if there are any
+ * CommonTableExprs with search clause
+ */
+static bool
+ContainsSearchClauseWalker(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, CommonTableExpr))
+	{
+		if (((CommonTableExpr *) node)->search_clause != NULL)
+		{
+			return true;
+		}
+	}
+
+	if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node, ContainsSearchClauseWalker, NULL, 0);
+	}
+
+	return expression_tree_walker(node, ContainsSearchClauseWalker, NULL);
+}
+
+
+#endif
 
 
 /*
