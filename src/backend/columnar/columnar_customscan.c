@@ -84,9 +84,9 @@ static void AddColumnarScanPathsRec(PlannerInfo *root, RelOptInfo *rel,
 									int depthLimit);
 static void AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
 								RangeTblEntry *rte, Relids required_relids);
-static void CostColumnarScan(CustomPath *cpath, PlannerInfo *root,
-							 RelOptInfo *rel, Oid relationId,
-							 int numberOfColumnsRead, int nClauses);
+static void CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+							 CustomPath *cpath, int numberOfColumnsRead,
+							 int nClauses);
 static Cost ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId,
 									  int numberOfColumnsRead);
 static uint64 ColumnarTableStripeCount(Oid relationId);
@@ -1132,7 +1132,7 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 	int numberOfColumnsRead = bms_num_members(rte->selectedCols);
 	int numberOfClausesPushed = list_length(cpath->custom_private);
 
-	CostColumnarScan(cpath, root, rel, rte->relid, numberOfColumnsRead,
+	CostColumnarScan(root, rel, rte->relid, cpath, numberOfColumnsRead,
 					 numberOfClausesPushed);
 
 
@@ -1155,8 +1155,8 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
  * columns to read how many pages need to be read.
  */
 static void
-CostColumnarScan(CustomPath *cpath, PlannerInfo *root, RelOptInfo *rel,
-				 Oid relationId, int numberOfColumnsRead, int nClauses)
+CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+				 CustomPath *cpath, int numberOfColumnsRead, int nClauses)
 {
 	Path *path = &cpath->path;
 
