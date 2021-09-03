@@ -68,7 +68,7 @@ static bool IsNotIndexPath(Path *path);
 static Path * CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel,
 										Oid relationId);
 static void CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
-static void RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+static void CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 									IndexPath *indexPath);
 static Cost ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId,
 											IndexPath *indexPath);
@@ -379,7 +379,7 @@ CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 			 * TableAmRoutine). For this reason, we only consider IndexPath's
 			 * here.
 			 */
-			RecostColumnarIndexPath(root, rel, relationId, (IndexPath *) path);
+			CostColumnarIndexPath(root, rel, relationId, (IndexPath *) path);
 		}
 		else if (path->pathtype == T_SeqScan)
 		{
@@ -390,11 +390,11 @@ CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 
 
 /*
- * RecostColumnarIndexPath re-costs given index path for columnar table with
+ * CostColumnarIndexPath re-costs given index path for columnar table with
  * relationId.
  */
 static void
-RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 						IndexPath *indexPath)
 {
 	if (!enable_indexscan)
