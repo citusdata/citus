@@ -18,6 +18,7 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
@@ -528,8 +529,8 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 	{
 		Relation relation = NULL;
 		Oid relationId = InvalidOid;
-		LOCKMODE lockmode = reindexStatement->concurrent ? ShareUpdateExclusiveLock :
-							AccessExclusiveLock;
+		LOCKMODE lockmode = IsReindexWithParam_compat(reindexStatement, "concurrently") ?
+							ShareUpdateExclusiveLock : AccessExclusiveLock;
 		MemoryContext relationContext = NULL;
 
 		Assert(reindexStatement->kind == REINDEX_OBJECT_INDEX ||
@@ -538,7 +539,8 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 		if (reindexStatement->kind == REINDEX_OBJECT_INDEX)
 		{
 			struct ReindexIndexCallbackState state;
-			state.concurrent = reindexStatement->concurrent;
+			state.concurrent = IsReindexWithParam_compat(reindexStatement,
+														 "concurrently");
 			state.locked_table_oid = InvalidOid;
 
 			Oid indOid = RangeVarGetRelidExtended(reindexStatement->relation,
@@ -587,10 +589,19 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 
 		if (isCitusRelation)
 		{
+			if (PartitionedTable(relationId))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("REINDEX TABLE queries on distributed partitioned "
+									   "tables are not supported")));
+			}
+
 			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 			ddlJob->targetRelationId = relationId;
-			ddlJob->concurrentIndexCmd = reindexStatement->concurrent;
-			ddlJob->startNewTransaction = reindexStatement->concurrent;
+			ddlJob->concurrentIndexCmd = IsReindexWithParam_compat(reindexStatement,
+																   "concurrently");
+			ddlJob->startNewTransaction = IsReindexWithParam_compat(reindexStatement,
+																	"concurrently");
 			ddlJob->commandString = reindexCommand;
 			ddlJob->taskList = CreateReindexTaskList(relationId, reindexStatement);
 

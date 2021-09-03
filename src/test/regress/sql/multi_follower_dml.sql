@@ -135,7 +135,7 @@ SELECT * FROM citus_local_table ORDER BY a;
 
 -- we should still disallow writes to local tables
 INSERT INTO local VALUES (1, 1);
-INSERT INTO local SELECT a, b FROM the_table;
+INSERT INTO local SELECT i,i FROM generate_series(0,100)i;
 
 -- we shouldn't be able to create local tables
 CREATE TEMP TABLE local_copy_of_the_table AS SELECT * FROM the_table;

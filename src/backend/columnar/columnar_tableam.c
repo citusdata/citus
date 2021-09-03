@@ -118,6 +118,9 @@ static void ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId
 											void *arg);
 static void ColumnarProcessUtility(PlannedStmt *pstmt,
 								   const char *queryString,
+#if PG_VERSION_NUM >= PG_VERSION_14
+								   bool readOnlyTree,
+#endif
 								   ProcessUtilityContext context,
 								   ParamListInfo params,
 								   struct QueryEnvironment *queryEnv,
@@ -634,6 +637,16 @@ columnar_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
 }
 
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+static TransactionId
+columnar_index_delete_tuples(Relation rel,
+							 TM_IndexDeleteOp *delstate)
+{
+	elog(ERROR, "columnar_index_delete_tuples not implemented");
+}
+
+
+#else
 static TransactionId
 columnar_compute_xid_horizon_for_tuples(Relation rel,
 										ItemPointerData *tids,
@@ -641,6 +654,9 @@ columnar_compute_xid_horizon_for_tuples(Relation rel,
 {
 	elog(ERROR, "columnar_compute_xid_horizon_for_tuples not implemented");
 }
+
+
+#endif
 
 
 static void
@@ -953,7 +969,7 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	int elevel = (params->options & VACOPT_VERBOSE) ? INFO : DEBUG2;
 
 	/* this should have been resolved by vacuum.c until now */
-	Assert(params->truncate != VACOPT_TERNARY_DEFAULT);
+	Assert(params->truncate != VACOPTVALUE_UNSPECIFIED);
 
 	LogRelationStats(rel, elevel);
 
@@ -961,7 +977,7 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 	 * We don't have updates, deletes, or concurrent updates, so all we
 	 * care for now is truncating the unused space at the end of storage.
 	 */
-	if (params->truncate == VACOPT_TERNARY_ENABLED)
+	if (params->truncate == VACOPTVALUE_ENABLED)
 	{
 		TruncateColumnar(rel, elevel);
 	}
@@ -1290,7 +1306,8 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	if (!IsBootstrapProcessingMode() && !indexInfo->ii_Concurrent)
 	{
 		/* ignore lazy VACUUM's */
-		OldestXmin = GetOldestXmin(columnarRelation, PROCARRAY_FLAGS_VACUUM);
+		OldestXmin = GetOldestNonRemovableTransactionId_compat(columnarRelation,
+															   PROCARRAY_FLAGS_VACUUM);
 	}
 
 	Snapshot snapshot = { 0 };
@@ -1636,8 +1653,8 @@ ColumnarReadMissingRowsIntoIndex(TableScanDesc scan, Relation indexRelation,
 		Relation columnarRelation = scan->rs_rd;
 		IndexUniqueCheck indexUniqueCheck =
 			indexInfo->ii_Unique ? UNIQUE_CHECK_YES : UNIQUE_CHECK_NO;
-		index_insert(indexRelation, indexValues, indexNulls, columnarItemPointer,
-					 columnarRelation, indexUniqueCheck, indexInfo);
+		index_insert_compat(indexRelation, indexValues, indexNulls, columnarItemPointer,
+							columnarRelation, indexUniqueCheck, false, indexInfo);
 
 		validateIndexState->tups_inserted += 1;
 	}
@@ -1993,12 +2010,22 @@ ColumnarTableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid object
 static void
 ColumnarProcessUtility(PlannedStmt *pstmt,
 					   const char *queryString,
+#if PG_VERSION_NUM >= PG_VERSION_14
+					   bool readOnlyTree,
+#endif
 					   ProcessUtilityContext context,
 					   ParamListInfo params,
 					   struct QueryEnvironment *queryEnv,
 					   DestReceiver *dest,
 					   QueryCompletionCompat *completionTag)
 {
+#if PG_VERSION_NUM >= PG_VERSION_14
+	if (readOnlyTree)
+	{
+		pstmt = copyObject(pstmt);
+	}
+#endif
+
 	Node *parsetree = pstmt->utilityStmt;
 
 	if (IsA(parsetree, IndexStmt))
@@ -2021,8 +2048,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		RelationClose(rel);
 	}
 
-	PrevProcessUtilityHook(pstmt, queryString, context,
-						   params, queryEnv, dest, completionTag);
+	PrevProcessUtilityHook_compat(pstmt, queryString, false, context,
+								  params, queryEnv, dest, completionTag);
 }
 
 
@@ -2096,7 +2123,11 @@ static const TableAmRoutine columnar_am_methods = {
 	.tuple_get_latest_tid = columnar_get_latest_tid,
 	.tuple_tid_valid = columnar_tuple_tid_valid,
 	.tuple_satisfies_snapshot = columnar_tuple_satisfies_snapshot,
+#if PG_VERSION_NUM >= PG_VERSION_14
+	.index_delete_tuples = columnar_index_delete_tuples,
+#else
 	.compute_xid_horizon_for_tuples = columnar_compute_xid_horizon_for_tuples,
+#endif
 
 	.tuple_insert = columnar_tuple_insert,
 	.tuple_insert_speculative = columnar_tuple_insert_speculative,

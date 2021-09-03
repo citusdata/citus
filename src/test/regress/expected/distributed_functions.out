@@ -343,20 +343,6 @@ SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,maca
  t
 (1 row)
 
-ALTER FUNCTION eq(macaddr,macaddr) SET "citus.setting;'" TO 'hello '' world';
-SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
- verify_function_is_same_on_workers
----------------------------------------------------------------------
- t
-(1 row)
-
-ALTER FUNCTION eq(macaddr,macaddr) RESET "citus.setting;'";
-SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
- verify_function_is_same_on_workers
----------------------------------------------------------------------
- t
-(1 row)
-
 ALTER FUNCTION eq(macaddr,macaddr) SET search_path TO 'sch'';ma', public;
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
  verify_function_is_same_on_workers
@@ -540,9 +526,6 @@ SELECT * FROM run_command_on_workers('SELECT function_tests2.sum2(id) FROM (sele
  localhost |    57638 | f       | ERROR:  function function_tests2.sum2(integer) does not exist
 (2 rows)
 
--- postgres doesn't accept parameter names in the regprocedure input
-SELECT create_distributed_function('eq_with_param_names(val1 macaddr, macaddr)', 'val1');
-ERROR:  invalid type name "val1 macaddr"
 -- invalid distribution_arg_name
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='test');
 ERROR:  cannot distribute the function "eq_with_param_names" since the distribution argument is not valid

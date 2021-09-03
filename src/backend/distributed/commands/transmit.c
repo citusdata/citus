@@ -245,7 +245,7 @@ static bool
 ReceiveCopyData(StringInfo copyData)
 {
 	bool copyDone = true;
-	const int unlimitedSize = 0;
+	const int unlimitedSize = PQ_LARGE_MESSAGE_LIMIT;
 
 	HOLD_CANCEL_INTERRUPTS();
 	pq_startmsgread();

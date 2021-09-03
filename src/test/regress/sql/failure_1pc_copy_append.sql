@@ -17,8 +17,6 @@ SELECT citus.clear_network_traffic();
 COPY copy_test FROM PROGRAM 'echo 0, 0 && echo 1, 1 && echo 2, 4 && echo 3, 9' WITH CSV;
 SELECT count(1) FROM copy_test;
 
-SELECT citus.dump_network_traffic();
-
 ---- all of the following tests test behavior with 2 shard placements ----
 SHOW citus.shard_replication_factor;
 

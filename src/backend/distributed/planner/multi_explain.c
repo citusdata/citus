@@ -11,6 +11,8 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
@@ -251,7 +253,13 @@ NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	/* explain the inner SELECT query */
 	IntoClause *into = NULL;
 	ParamListInfo params = NULL;
-	char *queryString = NULL;
+
+	/*
+	 * With PG14, we need to provide a string here,
+	 * for now we put an empty string, which is valid according to postgres.
+	 */
+	char *queryString = pstrdup("");
+
 	ExplainOneQuery(queryCopy, 0, into, es, queryString, params, NULL);
 
 	ExplainCloseGroup("Select Query", "Select Query", false, es);
@@ -278,7 +286,12 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		PlannedStmt *plan = subPlan->plan;
 		IntoClause *into = NULL;
 		ParamListInfo params = NULL;
-		char *queryString = NULL;
+
+		/*
+		 * With PG14, we need to provide a string here,
+		 * for now we put an empty string, which is valid according to postgres.
+		 */
+		char *queryString = pstrdup("");
 		instr_time planduration;
 		#if PG_VERSION_NUM >= PG_VERSION_13
 
@@ -1024,8 +1037,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 	DestReceiver *tupleStoreDest = CreateTuplestoreDestReceiver();
-	SetTuplestoreDestReceiverParams(tupleStoreDest, tupleStore,
-									CurrentMemoryContext, false);
+	SetTuplestoreDestReceiverParams_compat(tupleStoreDest, tupleStore,
+										   CurrentMemoryContext, false, NULL, NULL);
 
 	List *parseTreeList = pg_parse_query(queryString);
 	if (list_length(parseTreeList) != 1)
@@ -1241,10 +1254,8 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 
 	/* plan the query */
 	PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
-
 	INSTR_TIME_SET_CURRENT(planduration);
 	INSTR_TIME_SUBTRACT(planduration, planstart);
-
 	#if PG_VERSION_NUM >= PG_VERSION_13
 
 	/* calc differences of buffer counters. */

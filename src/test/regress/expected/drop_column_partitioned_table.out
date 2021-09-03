@@ -226,78 +226,55 @@ EXPLAIN (COSTS FALSE) INSERT INTO sensors_2003 VALUES (3, '2003-01-01', row_to_j
                ->  Result
 (7 rows)
 
+SELECT public.explain_has_single_task(
+	$$
 EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors WHERE measureid = 3 AND eventdatetime = '2000-02-02';
-                                            QUERY PLAN
+	$$
+);
+ explain_has_single_task
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Aggregate
-               ->  Index Only Scan using sensors_2000_pkey_2580005 on sensors_2000_2580005 sensors
-                     Index Cond: ((measureid = 3) AND (eventdatetime = '2000-02-02'::date))
-(8 rows)
+ t
+(1 row)
 
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2000 WHERE measureid = 3;
-                               QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2000_2580005 sensors_xxx
-                     Recheck Cond: (measureid = 3)
-                     ->  Bitmap Index Scan on sensors_2000_pkey_2580005
-                           Index Cond: (measureid = 3)
-(10 rows)
-
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2001 WHERE measureid = 3;
-                               QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2001_2580009 sensors_xxx
-                     Recheck Cond: (measureid = 3)
-                     ->  Bitmap Index Scan on sensors_2001_pkey_2580009
-                           Index Cond: (measureid = 3)
-(10 rows)
-
-EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2002 WHERE measureid = 3;
-                               QUERY PLAN
----------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2002_2580013 sensors_xxx
-                     Recheck Cond: (measureid = 3)
-                     ->  Bitmap Index Scan on sensors_2002_pkey_2580013
-                           Index Cond: (measureid = 3)
-(10 rows)
-
+SELECT public.explain_has_single_task(
+	$$
 EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2003 WHERE measureid = 3;
-                               QUERY PLAN
+	$$
+);
+ explain_has_single_task
 ---------------------------------------------------------------------
- Custom Scan (Citus Adaptive)
-   Task Count: 1
-   Tasks Shown: All
-   ->  Task
-         Node: host=localhost port=xxxxx dbname=regression
-         ->  Aggregate
-               ->  Bitmap Heap Scan on sensors_2003_2580017 sensors_xxx
-                     Recheck Cond: (measureid = 3)
-                     ->  Bitmap Index Scan on sensors_2003_pkey_2580017
-                           Index Cond: (measureid = 3)
-(10 rows)
+ t
+(1 row)
+
+SELECT public.explain_has_single_task(
+	$$
+EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2000 WHERE measureid = 3;
+	$$
+);
+ explain_has_single_task
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_single_task(
+	$$
+EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2001 WHERE measureid = 3;
+	$$
+);
+ explain_has_single_task
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT public.explain_has_single_task(
+	$$
+EXPLAIN (COSTS FALSE) SELECT count(*) FROM sensors_2002 WHERE measureid = 3;
+	$$
+);
+ explain_has_single_task
+---------------------------------------------------------------------
+ t
+(1 row)
 
 -- execute 7 times to make sure it is re-cached
 EXECUTE drop_col_prepare_insert(3, '2000-10-01', row_to_json(row(1)));

@@ -99,12 +99,7 @@ SELECT create_distributed_table('test','x');
 
 (1 row)
 
-CREATE STATISTICS stats_xy ON (x, y) FROM test;
-ERROR:  only simple column references are allowed in CREATE STATISTICS
-CREATE STATISTICS stats_xy ON x+y FROM test;
-ERROR:  only simple column references are allowed in CREATE STATISTICS
 CREATE STATISTICS stats_xy ON x,y FROM test;
-CREATE STATISTICS IF NOT EXISTS stats_xy ON x+y FROM test;
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext

@@ -688,6 +688,7 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 	Assert(deleteCriteria != NULL);
 	List *deleteCriteriaList = list_make1(deleteCriteria);
 
+
 	/* walk over shard list and check if shards can be dropped */
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
@@ -703,9 +704,17 @@ ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
 			Expr *lessThanExpr = (Expr *) linitial(andExpr->args);
 			Expr *greaterThanExpr = (Expr *) lsecond(andExpr->args);
 
-			RestrictInfo *lessThanRestrictInfo = make_simple_restrictinfo(lessThanExpr);
-			RestrictInfo *greaterThanRestrictInfo = make_simple_restrictinfo(
-				greaterThanExpr);
+			/*
+			 * passing NULL for plannerInfo will be problematic if we have placeholder
+			 * vars. However, it won't be the case here because we are building
+			 * the expression from shard intervals which don't have placeholder vars.
+			 * Note that this is only the case with PG14 as the parameter doesn't exist
+			 * prior to that.
+			 */
+			RestrictInfo *lessThanRestrictInfo = make_simple_restrictinfo_compat(NULL,
+																				 lessThanExpr);
+			RestrictInfo *greaterThanRestrictInfo = make_simple_restrictinfo_compat(NULL,
+																					greaterThanExpr);
 
 			restrictInfoList = lappend(restrictInfoList, lessThanRestrictInfo);
 			restrictInfoList = lappend(restrictInfoList, greaterThanRestrictInfo);

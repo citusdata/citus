@@ -135,7 +135,13 @@ ListToHashSet(List *itemList, Size keySize, bool isStringList)
 	info.entrysize = keySize;
 	info.hcxt = CurrentMemoryContext;
 
-	if (!isStringList)
+	if (isStringList)
+	{
+#if PG_VERSION_NUM >= PG_VERSION_14
+		flags |= HASH_STRINGS;
+#endif
+	}
+	else
 	{
 		flags |= HASH_BLOBS;
 	}

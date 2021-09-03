@@ -1386,12 +1386,16 @@ LIMIT 5;
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  Presorted Key: users_table.user_id
                                  ->  WindowAgg
-                                       ->  Sort
+                                       ->  Incremental Sort
                                              Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                             ->  HashAggregate
+                                             Presorted Key: users_table.user_id
+                                             ->  GroupAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
-                                                   ->  Seq Scan on users_table_1400256 users_table
-(18 rows)
+                                                   ->  Incremental Sort
+                                                         Sort Key: users_table.user_id, users_table.value_2
+                                                         Presorted Key: users_table.user_id
+                                                         ->  Index Scan using is_index1_1400256 on users_table_1400256 users_table
+(22 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1418,12 +1422,16 @@ LIMIT 5;
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  Presorted Key: users_table.user_id
                                  ->  WindowAgg
-                                       ->  Sort
+                                       ->  Incremental Sort
                                              Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                             ->  HashAggregate
+                                             Presorted Key: users_table.user_id
+                                             ->  GroupAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
-                                                   ->  Seq Scan on users_table_1400256 users_table
-(18 rows)
+                                                   ->  Incremental Sort
+                                                         Sort Key: users_table.user_id, users_table.value_2
+                                                         Presorted Key: users_table.user_id
+                                                         ->  Index Scan using is_index1_1400256 on users_table_1400256 users_table
+(22 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1435,7 +1443,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                    QUERY PLAN
+                                                            QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1450,12 +1458,16 @@ LIMIT 5;
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  Presorted Key: users_table.user_id
                                  ->  WindowAgg
-                                       ->  Sort
+                                       ->  Incremental Sort
                                              Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
-                                             ->  HashAggregate
+                                             Presorted Key: users_table.user_id
+                                             ->  GroupAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
-                                                   ->  Seq Scan on users_table_1400256 users_table
-(18 rows)
+                                                   ->  Incremental Sort
+                                                         Sort Key: users_table.user_id, users_table.value_2
+                                                         Presorted Key: users_table.user_id
+                                                         ->  Index Scan using is_index1_1400256 on users_table_1400256 users_table
+(22 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1467,7 +1479,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                              QUERY PLAN
+                                                            QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1482,12 +1494,16 @@ LIMIT 5;
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  Presorted Key: users_table.user_id
                                  ->  WindowAgg
-                                       ->  Sort
+                                       ->  Incremental Sort
                                              Sort Key: users_table.user_id, (sum(users_table.value_2))
-                                             ->  HashAggregate
+                                             Presorted Key: users_table.user_id
+                                             ->  GroupAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
-                                                   ->  Seq Scan on users_table_1400256 users_table
-(18 rows)
+                                                   ->  Incremental Sort
+                                                         Sort Key: users_table.user_id, users_table.value_2
+                                                         Presorted Key: users_table.user_id
+                                                         ->  Index Scan using is_index1_1400256 on users_table_1400256 users_table
+(22 rows)
 
 -- Grouping can be pushed down with aggregates even when window function can't
 EXPLAIN (COSTS FALSE)

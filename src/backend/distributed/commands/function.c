@@ -1613,7 +1613,8 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 	 * workers
 	 */
 
-	const char *functionName = getObjectIdentity(&address);
+	const char *functionName =
+		getObjectIdentity_compat(&address, /* missingOk: */ false);
 	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
 						   "extension"),
 					errdetail("Function \"%s\" is already distributed. Functions from "
@@ -1807,8 +1808,8 @@ GenerateBackupNameForProcCollision(const ObjectAddress *address)
 		List *newProcName = list_make2(namespace, makeString(newName));
 
 		/* don't need to rename if the input arguments don't match */
-		FuncCandidateList clist = FuncnameGetCandidates(newProcName, numargs, NIL, false,
-														false, true);
+		FuncCandidateList clist = FuncnameGetCandidates_compat(newProcName, numargs, NIL,
+															   false, false, false, true);
 		for (; clist; clist = clist->next)
 		{
 			if (memcmp(clist->args, argtypes, sizeof(Oid) * numargs) == 0)
@@ -1932,8 +1933,10 @@ ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress)
 
 	if (IsObjectAddressOwnedByExtension(functionAddress, &extensionAddress))
 	{
-		char *functionName = getObjectIdentity(functionAddress);
-		char *extensionName = getObjectIdentity(&extensionAddress);
+		char *functionName =
+			getObjectIdentity_compat(functionAddress, /* missingOk: */ false);
+		char *extensionName =
+			getObjectIdentity_compat(&extensionAddress, /* missingOk: */ false);
 		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
 							   "owned by an extension"),
 						errdetail("Function \"%s\" has a dependency on extension \"%s\". "

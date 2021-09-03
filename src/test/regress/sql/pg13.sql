@@ -111,9 +111,15 @@ EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMI
 INSERT INTO test_wal VALUES(3,33),(4,44),(5,55) RETURNING *;
 
 -- make sure WAL works in distributed subplans
+-- this test has different output for pg14 and here we mostly test that
+-- we don't get an error, hence we use explain_has_distributed_subplan.
+SELECT public.explain_has_distributed_subplan(
+$$
 EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
 WITH cte_1 AS (INSERT INTO test_wal VALUES(6,66),(7,77),(8,88) RETURNING *)
 SELECT * FROM cte_1;
+$$
+);
 
 SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;

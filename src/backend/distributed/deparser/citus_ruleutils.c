@@ -22,6 +22,9 @@
 #include "access/skey.h"
 #include "access/stratnum.h"
 #include "access/sysattr.h"
+#if PG_VERSION_NUM >= PG_VERSION_14
+#include "access/toast_compression.h"
+#endif
 #include "access/tupdesc.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
@@ -39,6 +42,7 @@
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/metadata_cache.h"
@@ -77,6 +81,7 @@ static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
 static void simple_quote_literal(StringInfo buf, const char *val);
 static char * flatten_reloptions(Oid relid);
+static void AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer);
 
 
 /*
@@ -379,6 +384,14 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 			{
 				appendStringInfoString(&buffer, " NOT NULL");
 			}
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+			if (CompressionMethodIsValid(attributeForm->attcompression))
+			{
+				appendStringInfo(&buffer, " COMPRESSION %s",
+								 GetCompressionMethodName(attributeForm->attcompression));
+			}
+#endif
 
 			if (attributeForm->attcollation != InvalidOid &&
 				attributeForm->attcollation != DEFAULT_COLLATION_OID)
@@ -740,7 +753,8 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 {
 	ReindexStmt *reindexStmt = copyObject(origStmt); /* copy to avoid modifications */
 	char *relationName = NULL;
-	const char *concurrentlyString = reindexStmt->concurrent ? "CONCURRENTLY " : "";
+	const char *concurrentlyString =
+		IsReindexWithParam_compat(reindexStmt, "concurrently") ? "CONCURRENTLY " : "";
 
 
 	if (reindexStmt->kind == REINDEX_OBJECT_INDEX ||
@@ -753,11 +767,7 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 	}
 
 	appendStringInfoString(buffer, "REINDEX ");
-
-	if (reindexStmt->options == REINDEXOPT_VERBOSE)
-	{
-		appendStringInfoString(buffer, "(VERBOSE) ");
-	}
+	AddVacuumParams(reindexStmt, buffer);
 
 	switch (reindexStmt->kind)
 	{
@@ -797,6 +807,80 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 							 quote_identifier(reindexStmt->name));
 			break;
 		}
+	}
+}
+
+
+/*
+ * IsReindexWithParam_compat returns true if the given parameter
+ * exists for the given reindexStmt.
+ */
+bool
+IsReindexWithParam_compat(ReindexStmt *reindexStmt, char *param)
+{
+#if PG_VERSION_NUM < PG_VERSION_14
+	if (strcmp(param, "concurrently") == 0)
+	{
+		return reindexStmt->concurrent;
+	}
+	else if (strcmp(param, "verbose") == 0)
+	{
+		return reindexStmt->options & REINDEXOPT_VERBOSE;
+	}
+	return false;
+#else
+	DefElem *opt = NULL;
+	foreach_ptr(opt, reindexStmt->params)
+	{
+		if (strcmp(opt->defname, param) == 0)
+		{
+			return defGetBoolean(opt);
+		}
+	}
+	return false;
+#endif
+}
+
+
+/*
+ * AddVacuumParams adds vacuum params to the given buffer.
+ */
+static void
+AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
+{
+	StringInfo temp = makeStringInfo();
+	if (IsReindexWithParam_compat(reindexStmt, "verbose"))
+	{
+		appendStringInfoString(temp, "VERBOSE");
+	}
+#if PG_VERSION_NUM >= PG_VERSION_14
+	char *tableSpaceName = NULL;
+	DefElem *opt = NULL;
+	foreach_ptr(opt, reindexStmt->params)
+	{
+		if (strcmp(opt->defname, "tablespace") == 0)
+		{
+			tableSpaceName = defGetString(opt);
+			break;
+		}
+	}
+
+	if (tableSpaceName)
+	{
+		if (temp->len > 0)
+		{
+			appendStringInfo(temp, ", TABLESPACE %s", tableSpaceName);
+		}
+		else
+		{
+			appendStringInfo(temp, "TABLESPACE %s", tableSpaceName);
+		}
+	}
+#endif
+
+	if (temp->len > 0)
+	{
+		appendStringInfo(buffer, "(%s) ", temp->data);
 	}
 }
 
@@ -1020,7 +1104,7 @@ contain_nextval_expression_walker(Node *node, void *context)
 	{
 		FuncExpr *funcExpr = (FuncExpr *) node;
 
-		if (funcExpr->funcid == F_NEXTVAL_OID)
+		if (funcExpr->funcid == F_NEXTVAL)
 		{
 			return true;
 		}
@@ -1196,6 +1280,8 @@ simple_quote_literal(StringInfo buf, const char *val)
  *
  * CURRENT_USER - resolved to the user name of the current role being used
  * SESSION_USER - resolved to the user name of the user that opened the session
+ * CURRENT_ROLE - same as CURRENT_USER, resolved to the user name of the current role being used
+ * Postgres treats CURRENT_ROLE is equivalent to CURRENT_USER, and we follow the same approach.
  *
  * withQuoteIdentifier is used, because if the results will be used in a query the quotes are needed but if not there
  * should not be extra quotes.
@@ -1212,6 +1298,9 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 				   spec->rolename;
 		}
 
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		case ROLESPEC_CURRENT_ROLE:
+		#endif
 		case ROLESPEC_CURRENT_USER:
 		{
 			return withQuoteIdentifier ?
