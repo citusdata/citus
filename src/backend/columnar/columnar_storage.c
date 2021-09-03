@@ -70,6 +70,19 @@ typedef struct ColumnarMetapage
 	uint64 reservedStripeId; /* first unused stripe id */
 	uint64 reservedRowNumber; /* first unused row number */
 	uint64 reservedOffset; /* first unused byte offset */
+
+	/*
+	 * Flag set to true in the init fork. After an unlogged table reset (due
+	 * to a crash), the init fork will be copied over the main fork. When
+	 * trying to read an unlogged table, if this flag is set to true, we must
+	 * clear the metadata for the table (because the actual data is gone,
+	 * too), and clear the flag. We can cross-check that the table is
+	 * UNLOGGED, and that the main fork is at the minimum size (no actual
+	 * data).
+	 *
+	 * XXX: Not used yet; reserved field for later support for UNLOGGED.
+	 */
+	bool unloggedReset;
 } ColumnarMetapage;
 
 
@@ -163,6 +176,7 @@ ColumnarStorageInit(SMgrRelation srel, uint64 storageId)
 	metapage.reservedStripeId = COLUMNAR_FIRST_STRIPE_ID;
 	metapage.reservedRowNumber = COLUMNAR_FIRST_ROW_NUMBER;
 	metapage.reservedOffset = ColumnarFirstLogicalOffset;
+	metapage.unloggedReset = false;
 	memcpy_s(page + phdr->pd_lower, phdr->pd_upper - phdr->pd_lower,
 			 (char *) &metapage, sizeof(ColumnarMetapage));
 	phdr->pd_lower += sizeof(ColumnarMetapage);
