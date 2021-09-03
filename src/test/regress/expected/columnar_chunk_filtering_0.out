@@ -612,18 +612,18 @@ SELECT * FROM r1, r2, r3, coltest WHERE
 EXPLAIN (analyze on, costs off, timing off, summary off)
 SELECT * FROM r1, coltest_part WHERE
   id1 = id AND n1 > x1;
-                                           QUERY PLAN
+                                   QUERY PLAN
 ---------------------------------------------------------------------
  Nested Loop (actual rows=3 loops=1)
    ->  Seq Scan on r1 (actual rows=5 loops=1)
    ->  Append (actual rows=1 loops=5)
-         ->  Custom Scan (ColumnarScan) on coltest_part0 coltest_part_1 (actual rows=1 loops=3)
+         ->  Custom Scan (ColumnarScan) on coltest_part0 (actual rows=1 loops=3)
                Filter: ((r1.n1 > x1) AND (r1.id1 = id))
                Rows Removed by Filter: 999
                Columnar Projected Columns: id, x1, x2, x3
                Columnar Chunk Group Filters: ((r1.n1 > x1) AND (r1.id1 = id))
                Columnar Chunk Groups Removed by Filter: 9
-         ->  Seq Scan on coltest_part1 coltest_part_2 (actual rows=0 loops=2)
+         ->  Seq Scan on coltest_part1 (actual rows=0 loops=2)
                Filter: ((r1.n1 > x1) AND (r1.id1 = id))
                Rows Removed by Filter: 10000
 (12 rows)

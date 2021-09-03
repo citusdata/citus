@@ -330,9 +330,13 @@ columnar_rescan(TableScanDesc sscan, ScanKey key, bool set_params,
 				bool allow_strat, bool allow_sync, bool allow_pagemode)
 {
 	ColumnarScanDesc scan = (ColumnarScanDesc) sscan;
+
+	/* XXX: hack to pass in new quals that aren't actually scan keys */
+	List *scanQual = (List *) key;
+
 	if (scan->cs_readState != NULL)
 	{
-		ColumnarRescan(scan->cs_readState);
+		ColumnarRescan(scan->cs_readState, scanQual);
 	}
 }
 

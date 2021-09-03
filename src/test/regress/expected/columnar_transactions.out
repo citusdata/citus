@@ -260,7 +260,7 @@ EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p1(20);
 (2 rows)
 
 SELECT * FROM t ORDER BY a;
-  a | b
+ a  | b
 ---------------------------------------------------------------------
   1 |  2
   2 |  4
@@ -327,12 +327,13 @@ SELECT * FROM t ORDER BY a;
 -- SELECT with 0 params
 PREPARE p3 AS SELECT * FROM t WHERE a = 8;
 EXPLAIN (COSTS OFF) EXECUTE p3;
-            QUERY PLAN
+               QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t
    Filter: (a = 8)
    Columnar Projected Columns: a, b
-(3 rows)
+   Columnar Chunk Group Filters: (a = 8)
+(4 rows)
 
 EXECUTE p3;
  a | b
@@ -347,9 +348,10 @@ EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p3;
  Custom Scan (ColumnarScan) on t (actual rows=2 loops=1)
    Filter: (a = 8)
    Rows Removed by Filter: 2
-   Columnar Chunk Groups Removed by Filter: 8
    Columnar Projected Columns: a, b
-(5 rows)
+   Columnar Chunk Group Filters: (a = 8)
+   Columnar Chunk Groups Removed by Filter: 8
+(6 rows)
 
 SELECT * FROM t ORDER BY a;
  a  | b
@@ -382,12 +384,13 @@ SELECT * FROM t ORDER BY a;
 -- SELECT with 1 param
 PREPARE p5(int) AS SELECT * FROM t WHERE a = $1;
 EXPLAIN (COSTS OFF) EXECUTE p5(16);
-            QUERY PLAN
+                QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t
    Filter: (a = 16)
    Columnar Projected Columns: a, b
-(3 rows)
+   Columnar Chunk Group Filters: (a = 16)
+(4 rows)
 
 EXECUTE p5(16);
  a | b
@@ -400,9 +403,10 @@ EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p5(9);
  Custom Scan (ColumnarScan) on t (actual rows=2 loops=1)
    Filter: (a = 9)
    Rows Removed by Filter: 2
-   Columnar Chunk Groups Removed by Filter: 8
    Columnar Projected Columns: a, b
-(5 rows)
+   Columnar Chunk Group Filters: (a = 9)
+   Columnar Chunk Groups Removed by Filter: 8
+(6 rows)
 
 SELECT * FROM t ORDER BY a;
  a  | b
@@ -435,12 +439,13 @@ SELECT * FROM t ORDER BY a;
 -- SELECT with >1 params
 PREPARE p6(int, int) AS SELECT * FROM t WHERE a = $1+1 AND b = $2+1;
 EXPLAIN (COSTS OFF) EXECUTE p6(30, 40);
-            QUERY PLAN
+                       QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on t
    Filter: ((a = 31) AND (b = 41))
    Columnar Projected Columns: a, b
-(3 rows)
+   Columnar Chunk Group Filters: ((a = 31) AND (b = 41))
+(4 rows)
 
 EXECUTE p6(30, 40);
  a  | b
@@ -454,9 +459,10 @@ EXPLAIN (ANALYZE true, COSTS off, TIMING off, SUMMARY off) EXECUTE p6(50, 60);
  Custom Scan (ColumnarScan) on t (actual rows=1 loops=1)
    Filter: ((a = 51) AND (b = 61))
    Rows Removed by Filter: 3
-   Columnar Chunk Groups Removed by Filter: 9
    Columnar Projected Columns: a, b
-(5 rows)
+   Columnar Chunk Group Filters: ((a = 51) AND (b = 61))
+   Columnar Chunk Groups Removed by Filter: 9
+(6 rows)
 
 SELECT * FROM t ORDER BY a;
  a  | b
