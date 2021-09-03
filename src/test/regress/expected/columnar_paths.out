@@ -401,12 +401,12 @@ $$
  t
 (1 row)
 
-SELECT columnar_test_helpers.uses_custom_scan (
+SELECT columnar_test_helpers.uses_index_scan (
 $$
 SELECT a FROM full_correlated WHERE a=1000;
 $$
 );
- uses_custom_scan
+ uses_index_scan
 ---------------------------------------------------------------------
  t
 (1 row)

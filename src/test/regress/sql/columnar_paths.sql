@@ -223,7 +223,7 @@ SELECT a FROM full_correlated WHERE a=0 OR a=5;
 $$
 );
 
-SELECT columnar_test_helpers.uses_custom_scan (
+SELECT columnar_test_helpers.uses_index_scan (
 $$
 SELECT a FROM full_correlated WHERE a=1000;
 $$

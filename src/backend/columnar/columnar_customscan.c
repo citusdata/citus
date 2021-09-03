@@ -61,42 +61,46 @@ typedef struct ColumnarScanState
 typedef bool (*PathPredicate)(Path *path);
 
 
-static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
-									   RangeTblEntry *rte);
-static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
-static bool IsNotIndexPath(Path *path);
-static Path * CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel,
-										Oid relationId);
-static void RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
-static void RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
-									IndexPath *indexPath);
-static Cost ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId,
-											IndexPath *indexPath);
-static Cost ColumnarIndexScanAddTotalCost(PlannerInfo *root, RelOptInfo *rel,
-										  Oid relationId, IndexPath *indexPath);
+/* functions to cost paths in-place */
+static void CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
+static void CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+								  IndexPath *indexPath);
 static void CostColumnarSeqPath(RelOptInfo *rel, Oid relationId, Path *path);
-static int RelationIdGetNumberOfAttributes(Oid relationId);
+static void CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+							 CustomPath *cpath, int numberOfColumnsRead,
+							 int nClauses);
+
+/* functions to add new paths */
 static void AddColumnarScanPaths(PlannerInfo *root, RelOptInfo *rel,
 								 RangeTblEntry *rte);
+static void AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
+								RangeTblEntry *rte, Relids required_relids);
+
+/* helper functions to be used when costing paths or altering them */
+static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
+static bool IsNotIndexPath(Path *path);
+static Cost ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
+											Oid relationId, IndexPath *indexPath);
+static int RelationIdGetNumberOfAttributes(Oid relationId);
+static Cost ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId,
+									  int numberOfColumnsRead);
+static uint64 ColumnarTableStripeCount(Oid relationId);
+static Path * CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel,
+										Oid relationId);
 static void AddColumnarScanPathsRec(PlannerInfo *root, RelOptInfo *rel,
 									RangeTblEntry *rte, Relids paramRelids,
 									Relids candidateRelids,
 									int depthLimit);
-static void AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
-								RangeTblEntry *rte, Relids required_relids);
-static void CostColumnarScan(CustomPath *cpath, PlannerInfo *root,
-							 RelOptInfo *rel, Oid relationId,
-							 int numberOfColumnsRead, int nClauses);
-static Cost ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId,
-									  int numberOfColumnsRead);
-static uint64 ColumnarTableStripeCount(Oid relationId);
+
+/* hooks and callbacks */
+static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
+									   RangeTblEntry *rte);
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
 											  struct CustomPath *best_path,
 											  List *tlist,
 											  List *clauses,
 											  List *custom_plans);
-
 static Node * ColumnarScan_CreateCustomScanState(CustomScan *cscan);
 
 static void ColumnarScan_BeginCustomScan(CustomScanState *node, EState *estate,
@@ -106,16 +110,19 @@ static void ColumnarScan_EndCustomScan(CustomScanState *node);
 static void ColumnarScan_ReScanCustomScan(CustomScanState *node);
 static void ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 										   ExplainState *es);
+
+/* helper functions to build strings for EXPLAIN */
 static const char * ColumnarPushdownClausesStr(List *context, List *clauses);
 static const char * ColumnarProjectedColumnsStr(List *context,
 												List *projectedColumns);
-static List * ColumnarVarNeeded(ColumnarScanState *columnarScanState);
-static Bitmapset * ColumnarAttrNeeded(ScanState *ss);
-
 #if PG_VERSION_NUM >= 130000
 static List * set_deparse_context_planstate(List *dpcontext, Node *node,
 											List *ancestors);
 #endif
+
+/* other helpers */
+static List * ColumnarVarNeeded(ColumnarScanState *columnarScanState);
+static Bitmapset * ColumnarAttrNeeded(ScanState *ss);
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
@@ -281,7 +288,7 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		 * Before doing that, we first re-cost all the existing paths so that
 		 * add_path makes correct cost comparisons when appending our SeqPath.
 		 */
-		RecostColumnarPaths(root, rel, rte->relid);
+		CostColumnarPaths(root, rel, rte->relid);
 
 		Path *seqPath = CreateColumnarSeqScanPath(root, rel, rte->relid);
 		add_path(rel, seqPath);
@@ -361,11 +368,11 @@ CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 
 
 /*
- * RecostColumnarPaths re-costs paths of given RelOptInfo for
+ * CostColumnarPaths re-costs paths of given RelOptInfo for
  * columnar table with relationId.
  */
 static void
-RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
+CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 {
 	Path *path = NULL;
 	foreach_ptr(path, rel->pathlist)
@@ -379,7 +386,7 @@ RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 			 * TableAmRoutine). For this reason, we only consider IndexPath's
 			 * here.
 			 */
-			RecostColumnarIndexPath(root, rel, relationId, (IndexPath *) path);
+			CostColumnarIndexPath(root, rel, relationId, (IndexPath *) path);
 		}
 		else if (path->pathtype == T_SeqScan)
 		{
@@ -390,12 +397,12 @@ RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 
 
 /*
- * RecostColumnarIndexPath re-costs given index path for columnar table with
+ * CostColumnarIndexPath re-costs given index path for columnar table with
  * relationId.
  */
 static void
-RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
-						IndexPath *indexPath)
+CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+					  IndexPath *indexPath)
 {
 	if (!enable_indexscan)
 	{
@@ -410,21 +417,12 @@ RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 
 	/*
 	 * We estimate the cost for columnar table read during index scan. Also,
-	 * instead of overwriting startup & total costs, we "add" ours to the
-	 * costs estimated by indexAM since we should consider index traversal
-	 * related costs too.
+	 * instead of overwriting total cost, we "add" ours to the cost estimated
+	 * by indexAM since we should consider index traversal related costs too.
 	 */
-	Cost indexAMStartupCost = indexPath->path.startup_cost;
-	Cost indexAMScanCost = indexPath->path.total_cost - indexAMStartupCost;
-
-	Cost columnarIndexScanStartupCost = ColumnarIndexScanAddStartupCost(rel, relationId,
-																		indexPath);
-	Cost columnarIndexScanCost = ColumnarIndexScanAddTotalCost(root, rel, relationId,
-															   indexPath);
-
-	indexPath->path.startup_cost = indexAMStartupCost + columnarIndexScanStartupCost;
-	indexPath->path.total_cost = indexPath->path.startup_cost +
-								 indexAMScanCost + columnarIndexScanCost;
+	Cost columnarIndexScanCost = ColumnarIndexScanAdditionalCost(root, rel, relationId,
+																 indexPath);
+	indexPath->path.total_cost += columnarIndexScanCost;
 
 	ereport(DEBUG4, (errmsg("columnar table index scan costs re-estimated "
 							"by columnarAM (including indexAM costs): "
@@ -435,26 +433,12 @@ RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 
 
 /*
- * ColumnarIndexScanAddStartupCost returns additional startup cost estimated
- * for index scan described by IndexPath for columnar table with relationId.
- */
-static Cost
-ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId, IndexPath *indexPath)
-{
-	int numberOfColumnsRead = RelationIdGetNumberOfAttributes(relationId);
-
-	/* we would at least read one stripe */
-	return ColumnarPerStripeScanCost(rel, relationId, numberOfColumnsRead);
-}
-
-
-/*
- * ColumnarIndexScanAddTotalCost returns additional cost estimated for
+ * ColumnarIndexScanAdditionalCost returns additional cost estimated for
  * index scan described by IndexPath for columnar table with relationId.
  */
 static Cost
-ColumnarIndexScanAddTotalCost(PlannerInfo *root, RelOptInfo *rel,
-							  Oid relationId, IndexPath *indexPath)
+ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
+								Oid relationId, IndexPath *indexPath)
 {
 	int numberOfColumnsRead = RelationIdGetNumberOfAttributes(relationId);
 	Cost perStripeCost = ColumnarPerStripeScanCost(rel, relationId, numberOfColumnsRead);
@@ -518,6 +502,9 @@ ColumnarIndexScanAddTotalCost(PlannerInfo *root, RelOptInfo *rel,
 	double estimatedStripeReadCount =
 		minStripeReadCount + complementIndexCorrelation * (maxStripeReadCount -
 														   minStripeReadCount);
+
+	/* even in the best case, we will read a single stripe */
+	estimatedStripeReadCount = Max(estimatedStripeReadCount, 1.0);
 
 	Cost scanCost = perStripeCost * estimatedStripeReadCount;
 
@@ -1132,7 +1119,7 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 	int numberOfColumnsRead = bms_num_members(rte->selectedCols);
 	int numberOfClausesPushed = list_length(cpath->custom_private);
 
-	CostColumnarScan(cpath, root, rel, rte->relid, numberOfColumnsRead,
+	CostColumnarScan(root, rel, rte->relid, cpath, numberOfColumnsRead,
 					 numberOfClausesPushed);
 
 
@@ -1155,8 +1142,8 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
  * columns to read how many pages need to be read.
  */
 static void
-CostColumnarScan(CustomPath *cpath, PlannerInfo *root, RelOptInfo *rel,
-				 Oid relationId, int numberOfColumnsRead, int nClauses)
+CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+				 CustomPath *cpath, int numberOfColumnsRead, int nClauses)
 {
 	Path *path = &cpath->path;
 
