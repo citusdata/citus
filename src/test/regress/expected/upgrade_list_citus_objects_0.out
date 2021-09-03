@@ -106,7 +106,9 @@ ORDER BY 1;
  function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
  function create_intermediate_result(text,text)
  function create_reference_table(regclass)
+ function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone)
  function distributed_tables_colocated(regclass,regclass)
+ function drop_old_time_partitions(regclass,timestamp with time zone)
  function dump_global_wait_edges()
  function dump_local_wait_edges()
  function fetch_intermediate_results(text[],text,integer)
@@ -117,6 +119,7 @@ ORDER BY 1;
  function get_colocated_table_array(regclass)
  function get_current_transaction_id()
  function get_global_active_transactions()
+ function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone)
  function get_rebalance_progress()
  function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name,real)
  function get_shard_id_for_distribution_column(regclass,"any")
@@ -240,5 +243,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(224 rows)
+(227 rows)
 

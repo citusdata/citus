@@ -231,10 +231,10 @@ $$ LANGUAGE plpgsql;
 SELECT modify_fast_path_plpsql(1,1);
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
@@ -243,10 +243,10 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 SELECT modify_fast_path_plpsql(2,2);
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
@@ -255,10 +255,10 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 SELECT modify_fast_path_plpsql(3,3);
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
@@ -267,10 +267,10 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 SELECT modify_fast_path_plpsql(4,4);
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
@@ -279,10 +279,10 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 SELECT modify_fast_path_plpsql(5,5);
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 
@@ -291,10 +291,10 @@ PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL stateme
 SELECT modify_fast_path_plpsql(6,6);
 DEBUG:  Deferred pruning for a fast-path router query
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2"
-PL/pgSQL function modify_fast_path_plpsql(integer,integer) line 3 at SQL statement
+PL/pgSQL function modify_fast_path_plpsql(integer,integer) line XX at SQL statement
  modify_fast_path_plpsql
 ---------------------------------------------------------------------
 

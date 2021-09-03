@@ -162,7 +162,7 @@ END;
 $$;
 NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a))
 CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers"
-PL/pgSQL function inline_code_block line 3 at PERFORM
+PL/pgSQL function inline_code_block line XX at PERFORM
 -- test plpgsql function
 CREATE FUNCTION test_reference_local_join_plpgsql_func()
 RETURNS void AS $$
@@ -177,10 +177,10 @@ $$ LANGUAGE plpgsql;
 SELECT test_reference_local_join_plpgsql_func();
 NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 (a) VALUES (4)
 CONTEXT:  SQL statement "INSERT INTO numbers VALUES (4)"
-PL/pgSQL function test_reference_local_join_plpgsql_func() line 4 at SQL statement
+PL/pgSQL function test_reference_local_join_plpgsql_func() line XX at SQL statement
 NOTICE:  executing the command locally: SELECT local_table.a, numbers.a FROM (replicate_ref_to_coordinator.local_table JOIN replicate_ref_to_coordinator.numbers_8000001 numbers(a) USING (a)) ORDER BY local_table.a
 CONTEXT:  SQL statement "SELECT local_table.a, numbers.a FROM local_table NATURAL JOIN numbers ORDER BY 1"
-PL/pgSQL function test_reference_local_join_plpgsql_func() line 5 at PERFORM
+PL/pgSQL function test_reference_local_join_plpgsql_func() line XX at PERFORM
 ERROR:
 CONTEXT:  PL/pgSQL function test_reference_local_join_plpgsql_func() line XX at RAISE
 SELECT sum(a) FROM local_table;
