@@ -70,8 +70,6 @@ static Path * CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel,
 static void CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
 static void CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 									IndexPath *indexPath);
-static Cost ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId,
-											IndexPath *indexPath);
 static Cost ColumnarIndexScanAddTotalCost(PlannerInfo *root, RelOptInfo *rel,
 										  Oid relationId, IndexPath *indexPath);
 static void CostColumnarSeqPath(RelOptInfo *rel, Oid relationId, Path *path);
@@ -410,41 +408,18 @@ CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 
 	/*
 	 * We estimate the cost for columnar table read during index scan. Also,
-	 * instead of overwriting startup & total costs, we "add" ours to the
-	 * costs estimated by indexAM since we should consider index traversal
-	 * related costs too.
+	 * instead of overwriting total cost, we "add" ours to the cost estimated
+	 * by indexAM since we should consider index traversal related costs too.
 	 */
-	Cost indexAMStartupCost = indexPath->path.startup_cost;
-	Cost indexAMScanCost = indexPath->path.total_cost - indexAMStartupCost;
-
-	Cost columnarIndexScanStartupCost = ColumnarIndexScanAddStartupCost(rel, relationId,
-																		indexPath);
 	Cost columnarIndexScanCost = ColumnarIndexScanAddTotalCost(root, rel, relationId,
 															   indexPath);
-
-	indexPath->path.startup_cost = indexAMStartupCost + columnarIndexScanStartupCost;
-	indexPath->path.total_cost = indexPath->path.startup_cost +
-								 indexAMScanCost + columnarIndexScanCost;
+	indexPath->path.total_cost += columnarIndexScanCost;
 
 	ereport(DEBUG4, (errmsg("columnar table index scan costs re-estimated "
 							"by columnarAM (including indexAM costs): "
 							"startup cost = %.10f, total cost = %.10f",
 							indexPath->path.startup_cost,
 							indexPath->path.total_cost)));
-}
-
-
-/*
- * ColumnarIndexScanAddStartupCost returns additional startup cost estimated
- * for index scan described by IndexPath for columnar table with relationId.
- */
-static Cost
-ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId, IndexPath *indexPath)
-{
-	int numberOfColumnsRead = RelationIdGetNumberOfAttributes(relationId);
-
-	/* we would at least read one stripe */
-	return ColumnarPerStripeScanCost(rel, relationId, numberOfColumnsRead);
 }
 
 
