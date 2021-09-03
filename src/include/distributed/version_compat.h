@@ -31,10 +31,7 @@
 #endif
 
 #if PG_VERSION_NUM >= PG_VERSION_14
-#define AlterTableStmtObjType(a) ((a)->objtype)
-#define F_NEXTVAL_COMPAT F_NEXTVAL
-#define ROLE_MONITOR_COMPAT ROLE_PG_MONITOR
-#define STATUS_WAITING_COMPAT PROC_WAIT_STATUS_WAITING
+#define AlterTableStmtObjType_compat(a) ((a)->objtype)
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a, b)
 #define getObjectIdentity_compat(a, b) getObjectIdentity(a, b)
 
@@ -43,18 +40,11 @@
 #define FuncnameGetCandidates_compat(a, b, c, d, e, f, g) \
 	FuncnameGetCandidates(a, b, c, d, e, f, g)
 #define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, b, c, d)
-#define VacOptValue_compat VacOptValue
-#define VACOPTVALUE_UNSPECIFIED_COMPAT VACOPTVALUE_UNSPECIFIED
-#define VACOPTVALUE_DISABLED_COMPAT VACOPTVALUE_DISABLED
-#define VACOPTVALUE_ENABLED_COMPAT VACOPTVALUE_ENABLED
-#define IsReindexWithParam_compat(reindex, param) IsReindexWithParam(reindex, param)
-#define CopyFromState_compat CopyFromState
 #define BeginCopyFrom_compat(a, b, c, d, e, f, g, h) BeginCopyFrom(a, b, c, d, e, f, g, h)
 #define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	standard_ProcessUtility(a, b, c, d, e, f, g, h)
 #define ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	ProcessUtility(a, b, c, d, e, f, g, h)
-#define COPY_FRONTEND_COMPAT COPY_FRONTEND
 #define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
 	SetTuplestoreDestReceiverParams(a, b, c, d, e, f)
 #define pgproc_statusflags_compat(pgproc) ((pgproc)->statusFlags)
@@ -64,10 +54,10 @@
 #define pull_varnos_compat(a, b) pull_varnos(a, b)
 #define pg_get_statisticsobj_worker_compat(a, b, c) pg_get_statisticsobj_worker(a, b, c)
 #else
-#define AlterTableStmtObjType(a) ((a)->relkind)
-#define F_NEXTVAL_COMPAT F_NEXTVAL_OID
-#define ROLE_MONITOR_COMPAT DEFAULT_ROLE_MONITOR
-#define STATUS_WAITING_COMPAT STATUS_WAITING
+#define AlterTableStmtObjType_compat(a) ((a)->relkind)
+#define F_NEXTVAL F_NEXTVAL_OID
+#define ROLE_PG_MONITOR DEFAULT_ROLE_MONITOR
+#define PROC_WAIT_STATUS_WAITING STATUS_WAITING
 #define getObjectTypeDescription_compat(a, b) getObjectTypeDescription(a)
 #define getObjectIdentity_compat(a, b) getObjectIdentity(a)
 
@@ -76,20 +66,16 @@
 #define FuncnameGetCandidates_compat(a, b, c, d, e, f, g) \
 	FuncnameGetCandidates(a, b, c, d, e, g)
 #define expand_function_arguments_compat(a, b, c, d) expand_function_arguments(a, c, d)
-#define VacOptValue_compat VacOptTernaryValue
-#define VACOPTVALUE_UNSPECIFIED_COMPAT VACOPT_TERNARY_DEFAULT
-#define VACOPTVALUE_DISABLED_COMPAT VACOPT_TERNARY_DISABLED
-#define VACOPTVALUE_ENABLED_COMPAT VACOPT_TERNARY_ENABLED
-#define IsReindexWithParam_compat(reindex, param) \
-	((strcmp(param, "concurrently") == 0) ? ((reindex)->concurrent) : \
-	 ((strcmp(param, "verbose") == 0) ? ((reindex)->options == REINDEXOPT_VERBOSE) : \
-	  false))
-#define CopyFromState_compat CopyState
+#define VacOptValue VacOptTernaryValue
+#define VACOPTVALUE_UNSPECIFIED VACOPT_TERNARY_DEFAULT
+#define VACOPTVALUE_DISABLED VACOPT_TERNARY_DISABLED
+#define VACOPTVALUE_ENABLED VACOPT_TERNARY_ENABLED
+#define CopyFromState CopyState
 #define BeginCopyFrom_compat(a, b, c, d, e, f, g, h) BeginCopyFrom(a, b, d, e, f, g, h)
 #define standard_ProcessUtility_compat(a, b, c, d, e, f, g, h) \
 	standard_ProcessUtility(a, b, d, e, f, g, h)
 #define ProcessUtility_compat(a, b, c, d, e, f, g, h) ProcessUtility(a, b, d, e, f, g, h)
-#define COPY_FRONTEND_COMPAT COPY_NEW_FE
+#define COPY_FRONTEND COPY_NEW_FE
 #define SetTuplestoreDestReceiverParams_compat(a, b, c, d, e, f) \
 	SetTuplestoreDestReceiverParams(a, b, c, d)
 #define pgproc_statusflags_compat(pgproc) \
