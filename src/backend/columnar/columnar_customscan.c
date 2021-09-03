@@ -69,9 +69,9 @@ static Path * CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel,
 										Oid relationId);
 static void CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
 static void CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
-									IndexPath *indexPath);
+								  IndexPath *indexPath);
 static Cost ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
-										  Oid relationId, IndexPath *indexPath);
+											Oid relationId, IndexPath *indexPath);
 static void CostColumnarSeqPath(RelOptInfo *rel, Oid relationId, Path *path);
 static int RelationIdGetNumberOfAttributes(Oid relationId);
 static void AddColumnarScanPaths(PlannerInfo *root, RelOptInfo *rel,
@@ -393,7 +393,7 @@ CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
  */
 static void
 CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
-						IndexPath *indexPath)
+					  IndexPath *indexPath)
 {
 	if (!enable_indexscan)
 	{
@@ -412,7 +412,7 @@ CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 	 * by indexAM since we should consider index traversal related costs too.
 	 */
 	Cost columnarIndexScanCost = ColumnarIndexScanAdditionalCost(root, rel, relationId,
-															   indexPath);
+																 indexPath);
 	indexPath->path.total_cost += columnarIndexScanCost;
 
 	ereport(DEBUG4, (errmsg("columnar table index scan costs re-estimated "
@@ -429,7 +429,7 @@ CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
  */
 static Cost
 ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
-							    Oid relationId, IndexPath *indexPath)
+								Oid relationId, IndexPath *indexPath)
 {
 	int numberOfColumnsRead = RelationIdGetNumberOfAttributes(relationId);
 	Cost perStripeCost = ColumnarPerStripeScanCost(rel, relationId, numberOfColumnsRead);
