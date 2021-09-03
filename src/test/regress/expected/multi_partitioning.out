@@ -1903,19 +1903,19 @@ DROP TABLE partitioning_test, reference_table;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Table "<dropped>" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed tables due to foreign keys. Any parallel modification to those hash distributed tables in the same transaction can only be executed in sequential query execution mode
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line 25 at PERFORM
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DEBUG:  drop cascades to 2 other objects
 DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660302 on table partitioning_schema.partitioning_test_1660302
 drop cascades to constraint partitioning_reference_fkey_1660304 on table partitioning_schema.partitioning_test_1660304
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line 25 at PERFORM
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DEBUG:  drop cascades to 2 other objects
 DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660303 on table partitioning_schema.partitioning_test_1660303
 drop cascades to constraint partitioning_reference_fkey_1660305 on table partitioning_schema.partitioning_test_1660305
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
-PL/pgSQL function citus_drop_trigger() line 25 at PERFORM
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 RESET client_min_messages;
 RESET SEARCH_PATH;
 -- not timestamp partitioned
@@ -2051,6 +2051,1827 @@ ALTER TABLE distributed_parent_table ATTACH PARTITION non_distributed_child_2 DE
 -- check adding another partition when default partition exists
 CREATE TABLE non_distributed_child_3 (event_id int NOT NULL, event_time timestamptz NOT NULL DEFAULT now());
 ALTER TABLE distributed_parent_table ATTACH PARTITION non_distributed_child_3 FOR VALUES FROM ('2021-07-30') TO ('2021-08-01');
+-- Test time partition utility UDFs
+-- a) test get_missing_time_partition_ranges
+-- 1) test get_missing_time_partition_ranges with date partitioned table
+CREATE TABLE date_partitioned_table(
+ measureid integer,
+ eventdate date,
+ measure_data jsonb) PARTITION BY RANGE(eventdate);
+SELECT create_distributed_table('date_partitioned_table','measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test interval must be multiple days for date partitioned table
+SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '6 hours', '2022-01-01', '2021-01-01');
+ERROR:  partition interval of date partitioned table must be day or multiple days
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '1 week 1 day 1 hour', '2022-01-01', '2021-01-01');
+ERROR:  partition interval of date partitioned table must be day or multiple days
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+-- test with various intervals
+SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '1 day', '2021-02-01', '2021-01-01');
+           partition_name           | range_from_value | range_to_value
+---------------------------------------------------------------------
+ date_partitioned_table_p2021_01_01 | 01-01-2021       | 01-02-2021
+ date_partitioned_table_p2021_01_02 | 01-02-2021       | 01-03-2021
+ date_partitioned_table_p2021_01_03 | 01-03-2021       | 01-04-2021
+ date_partitioned_table_p2021_01_04 | 01-04-2021       | 01-05-2021
+ date_partitioned_table_p2021_01_05 | 01-05-2021       | 01-06-2021
+ date_partitioned_table_p2021_01_06 | 01-06-2021       | 01-07-2021
+ date_partitioned_table_p2021_01_07 | 01-07-2021       | 01-08-2021
+ date_partitioned_table_p2021_01_08 | 01-08-2021       | 01-09-2021
+ date_partitioned_table_p2021_01_09 | 01-09-2021       | 01-10-2021
+ date_partitioned_table_p2021_01_10 | 01-10-2021       | 01-11-2021
+ date_partitioned_table_p2021_01_11 | 01-11-2021       | 01-12-2021
+ date_partitioned_table_p2021_01_12 | 01-12-2021       | 01-13-2021
+ date_partitioned_table_p2021_01_13 | 01-13-2021       | 01-14-2021
+ date_partitioned_table_p2021_01_14 | 01-14-2021       | 01-15-2021
+ date_partitioned_table_p2021_01_15 | 01-15-2021       | 01-16-2021
+ date_partitioned_table_p2021_01_16 | 01-16-2021       | 01-17-2021
+ date_partitioned_table_p2021_01_17 | 01-17-2021       | 01-18-2021
+ date_partitioned_table_p2021_01_18 | 01-18-2021       | 01-19-2021
+ date_partitioned_table_p2021_01_19 | 01-19-2021       | 01-20-2021
+ date_partitioned_table_p2021_01_20 | 01-20-2021       | 01-21-2021
+ date_partitioned_table_p2021_01_21 | 01-21-2021       | 01-22-2021
+ date_partitioned_table_p2021_01_22 | 01-22-2021       | 01-23-2021
+ date_partitioned_table_p2021_01_23 | 01-23-2021       | 01-24-2021
+ date_partitioned_table_p2021_01_24 | 01-24-2021       | 01-25-2021
+ date_partitioned_table_p2021_01_25 | 01-25-2021       | 01-26-2021
+ date_partitioned_table_p2021_01_26 | 01-26-2021       | 01-27-2021
+ date_partitioned_table_p2021_01_27 | 01-27-2021       | 01-28-2021
+ date_partitioned_table_p2021_01_28 | 01-28-2021       | 01-29-2021
+ date_partitioned_table_p2021_01_29 | 01-29-2021       | 01-30-2021
+ date_partitioned_table_p2021_01_30 | 01-30-2021       | 01-31-2021
+ date_partitioned_table_p2021_01_31 | 01-31-2021       | 02-01-2021
+(31 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '1 week', '2022-01-01', '2021-01-01');
+         partition_name          | range_from_value | range_to_value
+---------------------------------------------------------------------
+ date_partitioned_table_p2020w53 | 12-28-2020       | 01-04-2021
+ date_partitioned_table_p2021w01 | 01-04-2021       | 01-11-2021
+ date_partitioned_table_p2021w02 | 01-11-2021       | 01-18-2021
+ date_partitioned_table_p2021w03 | 01-18-2021       | 01-25-2021
+ date_partitioned_table_p2021w04 | 01-25-2021       | 02-01-2021
+ date_partitioned_table_p2021w05 | 02-01-2021       | 02-08-2021
+ date_partitioned_table_p2021w06 | 02-08-2021       | 02-15-2021
+ date_partitioned_table_p2021w07 | 02-15-2021       | 02-22-2021
+ date_partitioned_table_p2021w08 | 02-22-2021       | 03-01-2021
+ date_partitioned_table_p2021w09 | 03-01-2021       | 03-08-2021
+ date_partitioned_table_p2021w10 | 03-08-2021       | 03-15-2021
+ date_partitioned_table_p2021w11 | 03-15-2021       | 03-22-2021
+ date_partitioned_table_p2021w12 | 03-22-2021       | 03-29-2021
+ date_partitioned_table_p2021w13 | 03-29-2021       | 04-05-2021
+ date_partitioned_table_p2021w14 | 04-05-2021       | 04-12-2021
+ date_partitioned_table_p2021w15 | 04-12-2021       | 04-19-2021
+ date_partitioned_table_p2021w16 | 04-19-2021       | 04-26-2021
+ date_partitioned_table_p2021w17 | 04-26-2021       | 05-03-2021
+ date_partitioned_table_p2021w18 | 05-03-2021       | 05-10-2021
+ date_partitioned_table_p2021w19 | 05-10-2021       | 05-17-2021
+ date_partitioned_table_p2021w20 | 05-17-2021       | 05-24-2021
+ date_partitioned_table_p2021w21 | 05-24-2021       | 05-31-2021
+ date_partitioned_table_p2021w22 | 05-31-2021       | 06-07-2021
+ date_partitioned_table_p2021w23 | 06-07-2021       | 06-14-2021
+ date_partitioned_table_p2021w24 | 06-14-2021       | 06-21-2021
+ date_partitioned_table_p2021w25 | 06-21-2021       | 06-28-2021
+ date_partitioned_table_p2021w26 | 06-28-2021       | 07-05-2021
+ date_partitioned_table_p2021w27 | 07-05-2021       | 07-12-2021
+ date_partitioned_table_p2021w28 | 07-12-2021       | 07-19-2021
+ date_partitioned_table_p2021w29 | 07-19-2021       | 07-26-2021
+ date_partitioned_table_p2021w30 | 07-26-2021       | 08-02-2021
+ date_partitioned_table_p2021w31 | 08-02-2021       | 08-09-2021
+ date_partitioned_table_p2021w32 | 08-09-2021       | 08-16-2021
+ date_partitioned_table_p2021w33 | 08-16-2021       | 08-23-2021
+ date_partitioned_table_p2021w34 | 08-23-2021       | 08-30-2021
+ date_partitioned_table_p2021w35 | 08-30-2021       | 09-06-2021
+ date_partitioned_table_p2021w36 | 09-06-2021       | 09-13-2021
+ date_partitioned_table_p2021w37 | 09-13-2021       | 09-20-2021
+ date_partitioned_table_p2021w38 | 09-20-2021       | 09-27-2021
+ date_partitioned_table_p2021w39 | 09-27-2021       | 10-04-2021
+ date_partitioned_table_p2021w40 | 10-04-2021       | 10-11-2021
+ date_partitioned_table_p2021w41 | 10-11-2021       | 10-18-2021
+ date_partitioned_table_p2021w42 | 10-18-2021       | 10-25-2021
+ date_partitioned_table_p2021w43 | 10-25-2021       | 11-01-2021
+ date_partitioned_table_p2021w44 | 11-01-2021       | 11-08-2021
+ date_partitioned_table_p2021w45 | 11-08-2021       | 11-15-2021
+ date_partitioned_table_p2021w46 | 11-15-2021       | 11-22-2021
+ date_partitioned_table_p2021w47 | 11-22-2021       | 11-29-2021
+ date_partitioned_table_p2021w48 | 11-29-2021       | 12-06-2021
+ date_partitioned_table_p2021w49 | 12-06-2021       | 12-13-2021
+ date_partitioned_table_p2021w50 | 12-13-2021       | 12-20-2021
+ date_partitioned_table_p2021w51 | 12-20-2021       | 12-27-2021
+ date_partitioned_table_p2021w52 | 12-27-2021       | 01-03-2022
+(53 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '1 month', '2022-01-01', '2021-01-01');
+         partition_name          | range_from_value | range_to_value
+---------------------------------------------------------------------
+ date_partitioned_table_p2021_01 | 01-01-2021       | 02-01-2021
+ date_partitioned_table_p2021_02 | 02-01-2021       | 03-01-2021
+ date_partitioned_table_p2021_03 | 03-01-2021       | 04-01-2021
+ date_partitioned_table_p2021_04 | 04-01-2021       | 05-01-2021
+ date_partitioned_table_p2021_05 | 05-01-2021       | 06-01-2021
+ date_partitioned_table_p2021_06 | 06-01-2021       | 07-01-2021
+ date_partitioned_table_p2021_07 | 07-01-2021       | 08-01-2021
+ date_partitioned_table_p2021_08 | 08-01-2021       | 09-01-2021
+ date_partitioned_table_p2021_09 | 09-01-2021       | 10-01-2021
+ date_partitioned_table_p2021_10 | 10-01-2021       | 11-01-2021
+ date_partitioned_table_p2021_11 | 11-01-2021       | 12-01-2021
+ date_partitioned_table_p2021_12 | 12-01-2021       | 01-01-2022
+(12 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '3 months', '2022-01-01', '2021-01-01');
+         partition_name         | range_from_value | range_to_value
+---------------------------------------------------------------------
+ date_partitioned_table_p2021q1 | 01-01-2021       | 04-01-2021
+ date_partitioned_table_p2021q2 | 04-01-2021       | 07-01-2021
+ date_partitioned_table_p2021q3 | 07-01-2021       | 10-01-2021
+ date_partitioned_table_p2021q4 | 10-01-2021       | 01-01-2022
+(4 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '6 months', '2022-01-01', '2021-01-01');
+         partition_name          | range_from_value | range_to_value
+---------------------------------------------------------------------
+ date_partitioned_table_p2021_01 | 01-01-2021       | 07-01-2021
+ date_partitioned_table_p2021_07 | 07-01-2021       | 01-01-2022
+(2 rows)
+
+-- test with from_date > to_date
+SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '1 day', '2021-01-01', '2021-02-01');
+ partition_name | range_from_value | range_to_value
+---------------------------------------------------------------------
+(0 rows)
+
+-- test with existing partitions
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-02');
+  SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '1 day', '2021-01-05', '2020-12-30');
+           partition_name           | range_from_value | range_to_value
+---------------------------------------------------------------------
+ date_partitioned_table_p2020_12_30 | 12-30-2020       | 12-31-2020
+ date_partitioned_table_p2020_12_31 | 12-31-2020       | 01-01-2021
+ date_partitioned_table_p2021_01_02 | 01-02-2021       | 01-03-2021
+ date_partitioned_table_p2021_01_03 | 01-03-2021       | 01-04-2021
+ date_partitioned_table_p2021_01_04 | 01-04-2021       | 01-05-2021
+(5 rows)
+
+  SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '2 days', '2021-01-05', '2020-12-30');
+ERROR:  partition date_partitioned_table_2021_01_01 with the range from 01-01-2021 to 01-02-2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-02');
+  CREATE TABLE date_partitioned_table_2021_01_02 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-02') TO ('2021-01-03');
+  SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '1 day', '2021-01-05', '2020-12-30');
+           partition_name           | range_from_value | range_to_value
+---------------------------------------------------------------------
+ date_partitioned_table_p2020_12_30 | 12-30-2020       | 12-31-2020
+ date_partitioned_table_p2020_12_31 | 12-31-2020       | 01-01-2021
+ date_partitioned_table_p2021_01_03 | 01-03-2021       | 01-04-2021
+ date_partitioned_table_p2021_01_04 | 01-04-2021       | 01-05-2021
+(4 rows)
+
+  SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '2 days', '2021-01-05', '2020-12-30');
+ERROR:  partition date_partitioned_table_2021_01_01 with the range from 01-01-2021 to 01-02-2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-03');
+  CREATE TABLE date_partitioned_table_2021_01_02 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-05') TO ('2021-01-07');
+  SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '2 days', '2021-01-15', '2020-12-30');
+           partition_name           | range_from_value | range_to_value
+---------------------------------------------------------------------
+ date_partitioned_table_p2020_12_30 | 12-30-2020       | 01-01-2021
+ date_partitioned_table_p2021_01_03 | 01-03-2021       | 01-05-2021
+ date_partitioned_table_p2021_01_07 | 01-07-2021       | 01-09-2021
+ date_partitioned_table_p2021_01_09 | 01-09-2021       | 01-11-2021
+ date_partitioned_table_p2021_01_11 | 01-11-2021       | 01-13-2021
+ date_partitioned_table_p2021_01_13 | 01-13-2021       | 01-15-2021
+(6 rows)
+
+ROLLBACK;
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-02');
+  CREATE TABLE date_partitioned_table_2021_01_02 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-02') TO ('2021-01-04');
+  SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '2 days', '2021-01-05', '2020-12-30');
+ERROR:  partition date_partitioned_table_2021_01_01 with the range from 01-01-2021 to 01-02-2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-03');
+  CREATE TABLE date_partitioned_table_2021_01_02 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-04') TO ('2021-01-06');
+  SELECT * FROM get_missing_time_partition_ranges('date_partitioned_table', INTERVAL '2 days', '2021-01-15', '2020-12-30');
+ERROR:  partition date_partitioned_table_2021_01_02 with the range from 01-04-2021 to 01-06-2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+DROP TABLE date_partitioned_table;
+-- 2) test timestamp with time zone partitioend table
+CREATE TABLE tstz_partitioned_table(
+ measureid integer,
+ eventdatetime timestamp with time zone,
+ measure_data jsonb) PARTITION BY RANGE(eventdatetime);
+SELECT create_distributed_table('tstz_partitioned_table','measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test with various intervals
+SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '30 minutes', '2021-01-01 12:00:00', '2021-01-01 00:00:00');
+             partition_name              |       range_from_value       |        range_to_value
+---------------------------------------------------------------------
+ tstz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 PST | Fri Jan 01 00:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0030 | Fri Jan 01 00:30:00 2021 PST | Fri Jan 01 01:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 PST | Fri Jan 01 01:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0130 | Fri Jan 01 01:30:00 2021 PST | Fri Jan 01 02:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 PST | Fri Jan 01 02:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0230 | Fri Jan 01 02:30:00 2021 PST | Fri Jan 01 03:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 PST | Fri Jan 01 03:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0330 | Fri Jan 01 03:30:00 2021 PST | Fri Jan 01 04:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 PST | Fri Jan 01 04:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0430 | Fri Jan 01 04:30:00 2021 PST | Fri Jan 01 05:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 PST | Fri Jan 01 05:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0530 | Fri Jan 01 05:30:00 2021 PST | Fri Jan 01 06:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 PST | Fri Jan 01 06:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0630 | Fri Jan 01 06:30:00 2021 PST | Fri Jan 01 07:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 PST | Fri Jan 01 07:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0730 | Fri Jan 01 07:30:00 2021 PST | Fri Jan 01 08:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 PST | Fri Jan 01 08:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0830 | Fri Jan 01 08:30:00 2021 PST | Fri Jan 01 09:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 PST | Fri Jan 01 09:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0930 | Fri Jan 01 09:30:00 2021 PST | Fri Jan 01 10:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 PST | Fri Jan 01 10:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1030 | Fri Jan 01 10:30:00 2021 PST | Fri Jan 01 11:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 PST | Fri Jan 01 11:30:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1130 | Fri Jan 01 11:30:00 2021 PST | Fri Jan 01 12:00:00 2021 PST
+(24 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '1 hour', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+             partition_name              |       range_from_value       |        range_to_value
+---------------------------------------------------------------------
+ tstz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 PST | Fri Jan 01 01:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 PST | Fri Jan 01 02:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 PST | Fri Jan 01 03:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 PST | Fri Jan 01 04:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 PST | Fri Jan 01 05:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 PST | Fri Jan 01 06:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 PST | Fri Jan 01 07:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 PST | Fri Jan 01 08:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 PST | Fri Jan 01 09:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 PST | Fri Jan 01 10:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 PST | Fri Jan 01 11:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 PST | Fri Jan 01 12:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 PST | Fri Jan 01 13:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1300 | Fri Jan 01 13:00:00 2021 PST | Fri Jan 01 14:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1400 | Fri Jan 01 14:00:00 2021 PST | Fri Jan 01 15:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1500 | Fri Jan 01 15:00:00 2021 PST | Fri Jan 01 16:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1600 | Fri Jan 01 16:00:00 2021 PST | Fri Jan 01 17:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1700 | Fri Jan 01 17:00:00 2021 PST | Fri Jan 01 18:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1800 | Fri Jan 01 18:00:00 2021 PST | Fri Jan 01 19:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1900 | Fri Jan 01 19:00:00 2021 PST | Fri Jan 01 20:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_2000 | Fri Jan 01 20:00:00 2021 PST | Fri Jan 01 21:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_2100 | Fri Jan 01 21:00:00 2021 PST | Fri Jan 01 22:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_2200 | Fri Jan 01 22:00:00 2021 PST | Fri Jan 01 23:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_2300 | Fri Jan 01 23:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST
+(24 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '6 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+             partition_name              |       range_from_value       |        range_to_value
+---------------------------------------------------------------------
+ tstz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 PST | Fri Jan 01 06:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 PST | Fri Jan 01 12:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 PST | Fri Jan 01 18:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1800 | Fri Jan 01 18:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST
+(4 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '12 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+             partition_name              |       range_from_value       |        range_to_value
+---------------------------------------------------------------------
+ tstz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 PST | Fri Jan 01 12:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST
+(2 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2021-01-01 00:00:00');
+           partition_name           |       range_from_value       |        range_to_value
+---------------------------------------------------------------------
+ tstz_partitioned_table_p2021_01_01 | Fri Jan 01 00:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_02 | Sat Jan 02 00:00:00 2021 PST | Sun Jan 03 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 PST | Mon Jan 04 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 PST | Tue Jan 05 00:00:00 2021 PST
+(4 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '1 week', '2021-01-15 00:00:00', '2021-01-01 00:00:00');
+         partition_name          |       range_from_value       |        range_to_value
+---------------------------------------------------------------------
+ tstz_partitioned_table_p2020w53 | Mon Dec 28 00:00:00 2020 PST | Mon Jan 04 00:00:00 2021 PST
+ tstz_partitioned_table_p2021w01 | Mon Jan 04 00:00:00 2021 PST | Mon Jan 11 00:00:00 2021 PST
+ tstz_partitioned_table_p2021w02 | Mon Jan 11 00:00:00 2021 PST | Mon Jan 18 00:00:00 2021 PST
+(3 rows)
+
+-- test with from_date > to_date
+SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '1 day', '2021-01-01 00:00:00', '2021-01-05 00:00:00');
+ partition_name | range_from_value | range_to_value
+---------------------------------------------------------------------
+(0 rows)
+
+-- test with existing partitions
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+           partition_name           |       range_from_value       |        range_to_value
+---------------------------------------------------------------------
+ tstz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 PST | Thu Dec 31 00:00:00 2020 PST
+ tstz_partitioned_table_p2020_12_31 | Thu Dec 31 00:00:00 2020 PST | Fri Jan 01 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_02 | Sat Jan 02 00:00:00 2021 PST | Sun Jan 03 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 PST | Mon Jan 04 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 PST | Tue Jan 05 00:00:00 2021 PST
+(5 rows)
+
+  SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tstz_partitioned_table_2021_01_01 with the range from Fri Jan 01 00:00:00 2021 PST to Sat Jan 02 00:00:00 2021 PST does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  CREATE TABLE tstz_partitioned_table_2021_01_02 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-02 00:00:00') TO ('2021-01-03 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+           partition_name           |       range_from_value       |        range_to_value
+---------------------------------------------------------------------
+ tstz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 PST | Thu Dec 31 00:00:00 2020 PST
+ tstz_partitioned_table_p2020_12_31 | Thu Dec 31 00:00:00 2020 PST | Fri Jan 01 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 PST | Mon Jan 04 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 PST | Tue Jan 05 00:00:00 2021 PST
+(4 rows)
+
+  SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tstz_partitioned_table_2021_01_01 with the range from Fri Jan 01 00:00:00 2021 PST to Sat Jan 02 00:00:00 2021 PST does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-03 00:00:00');
+  CREATE TABLE tstz_partitioned_table_2021_01_02 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-05 00:00:00') TO ('2021-01-07 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '2 days', '2021-01-15 00:00:00', '2020-12-30 00:00:00');
+           partition_name           |       range_from_value       |        range_to_value
+---------------------------------------------------------------------
+ tstz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 PST | Fri Jan 01 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 PST | Tue Jan 05 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_07 | Thu Jan 07 00:00:00 2021 PST | Sat Jan 09 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_09 | Sat Jan 09 00:00:00 2021 PST | Mon Jan 11 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_11 | Mon Jan 11 00:00:00 2021 PST | Wed Jan 13 00:00:00 2021 PST
+ tstz_partitioned_table_p2021_01_13 | Wed Jan 13 00:00:00 2021 PST | Fri Jan 15 00:00:00 2021 PST
+(6 rows)
+
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  CREATE TABLE tstz_partitioned_table_2021_01_02 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-02 00:00:00') TO ('2021-01-04 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tstz_partitioned_table_2021_01_01 with the range from Fri Jan 01 00:00:00 2021 PST to Sat Jan 02 00:00:00 2021 PST does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-03 00:00:00');
+  CREATE TABLE tstz_partitioned_table_2021_01_02 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-04 00:00:00') TO ('2021-01-06 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '2 days', '2021-01-15 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tstz_partitioned_table_2021_01_02 with the range from Mon Jan 04 00:00:00 2021 PST to Wed Jan 06 00:00:00 2021 PST does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+DROP TABLE tstz_partitioned_table;
+-- 3) test timestamp without time zone partitioend table
+CREATE TABLE tswtz_partitioned_table(
+ measureid integer,
+ eventdatetime timestamp without time zone,
+ measure_data jsonb) PARTITION BY RANGE(eventdatetime);
+SELECT create_distributed_table('tswtz_partitioned_table','measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test with various intervals
+SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '30 minutes', '2021-01-01 12:00:00', '2021-01-01 00:00:00');
+              partition_name              |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ tswtz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 00:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0030 | Fri Jan 01 00:30:00 2021 | Fri Jan 01 01:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 | Fri Jan 01 01:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0130 | Fri Jan 01 01:30:00 2021 | Fri Jan 01 02:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 | Fri Jan 01 02:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0230 | Fri Jan 01 02:30:00 2021 | Fri Jan 01 03:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 | Fri Jan 01 03:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0330 | Fri Jan 01 03:30:00 2021 | Fri Jan 01 04:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 | Fri Jan 01 04:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0430 | Fri Jan 01 04:30:00 2021 | Fri Jan 01 05:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 | Fri Jan 01 05:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0530 | Fri Jan 01 05:30:00 2021 | Fri Jan 01 06:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 | Fri Jan 01 06:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0630 | Fri Jan 01 06:30:00 2021 | Fri Jan 01 07:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 | Fri Jan 01 07:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0730 | Fri Jan 01 07:30:00 2021 | Fri Jan 01 08:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 | Fri Jan 01 08:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0830 | Fri Jan 01 08:30:00 2021 | Fri Jan 01 09:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 | Fri Jan 01 09:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_0930 | Fri Jan 01 09:30:00 2021 | Fri Jan 01 10:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 | Fri Jan 01 10:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_1030 | Fri Jan 01 10:30:00 2021 | Fri Jan 01 11:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 | Fri Jan 01 11:30:00 2021
+ tswtz_partitioned_table_p2021_01_01_1130 | Fri Jan 01 11:30:00 2021 | Fri Jan 01 12:00:00 2021
+(24 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '1 hour', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+              partition_name              |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ tswtz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 01:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 | Fri Jan 01 02:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 | Fri Jan 01 03:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 | Fri Jan 01 04:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 | Fri Jan 01 05:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 | Fri Jan 01 06:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 | Fri Jan 01 07:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 | Fri Jan 01 08:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 | Fri Jan 01 09:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 | Fri Jan 01 10:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 | Fri Jan 01 11:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 | Fri Jan 01 12:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 | Fri Jan 01 13:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1300 | Fri Jan 01 13:00:00 2021 | Fri Jan 01 14:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1400 | Fri Jan 01 14:00:00 2021 | Fri Jan 01 15:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1500 | Fri Jan 01 15:00:00 2021 | Fri Jan 01 16:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1600 | Fri Jan 01 16:00:00 2021 | Fri Jan 01 17:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1700 | Fri Jan 01 17:00:00 2021 | Fri Jan 01 18:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1800 | Fri Jan 01 18:00:00 2021 | Fri Jan 01 19:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1900 | Fri Jan 01 19:00:00 2021 | Fri Jan 01 20:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_2000 | Fri Jan 01 20:00:00 2021 | Fri Jan 01 21:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_2100 | Fri Jan 01 21:00:00 2021 | Fri Jan 01 22:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_2200 | Fri Jan 01 22:00:00 2021 | Fri Jan 01 23:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_2300 | Fri Jan 01 23:00:00 2021 | Sat Jan 02 00:00:00 2021
+(24 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '6 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+              partition_name              |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ tswtz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 06:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 | Fri Jan 01 12:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 | Fri Jan 01 18:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1800 | Fri Jan 01 18:00:00 2021 | Sat Jan 02 00:00:00 2021
+(4 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '12 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+              partition_name              |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ tswtz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 12:00:00 2021
+ tswtz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 | Sat Jan 02 00:00:00 2021
+(2 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2021-01-01 00:00:00');
+           partition_name            |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ tswtz_partitioned_table_p2021_01_01 | Fri Jan 01 00:00:00 2021 | Sat Jan 02 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_02 | Sat Jan 02 00:00:00 2021 | Sun Jan 03 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 | Mon Jan 04 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 | Tue Jan 05 00:00:00 2021
+(4 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '1 week', '2021-01-15 00:00:00', '2021-01-01 00:00:00');
+          partition_name          |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ tswtz_partitioned_table_p2020w53 | Mon Dec 28 00:00:00 2020 | Mon Jan 04 00:00:00 2021
+ tswtz_partitioned_table_p2021w01 | Mon Jan 04 00:00:00 2021 | Mon Jan 11 00:00:00 2021
+ tswtz_partitioned_table_p2021w02 | Mon Jan 11 00:00:00 2021 | Mon Jan 18 00:00:00 2021
+(3 rows)
+
+-- test with from_date > to_date
+SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '1 day', '2021-01-01 00:00:00', '2021-01-05 00:00:00');
+ partition_name | range_from_value | range_to_value
+---------------------------------------------------------------------
+(0 rows)
+
+-- test with existing partitions
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2021_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+           partition_name            |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ tswtz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 | Thu Dec 31 00:00:00 2020
+ tswtz_partitioned_table_p2020_12_31 | Thu Dec 31 00:00:00 2020 | Fri Jan 01 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_02 | Sat Jan 02 00:00:00 2021 | Sun Jan 03 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 | Mon Jan 04 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 | Tue Jan 05 00:00:00 2021
+(5 rows)
+
+  SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tswtz_partitioned_table_2021_01_01 with the range from Fri Jan 01 00:00:00 2021 to Sat Jan 02 00:00:00 2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2021_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  CREATE TABLE tswtz_partitioned_table_2021_01_02 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-02 00:00:00') TO ('2021-01-03 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+           partition_name            |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ tswtz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 | Thu Dec 31 00:00:00 2020
+ tswtz_partitioned_table_p2020_12_31 | Thu Dec 31 00:00:00 2020 | Fri Jan 01 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 | Mon Jan 04 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 | Tue Jan 05 00:00:00 2021
+(4 rows)
+
+  SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tswtz_partitioned_table_2021_01_01 with the range from Fri Jan 01 00:00:00 2021 to Sat Jan 02 00:00:00 2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2021_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-03 00:00:00');
+  CREATE TABLE tswtz_partitioned_table_2021_01_02 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-05 00:00:00') TO ('2021-01-07 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-15 00:00:00', '2020-12-30 00:00:00');
+           partition_name            |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ tswtz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 | Fri Jan 01 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 | Tue Jan 05 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_07 | Thu Jan 07 00:00:00 2021 | Sat Jan 09 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_09 | Sat Jan 09 00:00:00 2021 | Mon Jan 11 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_11 | Mon Jan 11 00:00:00 2021 | Wed Jan 13 00:00:00 2021
+ tswtz_partitioned_table_p2021_01_13 | Wed Jan 13 00:00:00 2021 | Fri Jan 15 00:00:00 2021
+(6 rows)
+
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2021_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  CREATE TABLE tswtz_partitioned_table_2021_01_02 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-02 00:00:00') TO ('2021-01-04 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tswtz_partitioned_table_2021_01_01 with the range from Fri Jan 01 00:00:00 2021 to Sat Jan 02 00:00:00 2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2021_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-03 00:00:00');
+  CREATE TABLE tswtz_partitioned_table_2021_01_02 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-04 00:00:00') TO ('2021-01-06 00:00:00');
+  SELECT * FROM get_missing_time_partition_ranges('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-15 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tswtz_partitioned_table_2021_01_02 with the range from Mon Jan 04 00:00:00 2021 to Wed Jan 06 00:00:00 2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+DROP TABLE tswtz_partitioned_table;
+-- 4) test with weird name
+CREATE TABLE "test !/ \n _dist_123_table"(
+ measureid integer,
+ eventdatetime timestamp without time zone,
+ measure_data jsonb) PARTITION BY RANGE(eventdatetime);
+SELECT create_distributed_table('"test !/ \n _dist_123_table"','measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test with various intervals
+SELECT * FROM get_missing_time_partition_ranges('"test !/ \n _dist_123_table"', INTERVAL '30 minutes', '2021-01-01 12:00:00', '2021-01-01 00:00:00');
+               partition_name                |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ test !/ \n _dist_123_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 00:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0030 | Fri Jan 01 00:30:00 2021 | Fri Jan 01 01:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 | Fri Jan 01 01:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0130 | Fri Jan 01 01:30:00 2021 | Fri Jan 01 02:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 | Fri Jan 01 02:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0230 | Fri Jan 01 02:30:00 2021 | Fri Jan 01 03:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 | Fri Jan 01 03:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0330 | Fri Jan 01 03:30:00 2021 | Fri Jan 01 04:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 | Fri Jan 01 04:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0430 | Fri Jan 01 04:30:00 2021 | Fri Jan 01 05:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 | Fri Jan 01 05:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0530 | Fri Jan 01 05:30:00 2021 | Fri Jan 01 06:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 | Fri Jan 01 06:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0630 | Fri Jan 01 06:30:00 2021 | Fri Jan 01 07:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 | Fri Jan 01 07:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0730 | Fri Jan 01 07:30:00 2021 | Fri Jan 01 08:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 | Fri Jan 01 08:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0830 | Fri Jan 01 08:30:00 2021 | Fri Jan 01 09:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 | Fri Jan 01 09:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0930 | Fri Jan 01 09:30:00 2021 | Fri Jan 01 10:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 | Fri Jan 01 10:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_1030 | Fri Jan 01 10:30:00 2021 | Fri Jan 01 11:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 | Fri Jan 01 11:30:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_1130 | Fri Jan 01 11:30:00 2021 | Fri Jan 01 12:00:00 2021
+(24 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('"test !/ \n _dist_123_table"', INTERVAL '1 hour', '2021-01-01 12:00:00', '2021-01-01 00:00:00');
+               partition_name                |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ test !/ \n _dist_123_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 01:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 | Fri Jan 01 02:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 | Fri Jan 01 03:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 | Fri Jan 01 04:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 | Fri Jan 01 05:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 | Fri Jan 01 06:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 | Fri Jan 01 07:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 | Fri Jan 01 08:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 | Fri Jan 01 09:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 | Fri Jan 01 10:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 | Fri Jan 01 11:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 | Fri Jan 01 12:00:00 2021
+(12 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('"test !/ \n _dist_123_table"', INTERVAL '6 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+               partition_name                |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ test !/ \n _dist_123_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 06:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 | Fri Jan 01 12:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 | Fri Jan 01 18:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_01_1800 | Fri Jan 01 18:00:00 2021 | Sat Jan 02 00:00:00 2021
+(4 rows)
+
+SELECT * FROM get_missing_time_partition_ranges('"test !/ \n _dist_123_table"', INTERVAL '1 day', '2021-01-03 00:00:00', '2021-01-01 00:00:00');
+             partition_name             |     range_from_value     |      range_to_value
+---------------------------------------------------------------------
+ test !/ \n _dist_123_table_p2021_01_01 | Fri Jan 01 00:00:00 2021 | Sat Jan 02 00:00:00 2021
+ test !/ \n _dist_123_table_p2021_01_02 | Sat Jan 02 00:00:00 2021 | Sun Jan 03 00:00:00 2021
+(2 rows)
+
+DROP TABLE "test !/ \n _dist_123_table";
+-- b) test create_time_partitions
+-- 1) test create_time_partitions with date partitioned table
+CREATE TABLE date_partitioned_table(
+ measureid integer,
+ eventdate date,
+ measure_data jsonb) PARTITION BY RANGE(eventdate);
+-- test interval must be multiple days for date partitioned table
+SELECT create_time_partitions('date_partitioned_table', INTERVAL '6 hours', '2022-01-01', '2021-01-01');
+ERROR:  partition interval of date partitioned table must be day or multiple days
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+SELECT create_time_partitions('date_partitioned_table', INTERVAL '1 week 1 day 1 hour', '2022-01-01', '2021-01-01');
+ERROR:  partition interval of date partitioned table must be day or multiple days
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+-- test with various intervals
+BEGIN;
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '1 day', '2021-02-01', '2021-01-01');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |             partition              | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_01 | 01-01-2021 | 01-02-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_02 | 01-02-2021 | 01-03-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_03 | 01-03-2021 | 01-04-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_04 | 01-04-2021 | 01-05-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_05 | 01-05-2021 | 01-06-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_06 | 01-06-2021 | 01-07-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_07 | 01-07-2021 | 01-08-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_08 | 01-08-2021 | 01-09-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_09 | 01-09-2021 | 01-10-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_10 | 01-10-2021 | 01-11-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_11 | 01-11-2021 | 01-12-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_12 | 01-12-2021 | 01-13-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_13 | 01-13-2021 | 01-14-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_14 | 01-14-2021 | 01-15-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_15 | 01-15-2021 | 01-16-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_16 | 01-16-2021 | 01-17-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_17 | 01-17-2021 | 01-18-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_18 | 01-18-2021 | 01-19-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_19 | 01-19-2021 | 01-20-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_20 | 01-20-2021 | 01-21-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_21 | 01-21-2021 | 01-22-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_22 | 01-22-2021 | 01-23-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_23 | 01-23-2021 | 01-24-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_24 | 01-24-2021 | 01-25-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_25 | 01-25-2021 | 01-26-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_26 | 01-26-2021 | 01-27-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_27 | 01-27-2021 | 01-28-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_28 | 01-28-2021 | 01-29-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_29 | 01-29-2021 | 01-30-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_30 | 01-30-2021 | 01-31-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_31 | 01-31-2021 | 02-01-2021 | heap
+(31 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '1 week', '2022-01-01', '2021-01-01');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |            partition            | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_partitioned_table | eventdate        | date_partitioned_table_p2020w53 | 12-28-2020 | 01-04-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w01 | 01-04-2021 | 01-11-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w02 | 01-11-2021 | 01-18-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w03 | 01-18-2021 | 01-25-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w04 | 01-25-2021 | 02-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w05 | 02-01-2021 | 02-08-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w06 | 02-08-2021 | 02-15-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w07 | 02-15-2021 | 02-22-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w08 | 02-22-2021 | 03-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w09 | 03-01-2021 | 03-08-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w10 | 03-08-2021 | 03-15-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w11 | 03-15-2021 | 03-22-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w12 | 03-22-2021 | 03-29-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w13 | 03-29-2021 | 04-05-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w14 | 04-05-2021 | 04-12-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w15 | 04-12-2021 | 04-19-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w16 | 04-19-2021 | 04-26-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w17 | 04-26-2021 | 05-03-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w18 | 05-03-2021 | 05-10-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w19 | 05-10-2021 | 05-17-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w20 | 05-17-2021 | 05-24-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w21 | 05-24-2021 | 05-31-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w22 | 05-31-2021 | 06-07-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w23 | 06-07-2021 | 06-14-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w24 | 06-14-2021 | 06-21-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w25 | 06-21-2021 | 06-28-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w26 | 06-28-2021 | 07-05-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w27 | 07-05-2021 | 07-12-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w28 | 07-12-2021 | 07-19-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w29 | 07-19-2021 | 07-26-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w30 | 07-26-2021 | 08-02-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w31 | 08-02-2021 | 08-09-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w32 | 08-09-2021 | 08-16-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w33 | 08-16-2021 | 08-23-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w34 | 08-23-2021 | 08-30-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w35 | 08-30-2021 | 09-06-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w36 | 09-06-2021 | 09-13-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w37 | 09-13-2021 | 09-20-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w38 | 09-20-2021 | 09-27-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w39 | 09-27-2021 | 10-04-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w40 | 10-04-2021 | 10-11-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w41 | 10-11-2021 | 10-18-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w42 | 10-18-2021 | 10-25-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w43 | 10-25-2021 | 11-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w44 | 11-01-2021 | 11-08-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w45 | 11-08-2021 | 11-15-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w46 | 11-15-2021 | 11-22-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w47 | 11-22-2021 | 11-29-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w48 | 11-29-2021 | 12-06-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w49 | 12-06-2021 | 12-13-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w50 | 12-13-2021 | 12-20-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w51 | 12-20-2021 | 12-27-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021w52 | 12-27-2021 | 01-03-2022 | heap
+(53 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '1 month', '2022-01-01', '2021-01-01');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |            partition            | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01 | 01-01-2021 | 02-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_02 | 02-01-2021 | 03-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_03 | 03-01-2021 | 04-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_04 | 04-01-2021 | 05-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_05 | 05-01-2021 | 06-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_06 | 06-01-2021 | 07-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_07 | 07-01-2021 | 08-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_08 | 08-01-2021 | 09-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_09 | 09-01-2021 | 10-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_10 | 10-01-2021 | 11-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_11 | 11-01-2021 | 12-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_12 | 12-01-2021 | 01-01-2022 | heap
+(12 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '3 months', '2022-01-01', '2021-01-01');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |           partition            | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021q1 | 01-01-2021 | 04-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021q2 | 04-01-2021 | 07-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021q3 | 07-01-2021 | 10-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021q4 | 10-01-2021 | 01-01-2022 | heap
+(4 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '6 months', '2022-01-01', '2021-01-01');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |            partition            | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01 | 01-01-2021 | 07-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_07 | 07-01-2021 | 01-01-2022 | heap
+(2 rows)
+
+ROLLBACK;
+-- test with from_date > to_date
+SELECT * FROM create_time_partitions('date_partitioned_table', INTERVAL '1 day', '2021-01-01', '2021-02-01');
+ERROR:  start_from (Mon Feb 01 00:00:00 2021 PST) must be older than end_at (Fri Jan 01 00:00:00 2021 PST)
+CONTEXT:  PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+-- test with existing partitions
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-02');
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '1 day', '2021-01-05', '2020-12-30');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |             partition              | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_partitioned_table | eventdate        | date_partitioned_table_2021_01_01  | 01-01-2021 | 01-02-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2020_12_30 | 12-30-2020 | 12-31-2020 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2020_12_31 | 12-31-2020 | 01-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_02 | 01-02-2021 | 01-03-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_03 | 01-03-2021 | 01-04-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_04 | 01-04-2021 | 01-05-2021 | heap
+(6 rows)
+
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '2 days', '2021-01-15', '2020-12-25');
+ERROR:  partition date_partitioned_table_p2020_12_30 with the range from 12-30-2020 to 12-31-2020 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-02');
+  CREATE TABLE date_partitioned_table_2021_01_02 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-02') TO ('2021-01-03');
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '1 day', '2021-01-05', '2020-12-30');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |             partition              | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_partitioned_table | eventdate        | date_partitioned_table_2021_01_01  | 01-01-2021 | 01-02-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_2021_01_02  | 01-02-2021 | 01-03-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2020_12_30 | 12-30-2020 | 12-31-2020 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2020_12_31 | 12-31-2020 | 01-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_03 | 01-03-2021 | 01-04-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_04 | 01-04-2021 | 01-05-2021 | heap
+(6 rows)
+
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '2 days', '2021-01-05', '2020-12-30');
+ERROR:  partition date_partitioned_table_p2020_12_30 with the range from 12-30-2020 to 12-31-2020 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-03');
+  CREATE TABLE date_partitioned_table_2021_01_02 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-05') TO ('2021-01-07');
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '2 days', '2021-01-15', '2020-12-30');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |             partition              | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_partitioned_table | eventdate        | date_partitioned_table_2021_01_01  | 01-01-2021 | 01-03-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_2021_01_02  | 01-05-2021 | 01-07-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2020_12_30 | 12-30-2020 | 01-01-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_03 | 01-03-2021 | 01-05-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_07 | 01-07-2021 | 01-09-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_09 | 01-09-2021 | 01-11-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_11 | 01-11-2021 | 01-13-2021 | heap
+ date_partitioned_table | eventdate        | date_partitioned_table_p2021_01_13 | 01-13-2021 | 01-15-2021 | heap
+(8 rows)
+
+ROLLBACK;
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-02');
+  CREATE TABLE date_partitioned_table_2020_01_02 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-02') TO ('2021-01-04');
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '1 day', '2021-01-05', '2020-12-30');
+ERROR:  partition date_partitioned_table_2020_01_02 with the range from 01-02-2021 to 01-04-2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+BEGIN;
+  CREATE TABLE date_partitioned_table_2021_01_01 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-01') TO ('2021-01-03');
+  CREATE TABLE date_partitioned_table_2021_01_02 PARTITION OF date_partitioned_table FOR VALUES FROM ('2021-01-04') TO ('2021-01-06');
+  SELECT create_time_partitions('date_partitioned_table', INTERVAL '2 days', '2021-01-15', '2020-12-30');
+ERROR:  partition date_partitioned_table_2021_01_02 with the range from 01-04-2021 to 01-06-2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+DROP TABLE date_partitioned_table;
+-- 2) test timestamp with time zone partitioend table
+CREATE TABLE tstz_partitioned_table(
+ measureid integer,
+ eventdatetime timestamp with time zone,
+ measure_data jsonb) PARTITION BY RANGE(eventdatetime);
+-- test with various intervals
+BEGIN;
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '30 minutes', '2021-01-01 12:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tstz_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |                partition                |          from_value          |           to_value           | access_method
+---------------------------------------------------------------------
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 PST | Fri Jan 01 00:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0030 | Fri Jan 01 00:30:00 2021 PST | Fri Jan 01 01:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 PST | Fri Jan 01 01:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0130 | Fri Jan 01 01:30:00 2021 PST | Fri Jan 01 02:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 PST | Fri Jan 01 02:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0230 | Fri Jan 01 02:30:00 2021 PST | Fri Jan 01 03:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 PST | Fri Jan 01 03:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0330 | Fri Jan 01 03:30:00 2021 PST | Fri Jan 01 04:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 PST | Fri Jan 01 04:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0430 | Fri Jan 01 04:30:00 2021 PST | Fri Jan 01 05:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 PST | Fri Jan 01 05:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0530 | Fri Jan 01 05:30:00 2021 PST | Fri Jan 01 06:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 PST | Fri Jan 01 06:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0630 | Fri Jan 01 06:30:00 2021 PST | Fri Jan 01 07:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 PST | Fri Jan 01 07:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0730 | Fri Jan 01 07:30:00 2021 PST | Fri Jan 01 08:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 PST | Fri Jan 01 08:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0830 | Fri Jan 01 08:30:00 2021 PST | Fri Jan 01 09:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 PST | Fri Jan 01 09:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0930 | Fri Jan 01 09:30:00 2021 PST | Fri Jan 01 10:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 PST | Fri Jan 01 10:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1030 | Fri Jan 01 10:30:00 2021 PST | Fri Jan 01 11:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 PST | Fri Jan 01 11:30:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1130 | Fri Jan 01 11:30:00 2021 PST | Fri Jan 01 12:00:00 2021 PST | heap
+(24 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '1 hour', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tstz_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |                partition                |          from_value          |           to_value           | access_method
+---------------------------------------------------------------------
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 PST | Fri Jan 01 01:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 PST | Fri Jan 01 02:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 PST | Fri Jan 01 03:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 PST | Fri Jan 01 04:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 PST | Fri Jan 01 05:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 PST | Fri Jan 01 06:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 PST | Fri Jan 01 07:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 PST | Fri Jan 01 08:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 PST | Fri Jan 01 09:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 PST | Fri Jan 01 10:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 PST | Fri Jan 01 11:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 PST | Fri Jan 01 12:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 PST | Fri Jan 01 13:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1300 | Fri Jan 01 13:00:00 2021 PST | Fri Jan 01 14:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1400 | Fri Jan 01 14:00:00 2021 PST | Fri Jan 01 15:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1500 | Fri Jan 01 15:00:00 2021 PST | Fri Jan 01 16:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1600 | Fri Jan 01 16:00:00 2021 PST | Fri Jan 01 17:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1700 | Fri Jan 01 17:00:00 2021 PST | Fri Jan 01 18:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1800 | Fri Jan 01 18:00:00 2021 PST | Fri Jan 01 19:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1900 | Fri Jan 01 19:00:00 2021 PST | Fri Jan 01 20:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_2000 | Fri Jan 01 20:00:00 2021 PST | Fri Jan 01 21:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_2100 | Fri Jan 01 21:00:00 2021 PST | Fri Jan 01 22:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_2200 | Fri Jan 01 22:00:00 2021 PST | Fri Jan 01 23:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_2300 | Fri Jan 01 23:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST | heap
+(24 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '6 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tstz_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |                partition                |          from_value          |           to_value           | access_method
+---------------------------------------------------------------------
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 PST | Fri Jan 01 06:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 PST | Fri Jan 01 12:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 PST | Fri Jan 01 18:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1800 | Fri Jan 01 18:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST | heap
+(4 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '12 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tstz_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |                partition                |          from_value          |           to_value           | access_method
+---------------------------------------------------------------------
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 PST | Fri Jan 01 12:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST | heap
+(2 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tstz_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |             partition              |          from_value          |           to_value           | access_method
+---------------------------------------------------------------------
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_01 | Fri Jan 01 00:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_02 | Sat Jan 02 00:00:00 2021 PST | Sun Jan 03 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 PST | Mon Jan 04 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 PST | Tue Jan 05 00:00:00 2021 PST | heap
+(4 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '1 week', '2021-01-15 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tstz_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |            partition            |          from_value          |           to_value           | access_method
+---------------------------------------------------------------------
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2020w53 | Mon Dec 28 00:00:00 2020 PST | Mon Jan 04 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021w01 | Mon Jan 04 00:00:00 2021 PST | Mon Jan 11 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021w02 | Mon Jan 11 00:00:00 2021 PST | Mon Jan 18 00:00:00 2021 PST | heap
+(3 rows)
+
+ROLLBACK;
+-- test with from_date > to_date
+SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '1 day', '2021-01-01 00:00:00', '2021-01-05 00:00:00');
+ERROR:  start_from (Tue Jan 05 00:00:00 2021 PST) must be older than end_at (Fri Jan 01 00:00:00 2021 PST)
+CONTEXT:  PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+-- test with existing partitions
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tstz_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |             partition              |          from_value          |           to_value           | access_method
+---------------------------------------------------------------------
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_2021_01_01  | Fri Jan 01 00:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 PST | Thu Dec 31 00:00:00 2020 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2020_12_31 | Thu Dec 31 00:00:00 2020 PST | Fri Jan 01 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_02 | Sat Jan 02 00:00:00 2021 PST | Sun Jan 03 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 PST | Mon Jan 04 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 PST | Tue Jan 05 00:00:00 2021 PST | heap
+(6 rows)
+
+  SELECT * FROM get_missing_time_partition_ranges('tstz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tstz_partitioned_table_p2020_12_30 with the range from Wed Dec 30 00:00:00 2020 PST to Thu Dec 31 00:00:00 2020 PST does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  CREATE TABLE tstz_partitioned_table_2021_01_02 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-02 00:00:00') TO ('2021-01-03 00:00:00');
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tstz_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |             partition              |          from_value          |           to_value           | access_method
+---------------------------------------------------------------------
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_2021_01_01  | Fri Jan 01 00:00:00 2021 PST | Sat Jan 02 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_2021_01_02  | Sat Jan 02 00:00:00 2021 PST | Sun Jan 03 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 PST | Thu Dec 31 00:00:00 2020 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2020_12_31 | Thu Dec 31 00:00:00 2020 PST | Fri Jan 01 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 PST | Mon Jan 04 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 PST | Tue Jan 05 00:00:00 2021 PST | heap
+(6 rows)
+
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tstz_partitioned_table_p2020_12_30 with the range from Wed Dec 30 00:00:00 2020 PST to Thu Dec 31 00:00:00 2020 PST does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-03 00:00:00');
+  CREATE TABLE tstz_partitioned_table_2021_01_02 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-05 00:00:00') TO ('2021-01-07 00:00:00');
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '2 days', '2021-01-15 00:00:00', '2020-12-30 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tstz_partitioned_table'::regclass ORDER BY 3;
+      parent_table      | partition_column |             partition              |          from_value          |           to_value           | access_method
+---------------------------------------------------------------------
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_2021_01_01  | Fri Jan 01 00:00:00 2021 PST | Sun Jan 03 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_2021_01_02  | Tue Jan 05 00:00:00 2021 PST | Thu Jan 07 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 PST | Fri Jan 01 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 PST | Tue Jan 05 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_07 | Thu Jan 07 00:00:00 2021 PST | Sat Jan 09 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_09 | Sat Jan 09 00:00:00 2021 PST | Mon Jan 11 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_11 | Mon Jan 11 00:00:00 2021 PST | Wed Jan 13 00:00:00 2021 PST | heap
+ tstz_partitioned_table | eventdatetime    | tstz_partitioned_table_p2021_01_13 | Wed Jan 13 00:00:00 2021 PST | Fri Jan 15 00:00:00 2021 PST | heap
+(8 rows)
+
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  CREATE TABLE tstz_partitioned_table_2021_01_02 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-02 00:00:00') TO ('2021-01-04 00:00:00');
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tstz_partitioned_table_2021_01_01 with the range from Fri Jan 01 00:00:00 2021 PST to Sat Jan 02 00:00:00 2021 PST does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tstz_partitioned_table_2021_01_01 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-03 00:00:00');
+  CREATE TABLE tstz_partitioned_table_2021_01_02 PARTITION OF tstz_partitioned_table FOR VALUES FROM ('2021-01-04 00:00:00') TO ('2021-01-06 00:00:00');
+  SELECT create_time_partitions('tstz_partitioned_table', INTERVAL '2 days', '2021-01-15 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tstz_partitioned_table_2021_01_02 with the range from Mon Jan 04 00:00:00 2021 PST to Wed Jan 06 00:00:00 2021 PST does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+DROP TABLE tstz_partitioned_table;
+-- 3) test timestamp without time zone partitioend table
+CREATE TABLE tswtz_partitioned_table(
+ measureid integer,
+ eventdatetime timestamp without time zone,
+ measure_data jsonb) PARTITION BY RANGE(eventdatetime);
+SELECT create_distributed_table('tswtz_partitioned_table','measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '30 minutes', '2021-01-01 12:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tswtz_partitioned_table'::regclass ORDER BY 3;
+      parent_table       | partition_column |                partition                 |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 00:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0030 | Fri Jan 01 00:30:00 2021 | Fri Jan 01 01:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 | Fri Jan 01 01:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0130 | Fri Jan 01 01:30:00 2021 | Fri Jan 01 02:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 | Fri Jan 01 02:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0230 | Fri Jan 01 02:30:00 2021 | Fri Jan 01 03:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 | Fri Jan 01 03:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0330 | Fri Jan 01 03:30:00 2021 | Fri Jan 01 04:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 | Fri Jan 01 04:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0430 | Fri Jan 01 04:30:00 2021 | Fri Jan 01 05:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 | Fri Jan 01 05:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0530 | Fri Jan 01 05:30:00 2021 | Fri Jan 01 06:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 | Fri Jan 01 06:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0630 | Fri Jan 01 06:30:00 2021 | Fri Jan 01 07:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 | Fri Jan 01 07:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0730 | Fri Jan 01 07:30:00 2021 | Fri Jan 01 08:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 | Fri Jan 01 08:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0830 | Fri Jan 01 08:30:00 2021 | Fri Jan 01 09:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 | Fri Jan 01 09:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0930 | Fri Jan 01 09:30:00 2021 | Fri Jan 01 10:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 | Fri Jan 01 10:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1030 | Fri Jan 01 10:30:00 2021 | Fri Jan 01 11:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 | Fri Jan 01 11:30:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1130 | Fri Jan 01 11:30:00 2021 | Fri Jan 01 12:00:00 2021 | heap
+(24 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '1 hour', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tswtz_partitioned_table'::regclass ORDER BY 3;
+      parent_table       | partition_column |                partition                 |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 01:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0100 | Fri Jan 01 01:00:00 2021 | Fri Jan 01 02:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0200 | Fri Jan 01 02:00:00 2021 | Fri Jan 01 03:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0300 | Fri Jan 01 03:00:00 2021 | Fri Jan 01 04:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0400 | Fri Jan 01 04:00:00 2021 | Fri Jan 01 05:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0500 | Fri Jan 01 05:00:00 2021 | Fri Jan 01 06:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 | Fri Jan 01 07:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0700 | Fri Jan 01 07:00:00 2021 | Fri Jan 01 08:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0800 | Fri Jan 01 08:00:00 2021 | Fri Jan 01 09:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0900 | Fri Jan 01 09:00:00 2021 | Fri Jan 01 10:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1000 | Fri Jan 01 10:00:00 2021 | Fri Jan 01 11:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1100 | Fri Jan 01 11:00:00 2021 | Fri Jan 01 12:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 | Fri Jan 01 13:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1300 | Fri Jan 01 13:00:00 2021 | Fri Jan 01 14:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1400 | Fri Jan 01 14:00:00 2021 | Fri Jan 01 15:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1500 | Fri Jan 01 15:00:00 2021 | Fri Jan 01 16:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1600 | Fri Jan 01 16:00:00 2021 | Fri Jan 01 17:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1700 | Fri Jan 01 17:00:00 2021 | Fri Jan 01 18:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1800 | Fri Jan 01 18:00:00 2021 | Fri Jan 01 19:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1900 | Fri Jan 01 19:00:00 2021 | Fri Jan 01 20:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_2000 | Fri Jan 01 20:00:00 2021 | Fri Jan 01 21:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_2100 | Fri Jan 01 21:00:00 2021 | Fri Jan 01 22:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_2200 | Fri Jan 01 22:00:00 2021 | Fri Jan 01 23:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_2300 | Fri Jan 01 23:00:00 2021 | Sat Jan 02 00:00:00 2021 | heap
+(24 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '6 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tswtz_partitioned_table'::regclass ORDER BY 3;
+      parent_table       | partition_column |                partition                 |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 06:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0600 | Fri Jan 01 06:00:00 2021 | Fri Jan 01 12:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 | Fri Jan 01 18:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1800 | Fri Jan 01 18:00:00 2021 | Sat Jan 02 00:00:00 2021 | heap
+(4 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '12 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tswtz_partitioned_table'::regclass ORDER BY 3;
+      parent_table       | partition_column |                partition                 |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_0000 | Fri Jan 01 00:00:00 2021 | Fri Jan 01 12:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01_1200 | Fri Jan 01 12:00:00 2021 | Sat Jan 02 00:00:00 2021 | heap
+(2 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tswtz_partitioned_table'::regclass ORDER BY 3;
+      parent_table       | partition_column |              partition              |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_01 | Fri Jan 01 00:00:00 2021 | Sat Jan 02 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_02 | Sat Jan 02 00:00:00 2021 | Sun Jan 03 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 | Mon Jan 04 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 | Tue Jan 05 00:00:00 2021 | heap
+(4 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '1 week', '2021-01-15 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tswtz_partitioned_table'::regclass ORDER BY 3;
+      parent_table       | partition_column |            partition             |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2020w53 | Mon Dec 28 00:00:00 2020 | Mon Jan 04 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021w01 | Mon Jan 04 00:00:00 2021 | Mon Jan 11 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021w02 | Mon Jan 11 00:00:00 2021 | Mon Jan 18 00:00:00 2021 | heap
+(3 rows)
+
+ROLLBACK;
+-- test with from_date > to_date
+SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '1 day', '2021-01-01 00:00:00', '2021-01-05 00:00:00');
+ERROR:  start_from (Tue Jan 05 00:00:00 2021 PST) must be older than end_at (Fri Jan 01 00:00:00 2021 PST)
+CONTEXT:  PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+-- test with existing partitions
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2021_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tswtz_partitioned_table'::regclass ORDER BY 3;
+      parent_table       | partition_column |              partition              |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_2021_01_01  | Fri Jan 01 00:00:00 2021 | Sat Jan 02 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 | Thu Dec 31 00:00:00 2020 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2020_12_31 | Thu Dec 31 00:00:00 2020 | Fri Jan 01 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_02 | Sat Jan 02 00:00:00 2021 | Sun Jan 03 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 | Mon Jan 04 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 | Tue Jan 05 00:00:00 2021 | heap
+(6 rows)
+
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tswtz_partitioned_table_p2020_12_30 with the range from Wed Dec 30 00:00:00 2020 to Thu Dec 31 00:00:00 2020 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2021_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  CREATE TABLE tswtz_partitioned_table_2021_01_02 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-02 00:00:00') TO ('2021-01-03 00:00:00');
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '1 day', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tswtz_partitioned_table'::regclass ORDER BY 3;
+      parent_table       | partition_column |              partition              |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_2021_01_01  | Fri Jan 01 00:00:00 2021 | Sat Jan 02 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_2021_01_02  | Sat Jan 02 00:00:00 2021 | Sun Jan 03 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 | Thu Dec 31 00:00:00 2020 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2020_12_31 | Thu Dec 31 00:00:00 2020 | Fri Jan 01 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 | Mon Jan 04 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_04 | Mon Jan 04 00:00:00 2021 | Tue Jan 05 00:00:00 2021 | heap
+(6 rows)
+
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tswtz_partitioned_table_p2020_12_30 with the range from Wed Dec 30 00:00:00 2020 to Thu Dec 31 00:00:00 2020 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2020_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-03 00:00:00');
+  CREATE TABLE tswtz_partitioned_table_2020_01_02 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-05 00:00:00') TO ('2021-01-07 00:00:00');
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-15 00:00:00', '2020-12-30 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'tswtz_partitioned_table'::regclass ORDER BY 3;
+      parent_table       | partition_column |              partition              |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_2020_01_01  | Fri Jan 01 00:00:00 2021 | Sun Jan 03 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_2020_01_02  | Tue Jan 05 00:00:00 2021 | Thu Jan 07 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2020_12_30 | Wed Dec 30 00:00:00 2020 | Fri Jan 01 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_03 | Sun Jan 03 00:00:00 2021 | Tue Jan 05 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_07 | Thu Jan 07 00:00:00 2021 | Sat Jan 09 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_09 | Sat Jan 09 00:00:00 2021 | Mon Jan 11 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_11 | Mon Jan 11 00:00:00 2021 | Wed Jan 13 00:00:00 2021 | heap
+ tswtz_partitioned_table | eventdatetime    | tswtz_partitioned_table_p2021_01_13 | Wed Jan 13 00:00:00 2021 | Fri Jan 15 00:00:00 2021 | heap
+(8 rows)
+
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2020_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-02 00:00:00');
+  CREATE TABLE tswtz_partitioned_table_2020_01_02 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-02 00:00:00') TO ('2021-01-04 00:00:00');
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-05 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tswtz_partitioned_table_2020_01_01 with the range from Fri Jan 01 00:00:00 2021 to Sat Jan 02 00:00:00 2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+BEGIN;
+  CREATE TABLE tswtz_partitioned_table_2020_01_01 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-01 00:00:00') TO ('2021-01-03 00:00:00');
+  CREATE TABLE tswtz_partitioned_table_2020_01_02 PARTITION OF tswtz_partitioned_table FOR VALUES FROM ('2021-01-04 00:00:00') TO ('2021-01-06 00:00:00');
+  SELECT create_time_partitions('tswtz_partitioned_table', INTERVAL '2 days', '2021-01-15 00:00:00', '2020-12-30 00:00:00');
+ERROR:  partition tswtz_partitioned_table_2020_01_02 with the range from Mon Jan 04 00:00:00 2021 to Wed Jan 06 00:00:00 2021 does not align with the initial partition given the partition interval
+HINT:  Only use partitions of the same size, without gaps between partitions.
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+ROLLBACK;
+DROP TABLE tswtz_partitioned_table;
+-- 4) test with weird name
+CREATE TABLE "test !/ \n _dist_123_table"(
+ measureid integer,
+ eventdatetime timestamp without time zone,
+ measure_data jsonb) PARTITION BY RANGE(eventdatetime);
+SELECT create_distributed_table('"test !/ \n _dist_123_table"','measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test with various intervals
+BEGIN;
+  SELECT create_time_partitions('"test !/ \n _dist_123_table"', INTERVAL '30 minutes', '2021-01-01 12:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = '"test !/ \n _dist_123_table"'::regclass ORDER BY 3;
+         parent_table         | partition_column |                   partition                   |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0000" | Fri Jan 01 00:00:00 2021 | Fri Jan 01 00:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0030" | Fri Jan 01 00:30:00 2021 | Fri Jan 01 01:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0100" | Fri Jan 01 01:00:00 2021 | Fri Jan 01 01:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0130" | Fri Jan 01 01:30:00 2021 | Fri Jan 01 02:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0200" | Fri Jan 01 02:00:00 2021 | Fri Jan 01 02:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0230" | Fri Jan 01 02:30:00 2021 | Fri Jan 01 03:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0300" | Fri Jan 01 03:00:00 2021 | Fri Jan 01 03:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0330" | Fri Jan 01 03:30:00 2021 | Fri Jan 01 04:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0400" | Fri Jan 01 04:00:00 2021 | Fri Jan 01 04:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0430" | Fri Jan 01 04:30:00 2021 | Fri Jan 01 05:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0500" | Fri Jan 01 05:00:00 2021 | Fri Jan 01 05:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0530" | Fri Jan 01 05:30:00 2021 | Fri Jan 01 06:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0600" | Fri Jan 01 06:00:00 2021 | Fri Jan 01 06:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0630" | Fri Jan 01 06:30:00 2021 | Fri Jan 01 07:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0700" | Fri Jan 01 07:00:00 2021 | Fri Jan 01 07:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0730" | Fri Jan 01 07:30:00 2021 | Fri Jan 01 08:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0800" | Fri Jan 01 08:00:00 2021 | Fri Jan 01 08:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0830" | Fri Jan 01 08:30:00 2021 | Fri Jan 01 09:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0900" | Fri Jan 01 09:00:00 2021 | Fri Jan 01 09:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0930" | Fri Jan 01 09:30:00 2021 | Fri Jan 01 10:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_1000" | Fri Jan 01 10:00:00 2021 | Fri Jan 01 10:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_1030" | Fri Jan 01 10:30:00 2021 | Fri Jan 01 11:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_1100" | Fri Jan 01 11:00:00 2021 | Fri Jan 01 11:30:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_1130" | Fri Jan 01 11:30:00 2021 | Fri Jan 01 12:00:00 2021 | heap
+(24 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('"test !/ \n _dist_123_table"', INTERVAL '6 hours', '2021-01-02 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = '"test !/ \n _dist_123_table"'::regclass ORDER BY 3;
+         parent_table         | partition_column |                   partition                   |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0000" | Fri Jan 01 00:00:00 2021 | Fri Jan 01 06:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_0600" | Fri Jan 01 06:00:00 2021 | Fri Jan 01 12:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_1200" | Fri Jan 01 12:00:00 2021 | Fri Jan 01 18:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01_1800" | Fri Jan 01 18:00:00 2021 | Sat Jan 02 00:00:00 2021 | heap
+(4 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('"test !/ \n _dist_123_table"', INTERVAL '1 day', '2021-01-03 00:00:00', '2021-01-01 00:00:00');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = '"test !/ \n _dist_123_table"'::regclass ORDER BY 3;
+         parent_table         | partition_column |                partition                 |        from_value        |         to_value         | access_method
+---------------------------------------------------------------------
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_01" | Fri Jan 01 00:00:00 2021 | Sat Jan 02 00:00:00 2021 | heap
+ "test !/ \n _dist_123_table" | eventdatetime    | "test !/ \n _dist_123_table_p2021_01_02" | Sat Jan 02 00:00:00 2021 | Sun Jan 03 00:00:00 2021 | heap
+(2 rows)
+
+ROLLBACK;
+DROP TABLE "test !/ \n _dist_123_table";
+-- 5) test with distributed table
+CREATE TABLE date_distributed_partitioned_table(
+ measureid integer,
+ eventdate date,
+ measure_data jsonb) PARTITION BY RANGE(eventdate);
+SELECT create_distributed_table('date_distributed_partitioned_table', 'measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test interval must be multiple days for date partitioned table
+SELECT create_time_partitions('date_distributed_partitioned_table', INTERVAL '6 hours', '2022-01-01', '2021-01-01');
+ERROR:  partition interval of date partitioned table must be day or multiple days
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+SELECT create_time_partitions('date_distributed_partitioned_table', INTERVAL '1 week 1 day 1 hour', '2022-01-01', '2021-01-01');
+ERROR:  partition interval of date partitioned table must be day or multiple days
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+-- test with various intervals
+BEGIN;
+  SELECT create_time_partitions('date_distributed_partitioned_table', INTERVAL '1 day', '2021-02-01', '2021-01-01');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_distributed_partitioned_table'::regclass ORDER BY 3;
+            parent_table            | partition_column |                   partition                    | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_01 | 01-01-2021 | 01-02-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_02 | 01-02-2021 | 01-03-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_03 | 01-03-2021 | 01-04-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_04 | 01-04-2021 | 01-05-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_05 | 01-05-2021 | 01-06-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_06 | 01-06-2021 | 01-07-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_07 | 01-07-2021 | 01-08-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_08 | 01-08-2021 | 01-09-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_09 | 01-09-2021 | 01-10-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_10 | 01-10-2021 | 01-11-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_11 | 01-11-2021 | 01-12-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_12 | 01-12-2021 | 01-13-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_13 | 01-13-2021 | 01-14-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_14 | 01-14-2021 | 01-15-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_15 | 01-15-2021 | 01-16-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_16 | 01-16-2021 | 01-17-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_17 | 01-17-2021 | 01-18-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_18 | 01-18-2021 | 01-19-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_19 | 01-19-2021 | 01-20-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_20 | 01-20-2021 | 01-21-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_21 | 01-21-2021 | 01-22-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_22 | 01-22-2021 | 01-23-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_23 | 01-23-2021 | 01-24-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_24 | 01-24-2021 | 01-25-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_25 | 01-25-2021 | 01-26-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_26 | 01-26-2021 | 01-27-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_27 | 01-27-2021 | 01-28-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_28 | 01-28-2021 | 01-29-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_29 | 01-29-2021 | 01-30-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_30 | 01-30-2021 | 01-31-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021_01_31 | 01-31-2021 | 02-01-2021 | heap
+(31 rows)
+
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('date_distributed_partitioned_table', INTERVAL '1 week', '2022-01-01', '2021-01-01');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'date_distributed_partitioned_table'::regclass ORDER BY 3;
+            parent_table            | partition_column |                  partition                  | from_value |  to_value  | access_method
+---------------------------------------------------------------------
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2020w53 | 12-28-2020 | 01-04-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w01 | 01-04-2021 | 01-11-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w02 | 01-11-2021 | 01-18-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w03 | 01-18-2021 | 01-25-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w04 | 01-25-2021 | 02-01-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w05 | 02-01-2021 | 02-08-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w06 | 02-08-2021 | 02-15-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w07 | 02-15-2021 | 02-22-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w08 | 02-22-2021 | 03-01-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w09 | 03-01-2021 | 03-08-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w10 | 03-08-2021 | 03-15-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w11 | 03-15-2021 | 03-22-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w12 | 03-22-2021 | 03-29-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w13 | 03-29-2021 | 04-05-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w14 | 04-05-2021 | 04-12-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w15 | 04-12-2021 | 04-19-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w16 | 04-19-2021 | 04-26-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w17 | 04-26-2021 | 05-03-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w18 | 05-03-2021 | 05-10-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w19 | 05-10-2021 | 05-17-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w20 | 05-17-2021 | 05-24-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w21 | 05-24-2021 | 05-31-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w22 | 05-31-2021 | 06-07-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w23 | 06-07-2021 | 06-14-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w24 | 06-14-2021 | 06-21-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w25 | 06-21-2021 | 06-28-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w26 | 06-28-2021 | 07-05-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w27 | 07-05-2021 | 07-12-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w28 | 07-12-2021 | 07-19-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w29 | 07-19-2021 | 07-26-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w30 | 07-26-2021 | 08-02-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w31 | 08-02-2021 | 08-09-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w32 | 08-09-2021 | 08-16-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w33 | 08-16-2021 | 08-23-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w34 | 08-23-2021 | 08-30-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w35 | 08-30-2021 | 09-06-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w36 | 09-06-2021 | 09-13-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w37 | 09-13-2021 | 09-20-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w38 | 09-20-2021 | 09-27-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w39 | 09-27-2021 | 10-04-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w40 | 10-04-2021 | 10-11-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w41 | 10-11-2021 | 10-18-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w42 | 10-18-2021 | 10-25-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w43 | 10-25-2021 | 11-01-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w44 | 11-01-2021 | 11-08-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w45 | 11-08-2021 | 11-15-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w46 | 11-15-2021 | 11-22-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w47 | 11-22-2021 | 11-29-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w48 | 11-29-2021 | 12-06-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w49 | 12-06-2021 | 12-13-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w50 | 12-13-2021 | 12-20-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w51 | 12-20-2021 | 12-27-2021 | heap
+ date_distributed_partitioned_table | eventdate        | date_distributed_partitioned_table_p2021w52 | 12-27-2021 | 01-03-2022 | heap
+(53 rows)
+
+ROLLBACK;
+DROP TABLE date_distributed_partitioned_table;
+-- pi test with parameter names
+CREATE TABLE pi_table(
+  event_id bigserial,
+  event_time timestamptz default now(),
+  payload text) PARTITION BY RANGE (event_time);
+BEGIN;
+  SELECT create_time_partitions('pi_table', start_from := '2021-08-01', end_at := '2021-10-01', partition_interval := pi() * interval '1 day');
+ create_time_partitions
+---------------------------------------------------------------------
+ t
+(1 row)
+
+  SELECT * FROM time_partitions WHERE parent_table = 'pi_table'::regclass ORDER BY 3;
+ parent_table | partition_column |      partition       |             from_value             |              to_value              | access_method
+---------------------------------------------------------------------
+ pi_table     | event_time       | pi_table_p2021_08_01 | Sun Aug 01 00:00:00 2021 PDT       | Wed Aug 04 03:23:53.60527 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_08_04 | Wed Aug 04 03:23:53.60527 2021 PDT | Sat Aug 07 06:47:47.21054 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_08_07 | Sat Aug 07 06:47:47.21054 2021 PDT | Tue Aug 10 10:11:40.81581 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_08_10 | Tue Aug 10 10:11:40.81581 2021 PDT | Fri Aug 13 13:35:34.42108 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_08_13 | Fri Aug 13 13:35:34.42108 2021 PDT | Mon Aug 16 16:59:28.02635 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_08_16 | Mon Aug 16 16:59:28.02635 2021 PDT | Thu Aug 19 20:23:21.63162 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_08_19 | Thu Aug 19 20:23:21.63162 2021 PDT | Sun Aug 22 23:47:15.23689 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_08_22 | Sun Aug 22 23:47:15.23689 2021 PDT | Thu Aug 26 03:11:08.84216 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_08_26 | Thu Aug 26 03:11:08.84216 2021 PDT | Sun Aug 29 06:35:02.44743 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_08_29 | Sun Aug 29 06:35:02.44743 2021 PDT | Wed Sep 01 09:58:56.0527 2021 PDT  | heap
+ pi_table     | event_time       | pi_table_p2021_09_01 | Wed Sep 01 09:58:56.0527 2021 PDT  | Sat Sep 04 13:22:49.65797 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_09_04 | Sat Sep 04 13:22:49.65797 2021 PDT | Tue Sep 07 16:46:43.26324 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_09_07 | Tue Sep 07 16:46:43.26324 2021 PDT | Fri Sep 10 20:10:36.86851 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_09_10 | Fri Sep 10 20:10:36.86851 2021 PDT | Mon Sep 13 23:34:30.47378 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_09_13 | Mon Sep 13 23:34:30.47378 2021 PDT | Fri Sep 17 02:58:24.07905 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_09_17 | Fri Sep 17 02:58:24.07905 2021 PDT | Mon Sep 20 06:22:17.68432 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_09_20 | Mon Sep 20 06:22:17.68432 2021 PDT | Thu Sep 23 09:46:11.28959 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_09_23 | Thu Sep 23 09:46:11.28959 2021 PDT | Sun Sep 26 13:10:04.89486 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_09_26 | Sun Sep 26 13:10:04.89486 2021 PDT | Wed Sep 29 16:33:58.50013 2021 PDT | heap
+ pi_table     | event_time       | pi_table_p2021_09_29 | Wed Sep 29 16:33:58.50013 2021 PDT | Sat Oct 02 19:57:52.1054 2021 PDT  | heap
+(20 rows)
+
+ROLLBACK;
+DROP TABLE pi_table;
+-- c) test drop_old_time_partitions
+-- 1) test with date partitioned table
+CREATE TABLE date_partitioned_table_to_exp (event_date date, event int) partition by range (event_date);
+SELECT create_distributed_table('date_partitioned_table_to_exp', 'event');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE date_partitioned_table_to_exp_d00 PARTITION OF date_partitioned_table_to_exp FOR VALUES FROM ('2000-01-01') TO ('2009-12-31');
+CREATE TABLE date_partitioned_table_to_exp_d10 PARTITION OF date_partitioned_table_to_exp FOR VALUES FROM ('2010-01-01') TO ('2019-12-31');
+CREATE TABLE date_partitioned_table_to_exp_d20 PARTITION OF date_partitioned_table_to_exp FOR VALUES FROM ('2020-01-01') TO ('2029-12-31');
+INSERT INTO date_partitioned_table_to_exp VALUES ('2005-01-01', 1);
+INSERT INTO date_partitioned_table_to_exp VALUES ('2015-01-01', 2);
+INSERT INTO date_partitioned_table_to_exp VALUES ('2025-01-01', 3);
+\set VERBOSITY terse
+-- expire no partitions
+CALL drop_old_time_partitions('date_partitioned_table_to_exp', '1999-01-01');
+SELECT partition FROM time_partitions WHERE parent_table = 'date_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+             partition
+---------------------------------------------------------------------
+ date_partitioned_table_to_exp_d00
+ date_partitioned_table_to_exp_d10
+ date_partitioned_table_to_exp_d20
+(3 rows)
+
+-- expire 2 old partitions
+CALL drop_old_time_partitions('date_partitioned_table_to_exp', '2021-01-01');
+NOTICE:  dropping date_partitioned_table_to_exp_d00 with start time 01-01-2000 and end time 12-31-2009
+NOTICE:  dropping date_partitioned_table_to_exp_d10 with start time 01-01-2010 and end time 12-31-2019
+SELECT partition FROM time_partitions WHERE parent_table = 'date_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+             partition
+---------------------------------------------------------------------
+ date_partitioned_table_to_exp_d20
+(1 row)
+
+\set VERBOSITY default
+DROP TABLE date_partitioned_table_to_exp;
+-- 2) test with timestamptz partitioned table
+CREATE TABLE tstz_partitioned_table_to_exp (event_time timestamptz, event int) partition by range (event_time);
+SELECT create_distributed_table('tstz_partitioned_table_to_exp', 'event');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE tstz_partitioned_table_to_exp_d0 PARTITION OF tstz_partitioned_table_to_exp FOR VALUES FROM ('2021-01-01 02:00:00+00') TO ('2021-01-01 06:00:00+00');
+CREATE TABLE tstz_partitioned_table_to_exp_d1 PARTITION OF tstz_partitioned_table_to_exp FOR VALUES FROM ('2021-01-01 06:00:00+00') TO ('2021-01-01 10:00:00+00');
+CREATE TABLE tstz_partitioned_table_to_exp_d2 PARTITION OF tstz_partitioned_table_to_exp FOR VALUES FROM ('2021-01-01 10:00:00+00') TO ('2021-01-01 14:00:00+00');
+INSERT INTO tstz_partitioned_table_to_exp VALUES ('2021-01-01 03:00:00+00', 1);
+INSERT INTO tstz_partitioned_table_to_exp VALUES ('2021-01-01 09:00:00+00', 2);
+INSERT INTO tstz_partitioned_table_to_exp VALUES ('2021-01-01 13:00:00+00', 3);
+\set VERBOSITY terse
+-- expire no partitions
+CALL drop_old_time_partitions('tstz_partitioned_table_to_exp', '2021-01-01 01:00:00+00');
+SELECT partition FROM time_partitions WHERE parent_table = 'tstz_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+            partition
+---------------------------------------------------------------------
+ tstz_partitioned_table_to_exp_d0
+ tstz_partitioned_table_to_exp_d1
+ tstz_partitioned_table_to_exp_d2
+(3 rows)
+
+-- expire 2 old partitions
+CALL drop_old_time_partitions('tstz_partitioned_table_to_exp', '2021-01-01 12:00:00+00');
+NOTICE:  dropping tstz_partitioned_table_to_exp_d0 with start time Thu Dec 31 18:00:00 2020 PST and end time Thu Dec 31 22:00:00 2020 PST
+NOTICE:  dropping tstz_partitioned_table_to_exp_d1 with start time Thu Dec 31 22:00:00 2020 PST and end time Fri Jan 01 02:00:00 2021 PST
+SELECT partition FROM time_partitions WHERE parent_table = 'tstz_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+            partition
+---------------------------------------------------------------------
+ tstz_partitioned_table_to_exp_d2
+(1 row)
+
+\set VERBOSITY default
+DROP TABLE tstz_partitioned_table_to_exp;
+-- 3) test with weird table name
+CREATE TABLE "test !/ \n _dist_123_table_exp" (event_time timestamptz, event int) partition by range (event_time);
+SELECT create_distributed_table('"test !/ \n _dist_123_table_exp"', 'event');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE tstz_partitioned_table_to_exp_d0 PARTITION OF "test !/ \n _dist_123_table_exp" FOR VALUES FROM ('2021-01-01 02:00:00+00') TO ('2021-01-01 06:00:00+00');
+CREATE TABLE tstz_partitioned_table_to_exp_d1 PARTITION OF "test !/ \n _dist_123_table_exp" FOR VALUES FROM ('2021-01-01 06:00:00+00') TO ('2021-01-01 10:00:00+00');
+CREATE TABLE tstz_partitioned_table_to_exp_d2 PARTITION OF "test !/ \n _dist_123_table_exp" FOR VALUES FROM ('2021-01-01 10:00:00+00') TO ('2021-01-01 14:00:00+00');
+INSERT INTO "test !/ \n _dist_123_table_exp" VALUES ('2021-01-01 03:00:00+00', 1);
+INSERT INTO "test !/ \n _dist_123_table_exp" VALUES ('2021-01-01 09:00:00+00', 2);
+INSERT INTO "test !/ \n _dist_123_table_exp" VALUES ('2021-01-01 13:00:00+00', 3);
+\set VERBOSITY terse
+-- expire no partitions
+CALL drop_old_time_partitions('"test !/ \n _dist_123_table_exp"', '2021-01-01 01:00:00+00');
+SELECT partition FROM time_partitions WHERE parent_table = '"test !/ \n _dist_123_table_exp"'::regclass ORDER BY partition::text;
+            partition
+---------------------------------------------------------------------
+ tstz_partitioned_table_to_exp_d0
+ tstz_partitioned_table_to_exp_d1
+ tstz_partitioned_table_to_exp_d2
+(3 rows)
+
+-- expire 2 old partitions
+CALL drop_old_time_partitions('"test !/ \n _dist_123_table_exp"', '2021-01-01 12:00:00+00');
+NOTICE:  dropping tstz_partitioned_table_to_exp_d0 with start time Thu Dec 31 18:00:00 2020 PST and end time Thu Dec 31 22:00:00 2020 PST
+NOTICE:  dropping tstz_partitioned_table_to_exp_d1 with start time Thu Dec 31 22:00:00 2020 PST and end time Fri Jan 01 02:00:00 2021 PST
+SELECT partition FROM time_partitions WHERE parent_table = '"test !/ \n _dist_123_table_exp"'::regclass ORDER BY partition::text;
+            partition
+---------------------------------------------------------------------
+ tstz_partitioned_table_to_exp_d2
+(1 row)
+
+\set VERBOSITY default
+DROP TABLE "test !/ \n _dist_123_table_exp";
+-- d) invalid tables for helper UDFs
+CREATE TABLE multiple_partition_column_table(
+  event_id bigserial,
+  event_time timestamptz,
+  payload text) PARTITION BY RANGE (event_time, event_id);
+SELECT create_time_partitions('multiple_partition_column_table', INTERVAL '1 month', now() + INTERVAL '1 year');
+ERROR:  partitioned tables with multiple partition columns are not supported
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+CALL drop_old_time_partitions('multiple_partition_column_table', now());
+ERROR:  partitioned tables with multiple partition columns are not supported
+CONTEXT:  PL/pgSQL function drop_old_time_partitions(regclass,timestamp with time zone) line XX at RAISE
+DROP TABLE multiple_partition_column_table;
+CREATE TABLE invalid_partition_column_table(
+  event_id bigserial,
+  event_time bigint,
+  payload text) PARTITION BY RANGE (event_time);
+SELECT create_time_partitions('invalid_partition_column_table', INTERVAL '1 month', now() + INTERVAL '1 year');
+ERROR:  type of the partition column of the table invalid_partition_column_table must be date, timestamp or timestamptz
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+CALL drop_old_time_partitions('invalid_partition_column_table', now());
+ERROR:  type of the partition column of the table invalid_partition_column_table must be date, timestamp or timestamptz
+CONTEXT:  PL/pgSQL function drop_old_time_partitions(regclass,timestamp with time zone) line XX at RAISE
+DROP TABLE invalid_partition_column_table;
+CREATE TABLE non_partitioned_table(
+  event_id bigserial,
+  event_time timestamptz,
+  payload text);
+SELECT create_time_partitions('non_partitioned_table', INTERVAL '1 month', now() + INTERVAL '1 year');
+ERROR:  non_partitioned_table is not partitioned
+CONTEXT:  PL/pgSQL function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at RAISE
+PL/pgSQL function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) line XX at FOR over SELECT rows
+CALL drop_old_time_partitions('non_partitioned_table', now());
+ERROR:  non_partitioned_table is not partitioned
+CONTEXT:  PL/pgSQL function drop_old_time_partitions(regclass,timestamp with time zone) line XX at RAISE
+DROP TABLE non_partitioned_table;
 DROP SCHEMA partitioning_schema CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table "schema-test"

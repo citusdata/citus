@@ -1251,7 +1251,7 @@ SELECT run_command_on_coordinator_and_workers('CREATE USER "test-user"');
 NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CONTEXT:  SQL statement "CREATE USER "test-user""
-PL/pgSQL function run_command_on_coordinator_and_workers(text) line 3 at EXECUTE
+PL/pgSQL function run_command_on_coordinator_and_workers(text) line XX at EXECUTE
  run_command_on_coordinator_and_workers
 ---------------------------------------------------------------------
 

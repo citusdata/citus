@@ -229,6 +229,7 @@ s/ERROR:  parallel workers for vacuum must/ERROR:  parallel vacuum degree must/g
 
 # ignore PL/pgSQL line numbers that differ on Mac builds
 s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g
+s/^(PL\/pgSQL function .* line) [0-9]+ (.*)/\1 XX \2/g
 
 # can be removed after dropping PG13 support
 s/ERROR:  parallel workers for vacuum must be between/ERROR:  parallel vacuum degree must be between/g
