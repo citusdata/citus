@@ -494,6 +494,9 @@ ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
 		minStripeReadCount + complementIndexCorrelation * (maxStripeReadCount -
 														   minStripeReadCount);
 
+	/* even in the best case, we will read a single stripe */
+	estimatedStripeReadCount = Max(estimatedStripeReadCount, 1.0);
+
 	Cost scanCost = perStripeCost * estimatedStripeReadCount;
 
 	ereport(DEBUG4, (errmsg("re-costing index scan for columnar table: "
