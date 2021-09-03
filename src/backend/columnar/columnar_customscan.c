@@ -61,40 +61,46 @@ typedef struct ColumnarScanState
 typedef bool (*PathPredicate)(Path *path);
 
 
-static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
-									   RangeTblEntry *rte);
-static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
-static bool IsNotIndexPath(Path *path);
-static Path * CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel,
-										Oid relationId);
+/* functions to cost paths in-place */
 static void CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
 static void CostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 								  IndexPath *indexPath);
-static Cost ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
-											Oid relationId, IndexPath *indexPath);
 static void CostColumnarSeqPath(RelOptInfo *rel, Oid relationId, Path *path);
-static int RelationIdGetNumberOfAttributes(Oid relationId);
+static void CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
+							 CustomPath *cpath, int numberOfColumnsRead,
+							 int nClauses);
+
+/* functions to add new paths */
 static void AddColumnarScanPaths(PlannerInfo *root, RelOptInfo *rel,
 								 RangeTblEntry *rte);
+static void AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
+								RangeTblEntry *rte, Relids required_relids);
+
+/* helper functions to be used when costing paths or altering them */
+static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPredicate);
+static bool IsNotIndexPath(Path *path);
+static Cost ColumnarIndexScanAdditionalCost(PlannerInfo *root, RelOptInfo *rel,
+											Oid relationId, IndexPath *indexPath);
+static int RelationIdGetNumberOfAttributes(Oid relationId);
+static Cost ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId,
+									  int numberOfColumnsRead);
+static uint64 ColumnarTableStripeCount(Oid relationId);
+static Path * CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel,
+										Oid relationId);
 static void AddColumnarScanPathsRec(PlannerInfo *root, RelOptInfo *rel,
 									RangeTblEntry *rte, Relids paramRelids,
 									Relids candidateRelids,
 									int depthLimit);
-static void AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel,
-								RangeTblEntry *rte, Relids required_relids);
-static void CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
-							 CustomPath *cpath, int numberOfColumnsRead,
-							 int nClauses);
-static Cost ColumnarPerStripeScanCost(RelOptInfo *rel, Oid relationId,
-									  int numberOfColumnsRead);
-static uint64 ColumnarTableStripeCount(Oid relationId);
+
+/* hooks and callbacks */
+static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
+									   RangeTblEntry *rte);
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
 											  struct CustomPath *best_path,
 											  List *tlist,
 											  List *clauses,
 											  List *custom_plans);
-
 static Node * ColumnarScan_CreateCustomScanState(CustomScan *cscan);
 
 static void ColumnarScan_BeginCustomScan(CustomScanState *node, EState *estate,
@@ -104,16 +110,19 @@ static void ColumnarScan_EndCustomScan(CustomScanState *node);
 static void ColumnarScan_ReScanCustomScan(CustomScanState *node);
 static void ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 										   ExplainState *es);
+
+/* helper functions to build strings for EXPLAIN */
 static const char * ColumnarPushdownClausesStr(List *context, List *clauses);
 static const char * ColumnarProjectedColumnsStr(List *context,
 												List *projectedColumns);
-static List * ColumnarVarNeeded(ColumnarScanState *columnarScanState);
-static Bitmapset * ColumnarAttrNeeded(ScanState *ss);
-
 #if PG_VERSION_NUM >= 130000
 static List * set_deparse_context_planstate(List *dpcontext, Node *node,
 											List *ancestors);
 #endif
+
+/* other helpers */
+static List * ColumnarVarNeeded(ColumnarScanState *columnarScanState);
+static Bitmapset * ColumnarAttrNeeded(ScanState *ss);
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
