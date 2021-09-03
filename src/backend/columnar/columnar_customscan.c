@@ -31,6 +31,7 @@
 #include "optimizer/optimizer.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/paths.h"
+#include "optimizer/plancat.h"
 #include "optimizer/restrictinfo.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -95,6 +96,8 @@ static void AddColumnarScanPathsRec(PlannerInfo *root, RelOptInfo *rel,
 /* hooks and callbacks */
 static void ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 									   RangeTblEntry *rte);
+static void ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
+										bool inhparent, RelOptInfo *rel);
 static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  RelOptInfo *rel,
 											  struct CustomPath *best_path,
@@ -126,6 +129,7 @@ static Bitmapset * ColumnarAttrNeeded(ScanState *ss);
 
 /* saved hook value in case of unload */
 static set_rel_pathlist_hook_type PreviousSetRelPathlistHook = NULL;
+static get_relation_info_hook_type PreviousGetRelationInfoHook = NULL;
 
 static bool EnableColumnarCustomScan = true;
 static bool EnableColumnarQualPushdown = true;
@@ -179,6 +183,9 @@ columnar_customscan_init()
 {
 	PreviousSetRelPathlistHook = set_rel_pathlist_hook;
 	set_rel_pathlist_hook = ColumnarSetRelPathlistHook;
+
+	PreviousGetRelationInfoHook = get_relation_info_hook;
+	get_relation_info_hook = ColumnarGetRelationInfoHook;
 
 	/* register customscan specific GUC's */
 	DefineCustomBoolVariable(
@@ -274,8 +281,14 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 							errmsg("sample scans not supported on columnar tables")));
 		}
 
-		/* columnar doesn't support parallel paths */
-		rel->partial_pathlist = NIL;
+		if (list_length(rel->partial_pathlist) != 0)
+		{
+			/*
+			 * Parallel scans on columnar tables are already discardad by
+			 * ColumnarGetRelationInfoHook but be on the safe side.
+			 */
+			elog(ERROR, "parallel scans on columnar are not supported");
+		}
 
 		/*
 		 * There are cases where IndexPath is normally more preferrable over
@@ -315,6 +328,23 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		}
 	}
 	RelationClose(relation);
+}
+
+
+static void
+ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
+							bool inhparent, RelOptInfo *rel)
+{
+	if (PreviousGetRelationInfoHook)
+	{
+		PreviousGetRelationInfoHook(root, relationObjectId, inhparent, rel);
+	}
+
+	if (IsColumnarTableAmTable(relationObjectId))
+	{
+		/* disable parallel query */
+		rel->rel_parallel_workers = 0;
+	}
 }
 
 
