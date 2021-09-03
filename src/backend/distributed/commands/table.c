@@ -536,7 +536,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	if (get_rel_relkind(leftRelationId) == RELKIND_SEQUENCE)
 	{
 		AlterTableStmt *stmtCopy = copyObject(alterTableStatement);
-		stmtCopy->relkind = OBJECT_SEQUENCE;
+		AlterTableStmtObjType_compat(stmtCopy) = OBJECT_SEQUENCE;
 		return PreprocessAlterSequenceOwnerStmt((Node *) stmtCopy, alterTableCommand,
 												processUtilityContext);
 	}
@@ -1629,7 +1629,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		 */
 		if (get_rel_relkind(relationId) == RELKIND_SEQUENCE)
 		{
-			alterTableStatement->relkind = OBJECT_SEQUENCE;
+			AlterTableStmtObjType_compat(alterTableStatement) = OBJECT_SEQUENCE;
 			PostprocessAlterSequenceOwnerStmt((Node *) alterTableStatement, NULL);
 			return;
 		}
@@ -2380,6 +2380,15 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+			case AT_DetachPartitionFinalize:
+			{
+				ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. FINALIZE "
+									   "commands are currently unsupported.")));
+				break;
+			}
+
+#endif
 			case AT_DetachPartition:
 			{
 				/* we only allow partitioning commands if they are only subcommand */
@@ -2391,7 +2400,16 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 									errhint("You can issue each subcommand "
 											"separately.")));
 				}
+				#if PG_VERSION_NUM >= PG_VERSION_14
+				PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
 
+				if (partitionCommand->concurrent)
+				{
+					ereport(ERROR, (errmsg("ALTER TABLE .. DETACH PARTITION .. "
+										   "CONCURRENTLY commands are currently "
+										   "unsupported.")));
+				}
+				#endif
 				ErrorIfCitusLocalTablePartitionCommand(command, relationId);
 
 				break;
@@ -2427,15 +2445,19 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			case AT_ReplicaIdentity:
 			case AT_ValidateConstraint:
 			case AT_DropConstraint: /* we do the check for invalidation in AlterTableDropsForeignKey */
-			{
-				/*
-				 * We will not perform any special check for:
-				 * ALTER TABLE .. ALTER COLUMN .. SET NOT NULL
-				 * ALTER TABLE .. REPLICA IDENTITY ..
-				 * ALTER TABLE .. VALIDATE CONSTRAINT ..
-				 */
-				break;
-			}
+#if PG_VERSION_NUM >= PG_VERSION_14
+			case AT_SetCompression:
+#endif
+				{
+					/*
+					 * We will not perform any special check for:
+					 * ALTER TABLE .. ALTER COLUMN .. SET NOT NULL
+					 * ALTER TABLE .. REPLICA IDENTITY ..
+					 * ALTER TABLE .. VALIDATE CONSTRAINT ..
+					 * ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
+					 */
+					break;
+				}
 
 			case AT_SetRelOptions:  /* SET (...) */
 			case AT_ResetRelOptions:    /* RESET (...) */

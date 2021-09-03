@@ -79,10 +79,7 @@ SELECT create_distributed_table('ownertest','a');
 CREATE TABLE test (x int, y int);
 SELECT create_distributed_table('test','x');
 
-CREATE STATISTICS stats_xy ON (x, y) FROM test;
-CREATE STATISTICS stats_xy ON x+y FROM test;
 CREATE STATISTICS stats_xy ON x,y FROM test;
-CREATE STATISTICS IF NOT EXISTS stats_xy ON x+y FROM test;
 
 \c - - - :worker_1_port
 SELECT stxname

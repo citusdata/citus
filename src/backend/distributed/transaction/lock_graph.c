@@ -456,14 +456,12 @@ BuildLocalWaitGraph(void)
 static bool
 IsProcessWaitingForSafeOperations(PGPROC *proc)
 {
-	if (proc->waitStatus != STATUS_WAITING)
+	if (proc->waitStatus != PROC_WAIT_STATUS_WAITING)
 	{
 		return false;
 	}
 
-	/* get the transaction that the backend associated with */
-	PGXACT *pgxact = &ProcGlobal->allPgXact[proc->pgprocno];
-	if (pgxact->vacuumFlags & PROC_IS_AUTOVACUUM)
+	if (pgproc_statusflags_compat(proc) & PROC_IS_AUTOVACUUM)
 	{
 		return true;
 	}
@@ -715,7 +713,7 @@ AddProcToVisit(PROCStack *remaining, PGPROC *proc)
 bool
 IsProcessWaitingForLock(PGPROC *proc)
 {
-	return proc->waitStatus == STATUS_WAITING;
+	return proc->waitStatus == PROC_WAIT_STATUS_WAITING;
 }
 
 

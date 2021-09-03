@@ -87,6 +87,9 @@ FROM
     ) as baz
     ORDER BY 1 DESC;
 
+-- we reset the client min_messages here to avoid adding an alternative output
+-- for pg14 as the output slightly differs.
+RESET client_min_messages;
 -- Expressions inside the aggregates
 -- parts of the query is inspired by TPCH queries
 SELECT
@@ -128,6 +131,8 @@ FROM
     events_table
     WHERE foo.avg != bar.cnt_1 AND baz.cnt_2 != events_table.event_type
     ORDER BY 1 DESC;
+SET client_min_messages TO DEBUG1;
+
 
 -- Multiple columns in GROUP BYs
 -- foo needs to be recursively planned, bar can be pushded down

@@ -206,7 +206,7 @@ PreprocessAlterTypeStmt(Node *node, const char *queryString,
 						ProcessUtilityContext processUtilityContext)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
 
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateObject(&typeAddress))
@@ -789,7 +789,7 @@ ObjectAddress
 AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
 
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
@@ -973,7 +973,8 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 	/* add owner ship change so the creation command can be run as a different user */
 	const char *username = GetUserNameFromId(GetTypeOwner(typeAddress->objectId), false);
 	initStringInfo(&buf);
-	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND, getObjectIdentity(typeAddress),
+	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND,
+					 getObjectIdentity_compat(typeAddress, false),
 					 quote_identifier(username));
 	ddlCommands = lappend(ddlCommands, buf.data);
 

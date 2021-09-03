@@ -50,6 +50,7 @@
 #include "postgres.h"
 #include "libpq-fe.h"
 #include "miscadmin.h"
+#include "pgstat.h"
 
 #include <arpa/inet.h> /* for htons */
 #include <netinet/in.h> /* for htons */
@@ -67,6 +68,7 @@
 #include "catalog/pg_type.h"
 #include "commands/copy.h"
 #include "commands/defrem.h"
+#include "commands/progress.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
@@ -267,7 +269,9 @@ static CopyCoercionData * ColumnCoercionPaths(TupleDesc destTupleDescriptor,
 											  Oid *finalColumnTypeArray);
 static FmgrInfo * TypeOutputFunctions(uint32 columnCount, Oid *typeIdArray,
 									  bool binaryFormat);
+#if PG_VERSION_NUM < PG_VERSION_14
 static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist);
+#endif
 static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
 static void CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag);
 static HTAB * CreateConnectionStateHash(MemoryContext memoryContext);
@@ -520,13 +524,14 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	}
 
 	/* initialize copy state to read from COPY data source */
-	CopyState copyState = BeginCopyFrom(NULL,
-										copiedDistributedRelation,
-										copyStatement->filename,
-										copyStatement->is_program,
-										NULL,
-										copyStatement->attlist,
-										copyStatement->options);
+	CopyFromState copyState = BeginCopyFrom_compat(NULL,
+												   copiedDistributedRelation,
+												   NULL,
+												   copyStatement->filename,
+												   copyStatement->is_program,
+												   NULL,
+												   copyStatement->attlist,
+												   copyStatement->options);
 
 	/* set up callback to identify error line number */
 	errorCallback.callback = CopyFromErrorCallback;
@@ -556,7 +561,11 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 
 		dest->receiveSlot(tupleTableSlot, dest);
 
-		processedRowCount += 1;
+		++processedRowCount;
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+		pgstat_progress_update_param(PROGRESS_COPY_TUPLES_PROCESSED, processedRowCount);
+#endif
 	}
 
 	EndCopyFrom(copyState);
@@ -617,13 +626,14 @@ CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, O
 		(ShardConnections *) palloc0(sizeof(ShardConnections));
 
 	/* initialize copy state to read from COPY data source */
-	CopyState copyState = BeginCopyFrom(NULL,
-										distributedRelation,
-										copyStatement->filename,
-										copyStatement->is_program,
-										NULL,
-										copyStatement->attlist,
-										copyStatement->options);
+	CopyFromState copyState = BeginCopyFrom_compat(NULL,
+												   distributedRelation,
+												   NULL,
+												   copyStatement->filename,
+												   copyStatement->is_program,
+												   NULL,
+												   copyStatement->attlist,
+												   copyStatement->options);
 
 	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));
 	copyOutState->delim = (char *) delimiterCharacter;
@@ -736,6 +746,10 @@ CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, O
 		}
 
 		processedRowCount += 1;
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+		pgstat_progress_update_param(PROGRESS_COPY_TUPLES_PROCESSED, processedRowCount);
+#endif
 	}
 
 	/*
@@ -1802,24 +1816,8 @@ CreateEmptyShard(char *relationName)
 static void
 SendCopyBegin(CopyOutState cstate)
 {
-	if (PG_PROTOCOL_MAJOR(FrontendProtocol) >= 3)
-	{
-		/* new way */
-		StringInfoData buf;
-		int			natts = list_length(cstate->attnumlist);
-		int16		format = (cstate->binary ? 1 : 0);
-		int			i;
-
-		pq_beginmessage(&buf, 'H');
-		pq_sendbyte(&buf, format);	/* overall format */
-		pq_sendint16(&buf, natts);
-		for (i = 0; i < natts; i++)
-			pq_sendint16(&buf, format); /* per-column formats */
-		pq_endmessage(&buf);
-		cstate->copy_dest = COPY_NEW_FE;
-	}
-	else
-	{
+#if PG_VERSION_NUM < PG_VERSION_14
+	if (PG_PROTOCOL_MAJOR(FrontendProtocol) < 3) {
 		/* old way */
 		if (cstate->binary)
 			ereport(ERROR,
@@ -1829,7 +1827,21 @@ SendCopyBegin(CopyOutState cstate)
 		/* grottiness needed for old COPY OUT protocol */
 		pq_startcopyout();
 		cstate->copy_dest = COPY_OLD_FE;
+		return;
 	}
+#endif
+	StringInfoData buf;
+	int			natts = list_length(cstate->attnumlist);
+	int16		format = (cstate->binary ? 1 : 0);
+	int			i;
+
+	pq_beginmessage(&buf, 'H');
+	pq_sendbyte(&buf, format);	/* overall format */
+	pq_sendint16(&buf, natts);
+	for (i = 0; i < natts; i++)
+		pq_sendint16(&buf, format); /* per-column formats */
+	pq_endmessage(&buf);
+	cstate->copy_dest = COPY_FRONTEND;
 }
 
 
@@ -1837,20 +1849,20 @@ SendCopyBegin(CopyOutState cstate)
 static void
 SendCopyEnd(CopyOutState cstate)
 {
-	if (cstate->copy_dest == COPY_NEW_FE)
-	{
-		/* Shouldn't have any unsent data */
-		Assert(cstate->fe_msgbuf->len == 0);
-		/* Send Copy Done message */
-		pq_putemptymessage('c');
-	}
-	else
+#if PG_VERSION_NUM < PG_VERSION_14
+	if (cstate->copy_dest != COPY_NEW_FE)
 	{
 		CopySendData(cstate, "\\.", 2);
 		/* Need to flush out the trailer (this also appends a newline) */
 		CopySendEndOfRow(cstate, true);
 		pq_endcopyout(false);
+		return;
 	}
+#endif
+	/* Shouldn't have any unsent data */
+	Assert(cstate->fe_msgbuf->len == 0);
+	/* Send Copy Done message */
+	pq_putemptymessage('c');
 }
 
 
@@ -1904,6 +1916,7 @@ CopySendEndOfRow(CopyOutState cstate, bool includeEndOfLine)
 
 	switch (cstate->copy_dest)
 	{
+#if PG_VERSION_NUM < PG_VERSION_14
 		case COPY_OLD_FE:
 			/* The FE/BE protocol uses \n as newline for all platforms */
 			if (!cstate->binary && includeEndOfLine)
@@ -1917,7 +1930,8 @@ CopySendEndOfRow(CopyOutState cstate, bool includeEndOfLine)
 						 errmsg("connection lost during COPY to stdout")));
 			}
 			break;
-		case COPY_NEW_FE:
+#endif
+		case COPY_FRONTEND:
 			/* The FE/BE protocol uses \n as newline for all platforms */
 			if (!cstate->binary && includeEndOfLine)
 				CopySendChar(cstate, '\n');
@@ -2979,6 +2993,13 @@ ProcessCopyStmt(CopyStmt *copyStatement, QueryCompletionCompat *completionTag, c
 			{
 				if (copyStatement->whereClause)
 				{
+					/*
+					 * Update progress reporting for tuples progressed so that the
+					 * progress is reflected on pg_stat_progress_copy. Citus currently
+					 * does not support COPY .. WHERE clause so TUPLES_EXCLUDED is not
+					 * handled. When we remove this check, we should implement progress
+					 * reporting as well.
+					 */
 					ereport(ERROR, (errmsg(
 										"Citus does not support COPY FROM with WHERE")));
 				}
@@ -3143,6 +3164,7 @@ CitusCopyTo(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 			PQclear(result);
 
 			tuplesSent += ForwardCopyDataFromConnection(copyOutState, connection);
+
 			break;
 		}
 
@@ -3275,6 +3297,8 @@ CreateRangeTable(Relation rel, AclMode requiredAccess)
 }
 
 
+#if PG_VERSION_NUM < PG_VERSION_14
+
 /* Helper for CheckCopyPermissions(), copied from postgres */
 static List *
 CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
@@ -3354,6 +3378,9 @@ CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 	return attnums;
 	/* *INDENT-ON* */
 }
+
+
+#endif
 
 
 /*

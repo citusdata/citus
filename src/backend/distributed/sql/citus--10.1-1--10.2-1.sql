@@ -28,3 +28,5 @@ CREATE FUNCTION pg_catalog.citus_drop_all_shards(logicalrelid regclass,
 COMMENT ON FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text, boolean)
     IS 'drop all shards in a relation and update metadata';
 #include "udfs/citus_drop_trigger/10.2-1.sql";
+#include "udfs/citus_prepare_pg_upgrade/10.2-1.sql"
+#include "udfs/citus_finish_pg_upgrade/10.2-1.sql"

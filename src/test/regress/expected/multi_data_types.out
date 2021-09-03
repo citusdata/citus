@@ -162,20 +162,18 @@ SELECT * FROM composite_type_partitioned_table WHERE id = 123;
  123 | (123,456)
 (1 row)
 
-EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE)
 INSERT INTO composite_type_partitioned_table VALUES (123, '(123, 456)'::other_composite_type);
-                                                                QUERY PLAN
+                                      QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Query: INSERT INTO public.composite_type_partitioned_table_530003 (id, col) VALUES (123, '(123,456)'::public.test_composite_type)
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Insert on public.composite_type_partitioned_table_530003 (actual rows=0 loops=1)
+         ->  Insert on composite_type_partitioned_table_530003 (actual rows=0 loops=1)
                ->  Result (actual rows=1 loops=1)
-                     Output: 123, '(123,456)'::test_composite_type
-(9 rows)
+(7 rows)
 
 SELECT run_command_on_coordinator_and_workers($cf$
     DROP CAST (other_composite_type as test_composite_type);
@@ -206,20 +204,18 @@ $cf$);
 (1 row)
 
 INSERT INTO composite_type_partitioned_table VALUES (456, '(456, 678)'::other_composite_type);
-EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE TRUE, TIMING FALSE, SUMMARY FALSE)
+EXPLAIN (ANALYZE TRUE, COSTS FALSE, VERBOSE FALSE, TIMING FALSE, SUMMARY FALSE)
 INSERT INTO composite_type_partitioned_table VALUES (123, '(456, 678)'::other_composite_type);
-                                                                 QUERY PLAN
+                                      QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
    Task Count: 1
    Tasks Shown: All
    ->  Task
-         Query: INSERT INTO public.composite_type_partitioned_table_530000 (id, col) VALUES (123, '(456,678)'::public.other_composite_type)
          Node: host=localhost port=xxxxx dbname=regression
-         ->  Insert on public.composite_type_partitioned_table_530000 (actual rows=0 loops=1)
+         ->  Insert on composite_type_partitioned_table_530000 (actual rows=0 loops=1)
                ->  Result (actual rows=1 loops=1)
-                     Output: 123, '(456,678)'::test_composite_type
-(9 rows)
+(7 rows)
 
 -- create and distribute a table on enum type column
 CREATE TYPE bug_status AS ENUM ('new', 'open', 'closed');

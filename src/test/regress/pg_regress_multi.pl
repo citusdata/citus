@@ -420,8 +420,13 @@ if (-e $hll_control)
 }
 push(@pgOptions, "shared_preload_libraries='${sharedPreloadLibraries}'");
 
-# Avoid parallelism to stabilize explain plans
-push(@pgOptions, "max_parallel_workers_per_gather=0");
+if ($vanillatest) {
+    # use the default used in vanilla tests
+    push(@pgOptions, "max_parallel_workers_per_gather=2");
+}else {
+    # Avoid parallelism to stabilize explain plans
+    push(@pgOptions, "max_parallel_workers_per_gather=0");
+}
 
 # Help with debugging
 push(@pgOptions, "log_error_verbosity = 'verbose'");
@@ -437,6 +442,12 @@ push(@pgOptions, "wal_receiver_status_interval=1");
 # replication run faster. This is used in ApplyLauncherMain in
 # src/backend/replication/logical/launcher.c.
 push(@pgOptions, "wal_retrieve_retry_interval=1000");
+
+# disable compute_query_id so that we don't get Query Identifiers
+# in explain outputs
+if ($majorversion >= "14") {
+    push(@pgOptions, "compute_query_id=off");
+}
 
 # Citus options set for the tests
 push(@pgOptions, "citus.shard_count=4");

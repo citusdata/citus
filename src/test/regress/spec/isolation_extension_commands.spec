@@ -36,7 +36,7 @@ step "s1-commit"
 
 step "s1-create-extension-with-schema2"
 {
-	CREATE extension seg with schema schema2;
+	CREATE extension seg with version "1.3" schema schema2;
 }
 
 step "s1-print"
@@ -72,12 +72,12 @@ step "s2-alter-extension-version-13"
 
 step "s2-create-extension-with-schema1"
 {
-	CREATE extension seg with schema schema1;
+	CREATE extension seg with version "1.3" schema schema1;
 }
 
 step "s2-create-extension-with-schema2"
 {
-	CREATE extension seg with schema schema2;
+	CREATE extension seg with version "1.3" schema schema2;
 }
 
 step "s2-drop-extension"

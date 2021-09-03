@@ -167,24 +167,6 @@ ALTER FUNCTION add(int, int) SET TIME ZONE '-7';
 $cmd$);
 
 SELECT deparse_and_run_on_workers($cmd$
-ALTER FUNCTION add(int, int) SET "citus.setting;'" TO 'hello '' world';
-$cmd$);
-
-SELECT deparse_and_run_on_workers($cmd$
-ALTER FUNCTION add(int, int) SET "citus.setting;'" TO -3.2;
-$cmd$);
-
-SELECT deparse_and_run_on_workers($cmd$
-ALTER FUNCTION add(int, int) SET "citus.setting;'" TO -32;
-$cmd$);
-
--- This raises an error about only accepting one item,
--- that's okay, we're just testing that we don't produce bad syntax.
-SELECT deparse_and_run_on_workers($cmd$
-ALTER FUNCTION add(int, int) SET "citus.setting;'" TO 'hello '' world', 'second '' item';
-$cmd$);
-
-SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION add RESET log_min_messages
 $cmd$);
 
