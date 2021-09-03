@@ -67,7 +67,7 @@ static void RemovePathsByPredicate(RelOptInfo *rel, PathPredicate removePathPred
 static bool IsNotIndexPath(Path *path);
 static Path * CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel,
 										Oid relationId);
-static void RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
+static void CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId);
 static void RecostColumnarIndexPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 									IndexPath *indexPath);
 static Cost ColumnarIndexScanAddStartupCost(RelOptInfo *rel, Oid relationId,
@@ -281,7 +281,7 @@ ColumnarSetRelPathlistHook(PlannerInfo *root, RelOptInfo *rel, Index rti,
 		 * Before doing that, we first re-cost all the existing paths so that
 		 * add_path makes correct cost comparisons when appending our SeqPath.
 		 */
-		RecostColumnarPaths(root, rel, rte->relid);
+		CostColumnarPaths(root, rel, rte->relid);
 
 		Path *seqPath = CreateColumnarSeqScanPath(root, rel, rte->relid);
 		add_path(rel, seqPath);
@@ -361,11 +361,11 @@ CreateColumnarSeqScanPath(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 
 
 /*
- * RecostColumnarPaths re-costs paths of given RelOptInfo for
+ * CostColumnarPaths re-costs paths of given RelOptInfo for
  * columnar table with relationId.
  */
 static void
-RecostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
+CostColumnarPaths(PlannerInfo *root, RelOptInfo *rel, Oid relationId)
 {
 	Path *path = NULL;
 	foreach_ptr(path, rel->pathlist)
