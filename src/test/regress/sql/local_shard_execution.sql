@@ -204,6 +204,8 @@ INSERT INTO distributed_table SELECT 1, '1',15 FROM distributed_table WHERE key 
 -- sanity check: multi-shard INSERT..SELECT pushdown goes through distributed execution
 INSERT INTO distributed_table SELECT * FROM distributed_table ON CONFLICT DO NOTHING;
 
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
 
 -- EXPLAIN for local execution just works fine
 -- though going through distributed execution

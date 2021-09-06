@@ -102,14 +102,10 @@ select squares(4);
 select multi_mx_function_call_delegation.mx_call_func(2, 0);
 select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
 
-
--- this is fixed with pg14 and this will fail prior to
--- pg 14
 SET citus.enable_binary_protocol = TRUE;
 select mx_call_func_custom_types('S', 'A');
 select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
 RESET citus.enable_binary_protocol;
-
 
 -- We don't allow distributing calls inside transactions
 begin;

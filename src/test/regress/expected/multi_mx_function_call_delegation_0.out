@@ -230,15 +230,21 @@ DEBUG:  pushing down the function call
  (S,S)
 (1 row)
 
--- this is fixed with pg14 and this will fail prior to
--- pg 14
 SET citus.enable_binary_protocol = TRUE;
 select mx_call_func_custom_types('S', 'A');
 DEBUG:  pushing down the function call
-ERROR:  wrong data type: XXXX, expected XXXX
+ mx_call_func_custom_types
+---------------------------------------------------------------------
+ (S,S)
+(1 row)
+
 select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
 DEBUG:  pushing down the function call
-ERROR:  wrong data type: XXXX, expected XXXX
+ mx_call_func_custom_types
+---------------------------------------------------------------------
+ (S,S)
+(1 row)
+
 RESET citus.enable_binary_protocol;
 -- We don't allow distributing calls inside transactions
 begin;

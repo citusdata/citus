@@ -90,6 +90,12 @@ FROM
 -- we reset the client min_messages here to avoid adding an alternative output
 -- for pg14 as the output slightly differs.
 RESET client_min_messages;
+
+-- Set binary protocol temporarily to true always, to get consistent float
+-- output across PG versions.
+-- This is a no-op for PG_VERSION_NUM >= 14
+SET citus.enable_binary_protocol = TRUE;
+
 -- Expressions inside the aggregates
 -- parts of the query is inspired by TPCH queries
 SELECT
@@ -133,6 +139,9 @@ FROM
     ORDER BY 1 DESC;
 SET client_min_messages TO DEBUG1;
 
+-- Reset binary protocol back after temporaribly changing it
+-- This is a no-op for PG_VERSION_NUM >= 14
+RESET citus.enable_binary_protocol;
 
 -- Multiple columns in GROUP BYs
 -- foo needs to be recursively planned, bar can be pushded down

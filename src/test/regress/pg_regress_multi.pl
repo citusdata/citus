@@ -468,6 +468,8 @@ if ($useMitmproxy)
 {
   # make tests reproducible by never trying to negotiate ssl
   push(@pgOptions, "citus.node_conninfo='sslmode=disable'");
+  # The commands that we intercept are based on the the text based protocol.
+  push(@pgOptions, "citus.enable_binary_protocol='false'");
 }
 elsif ($followercluster)
 {

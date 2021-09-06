@@ -476,7 +476,11 @@ struct TaskPlacementExecution;
 /* GUC, determining whether Citus opens 1 connection per task */
 bool ForceMaxQueryParallelization = false;
 int MaxAdaptiveExecutorPoolSize = 16;
+#if PG_VERSION_NUM >= PG_VERSION_14
+bool EnableBinaryProtocol = true;
+#else
 bool EnableBinaryProtocol = false;
+#endif
 
 /* GUC, number of ms to wait between opening connections to the same worker */
 int ExecutorSlowStartInterval = 10;
@@ -2023,13 +2027,7 @@ SetAttributeInputMetadata(DistributedExecution *execution,
 		{
 			attInMetadata = NULL;
 		}
-		/*
-		 * We only allow binary results when queryCount is 1, because we
-		 * cannot use binary results with SendRemoteCommand. Which must be
-		 * used if queryCount is larger than 1.
-		 */
-		else if (EnableBinaryProtocol && queryCount == 1 &&
-				 CanUseBinaryCopyFormat(tupleDescriptor))
+		else if (EnableBinaryProtocol && CanUseBinaryCopyFormat(tupleDescriptor))
 		{
 			attInMetadata = TupleDescGetAttBinaryInMetadata(tupleDescriptor);
 			shardCommandExecution->binaryResults = true;

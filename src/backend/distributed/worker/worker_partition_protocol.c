@@ -49,7 +49,11 @@
 
 
 /* Config variables managed via guc.c */
+#if PG_VERSION_NUM >= PG_VERSION_14
+bool BinaryWorkerCopyFormat = true;   /* binary format for copying between workers */
+#else
 bool BinaryWorkerCopyFormat = false;   /* binary format for copying between workers */
+#endif
 int PartitionBufferSize = 16384; /* total partitioning buffer size in KB */
 
 /* Local variables */
