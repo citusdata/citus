@@ -42,6 +42,7 @@
 #include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_expr.h"
+#include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -95,8 +96,11 @@ static void SetInterShardDDLTaskPlacementList(Task *task,
 static void SetInterShardDDLTaskRelationShardList(Task *task,
 												  ShardInterval *leftShardInterval,
 												  ShardInterval *rightShardInterval);
-static Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 static Oid get_attrdef_oid(Oid relationId, AttrNumber attnum);
+static char * GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
+												  char *colname);
+static char * GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId,
+												char *colname, TypeName *typeName);
 
 
 /*
@@ -654,6 +658,14 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	 */
 	bool deparseAT = false;
 	bool propagateCommandToWorkers = true;
+
+	/*
+	 * Sometimes we want to run a different DDL Command string in MX workers
+	 * For example, in cases where worker_nextval should be used instead
+	 * of nextval() in column defaults with type int and smallint
+	 */
+	bool useInitialDDLCommandString = true;
+
 	AlterTableStmt *newStmt = copyObject(alterTableStatement);
 
 	AlterTableCmd *newCmd = makeNode(AlterTableCmd);
@@ -763,6 +775,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 						if (contain_nextval_expression_walker(expr, NULL))
 						{
 							deparseAT = true;
+							useInitialDDLCommandString = false;
 
 							/* the new column definition will have no constraint */
 							ColumnDef *newColDef = copyObject(columnDefinition);
@@ -832,6 +845,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 			if (contain_nextval_expression_walker(expr, NULL))
 			{
 				propagateCommandToWorkers = false;
+				useInitialDDLCommandString = false;
 			}
 		}
 		else if (alterTableType == AT_AttachPartition)
@@ -928,7 +942,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		sqlForTaskList = DeparseTreeNode((Node *) newStmt);
 	}
 
-	ddlJob->commandString = alterTableCommand;
+	ddlJob->commandString = useInitialDDLCommandString ? alterTableCommand : NULL;
 
 	if (OidIsValid(rightRelationId))
 	{
@@ -1640,6 +1654,11 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 	}
 
+	/* for the new sequences coming with this ALTER TABLE statement */
+	bool needMetadataSyncForNewSequences = false;
+
+	char *alterTableDefaultNextvalCmd = NULL;
+
 	List *commandList = alterTableStatement->cmds;
 	AlterTableCmd *command = NULL;
 	foreach_ptr(command, commandList)
@@ -1728,8 +1747,16 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 								if (ShouldSyncTableMetadata(relationId) &&
 									ClusterHasKnownMetadataWorkers())
 								{
+									needMetadataSyncForNewSequences = true;
 									MarkSequenceDistributedAndPropagateDependencies(
 										seqOid);
+									alterTableDefaultNextvalCmd =
+										GetAddColumnWithNextvalDefaultCmd(seqOid,
+																		  relationId,
+																		  columnDefinition
+																		  ->colname,
+																		  columnDefinition
+																		  ->typeName);
 								}
 							}
 						}
@@ -1761,15 +1788,17 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 					if (ShouldSyncTableMetadata(relationId) &&
 						ClusterHasKnownMetadataWorkers())
 					{
+						needMetadataSyncForNewSequences = true;
 						MarkSequenceDistributedAndPropagateDependencies(seqOid);
+						alterTableDefaultNextvalCmd = GetAlterColumnWithNextvalDefaultCmd(
+							seqOid, relationId, command->name);
 					}
 				}
 			}
 		}
 	}
 
-	/* for the new sequences coming with this ALTER TABLE statement */
-	if (ShouldSyncTableMetadata(relationId) && ClusterHasKnownMetadataWorkers())
+	if (needMetadataSyncForNewSequences)
 	{
 		List *sequenceCommandList = NIL;
 
@@ -1787,6 +1816,16 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 			SendCommandToWorkersWithMetadata(sequenceCommand);
 		}
 
+		/*
+		 * It's easy to retrieve the sequence id to create the proper commands
+		 * in postprocess, after the dependency between the sequence and the table
+		 * has been created. We already return ddlJobs in PreprocessAlterTableStmt,
+		 * hence we can't return ddlJobs in PostprocessAlterTableStmt.
+		 * That's why we execute the following here instead of
+		 * in ExecuteDistributedDDLJob
+		 */
+		SendCommandToWorkersWithMetadata(alterTableDefaultNextvalCmd);
+
 		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 	}
 }
@@ -1797,7 +1836,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
  * of the attribute with given attnum of the given table relationId
  * If there is no sequence used it returns InvalidOid.
  */
-static Oid
+Oid
 GetSequenceOid(Oid relationId, AttrNumber attnum)
 {
 	/* get attrdefoid from the given relationId and attnum */
@@ -1821,15 +1860,10 @@ GetSequenceOid(Oid relationId, AttrNumber attnum)
 	if (list_length(sequencesFromAttrDef) > 1)
 	{
 		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
-		if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-		{
-			ereport(ERROR, (errmsg(
-								"More than one sequence in a column default"
-								" is not supported for adding local tables to metadata")));
-		}
 		ereport(ERROR, (errmsg(
 							"More than one sequence in a column default"
-							" is not supported for distribution")));
+							" is not supported for distribution "
+							"or for adding local tables to metadata")));
 	}
 
 	return lfirst_oid(list_head(sequencesFromAttrDef));
@@ -1883,6 +1917,83 @@ get_attrdef_oid(Oid relationId, AttrNumber attnum)
 	systable_endscan(scan);
 	table_close(depRel, AccessShareLock);
 	return resultAttrdefOid;
+}
+
+
+/*
+ * GetAlterColumnWithNextvalDefaultCmd returns a string representing:
+ * ALTER TABLE ALTER COLUMN .. SET DEFAULT nextval()
+ * If sequence type is not bigint, we use worker_nextval() instead of nextval().
+ */
+static char *
+GetAlterColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname)
+{
+	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+	char *nextvalFunctionName = "nextval";
+	bool useWorkerNextval = (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
+	if (useWorkerNextval)
+	{
+		/*
+		 * We use worker_nextval for int and smallint types.
+		 * Check issue #5126 and PR #5254 for details.
+		 * https://github.com/citusdata/citus/issues/5126
+		 */
+		nextvalFunctionName = "worker_nextval";
+	}
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+	appendStringInfo(&str, "ALTER TABLE %s ALTER COLUMN %s "
+						   "SET DEFAULT %s(%s::regclass)",
+					 qualifiedRelationName, colname,
+					 quote_qualified_identifier("pg_catalog", nextvalFunctionName),
+					 quote_literal_cstr(qualifiedSequenceName));
+
+	return str.data;
+}
+
+
+/*
+ * GetAddColumnWithNextvalDefaultCmd returns a string representing:
+ * ALTER TABLE ADD COLUMN .. DEFAULT nextval()
+ * If sequence type is not bigint, we use worker_nextval() instead of nextval().
+ */
+static char *
+GetAddColumnWithNextvalDefaultCmd(Oid sequenceOid, Oid relationId, char *colname,
+								  TypeName *typeName)
+{
+	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceOid);
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+	char *nextvalFunctionName = "nextval";
+	bool useWorkerNextval = (pg_get_sequencedef(sequenceOid)->seqtypid != INT8OID);
+	if (useWorkerNextval)
+	{
+		/*
+		 * We use worker_nextval for int and smallint types.
+		 * Check issue #5126 and PR #5254 for details.
+		 * https://github.com/citusdata/citus/issues/5126
+		 */
+		nextvalFunctionName = "worker_nextval";
+	}
+
+	int32 typmod = 0;
+	Oid typeOid = InvalidOid;
+	bits16 formatFlags = FORMAT_TYPE_TYPEMOD_GIVEN | FORMAT_TYPE_FORCE_QUALIFY;
+	typenameTypeIdAndMod(NULL, typeName, &typeOid, &typmod);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+	appendStringInfo(&str,
+					 "ALTER TABLE %s ADD COLUMN %s %s "
+					 "DEFAULT %s(%s::regclass)", qualifiedRelationName, colname,
+					 format_type_extended(typeOid, typmod, formatFlags),
+					 quote_qualified_identifier("pg_catalog", nextvalFunctionName),
+					 quote_literal_cstr(qualifiedSequenceName));
+
+	return str.data;
 }
 
 

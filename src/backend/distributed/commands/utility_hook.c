@@ -891,7 +891,10 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 				SendCommandToWorkersWithMetadata(setSearchPathCommand);
 			}
 
-			SendCommandToWorkersWithMetadata((char *) ddlJob->commandString);
+			if (ddlJob->commandString != NULL)
+			{
+				SendCommandToWorkersWithMetadata((char *) ddlJob->commandString);
+			}
 		}
 
 		ExecuteUtilityTaskList(ddlJob->taskList, localExecutionSupported);

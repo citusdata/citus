@@ -19,6 +19,7 @@ ALTER TABLE pg_catalog.pg_dist_placement ADD CONSTRAINT placement_shardid_groupi
 #include "udfs/create_time_partitions/10.2-1.sql"
 #include "udfs/drop_old_time_partitions/10.2-1.sql"
 #include "udfs/get_missing_time_partition_ranges/10.2-1.sql"
+#include "udfs/worker_nextval/10.2-1.sql"
 
 DROP FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text);
 CREATE FUNCTION pg_catalog.citus_drop_all_shards(logicalrelid regclass,

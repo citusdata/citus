@@ -251,12 +251,14 @@ pg_get_sequencedef(Oid sequenceRelationId)
  * definition includes table's schema, default column values, not null and check
  * constraints. The definition does not include constraints that trigger index
  * creations; specifically, unique and primary key constraints are excluded.
- * When the flag includeSequenceDefaults is set, the function also creates
+ * When includeSequenceDefaults is NEXTVAL_SEQUENCE_DEFAULTS, the function also creates
  * DEFAULT clauses for columns getting their default values from a sequence.
+ * When it's WORKER_NEXTVAL_SEQUENCE_DEFAULTS, the function creates the DEFAULT
+ * clause using worker_nextval('sequence') and not nextval('sequence')
  */
 char *
-pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
-							 char *accessMethod)
+pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
+							 includeSequenceDefaults, char *accessMethod)
 {
 	bool firstAttributePrinted = false;
 	AttrNumber defaultValueIndex = 0;
@@ -374,7 +376,26 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 					}
 					else
 					{
-						appendStringInfo(&buffer, " DEFAULT %s", defaultString);
+						Oid seqOid = GetSequenceOid(tableRelationId, defaultValue->adnum);
+						if (includeSequenceDefaults == WORKER_NEXTVAL_SEQUENCE_DEFAULTS &&
+							seqOid != InvalidOid &&
+							pg_get_sequencedef(seqOid)->seqtypid != INT8OID)
+						{
+							/*
+							 * We use worker_nextval for int and smallint types.
+							 * Check issue #5126 and PR #5254 for details.
+							 * https://github.com/citusdata/citus/issues/5126
+							 */
+							char *sequenceName = generate_qualified_relation_name(
+								seqOid);
+							appendStringInfo(&buffer,
+											 " DEFAULT worker_nextval(%s::regclass)",
+											 quote_literal_cstr(sequenceName));
+						}
+						else
+						{
+							appendStringInfo(&buffer, " DEFAULT %s", defaultString);
+						}
 					}
 				}
 			}

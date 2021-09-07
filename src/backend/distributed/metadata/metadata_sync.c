@@ -497,7 +497,7 @@ MetadataCreateCommands(void)
 	List *propagatedTableList = NIL;
 	bool includeNodesFromOtherClusters = true;
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
-	bool includeSequenceDefaults = true;
+	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
 	/* make sure we have deterministic output for our tests */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
@@ -651,7 +651,7 @@ GetDistributedTableDDLEvents(Oid relationId)
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	List *commandList = NIL;
-	bool includeSequenceDefaults = true;
+	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
 	/* if the table is owned by an extension we only propagate pg_dist_* records */
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
@@ -1287,14 +1287,10 @@ GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
 		if (list_length(sequencesFromAttrDef) > 1)
 		{
-			if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-			{
-				ereport(ERROR, (errmsg(
-									"More than one sequence in a column default"
-									" is not supported for adding local tables to metadata")));
-			}
-			ereport(ERROR, (errmsg("More than one sequence in a column default"
-								   " is not supported for distribution")));
+			ereport(ERROR, (errmsg(
+								"More than one sequence in a column default"
+								" is not supported for distribution "
+								"or for adding local tables to metadata")));
 		}
 
 		if (list_length(sequencesFromAttrDef) == 1)

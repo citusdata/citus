@@ -539,7 +539,9 @@ ConvertTable(TableConversionState *con)
 	}
 	char *newAccessMethod = con->accessMethod ? con->accessMethod :
 							con->originalAccessMethod;
-	List *preLoadCommands = GetPreLoadTableCreationCommands(con->relationId, true,
+	IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
+	List *preLoadCommands = GetPreLoadTableCreationCommands(con->relationId,
+															includeSequenceDefaults,
 															newAccessMethod);
 
 	if (con->accessMethod && strcmp(con->accessMethod, "columnar") == 0)
