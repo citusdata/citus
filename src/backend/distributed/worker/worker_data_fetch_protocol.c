@@ -28,13 +28,14 @@
 #include "commands/extension.h"
 #include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
-#include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
-#include "distributed/commands/multi_copy.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_server_executor.h"
@@ -45,6 +46,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
+#include "parser/parse_relation.h"
 #include "storage/lmgr.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -594,9 +596,6 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	char *sourceSchemaName = NULL;
 	char *sourceTableName = NULL;
 
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
 	CheckCitusVersion(ERROR);
 
 	/* We extract schema names and table names from qualified names */
@@ -613,10 +612,13 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	uint64 shardId = ExtractShardIdFromTableName(shardTableName, false);
 	LockShardResource(shardId, AccessExclusiveLock);
 
-	/* copy remote table's data to this node */
+	/*
+	 * Copy into intermediate results directory, which is automatically cleaned on
+	 * error.
+	 */
 	StringInfo localFilePath = makeStringInfo();
-	appendStringInfo(localFilePath, "base/%s/%s" UINT64_FORMAT,
-					 PG_JOB_CACHE_DIR, TABLE_FILE_PREFIX, shardId);
+	appendStringInfo(localFilePath, "%s/worker_append_table_to_shard_" UINT64_FORMAT,
+					 CreateIntermediateResultsDirectory(), shardId);
 
 	char *sourceQualifiedName = quote_qualified_identifier(sourceSchemaName,
 														   sourceTableName);
@@ -641,7 +643,8 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 		appendStringInfo(sourceCopyCommand, COPY_OUT_COMMAND, sourceQualifiedName);
 	}
 
-	bool received = ReceiveRegularFile(sourceNodeName, sourceNodePort, NULL,
+	char *userName = CurrentUserName();
+	bool received = ReceiveRegularFile(sourceNodeName, sourceNodePort, userName,
 									   sourceCopyCommand,
 									   localFilePath);
 	if (!received)
@@ -664,17 +667,36 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	/* make sure we are allowed to execute the COPY command */
 	CheckCopyPermissions(localCopyCommand);
 
-	/* need superuser to copy from files */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+	Relation shardRelation = table_openrv(localCopyCommand->relation, RowExclusiveLock);
 
-	CitusProcessUtility((Node *) localCopyCommand, queryString->data,
-						PROCESS_UTILITY_QUERY, NULL, None_Receiver, NULL);
+	/* mimic check from copy.c */
+	if (XactReadOnly && !shardRelation->rd_islocaltemp)
+	{
+		PreventCommandIfReadOnly("COPY FROM");
+	}
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	ParseState *parseState = make_parsestate(NULL);
+	(void) addRangeTableEntryForRelation(parseState, shardRelation,
+#if PG_VERSION_NUM >= PG_VERSION_12
+										 RowExclusiveLock,
+#endif
+										 NULL, false, false);
+
+	CopyState copyState = BeginCopyFrom(parseState,
+										shardRelation,
+										localCopyCommand->filename,
+										localCopyCommand->is_program,
+										NULL,
+										localCopyCommand->attlist,
+										localCopyCommand->options);
+	CopyFrom(copyState);
+	EndCopyFrom(copyState);
+
+	free_parsestate(parseState);
 
 	/* finally delete the temporary file we created */
 	CitusDeleteFile(localFilePath->data);
+	table_close(shardRelation, NoLock);
 
 	PG_RETURN_VOID();
 }
