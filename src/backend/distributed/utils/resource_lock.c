@@ -577,8 +577,6 @@ LockShardResource(uint64 shardId, LOCKMODE lockmode)
 	const bool sessionLock = false;
 	const bool dontWait = false;
 
-	AssertArg(shardId != INVALID_SHARD_ID);
-
 	SET_LOCKTAG_SHARD_RESOURCE(tag, MyDatabaseId, shardId);
 
 	(void) LockAcquire(&tag, lockmode, sessionLock, dontWait);
