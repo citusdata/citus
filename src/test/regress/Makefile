@@ -97,10 +97,6 @@ ifndef CITUS_VALGRIND_LOG_FILE
 CITUS_VALGRIND_LOG_FILE := citus_valgrind_test_log.txt
 endif
 
-ifndef COLUMNAR_VALGRIND_LOG_FILE
-COLUMNAR_VALGRIND_LOG_FILE := columnar_valgrind_test_log.txt
-endif
-
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
 check-worker: all
@@ -156,9 +152,14 @@ check-multi-vg: all
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
+check-multi-1-vg: all
+	$(pg_regress_multi_check) --load-extension=citus --valgrind \
+	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
+
 check-columnar-vg: all
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
-	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(COLUMNAR_VALGRIND_LOG_FILE) \
+	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
 
 check-isolation: all  $(isolation_test_files)
