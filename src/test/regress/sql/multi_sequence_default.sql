@@ -90,17 +90,18 @@ ALTER TABLE seq_test_0_local_table ALTER COLUMN z TYPE smallint;
 CREATE TABLE seq_test_4 (x int, y int);
 SELECT create_distributed_table('seq_test_4','x');
 CREATE SEQUENCE seq_4;
-ALTER TABLE seq_test_4 ADD COLUMN a int DEFAULT nextval('seq_4');
+ALTER TABLE seq_test_4 ADD COLUMN a bigint DEFAULT nextval('seq_4');
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SEQUENCE seq_4 CASCADE;
 TRUNCATE seq_test_4;
 CREATE SEQUENCE seq_4;
-ALTER TABLE seq_test_4 ADD COLUMN b int DEFAULT nextval('seq_4');
+ALTER TABLE seq_test_4 ADD COLUMN b bigint DEFAULT nextval('seq_4');
 -- on worker it should generate high sequence number
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_4 VALUES (1,2) RETURNING *;
 
--- check that we have can properly insert to tables from before metadata sync
+-- check that we have can't insert to tables from before metadata sync
+-- seq_test_0 and seq_test_0_local_table have int and smallint column defaults
 INSERT INTO sequence_default.seq_test_0 VALUES (1,2) RETURNING *;
 INSERT INTO sequence_default.seq_test_0_local_table VALUES (1,2) RETURNING *;
 
@@ -119,7 +120,7 @@ SELECT create_distributed_table('seq_test_1','x');
 ALTER TABLE seq_test_1 ADD COLUMN z int DEFAULT nextval('seq_1');
 -- type is changed to int
 \d seq_1
--- check insertion is within int bounds in the worker
+-- check insertion doesn't work in the worker because type is int
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_1 values (1, 2) RETURNING *;
 \c - - - :master_port
@@ -137,7 +138,7 @@ SELECT citus_add_local_table_to_metadata('seq_test_1_local_table');
 ALTER TABLE seq_test_1_local_table ADD COLUMN z int DEFAULT nextval('seq_1_local_table');
 -- type is changed to int
 \d seq_1_local_table
--- check insertion is within int bounds in the worker
+-- check insertion doesn't work in the worker because type is int
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_1_local_table values (1, 2) RETURNING *;
 \c - - - :master_port
@@ -218,7 +219,7 @@ CREATE TABLE seq_test_5 (x int, y int);
 SELECT create_distributed_table('seq_test_5','x');
 CREATE SCHEMA sequence_default_1;
 CREATE SEQUENCE sequence_default_1.seq_5;
-ALTER TABLE seq_test_5 ADD COLUMN a int DEFAULT nextval('sequence_default_1.seq_5');
+ALTER TABLE seq_test_5 ADD COLUMN a bigint DEFAULT nextval('sequence_default_1.seq_5');
 DROP SCHEMA sequence_default_1 CASCADE;
 -- sequence is gone from coordinator
 INSERT INTO seq_test_5 VALUES (1, 2) RETURNING *;
@@ -372,7 +373,95 @@ SELECT create_distributed_table('seq_test_11', 'col1');
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_10 VALUES (1);
 \c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
+
+-- Check worker_nextval and setval precautions for int and smallint column defaults
+-- For details see issue #5126 and PR #5254
+-- https://github.com/citusdata/citus/issues/5126
+CREATE SEQUENCE seq_12;
+CREATE SEQUENCE seq_13;
+CREATE SEQUENCE seq_14;
+CREATE TABLE seq_test_12(col0 text, col1 smallint DEFAULT nextval('seq_12'),
+                         col2 int DEFAULT nextval('seq_13'),
+                         col3 bigint DEFAULT nextval('seq_14'));
+SELECT create_distributed_table('seq_test_12', 'col0');
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+INSERT INTO seq_test_12 VALUES ('hello0') RETURNING *;
+
+\c - - - :worker_1_port
+SET search_path = sequence_default, public;
+-- we should see worker_nextval for int and smallint columns
+SELECT table_name, column_name, data_type, column_default FROM information_schema.columns
+WHERE table_name = 'seq_test_12' ORDER BY column_name;
+-- insertion from worker should fail
+INSERT INTO seq_test_12 VALUES ('hello1') RETURNING *;
+-- nextval from worker should fail for int and smallint sequences
+SELECT nextval('seq_12');
+SELECT nextval('seq_13');
+-- nextval from worker should work for bigint sequences
+SELECT nextval('seq_14');
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+TRUNCATE seq_test_12;
+ALTER TABLE seq_test_12 DROP COLUMN col1;
+ALTER TABLE seq_test_12 DROP COLUMN col2;
+ALTER TABLE seq_test_12 DROP COLUMN col3;
+DROP SEQUENCE seq_12, seq_13, seq_14;
+CREATE SEQUENCE seq_12;
+CREATE SEQUENCE seq_13;
+CREATE SEQUENCE seq_14;
+ALTER TABLE seq_test_12 ADD COLUMN col1 smallint DEFAULT nextval('seq_14');
+ALTER TABLE seq_test_12 ADD COLUMN col2 int DEFAULT nextval('seq_13');
+ALTER TABLE seq_test_12 ADD COLUMN col3 bigint DEFAULT nextval('seq_12');
+ALTER TABLE seq_test_12 ADD COLUMN col4 smallint;
+ALTER TABLE seq_test_12 ALTER COLUMN col4 SET DEFAULT nextval('seq_14');
+ALTER TABLE seq_test_12 ADD COLUMN col5 int;
+ALTER TABLE seq_test_12 ALTER COLUMN col5 SET DEFAULT nextval('seq_13');
+ALTER TABLE seq_test_12 ADD COLUMN col6 bigint;
+ALTER TABLE seq_test_12 ALTER COLUMN col6 SET DEFAULT nextval('seq_12');
+INSERT INTO seq_test_12 VALUES ('hello1') RETURNING *;
+
+\c - - - :worker_1_port
+SET search_path = sequence_default, public;
+-- we should see worker_nextval for int and smallint columns
+SELECT table_name, column_name, data_type, column_default FROM information_schema.columns
+WHERE table_name = 'seq_test_12' ORDER BY column_name;
+-- insertion from worker should fail
+INSERT INTO seq_test_12 VALUES ('hello2') RETURNING *;
+-- nextval from worker should work for bigint sequences
+SELECT nextval('seq_12');
+-- nextval from worker should fail for int and smallint sequences
+SELECT nextval('seq_13');
+SELECT nextval('seq_14');
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT undistribute_table('seq_test_12');
+SELECT create_distributed_table('seq_test_12', 'col0');
+INSERT INTO seq_test_12 VALUES ('hello2') RETURNING *;
+
+\c - - - :worker_1_port
+SET search_path = sequence_default, public;
+-- we should see worker_nextval for int and smallint columns
+SELECT table_name, column_name, data_type, column_default FROM information_schema.columns
+WHERE table_name = 'seq_test_12' ORDER BY column_name;
+-- insertion from worker should fail
+INSERT INTO seq_test_12 VALUES ('hello2') RETURNING *;
+-- nextval from worker should work for bigint sequences
+SELECT nextval('seq_12');
+-- nextval from worker should fail for int and smallint sequences
+SELECT nextval('seq_13');
+SELECT nextval('seq_14');
+
+\c - - - :master_port
 
 -- clean up
 DROP TABLE sequence_default.seq_test_7_par;

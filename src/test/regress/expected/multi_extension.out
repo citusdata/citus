@@ -810,7 +810,8 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                             | function drop_old_time_partitions(regclass,timestamp with time zone)
                                                             | function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) TABLE(partition_name text, range_from_value text, range_to_value text)
                                                             | function stop_metadata_sync_to_node(text,integer,boolean) void
-(15 rows)
+                                                            | function worker_nextval(regclass) integer
+(16 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

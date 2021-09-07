@@ -207,6 +207,7 @@ ORDER BY 1;
  function worker_hash_partition_table(bigint,integer,text,text,oid,anyarray)
  function worker_last_saved_explain_analyze()
  function worker_merge_files_into_table(bigint,integer,text[],text[])
+ function worker_nextval(regclass)
  function worker_partial_agg(oid,anyelement)
  function worker_partial_agg_ffunc(internal)
  function worker_partial_agg_sfunc(internal,oid,anyelement)
@@ -257,5 +258,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(241 rows)
+(242 rows)
 
