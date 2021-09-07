@@ -7,7 +7,7 @@ AS $$
 DECLARE
     r record;
 BEGIN
-	/* first check whether we can convert all the to_value's to timestamptz */
+	-- first check whether we can convert all the to_value's to timestamptz
 	BEGIN
 		PERFORM
 		FROM pg_catalog.time_partitions
@@ -19,7 +19,7 @@ BEGIN
 		RAISE 'partition column of % cannot be cast to a timestamptz', parent_table_name;
 	END;
 
-	/* now convert the partitions in separate transactions */
+	-- now convert the partitions in separate transactions
     FOR r IN
 		SELECT partition, from_value, to_value
 		FROM pg_catalog.time_partitions

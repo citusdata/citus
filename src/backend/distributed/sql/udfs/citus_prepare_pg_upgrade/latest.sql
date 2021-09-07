@@ -8,13 +8,13 @@ BEGIN
     DELETE FROM pg_depend WHERE
         objid IN (SELECT oid FROM pg_proc WHERE proname = 'array_cat_agg') AND
         refobjid IN (select oid from pg_extension where extname = 'citus');
-    /*
-     * We are dropping the aggregates because postgres 14 changed
-     * array_cat type from anyarray to anycompatiblearray. When
-     * upgrading to pg14, spegifically when running pg_restore on
-     * array_cat_agg we would get an error. So we drop the aggregate
-     * and create the right one on citus_finish_pg_upgrade.
-     */
+    --
+    -- We are dropping the aggregates because postgres 14 changed
+    -- array_cat type from anyarray to anycompatiblearray. When
+    -- upgrading to pg14, spegifically when running pg_restore on
+    -- array_cat_agg we would get an error. So we drop the aggregate
+    -- and create the right one on citus_finish_pg_upgrade.
+
     DROP AGGREGATE IF EXISTS array_cat_agg(anyarray);
     DROP AGGREGATE IF EXISTS array_cat_agg(anycompatiblearray);
     --
