@@ -436,33 +436,21 @@ ErrorIfInvalidRowNumber(uint64 rowNumber)
 static Size
 columnar_parallelscan_estimate(Relation rel)
 {
-	return sizeof(ParallelBlockTableScanDescData);
+	elog(ERROR, "columnar_parallelscan_estimate not implemented");
 }
 
 
 static Size
 columnar_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	ParallelBlockTableScanDesc bpscan = (ParallelBlockTableScanDesc) pscan;
-
-	bpscan->base.phs_relid = RelationGetRelid(rel);
-	bpscan->phs_nblocks = RelationGetNumberOfBlocks(rel);
-	bpscan->base.phs_syncscan = synchronize_seqscans &&
-								!RelationUsesLocalBuffers(rel) &&
-								bpscan->phs_nblocks > NBuffers / 4;
-	SpinLockInit(&bpscan->phs_mutex);
-	bpscan->phs_startblock = InvalidBlockNumber;
-	pg_atomic_init_u64(&bpscan->phs_nallocated, 0);
-
-	return sizeof(ParallelBlockTableScanDescData);
+	elog(ERROR, "columnar_parallelscan_initialize not implemented");
 }
 
 
 static void
 columnar_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 {
-	ParallelBlockTableScanDesc bpscan = (ParallelBlockTableScanDesc) pscan;
-	pg_atomic_write_u64(&bpscan->phs_nallocated, 0);
+	elog(ERROR, "columnar_parallelscan_reinitialize not implemented");
 }
 
 
@@ -1293,22 +1281,10 @@ columnar_index_build_range_scan(Relation columnarRelation,
 	if (scan)
 	{
 		/*
-		 * Scan is initialized iff postgres decided to build the index using
-		 * parallel workers. In this case, we simply return for parallel
-		 * workers since we don't support parallel scan on columnar tables.
+		 * Parallel scans on columnar tables are already discardad by
+		 * ColumnarGetRelationInfoHook but be on the safe side.
 		 */
-		if (IsBackgroundWorker)
-		{
-			ereport(DEBUG4, (errmsg("ignoring parallel worker when building "
-									"index since parallel scan on columnar "
-									"tables is not supported")));
-			table_endscan(scan);
-			return 0;
-		}
-
-		ereport(NOTICE, (errmsg("falling back to serial index build since "
-								"parallel scan on columnar tables is not "
-								"supported")));
+		elog(ERROR, "parallel scans on columnar are not supported");
 	}
 
 	/*
@@ -1326,39 +1302,26 @@ columnar_index_build_range_scan(Relation columnarRelation,
 
 	Snapshot snapshot = { 0 };
 	bool snapshotRegisteredByUs = false;
-	if (!scan)
-	{
-		/*
-		 * For serial index build, we begin our own scan. We may also need to
-		 * register a snapshot whose lifetime is under our direct control.
-		 */
-		if (!TransactionIdIsValid(OldestXmin))
-		{
-			snapshot = RegisterSnapshot(GetTransactionSnapshot());
-			snapshotRegisteredByUs = true;
-		}
-		else
-		{
-			snapshot = SnapshotAny;
-		}
 
-		int nkeys = 0;
-		ScanKeyData *scanKey = NULL;
-		bool allowAccessStrategy = true;
-		scan = table_beginscan_strat(columnarRelation, snapshot, nkeys, scanKey,
-									 allowAccessStrategy, allow_sync);
+	/*
+	 * For serial index build, we begin our own scan. We may also need to
+	 * register a snapshot whose lifetime is under our direct control.
+	 */
+	if (!TransactionIdIsValid(OldestXmin))
+	{
+		snapshot = RegisterSnapshot(GetTransactionSnapshot());
+		snapshotRegisteredByUs = true;
 	}
 	else
 	{
-		/*
-		 * For parallel index build, we don't register/unregister own snapshot
-		 * since snapshot is taken from parallel scan. Note that even if we
-		 * don't support parallel index builds, we still continue building the
-		 * index via the main backend and we should still rely on the snapshot
-		 * provided by parallel scan.
-		 */
-		snapshot = scan->rs_snapshot;
+		snapshot = SnapshotAny;
 	}
+
+	int nkeys = 0;
+	ScanKeyData *scanKey = NULL;
+	bool allowAccessStrategy = true;
+	scan = table_beginscan_strat(columnarRelation, snapshot, nkeys, scanKey,
+								 allowAccessStrategy, allow_sync);
 
 	if (progress)
 	{
@@ -2113,17 +2076,6 @@ static const TableAmRoutine columnar_am_methods = {
 	.scan_rescan = columnar_rescan,
 	.scan_getnextslot = columnar_getnextslot,
 
-	/*
-	 * Postgres calls following three callbacks during index builds, if it
-	 * decides to use parallel workers when building the index. On the other
-	 * hand, we don't support parallel scans on columnar tables but we also
-	 * want to fallback to serial index build. For this reason, we both skip
-	 * parallel workers in columnar_index_build_range_scan and also provide
-	 * basic implementations for those callbacks based on their corresponding
-	 * implementations in heapAM.
-	 * Note that for regular query plans, we already ignore parallel paths via
-	 * ColumnarSetRelPathlistHook.
-	 */
 	.parallelscan_estimate = columnar_parallelscan_estimate,
 	.parallelscan_initialize = columnar_parallelscan_initialize,
 	.parallelscan_reinitialize = columnar_parallelscan_reinitialize,

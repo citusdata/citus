@@ -448,16 +448,10 @@ ERROR:  unsupported access method for the index on columnar table brin_summarize
 CREATE TABLE parallel_scan_test(a int) USING columnar WITH ( parallel_workers = 2 );
 INSERT INTO parallel_scan_test SELECT i FROM generate_series(1,10) i;
 CREATE INDEX ON parallel_scan_test (a);
-NOTICE:  falling back to serial index build since parallel scan on columnar tables is not supported
 VACUUM FULL parallel_scan_test;
-NOTICE:  falling back to serial index build since parallel scan on columnar tables is not supported
 REINDEX TABLE parallel_scan_test;
-NOTICE:  falling back to serial index build since parallel scan on columnar tables is not supported
 CREATE INDEX CONCURRENTLY ON parallel_scan_test (a);
-NOTICE:  falling back to serial index build since parallel scan on columnar tables is not supported
 REINDEX TABLE CONCURRENTLY parallel_scan_test;
-NOTICE:  falling back to serial index build since parallel scan on columnar tables is not supported
-NOTICE:  falling back to serial index build since parallel scan on columnar tables is not supported
 -- test with different data types & indexAM's --
 CREATE TABLE hash_text(a INT, b TEXT) USING columnar;
 INSERT INTO hash_text SELECT i, (i*2)::TEXT FROM generate_series(1, 10) i;
@@ -550,5 +544,27 @@ ERROR:  duplicate key value violates unique constraint "aborted_write_test_pkey"
 DETAIL:  Key (a)=(16999) already exists.
 -- since second INSERT already failed, should not throw a "duplicate key" error
 REINDEX TABLE aborted_write_test;
+create table events (event_id bigserial, event_time timestamptz default now(), payload text) using columnar;
+BEGIN;
+  -- this wouldn't flush any data
+  insert into events (payload) select 'hello-'||s from generate_series(1, 10) s;
+  -- Since table is large enough, normally postgres would prefer using
+  -- parallel workers when building the index.
+  --
+  -- However, before starting to build the index, we will first flush
+  -- the writes of above INSERT and this would try to update the stripe
+  -- reservation entry in columnar.stripe when doing that.
+  --
+  -- However, updating a tuple during a parallel operation is not allowed
+  -- by postgres and throws an error. For this reason, here we don't expect
+  -- following commnad to fail since we prevent using parallel workers for
+  -- columnar tables.
+  SET LOCAL force_parallel_mode = regress;
+  SET LOCAL min_parallel_table_scan_size = 1;
+  SET LOCAL parallel_tuple_cost = 0;
+  SET LOCAL max_parallel_workers = 4;
+  SET LOCAL max_parallel_workers_per_gather = 4;
+  create index on events (event_id);
+COMMIT;
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;

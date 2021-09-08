@@ -264,6 +264,19 @@ SELECT alter_table_set_access_method('abcde_012345678901234567890123456789012345
 SELECT * FROM abcde_0123456789012345678901234567890123456789012345678901234567890123456789;
 RESET client_min_messages;
 
+create table events (event_id bigserial, event_time timestamptz default now(), payload text);
+create index on events (event_id);
+insert into events (payload) select 'hello-'||s from generate_series(1,10) s;
+
+BEGIN;
+  SET LOCAL force_parallel_mode = regress;
+  SET LOCAL min_parallel_table_scan_size = 1;
+  SET LOCAL parallel_tuple_cost = 0;
+  SET LOCAL max_parallel_workers = 4;
+  SET LOCAL max_parallel_workers_per_gather = 4;
+  select alter_table_set_access_method('events', 'columnar');
+COMMIT;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
