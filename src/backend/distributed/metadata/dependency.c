@@ -1212,18 +1212,31 @@ GetDependingView(Form_pg_depend pg_depend)
 										   true, NULL, 1, rkey);
 
 	HeapTuple rewriteTup = systable_getnext(rscan);
+	if (!HeapTupleIsValid(rewriteTup))
+	{
+		/*
+		 * This function already verified that objid's classid is
+		 * RewriteRelationId, so it should exists. But be on the
+		 * safe side.
+		 */
+		ereport(ERROR, (errmsg("catalog lookup failed for view %u",
+							   pg_depend->objid)));
+	}
+
 	Form_pg_rewrite pg_rewrite = (Form_pg_rewrite) GETSTRUCT(rewriteTup);
 
 	bool isView = get_rel_relkind(pg_rewrite->ev_class) == RELKIND_VIEW;
 	bool isMatView = get_rel_relkind(pg_rewrite->ev_class) == RELKIND_MATVIEW;
 	bool isDifferentThanRef = pg_rewrite->ev_class != pg_depend->refobjid;
 
+	Oid dependingView = InvalidOid;
+	if ((isView || isMatView) && isDifferentThanRef)
+	{
+		dependingView = pg_rewrite->ev_class;
+	}
+
 	systable_endscan(rscan);
 	relation_close(rewriteRel, AccessShareLock);
 
-	if ((isView || isMatView) && isDifferentThanRef)
-	{
-		return pg_rewrite->ev_class;
-	}
-	return InvalidOid;
+	return dependingView;
 }
