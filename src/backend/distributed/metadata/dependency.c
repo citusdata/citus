@@ -1219,7 +1219,7 @@ GetDependingView(Form_pg_depend pg_depend)
 		 * RewriteRelationId, so it should exists. But be on the
 		 * safe side.
 		 */
-		ereport(ERROR, (errmsg("catalog lookup failed for function %u",
+		ereport(ERROR, (errmsg("catalog lookup failed for view %u",
 							   pg_depend->objid)));
 	}
 
