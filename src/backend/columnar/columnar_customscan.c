@@ -344,6 +344,13 @@ ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 	{
 		/* disable parallel query */
 		rel->rel_parallel_workers = 0;
+
+		/* disable index-only scan */
+		IndexOptInfo *indexOptInfo = NULL;
+		foreach_ptr(indexOptInfo, rel->indexlist)
+		{
+			memset(indexOptInfo->canreturn, false, indexOptInfo->ncolumns);
+		}
 	}
 }
 
