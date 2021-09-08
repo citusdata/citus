@@ -397,5 +397,14 @@ INSERT INTO revisit_same_cgroup SELECT random()*500, (random()*500)::INT::TEXT F
 
 SELECT sum(a)>-1 FROM revisit_same_cgroup WHERE b = '1';
 
+CREATE TABLE aborted_write_test (a INT PRIMARY KEY) USING columnar;
+ALTER TABLE aborted_write_test SET (parallel_workers = 0);
+
+INSERT INTO aborted_write_test VALUES (16999);
+INSERT INTO aborted_write_test VALUES (16999);
+
+-- since second INSERT already failed, should not throw a "duplicate key" error
+REINDEX TABLE aborted_write_test;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;

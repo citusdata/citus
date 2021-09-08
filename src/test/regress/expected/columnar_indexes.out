@@ -542,5 +542,13 @@ SELECT sum(a)>-1 FROM revisit_same_cgroup WHERE b = '1';
  t
 (1 row)
 
+CREATE TABLE aborted_write_test (a INT PRIMARY KEY) USING columnar;
+ALTER TABLE aborted_write_test SET (parallel_workers = 0);
+INSERT INTO aborted_write_test VALUES (16999);
+INSERT INTO aborted_write_test VALUES (16999);
+ERROR:  duplicate key value violates unique constraint "aborted_write_test_pkey"
+DETAIL:  Key (a)=(16999) already exists.
+-- since second INSERT already failed, should not throw a "duplicate key" error
+REINDEX TABLE aborted_write_test;
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;
