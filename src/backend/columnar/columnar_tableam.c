@@ -562,7 +562,8 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 		return false;
 	}
 
-	if (StripeIsFlushed(stripeMetadata) &&
+	StripeWriteStateEnum stripeWriteState = StripeWriteState(stripeMetadata);
+	if (stripeWriteState == STRIPE_WRITE_FLUSHED &&
 		!ColumnarReadRowByRowNumber(scan->cs_readState, rowNumber,
 									slot->tts_values, slot->tts_isnull))
 	{
@@ -573,14 +574,19 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 		 */
 		return false;
 	}
-
-	if (!StripeIsFlushed(stripeMetadata))
+	else if (stripeWriteState == STRIPE_WRITE_ABORTED)
 	{
 		/*
 		 * We only expect to see un-flushed stripes when checking against
 		 * constraint violation. In that case, indexAM provides dirty
 		 * snapshot to index_fetch_tuple callback.
 		 */
+		Assert(snapshot->snapshot_type == SNAPSHOT_DIRTY);
+		return false;
+	}
+	else if (stripeWriteState == STRIPE_WRITE_IN_PROGRESS)
+	{
+		/* similar to aborted writes .. */
 		Assert(snapshot->snapshot_type == SNAPSHOT_DIRTY);
 
 		/*
@@ -592,6 +598,14 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 		 * the tupleslot properly.
 		 */
 		memset(slot->tts_isnull, true, slot->tts_nvalid);
+	}
+	else
+	{
+		/*
+		 * At this point, we certainly know that stripe is flushed and
+		 * ColumnarReadRowByRowNumber successfully filled the tupleslot.
+		 */
+		Assert(stripeWriteState == STRIPE_WRITE_FLUSHED);
 	}
 
 	slot->tts_tableOid = RelationGetRelid(columnarRelation);
