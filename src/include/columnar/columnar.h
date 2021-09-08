@@ -236,10 +236,14 @@ extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 List *qualConditions,
 											 MemoryContext scanContext,
 											 Snapshot snaphot,
-											 bool snapshotRegisteredByUs);
+											 bool flushWrites);
+extern void ColumnarReadFlushPendingWrites(ColumnarReadState *readState);
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls, uint64 *rowNumber);
 extern void ColumnarRescan(ColumnarReadState *readState, List *scanQual);
+extern void ColumnarReadRowByRowNumberOrError(ColumnarReadState *readState,
+											  uint64 rowNumber, Datum *columnValues,
+											  bool *columnNulls);
 extern bool ColumnarReadRowByRowNumber(ColumnarReadState *readState,
 									   uint64 rowNumber, Datum *columnValues,
 									   bool *columnNulls);

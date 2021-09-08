@@ -456,5 +456,64 @@ BEGIN;
   create index on events (event_id);
 COMMIT;
 
+CREATE TABLE pending_index_scan(i INT UNIQUE) USING columnar;
+BEGIN;
+  INSERT INTO pending_index_scan SELECT generate_series(1,100);
+
+  -- test index scan when there are pending writes
+  SET LOCAL enable_seqscan TO OFF;
+  SET LOCAL columnar.enable_custom_scan TO OFF;
+  SELECT COUNT(*)=100 FROM pending_index_scan ;
+COMMIT;
+
+-- show that we don't flush single-tuple stripes due to aborted writes ...
+create table uniq(i int unique) using columnar;
+
+-- a) when table has a unique:
+begin;
+  insert into uniq select generate_series(1,100);
+  -- i) abort before flushing
+rollback;
+insert into uniq select generate_series(1,100);
+
+SELECT COUNT(*)=1 FROM columnar.stripe cs
+WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+
+TRUNCATE uniq;
+
+begin;
+  insert into uniq select generate_series(1,100);
+  -- ii) abort after flushing
+  SELECT count(*) FROM uniq;
+rollback;
+insert into uniq select generate_series(1,100);
+
+SELECT COUNT(*)=1 FROM columnar.stripe cs
+WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+
+TRUNCATE uniq;
+
+-- b) when table has a primary key:
+begin;
+  insert into uniq select generate_series(1,100);
+  -- i) abort before flushing
+rollback;
+insert into uniq select generate_series(1,100);
+
+SELECT COUNT(*)=1 FROM columnar.stripe cs
+WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+
+TRUNCATE uniq;
+
+begin;
+  insert into uniq select generate_series(1,100);
+  -- ii) abort after flushing
+  SELECT count(*) FROM uniq;
+rollback;
+insert into uniq select generate_series(1,100);
+
+SELECT COUNT(*)=1 FROM columnar.stripe cs
+WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;

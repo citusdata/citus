@@ -19,6 +19,7 @@
 #include "safe_lib.h"
 
 #include "access/nbtree.h"
+#include "access/xact.h"
 #include "catalog/pg_am.h"
 #include "commands/defrem.h"
 #include "distributed/listutils.h"
@@ -178,7 +179,7 @@ ColumnarReadState *
 ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				  List *projectedColumnList, List *whereClauseList,
 				  MemoryContext scanContext, Snapshot snapshot,
-				  bool snapshotRegisteredByUs)
+				  bool flushWrites)
 {
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -197,13 +198,90 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->stripeReadContext = stripeReadContext;
 	readState->stripeReadState = NULL;
 	readState->scanContext = scanContext;
+
+	/*
+	 * Note that ColumnarReadFlushPendingWrites might update those two by
+	 * registering a new snapshot.
+	 */
 	readState->snapshot = snapshot;
-	readState->snapshotRegisteredByUs = snapshotRegisteredByUs;
+	readState->snapshotRegisteredByUs = false;
+
+	if (flushWrites)
+	{
+		ColumnarReadFlushPendingWrites(readState);
+	}
+
+	readState->currentStripeMetadata = FindNextStripeByRowNumber(relation,
+																 COLUMNAR_INVALID_ROW_NUMBER,
+																 readState->snapshot);
 
 	/* set currentStripeMetadata for the first stripe to read */
 	AdvanceStripeRead(readState);
 
 	return readState;
+}
+
+
+/*
+ * ColumnarReadFlushPendingWrites flushes pending writes for read operation
+ * and sets a new (registered) snapshot if necessary.
+ *
+ * If it sets a new snapshot, then sets snapshotRegisteredByUs to true to
+ * indicate that caller should unregister the snapshot after finishing read
+ * operation.
+ *
+ * Note that this function assumes that readState's relation and snapshot
+ * fields are already set.
+ */
+void
+ColumnarReadFlushPendingWrites(ColumnarReadState *readState)
+{
+	Assert(!readState->snapshotRegisteredByUs);
+
+	Oid relfilenode = readState->relation->rd_node.relNode;
+	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
+
+	if (readState->snapshot == InvalidSnapshot || !IsMVCCSnapshot(readState->snapshot))
+	{
+		return;
+	}
+
+	/*
+	 * If we flushed any pending writes, then we should guarantee that
+	 * those writes are visible to us too. For this reason, if given
+	 * snapshot is an MVCC snapshot, then we set its curcid to current
+	 * command id.
+	 *
+	 * For simplicity, we do that even if we didn't flush any writes
+	 * since we don't see any problem with that.
+	 *
+	 * XXX: We should either not update cid if we are executing a FETCH
+	 * (from cursor) command, or we should have a better way to deal with
+	 * pending writes, see the discussion in
+	 * https://github.com/citusdata/citus/issues/5231.
+	 */
+	PushCopiedSnapshot(readState->snapshot);
+
+	/* now our snapshot is the active one */
+	UpdateActiveSnapshotCommandId();
+	Snapshot newSnapshot = GetActiveSnapshot();
+	RegisterSnapshot(newSnapshot);
+
+	/*
+	 * To be able to use UpdateActiveSnapshotCommandId, we pushed the
+	 * copied snapshot to the stack. However, we don't need to keep it
+	 * there since we will anyway rely on ColumnarReadState->snapshot
+	 * during read operation.
+	 *
+	 * Note that since we registered the snapshot already, we guarantee
+	 * that PopActiveSnapshot won't free it.
+	 */
+	PopActiveSnapshot();
+
+	readState->snapshot = newSnapshot;
+
+	/* not forget to unregister it when finishing read operation */
+	readState->snapshotRegisteredByUs = true;
 }
 
 
@@ -263,6 +341,27 @@ ColumnarReadNextRow(ColumnarReadState *readState, Datum *columnValues, bool *col
 	}
 
 	return false;
+}
+
+
+/*
+ * ColumnarReadRowByRowNumberOrError is a wrapper around
+ * ColumnarReadRowByRowNumber that throws an error if tuple
+ * with rowNumber does not exist.
+ */
+void
+ColumnarReadRowByRowNumberOrError(ColumnarReadState *readState,
+								  uint64 rowNumber, Datum *columnValues,
+								  bool *columnNulls)
+{
+	if (!ColumnarReadRowByRowNumber(readState, rowNumber,
+									columnValues, columnNulls))
+	{
+		ereport(ERROR, (errmsg("cannot read from columnar table %s, tuple with "
+							   "row number " UINT64_FORMAT " does not exist",
+							   RelationGetRelationName(readState->relation),
+							   rowNumber)));
+	}
 }
 
 
