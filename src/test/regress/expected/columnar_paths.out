@@ -354,7 +354,7 @@ LIMIT 100;
                                  ->  GroupAggregate
                                        Group Key: full_correlated_1.a
                                        Filter: (count(DISTINCT full_correlated_1.a) >= 1)
-                                       ->  Index Only Scan Backward using full_correlated_btree on full_correlated full_correlated_1
+                                       ->  Index Scan Backward using full_correlated_btree on full_correlated full_correlated_1
                                              Index Cond: (a > 10)
                ->  Materialize
                      ->  Subquery Scan on sub_3
@@ -504,16 +504,6 @@ $$
  t
 (1 row)
 
-SELECT columnar_test_helpers.uses_index_scan (
-$$
-SELECT a FROM full_anti_correlated WHERE a>2000 AND a<7000 AND b='24';
-$$
-);
- uses_index_scan
----------------------------------------------------------------------
- t
-(1 row)
-
 SELECT columnar_test_helpers.uses_custom_scan (
 $$
 SELECT a FROM full_anti_correlated WHERE a<7000 AND b<'10000';
@@ -610,12 +600,11 @@ SELECT * FROM correlated WHERE x = 78910;
 -- should choose index scan; selective but uncorrelated
 EXPLAIN (analyze on, costs off, timing off, summary off)
 SELECT * FROM uncorrelated WHERE x = 78910;
-                                   QUERY PLAN
+                                QUERY PLAN
 ---------------------------------------------------------------------
- Index Only Scan using uncorrelated_idx on uncorrelated (actual rows=1 loops=1)
+ Index Scan using uncorrelated_idx on uncorrelated (actual rows=1 loops=1)
    Index Cond: (x = 78910)
-   Heap Fetches: 1
-(3 rows)
+(2 rows)
 
 SELECT * FROM uncorrelated WHERE x = 78910;
    x

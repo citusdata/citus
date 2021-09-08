@@ -293,12 +293,6 @@ SELECT a FROM full_anti_correlated WHERE a>2000 AND a<7000;
 $$
 );
 
-SELECT columnar_test_helpers.uses_index_scan (
-$$
-SELECT a FROM full_anti_correlated WHERE a>2000 AND a<7000 AND b='24';
-$$
-);
-
 SELECT columnar_test_helpers.uses_custom_scan (
 $$
 SELECT a FROM full_anti_correlated WHERE a<7000 AND b<'10000';
