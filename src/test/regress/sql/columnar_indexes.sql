@@ -397,5 +397,38 @@ INSERT INTO revisit_same_cgroup SELECT random()*500, (random()*500)::INT::TEXT F
 
 SELECT sum(a)>-1 FROM revisit_same_cgroup WHERE b = '1';
 
+CREATE TABLE aborted_write_test (a INT PRIMARY KEY) USING columnar;
+ALTER TABLE aborted_write_test SET (parallel_workers = 0);
+
+INSERT INTO aborted_write_test VALUES (16999);
+INSERT INTO aborted_write_test VALUES (16999);
+
+-- since second INSERT already failed, should not throw a "duplicate key" error
+REINDEX TABLE aborted_write_test;
+
+create table events (event_id bigserial, event_time timestamptz default now(), payload text) using columnar;
+BEGIN;
+  -- this wouldn't flush any data
+  insert into events (payload) select 'hello-'||s from generate_series(1, 10) s;
+
+  -- Since table is large enough, normally postgres would prefer using
+  -- parallel workers when building the index.
+  --
+  -- However, before starting to build the index, we will first flush
+  -- the writes of above INSERT and this would try to update the stripe
+  -- reservation entry in columnar.stripe when doing that.
+  --
+  -- However, updating a tuple during a parallel operation is not allowed
+  -- by postgres and throws an error. For this reason, here we don't expect
+  -- following commnad to fail since we prevent using parallel workers for
+  -- columnar tables.
+  SET LOCAL force_parallel_mode = regress;
+  SET LOCAL min_parallel_table_scan_size = 1;
+  SET LOCAL parallel_tuple_cost = 0;
+  SET LOCAL max_parallel_workers = 4;
+  SET LOCAL max_parallel_workers_per_gather = 4;
+  create index on events (event_id);
+COMMIT;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;

@@ -179,6 +179,27 @@ typedef struct StripeBuffers
 } StripeBuffers;
 
 
+/* return value of StripeWriteState to decide stripe write state */
+typedef enum StripeWriteStateEnum
+{
+	/* stripe write is flushed to disk, so it's readable */
+	STRIPE_WRITE_FLUSHED,
+
+	/*
+	 * Writer transaction did abort either before inserting into
+	 * columnar.stripe or after.
+	 */
+	STRIPE_WRITE_ABORTED,
+
+	/*
+	 * Writer transaction is still in-progress. Note that it is not certain
+	 * if it is being written by current backend's current transaction or
+	 * another backend.
+	 */
+	STRIPE_WRITE_IN_PROGRESS
+} StripeWriteStateEnum;
+
+
 /* ColumnarReadState represents state of a columnar scan. */
 struct ColumnarReadState;
 typedef struct ColumnarReadState ColumnarReadState;
@@ -268,7 +289,7 @@ extern StripeMetadata * FindStripeByRowNumber(Relation relation, uint64 rowNumbe
 extern StripeMetadata * FindStripeWithMatchingFirstRowNumber(Relation relation,
 															 uint64 rowNumber,
 															 Snapshot snapshot);
-extern bool StripeIsFlushed(StripeMetadata *stripeMetadata);
+extern StripeWriteStateEnum StripeWriteState(StripeMetadata *stripeMetadata);
 extern uint64 StripeGetHighestRowNumber(StripeMetadata *stripeMetadata);
 extern StripeMetadata * FindStripeWithHighestRowNumber(Relation relation,
 													   Snapshot snapshot);

@@ -799,6 +799,26 @@ DEBUG:  pathlist hook for columnar table am
 (0 rows)
 
 RESET client_min_messages;
+create table events (event_id bigserial, event_time timestamptz default now(), payload text);
+create index on events (event_id);
+insert into events (payload) select 'hello-'||s from generate_series(1,10) s;
+BEGIN;
+  SET LOCAL force_parallel_mode = regress;
+  SET LOCAL min_parallel_table_scan_size = 1;
+  SET LOCAL parallel_tuple_cost = 0;
+  SET LOCAL max_parallel_workers = 4;
+  SET LOCAL max_parallel_workers_per_gather = 4;
+  select alter_table_set_access_method('events', 'columnar');
+NOTICE:  creating a new table for alter_table_set_access_method.events
+NOTICE:  moving the data of alter_table_set_access_method.events
+NOTICE:  dropping the old alter_table_set_access_method.events
+NOTICE:  renaming the new table to alter_table_set_access_method.events
+ alter_table_set_access_method
+---------------------------------------------------------------------
+
+(1 row)
+
+COMMIT;
 SET client_min_messages TO WARNING;
 DROP SCHEMA alter_table_set_access_method CASCADE;
 SELECT 1 FROM master_remove_node('localhost', :master_port);

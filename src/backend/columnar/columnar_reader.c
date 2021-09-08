@@ -288,7 +288,7 @@ ColumnarReadRowByRowNumber(ColumnarReadState *readState,
 			return false;
 		}
 
-		if (!StripeIsFlushed(stripeMetadata))
+		if (StripeWriteState(stripeMetadata) != STRIPE_WRITE_FLUSHED)
 		{
 			/*
 			 * Callers are expected to skip stripes that are not flushed to
@@ -582,7 +582,7 @@ AdvanceStripeRead(ColumnarReadState *readState)
 																 readState->snapshot);
 
 	if (readState->currentStripeMetadata &&
-		!StripeIsFlushed(readState->currentStripeMetadata) &&
+		StripeWriteState(readState->currentStripeMetadata) != STRIPE_WRITE_FLUSHED &&
 		!SnapshotMightSeeUnflushedStripes(readState->snapshot))
 	{
 		/*
@@ -596,7 +596,7 @@ AdvanceStripeRead(ColumnarReadState *readState)
 	}
 
 	while (readState->currentStripeMetadata &&
-		   !StripeIsFlushed(readState->currentStripeMetadata))
+		   StripeWriteState(readState->currentStripeMetadata) != STRIPE_WRITE_FLUSHED)
 	{
 		readState->currentStripeMetadata =
 			FindNextStripeByRowNumber(readState->relation,
