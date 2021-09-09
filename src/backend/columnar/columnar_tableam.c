@@ -585,7 +585,7 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 		 * writer transaction commits or aborts, without requiring us to fill
 		 * the tupleslot properly.
 		 */
-		memset(slot->tts_isnull, true, slot->tts_nvalid);
+		memset(slot->tts_isnull, true, slot->tts_nvalid * sizeof(bool));
 	}
 	else
 	{
