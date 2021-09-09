@@ -83,6 +83,7 @@ typedef struct ColumnarScanDescData
 	MemoryContext scanContext;
 	Bitmapset *attr_needed;
 	List *scanQual;
+	Index scanrelid;
 } ColumnarScanDescData;
 
 typedef struct ColumnarScanDescData *ColumnarScanDesc;
@@ -178,9 +179,14 @@ columnar_beginscan(Relation relation, Snapshot snapshot,
 	/* attr_needed represents 0-indexed attribute numbers */
 	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
 
+	/* not applicable for plain scan */
+	List *scanQual = NIL;
+	Index scanrelid = 0;
+
 	TableScanDesc scandesc = columnar_beginscan_extended(relation, snapshot, nkeys, key,
-														 parallel_scan,
-														 flags, attr_needed, NULL);
+														 parallel_scan, flags,
+														 attr_needed, scanQual,
+														 scanrelid);
 
 	bms_free(attr_needed);
 
@@ -192,7 +198,8 @@ TableScanDesc
 columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 							int nkeys, ScanKey key,
 							ParallelTableScanDesc parallel_scan,
-							uint32 flags, Bitmapset *attr_needed, List *scanQual)
+							uint32 flags, Bitmapset *attr_needed,
+							List *scanQual, Index scanrelid)
 {
 	Oid relfilenode = relation->rd_node.relNode;
 
@@ -222,6 +229,7 @@ columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 	scan->cs_readState = NULL;
 	scan->attr_needed = bms_copy(attr_needed);
 	scan->scanQual = copyObject(scanQual);
+	scan->scanrelid = scanrelid;
 	scan->scanContext = scanContext;
 
 	if (PendingWritesInUpperTransactions(relfilenode, GetCurrentSubTransactionId()))
@@ -254,7 +262,8 @@ CreateColumnarScanMemoryContext(void)
  */
 static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
-						 List *scanQual, MemoryContext scanContext, Snapshot snapshot)
+						 List *scanQual, Index varno, MemoryContext scanContext,
+						 Snapshot snapshot)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
 
@@ -302,8 +311,8 @@ init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_n
 
 	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
-													 scanQual, scanContext, snapshot,
-													 snapshotRegisteredByUs);
+													 scanQual, varno, scanContext,
+													 snapshot, snapshotRegisteredByUs);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -357,7 +366,8 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 		scan->cs_readState =
 			init_columnar_read_state(scan->cs_base.rs_rd, slot->tts_tupleDescriptor,
 									 scan->attr_needed, scan->scanQual,
-									 scan->scanContext, scan->cs_base.rs_snapshot);
+									 scan->scanrelid, scan->scanContext,
+									 scan->cs_base.rs_snapshot);
 	}
 
 	ExecClearTuple(slot);
@@ -533,11 +543,12 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 
 		/* no quals for index scan */
 		List *scanQual = NIL;
+		Index scanrelid = 0;
 
 		scan->cs_readState = init_columnar_read_state(columnarRelation,
 													  slot->tts_tupleDescriptor,
 													  attr_needed, scanQual,
-													  scan->scanContext,
+													  scanrelid, scan->scanContext,
 													  snapshot);
 	}
 
@@ -897,6 +908,7 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 
 	/* no quals for table rewrite */
 	List *scanQual = NIL;
+	Index scanrelid = 0;
 
 	/* use SnapshotAny when re-writing table as heapAM does */
 	Snapshot snapshot = SnapshotAny;
@@ -904,7 +916,8 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	MemoryContext scanContext = CreateColumnarScanMemoryContext();
 	ColumnarReadState *readState = init_columnar_read_state(OldHeap, sourceDesc,
 															attr_needed, scanQual,
-															scanContext, snapshot);
+															scanrelid, scanContext,
+															snapshot);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));

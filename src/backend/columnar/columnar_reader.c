@@ -147,7 +147,7 @@ static bool * SelectedChunkMask(StripeSkipList *stripeSkipList,
 								List *whereClauseList, List *whereClauseVars,
 								int64 *chunkGroupsFiltered);
 static Node * BuildBaseConstraint(Var *variable);
-static List * GetClauseVars(List *clauses, int natts);
+static List * GetClauseVars(List *clauses, int natts, Index scanrelid);
 static OpExpr * MakeOpExpression(Var *variable, int16 strategyNumber);
 static Oid GetOperatorByType(Oid typeId, Oid accessMethodId, int16 strategyNumber);
 static void UpdateConstraint(Node *baseConstraint, Datum minValue, Datum maxValue);
@@ -177,8 +177,8 @@ static Datum ColumnDefaultValue(TupleConstr *tupleConstraints,
 ColumnarReadState *
 ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				  List *projectedColumnList, List *whereClauseList,
-				  MemoryContext scanContext, Snapshot snapshot,
-				  bool snapshotRegisteredByUs)
+				  Index scanrelid, MemoryContext scanContext,
+				  Snapshot snapshot, bool snapshotRegisteredByUs)
 {
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -191,7 +191,8 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->relation = relation;
 	readState->projectedColumnList = projectedColumnList;
 	readState->whereClauseList = whereClauseList;
-	readState->whereClauseVars = GetClauseVars(whereClauseList, tupleDescriptor->natts);
+	readState->whereClauseVars =
+		GetClauseVars(whereClauseList, tupleDescriptor->natts, scanrelid);
 	readState->chunkGroupsFiltered = 0;
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
@@ -1124,7 +1125,7 @@ BuildBaseConstraint(Var *variable)
  * deduplicates and sorts them.
  */
 static List *
-GetClauseVars(List *whereClauseList, int natts)
+GetClauseVars(List *whereClauseList, int natts, Index scanrelid)
 {
 	/*
 	 * We don't recurse into or include aggregates, window functions, or
@@ -1143,6 +1144,12 @@ GetClauseVars(List *whereClauseList, int natts)
 		Assert(IsA(node, Var));
 
 		Var *var = (Var *) node;
+
+		if (var->varno != scanrelid)
+		{
+			continue;
+		}
+
 		int idx = var->varattno - 1;
 
 		if (deduplicate[idx] != NULL)

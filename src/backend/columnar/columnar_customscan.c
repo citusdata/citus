@@ -1462,10 +1462,12 @@ ColumnarScanNext(ColumnarScanState *columnarScanState)
 		 * We reach here if the scan is not parallel, or if we're serially
 		 * executing a scan that was planned to be parallel.
 		 */
+		CustomScan *customScan = (CustomScan *) node->ss.ps.plan;
 		scandesc = columnar_beginscan_extended(node->ss.ss_currentRelation,
 											   estate->es_snapshot,
 											   0, NULL, NULL, flags, attr_needed,
-											   columnarScanState->qual);
+											   columnarScanState->qual,
+											   customScan->scan.scanrelid);
 		bms_free(attr_needed);
 
 		node->ss.ss_currentScanDesc = scandesc;
