@@ -42,7 +42,7 @@ COMMENT ON FUNCTION master_update_table_statistics(regclass)
 	IS 'updates shard statistics of the given table and its colocated tables';
 
 DROP FUNCTION pg_catalog.citus_get_active_worker_nodes(OUT text, OUT bigint);
-/* copy of citus--10.0-2--10.0-1.sql */
+-- copy of citus--10.0-2--10.0-1.sql
 #include "../../../columnar/sql/downgrades/columnar--10.0-2--10.0-1.sql"
 
 -- copy of citus--10.0-1--9.5-1

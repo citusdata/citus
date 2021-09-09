@@ -1,4 +1,4 @@
-/* columnar--10.0-3--10.1-1.sql */
+-- columnar--10.0-3--10.1-1.sql
 
 -- Drop foreign keys between columnar metadata tables.
 -- Postgres assigns different names to those foreign keys in PG11, so act accordingly.

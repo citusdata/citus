@@ -1,4 +1,4 @@
-/* columnar--10.1-1--10.0-3.sql */
+-- columnar--10.1-1--10.0-3.sql
 
 -- define foreign keys between columnar metadata tables
 ALTER TABLE columnar.chunk
