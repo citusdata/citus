@@ -985,7 +985,9 @@ SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
 
 INSERT INTO mx_table_with_small_sequence VALUES (0);
 \c - - - :worker_1_port
+-- Insert doesn't work because the defaults are of type int and smallint
 INSERT INTO mx_table_with_small_sequence VALUES (1), (3);
+ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 -- Create an MX table with (BIGSERIAL) sequences
@@ -996,6 +998,7 @@ SELECT create_distributed_table('mx_table_with_sequence', 'a');
 
 (1 row)
 
+INSERT INTO mx_table_with_sequence VALUES (0);
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
  Column |  Type   |                             Modifiers
 ---------------------------------------------------------------------
@@ -1042,6 +1045,8 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_
  public | mx_table_with_sequence_c_seq | sequence | postgres
 (1 row)
 
+-- Insert works because the defaults are of type bigint
+INSERT INTO mx_table_with_sequence VALUES (1), (3);
 -- check that pg_depend records exist on the worker
 SELECT refobjsubid FROM pg_depend
 WHERE objid = 'mx_table_with_sequence_b_seq'::regclass AND refobjid = 'mx_table_with_sequence'::regclass;
@@ -1061,13 +1066,13 @@ WHERE objid = 'mx_table_with_sequence_c_seq'::regclass AND refobjid = 'mx_table_
 SELECT nextval('mx_table_with_sequence_b_seq');
      nextval
 ---------------------------------------------------------------------
- 281474976710657
+ 281474976710659
 (1 row)
 
 SELECT nextval('mx_table_with_sequence_c_seq');
      nextval
 ---------------------------------------------------------------------
- 281474976710657
+ 281474976710659
 (1 row)
 
 -- Check that adding a new metadata node sets the sequence space correctly
@@ -1119,7 +1124,11 @@ SELECT nextval('mx_table_with_sequence_c_seq');
  562949953421313
 (1 row)
 
+-- Insert doesn't work because the defaults are of type int and smallint
 INSERT INTO mx_table_with_small_sequence VALUES (2), (4);
+ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+-- Insert works because the defaults are of type bigint
+INSERT INTO mx_table_with_sequence VALUES (2), (4);
 -- Check that dropping the mx table with sequences works as expected
 \c - - - :master_port
 -- check our small sequence values
@@ -1127,10 +1136,17 @@ SELECT a, b, c FROM mx_table_with_small_sequence ORDER BY a,b,c;
  a |     b     |  c
 ---------------------------------------------------------------------
  0 |         1 |    1
- 1 | 268435457 | 4097
- 2 | 536870913 | 8193
- 3 | 268435458 | 4098
- 4 | 536870914 | 8194
+(1 row)
+
+--check our bigint sequence values
+SELECT a, b, c FROM mx_table_with_sequence ORDER BY a,b,c;
+ a |        b        |        c
+---------------------------------------------------------------------
+ 0 |               1 |               1
+ 1 | 281474976710657 | 281474976710657
+ 2 | 562949953421314 | 562949953421314
+ 3 | 281474976710658 | 281474976710658
+ 4 | 562949953421315 | 562949953421315
 (5 rows)
 
 -- Check that dropping the mx table with sequences works as expected
@@ -1672,7 +1688,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
  CREATE TABLE public.dist_table_1 (a integer)
  CREATE TABLE public.mx_ref (col_1 integer, col_2 text)
- CREATE TABLE public.test_table (id integer DEFAULT nextval('public.mx_test_sequence_0'::regclass), id2 integer DEFAULT nextval('public.mx_test_sequence_1'::regclass))
+ CREATE TABLE public.test_table (id integer DEFAULT worker_nextval('public.mx_test_sequence_0'::regclass), id2 integer DEFAULT worker_nextval('public.mx_test_sequence_1'::regclass))
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (4, 1, 'localhost', 8888, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'default', TRUE),(5, 1, 'localhost', 8889, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'second-cluster', TRUE),(1, 1, 'localhost', 57637, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE),(7, 5, 'localhost', 57638, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE)
  SELECT citus_internal_add_partition_metadata ('mx_test_schema_1.mx_table_1'::regclass, 'h', 'col1', 3, 's')
  SELECT citus_internal_add_partition_metadata ('mx_test_schema_2.mx_table_2'::regclass, 'h', 'col1', 3, 's')

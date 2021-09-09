@@ -19,6 +19,7 @@ DROP FUNCTION pg_catalog.citus_internal_delete_shard_metadata(bigint);
 DROP FUNCTION pg_catalog.citus_internal_update_relation_colocation(oid, integer);
 DROP FUNCTION pg_catalog.create_time_partitions(regclass, interval, timestamp with time zone, timestamp with time zone);
 DROP FUNCTION pg_catalog.get_missing_time_partition_ranges(regclass, interval, timestamp with time zone, timestamp with time zone);
+DROP FUNCTION pg_catalog.worker_nextval(regclass);
 
 DROP PROCEDURE pg_catalog.drop_old_time_partitions(regclass, timestamptz);
 

@@ -1453,7 +1453,7 @@ RecreateTableDDLCommandList(Oid relationId)
 
 	StringInfo dropCommand = makeStringInfo();
 	char relationKind = get_rel_relkind(relationId);
-	bool includeSequenceDefaults = false;
+	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
 
 	/* build appropriate DROP command based on relation kind */
 	if (RegularTable(relationId))

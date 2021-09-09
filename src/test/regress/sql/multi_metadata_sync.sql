@@ -452,6 +452,7 @@ SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
 INSERT INTO mx_table_with_small_sequence VALUES (0);
 
 \c - - - :worker_1_port
+-- Insert doesn't work because the defaults are of type int and smallint
 INSERT INTO mx_table_with_small_sequence VALUES (1), (3);
 
 \c - - - :master_port
@@ -460,6 +461,7 @@ SET citus.shard_replication_factor TO 1;
 -- Create an MX table with (BIGSERIAL) sequences
 CREATE TABLE mx_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
 SELECT create_distributed_table('mx_table_with_sequence', 'a');
+INSERT INTO mx_table_with_sequence VALUES (0);
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
@@ -469,6 +471,9 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_sequence'::regclass;
 \ds mx_table_with_sequence_b_seq
 \ds mx_table_with_sequence_c_seq
+
+-- Insert works because the defaults are of type bigint
+INSERT INTO mx_table_with_sequence VALUES (1), (3);
 
 -- check that pg_depend records exist on the worker
 SELECT refobjsubid FROM pg_depend
@@ -493,13 +498,19 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_table_with_
 SELECT nextval('mx_table_with_sequence_b_seq');
 SELECT nextval('mx_table_with_sequence_c_seq');
 
+-- Insert doesn't work because the defaults are of type int and smallint
 INSERT INTO mx_table_with_small_sequence VALUES (2), (4);
+-- Insert works because the defaults are of type bigint
+INSERT INTO mx_table_with_sequence VALUES (2), (4);
 
 -- Check that dropping the mx table with sequences works as expected
 \c - - - :master_port
 
 -- check our small sequence values
 SELECT a, b, c FROM mx_table_with_small_sequence ORDER BY a,b,c;
+
+--check our bigint sequence values
+SELECT a, b, c FROM mx_table_with_sequence ORDER BY a,b,c;
 
 -- Check that dropping the mx table with sequences works as expected
 DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;

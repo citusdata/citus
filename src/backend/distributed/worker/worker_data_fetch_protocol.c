@@ -77,6 +77,7 @@ PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
 PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
+PG_FUNCTION_INFO_V1(worker_nextval);
 
 /*
  * Following UDFs are stub functions, you can check their comments for more
@@ -701,6 +702,21 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 
 
 /*
+ * worker_nextval calculates nextval() in worker nodes
+ * for int and smallint column default types
+ * TODO: not error out but get the proper nextval()
+ */
+Datum
+worker_nextval(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errmsg(
+						"nextval(sequence) calls in worker nodes are not supported"
+						" for column defaults of type int or smallint")));
+	PG_RETURN_INT32(0);
+}
+
+
+/*
  * check_log_statement is a copy of postgres' check_log_statement function and
  * returns whether a statement ought to be logged or not.
  */
@@ -755,14 +771,20 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 	int64 sequenceMinValue = sequenceData->seqmin;
 	int valueBitLength = 48;
 
-	/* for smaller types, put the group ID into the first 4 bits */
-	if (sequenceTypeId == INT4OID)
+	/*
+	 * For int and smallint, we don't currently support insertion from workers
+	 * Check issue #5126 and PR #5254 for details.
+	 * https://github.com/citusdata/citus/issues/5126
+	 * So, no need to alter sequence min/max for now
+	 * We call setval(sequence, maxvalue) such that manually using
+	 * nextval(sequence) in the workers will error out as well.
+	 */
+	if (sequenceTypeId != INT8OID)
 	{
-		valueBitLength = 28;
-	}
-	else if (sequenceTypeId == INT2OID)
-	{
-		valueBitLength = 12;
+		DirectFunctionCall2(setval_oid,
+							ObjectIdGetDatum(sequenceId),
+							Int64GetDatum(sequenceMaxValue));
+		return;
 	}
 
 	/* calculate min/max values that the sequence can generate in this worker */

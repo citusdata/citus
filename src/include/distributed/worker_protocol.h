@@ -162,5 +162,7 @@ extern Datum worker_find_block_local_path(PG_FUNCTION_ARGS);
 /* Function declaration for calculating hashed value */
 extern Datum worker_hash(PG_FUNCTION_ARGS);
 
+/* Function declaration for calculating nextval() in worker */
+extern Datum worker_nextval(PG_FUNCTION_ARGS);
 
 #endif   /* WORKER_PROTOCOL_H */

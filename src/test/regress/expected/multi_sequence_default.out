@@ -184,7 +184,7 @@ SELECT create_distributed_table('seq_test_4','x');
 (1 row)
 
 CREATE SEQUENCE seq_4;
-ALTER TABLE seq_test_4 ADD COLUMN a int DEFAULT nextval('seq_4');
+ALTER TABLE seq_test_4 ADD COLUMN a bigint DEFAULT nextval('seq_4');
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -195,28 +195,21 @@ DROP SEQUENCE seq_4 CASCADE;
 NOTICE:  drop cascades to default value for column a of table seq_test_4
 TRUNCATE seq_test_4;
 CREATE SEQUENCE seq_4;
-ALTER TABLE seq_test_4 ADD COLUMN b int DEFAULT nextval('seq_4');
+ALTER TABLE seq_test_4 ADD COLUMN b bigint DEFAULT nextval('seq_4');
 -- on worker it should generate high sequence number
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_4 VALUES (1,2) RETURNING *;
- x | y | a |     b
+ x | y | a |        b
 ---------------------------------------------------------------------
- 1 | 2 |   | 268435457
+ 1 | 2 |   | 281474976710657
 (1 row)
 
--- check that we have can properly insert to tables from before metadata sync
+-- check that we have can't insert to tables from before metadata sync
+-- seq_test_0 and seq_test_0_local_table have int and smallint column defaults
 INSERT INTO sequence_default.seq_test_0 VALUES (1,2) RETURNING *;
- x | y |     z     | w00  | w01  |    w10    |    w11    |       w20       |       w21
----------------------------------------------------------------------
- 1 | 2 | 268435457 | 4097 | 4097 | 268435457 | 268435457 | 281474976710657 | 281474976710657
-(1 row)
-
+ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
 INSERT INTO sequence_default.seq_test_0_local_table VALUES (1,2) RETURNING *;
- x | y |     z     | w00  | w01  |    w10    |    w11    |       w20       |       w21
----------------------------------------------------------------------
- 1 | 2 | 268435457 | 4097 | 4097 | 268435457 | 268435457 | 281474976710657 | 281474976710657
-(1 row)
-
+ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
@@ -250,14 +243,10 @@ ALTER TABLE seq_test_1 ADD COLUMN z int DEFAULT nextval('seq_1');
 ---------------------------------------------------------------------
  integer |     1 |       1 | 2147483647 |         1 | no      |     1
 
--- check insertion is within int bounds in the worker
+-- check insertion doesn't work in the worker because type is int
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_1 values (1, 2) RETURNING *;
- x | y |     z
----------------------------------------------------------------------
- 1 | 2 | 268435457
-(1 row)
-
+ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
@@ -291,14 +280,10 @@ ALTER TABLE seq_test_1_local_table ADD COLUMN z int DEFAULT nextval('seq_1_local
 ---------------------------------------------------------------------
  integer |     1 |       1 | 2147483647 |         1 | no      |     1
 
--- check insertion is within int bounds in the worker
+-- check insertion doesn't work in the worker because type is int
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_1_local_table values (1, 2) RETURNING *;
- x | y |     z
----------------------------------------------------------------------
- 1 | 2 | 268435457
-(1 row)
-
+ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
@@ -436,7 +421,7 @@ SELECT create_distributed_table('seq_test_5','x');
 
 CREATE SCHEMA sequence_default_1;
 CREATE SEQUENCE sequence_default_1.seq_5;
-ALTER TABLE seq_test_5 ADD COLUMN a int DEFAULT nextval('sequence_default_1.seq_5');
+ALTER TABLE seq_test_5 ADD COLUMN a bigint DEFAULT nextval('sequence_default_1.seq_5');
 DROP SCHEMA sequence_default_1 CASCADE;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to sequence sequence_default_1.seq_5
@@ -451,9 +436,9 @@ INSERT INTO seq_test_5 VALUES (1, 2) RETURNING *;
 -- but is still present on worker
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_5 VALUES (1, 2) RETURNING *;
- x | y |     a
+ x | y |        a
 ---------------------------------------------------------------------
- 1 | 2 | 268435457
+ 1 | 2 | 281474976710657
 (1 row)
 
 \c - - - :master_port
@@ -593,10 +578,10 @@ ERROR:  cannot alter OWNED BY option of a sequence already owned by a distribute
 ALTER SEQUENCE seq_8 SET SCHEMA sequence_default_8;
 \c - - - :worker_1_port
 \d sequence_default_8.seq_8
-                    Sequence "sequence_default_8.seq_8"
-  Type   |   Start   |  Minimum  |  Maximum  | Increment | Cycles? | Cache
+                 Sequence "sequence_default_8.seq_8"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
 ---------------------------------------------------------------------
- integer | 268435457 | 268435457 | 536870913 |         3 | yes     |    10
+ integer |     1 |       1 | 2147483647 |         3 | yes     |    10
 
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
@@ -611,10 +596,10 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 ALTER TABLE sequence_default_8.seq_8 SET SCHEMA sequence_default;
 \c - - - :worker_1_port
 \d sequence_default.seq_8
-                     Sequence "sequence_default.seq_8"
-  Type   |   Start   |  Minimum  |  Maximum  | Increment | Cycles? | Cache
+                  Sequence "sequence_default.seq_8"
+  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
 ---------------------------------------------------------------------
- integer | 268435457 | 268435457 | 536870913 |         3 | yes     |    10
+ integer |     1 |       1 | 2147483647 |         3 | yes     |    10
 
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
@@ -638,9 +623,9 @@ CREATE SEQUENCE seq_9;
 CREATE SEQUENCE seq_10;
 CREATE TABLE seq_test_9 (x int, y int DEFAULT nextval('seq_9') - nextval('seq_10'));
 SELECT create_distributed_table('seq_test_9', 'x');
-ERROR:  More than one sequence in a column default is not supported for distribution
+ERROR:  More than one sequence in a column default is not supported for distribution or for adding local tables to metadata
 SELECT citus_add_local_table_to_metadata('seq_test_9');
-ERROR:  More than one sequence in a column default is not supported for adding local tables to metadata
+ERROR:  More than one sequence in a column default is not supported for distribution or for adding local tables to metadata
 ALTER TABLE seq_test_9 ALTER COLUMN y SET DEFAULT nextval('seq_9');
 SELECT create_distributed_table('seq_test_9', 'x');
  create_distributed_table
@@ -771,6 +756,200 @@ SELECT create_distributed_table('seq_test_11', 'col1');
 \c - - - :worker_1_port
 INSERT INTO sequence_default.seq_test_10 VALUES (1);
 ERROR:  relation "seq_11" does not exist
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Check worker_nextval and setval precautions for int and smallint column defaults
+-- For details see issue #5126 and PR #5254
+-- https://github.com/citusdata/citus/issues/5126
+CREATE SEQUENCE seq_12;
+CREATE SEQUENCE seq_13;
+CREATE SEQUENCE seq_14;
+CREATE TABLE seq_test_12(col0 text, col1 smallint DEFAULT nextval('seq_12'),
+                         col2 int DEFAULT nextval('seq_13'),
+                         col3 bigint DEFAULT nextval('seq_14'));
+SELECT create_distributed_table('seq_test_12', 'col0');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO seq_test_12 VALUES ('hello0') RETURNING *;
+  col0  | col1 | col2 | col3
+---------------------------------------------------------------------
+ hello0 |    1 |    1 |    1
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path = sequence_default, public;
+-- we should see worker_nextval for int and smallint columns
+SELECT table_name, column_name, data_type, column_default FROM information_schema.columns
+WHERE table_name = 'seq_test_12' ORDER BY column_name;
+ table_name  | column_name | data_type |           column_default
+---------------------------------------------------------------------
+ seq_test_12 | col0        | text      |
+ seq_test_12 | col1        | smallint  | worker_nextval('seq_12'::regclass)
+ seq_test_12 | col2        | integer   | worker_nextval('seq_13'::regclass)
+ seq_test_12 | col3        | bigint    | nextval('seq_14'::regclass)
+(4 rows)
+
+-- insertion from worker should fail
+INSERT INTO seq_test_12 VALUES ('hello1') RETURNING *;
+ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+-- nextval from worker should fail for int and smallint sequences
+SELECT nextval('seq_12');
+ERROR:  nextval: reached maximum value of sequence "seq_12" (32767)
+SELECT nextval('seq_13');
+ERROR:  nextval: reached maximum value of sequence "seq_13" (2147483647)
+-- nextval from worker should work for bigint sequences
+SELECT nextval('seq_14');
+     nextval
+---------------------------------------------------------------------
+ 281474976710657
+(1 row)
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+TRUNCATE seq_test_12;
+ALTER TABLE seq_test_12 DROP COLUMN col1;
+ALTER TABLE seq_test_12 DROP COLUMN col2;
+ALTER TABLE seq_test_12 DROP COLUMN col3;
+DROP SEQUENCE seq_12, seq_13, seq_14;
+CREATE SEQUENCE seq_12;
+CREATE SEQUENCE seq_13;
+CREATE SEQUENCE seq_14;
+ALTER TABLE seq_test_12 ADD COLUMN col1 smallint DEFAULT nextval('seq_14');
+ALTER TABLE seq_test_12 ADD COLUMN col2 int DEFAULT nextval('seq_13');
+ALTER TABLE seq_test_12 ADD COLUMN col3 bigint DEFAULT nextval('seq_12');
+ALTER TABLE seq_test_12 ADD COLUMN col4 smallint;
+ALTER TABLE seq_test_12 ALTER COLUMN col4 SET DEFAULT nextval('seq_14');
+ALTER TABLE seq_test_12 ADD COLUMN col5 int;
+ALTER TABLE seq_test_12 ALTER COLUMN col5 SET DEFAULT nextval('seq_13');
+ALTER TABLE seq_test_12 ADD COLUMN col6 bigint;
+ALTER TABLE seq_test_12 ALTER COLUMN col6 SET DEFAULT nextval('seq_12');
+INSERT INTO seq_test_12 VALUES ('hello1') RETURNING *;
+  col0  | col1 | col2 | col3 | col4 | col5 | col6
+---------------------------------------------------------------------
+ hello1 |    1 |    1 |    1 |    2 |    2 |    2
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path = sequence_default, public;
+-- we should see worker_nextval for int and smallint columns
+SELECT table_name, column_name, data_type, column_default FROM information_schema.columns
+WHERE table_name = 'seq_test_12' ORDER BY column_name;
+ table_name  | column_name | data_type |           column_default
+---------------------------------------------------------------------
+ seq_test_12 | col0        | text      |
+ seq_test_12 | col1        | smallint  | worker_nextval('seq_14'::regclass)
+ seq_test_12 | col2        | integer   | worker_nextval('seq_13'::regclass)
+ seq_test_12 | col3        | bigint    | nextval('seq_12'::regclass)
+ seq_test_12 | col4        | smallint  | worker_nextval('seq_14'::regclass)
+ seq_test_12 | col5        | integer   | worker_nextval('seq_13'::regclass)
+ seq_test_12 | col6        | bigint    | nextval('seq_12'::regclass)
+(7 rows)
+
+-- insertion from worker should fail
+INSERT INTO seq_test_12 VALUES ('hello2') RETURNING *;
+ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+-- nextval from worker should work for bigint sequences
+SELECT nextval('seq_12');
+     nextval
+---------------------------------------------------------------------
+ 281474976710657
+(1 row)
+
+-- nextval from worker should fail for int and smallint sequences
+SELECT nextval('seq_13');
+ERROR:  nextval: reached maximum value of sequence "seq_13" (2147483647)
+SELECT nextval('seq_14');
+ERROR:  nextval: reached maximum value of sequence "seq_14" (32767)
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = sequence_default, public;
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT undistribute_table('seq_test_12');
+NOTICE:  creating a new table for sequence_default.seq_test_12
+NOTICE:  moving the data of sequence_default.seq_test_12
+NOTICE:  dropping the old sequence_default.seq_test_12
+NOTICE:  renaming the new table to sequence_default.seq_test_12
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('seq_test_12', 'col0');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$sequence_default.seq_test_12$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO seq_test_12 VALUES ('hello2') RETURNING *;
+  col0  | col1 | col2 | col3 | col4 | col5 | col6
+---------------------------------------------------------------------
+ hello2 |    3 |    3 |    3 |    4 |    4 |    4
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path = sequence_default, public;
+-- we should see worker_nextval for int and smallint columns
+SELECT table_name, column_name, data_type, column_default FROM information_schema.columns
+WHERE table_name = 'seq_test_12' ORDER BY column_name;
+ table_name  | column_name | data_type |           column_default
+---------------------------------------------------------------------
+ seq_test_12 | col0        | text      |
+ seq_test_12 | col1        | smallint  | worker_nextval('seq_14'::regclass)
+ seq_test_12 | col2        | integer   | worker_nextval('seq_13'::regclass)
+ seq_test_12 | col3        | bigint    | nextval('seq_12'::regclass)
+ seq_test_12 | col4        | smallint  | worker_nextval('seq_14'::regclass)
+ seq_test_12 | col5        | integer   | worker_nextval('seq_13'::regclass)
+ seq_test_12 | col6        | bigint    | nextval('seq_12'::regclass)
+(7 rows)
+
+-- insertion from worker should fail
+INSERT INTO seq_test_12 VALUES ('hello2') RETURNING *;
+ERROR:  nextval(sequence) calls in worker nodes are not supported for column defaults of type int or smallint
+-- nextval from worker should work for bigint sequences
+SELECT nextval('seq_12');
+     nextval
+---------------------------------------------------------------------
+ 281474976710658
+(1 row)
+
+-- nextval from worker should fail for int and smallint sequences
+SELECT nextval('seq_13');
+ERROR:  nextval: reached maximum value of sequence "seq_13" (2147483647)
+SELECT nextval('seq_14');
+ERROR:  nextval: reached maximum value of sequence "seq_14" (32767)
 \c - - - :master_port
 -- clean up
 DROP TABLE sequence_default.seq_test_7_par;

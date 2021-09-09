@@ -216,7 +216,7 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 	{
 		text *relationName = PG_GETARG_TEXT_P(0);
 		Oid relationId = ResolveRelationId(relationName, false);
-		bool includeSequenceDefaults = true;
+		IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
 
 
 		/* create a function context for cross-call persistence */
@@ -533,16 +533,19 @@ ResolveRelationId(text *relationName, bool missingOk)
 
 
 /*
- * GetFullTableCreationCommands takes in a relationId, includeSequenceDefaults flag,
+ * GetFullTableCreationCommands takes in a relationId, includeSequenceDefaults,
  * and returns the list of DDL commands needed to reconstruct the relation.
- * When the flag includeSequenceDefaults is set, the function also creates
+ * When includeSequenceDefaults is NEXTVAL_SEQUENCE_DEFAULTS, the function also creates
  * DEFAULT clauses for columns getting their default values from a sequence.
+ * When it's WORKER_NEXTVAL_SEQUENCE_DEFAULTS, the function creates the DEFAULT
+ * clause using worker_nextval('sequence') and not nextval('sequence')
  * These DDL commands are all palloced; and include the table's schema
  * definition, optional column storage and statistics definitions, and index
  * constraint and trigger definitions.
  */
 List *
-GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults)
+GetFullTableCreationCommands(Oid relationId, IncludeSequenceDefaults
+							 includeSequenceDefaults)
 {
 	List *tableDDLEventList = NIL;
 
@@ -651,7 +654,8 @@ GetTableReplicaIdentityCommand(Oid relationId)
  * to facilitate faster data load.
  */
 List *
-GetPreLoadTableCreationCommands(Oid relationId, bool includeSequenceDefaults,
+GetPreLoadTableCreationCommands(Oid relationId,
+								IncludeSequenceDefaults includeSequenceDefaults,
 								char *accessMethod)
 {
 	List *tableDDLEventList = NIL;

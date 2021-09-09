@@ -463,7 +463,7 @@ GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
 	 * Include DEFAULT clauses for columns getting their default values from
 	 * a sequence.
 	 */
-	bool includeSequenceDefaults = true;
+	IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
 
 	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 														  includeSequenceDefaults);

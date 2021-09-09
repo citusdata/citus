@@ -111,6 +111,25 @@ typedef enum IndexDefinitionDeparseFlags
 } IndexDefinitionDeparseFlags;
 
 
+/*
+ * IncludeSequenceDefaults decides on inclusion of DEFAULT clauses for columns
+ * getting their default values from a sequence when creating the definition
+ * of a table.
+ */
+typedef enum IncludeSequenceDefaults
+{
+	NO_SEQUENCE_DEFAULTS = 0, /* don't include sequence defaults */
+	NEXTVAL_SEQUENCE_DEFAULTS = 1, /* include sequence defaults */
+
+	/*
+	 * Include sequence defaults, but use worker_nextval instead of nextval
+	 * when the default will be called in worker node, and the column type is
+	 * int or smallint.
+	 */
+	WORKER_NEXTVAL_SEQUENCE_DEFAULTS = 2,
+} IncludeSequenceDefaults;
+
+
 struct TableDDLCommand;
 typedef struct TableDDLCommand TableDDLCommand;
 typedef char *(*TableDDLFunction)(void *context);
@@ -193,11 +212,12 @@ extern bool CStoreTable(Oid relationId);
 extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
-extern List * GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults);
+extern List * GetFullTableCreationCommands(Oid relationId,
+										   IncludeSequenceDefaults includeSequenceDefaults);
 extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes,
 											   bool includeReplicaIdentity);
-extern List * GetPreLoadTableCreationCommands(Oid relationId,
-											  bool includeSequenceDefaults,
+extern List * GetPreLoadTableCreationCommands(Oid relationId, IncludeSequenceDefaults
+											  includeSequenceDefaults,
 											  char *accessMethod);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId, int indexFlags);
 extern List * GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(Oid relationId,
