@@ -238,7 +238,6 @@ extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 MemoryContext scanContext,
 											 Snapshot snaphot,
 											 bool snapshotRegisteredByUs);
-extern void ColumnarReadSetClauseVars(ColumnarReadState *readState, Index varno);
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls, uint64 *rowNumber);
 extern void ColumnarRescan(ColumnarReadState *readState, List *scanQual);
