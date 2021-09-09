@@ -349,7 +349,7 @@ ColumnarGetRelationInfoHook(PlannerInfo *root, Oid relationObjectId,
 		IndexOptInfo *indexOptInfo = NULL;
 		foreach_ptr(indexOptInfo, rel->indexlist)
 		{
-			memset(indexOptInfo->canreturn, false, indexOptInfo->ncolumns);
+			memset(indexOptInfo->canreturn, false, indexOptInfo->ncolumns * sizeof(bool));
 		}
 	}
 }
