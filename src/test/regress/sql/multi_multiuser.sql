@@ -409,6 +409,30 @@ SET ROLE full_access;
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
 RESET ROLE;
 
+-- non-superuser should be able to use worker_append_table_to_shard on their own shard
+SET ROLE full_access;
+CREATE TABLE full_access_user_schema.source_table (id int);
+INSERT INTO full_access_user_schema.source_table VALUES (1);
+CREATE TABLE full_access_user_schema.shard_0 (id int);
+SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_access_user_schema.source_table', 'localhost', :worker_2_port);
+SELECT * FROM full_access_user_schema.shard_0;
+RESET ROLE;
+
+-- other users should not be able to read from a table they have no access to via worker_append_table_to_shard
+SET ROLE usage_access;
+SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_access_user_schema.source_table', 'localhost', :worker_2_port);
+RESET ROLE;
+
+-- allow usage_access to read from table
+GRANT SELECT ON full_access_user_schema.source_table TO usage_access;
+
+-- other users should not be able to write to a table they do not have write access to
+SET ROLE usage_access;
+SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_access_user_schema.source_table', 'localhost', :worker_2_port);
+RESET ROLE;
+
+DROP TABLE full_access_user_schema.source_table, full_access_user_schema.shard_0;
+
 -- now we will test that only the user who owns the fetched file is able to merge it into
 -- a table
 -- test that no other user can merge the downloaded file before the task is being tracked
