@@ -507,7 +507,7 @@ static StringInfo
 SerializeBoolArray(bool *boolArray, uint32 boolArrayLength)
 {
 	uint32 boolArrayIndex = 0;
-	uint32 byteCount = (boolArrayLength + 7) / 8;
+	uint32 byteCount = ((boolArrayLength * sizeof(bool)) + (8 - sizeof(bool))) / 8;
 
 	StringInfo boolArrayBuffer = makeStringInfo();
 	enlargeStringInfo(boolArrayBuffer, byteCount);
