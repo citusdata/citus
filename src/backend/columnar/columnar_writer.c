@@ -118,7 +118,7 @@ ColumnarBeginWrite(RelFileNode relfilenode,
 															 ALLOCSET_DEFAULT_SIZES);
 
 	bool *columnMaskArray = palloc(columnCount * sizeof(bool));
-	memset(columnMaskArray, true, columnCount);
+	memset(columnMaskArray, true, columnCount * sizeof(bool));
 
 	ChunkData *chunkData = CreateEmptyChunkData(columnCount, columnMaskArray,
 												options.chunkRowCount);
