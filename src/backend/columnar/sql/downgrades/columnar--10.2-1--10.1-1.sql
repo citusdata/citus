@@ -1,4 +1,4 @@
-/* columnar--10.2-1--10.1-1.sql */
+-- columnar--10.2-1--10.1-1.sql
 
 -- downgrade storage for all columnar relations
 SELECT citus_internal.downgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a

@@ -1,4 +1,4 @@
-/* columnar--9.5-1--10.0-1.sql */
+-- columnar--9.5-1--10.0-1.sql
 
 CREATE SCHEMA columnar;
 SET search_path TO columnar;

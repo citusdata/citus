@@ -1,4 +1,4 @@
-/* columnar--10.1-1--10.2-1.sql */
+-- columnar--10.1-1--10.2-1.sql
 
 -- For a proper mapping between tid & (stripe, row_num), add a new column to
 -- columnar.stripe and define a BTREE index on this column.
