@@ -830,51 +830,38 @@ CheckStripeMetadataConsistency(StripeMetadata *stripeMetadata)
 		 (stripeMetadata->fileOffset == ColumnarInvalidLogicalOffset &&
 		  stripeMetadata->dataLength == 0));
 
-	switch (StripeWriteState(stripeMetadata))
+	StripeWriteStateEnum stripeWriteState = StripeWriteState(stripeMetadata);
+	if (stripeWriteState == STRIPE_WRITE_FLUSHED && stripeLooksFlushed)
 	{
-		case STRIPE_WRITE_FLUSHED:
-		{
-			/*
-			 * If stripe was flushed to disk, then we expect stripe to store
-			 * at least one tuple.
-			 */
-			if (stripeLooksFlushed)
-			{
-				break;
-			}
-		}
-
-		case STRIPE_WRITE_IN_PROGRESS:
-		{
-			/*
-			 * If stripe was not flushed to disk, then values of given four
-			 * fields should match the columns inserted by
-			 * InsertEmptyStripeMetadataRow.
-			 */
-			if (stripeLooksInProgress)
-			{
-				break;
-			}
-		}
-
-		case STRIPE_WRITE_ABORTED:
-		{
-			/*
-			 * Stripe metadata entry for an aborted write can be complete or
-			 * incomplete. We might have aborted the transaction before or after
-			 * inserting into stripe metadata.
-			 */
-			if (stripeLooksInProgress || stripeLooksFlushed)
-			{
-				break;
-			}
-		}
-
-		default:
-			ereport(ERROR, (errmsg("unexpected stripe state, stripe metadata "
-								   "entry for stripe with id=" UINT64_FORMAT
-								   " is not consistent", stripeMetadata->id)));
+		/*
+		 * If stripe was flushed to disk, then we expect stripe to store
+		 * at least one tuple.
+		 */
+		return;
 	}
+	else if (stripeWriteState == STRIPE_WRITE_IN_PROGRESS && stripeLooksInProgress)
+	{
+		/*
+		 * If stripe was not flushed to disk, then values of given four
+		 * fields should match the columns inserted by
+		 * InsertEmptyStripeMetadataRow.
+		 */
+		return;
+	}
+	else if (stripeWriteState == STRIPE_WRITE_ABORTED && (stripeLooksInProgress ||
+														  stripeLooksFlushed))
+	{
+		/*
+		 * Stripe metadata entry for an aborted write can be complete or
+		 * incomplete. We might have aborted the transaction before or after
+		 * inserting into stripe metadata.
+		 */
+		return;
+	}
+
+	ereport(ERROR, (errmsg("unexpected stripe state, stripe metadata "
+						   "entry for stripe with id=" UINT64_FORMAT
+						   " is not consistent", stripeMetadata->id)));
 }
 
 
