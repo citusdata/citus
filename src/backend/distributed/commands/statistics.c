@@ -93,7 +93,7 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -198,7 +198,7 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 
 		ddlJob->targetRelationId = relationId;
 		ddlJob->startNewTransaction = false;
-		ddlJob->commandString = ddlCommand;
+		ddlJob->metadataSyncCommand = ddlCommand;
 		ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 		ddlJobs = lappend(ddlJobs, ddlJob);
@@ -237,7 +237,7 @@ PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -275,7 +275,7 @@ PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -366,7 +366,7 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -406,7 +406,7 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);

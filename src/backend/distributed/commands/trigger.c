@@ -637,7 +637,7 @@ CitusLocalTableTriggerCommandDDLJob(Oid relationId, char *triggerName,
 {
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = relationId;
-	ddlJob->commandString = queryString;
+	ddlJob->metadataSyncCommand = queryString;
 
 	if (!triggerName)
 	{

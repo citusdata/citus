@@ -57,7 +57,12 @@ typedef struct DDLJob
 	 */
 	bool startNewTransaction;
 
-	const char *commandString; /* initial (coordinator) DDL command string */
+	/*
+	 * Command to run in MX nodes when metadata is synced
+	 * This is usually the initial (coordinator) DDL command string
+	 */
+	const char *metadataSyncCommand;
+
 	List *taskList;            /* worker DDL tasks to execute */
 } DDLJob;
 
