@@ -1,4 +1,4 @@
-/* columnar--10.0-1--9.5-1.sql */
+-- columnar--10.0-1--9.5-1.sql
 
 SET search_path TO columnar;
 

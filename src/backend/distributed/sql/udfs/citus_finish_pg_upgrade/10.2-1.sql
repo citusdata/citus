@@ -24,16 +24,16 @@ BEGIN
     $cmd$;
     END IF;
 
-    /*
-     * Citus creates the array_cat_agg but because of a compatibility
-     * issue between pg13-pg14, we drop and create it during upgrade.
-     * And as Citus creates it, there needs to be a dependency to the
-     * Citus extension, so we create that dependency here.
-     * We are not using:
-     *  ALTER EXENSION citus DROP/CREATE AGGREGATE array_cat_agg
-     * because we don't have an easy way to check if the aggregate
-     * exists with anyarray type or anycompatiblearray type.
-     */
+    --
+    -- Citus creates the array_cat_agg but because of a compatibility
+    -- issue between pg13-pg14, we drop and create it during upgrade.
+    -- And as Citus creates it, there needs to be a dependency to the
+    -- Citus extension, so we create that dependency here.
+    -- We are not using:
+    --  ALTER EXENSION citus DROP/CREATE AGGREGATE array_cat_agg
+    -- because we don't have an easy way to check if the aggregate
+    -- exists with anyarray type or anycompatiblearray type.
+
     INSERT INTO pg_depend
     SELECT
         'pg_proc'::regclass::oid as classid,
