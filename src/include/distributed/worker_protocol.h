@@ -35,7 +35,6 @@
 #define JOB_SCHEMA_PREFIX "pg_merge_job_"
 #define TASK_FILE_PREFIX "task_"
 #define TASK_TABLE_PREFIX "task_"
-#define TABLE_FILE_PREFIX "table_"
 #define PARTITION_FILE_PREFIX "p_"
 #define ATTEMPT_FILE_SUFFIX ".attempt"
 #define MERGE_TABLE_SUFFIX "_merge"
