@@ -4468,14 +4468,24 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		return;
 	}
 
-	/*
-	 * We currently don't support finding partition keys in the subqueries
-	 * that reference outer subqueries. For example, in correlated
-	 * subqueries in WHERE clause, we don't support use of partition keys
-	 * in the subquery that is referred from the outer query.
-	 */
-	if (candidateColumn->varlevelsup > 0 && !skipOuterVars)
+
+	if (candidateColumn->varlevelsup > 0)
 	{
+		if (skipOuterVars)
+		{
+			/*
+			 * we don't want to process outer vars, so we return early.
+			 */
+			return;
+		}
+
+		/*
+		 * We currently don't support finding partition keys in the subqueries
+		 * that reference outer subqueries. For example, in correlated
+		 * subqueries in WHERE clause, we don't support use of partition keys
+		 * in the subquery that is referred from the outer query.
+		 */
+
 		int parentQueryIndex = list_length(parentQueryList) -
 							   candidateColumn->varlevelsup;
 		if (!(IsIndexInRange(parentQueryList, parentQueryIndex)))
