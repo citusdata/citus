@@ -1,3 +1,5 @@
+#ifndef COLUMNAR_TABLEAM_H
+#define COLUMNAR_TABLEAM_H
 #include "citus_version.h"
 
 #include "postgres.h"
@@ -60,3 +62,6 @@ extern bool ColumnarSupportsIndexAM(char *indexAMName);
 extern bool IsColumnarTableAmTable(Oid relationId);
 extern TableDDLCommand * ColumnarGetTableOptionsDDL(Oid relationId);
 extern char * GetShardedTableDDLCommandColumnar(uint64 shardId, void *context);
+
+
+#endif /* COLUMNAR_TABLEAM_H */
