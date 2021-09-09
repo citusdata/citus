@@ -2110,8 +2110,6 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 	/* initialize read state for the first row */
 	if (cscan->cs_readState == NULL)
 	{
-		MemoryContext oldContext = MemoryContextSwitchTo(cscan->scanContext);
-
 		/* we need all columns */
 		int natts = rel->rd_att->natts;
 		Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
@@ -2119,16 +2117,15 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 		/* no quals for index scan */
 		List *scanQual = NIL;
 
-		cscan->cs_readState = init_columnar_read_state(rel,
-													  slot->tts_tupleDescriptor,
-													  attr_needed, scanQual);
-		MemoryContextSwitchTo(oldContext);
+        cscan->cs_readState = init_columnar_read_state(rel, slot->tts_tupleDescriptor,
+                                                       attr_needed, scanQual,
+                                                       cscan->scanContext,
+                                                       cscan->cs_base.rs_snapshot);
 	}
 
 	uint64 rowNumber = tid_to_row_number(tid);
 	if (!ColumnarReadRowByRowNumber(cscan->cs_readState, rowNumber,
-									slot->tts_values, slot->tts_isnull,
-									cscan->cs_base.rs_snapshot))
+									slot->tts_values, slot->tts_isnull))
 	{
 		return false;
 	}
