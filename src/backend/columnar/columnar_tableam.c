@@ -2074,7 +2074,6 @@ columnar_bitmap_next_block(TableScanDesc scan, TBMIterateResult *tbmres)
 	ColumnarScanDesc cscan = (ColumnarScanDesc) scan;
 	cscan->tupleindex = 0;
 
-//	ereport(ERROR, (errmsg("bitmap scan not implemented")));
 	return tbmres->blockno == 0;
 }
 
@@ -2085,27 +2084,19 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 {
 	ColumnarScanDesc cscan = (ColumnarScanDesc) scan;
 
-	/**/
 	if (cscan->tupleindex >= tbmres->ntuples)
 	{
 		return false;
 	}
 
-	// TEST!
-
-	ItemPointerData tid = {};
+	ItemPointerData tid = { 0 };
 
 	ItemPointerSet(&tid, tbmres->blockno, tbmres->offsets[cscan->tupleindex]);
 	cscan->tupleindex++;
 
 	ExecClearTuple(slot);
 
-	/* we need all columns */
 	Relation rel = cscan->cs_base.rs_rd;
-//	int natts = rel->rd_att->natts;
-//	Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
-//	TupleDesc relationTupleDesc = RelationGetDescr(rel);
-//	List *relationColumnList = NeededColumnsList(relationTupleDesc, attr_needed);
 
 	/* initialize read state for the first row */
 	if (cscan->cs_readState == NULL)
@@ -2117,10 +2108,10 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 		/* no quals for index scan */
 		List *scanQual = NIL;
 
-        cscan->cs_readState = init_columnar_read_state(rel, slot->tts_tupleDescriptor,
-                                                       attr_needed, scanQual,
-                                                       cscan->scanContext,
-                                                       cscan->cs_base.rs_snapshot);
+		cscan->cs_readState = init_columnar_read_state(rel, slot->tts_tupleDescriptor,
+													   attr_needed, scanQual,
+													   cscan->scanContext,
+													   cscan->cs_base.rs_snapshot);
 	}
 
 	uint64 rowNumber = tid_to_row_number(tid);
@@ -2136,6 +2127,7 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 
 	return true;
 }
+
 
 static const TableAmRoutine columnar_am_methods = {
 	.type = T_TableAmRoutine,
