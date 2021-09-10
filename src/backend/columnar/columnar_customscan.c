@@ -104,6 +104,9 @@ static Plan * ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 											  List *tlist,
 											  List *clauses,
 											  List *custom_plans);
+static List * ColumnarScanPath_ReparameterizeCustomPathByChild(PlannerInfo *root,
+															   List *custom_private,
+															   RelOptInfo *child_rel);
 static Node * ColumnarScan_CreateCustomScanState(CustomScan *cscan);
 
 static void ColumnarScan_BeginCustomScan(CustomScanState *node, EState *estate,
@@ -141,6 +144,7 @@ static int ColumnarPlannerDebugLevel = DEBUG3;
 const struct CustomPathMethods ColumnarScanPathMethods = {
 	.CustomName = "ColumnarScan",
 	.PlanCustomPath = ColumnarScanPath_PlanCustomPath,
+	.ReparameterizeCustomPathByChild = ColumnarScanPath_ReparameterizeCustomPathByChild,
 };
 
 const struct CustomScanMethods ColumnarScanScanMethods = {
@@ -1313,6 +1317,66 @@ ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 	cscan->scan.scanrelid = best_path->path.parent->relid;
 
 	return (Plan *) cscan;
+}
+
+
+/*
+ * ReparameterizeMutator changes all varnos referencing the topmost parent of
+ * child_rel to instead reference child_rel directly.
+ */
+static Node *
+ReparameterizeMutator(Node *node, RelOptInfo *child_rel)
+{
+	if (node == NULL)
+	{
+		return NULL;
+	}
+	if (IsA(node, Var))
+	{
+		Var *var = castNode(Var, node);
+		if (bms_is_member(var->varno, child_rel->top_parent_relids))
+		{
+			var = copyObject(var);
+			var->varno = child_rel->relid;
+		}
+		return (Node *) var;
+	}
+
+	if (IsA(node, RestrictInfo))
+	{
+		RestrictInfo *rinfo = castNode(RestrictInfo, node);
+		rinfo = copyObject(rinfo);
+		rinfo->clause = (Expr *) expression_tree_mutator(
+			(Node *) rinfo->clause, ReparameterizeMutator, (void *) child_rel);
+		return (Node *) rinfo;
+	}
+	return expression_tree_mutator(node, ReparameterizeMutator,
+								   (void *) child_rel);
+}
+
+
+/*
+ * ColumnarScanPath_ReparameterizeCustomPathByChild is a method called when a
+ * path is reparameterized directly to a child relation, rather than the
+ * top-level parent.
+ *
+ * For instance, let there be a join of two partitioned columnar relations PX
+ * and PY. A path for a ColumnarScan of PY3 might be parameterized by PX so
+ * that the join qual "PY3.a = PX.a" (referencing the parent PX) can be pushed
+ * down. But if the planner decides on a partition-wise join, then the path
+ * will be reparameterized on the child table PX3 directly.
+ *
+ * When that happens, we need to update all Vars in the pushed-down quals to
+ * reference PX3, not PX, to match the new parameterization. This method
+ * notifies us that it needs to be done, and allows us to update the
+ * information in custom_private.
+ */
+static List *
+ColumnarScanPath_ReparameterizeCustomPathByChild(PlannerInfo *root,
+												 List *custom_private,
+												 RelOptInfo *child_rel)
+{
+	return (List *) ReparameterizeMutator((Node *) custom_private, child_rel);
 }
 
 

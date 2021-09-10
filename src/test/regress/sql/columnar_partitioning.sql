@@ -146,3 +146,46 @@ DROP TABLE ij_row_row;
 
 DROP TABLE i_row CASCADE;
 DROP TABLE i_col CASCADE;
+
+--
+-- https://github.com/citusdata/citus/issues/5257
+--
+
+set default_table_access_method to columnar;
+CREATE TABLE prt1 (a int, b int, c varchar) PARTITION BY RANGE(a);
+CREATE TABLE prt1_p1 PARTITION OF prt1 FOR VALUES FROM (0) TO (250);
+CREATE TABLE prt1_p3 PARTITION OF prt1 FOR VALUES FROM (500) TO (600);
+CREATE TABLE prt1_p2 PARTITION OF prt1 FOR VALUES FROM (250) TO (500);
+INSERT INTO prt1 SELECT i, i % 25, to_char(i, 'FM0000') FROM generate_series(0, 599) i WHERE i % 2 = 0;
+
+CREATE TABLE prt2 (a int, b int, c varchar) PARTITION BY RANGE(b);
+CREATE TABLE prt2_p1 PARTITION OF prt2 FOR VALUES FROM (0) TO (250);
+CREATE TABLE prt2_p2 PARTITION OF prt2 FOR VALUES FROM (250) TO (500);
+CREATE TABLE prt2_p3 PARTITION OF prt2 FOR VALUES FROM (500) TO (600);
+INSERT INTO prt2 SELECT i % 25, i, to_char(i, 'FM0000') FROM generate_series(0, 599) i WHERE i % 3 = 0;
+
+SET enable_partitionwise_join to true;
+
+EXPLAIN (costs off, timing off, summary off)
+SELECT * FROM
+  prt1 t1 LEFT JOIN LATERAL
+  (SELECT t2.a AS t2a, t3.a AS t3a, least(t1.a,t2.a,t3.b)
+    FROM prt1 t2
+    JOIN prt2 t3 ON (t2.a = t3.b)
+  ) ss
+  ON t1.a = ss.t2a WHERE t1.b = 0
+  ORDER BY t1.a;
+
+SELECT * FROM
+  prt1 t1 LEFT JOIN LATERAL
+  (SELECT t2.a AS t2a, t3.a AS t3a, least(t1.a,t2.a,t3.b)
+    FROM prt1 t2
+    JOIN prt2 t3 ON (t2.a = t3.b)
+  ) ss
+  ON t1.a = ss.t2a WHERE t1.b = 0
+  ORDER BY t1.a;
+
+set default_table_access_method to default;
+SET enable_partitionwise_join to default;
+DROP TABLE prt1;
+DROP TABLE prt2;
