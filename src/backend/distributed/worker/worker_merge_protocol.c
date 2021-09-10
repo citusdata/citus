@@ -577,10 +577,11 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 			parseState->p_sourcetext = queryString;
 
 			Relation relation = table_openrv(rangeVar, RowExclusiveLock);
+			(void) addRangeTableEntryForRelation(parseState, relation,
 #if PG_VERSION_NUM >= PG_VERSION_12
-			(void) addRangeTableEntryForRelation(parseState, relation, RowExclusiveLock,
-												 NULL, false, false);
+												 RowExclusiveLock,
 #endif
+												 NULL, false, false);
 
 			CopyState copyState = BeginCopyFrom(parseState,
 												relation,
