@@ -566,7 +566,6 @@ BEGIN;
   -- transactions.
   TRUNCATE columnar.chunk, columnar.chunk_group;
   CREATE INDEX ON aborted_write_test (a);
-ERROR:  unexpected chunk group count
 ROLLBACK;
 create table events (event_id bigserial, event_time timestamptz default now(), payload text) using columnar;
 BEGIN;

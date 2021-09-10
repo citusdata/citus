@@ -196,12 +196,12 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->tupleDescriptor = tupleDescriptor;
 	readState->stripeReadContext = stripeReadContext;
 	readState->stripeReadState = NULL;
-	readState->currentStripeMetadata = FindNextStripeByRowNumber(relation,
-																 COLUMNAR_INVALID_ROW_NUMBER,
-																 snapshot);
 	readState->scanContext = scanContext;
 	readState->snapshot = snapshot;
 	readState->snapshotRegisteredByUs = snapshotRegisteredByUs;
+
+	/* set currentStripeMetadata for the first stripe to read */
+	AdvanceStripeRead(readState);
 
 	return readState;
 }
@@ -472,9 +472,10 @@ ColumnarRescan(ColumnarReadState *readState, List *scanQual)
 	MemoryContext oldContext = MemoryContextSwitchTo(readState->scanContext);
 
 	ColumnarResetRead(readState);
-	readState->currentStripeMetadata = FindNextStripeByRowNumber(readState->relation,
-																 COLUMNAR_INVALID_ROW_NUMBER,
-																 readState->snapshot);
+
+	/* set currentStripeMetadata for the first stripe to read */
+	AdvanceStripeRead(readState);
+
 	readState->chunkGroupsFiltered = 0;
 
 	readState->whereClauseList = copyObject(scanQual);
@@ -572,11 +573,17 @@ AdvanceStripeRead(ColumnarReadState *readState)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(readState->scanContext);
 
-	readState->chunkGroupsFiltered +=
-		readState->stripeReadState->chunkGroupsFiltered;
+	/* if not read any stripes yet, start from the first one .. */
+	uint64 lastReadRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
+	if (StripeReadInProgress(readState))
+	{
+		/* .. otherwise, continue with the next stripe */
+		lastReadRowNumber = StripeGetHighestRowNumber(readState->currentStripeMetadata);
 
-	uint64 lastReadRowNumber =
-		StripeGetHighestRowNumber(readState->currentStripeMetadata);
+		readState->chunkGroupsFiltered +=
+			readState->stripeReadState->chunkGroupsFiltered;
+	}
+
 	readState->currentStripeMetadata = FindNextStripeByRowNumber(readState->relation,
 																 lastReadRowNumber,
 																 readState->snapshot);
