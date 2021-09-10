@@ -84,7 +84,7 @@ typedef struct ColumnarScanDescData
 	Bitmapset *attr_needed;
 	List *scanQual;
 
-	int tupleindex;
+	Bitmapset *offsets;
 } ColumnarScanDescData;
 
 typedef struct ColumnarScanDescData *ColumnarScanDesc;
@@ -2072,7 +2072,35 @@ static bool
 columnar_bitmap_next_block(TableScanDesc scan, TBMIterateResult *tbmres)
 {
 	ColumnarScanDesc cscan = (ColumnarScanDesc) scan;
-	cscan->tupleindex = 0;
+
+	/* remove any previously left over set of offsets */
+	if (cscan->offsets != NULL)
+	{
+		bms_free(cscan->offsets);
+		cscan->offsets = NULL;
+	}
+
+	/*
+	 * Load all unique offset numbers of the tid to load for the current block described
+	 * in the tbmres. During the iteration of the block we simply consume the offset
+	 * numbers till they are depleted. These offset numbers will be combined with the
+	 * block number to construct the tid's.
+	 */
+	Bitmapset *offsets = NULL;
+	if (tbmres->ntuples >= 0)
+	{
+		for (int i = 0; i < tbmres->ntuples; i++)
+		{
+			offsets = bms_add_member(offsets, tbmres->offsets[i]);
+		}
+	}
+	else
+	{
+		/* TODO page is lossy, we should add all valid offsets to the bms */
+		Assert(false);
+	}
+
+	cscan->offsets = offsets;
 
 	return tbmres->blockno == 0;
 }
@@ -2083,16 +2111,16 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 						   TupleTableSlot *slot)
 {
 	ColumnarScanDesc cscan = (ColumnarScanDesc) scan;
-
-	if (cscan->tupleindex >= tbmres->ntuples)
+	if (bms_is_empty(cscan->offsets))
 	{
+		/* offsets are empty, we have returned all the tuples for this page */
 		return false;
 	}
 
+	/* since we already did an empty check we know we will read a valid OffsetNumber */
+	OffsetNumber offset = bms_first_member(cscan->offsets);
 	ItemPointerData tid = { 0 };
-
-	ItemPointerSet(&tid, tbmres->blockno, tbmres->offsets[cscan->tupleindex]);
-	cscan->tupleindex++;
+	ItemPointerSet(&tid, tbmres->blockno, offset);
 
 	ExecClearTuple(slot);
 
@@ -2101,15 +2129,11 @@ columnar_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres,
 	/* initialize read state for the first row */
 	if (cscan->cs_readState == NULL)
 	{
-		/* we need all columns */
-		int natts = rel->rd_att->natts;
-		Bitmapset *attr_needed = bms_add_range(NULL, 0, natts - 1);
-
 		/* no quals for index scan */
 		List *scanQual = NIL;
 
 		cscan->cs_readState = init_columnar_read_state(rel, slot->tts_tupleDescriptor,
-													   attr_needed, scanQual,
+													   cscan->attr_needed, scanQual,
 													   cscan->scanContext,
 													   cscan->cs_base.rs_snapshot);
 	}
