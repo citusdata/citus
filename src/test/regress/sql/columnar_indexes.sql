@@ -406,6 +406,32 @@ INSERT INTO aborted_write_test VALUES (16999);
 -- since second INSERT already failed, should not throw a "duplicate key" error
 REINDEX TABLE aborted_write_test;
 
+BEGIN;
+  ALTER TABLE columnar.stripe SET (autovacuum_enabled = false);
+  ALTER TABLE columnar.chunk SET (autovacuum_enabled = false);
+  ALTER TABLE columnar.chunk_group SET (autovacuum_enabled = false);
+
+  DROP TABLE aborted_write_test;
+  TRUNCATE columnar.stripe, columnar.chunk, columnar.chunk_group;
+
+  CREATE TABLE aborted_write_test (a INT) USING columnar;
+
+  SAVEPOINT svpt;
+    INSERT INTO aborted_write_test SELECT i FROM generate_series(1, 2) i;
+    -- force flush write state
+    SELECT FROM aborted_write_test;
+  ROLLBACK TO SAVEPOINT svpt;
+
+  -- Already disabled autovacuum for all three metadata tables.
+  -- Here we truncate columnar.chunk and columnar.chunk_group but not
+  -- columnar.stripe to make sure that we properly handle dead tuples
+  -- in columnar.stripe, i.e. stripe metadata entries for aborted
+  -- transactions.
+  TRUNCATE columnar.chunk, columnar.chunk_group;
+
+  CREATE INDEX ON aborted_write_test (a);
+ROLLBACK;
+
 create table events (event_id bigserial, event_time timestamptz default now(), payload text) using columnar;
 BEGIN;
   -- this wouldn't flush any data
