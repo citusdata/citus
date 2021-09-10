@@ -126,6 +126,8 @@ static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
 static bool MaybeExecutingUDF(void);
 static void ResetGlobalVariables(void);
+static bool SwallowErrors(void (*func)(void));
+static void ForceAllInProgressConnectionsToClose(void);
 
 
 /*
@@ -325,7 +327,21 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			/* handles both already prepared and open transactions */
 			if (CurrentCoordinatedTransactionState > COORD_TRANS_IDLE)
 			{
-				CoordinatedRemoteTransactionsAbort();
+				/*
+				 * Since CoordinateRemoteTransactionsAbort may cause an error and it is
+				 * not allowed to error out at that point, swallow the error if any.
+				 *
+				 * Particular error we've observed was CreateWaitEventSet throwing an error
+				 * when out of file descriptor.
+				 *
+				 * If an error is swallowed, connections of all active transactions must
+				 * be forced to close at the end of the transaction explicitly.
+				 */
+				bool errorSwallowed = SwallowErrors(CoordinatedRemoteTransactionsAbort);
+				if (errorSwallowed == true)
+				{
+					ForceAllInProgressConnectionsToClose();
+				}
 			}
 
 			/*
@@ -475,6 +491,69 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			break;
 		}
 	}
+}
+
+
+/*
+ * ForceAllInProgressConnectionsToClose forces all connections of in progress transactions
+ * to close at the end of the transaction.
+ */
+static void
+ForceAllInProgressConnectionsToClose(void)
+{
+	dlist_iter iter;
+	dlist_foreach(iter, &InProgressTransactions)
+	{
+		MultiConnection *connection = dlist_container(MultiConnection,
+													  transactionNode,
+													  iter.cur);
+
+		connection->forceCloseAtTransactionEnd = true;
+	}
+}
+
+
+/*
+ * If an ERROR is thrown while processing a transaction the ABORT handler is called.
+ * ERRORS thrown during ABORT are not treated any differently, the ABORT handler is also
+ * called during processing of those. If an ERROR was raised the first time through it's
+ * unlikely that the second try will succeed; more likely that an ERROR will be thrown
+ * again. This loop continues until Postgres notices and PANICs, complaining about a stack
+ * overflow.
+ *
+ * Instead of looping and crashing, SwallowErrors lets us attempt to continue running the
+ * ABORT logic. This wouldn't be safe in most other parts of the codebase, in
+ * approximately none of the places where we emit ERROR do we first clean up after
+ * ourselves! It's fine inside the ABORT handler though; Postgres is going to clean
+ * everything up before control passes back to us.
+ *
+ * If it swallows any error, returns true. Otherwise, returns false.
+ */
+static bool
+SwallowErrors(void (*func)())
+{
+	MemoryContext savedContext = CurrentMemoryContext;
+	volatile bool anyErrorSwallowed = false;
+
+	PG_TRY();
+	{
+		func();
+	}
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(savedContext);
+		ErrorData *edata = CopyErrorData();
+		FlushErrorState();
+
+		/* rethrow as WARNING */
+		edata->elevel = WARNING;
+		ThrowErrorData(edata);
+
+		anyErrorSwallowed = true;
+	}
+	PG_END_TRY();
+
+	return anyErrorSwallowed;
 }
 
 
