@@ -1,3 +1,46 @@
+### citus v10.2.0 (September 10, 2021) ###
+
+* Fixes a bug that may cause crash while aborting transaction
+
+* Fixes bug about int and smallint sequences on MX
+
+* Fixes a bug that caused worker_append_table_to_shard to write as superuser
+
+* Enable transferring of data using binary encoding by default on PG14
+
+* Add helper UDFs for easy time partition management
+
+* Adds pg14 support
+
+* Columnar: enable chunk group filtering to work with Params.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents attaching partitions when colocated foreign key exists
+
+* Speeds up dropping partitioned tables
+
+* Fix crash in shard rebalancer when no distributed tables exist
+
+* Fix a segfault caused by use after free in ConnectionsPlacementHash
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Acquire AccessShareLock before updating table statistics to verify the table exists
+
+* Allows more graceful failovers when replication factor > 1
+
+* Fixes a bug that cause partitions to have wrong dist. key after DROP COLUMN
+
+* Columnar: fix misleading comments and useless types.
+
+* Fix master_update_table_statistics scripts for 9.4, 9.5, 10.0, 10.1
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Reduces memory usage of columnar table scans by freeing the memory used for last stripe rea
+
+* Fix showing target shard size in the rebalance progress monitor
+
+* Include data_type and cache in sequence definition on worker
+
 ### citus v10.1.1 (August 5, 2021) ###
 
 * Improves citus_update_table_statistics and provides distributed deadlock
