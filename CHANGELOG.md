@@ -1,3 +1,124 @@
+### citus v10.2.0 (September 10, 2021) ###
+
+* Fixes a bug that may cause crash while aborting transaction
+
+* Fixes bug about int and smallint sequences on MX
+
+* Fixes a bug that caused worker_append_table_to_shard to write as superuser
+
+* Enable transferring of data using binary encoding by default on PG14
+
+* Add helper UDFs for easy time partition management
+
+* Adds pg14 support
+
+* Columnar: enable chunk group filtering to work with Params.
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug that prevents attaching partitions when colocated foreign key exists
+
+* Speeds up dropping partitioned tables
+
+* Fix crash in shard rebalancer when no distributed tables exist
+
+* Fix a segfault caused by use after free in ConnectionsPlacementHash
+
+* Adds support for CREATE INDEX ON ONLY
+
+* Adds support for ALTER INDEX ATTACH PARTITION
+
+* Synchronizes hasmetadata flag on mx workers
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Acquire AccessShareLock before updating table statistics to verify the table exists
+
+* Allows more graceful failovers when replication factor > 1
+
+* Fixes a bug that cause partitions to have wrong dist. key after DROP COLUMN
+
+* Columnar: fix misleading comments and useless types.
+
+* Fix master_update_table_statistics scripts for 9.4, 9.5, 10.0, 10.1
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Reduces memory usage of columnar table scans by freeing the memory used for last stripe rea
+
+* Fixes a UNION pushdown issue 
+
+* Fix showing target shard size in the rebalance progress monitor
+
+* Include data_type and cache in sequence definition on worker
+
+* Use current user while syncing metadata
+
+* Remove dependencies on the existence of public schema
+
+* Adds failure test for stop_metadata_sync_to_nod
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Adds a parameter to cleanup metadata
+
+* Excludes orphaned shards while finding shard placements
+
+* Adds propagation of ALTER SEQUENCE and other improvements
+
+* Fix bug where foreign key to reference table was disallowe
+
+* Fix bug that allowed moving of shards belonging to a reference table
+
+* Fix two race conditions in the get_rebalance_progress
+
+* Fixes a bug with local cached plans on tables with dropped columns
+
+* Adds hash & btree index support for columnar tables
+
+* Fixes the relation size bug during rebalancing
+
+* Fixes a bug that caused worker_create_or_alter_role to crash with NULL input
+
+* Fix nextval('seq_name'::text) bug, and schema for seq tests
+
+* Improve performance of citus_shards
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* `alter_columnar_table_set` enforces table option constraints for columnar tables
+
+* Prevents users from dropping&truncating known shards
+
+* Do smarter cleanup of orphaned shards
+
+* Fix possible segfaults when using Citus in the middle of an upgrad
+
+* Fix relname null bug when parallel execution
+
+* Fixes a bug that can cause a crash when DEBUG4 logging is enabled
+
+* Fix data race in get_rebalance_progress
+
+* Ignores old placements when disabling or removing a node
+
+* Fixes using 2PC when it might be necessary
+
+* Enables citus.defer_drop_after_shard_move by default
+
+* fix shared dependencies that are not resident in a database
+
+* Fetch shard size on the fly for the rebalance monitor
+
+* Add support for ALTER DATABASE OWNER
+
+* Make sure that target node in shard moves is eligible for shard move
+
+TODO: PLEASE SHORTEN THE NEXT LINE MANUALLY, IT SHOULD BE NO LONGER THAN 78 CHARS
+* Fixes a bug causing stale hostnames in prep. statements after master_update_node
+
+* Closes connection after each shard move
+
+* Fixes matview access method change issue
+
 ### citus v10.1.1 (August 5, 2021) ###
 
 * Improves citus_update_table_statistics and provides distributed deadlock
