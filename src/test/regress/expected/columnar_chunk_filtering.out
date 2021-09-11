@@ -645,7 +645,7 @@ alter table coltest add column x5 int default (random()*20000)::int;
 analyze coltest;
 -- test that expressions on whole-row references are not pushed down
 select * from coltest where coltest = (1,1,1,1);
-NOTICE:  columnar planner: cannot push down clause: var is whole-row reference
+NOTICE:  columnar planner: cannot push down clause: var is whole-row reference or system column
 NOTICE:  columnar planner: adding CustomScan path for coltest
 DETAIL:  unparameterized; 0 clauses pushed down
  id | x1 | x2 | x3 | x5
@@ -655,7 +655,7 @@ DETAIL:  unparameterized; 0 clauses pushed down
 -- test that expressions on uncorrelated attributes are not pushed down
 set columnar.qual_pushdown_correlation to default;
 select * from coltest where x5 = 23484;
-NOTICE:  columnar planner: cannot push down clause: var attribute 5 is uncorrelated
+NOTICE:  columnar planner: cannot push down clause: absolute correlation (X.YZ) of var attribute 5 is smaller than the value configured in "columnar.qual_pushdown_correlation_threshold" (0.900)
 NOTICE:  columnar planner: adding CustomScan path for coltest
 DETAIL:  unparameterized; 0 clauses pushed down
  id | x1 | x2 | x3 | x5
@@ -819,3 +819,250 @@ select * from numrange_test natural join numrange_test2 order by nr;
 
 DROP TABLE atest1, atest2, t1, t2, t3, numrange_test, numrange_test2;
 set default_table_access_method to default;
+set columnar.planner_debug_level to notice;
+BEGIN;
+  SET LOCAL columnar.stripe_row_limit = 2000;
+  SET LOCAL columnar.chunk_group_row_limit = 1000;
+  create table pushdown_test (a int, b int) using columnar;
+  insert into pushdown_test values (generate_series(1, 200000));
+COMMIT;
+SET columnar.max_custom_scan_paths TO 50;
+SET columnar.qual_pushdown_correlation_threshold TO 0.0;
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test WHERE a = 204356 or a = 104356 or a = 76556;
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+                                     QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (ColumnarScan) on pushdown_test (actual rows=2 loops=1)
+         Filter: ((a = 204356) OR (a = 104356) OR (a = 76556))
+         Rows Removed by Filter: 1998
+         Columnar Projected Columns: a
+         Columnar Chunk Group Filters: ((a = 204356) OR (a = 104356) OR (a = 76556))
+         Columnar Chunk Groups Removed by Filter: 198
+(7 rows)
+
+SELECT sum(a) FROM pushdown_test WHERE a = 204356 or a = 104356 or a = 76556;
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+  sum
+---------------------------------------------------------------------
+ 180912
+(1 row)
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test WHERE a = 194356 or a = 104356 or a = 76556;
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+                                     QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (ColumnarScan) on pushdown_test (actual rows=3 loops=1)
+         Filter: ((a = 194356) OR (a = 104356) OR (a = 76556))
+         Rows Removed by Filter: 2997
+         Columnar Projected Columns: a
+         Columnar Chunk Group Filters: ((a = 194356) OR (a = 104356) OR (a = 76556))
+         Columnar Chunk Groups Removed by Filter: 197
+(7 rows)
+
+SELECT sum(a) FROM pushdown_test WHERE a = 194356 or a = 104356 or a = 76556;
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+  sum
+---------------------------------------------------------------------
+ 375268
+(1 row)
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test WHERE a = 204356 or a > a*-1 + b;
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: cannot push down clause: all arguments of an OR expression must be pushdownable but one of them was not, due to the reason given above
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 0 clauses pushed down
+                                QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (ColumnarScan) on pushdown_test (actual rows=0 loops=1)
+         Filter: ((a = 204356) OR (a > ((a * '-1'::integer) + b)))
+         Rows Removed by Filter: 200000
+         Columnar Projected Columns: a, b
+(5 rows)
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where (a > 1000 and a < 10000) or (a > 20000 and a < 50000);
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+                                              QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (ColumnarScan) on pushdown_test (actual rows=38998 loops=1)
+         Filter: (((a > 1000) AND (a < 10000)) OR ((a > 20000) AND (a < 50000)))
+         Rows Removed by Filter: 2
+         Columnar Projected Columns: a
+         Columnar Chunk Group Filters: (((a > 1000) AND (a < 10000)) OR ((a > 20000) AND (a < 50000)))
+         Columnar Chunk Groups Removed by Filter: 161
+(7 rows)
+
+SELECT sum(a) FROM pushdown_test where (a > 1000 and a < 10000) or (a > 20000 and a < 50000);
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+    sum
+---------------------------------------------------------------------
+ 1099459500
+(1 row)
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where (a > random() and a < 2*a) or (a > 100);
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: cannot push down clause: none of the arguments were pushdownable, due to the reason(s) given above
+NOTICE:  columnar planner: cannot push down clause: all arguments of an OR expression must be pushdownable but one of them was not, due to the reason given above
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 0 clauses pushed down
+                                      QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (ColumnarScan) on pushdown_test (actual rows=200000 loops=1)
+         Filter: ((((a)::double precision > random()) AND (a < (2 * a))) OR (a > 100))
+         Columnar Projected Columns: a
+(4 rows)
+
+SELECT sum(a) FROM pushdown_test where (a > random() and a < 2*a) or (a > 100);
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: cannot push down clause: none of the arguments were pushdownable, due to the reason(s) given above
+NOTICE:  columnar planner: cannot push down clause: all arguments of an OR expression must be pushdownable but one of them was not, due to the reason given above
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 0 clauses pushed down
+     sum
+---------------------------------------------------------------------
+ 20000100000
+(1 row)
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 200000-1010);
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+                                       QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (ColumnarScan) on pushdown_test (actual rows=3010 loops=1)
+         Filter: ((((a)::double precision > random()) AND (a <= 2000)) OR (a > 198990))
+         Rows Removed by Filter: 990
+         Columnar Projected Columns: a
+         Columnar Chunk Group Filters: ((a <= 2000) OR (a > 198990))
+         Columnar Chunk Groups Removed by Filter: 196
+(7 rows)
+
+SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 200000-1010);
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+    sum
+---------------------------------------------------------------------
+ 203491455
+(1 row)
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where
+(
+  a > random()
+  and
+  (
+    (a < 200 and a not in (select a from pushdown_test)) or
+    (a > 1000 and a < 2000)
+  )
+)
+or
+(a > 200000-2010);
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 0 clauses pushed down
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: cannot push down clause: must not contain a subplan
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+                                                                  QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (ColumnarScan) on pushdown_test (actual rows=3009 loops=1)
+         Filter: ((((a)::double precision > random()) AND (((a < 200) AND (NOT (SubPlan 1))) OR ((a > 1000) AND (a < 2000)))) OR (a > 197990))
+         Rows Removed by Filter: 1991
+         Columnar Projected Columns: a
+         Columnar Chunk Group Filters: (((a < 200) OR ((a > 1000) AND (a < 2000))) OR (a > 197990))
+         Columnar Chunk Groups Removed by Filter: 195
+         SubPlan 1
+           ->  Materialize (actual rows=100 loops=199)
+                 ->  Custom Scan (ColumnarScan) on pushdown_test pushdown_test_1 (actual rows=199 loops=1)
+                       Columnar Projected Columns: a
+(11 rows)
+
+SELECT sum(a) FROM pushdown_test where
+(
+  a > random()
+  and
+  (
+    (a < 200 and a not in (select a from pushdown_test)) or
+    (a > 1000 and a < 2000)
+  )
+)
+or
+(a > 200000-2010);
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 0 clauses pushed down
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: cannot push down clause: must not contain a subplan
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+    sum
+---------------------------------------------------------------------
+ 401479455
+(1 row)
+
+create function stable_1(arg int) returns int language plpgsql STRICT IMMUTABLE as
+$$ BEGIN RETURN 1+arg; END; $$;
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where (a = random() and a < stable_1(a) and a < stable_1(6000));
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+                                        QUERY PLAN
+---------------------------------------------------------------------
+ Aggregate (actual rows=1 loops=1)
+   ->  Custom Scan (ColumnarScan) on pushdown_test (actual rows=0 loops=1)
+         Filter: ((a < 6001) AND ((a)::double precision = random()) AND (a < stable_1(a)))
+         Rows Removed by Filter: 6000
+         Columnar Projected Columns: a
+         Columnar Chunk Group Filters: (a < 6001)
+         Columnar Chunk Groups Removed by Filter: 194
+(7 rows)
+
+SELECT sum(a) FROM pushdown_test where (a = random() and a < stable_1(a) and a < stable_1(6000));
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: cannot push down clause: must match 'Var <op> Expr' or 'Expr <op> Var'
+HINT:  Var must only reference this rel, and Expr must not reference this rel
+NOTICE:  columnar planner: adding CustomScan path for pushdown_test
+DETAIL:  unparameterized; 1 clauses pushed down
+ sum
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET columnar.max_custom_scan_paths;
+RESET columnar.qual_pushdown_correlation_threshold;
+RESET columnar.planner_debug_level;
+DROP TABLE pushdown_test;
