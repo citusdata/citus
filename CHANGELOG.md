@@ -1,3 +1,80 @@
+### citus v10.2.0 (September 14, 2021) ###
+
+* Adds PostgreSQL 14 support
+
+* Adds hash & btree index support for columnar tables
+
+* Adds helper UDFs for easy time partition management:
+  `get_missing_time_partition_ranges`, `create_time_partitions`, and
+  `drop_old_time_partitions`
+
+* Adds propagation of ALTER SEQUENCE
+
+* Adds support for ALTER INDEX ATTACH PARTITION
+
+* Adds support for CREATE INDEX ON ONLY
+
+* Allows more graceful failovers when replication factor > 1
+
+* Enables chunk group filtering to work with Params for columnar tables
+
+* Enables qual push down for joins including columnar tables
+
+* Enables transferring of data using binary encoding by default on PG14
+
+* Improves `master_update_table_statistics` and provides distributed deadlock
+  detection
+
+* Includes `data_type` and `cache` in sequence definition on worker
+
+* Makes start/stop_metadata_sync_to_node() transactional
+
+* Makes sure that table exists before updating table statistics
+
+* Prevents errors with concurrent `citus_update_table_statistics` and DROP table
+
+* Reduces memory usage of columnar table scans by freeing the memory used for
+  last stripe read
+
+* Shows projected columns for columnar tables in EXPLAIN output
+
+* Speeds up dropping partitioned tables
+
+* Synchronizes hasmetadata flag on mx workers
+
+* Uses current user while syncing metadata
+
+* Adds a parameter to cleanup metadata when metadata syncing is stopped
+
+* Fixes a bug about int and smallint sequences on MX
+
+* Fixes a bug that cause partitions to have wrong distribution key after
+  DROP COLUMN
+
+* Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
+
+* Fixes a bug that caused `worker_create_or_alter_role` to crash with NULL input
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes a bug that may cause crash while aborting transaction
+
+* Fixes a bug that prevents attaching partitions when colocated foreign key
+  exists
+
+* Fixes a bug with `nextval('seq_name'::text)`
+
+* Fixes a crash in shard rebalancer when no distributed tables exist
+
+* Fixes a segfault caused by use after free in when using a cached connection
+
+* Fixes a UNION pushdown issue
+
+* Fixes a use after free issue that could happen when altering a distributed
+  table
+
+* Fixes showing target shard size in the rebalance progress monitor
+
 ### citus v10.1.2 (August 16, 2021) ###
 
 * Allows more graceful failovers when replication factor > 1
