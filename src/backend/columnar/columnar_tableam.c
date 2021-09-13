@@ -255,14 +255,14 @@ CreateColumnarScanMemoryContext(void)
 static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
 						 List *scanQual, MemoryContext scanContext, Snapshot snapshot,
-						 bool flushWrites)
+						 bool randomAccess)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
 
 	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
 													 scanQual, scanContext, snapshot,
-													 flushWrites);
+													 randomAccess);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -313,12 +313,12 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 	 */
 	if (scan->cs_readState == NULL)
 	{
-		bool flushWrites = true;
+		bool randomAccess = false;
 		scan->cs_readState =
 			init_columnar_read_state(scan->cs_base.rs_rd, slot->tts_tupleDescriptor,
 									 scan->attr_needed, scan->scanQual,
 									 scan->scanContext, scan->cs_base.rs_snapshot,
-									 flushWrites);
+									 randomAccess);
 	}
 
 	ExecClearTuple(slot);
@@ -495,12 +495,12 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 		/* no quals for index scan */
 		List *scanQual = NIL;
 
-		bool flushWrites = false;
+		bool randomAccess = true;
 		scan->cs_readState = init_columnar_read_state(columnarRelation,
 													  slot->tts_tupleDescriptor,
 													  attr_needed, scanQual,
 													  scan->scanContext,
-													  snapshot, flushWrites);
+													  snapshot, randomAccess);
 	}
 
 	uint64 rowNumber = tid_to_row_number(*tid);
@@ -561,7 +561,7 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 		}
 		else
 		{
-			/* similar to aborted writes .. */
+			/* similar to aborted writes, it should be dirty snapshot */
 			Assert(snapshot->snapshot_type == SNAPSHOT_DIRTY);
 
 			/*
@@ -573,10 +573,21 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 			 * the tupleslot properly.
 			 *
 			 * XXX: Note that the assumption we made above for the tupleslot
-			 * seems to hold for "unique" and "exclusion" constraint checks when
-			 * indexAM is not lossy. Since we only support "btree" and "hash"
-			 * indexAM's and they are not lossy, we believe this should be enough
-			 * for now, in a hacky way.
+			 * holds for "unique" constraints defined on "btree" indexes.
+			 *
+			 * For the other constraints that we support, namely:
+			 * * exclusion on btree,
+			 * * exclusion on hash,
+			 * * unique on btree;
+			 * we still need to fill tts_values.
+			 *
+			 * However, for the same reason, we should have already flushed
+			 * single tuple stripes when inserting into table for those three
+			 * classes of constraints.
+			 *
+			 * This is annoying, but this also explains why this hack works for
+			 * unique constraints on btree indexes, and also explains how we
+			 * would never end up with "else" condition otherwise.
 			 */
 			memset(slot->tts_isnull, true, slot->tts_nvalid * sizeof(bool));
 		}
@@ -896,11 +907,11 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	Snapshot snapshot = SnapshotAny;
 
 	MemoryContext scanContext = CreateColumnarScanMemoryContext();
-	bool flushWrites = true;
+	bool randomAccess = false;
 	ColumnarReadState *readState = init_columnar_read_state(OldHeap, sourceDesc,
 															attr_needed, scanQual,
 															scanContext, snapshot,
-															flushWrites);
+															randomAccess);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));

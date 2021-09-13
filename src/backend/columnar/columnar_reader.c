@@ -179,7 +179,7 @@ ColumnarReadState *
 ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 				  List *projectedColumnList, List *whereClauseList,
 				  MemoryContext scanContext, Snapshot snapshot,
-				  bool flushWrites)
+				  bool randomAccess)
 {
 	/*
 	 * We allocate all stripe specific data in the stripeReadContext, and reset
@@ -206,17 +206,33 @@ ColumnarBeginRead(Relation relation, TupleDesc tupleDescriptor,
 	readState->snapshot = snapshot;
 	readState->snapshotRegisteredByUs = false;
 
-	if (flushWrites)
+	if (!randomAccess)
 	{
+		/*
+		 * When doing random access (i.e.: index scan), we don't need to flush
+		 * pending writes until we need to read them.
+		 * columnar_index_fetch_tuple would do so when needed.
+		 */
 		ColumnarReadFlushPendingWrites(readState);
+
+		/*
+		 * AdvanceStripeRead sets currentStripeMetadata for the first stripe
+		 * to read if not doing random access. Otherwise, reader (i.e.:
+		 * ColumnarReadRowByRowNumber) would already decide the stripe to read
+		 * on-the-fly.
+		 *
+		 * Moreover, Since we don't flush pending writes for random access,
+		 * AdvanceStripeRead might encounter with stripe metadata entries due
+		 * to current transaction's pending writes even when using an MVCC
+		 * snapshot, but AdvanceStripeRead would throw an error for that.
+		 * Note that this is not the case with for plain table scan methods
+		 * (i.e.: SeqScan and Columnar CustomScan).
+		 *
+		 * For those reasons, we don't call AdvanceStripeRead if we will do
+		 * random access.
+		 */
+		AdvanceStripeRead(readState);
 	}
-
-	readState->currentStripeMetadata = FindNextStripeByRowNumber(relation,
-																 COLUMNAR_INVALID_ROW_NUMBER,
-																 readState->snapshot);
-
-	/* set currentStripeMetadata for the first stripe to read */
-	AdvanceStripeRead(readState);
 
 	return readState;
 }

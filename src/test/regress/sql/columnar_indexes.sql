@@ -515,5 +515,36 @@ insert into uniq select generate_series(1,100);
 SELECT COUNT(*)=1 FROM columnar.stripe cs
 WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
 
+TRUNCATE uniq;
+
+begin;
+  SAVEPOINT svpt;
+    insert into uniq select generate_series(1,100);
+  ROLLBACK TO SAVEPOINT svpt;
+
+  -- Since we rollbacked the writes in the upper transaction, we don't need
+  -- to flush pending writes for uniquenes check when inserting the same
+  -- values. So the following insert should just work.
+  insert into uniq select generate_series(1,100);
+
+  -- didn't flush anything yet, but should see the in progress stripe-write
+  SELECT stripe_num, first_row_number, row_count FROM columnar.stripe cs
+  WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+commit;
+
+-- should have completed the stripe reservation
+SELECT stripe_num, first_row_number, row_count FROM columnar.stripe cs
+WHERE cs.storage_id = columnar_test_helpers.columnar_relation_storageid('columnar_indexes.uniq'::regclass);
+
+TRUNCATE uniq;
+
+begin;
+    insert into uniq select generate_series(1,100);
+    SAVEPOINT svpt;
+  -- cannot verify unique constraint when there are pending writes in
+  -- the upper transaction
+  insert into uniq select generate_series(1,100);
+rollback;
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;

@@ -236,7 +236,7 @@ extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 List *qualConditions,
 											 MemoryContext scanContext,
 											 Snapshot snaphot,
-											 bool flushWrites);
+											 bool randomAccess);
 extern void ColumnarReadFlushPendingWrites(ColumnarReadState *readState);
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls, uint64 *rowNumber);
