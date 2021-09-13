@@ -1,0 +1,7 @@
+\timing on
+\pset linestyle unicode 
+\pset border 2
+\setenv PAGER 'pspg --no-mouse -bX --no-commandbar --no-topbar'
+\set HISTSIZE 100000
+\set PROMPT1 '\n%[%033[1m%]%M %n@%/:%>-%p%R%[%033[0m%]%# '
+\set PROMPT2 '  '
