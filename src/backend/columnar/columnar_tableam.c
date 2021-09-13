@@ -254,56 +254,15 @@ CreateColumnarScanMemoryContext(void)
  */
 static ColumnarReadState *
 init_columnar_read_state(Relation relation, TupleDesc tupdesc, Bitmapset *attr_needed,
-						 List *scanQual, MemoryContext scanContext, Snapshot snapshot)
+						 List *scanQual, MemoryContext scanContext, Snapshot snapshot,
+						 bool randomAccess)
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(scanContext);
-
-	Oid relfilenode = relation->rd_node.relNode;
-	FlushWriteStateForRelfilenode(relfilenode, GetCurrentSubTransactionId());
-
-	bool snapshotRegisteredByUs = false;
-	if (snapshot != InvalidSnapshot && IsMVCCSnapshot(snapshot))
-	{
-		/*
-		 * If we flushed any pending writes, then we should guarantee that
-		 * those writes are visible to us too. For this reason, if given
-		 * snapshot is an MVCC snapshot, then we set its curcid to current
-		 * command id.
-		 *
-		 * For simplicity, we do that even if we didn't flush any writes
-		 * since we don't see any problem with that.
-		 *
-		 * XXX: We should either not update cid if we are executing a FETCH
-		 * (from cursor) command, or we should have a better way to deal with
-		 * pending writes, see the discussion in
-		 * https://github.com/citusdata/citus/issues/5231.
-		 */
-		PushCopiedSnapshot(snapshot);
-
-		/* now our snapshot is the active one */
-		UpdateActiveSnapshotCommandId();
-		snapshot = GetActiveSnapshot();
-		RegisterSnapshot(snapshot);
-
-		/*
-		 * To be able to use UpdateActiveSnapshotCommandId, we pushed the
-		 * copied snapshot to the stack. However, we don't need to keep it
-		 * there since we will anyway rely on ColumnarReadState->snapshot
-		 * during read operation.
-		 *
-		 * Note that since we registered the snapshot already, we guarantee
-		 * that PopActiveSnapshot won't free it.
-		 */
-		PopActiveSnapshot();
-
-		/* not forget to unregister it when finishing read operation */
-		snapshotRegisteredByUs = true;
-	}
 
 	List *neededColumnList = NeededColumnsList(tupdesc, attr_needed);
 	ColumnarReadState *readState = ColumnarBeginRead(relation, tupdesc, neededColumnList,
 													 scanQual, scanContext, snapshot,
-													 snapshotRegisteredByUs);
+													 randomAccess);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -354,10 +313,12 @@ columnar_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlo
 	 */
 	if (scan->cs_readState == NULL)
 	{
+		bool randomAccess = false;
 		scan->cs_readState =
 			init_columnar_read_state(scan->cs_base.rs_rd, slot->tts_tupleDescriptor,
 									 scan->attr_needed, scan->scanQual,
-									 scan->scanContext, scan->cs_base.rs_snapshot);
+									 scan->scanContext, scan->cs_base.rs_snapshot,
+									 randomAccess);
 	}
 
 	ExecClearTuple(slot);
@@ -534,11 +495,12 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 		/* no quals for index scan */
 		List *scanQual = NIL;
 
+		bool randomAccess = true;
 		scan->cs_readState = init_columnar_read_state(columnarRelation,
 													  slot->tts_tupleDescriptor,
 													  attr_needed, scanQual,
 													  scan->scanContext,
-													  snapshot);
+													  snapshot, randomAccess);
 	}
 
 	uint64 rowNumber = tid_to_row_number(*tid);
@@ -574,18 +536,61 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 	}
 	else if (stripeWriteState == STRIPE_WRITE_IN_PROGRESS)
 	{
-		/* similar to aborted writes .. */
-		Assert(snapshot->snapshot_type == SNAPSHOT_DIRTY);
+		if (stripeMetadata->insertedByCurrentXact)
+		{
+			/*
+			 * Stripe write is in progress and its entry is inserted by current
+			 * transaction, so obviously it must be written by me. Since caller
+			 * might want to use tupleslot datums for some reason, do another
+			 * look-up, but this time by first flushing our writes.
+			 *
+			 * XXX: For index scan, this is the only case that we flush pending
+			 * writes of the current backend. If we have taught reader how to
+			 * read from WriteStateMap. then we could guarantee that
+			 * index_fetch_tuple would never flush pending writes, but this seem
+			 * to be too much work for now, but should be doable.
+			 */
+			ColumnarReadFlushPendingWrites(scan->cs_readState);
 
-		/*
-		 * Stripe that "might" contain the tuple with rowNumber is not
-		 * flushed yet. Here we set all attributes of given tupleslot to NULL
-		 * before returning true and expect the indexAM callback that called
-		 * us --possibly to check against constraint violation-- blocks until
-		 * writer transaction commits or aborts, without requiring us to fill
-		 * the tupleslot properly.
-		 */
-		memset(slot->tts_isnull, true, slot->tts_nvalid * sizeof(bool));
+			/*
+			 * Fill the tupleslot and fall through to return true, it
+			 * certainly exists.
+			 */
+			ColumnarReadRowByRowNumberOrError(scan->cs_readState, rowNumber,
+											  slot->tts_values, slot->tts_isnull);
+		}
+		else
+		{
+			/* similar to aborted writes, it should be dirty snapshot */
+			Assert(snapshot->snapshot_type == SNAPSHOT_DIRTY);
+
+			/*
+			 * Stripe that "might" contain the tuple with rowNumber is not
+			 * flushed yet. Here we set all attributes of given tupleslot to NULL
+			 * before returning true and expect the indexAM callback that called
+			 * us --possibly to check against constraint violation-- blocks until
+			 * writer transaction commits or aborts, without requiring us to fill
+			 * the tupleslot properly.
+			 *
+			 * XXX: Note that the assumption we made above for the tupleslot
+			 * holds for "unique" constraints defined on "btree" indexes.
+			 *
+			 * For the other constraints that we support, namely:
+			 * * exclusion on btree,
+			 * * exclusion on hash,
+			 * * unique on btree;
+			 * we still need to fill tts_values.
+			 *
+			 * However, for the same reason, we should have already flushed
+			 * single tuple stripes when inserting into table for those three
+			 * classes of constraints.
+			 *
+			 * This is annoying, but this also explains why this hack works for
+			 * unique constraints on btree indexes, and also explains how we
+			 * would never end up with "else" condition otherwise.
+			 */
+			memset(slot->tts_isnull, true, slot->tts_nvalid * sizeof(bool));
+		}
 	}
 	else
 	{
@@ -902,9 +907,11 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 	Snapshot snapshot = SnapshotAny;
 
 	MemoryContext scanContext = CreateColumnarScanMemoryContext();
+	bool randomAccess = false;
 	ColumnarReadState *readState = init_columnar_read_state(OldHeap, sourceDesc,
 															attr_needed, scanQual,
-															scanContext, snapshot);
+															scanContext, snapshot,
+															randomAccess);
 
 	Datum *values = palloc0(sourceDesc->natts * sizeof(Datum));
 	bool *nulls = palloc0(sourceDesc->natts * sizeof(bool));

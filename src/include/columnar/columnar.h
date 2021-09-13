@@ -230,22 +230,32 @@ extern bool ContainsPendingWrites(ColumnarWriteState *state);
 extern MemoryContext ColumnarWritePerTupleContext(ColumnarWriteState *state);
 
 /* Function declarations for reading from columnar table */
+
+/* functions applicable for both sequential and random access */
 extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 TupleDesc tupleDescriptor,
 											 List *projectedColumnList,
 											 List *qualConditions,
 											 MemoryContext scanContext,
 											 Snapshot snaphot,
-											 bool snapshotRegisteredByUs);
+											 bool randomAccess);
+extern void ColumnarReadFlushPendingWrites(ColumnarReadState *readState);
+extern void ColumnarEndRead(ColumnarReadState *state);
+extern void ColumnarResetRead(ColumnarReadState *readState);
+
+/* functions only applicable for sequential access */
 extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
 								bool *columnNulls, uint64 *rowNumber);
+extern int64 ColumnarReadChunkGroupsFiltered(ColumnarReadState *state);
 extern void ColumnarRescan(ColumnarReadState *readState, List *scanQual);
+
+/* functions only applicable for random access */
+extern void ColumnarReadRowByRowNumberOrError(ColumnarReadState *readState,
+											  uint64 rowNumber, Datum *columnValues,
+											  bool *columnNulls);
 extern bool ColumnarReadRowByRowNumber(ColumnarReadState *readState,
 									   uint64 rowNumber, Datum *columnValues,
 									   bool *columnNulls);
-extern void ColumnarEndRead(ColumnarReadState *state);
-extern void ColumnarResetRead(ColumnarReadState *readState);
-extern int64 ColumnarReadChunkGroupsFiltered(ColumnarReadState *state);
 
 /* Function declarations for common functions */
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,

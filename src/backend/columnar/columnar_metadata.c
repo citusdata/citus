@@ -1261,8 +1261,17 @@ BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
 	stripeMetadata->firstRowNumber = DatumGetUInt64(
 		datumArray[Anum_columnar_stripe_first_row_number - 1]);
 
+	/*
+	 * If there is unflushed data in a parent transaction, then we would
+	 * have already thrown an error before starting to scan the table.. If
+	 * the data is from an earlier subxact that committed, then it would
+	 * have been flushed already. For this reason, we don't care about
+	 * subtransaction id here.
+	 */
 	TransactionId entryXmin = HeapTupleHeaderGetXmin(heapTuple->t_data);
 	stripeMetadata->aborted = TransactionIdDidAbort(entryXmin);
+	stripeMetadata->insertedByCurrentXact =
+		TransactionIdIsCurrentTransactionId(entryXmin);
 
 	CheckStripeMetadataConsistency(stripeMetadata);
 
