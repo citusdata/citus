@@ -1101,6 +1101,29 @@ ParameterizationAsString(PlannerInfo *root, Relids paramRelids, StringInfo buf)
 
 
 /*
+ * ContainsExecParams tests whether the node contains any exec params. The
+ * signature accepts an extra argument for use with expression_tree_walker.
+ */
+static bool
+ContainsExecParams(Node *node, void *notUsed)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+	else if (IsA(node, Param))
+	{
+		Param *param = castNode(Param, node);
+		if (param->paramkind == PARAM_EXEC)
+		{
+			return true;
+		}
+	}
+	return expression_tree_walker(node, ContainsExecParams, NULL);
+}
+
+
+/*
  * Create and add a path with the given parameterization paramRelids.
  *
  * XXX: Consider refactoring to be more like postgresGetForeignPaths(). The
@@ -1133,11 +1156,8 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 	path->param_info = get_baserel_parampathinfo(root, rel, paramRelids);
 
 	/*
-	 * Now, baserestrictinfo contains the clauses referencing only this rel,
-	 * and ppi_clauses (if present) represents the join clauses that reference
-	 * this rel and rels contained in paramRelids (after accounting for
-	 * ECs). Combine the two lists of clauses, extracting the actual clause
-	 * from the rinfo, and filtering out pseudoconstants and SAOPs.
+	 * Usable clauses for this parameterization exist in baserestrictinfo and
+	 * ppi_clauses.
 	 */
 	List *allClauses = copyObject(rel->baserestrictinfo);
 	if (path->param_info != NULL)
@@ -1145,20 +1165,47 @@ AddColumnarScanPath(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte,
 		allClauses = list_concat(allClauses, path->param_info->ppi_clauses);
 	}
 
-	/*
-	 * This is the set of clauses that can be pushed down for this
-	 * parameterization (with the given paramRelids), and will be used to
-	 * construct the CustomScan plan.
-	 */
-	List *pushdownClauses = FilterPushdownClauses(root, rel, allClauses);
+	allClauses = FilterPushdownClauses(root, rel, allClauses);
 
+	/*
+	 * Plain clauses may contain extern params, but not exec params, and can
+	 * be evaluated at init time or rescan time. Track them in another list
+	 * that is a subset of allClauses.
+	 *
+	 * Note: although typically baserestrictinfo contains plain clauses,
+	 * that's not always true. It can also contain a qual referencing a Var at
+	 * a higher query level, which can be turned into an exec param, and
+	 * therefore it won't be a plain clause.
+	 */
+	List *plainClauses = NIL;
+	ListCell *lc;
+	foreach(lc, allClauses)
+	{
+		RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc);
+		if (bms_is_subset(rinfo->required_relids, rel->relids) &&
+			!ContainsExecParams((Node *) rinfo->clause, NULL))
+		{
+			plainClauses = lappend(plainClauses, rinfo);
+		}
+	}
+
+	/*
+	 * We can't make our own CustomPath structure, so we need to put
+	 * everything in the custom_private list. To keep the two lists separate,
+	 * we make them sublists in a 2-element list.
+	 */
 	if (EnableColumnarQualPushdown)
 	{
-		cpath->custom_private = pushdownClauses;
+		cpath->custom_private = list_make2(copyObject(plainClauses),
+										   copyObject(allClauses));
+	}
+	else
+	{
+		cpath->custom_private = list_make2(NIL, NIL);
 	}
 
 	int numberOfColumnsRead = bms_num_members(rte->selectedCols);
-	int numberOfClausesPushed = list_length(cpath->custom_private);
+	int numberOfClausesPushed = list_length(allClauses);
 
 	CostColumnarScan(root, rel, rte->relid, cpath, numberOfColumnsRead,
 					 numberOfClausesPushed);
@@ -1188,8 +1235,9 @@ CostColumnarScan(PlannerInfo *root, RelOptInfo *rel, Oid relationId,
 {
 	Path *path = &cpath->path;
 
+	List *allClauses = lsecond(cpath->custom_private);
 	Selectivity clauseSel = clauselist_selectivity(
-		root, cpath->custom_private, rel->relid, JOIN_INNER, NULL);
+		root, allClauses, rel->relid, JOIN_INNER, NULL);
 
 	/*
 	 * We already filtered out clauses where the overall selectivity would be
@@ -1297,18 +1345,28 @@ ColumnarScanPath_PlanCustomPath(PlannerInfo *root,
 	if (EnableColumnarQualPushdown)
 	{
 		/*
-		 * List of pushed-down clauses. The Vars referencing other relations
-		 * will be changed into exec Params by create_customscan_plan().
+		 * Lists of pushed-down clauses. The Vars in custom_exprs referencing
+		 * other relations will be changed into exec Params by
+		 * create_customscan_plan().
 		 *
-		 * XXX: this just means what will be pushed into the columnar reader
-		 * code; some of these may not be usable. We should fix this by
-		 * passing down something more like ScanKeys, where we've already
-		 * verified that the operators match the btree opclass of the chunk
-		 * predicates.
+		 * Like CustomPath->custom_private, keep a list of plain clauses
+		 * separate from the list of all clauses by making them sublists of a
+		 * 2-element list.
+		 *
+		 * XXX: custom_exprs are the quals that will be pushed into the
+		 * columnar reader code; some of these may not be usable. We should
+		 * fix this by processing the quals more completely and using
+		 * ScanKeys.
 		 */
-		cscan->custom_exprs = copyObject(
-			extract_actual_clauses(best_path->custom_private,
-								   false /* no pseudoconstants */));
+		List *plainClauses = extract_actual_clauses(
+			linitial(best_path->custom_private), false /* no pseudoconstants */);
+		List *allClauses = extract_actual_clauses(
+			lsecond(best_path->custom_private), false /* no pseudoconstants */);
+		cscan->custom_exprs = copyObject(list_make2(plainClauses, allClauses));
+	}
+	else
+	{
+		cscan->custom_exprs = list_make2(NIL, NIL);
 	}
 
 	cscan->scan.plan.qual = extract_actual_clauses(
@@ -1447,10 +1505,10 @@ ColumnarScan_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int ef
 	columnarScanState->css_RuntimeContext = cscanstate->ss.ps.ps_ExprContext;
 	cscanstate->ss.ps.ps_ExprContext = stdecontext;
 
-	/* XXX: separate into runtime clauses and normal clauses */
 	ResetExprContext(columnarScanState->css_RuntimeContext);
+	List *plainClauses = linitial(cscan->custom_exprs);
 	columnarScanState->qual = (List *) EvalParamsMutator(
-		(Node *) cscan->custom_exprs, columnarScanState->css_RuntimeContext);
+		(Node *) plainClauses, columnarScanState->css_RuntimeContext);
 
 	/* scan slot is already initialized */
 }
@@ -1604,8 +1662,9 @@ ColumnarScan_ReScanCustomScan(CustomScanState *node)
 	ColumnarScanState *columnarScanState = (ColumnarScanState *) node;
 
 	ResetExprContext(columnarScanState->css_RuntimeContext);
+	List *allClauses = lsecond(cscan->custom_exprs);
 	columnarScanState->qual = (List *) EvalParamsMutator(
-		(Node *) cscan->custom_exprs, columnarScanState->css_RuntimeContext);
+		(Node *) allClauses, columnarScanState->css_RuntimeContext);
 
 	TableScanDesc scanDesc = node->ss.ss_currentScanDesc;
 
@@ -1635,7 +1694,7 @@ ColumnarScan_ExplainCustomScan(CustomScanState *node, List *ancestors,
 						projectedColumnsStr, es);
 
 	CustomScan *cscan = castNode(CustomScan, node->ss.ps.plan);
-	List *chunkGroupFilter = cscan->custom_exprs;
+	List *chunkGroupFilter = lsecond(cscan->custom_exprs);
 	if (chunkGroupFilter != NULL)
 	{
 		const char *pushdownClausesStr = ColumnarPushdownClausesStr(

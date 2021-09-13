@@ -316,3 +316,61 @@ select filtered_row_count('execute foo(3)');
 select filtered_row_count('execute foo(3)');
 select filtered_row_count('execute foo(3)');
 drop table columnar_prepared_stmt;
+
+--
+-- https://github.com/citusdata/citus/issues/5258
+--
+set default_table_access_method to columnar;
+CREATE TABLE atest1 ( a int, b text );
+CREATE TABLE atest2 (col1 varchar(10), col2 boolean);
+
+INSERT INTO atest1 VALUES (1, 'one');
+SELECT * FROM atest1; -- ok
+SELECT * FROM atest2; -- ok
+INSERT INTO atest1 VALUES (2, 'two'); -- ok
+INSERT INTO atest1 SELECT 1, b FROM atest1; -- ok
+
+SELECT * FROM atest2 WHERE ( col1 IN ( SELECT b FROM atest1 ) );
+
+CREATE TABLE t1 (name TEXT, n INTEGER);
+CREATE TABLE t2 (name TEXT, n INTEGER);
+CREATE TABLE t3 (name TEXT, n INTEGER);
+
+INSERT INTO t1 VALUES ( 'bb', 11 );
+INSERT INTO t2 VALUES ( 'bb', 12 );
+INSERT INTO t2 VALUES ( 'cc', 22 );
+INSERT INTO t2 VALUES ( 'ee', 42 );
+INSERT INTO t3 VALUES ( 'bb', 13 );
+INSERT INTO t3 VALUES ( 'cc', 23 );
+INSERT INTO t3 VALUES ( 'dd', 33 );
+
+SELECT * FROM
+(SELECT name, n as s1_n, 1 as s1_1 FROM t1) as s1
+NATURAL INNER JOIN
+(SELECT name, n as s2_n, 2 as s2_2 FROM t2) as s2
+NATURAL INNER JOIN
+(SELECT name, n as s3_n, 3 as s3_2 FROM t3) s3;
+
+CREATE TABLE numrange_test (nr NUMRANGE);
+INSERT INTO numrange_test VALUES('[,)');
+INSERT INTO numrange_test VALUES('[3,]');
+INSERT INTO numrange_test VALUES('[, 5)');
+INSERT INTO numrange_test VALUES(numrange(1.1, 2.2));
+INSERT INTO numrange_test VALUES('empty');
+INSERT INTO numrange_test VALUES(numrange(1.7, 1.7, '[]'));
+
+create table numrange_test2(nr numrange);
+INSERT INTO numrange_test2 VALUES('[, 5)');
+INSERT INTO numrange_test2 VALUES(numrange(1.1, 2.2));
+INSERT INTO numrange_test2 VALUES(numrange(1.1, 2.2));
+INSERT INTO numrange_test2 VALUES(numrange(1.1, 2.2,'()'));
+INSERT INTO numrange_test2 VALUES('empty');
+
+set enable_nestloop=t;
+set enable_hashjoin=f;
+set enable_mergejoin=f;
+select * from numrange_test natural join numrange_test2 order by nr;
+
+DROP TABLE atest1, atest2, t1, t2, t3, numrange_test, numrange_test2;
+
+set default_table_access_method to default;
