@@ -64,6 +64,11 @@ RUN sudo apt update && sudo apt install -y \
 
 RUN sudo locale-gen en_US.UTF-8
 
+RUN sudo apt update && sudo apt install -y \
+    pspg \
+    uncrustify \
+ && sudo apt clean
+
 # bin directory for user tools
 RUN mkdir .bin
 ENV PATH="/home/citus/.bin:${PATH}"
@@ -72,6 +77,7 @@ ENV PATH="/home/citus/.bin:${PATH}"
 RUN git clone https://github.com/citusdata/tools.git citus-tools
 RUN pip3 install -r citus-tools/citus_dev/requirements.txt
 RUN ln -s /home/citus/citus-tools/citus_dev/citus_dev .bin/
+RUN sudo make -C citus-tools/uncrustify install bindir=/usr/local/bin pkgsysconfdir=/usr/local/etc/
 
 # TODO add citus_indent
 
@@ -85,3 +91,8 @@ RUN sudo mkdir /data
 RUN sudo chown citus:citus /data
 
 COPY --chown=citus:citus .psqlrc .
+
+RUN sudo apt update && sudo apt install -y \
+    gdb \
+ && sudo apt clean
+ 

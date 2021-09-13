@@ -1,3 +1,8 @@
 {
     "build": { "dockerfile": "Dockerfile" },
+    "runArgs": [ "--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined" ],
+    "forwardPorts": [9700],
+    "extensions": [
+        "ms-vscode.cpptools",
+    ],
 }
