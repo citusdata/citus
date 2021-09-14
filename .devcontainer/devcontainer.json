@@ -4,5 +4,6 @@
     "forwardPorts": [9700],
     "extensions": [
         "ms-vscode.cpptools",
+        "ms-vsliveshare.vsliveshare",
     ],
 }
