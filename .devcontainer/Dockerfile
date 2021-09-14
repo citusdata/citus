@@ -1,4 +1,4 @@
-FROM ubuntu:21.10
+FROM ubuntu:21.10 AS base
 
 # environment is to make python pass an interactive shell, probably not the best timezone given a wide variety of colleagues
 ENV TZ=Europe/Amsterdam
@@ -53,18 +53,41 @@ ENV PATH="/home/citus/.pgenv/bin:${PATH}"
 ENV PATH="/home/citus/.pgenv/pgsql/bin:${PATH}"
 
 COPY --chown=citus:citus configure.flags .pgenv/
-COPY --chown=citus:citus *.tar.bz2 .pgenv/src/
+# COPY --chown=citus:citus *.tar.bz2 .pgenv/src/
 
 USER citus
 
-# TODO add more postgres versions
-RUN pgenv build 13.4
+# build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
+FROM base AS pg12
 RUN pgenv build 12.8
+RUN rm .pgenv/src/*.tar*
+# TODO remove excessive artifacts for smaller images
+RUN make -C .pgenv/src/postgresql-*/ clean
+
+FROM base AS pg13
+RUN pgenv build 13.4
+RUN rm .pgenv/src/*.tar*
+# TODO remove excessive artifacts for smaller images
+RUN make -C .pgenv/src/postgresql-*/ clean
+
+FROM base AS pg14
 RUN pgenv build 14beta3
+RUN rm .pgenv/src/*.tar*
+# TODO remove excessive artifacts for smaller images
+RUN make -C .pgenv/src/postgresql-*/ clean
 
-# sets default pg version
-RUN pgenv switch 13.4
+# assemble the final container by copying over the artifacts from separately build containers
+FROM base AS devcontainer
+COPY --from=pg12 /home/citus/.pgenv/src /home/citus/.pgenv/src
+COPY --from=pg12 /home/citus/.pgenv/pgsql-12.8 /home/citus/.pgenv/pgsql-12.8
 
+COPY --from=pg13 /home/citus/.pgenv/src /home/citus/.pgenv/src
+COPY --from=pg13 /home/citus/.pgenv/pgsql-13.4 /home/citus/.pgenv/pgsql-13.4
+
+COPY --from=pg14 /home/citus/.pgenv/src /home/citus/.pgenv/src
+COPY --from=pg14 /home/citus/.pgenv/pgsql-14beta3 /home/citus/.pgenv/pgsql-14beta3
+
+# add some common tools to the final container
 # bin directory for user tools
 RUN mkdir .bin
 ENV PATH="/home/citus/.bin:${PATH}"
@@ -85,3 +108,6 @@ RUN sudo mkdir /data
 RUN sudo chown citus:citus /data
 
 COPY --chown=citus:citus .psqlrc .
+
+# sets default pg version
+RUN pgenv switch 13.4
