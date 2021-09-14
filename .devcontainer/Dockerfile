@@ -33,6 +33,7 @@ RUN apt update && apt install -y \
     sudo \
     uncrustify \
     uuid-dev \
+    vim \
     zlib1g-dev \
  && apt clean
 
