@@ -37,8 +37,7 @@ RUN apt update && apt install -y \
     zlib1g-dev \
  && apt clean
 
- RUN locale-gen en_US.UTF-8
-# TODO remove caches with `apt clean` instead
+RUN locale-gen en_US.UTF-8
 
 # allow all sudoers to login without a password prompt
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
@@ -60,6 +59,8 @@ USER citus
 
 # TODO add more postgres versions
 RUN pgenv build 13.4
+RUN pgenv build 12.8
+RUN pgenv build 14beta3
 
 # sets default pg version
 RUN pgenv switch 13.4
