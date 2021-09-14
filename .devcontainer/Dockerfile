@@ -18,7 +18,7 @@ RUN apt update && apt install -y \
     libkrb5-dev \
     liblz4-dev \
     liblz4-dev \
-    libpam0g-dev \ 
+    libpam0g-dev \
     libreadline-dev \
     libreadline-dev \
     libselinux1-dev \
