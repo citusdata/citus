@@ -425,7 +425,7 @@ FixParentsForCitusLocalTablePartitions(Oid shellRelationId, Oid shardRelationId,
 		commands = lappend(commands, GenerateDetachPartitionCommand(shardRelationId));
 	}
 
-	Oid shellParentId = get_partition_parent(shardRelationId);
+	Oid shellParentId = PartitionParentOid(shardRelationId);
 	char *shellParentQualifiedName = generate_qualified_relation_name(shellParentId);
 	char *shellPartitionQualifiedName = generate_qualified_relation_name(shellRelationId);
 
@@ -2594,7 +2594,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										   "unsupported.")));
 				}
 				#endif
-				ErrorIfCitusLocalTablePartitionCommand(command, relationId);
 
 				break;
 			}
