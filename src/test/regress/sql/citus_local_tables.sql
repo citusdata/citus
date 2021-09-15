@@ -616,19 +616,30 @@ FROM
 WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name LIKE 'cas_1%'
 ORDER BY ccu.table_name;
 
-DROP TABLE cas_par;
 -- test creating distributed tables from partitioned citus local tables
-CREATE TABLE cas_par (a INT UNIQUE) PARTITION BY RANGE(a);
-CREATE TABLE cas_par_1 PARTITION OF cas_par FOR VALUES FROM (1) TO (4);
-CREATE TABLE cas_par_2 PARTITION OF cas_par FOR VALUES FROM (5) TO (8);
-SELECT citus_add_local_table_to_metadata('cas_par');
-SELECT create_distributed_table('cas_par','a');
+CREATE TABLE partitioned_distributed (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE partitioned_distributed_1 PARTITION OF partitioned_distributed FOR VALUES FROM (1) TO (4);
+CREATE TABLE partitioned_distributed_2 PARTITION OF partitioned_distributed FOR VALUES FROM (5) TO (8);
+SELECT citus_add_local_table_to_metadata('partitioned_distributed');
+SELECT create_distributed_table('partitioned_distributed','a');
+
+\c - - - :worker_1_port
+\d+ citus_local_tables_test_schema.partitioned_distributed_1504046
+\c - - - :master_port
+
+-- verify that mx nodes have the shell table 
+SET search_path TO citus_local_tables_test_schema;
+CREATE TABLE partitioned_mx (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE partitioned_mx_1 PARTITION OF partitioned_mx FOR VALUES FROM (1) TO (4);
+CREATE TABLE partitioned_mx_2 PARTITION OF partitioned_mx FOR VALUES FROM (5) TO (8);
+SELECT citus_add_local_table_to_metadata('partitioned_mx');
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_test_schema;
-\d+ cas_par_1504046
+\d+ partitioned_mx
 \c - - - :master_port
-
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 -- cleanup at exit
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;

@@ -952,37 +952,73 @@ ORDER BY ccu.table_name;
  citus_local_tables_test_schema | fkey_from_par_1_1504041 | cas_par_1_1504041 | citus_local_tables_test_schema | cas_1_1504039
 (2 rows)
 
-DROP TABLE cas_par;
 -- test creating distributed tables from partitioned citus local tables
-CREATE TABLE cas_par (a INT UNIQUE) PARTITION BY RANGE(a);
-CREATE TABLE cas_par_1 PARTITION OF cas_par FOR VALUES FROM (1) TO (4);
-CREATE TABLE cas_par_2 PARTITION OF cas_par FOR VALUES FROM (5) TO (8);
-SELECT citus_add_local_table_to_metadata('cas_par');
+CREATE TABLE partitioned_distributed (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE partitioned_distributed_1 PARTITION OF partitioned_distributed FOR VALUES FROM (1) TO (4);
+CREATE TABLE partitioned_distributed_2 PARTITION OF partitioned_distributed FOR VALUES FROM (5) TO (8);
+SELECT citus_add_local_table_to_metadata('partitioned_distributed');
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT create_distributed_table('cas_par','a');
+SELECT create_distributed_table('partitioned_distributed','a');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 \c - - - :worker_1_port
-SET search_path TO citus_local_tables_test_schema;
-\d+ cas_par_1504046
-            Table "citus_local_tables_test_schema.cas_par_1504046"
+\d+ citus_local_tables_test_schema.partitioned_distributed_1504046
+    Table "citus_local_tables_test_schema.partitioned_distributed_1504046"
  Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description
 ---------------------------------------------------------------------
  a      | integer |           |          |         | plain   |              |
 Partition key: RANGE (a)
 Indexes:
-    "cas_par_a_key_1504046" UNIQUE CONSTRAINT, btree (a)
-Partitions: cas_par_1_1504050 FOR VALUES FROM (1) TO (4),
-            cas_par_2_1504054 FOR VALUES FROM (5) TO (8)
+    "partitioned_distributed_a_key_1504046" UNIQUE CONSTRAINT, btree (a)
+Partitions: citus_local_tables_test_schema.partitioned_distributed_1_1504050 FOR VALUES FROM (1) TO (4),
+            citus_local_tables_test_schema.partitioned_distributed_2_1504054 FOR VALUES FROM (5) TO (8)
 
 \c - - - :master_port
+-- verify that mx nodes have the shell table
+SET search_path TO citus_local_tables_test_schema;
+CREATE TABLE partitioned_mx (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE partitioned_mx_1 PARTITION OF partitioned_mx FOR VALUES FROM (1) TO (4);
+CREATE TABLE partitioned_mx_2 PARTITION OF partitioned_mx FOR VALUES FROM (5) TO (8);
+SELECT citus_add_local_table_to_metadata('partitioned_mx');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO citus_local_tables_test_schema;
+\d+ partitioned_mx
+            Table "citus_local_tables_test_schema.partitioned_mx"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | integer |           |          |         | plain   |              |
+Partition key: RANGE (a)
+Indexes:
+    "partitioned_mx_a_key" UNIQUE CONSTRAINT, btree (a)
+Partitions: partitioned_mx_1 FOR VALUES FROM (1) TO (4),
+            partitioned_mx_2 FOR VALUES FROM (5) TO (8)
+
+\c - - - :master_port
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- cleanup at exit
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;
