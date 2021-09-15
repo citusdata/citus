@@ -297,7 +297,7 @@ CreatePartitioningTupleDest(CitusTableCacheEntry *targetRelation)
 
 
 /*
- * PartitioningTupleDestTupleDescForQuery implements TupleDestination->putTuple for
+ * PartitioningTupleDestPutTuple implements TupleDestination->putTuple for
  * PartitioningTupleDest.
  */
 static void

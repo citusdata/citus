@@ -693,7 +693,7 @@ CheckDistributionColumnType(Oid sourceRelationId, Oid targetRelationId)
 
 
 /*
- * GetColumnTypeEquality checks if distribution column types and collations
+ * EnsureColumnTypeEquality checks if distribution column types and collations
  * of the given columns are same. The function sets the boolean pointers.
  */
 void

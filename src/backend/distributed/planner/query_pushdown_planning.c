@@ -77,7 +77,7 @@ static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
 static DeferredErrorMessage * DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree);
-static bool ExtractSetOperationStatmentWalker(Node *node, List **setOperationList);
+static bool ExtractSetOperationStatementWalker(Node *node, List **setOperationList);
 static RecurringTuplesType FetchFirstRecurType(PlannerInfo *plannerInfo,
 											   Relids relids);
 static bool ContainsRecurringRTE(RangeTblEntry *rangeTableEntry,
@@ -1254,8 +1254,8 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
 	ListCell *setOperationStatmentCell = NULL;
 	RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
 
-	ExtractSetOperationStatmentWalker((Node *) subqueryTree->setOperations,
-									  &setOperationStatementList);
+	ExtractSetOperationStatementWalker((Node *) subqueryTree->setOperations,
+									   &setOperationStatementList);
 	foreach(setOperationStatmentCell, setOperationStatementList)
 	{
 		SetOperationStmt *setOperation =
@@ -1343,7 +1343,7 @@ DeferErrorIfUnsupportedUnionQuery(Query *subqueryTree)
  * and finds all set operations in the tree.
  */
 static bool
-ExtractSetOperationStatmentWalker(Node *node, List **setOperationList)
+ExtractSetOperationStatementWalker(Node *node, List **setOperationList)
 {
 	if (node == NULL)
 	{
@@ -1358,7 +1358,7 @@ ExtractSetOperationStatmentWalker(Node *node, List **setOperationList)
 	}
 
 	bool walkerResult = expression_tree_walker(node,
-											   ExtractSetOperationStatmentWalker,
+											   ExtractSetOperationStatementWalker,
 											   setOperationList);
 
 	return walkerResult;

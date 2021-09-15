@@ -2626,7 +2626,7 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 
 
 /*
- * PrcoessDistinctClauseForWorkerQuery gets the inputs and modifies the outputs
+ * ProcessDistinctClauseForWorkerQuery gets the inputs and modifies the outputs
  * such that worker query's DISTINCT and DISTINCT ON clauses are set accordingly.
  * Note the function may or may not decide to pushdown the DISTINCT and DISTINCT
  * on clauses based on the inputs.
@@ -2789,7 +2789,7 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
 
 
 /*
- * BuildLimitOrderByReference is a helper function that simply builds
+ * BuildOrderByLimitReference is a helper function that simply builds
  * the necessary information for processing the limit and order by.
  * The return value should be used in a read-only manner.
  */

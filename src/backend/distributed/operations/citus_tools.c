@@ -206,7 +206,7 @@ ParseCommandParameters(FunctionCallInfo fcinfo, StringInfo **nodeNameArray,
 
 
 /*
- * ExecuteCommandsInParellelAndStoreResults connects to each node specified in
+ * ExecuteCommandsInParallelAndStoreResults connects to each node specified in
  * nodeNameArray and nodePortArray, and executes command in commandStringArray
  * in parallel fashion. Execution success status and result is reported for
  * each command in statusArray and resultStringArray. Each array contains

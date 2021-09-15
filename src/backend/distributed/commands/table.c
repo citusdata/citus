@@ -1576,7 +1576,7 @@ IsAlterTableRenameStmt(RenameStmt *renameStmt)
 
 
 /*
- * ErrorIfDropPartitionColumn checks if any subcommands of the given alter table
+ * ErrorIfAlterDropsPartitionColumn checks if any subcommands of the given alter table
  * command is a DROP COLUMN command which drops the partition column of a distributed
  * table. If there is such a subcommand, this function errors out.
  */
@@ -2967,7 +2967,7 @@ AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
 
 
 /*
- * ErrorIfUnsopprtedAlterAddConstraintStmt runs the constraint checks on distributed
+ * ErrorIfUnsupportedAlterAddConstraintStmt runs the constraint checks on distributed
  * table using the same logic with create_distributed_table.
  */
 static void

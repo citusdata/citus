@@ -217,7 +217,7 @@ DropOrphanedShards(bool waitForLocks)
 
 
 /*
- * TryLockRelationAndCleanup tries to lock the given relation
+ * TryLockRelationAndPlacementCleanup tries to lock the given relation
  * and the placement cleanup. If it cannot, it returns false.
  *
  */

@@ -649,7 +649,7 @@ LockShardListMetadata(List *shardIntervalList, LOCKMODE lockMode)
 
 
 /*
- * LockPlacementListMetadata takes locks on the metadata of all shards in
+ * LockShardsInPlacementListMetadata takes locks on the metadata of all shards in
  * shardPlacementList to prevent concurrent placement changes.
  */
 void

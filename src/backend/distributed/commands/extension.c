@@ -540,10 +540,10 @@ PostprocessAlterExtensionCitusUpdateStmt(Node *node)
 
 
 /*
- * MarkAllExistingObjectsDistributed marks all objects that could be distributed by
- * resolving dependencies of "existing distributed tables" and "already distributed
- * objects" to introduce the objects created in older versions of Citus to distributed
- * object infrastructure as well.
+ * MarkExistingObjectDependenciesDistributedIfSupported marks all objects that could
+ * be distributed by resolving dependencies of "existing distributed tables" and
+ * "already distributed objects" to introduce the objects created in older versions
+ * of Citus to distributed object infrastructure as well.
  *
  * Note that this function is not responsible for ensuring if dependencies exist on
  * nodes and satisfying these dependendencies if not exists, which is already done by

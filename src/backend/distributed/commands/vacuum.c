@@ -198,7 +198,7 @@ ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
 
 
 /*
- * IsSupportedDistributedVacuumStmt returns whether distributed execution of a
+ * IsDistributedVacuumStmt returns whether distributed execution of a
  * given VacuumStmt is supported. The provided relationId list represents
  * the list of tables targeted by the provided statement.
  *

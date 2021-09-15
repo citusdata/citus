@@ -137,7 +137,7 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 
 
 /*
- * ErrorIfDistributedRenameStmt errors out if the corresponding rename statement
+ * ErrorIfUnsupportedRenameStmt errors out if the corresponding rename statement
  * operates on any part of a distributed table other than a column.
  *
  * Note: This function handles RenameStmt applied to relations handed by Citus.

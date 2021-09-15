@@ -174,8 +174,8 @@ AppendRoleOption(StringInfo buf, ListCell *optionCell)
 
 
 /*
- * AppendAlterRoleStmt generates the string representation of the
- * AlterRoleStmt and appends it to the buffer.
+ * AppendAlterRoleSetStmt generates the string representation of the
+ * AlterRoleSetStmt and appends it to the buffer.
  */
 static void
 AppendAlterRoleSetStmt(StringInfo buf, AlterRoleSetStmt *stmt)
