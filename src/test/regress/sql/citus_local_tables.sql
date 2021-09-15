@@ -627,7 +627,7 @@ SELECT create_distributed_table('partitioned_distributed','a');
 \d+ citus_local_tables_test_schema.partitioned_distributed_1504046
 \c - - - :master_port
 
--- verify that mx nodes have the shell table 
+-- verify that mx nodes have the shell table
 SET search_path TO citus_local_tables_test_schema;
 CREATE TABLE partitioned_mx (a INT UNIQUE) PARTITION BY RANGE(a);
 CREATE TABLE partitioned_mx_1 PARTITION OF partitioned_mx FOR VALUES FROM (1) TO (4);
