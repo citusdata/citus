@@ -1,3 +1,10 @@
+### citus 9.5.8 (September 15, 2021) ###
+
+* Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
+
+* Fixes a use after free issue that could happen when altering a distributed
+  table
+
 ### citus v10.2.0 (September 14, 2021) ###
 
 * Adds PostgreSQL 14 support
