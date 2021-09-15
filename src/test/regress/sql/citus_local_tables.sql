@@ -616,9 +616,19 @@ FROM
 WHERE tc.constraint_type = 'FOREIGN KEY' AND ccu.table_name LIKE 'cas_1%'
 ORDER BY ccu.table_name;
 
--- drop successfully
 DROP TABLE cas_par;
-DROP TABLE cas_1;
+-- test creating distributed tables from partitioned citus local tables
+CREATE TABLE cas_par (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE cas_par_1 PARTITION OF cas_par FOR VALUES FROM (1) TO (4);
+CREATE TABLE cas_par_2 PARTITION OF cas_par FOR VALUES FROM (5) TO (8);
+SELECT citus_add_local_table_to_metadata('cas_par');
+SELECT create_distributed_table('cas_par','a');
+
+\c - - - :worker_1_port
+SET search_path TO citus_local_tables_test_schema;
+\d+ cas_par_1504046
+\c - - - :master_port
 
 -- cleanup at exit
+SET client_min_messages TO ERROR;
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;

@@ -952,8 +952,37 @@ ORDER BY ccu.table_name;
  citus_local_tables_test_schema | fkey_from_par_1_1504041 | cas_par_1_1504041 | citus_local_tables_test_schema | cas_1_1504039
 (2 rows)
 
--- drop successfully
 DROP TABLE cas_par;
-DROP TABLE cas_1;
+-- test creating distributed tables from partitioned citus local tables
+CREATE TABLE cas_par (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE cas_par_1 PARTITION OF cas_par FOR VALUES FROM (1) TO (4);
+CREATE TABLE cas_par_2 PARTITION OF cas_par FOR VALUES FROM (5) TO (8);
+SELECT citus_add_local_table_to_metadata('cas_par');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('cas_par','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO citus_local_tables_test_schema;
+\d+ cas_par_1504046
+            Table "citus_local_tables_test_schema.cas_par_1504046"
+ Column |  Type   | Collation | Nullable | Default | Storage | Stats target | Description
+---------------------------------------------------------------------
+ a      | integer |           |          |         | plain   |              |
+Partition key: RANGE (a)
+Indexes:
+    "cas_par_a_key_1504046" UNIQUE CONSTRAINT, btree (a)
+Partitions: cas_par_1_1504050 FOR VALUES FROM (1) TO (4),
+            cas_par_2_1504054 FOR VALUES FROM (5) TO (8)
+
+\c - - - :master_port
 -- cleanup at exit
+SET client_min_messages TO ERROR;
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;
