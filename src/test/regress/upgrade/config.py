@@ -11,7 +11,7 @@ MIXED_AFTER_CITUS_UPGRADE_SCHEDULE = './mixed_after_citus_upgrade_schedule'
 
 MASTER = 'master'
 # This should be updated when citus version changes
-MASTER_VERSION = '10.2'
+MASTER_VERSION = '10.3'
 
 HOME = expanduser("~")
 
