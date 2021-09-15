@@ -1,3 +1,10 @@
+### citus 9.5.8 (September 15, 2021) ###
+
+* Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
+
+* Fixes a use after free issue that could happen when altering a distributed
+  table
+
 ### citus v9.5.7 (August 16, 2021) ###
 
 * Allows more graceful failovers when replication factor > 1
