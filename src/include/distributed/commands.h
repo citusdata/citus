@@ -502,7 +502,8 @@ extern Oid GetTriggerFunctionId(Oid triggerId);
 /* cascade_table_operation_for_connected_relations.c */
 
 /*
- * Flags that can be passed to CascadeOperationForConnectedRelations to specify
+ * Flags that can be passed to CascadeOperationForFkeyConnectedRelations, and
+ * CascadeOperationForRelationIdList to specify
  * citus table function to be executed in cascading mode.
  */
 typedef enum CascadeOperationType
@@ -513,14 +514,18 @@ typedef enum CascadeOperationType
 	CASCADE_FKEY_UNDISTRIBUTE_TABLE = 1 << 1,
 
 	/* execute CreateCitusLocalTable on each relation */
-	CASCADE_FKEY_ADD_LOCAL_TABLE_TO_METADATA = 1 << 2,
+	CASCADE_ADD_LOCAL_TABLE_TO_METADATA = 1 << 2,
 } CascadeOperationType;
 
-extern void CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE relLockMode,
-												  CascadeOperationType
-												  cascadeOperationType);
+extern void CascadeOperationForFkeyConnectedRelations(Oid relationId,
+													  LOCKMODE relLockMode,
+													  CascadeOperationType
+													  cascadeOperationType);
+extern void CascadeOperationForRelationIdList(List *relationIdList, LOCKMODE lockMode,
+											  CascadeOperationType cascadeOperationType);
 extern void ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList);
 extern bool RelationIdListHasReferenceTable(List *relationIdList);
+extern List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
 extern void DropRelationForeignKeys(Oid relationId, int flags);
 extern void SetLocalEnableLocalReferenceForeignKeys(bool state);
 extern void ExecuteAndLogUtilityCommandList(List *ddlCommandList);
@@ -538,5 +543,7 @@ extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *set
 /* create_citus_local_table.c */
 
 extern void CreateCitusLocalTable(Oid relationId, bool cascade);
+extern void CreateCitusLocalTablePartitionOf(CreateStmt *createStatement,
+											 Oid relationId, Oid parentRelationId);
 
 #endif /*CITUS_COMMANDS_H */

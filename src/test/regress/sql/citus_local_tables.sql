@@ -93,42 +93,6 @@ SELECT create_distributed_table('distributed_table', 'a');
 -- cannot create citus local table from an existing citus table
 SELECT citus_add_local_table_to_metadata('distributed_table');
 
--- partitioned table tests --
-
-CREATE TABLE partitioned_table(a int, b int) PARTITION BY RANGE (a);
-CREATE TABLE partitioned_table_1 PARTITION OF partitioned_table FOR VALUES FROM (0) TO (10);
-CREATE TABLE partitioned_table_2 PARTITION OF partitioned_table FOR VALUES FROM (10) TO (20);
-
--- cannot create partitioned citus local tables
-SELECT citus_add_local_table_to_metadata('partitioned_table');
-
-BEGIN;
-  CREATE TABLE citus_local_table PARTITION OF partitioned_table FOR VALUES FROM (20) TO (30);
-
-  -- cannot create citus local table as a partition of a local table
-  SELECT citus_add_local_table_to_metadata('citus_local_table');
-ROLLBACK;
-
-BEGIN;
-  CREATE TABLE citus_local_table (a int, b int);
-
-  SELECT citus_add_local_table_to_metadata('citus_local_table');
-
-  -- cannot create citus local table as a partition of a local table
-  -- via ALTER TABLE commands as well
-  ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
-ROLLBACK;
-
-BEGIN;
-  SELECT create_distributed_table('partitioned_table', 'a');
-
-  CREATE TABLE citus_local_table (a int, b int);
-  SELECT citus_add_local_table_to_metadata('citus_local_table');
-
-  -- cannot attach citus local table to a partitioned distributed table
-  ALTER TABLE partitioned_table ATTACH PARTITION citus_local_table FOR VALUES FROM (20) TO (30);
-ROLLBACK;
-
 -- show that we do not support inheritance relationships --
 
 CREATE TABLE parent_table (a int, b text);
@@ -539,5 +503,95 @@ TRUNCATE referenced_table CASCADE;
 RESET client_min_messages;
 \set VERBOSITY terse
 
+-- test for partitioned tables
+SET client_min_messages TO ERROR;
+-- verify we can convert partitioned tables into Citus Local Tables
+CREATE TABLE partitioned (user_id int, time timestamp with time zone, data jsonb, PRIMARY KEY (user_id, time )) PARTITION BY RANGE ("time");
+CREATE TABLE partition1 PARTITION OF partitioned FOR VALUES FROM ('2018-04-13 00:00:00+00') TO ('2018-04-14 00:00:00+00');
+CREATE TABLE partition2 PARTITION OF partitioned FOR VALUES FROM ('2018-04-14 00:00:00+00') TO ('2018-04-15 00:00:00+00');
+SELECT citus_add_local_table_to_metadata('partitioned');
+-- partitions added after the conversion get converted into CLT as well
+CREATE TABLE partition3 PARTITION OF partitioned FOR VALUES FROM ('2018-04-15 00:00:00+00') TO ('2018-04-16 00:00:00+00');
+--verify partitioning hierarchy is preserved after conversion
+select inhrelid::regclass from pg_inherits where inhparent='partitioned'::regclass order by 1;
+SELECT partition, from_value, to_value, access_method
+  FROM time_partitions
+  WHERE partition::text LIKE '%partition%'
+  ORDER BY partition::text;
+-- undistribute succesfully
+SELECT undistribute_table('partitioned');
+-- verify the partitioning hierarchy is preserved after undistributing
+select inhrelid::regclass from pg_inherits where inhparent='partitioned'::regclass order by 1;
+
+-- verify table is undistributed
+SELECT relname FROM pg_class WHERE relname LIKE 'partition3%' AND relnamespace IN
+    (SELECT oid FROM pg_namespace WHERE nspname = 'citus_local_tables_test_schema')
+    ORDER BY relname;
+
+-- drop successfully
+DROP TABLE partitioned;
+
+-- test creating distributed tables from partitioned citus local tables
+CREATE TABLE partitioned_distributed (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE partitioned_distributed_1 PARTITION OF partitioned_distributed FOR VALUES FROM (1) TO (4);
+CREATE TABLE partitioned_distributed_2 PARTITION OF partitioned_distributed FOR VALUES FROM (5) TO (8);
+SELECT citus_add_local_table_to_metadata('partitioned_distributed');
+SELECT create_distributed_table('partitioned_distributed','a');
+
+\c - - - :worker_1_port
+SELECT relname FROM pg_class
+  WHERE relname LIKE 'partitioned_distributed%'
+    AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'citus_local_tables_test_schema')
+  ORDER BY relname;
+\c - - - :master_port
+SET search_path TO citus_local_tables_test_schema;
+
+-- error out if converting multi-level partitioned table
+CREATE TABLE multi_par (id text, country text) PARTITION BY RANGE (id);
+ALTER TABLE multi_par ADD CONSTRAINT unique_constraint UNIQUE (id, country);
+CREATE TABLE multi_par_a_to_i PARTITION OF multi_par FOR VALUES FROM ('a') TO ('j');
+-- multi-level partitioning
+CREATE TABLE multi_par_j_to_r PARTITION OF multi_par FOR VALUES FROM ('j') TO ('s') PARTITION BY LIST  (country);
+CREATE TABLE multi_par_j_to_r_japan PARTITION OF multi_par_j_to_r FOR VALUES IN ('japan');
+-- these two should error out
+SELECT citus_add_local_table_to_metadata('multi_par');
+SELECT citus_add_local_table_to_metadata('multi_par',cascade_via_foreign_keys=>true);
+
+-- should error out when cascading via fkeys as well
+CREATE TABLE cas_1 (a text, b text);
+ALTER TABLE cas_1 ADD CONSTRAINT unique_constraint_2 UNIQUE (a, b);
+ALTER TABLE cas_1 ADD CONSTRAINT fkey_to_multi_parti FOREIGN KEY (a,b) REFERENCES multi_par(id, country);
+SELECT citus_add_local_table_to_metadata('cas_1');
+SELECT citus_add_local_table_to_metadata('cas_1', cascade_via_foreign_keys=>true);
+SELECT create_reference_table('cas_1');
+ALTER TABLE cas_1 DROP CONSTRAINT fkey_to_multi_parti;
+SELECT create_reference_table('cas_1');
+ALTER TABLE cas_1 ADD CONSTRAINT fkey_to_multi_parti FOREIGN KEY (a,b) REFERENCES multi_par(id, country);
+
+-- undistribute tables to avoid unnecessary log messages later
+select undistribute_table('citus_local_table_4', cascade_via_foreign_keys=>true);
+select undistribute_table('referencing_table', cascade_via_foreign_keys=>true);
+
+-- test dropping fkey
+CREATE TABLE parent_2_child_1 (a int);
+CREATE TABLE parent_1_child_1 (a int);
+CREATE TABLE parent_2 (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE parent_1 (a INT UNIQUE) PARTITION BY RANGE(a);
+alter table parent_1 attach partition parent_1_child_1 default ;
+alter table parent_2 attach partition parent_2_child_1 default ;
+CREATE TABLE ref_table(a int unique);
+alter table parent_1 add constraint fkey_test_drop foreign key(a) references ref_table(a);
+alter table parent_2 add constraint fkey1 foreign key(a) references ref_table(a);
+alter table parent_1 add constraint fkey2 foreign key(a) references parent_2(a);
+SELECT create_reference_table('ref_table');
+alter table parent_1 drop constraint fkey_test_drop;
+select count(*) from pg_constraint where conname = 'fkey_test_drop';
+-- verify we still preserve the child-parent hierarchy after all conversions
+-- check the shard partition
+select inhrelid::regclass from pg_inherits where (select inhparent::regclass::text) ~ '^parent_1_\d{7}$' order by 1;
+-- check the shell partition
+select inhrelid::regclass from pg_inherits where inhparent='parent_1'::regclass order by 1;
+
 -- cleanup at exit
+SET client_min_messages TO ERROR;
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;

@@ -1289,14 +1289,6 @@ ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_4 FOREIGN KEY (col_1) REFERE
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_5 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_2);
 SELECT undistribute_table('partitioned_table_1', cascade_via_foreign_keys=>true);
 NOTICE:  converting the partitions of single_node.partitioned_table_1
-NOTICE:  creating a new table for single_node.partitioned_table_1_100_200
-NOTICE:  moving the data of single_node.partitioned_table_1_100_200
-NOTICE:  dropping the old single_node.partitioned_table_1_100_200
-NOTICE:  renaming the new table to single_node.partitioned_table_1_100_200
-NOTICE:  creating a new table for single_node.partitioned_table_1_200_300
-NOTICE:  moving the data of single_node.partitioned_table_1_200_300
-NOTICE:  dropping the old single_node.partitioned_table_1_200_300
-NOTICE:  renaming the new table to single_node.partitioned_table_1_200_300
 NOTICE:  creating a new table for single_node.partitioned_table_1
 NOTICE:  dropping the old single_node.partitioned_table_1
 NOTICE:  renaming the new table to single_node.partitioned_table_1
@@ -1312,6 +1304,14 @@ NOTICE:  creating a new table for single_node.citus_local_table_1
 NOTICE:  moving the data of single_node.citus_local_table_1
 NOTICE:  dropping the old single_node.citus_local_table_1
 NOTICE:  renaming the new table to single_node.citus_local_table_1
+NOTICE:  creating a new table for single_node.partitioned_table_1_100_200
+NOTICE:  moving the data of single_node.partitioned_table_1_100_200
+NOTICE:  dropping the old single_node.partitioned_table_1_100_200
+NOTICE:  renaming the new table to single_node.partitioned_table_1_100_200
+NOTICE:  creating a new table for single_node.partitioned_table_1_200_300
+NOTICE:  moving the data of single_node.partitioned_table_1_200_300
+NOTICE:  dropping the old single_node.partitioned_table_1_200_300
+NOTICE:  renaming the new table to single_node.partitioned_table_1_200_300
  undistribute_table
 ---------------------------------------------------------------------
 

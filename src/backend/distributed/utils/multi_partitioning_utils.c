@@ -1007,6 +1007,26 @@ GenerateDetachPartitionCommand(Oid partitionTableId)
 
 
 /*
+ * GenerateDetachPartitionCommandRelationIdList returns the necessary command list to
+ * detach the given partitions from their parents.
+ */
+List *
+GenerateDetachPartitionCommandRelationIdList(List *relationIds)
+{
+	List *detachPartitionCommands = NIL;
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIds)
+	{
+		Assert(PartitionTable(relationId));
+		char *detachCommand = GenerateDetachPartitionCommand(relationId);
+		detachPartitionCommands = lappend(detachPartitionCommands, detachCommand);
+	}
+
+	return detachPartitionCommands;
+}
+
+
+/*
  * GenereatePartitioningInformation returns the partitioning type and partition column
  * for the given parent table in the form of "PARTITION TYPE (partitioning column(s)/expression(s))".
  */
@@ -1099,6 +1119,25 @@ GenerateAlterTableAttachPartitionCommand(Oid partitionTableId)
 					 partitionBoundCString);
 
 	return createPartitionCommand->data;
+}
+
+
+/*
+ * GenerateAttachPartitionCommandRelationIdList returns the necessary command list to
+ * attach the given partitions to their parents.
+ */
+List *
+GenerateAttachPartitionCommandRelationIdList(List *relationIds)
+{
+	List *attachPartitionCommands = NIL;
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIds)
+	{
+		char *attachCommand = GenerateAlterTableAttachPartitionCommand(relationId);
+		attachPartitionCommands = lappend(attachPartitionCommands, attachCommand);
+	}
+
+	return attachPartitionCommands;
 }
 
 

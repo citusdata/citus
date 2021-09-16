@@ -44,13 +44,14 @@
 #include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h" /* IWYU pragma: keep */
+#include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/maintenanced.h"
-#include "distributed/coordinator_protocol.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
@@ -712,6 +713,12 @@ UndistributeDisconnectedCitusLocalTables(void)
 			continue;
 		}
 		ReleaseSysCache(heapTuple);
+
+		if (PartitionTable(citusLocalTableId))
+		{
+			/* we skip here, we'll undistribute from the parent if necessary */
+			continue;
+		}
 
 		if (ConnectedToReferenceTableViaFKey(citusLocalTableId))
 		{

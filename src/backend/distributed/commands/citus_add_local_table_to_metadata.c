@@ -30,6 +30,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/sequence.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
 #include "distributed/metadata_sync.h"
@@ -47,6 +48,7 @@
 
 static void citus_add_local_table_to_metadata_internal(Oid relationId,
 													   bool cascadeViaForeignKeys);
+static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
@@ -223,6 +225,8 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 
 	ErrorIfUnsupportedCreateCitusLocalTable(relation);
 
+	ErrorIfAddingPartitionTableToMetadata(relationId);
+
 	/*
 	 * We immediately close relation with NoLock right after opening it. This is
 	 * because, in this function, we may execute ALTER TABLE commands modifying
@@ -232,15 +236,35 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	 */
 	relation_close(relation, NoLock);
 
-	bool tableHasExternalForeignKeys = TableHasExternalForeignKeys(relationId);
-	if (tableHasExternalForeignKeys && cascadeViaForeignKeys)
+	if (TableHasExternalForeignKeys(relationId))
 	{
+		if (!cascadeViaForeignKeys)
+		{
+			/*
+			 * We do not allow creating citus local table if the table is involved in a
+			 * foreign key relationship with "any other table", unless the option
+			 * cascadeViaForeignKeys is given true.
+			 * Note that we allow self references.
+			 */
+			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("relation %s is involved in a foreign key "
+								   "relationship with another table",
+								   qualifiedRelationName),
+							errhint("Use cascade_via_foreign_keys option to add "
+									"all the relations involved in a foreign key "
+									"relationship with %s to citus metadata by "
+									"executing SELECT citus_add_local_table_to_metadata($$%s$$, "
+									"cascade_via_foreign_keys=>true)",
+									qualifiedRelationName, qualifiedRelationName)));
+		}
+
 		/*
 		 * By acquiring AccessExclusiveLock, make sure that no modifications happen
 		 * on the relations.
 		 */
-		CascadeOperationForConnectedRelations(relationId, lockMode,
-											  CASCADE_FKEY_ADD_LOCAL_TABLE_TO_METADATA);
+		CascadeOperationForFkeyConnectedRelations(relationId, lockMode,
+												  CASCADE_ADD_LOCAL_TABLE_TO_METADATA);
 
 		/*
 		 * We converted every foreign key connected table in our subgraph
@@ -248,23 +272,18 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		 */
 		return;
 	}
-	else if (tableHasExternalForeignKeys)
+
+	if (PartitionedTable(relationId))
 	{
-		/*
-		 * We do not allow creating citus local table if the table is involved in a
-		 * foreign key relationship with "any other table". Note that we allow self
-		 * references.
-		 */
-		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("relation %s is involved in a foreign key "
-							   "relationship with another table", qualifiedRelationName),
-						errhint("Use cascade_via_foreign_keys option to add "
-								"all the relations involved in a foreign key "
-								"relationship with %s to citus metadata by "
-								"executing SELECT citus_add_local_table_to_metadata($$%s$$, "
-								"cascade_via_foreign_keys=>true)",
-								qualifiedRelationName, qualifiedRelationName)));
+		List *relationList = PartitionList(relationId);
+		if (list_length(relationList) > 0)
+		{
+			relationList = lappend_oid(relationList, relationId);
+
+			CascadeOperationForRelationIdList(relationList, AccessExclusiveLock,
+											  CASCADE_ADD_LOCAL_TABLE_TO_METADATA);
+			return;
+		}
 	}
 
 	ObjectAddress tableAddress = { 0 };
@@ -334,6 +353,88 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 
 
 /*
+ * CreateCitusLocalTablePartitionOf generates and executes the necessary commands
+ * to create a table as partition of a partitioned Citus Local Table.
+ * The conversion is done by CreateCitusLocalTable.
+ */
+void
+CreateCitusLocalTablePartitionOf(CreateStmt *createStatement, Oid relationId,
+								 Oid parentRelationId)
+{
+	if (createStatement->partspec)
+	{
+		/*
+		 * Since partspec represents "PARTITION BY" clause, being different than
+		 * NULL means that given CreateStmt attempts to create a parent table
+		 * at the same time. That means multi-level partitioning within this
+		 * function's context. We don't support this currently.
+		 */
+		char *parentRelationName = get_rel_name(parentRelationId);
+		char *relationName = get_rel_name(relationId);
+
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("distributing multi-level partitioned tables "
+							   "is not supported"),
+						errdetail("Relation \"%s\" is partitioned table itself "
+								  "and it is also partition of relation \"%s\".",
+								  relationName, parentRelationName)));
+	}
+
+	/*
+	 * Since the shell table for the partition is not created yet on MX workers,
+	 * we should disable DDL propagation before the DETACH command, to avoid
+	 * getting an error on the worker.
+	 */
+	List *detachCommands = list_make3(DISABLE_DDL_PROPAGATION,
+									  GenerateDetachPartitionCommand(relationId),
+									  ENABLE_DDL_PROPAGATION);
+	char *attachCommand = GenerateAlterTableAttachPartitionCommand(relationId);
+	ExecuteAndLogUtilityCommandList(detachCommands);
+	int fKeyFlags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
+
+	/*
+	 * When cascadeViaForeignKeys is false, CreateCitusLocalTable doesn't expect
+	 * any foreign keys on given relation. Note that we don't want to pass
+	 * cascadeViaForeignKeys to be true here since we don't already allow non-inherited
+	 * foreign keys on child relations, and for the inherited ones, we should have already
+	 * cascaded to the other relations when creating a citus local table from parent.
+	 *
+	 * For this reason, we drop inherited foreign keys here, they'll anyway get created
+	 * again with the attach command
+	 */
+	DropRelationForeignKeys(relationId, fKeyFlags);
+	CreateCitusLocalTable(relationId, false);
+	ExecuteAndLogUtilityCommand(attachCommand);
+}
+
+
+/*
+ * ErrorIfAddingPartitionTableToMetadata errors out if we try to create the
+ * citus local table from a partition table.
+ */
+static void
+ErrorIfAddingPartitionTableToMetadata(Oid relationId)
+{
+	if (PartitionTable(relationId))
+	{
+		/*
+		 * We do not allow converting only partitions into Citus Local Tables.
+		 * Users should call the UDF citus_add_local_table_to_metadata with the
+		 * parent table; then the whole partitioned table will be converted.
+		 */
+		char *relationName = get_rel_name(relationId);
+		Oid parentRelationId = PartitionParentOid(relationId);
+		char *parentRelationName = get_rel_name(parentRelationId);
+		ereport(ERROR, (errmsg("cannot add local table %s to metadata since "
+							   "it is a partition of %s. Instead, add the parent "
+							   "table %s to metadata.",
+							   relationName, parentRelationName,
+							   parentRelationName)));
+	}
+}
+
+
+/*
  * ErrorIfUnsupportedCreateCitusLocalTable errors out if we cannot create the
  * citus local table from the relation.
  */
@@ -387,20 +488,14 @@ ErrorIfUnsupportedCitusLocalTableKind(Oid relationId)
 							   "relationships", relationName)));
 	}
 
-	if (PartitionTable(relationId))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot add local table \"%s\" to metadata, local tables "
-							   "added to metadata cannot be partition of other tables ",
-							   relationName)));
-	}
-
 	char relationKind = get_rel_relkind(relationId);
-	if (!(relationKind == RELKIND_RELATION || relationKind == RELKIND_FOREIGN_TABLE))
+	if (!(relationKind == RELKIND_RELATION || relationKind == RELKIND_FOREIGN_TABLE ||
+		  relationKind == RELKIND_PARTITIONED_TABLE))
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						errmsg("cannot add local table \"%s\" to metadata, only regular "
-							   "tables and foreign tables can be added to citus metadata ",
+							   "tables, partitioned tables and foreign tables"
+							   " can be added to citus metadata ",
 							   relationName)));
 	}
 
@@ -948,7 +1043,13 @@ DropDefaultColumnDefinition(Oid relationId, char *columnName)
 					 "ALTER TABLE %s ALTER COLUMN %s DROP DEFAULT",
 					 qualifiedRelationName, quotedColumnName);
 
-	ExecuteAndLogUtilityCommand(sequenceDropCommand->data);
+	/*
+	 * We need to disable/enable ddl propagation for this command, to prevent
+	 * sending unnecessary ALTER COLUMN commands for partitions, to MX workers.
+	 */
+	ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
+											   sequenceDropCommand->data,
+											   ENABLE_DDL_PROPAGATION));
 }
 
 
@@ -971,7 +1072,15 @@ TransferSequenceOwnership(Oid sequenceId, Oid targetRelationId, char *targetColu
 					 qualifiedSequenceName, qualifiedTargetRelationName,
 					 quotedTargetColumnName);
 
-	ExecuteAndLogUtilityCommand(sequenceOwnershipCommand->data);
+	/*
+	 * We need to disable/enable ddl propagation for this command, to prevent
+	 * sending unnecessary ALTER SEQUENCE commands for partitions, to MX workers.
+	 * Especially for partitioned tables, where the same sequence is used for
+	 * all partitions, this might cause errors.
+	 */
+	ExecuteAndLogUtilityCommandList(list_make3(DISABLE_DDL_PROPAGATION,
+											   sequenceOwnershipCommand->data,
+											   ENABLE_DDL_PROPAGATION));
 }
 
 

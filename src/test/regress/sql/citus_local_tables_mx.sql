@@ -168,6 +168,180 @@ SELECT stxname FROM pg_statistic_ext ORDER BY stxname;
 \c - - - :master_port
 SET search_path TO citus_local_tables_mx;
 
+-- undistribute old tables to prevent unnecessary undistribute logs later
+SELECT undistribute_table('citus_local_table', cascade_via_foreign_keys=>true);
+SELECT undistribute_table('citus_local_table_3', cascade_via_foreign_keys=>true);
+SELECT undistribute_table('citus_local_table_stats', cascade_via_foreign_keys=>true);
+
+-- verify that mx nodes have the shell table for partitioned citus local tables
+CREATE TABLE local_table_fkey(a INT UNIQUE);
+CREATE TABLE local_table_fkey2(a INT UNIQUE);
+CREATE TABLE partitioned_mx (a INT UNIQUE) PARTITION BY RANGE(a);
+ALTER TABLE partitioned_mx ADD CONSTRAINT fkey_to_local FOREIGN KEY (a) REFERENCES local_table_fkey(a);
+
+CREATE TABLE IF NOT EXISTS partitioned_mx_1 PARTITION OF partitioned_mx FOR VALUES FROM (1) TO (4);
+CREATE TABLE partitioned_mx_2 (a INT UNIQUE);
+ALTER TABLE partitioned_mx ATTACH PARTITION partitioned_mx_2 FOR VALUES FROM (5) TO (8);
+SELECT create_reference_table('local_table_fkey');
+CREATE TABLE partitioned_mx_3 (a INT UNIQUE);
+ALTER TABLE partitioned_mx ATTACH PARTITION partitioned_mx_3 FOR VALUES FROM (9) TO (12);
+-- these should error out since multi-level partitioned citus local tables are not supported
+CREATE TABLE IF NOT EXISTS partitioned_mx_4 PARTITION OF partitioned_mx FOR VALUES FROM (13) TO (16) PARTITION BY RANGE (a);
+BEGIN;
+    CREATE TABLE partitioned_mx_4(a INT UNIQUE) PARTITION BY RANGE (a);
+    alter table partitioned_mx attach partition partitioned_mx_4 FOR VALUES FROM (13) TO (16);
+END;
+CREATE TABLE multi_level_p (a INT UNIQUE) PARTITION BY RANGE (a);
+CREATE TABLE IF NOT EXISTS multi_level_c PARTITION OF multi_level_p FOR VALUES FROM (13) TO (16) PARTITION BY RANGE (a);
+select citus_add_local_table_to_metadata('multi_level_p'); --errors
+select citus_add_local_table_to_metadata('multi_level_p', true); --errors
+-- try attaching a partition with an external foreign key
+CREATE TABLE partitioned_mx_4 (a INT UNIQUE);
+ALTER TABLE partitioned_mx_4 ADD CONSTRAINT fkey_not_inherited FOREIGN KEY (a) REFERENCES local_table_fkey2(a);
+-- these two should error out
+ALTER TABLE partitioned_mx ATTACH PARTITION partitioned_mx_4 FOR VALUES FROM (13) TO (16);
+ALTER TABLE partitioned_mx ATTACH PARTITION partitioned_mx_4 default;
+
+SELECT
+    nmsp_parent.nspname AS parent_schema,
+    parent.relname      AS parent,
+    nmsp_child.nspname  AS child_schema,
+    child.relname       AS child
+FROM pg_inherits
+    JOIN pg_class parent            ON pg_inherits.inhparent = parent.oid
+    JOIN pg_class child             ON pg_inherits.inhrelid   = child.oid
+    JOIN pg_namespace nmsp_parent   ON nmsp_parent.oid  = parent.relnamespace
+    JOIN pg_namespace nmsp_child    ON nmsp_child.oid   = child.relnamespace
+WHERE parent.relname='partitioned_mx'
+ORDER BY child;
+
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'partitioned_mx%' ORDER BY relname;
+SELECT
+    nmsp_parent.nspname AS parent_schema,
+    parent.relname      AS parent,
+    nmsp_child.nspname  AS child_schema,
+    child.relname       AS child
+FROM pg_inherits
+    JOIN pg_class parent            ON pg_inherits.inhparent = parent.oid
+    JOIN pg_class child             ON pg_inherits.inhrelid   = child.oid
+    JOIN pg_namespace nmsp_parent   ON nmsp_parent.oid  = parent.relnamespace
+    JOIN pg_namespace nmsp_child    ON nmsp_child.oid   = child.relnamespace
+WHERE parent.relname='partitioned_mx'
+ORDER BY child;
+
+\c - - - :master_port
+SET search_path TO citus_local_tables_mx;
+SET client_min_messages TO ERROR;
+DROP TABLE partitioned_mx;
+RESET client_min_messages;
+-- test cascading via foreign keys
+CREATE TABLE cas_1 (a INT UNIQUE);
+CREATE TABLE cas_par (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE cas_par_1 PARTITION OF cas_par FOR VALUES FROM (1) TO (4);
+CREATE TABLE cas_par_2 PARTITION OF cas_par FOR VALUES FROM (5) TO (8);
+ALTER TABLE cas_par_1 ADD CONSTRAINT fkey_cas_test_1 FOREIGN KEY (a) REFERENCES cas_1(a);
+CREATE TABLE cas_par2 (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE cas_par2_1 PARTITION OF cas_par2 FOR VALUES FROM (1) TO (4);
+CREATE TABLE cas_par2_2 PARTITION OF cas_par2 FOR VALUES FROM (5) TO (8);
+ALTER TABLE cas_par2_1 ADD CONSTRAINT fkey_cas_test_2 FOREIGN KEY (a) REFERENCES cas_1(a);
+CREATE TABLE cas_par3 (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE cas_par3_1 PARTITION OF cas_par3 FOR VALUES FROM (1) TO (4);
+CREATE TABLE cas_par3_2 PARTITION OF cas_par3 FOR VALUES FROM (5) TO (8);
+-- these two should error out as we should call the conversion from the parent
+SELECT citus_add_local_table_to_metadata('cas_par2_2');
+SELECT citus_add_local_table_to_metadata('cas_par2_2', cascade_via_foreign_keys=>true);
+-- these two should error out as the foreign keys are not inherited from the parent
+SELECT citus_add_local_table_to_metadata('cas_par2');
+SELECT citus_add_local_table_to_metadata('cas_par2', cascade_via_foreign_keys=>true);
+-- drop the foreign keys and establish them again using the parent table
+ALTER TABLE cas_par_1 DROP CONSTRAINT fkey_cas_test_1;
+ALTER TABLE cas_par2_1 DROP CONSTRAINT fkey_cas_test_2;
+ALTER TABLE cas_par ADD CONSTRAINT fkey_cas_test_1 FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par2 ADD CONSTRAINT fkey_cas_test_2 FOREIGN KEY (a) REFERENCES cas_1(a);
+ALTER TABLE cas_par3 ADD CONSTRAINT fkey_cas_test_3 FOREIGN KEY (a) REFERENCES cas_par(a);
+-- this should error out as cascade_via_foreign_keys is not set to true
+SELECT citus_add_local_table_to_metadata('cas_par2');
+-- this should work
+SELECT citus_add_local_table_to_metadata('cas_par2', cascade_via_foreign_keys=>true);
+-- verify the partitioning hierarchy is preserved
+select inhrelid::regclass from pg_inherits where inhparent='cas_par'::regclass order by 1;
+-- verify the fkeys + fkeys with shard ids are created
+select conname from pg_constraint where conname like 'fkey_cas_test%' order by conname;
+-- when all partitions are converted, there should be 40 tables and indexes
+-- the individual names are not much relevant, so we only print the count
+SELECT count(*) FROM pg_class WHERE relname LIKE 'cas\_%' AND relnamespace IN
+    (SELECT oid FROM pg_namespace WHERE nspname = 'citus_local_tables_mx');
+-- verify on the mx worker
+\c - - - :worker_1_port
+-- on worker, there should be 20, since the shards are created only on the coordinator
+SELECT count(*) FROM pg_class WHERE relname LIKE 'cas\_%' AND relnamespace IN
+    (SELECT oid FROM pg_namespace WHERE nspname = 'citus_local_tables_mx');
+-- verify that the shell foreign keys are created on the worker as well
+select conname from pg_constraint where conname like 'fkey_cas_test%' order by conname;
+\c - - - :master_port
+SET search_path TO citus_local_tables_mx;
+-- undistribute table
+-- this one should error out since we don't set the cascade option as true
+SELECT undistribute_table('cas_par2');
+-- this one should work
+SET client_min_messages TO WARNING;
+SELECT undistribute_table('cas_par2', cascade_via_foreign_keys=>true);
+-- verify the partitioning hierarchy is preserved
+select inhrelid::regclass from pg_inherits where inhparent='cas_par'::regclass order by 1;
+-- verify that the foreign keys with shard ids are gone, due to undistribution
+select conname from pg_constraint where conname like 'fkey_cas_test%' order by conname;
+-- add a non-inherited fkey and verify it fails when trying to convert
+ALTER TABLE cas_par2_1 ADD CONSTRAINT fkey_cas_test_3 FOREIGN KEY (a) REFERENCES cas_1(a);
+SELECT citus_add_local_table_to_metadata('cas_par2', cascade_via_foreign_keys=>true);
+-- verify undistribute_table works proper for the mx worker
+\c - - - :worker_1_port
+SELECT relname FROM pg_class WHERE relname LIKE 'cas\_%' ORDER BY relname;
+\c - - - :master_port
+SET search_path TO citus_local_tables_mx;
+
+CREATE TABLE date_partitioned_citus_local_table_seq( measureid bigserial, eventdate date, measure_data jsonb, PRIMARY KEY (measureid, eventdate)) PARTITION BY RANGE(eventdate);
+SELECT create_time_partitions('date_partitioned_citus_local_table_seq', INTERVAL '1 month', '2022-01-01', '2021-01-01');
+SELECT citus_add_local_table_to_metadata('date_partitioned_citus_local_table_seq');
+DROP TABLE date_partitioned_citus_local_table_seq;
+-- test sequences
+CREATE TABLE par_citus_local_seq(measureid bigserial, val int) PARTITION BY RANGE(val);
+CREATE TABLE par_citus_local_seq_1 PARTITION OF par_citus_local_seq FOR VALUES FROM (1) TO (4);
+SELECT citus_add_local_table_to_metadata('par_citus_local_seq');
+INSERT INTO par_citus_local_seq (val) VALUES (1) RETURNING *;
+INSERT INTO par_citus_local_seq (val) VALUES (2) RETURNING *;
+\c - - - :worker_1_port
+-- insert on the worker
+INSERT INTO citus_local_tables_mx.par_citus_local_seq (val) VALUES (1) RETURNING *;
+\c - - - :master_port
+SET search_path TO citus_local_tables_mx;
+INSERT INTO par_citus_local_seq (val) VALUES (2) RETURNING *;
+SELECT undistribute_table('par_citus_local_seq');
+INSERT INTO par_citus_local_seq (val) VALUES (3) RETURNING *;
+SELECT measureid FROM par_citus_local_seq ORDER BY measureid;
+
+-- test adding invalid foreign key to partition table
+CREATE TABLE citus_local_parent_1 (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE citus_local_parent_2 (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE citus_local_plain (a INT UNIQUE);
+CREATE TABLE ref (a INT UNIQUE);
+SELECT create_reference_table('ref');
+alter table citus_local_parent_1 add foreign key (a) references citus_local_parent_2(a);
+alter table citus_local_plain add foreign key (a) references citus_local_parent_2(a);
+CREATE TABLE citus_local_parent_1_child_1 PARTITION OF citus_local_parent_1 FOR VALUES FROM (3) TO (5);
+CREATE TABLE citus_local_parent_1_child_2 PARTITION OF citus_local_parent_1 FOR VALUES FROM (30) TO (50);
+CREATE TABLE citus_local_parent_2_child_1 PARTITION OF citus_local_parent_2 FOR VALUES FROM (40) TO (60);
+-- this one should error out, since we cannot convert it to citus local table,
+-- as citus local table partitions cannot have non-inherited foreign keys
+alter table citus_local_parent_1_child_1 add foreign key(a) references ref(a);
+-- this should work
+alter table citus_local_parent_1 add constraint fkey_to_drop_test foreign key(a) references ref(a);
+-- this should undistribute the table, and the entries should be gone from pg_dist_partition
+select logicalrelid from pg_dist_partition where logicalrelid::text like 'citus_local_parent%';
+set client_min_messages to error;
+alter table citus_local_parent_1 drop constraint fkey_to_drop_test;
+select logicalrelid from pg_dist_partition where logicalrelid::text like 'citus_local_parent%';
+
 SELECT master_remove_distributed_table_metadata_from_workers('citus_local_table_4'::regclass::oid, 'citus_local_tables_mx', 'citus_local_table_4');
 
 -- both workers should print 0 as master_remove_distributed_table_metadata_from_workers
@@ -176,6 +350,5 @@ SELECT run_command_on_workers(
 $$
 SELECT count(*) FROM pg_catalog.pg_tables WHERE tablename='citus_local_table_4'
 $$);
-
 -- cleanup at exit
 DROP SCHEMA citus_local_tables_mx CASCADE;
