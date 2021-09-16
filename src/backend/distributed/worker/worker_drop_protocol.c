@@ -123,7 +123,7 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 		add_exact_object_address(&foreignServerObject, objects);
 
 		/* drop both the table and the server */
-		performMultipleDeletions(objects, DROP_RESTRICT,
+		performMultipleDeletions(objects, DROP_CASCADE,
 								 PERFORM_DELETION_INTERNAL);
 	}
 	else if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
