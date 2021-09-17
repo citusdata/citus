@@ -81,14 +81,14 @@ Install packages on Ubuntu / Debian:
 ```bash
 curl https://install.citusdata.com/community/deb.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo apt-get -y install postgresql-13-citus-10.0
+sudo apt-get -y install postgresql-13-citus-10.2
 ```
 
 Install packages on CentOS / Fedora / Red Hat:
 ```bash
 curl https://install.citusdata.com/community/rpm.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo yum install -y citus100_13
+sudo yum install -y citus102_13
 ```
 
 To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
@@ -295,7 +295,7 @@ CREATE TABLE events_row AS SELECT * FROM events_columnar;
 
 You can use columnar storage by itself, or in a distributed table to combine the benefits of compression and the distributed query engine.
 
-When using columnar storage, you should only load data in batch using `COPY` or `INSERT..SELECT` to achieve good  compression. Update, delete, indexes, and foreign keys are currently unsupported on columnar tables. However, you can use partitioned tables in which newer partitions use row-based storage, and older partitions are compressed using columnar storage.
+When using columnar storage, you should only load data in batch using `COPY` or `INSERT..SELECT` to achieve good  compression. Update, delete, and foreign keys are currently unsupported on columnar tables. However, you can use partitioned tables in which newer partitions use row-based storage, and older partitions are compressed using columnar storage.
 
 To learn more about columnar storage, check out the [columnar storage README](https://github.com/citusdata/citus/blob/master/src/backend/columnar/README.md).
 
