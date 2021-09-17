@@ -406,4 +406,11 @@ SELECT shardcount FROM pg_dist_colocation WHERE colocationid IN
          13
 (1 row)
 
+CREATE TEMP TABLE temp_table(a int);
+-- make sure temp table cannot be distributed and we give a good error
+select create_distributed_table('temp_table', 'a');
+ERROR:  cannot distribute a temporary table
+select create_reference_table('temp_table');
+ERROR:  cannot distribute a temporary table
+DROP TABLE temp_table;
 DROP TABLE shard_count_table_3;
