@@ -1,4 +1,4 @@
-### citus 10.1.3 (September 17, 2021) ###
+### citus v10.1.3 (September 17, 2021) ###
 
 * Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
 
