@@ -1,3 +1,12 @@
+### citus 10.1.3 (September 17, 2021) ###
+
+* Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
+
+* Fixes a crash in shard rebalancer when no distributed tables exist
+
+* Fixes a use after free issue that could happen when altering a distributed
+  table
+
 ### citus 9.5.8 (September 15, 2021) ###
 
 * Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
