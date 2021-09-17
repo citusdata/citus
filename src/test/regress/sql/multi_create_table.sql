@@ -265,4 +265,10 @@ SELECT shardcount FROM pg_dist_colocation WHERE colocationid IN
 	SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_count_table_3'::regclass
 );
 
+CREATE TEMP TABLE temp_table(a int);
+-- make sure temp table cannot be distributed and we give a good error
+select create_distributed_table('temp_table', 'a');
+select create_reference_table('temp_table');
+DROP TABLE temp_table;
+
 DROP TABLE shard_count_table_3;
