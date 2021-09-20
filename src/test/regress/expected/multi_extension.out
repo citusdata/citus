@@ -760,7 +760,7 @@ ERROR:  loaded Citus library version differs from installed extension version
 INSERT INTO columnar_table SELECT i FROM generate_series(1, 10) i;
 ERROR:  loaded Citus library version differs from installed extension version
 VACUUM columnar_table;
-ERROR:  loaded Citus library version differs from installed extension version
+WARNING:  loaded Citus library version differs from installed extension version
 TRUNCATE columnar_table;
 ERROR:  loaded Citus library version differs from installed extension version
 DROP TABLE columnar_table;
