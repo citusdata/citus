@@ -173,6 +173,8 @@ columnar_beginscan(Relation relation, Snapshot snapshot,
 				   ParallelTableScanDesc parallel_scan,
 				   uint32 flags)
 {
+	CheckCitusVersion(ERROR);
+
 	int natts = relation->rd_att->natts;
 
 	/* attr_needed represents 0-indexed attribute numbers */
@@ -418,6 +420,8 @@ columnar_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 static IndexFetchTableData *
 columnar_index_fetch_begin(Relation rel)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relfilenode = rel->rd_node.relNode;
 	if (PendingWritesInUpperTransactions(relfilenode, GetCurrentSubTransactionId()))
 	{
@@ -638,6 +642,8 @@ static bool
 columnar_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
 								  Snapshot snapshot)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 rowNumber = tid_to_row_number(slot->tts_tid);
 	StripeMetadata *stripeMetadata = FindStripeByRowNumber(rel, rowNumber, snapshot);
 	return stripeMetadata != NULL;
@@ -670,6 +676,8 @@ static void
 columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 					  int options, BulkInsertState bistate)
 {
+	CheckCitusVersion(ERROR);
+
 	/*
 	 * columnar_init_write_state allocates the write state in a longer
 	 * lasting context, so no need to worry about it.
@@ -716,6 +724,8 @@ static void
 columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					  CommandId cid, int options, BulkInsertState bistate)
 {
+	CheckCitusVersion(ERROR);
+
 	ColumnarWriteState *writeState = columnar_init_write_state(relation,
 															   RelationGetDescr(relation),
 															   GetCurrentSubTransactionId());
@@ -790,6 +800,8 @@ columnar_relation_set_new_filenode(Relation rel,
 								   TransactionId *freezeXid,
 								   MultiXactId *minmulti)
 {
+	CheckCitusVersion(ERROR);
+
 	if (persistence == RELPERSISTENCE_UNLOGGED)
 	{
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -825,6 +837,8 @@ columnar_relation_set_new_filenode(Relation rel,
 static void
 columnar_relation_nontransactional_truncate(Relation rel)
 {
+	CheckCitusVersion(ERROR);
+
 	RelFileNode relfilenode = rel->rd_node;
 
 	NonTransactionDropWriteState(relfilenode.relNode);
@@ -871,6 +885,8 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 								   double *tups_vacuumed,
 								   double *tups_recently_dead)
 {
+	CheckCitusVersion(ERROR);
+
 	TupleDesc sourceDesc = RelationGetDescr(OldHeap);
 	TupleDesc targetDesc = RelationGetDescr(NewHeap);
 
@@ -967,6 +983,15 @@ static void
 columnar_vacuum_rel(Relation rel, VacuumParams *params,
 					BufferAccessStrategy bstrategy)
 {
+	if (!CheckCitusVersion(WARNING))
+	{
+		/*
+		 * Skip if the extension catalogs are not up-to-date, but avoid
+		 * erroring during auto-vacuum.
+		 */
+		return;
+	}
+
 	/*
 	 * If metapage version of relation is older, then we hint users to VACUUM
 	 * the relation in ColumnarMetapageCheckVersion. So if needed, upgrade
@@ -1276,6 +1301,8 @@ columnar_index_build_range_scan(Relation columnarRelation,
 								void *callback_state,
 								TableScanDesc scan)
 {
+	CheckCitusVersion(ERROR);
+
 	if (start_blockno != 0 || numblocks != InvalidBlockNumber)
 	{
 		/*
@@ -1524,6 +1551,8 @@ columnar_index_validate_scan(Relation columnarRelation,
 							 ValidateIndexState *
 							 validateIndexState)
 {
+	CheckCitusVersion(ERROR);
+
 	ColumnarReportTotalVirtualBlocks(columnarRelation, snapshot,
 									 PROGRESS_SCAN_BLOCKS_TOTAL);
 
@@ -1694,6 +1723,8 @@ TupleSortSkipSmallerItemPointers(Tuplesortstate *tupleSort, ItemPointer targetIt
 static uint64
 columnar_relation_size(Relation rel, ForkNumber forkNumber)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 nblocks = 0;
 
 	/* Open it at the smgr level if not already done */
@@ -1719,6 +1750,8 @@ columnar_relation_size(Relation rel, ForkNumber forkNumber)
 static bool
 columnar_relation_needs_toast_table(Relation rel)
 {
+	CheckCitusVersion(ERROR);
+
 	return false;
 }
 
@@ -1728,6 +1761,8 @@ columnar_estimate_rel_size(Relation rel, int32 *attr_widths,
 						   BlockNumber *pages, double *tuples,
 						   double *allvisfrac)
 {
+	CheckCitusVersion(ERROR);
+
 	RelationOpenSmgr(rel);
 	*pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
 	*tuples = ColumnarTableRowCount(rel);
@@ -1899,6 +1934,8 @@ ColumnarTableDropHook(Oid relid)
 
 	if (IsColumnarTableAmTable(relid))
 	{
+		CheckCitusVersion(ERROR);
+
 		/*
 		 * Drop metadata. No need to drop storage here since for
 		 * tableam tables storage is managed by postgres.
@@ -2020,6 +2057,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 									   GetCreateIndexRelationLockMode(indexStmt));
 		if (rel->rd_tableam == GetColumnarTableAmRoutine())
 		{
+			CheckCitusVersion(ERROR);
+
 			if (!ColumnarSupportsIndexAM(indexStmt->accessMethod))
 			{
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -2356,6 +2395,8 @@ PG_FUNCTION_INFO_V1(alter_columnar_table_set);
 Datum
 alter_columnar_table_set(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */
@@ -2483,6 +2524,8 @@ PG_FUNCTION_INFO_V1(alter_columnar_table_reset);
 Datum
 alter_columnar_table_reset(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 
 	Relation rel = table_open(relationId, AccessExclusiveLock); /* ALTER TABLE LOCK */

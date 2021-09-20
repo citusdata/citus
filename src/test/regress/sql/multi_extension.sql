@@ -297,6 +297,35 @@ ALTER EXTENSION citus UPDATE TO '9.5-1';
 ALTER EXTENSION citus UPDATE TO '10.0-4';
 SELECT * FROM multi_extension.print_extension_changes();
 
+-- not print "HINT: " to hide current lib version
+\set VERBOSITY terse
+CREATE TABLE columnar_table(a INT, b INT) USING columnar;
+SET citus.enable_version_checks TO ON;
+
+-- all should throw an error due to version mismatch
+VACUUM FULL columnar_table;
+INSERT INTO columnar_table SELECT i FROM generate_series(1, 10) i;
+VACUUM columnar_table;
+TRUNCATE columnar_table;
+DROP TABLE columnar_table;
+CREATE INDEX ON columnar_table (a);
+SELECT alter_columnar_table_set('columnar_table', compression => 'pglz');
+SELECT alter_columnar_table_reset('columnar_table');
+INSERT INTO columnar_table SELECT * FROM columnar_table;
+
+SELECT 1 FROM columnar_table; -- columnar custom scan
+
+SET columnar.enable_custom_scan TO OFF;
+SELECT 1 FROM columnar_table; -- seq scan
+
+CREATE TABLE new_columnar_table (a int) USING columnar;
+
+-- do cleanup for the rest of the tests
+SET citus.enable_version_checks TO OFF;
+DROP TABLE columnar_table;
+RESET columnar.enable_custom_scan;
+\set VERBOSITY default
+
 -- Test downgrade to 10.0-4 from 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
 ALTER EXTENSION citus UPDATE TO '10.0-4';
