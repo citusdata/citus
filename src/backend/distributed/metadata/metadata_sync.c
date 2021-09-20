@@ -2061,6 +2061,8 @@ ShouldInitiateMetadataSync(bool *lockFailure)
 Datum
 citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	PG_ENSURE_ARGNOTNULL(0, "relation");
 	Oid relationId = PG_GETARG_OID(0);
 
@@ -2211,6 +2213,8 @@ EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod, int coloc
 Datum
 citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	PG_ENSURE_ARGNOTNULL(0, "relation");
 	Oid relationId = PG_GETARG_OID(0);
 
@@ -2426,6 +2430,8 @@ EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 Datum
 citus_internal_add_placement_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	int64 shardId = PG_GETARG_INT64(0);
 	int32 shardState = PG_GETARG_INT32(1);
 	int64 shardLength = PG_GETARG_INT64(2);
@@ -2537,6 +2543,8 @@ ShouldSkipMetadataChecks(void)
 Datum
 citus_internal_update_placement_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	int64 shardId = PG_GETARG_INT64(0);
 	int32 sourceGroupId = PG_GETARG_INT32(1);
 	int32 targetGroupId = PG_GETARG_INT32(2);
@@ -2602,6 +2610,8 @@ citus_internal_update_placement_metadata(PG_FUNCTION_ARGS)
 Datum
 citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	int64 shardId = PG_GETARG_INT64(0);
 
 	if (!ShouldSkipMetadataChecks())
@@ -2640,6 +2650,8 @@ citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
 Datum
 citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	uint32 tagetColocationId = PG_GETARG_UINT32(1);
 
