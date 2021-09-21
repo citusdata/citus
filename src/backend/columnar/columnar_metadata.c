@@ -1269,7 +1269,8 @@ BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
 	 * subtransaction id here.
 	 */
 	TransactionId entryXmin = HeapTupleHeaderGetXmin(heapTuple->t_data);
-	stripeMetadata->aborted = TransactionIdDidAbort(entryXmin);
+	stripeMetadata->aborted = !TransactionIdIsInProgress(entryXmin) &&
+							  TransactionIdDidAbort(entryXmin);
 	stripeMetadata->insertedByCurrentXact =
 		TransactionIdIsCurrentTransactionId(entryXmin);
 
