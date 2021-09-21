@@ -556,11 +556,16 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	{
 		List *partitionList = PartitionList(relationId);
 		Oid partitionRelationId = InvalidOid;
+		Oid namespaceId = get_rel_namespace(relationId);
+		char *schemaName = get_namespace_name(namespaceId);
+		char *relationName = get_rel_name(relationId);
+		char *parentRelationName = quote_qualified_identifier(schemaName, relationName);
+
 		foreach_oid(partitionRelationId, partitionList)
 		{
 			CreateDistributedTable(partitionRelationId, distributionColumn,
 								   distributionMethod, shardCount, false,
-								   colocateWithTableName, viaDeprecatedAPI);
+								   parentRelationName, viaDeprecatedAPI);
 		}
 	}
 
