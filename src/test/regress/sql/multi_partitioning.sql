@@ -638,6 +638,35 @@ CREATE TABLE partitioned_events_table_2009 PARTITION OF partitioned_events_table
 INSERT INTO partitioned_events_table SELECT * FROM events_table;
 INSERT INTO partitioned_users_table_2009 SELECT * FROM users_table;
 
+-- test distributed partitions are indeed colocated with the parent table
+CREATE TABLE sensors(measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data))
+PARTITION BY RANGE(eventdatetime);
+
+CREATE TABLE sensors_old PARTITION OF sensors FOR VALUES FROM ('2000-01-01') TO ('2020-01-01');
+CREATE TABLE sensors_2020_01_01 PARTITION OF sensors FOR VALUES FROM ('2020-01-01') TO ('2020-02-01');
+CREATE TABLE sensors_new PARTITION OF sensors DEFAULT;
+
+SELECT create_distributed_table('sensors', 'measureid', colocate_with:='none');
+
+SELECT count(DISTINCT colocationid) FROM pg_dist_partition
+WHERE logicalrelid IN ('sensors'::regclass, 'sensors_old'::regclass, 'sensors_2020_01_01'::regclass, 'sensors_new'::regclass);
+
+CREATE TABLE local_sensors(measureid integer, eventdatetime date, measure_data jsonb, PRIMARY KEY (measureid, eventdatetime, measure_data))
+PARTITION BY RANGE(eventdatetime);
+
+CREATE TABLE local_sensors_old PARTITION OF local_sensors FOR VALUES FROM ('2000-01-01') TO ('2020-01-01');
+CREATE TABLE local_sensors_2020_01_01 PARTITION OF local_sensors FOR VALUES FROM ('2020-01-01') TO ('2020-02-01');
+CREATE TABLE local_sensors_new PARTITION OF local_sensors DEFAULT;
+
+SELECT create_distributed_table('local_sensors', 'measureid', colocate_with:='sensors');
+
+SELECT count(DISTINCT colocationid) FROM pg_dist_partition
+WHERE logicalrelid IN ('sensors'::regclass, 'sensors_old'::regclass, 'sensors_2020_01_01'::regclass, 'sensors_new'::regclass,
+'local_sensors'::regclass, 'local_sensors_old'::regclass, 'local_sensors_2020_01_01'::regclass, 'local_sensors_new'::regclass);
+
+DROP TABLE sensors;
+DROP TABLE local_sensors;
+
 --
 -- Complex JOINs, subqueries, UNIONs etc...
 --
