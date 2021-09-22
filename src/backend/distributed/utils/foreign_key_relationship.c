@@ -139,11 +139,12 @@ GetForeignKeyConnectedRelationIdList(Oid relationId)
 
 
 /*
- * ConnectedToReferenceTableViaFKey returns true if given relationId is
- * connected to a reference table via its foreign key subgraph.
+ * ShouldUndistributeCitusLocalTable returns true if given relationId needs
+ * to be undistributed. Here we do not undistribute table if it's converted by the user,
+ * or connected to a table converted by the user, or a reference table, via foreign keys.
  */
 bool
-ConnectedToReferenceTableViaFKey(Oid relationId)
+ShouldUndistributeCitusLocalTable(Oid relationId)
 {
 	/*
 	 * As we will operate on foreign key connected relations, here we
@@ -152,7 +153,16 @@ ConnectedToReferenceTableViaFKey(Oid relationId)
 	InvalidateForeignKeyGraph();
 
 	List *fkeyConnectedRelations = GetForeignKeyConnectedRelationIdList(relationId);
-	return RelationIdListHasReferenceTable(fkeyConnectedRelations);
+	Oid relationOid = InvalidOid;
+	foreach_oid(relationOid, fkeyConnectedRelations)
+	{
+		if (IsCitusTableType(relationOid, REFERENCE_TABLE))
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 
