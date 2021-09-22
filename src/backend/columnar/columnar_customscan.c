@@ -605,10 +605,11 @@ RelationIdGetNumberOfAttributes(Oid relationId)
 /*
  * CheckVarStats() checks whether a qual involving this Var is likely to be
  * useful based on the correlation stats. If so, or if stats are unavailable,
- * return true; otherwise return false.
+ * return true; otherwise return false and sets absVarCorrelation in case
+ * caller wants to use for logging purposes.
  */
 static bool
-CheckVarStats(PlannerInfo *root, Var *var, Oid sortop)
+CheckVarStats(PlannerInfo *root, Var *var, Oid sortop, float4 *absVarCorrelation)
 {
 	/*
 	 * Collect isunique, ndistinct, and varCorrelation.
@@ -642,6 +643,14 @@ CheckVarStats(PlannerInfo *root, Var *var, Oid sortop)
 	 */
 	if (Abs(varCorrelation) < ColumnarQualPushdownCorrelationThreshold)
 	{
+		if (absVarCorrelation)
+		{
+			/*
+			 * Report absVarCorrelation if caller wants to know why given
+			 * var is rejected.
+			 */
+			*absVarCorrelation = Abs(varCorrelation);
+		}
 		return false;
 	}
 
@@ -674,7 +683,7 @@ ExprReferencesRelid(Expr *expr, Index relid)
 
 
 /*
- * CheckPushdownClause tests to see if clause is a candidate for pushing down
+ * ExtractPushdownClause extracts an Expr node from given clause for pushing down
  * into the given rel (including join clauses). This test may not be exact in
  * all cases; it's used to reduce the search space for parameterization.
  *
@@ -683,19 +692,134 @@ ExprReferencesRelid(Expr *expr, Index relid)
  * and that doesn't seem worth the effort. Here we just look for "Var op Expr"
  * or "Expr op Var", where Var references rel and Expr references other rels
  * (or no rels at all).
+ *
+ * Moreover, this function also looks into BoolExpr's to recursively extract
+ * pushdownable OpExpr's of them:
+ * i)   AND_EXPR:
+ *      Take pushdownable args of AND expressions by ignoring the other args.
+ * ii)  OR_EXPR:
+ *      Ignore the whole OR expression if we cannot exract a pushdownable Expr
+ *      from one of its args.
+ * iii) NOT_EXPR:
+ *      Simply ignore NOT expressions since we don't expect to see them before
+ *      an expression that we can pushdown, see the comment in function.
+ *
+ * The reasoning for those three rules could also be summarized as such;
+ * for any expression that we cannot push-down, we must assume that it
+ * evaluates to true.
+ *
+ * For example, given following WHERE clause:
+ * (
+ *     (a > random() OR a < 30)
+ *     AND
+ *     a < 200
+ * ) OR
+ * (
+ *     a = 300
+ *     OR
+ *     a > 400
+ * );
+ * Even if we can pushdown (a < 30), we cannot pushdown (a > random() OR a < 30)
+ * due to (a > random()). However, we can pushdown (a < 200), so we extract
+ * (a < 200) from the lhs of the top level OR expression.
+ *
+ * For the rhs of the top level OR expression, since we can pushdown both (a = 300)
+ * and (a > 400), we take this part as is.
+ *
+ * Finally, since both sides of the top level OR expression yielded pushdownable
+ * expressions, we will pushdown the following:
+ *  (a < 200) OR ((a = 300) OR (a > 400))
  */
-static bool
-CheckPushdownClause(PlannerInfo *root, RelOptInfo *rel, Expr *clause)
+static Expr *
+ExtractPushdownClause(PlannerInfo *root, RelOptInfo *rel, Node *node)
 {
-	if (!IsA(clause, OpExpr) || list_length(((OpExpr *) clause)->args) != 2)
+	CHECK_FOR_INTERRUPTS();
+	check_stack_depth();
+
+	if (node == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsA(node, BoolExpr))
+	{
+		BoolExpr *boolExpr = castNode(BoolExpr, node);
+		if (boolExpr->boolop == NOT_EXPR)
+		{
+			/*
+			 * Standard planner should have already applied de-morgan rule to
+			 * simple NOT expressions. If we encounter with such an expression
+			 * here, then it can't be a pushdownable one, such as:
+			 *   WHERE id NOT IN (SELECT id FROM something).
+			 */
+			ereport(ColumnarPlannerDebugLevel,
+					(errmsg("columnar planner: cannot push down clause: "
+							"must not contain a subplan")));
+			return NULL;
+		}
+
+		List *pushdownableArgs = NIL;
+
+		Node *boolExprArg = NULL;
+		foreach_ptr(boolExprArg, boolExpr->args)
+		{
+			Expr *pushdownableArg = ExtractPushdownClause(root, rel,
+														  (Node *) boolExprArg);
+			if (pushdownableArg)
+			{
+				pushdownableArgs = lappend(pushdownableArgs, pushdownableArg);
+			}
+			else if (boolExpr->boolop == OR_EXPR)
+			{
+				ereport(ColumnarPlannerDebugLevel,
+						(errmsg("columnar planner: cannot push down clause: "
+								"all arguments of an OR expression must be "
+								"pushdownable but one of them was not, due "
+								"to the reason given above")));
+				return NULL;
+			}
+
+			/* simply skip AND args that we cannot pushdown */
+		}
+
+		int npushdownableArgs = list_length(pushdownableArgs);
+		if (npushdownableArgs == 0)
+		{
+			ereport(ColumnarPlannerDebugLevel,
+					(errmsg("columnar planner: cannot push down clause: "
+							"none of the arguments were pushdownable, "
+							"due to the reason(s) given above ")));
+			return NULL;
+		}
+		else if (npushdownableArgs == 1)
+		{
+			return (Expr *) linitial(pushdownableArgs);
+		}
+
+		if (boolExpr->boolop == AND_EXPR)
+		{
+			return make_andclause(pushdownableArgs);
+		}
+		else if (boolExpr->boolop == OR_EXPR)
+		{
+			return make_orclause(pushdownableArgs);
+		}
+		else
+		{
+			/* already discarded NOT expr, so should not be reachable */
+			return NULL;
+		}
+	}
+
+	if (!IsA(node, OpExpr) || list_length(((OpExpr *) node)->args) != 2)
 	{
 		ereport(ColumnarPlannerDebugLevel,
 				(errmsg("columnar planner: cannot push down clause: "
 						"must be binary operator expression")));
-		return false;
+		return NULL;
 	}
 
-	OpExpr *opExpr = castNode(OpExpr, clause);
+	OpExpr *opExpr = castNode(OpExpr, node);
 	Expr *lhs = list_nth(opExpr->args, 0);
 	Expr *rhs = list_nth(opExpr->args, 1);
 
@@ -721,15 +845,15 @@ CheckPushdownClause(PlannerInfo *root, RelOptInfo *rel, Expr *clause)
 						"must match 'Var <op> Expr' or 'Expr <op> Var'"),
 				 errhint("Var must only reference this rel, "
 						 "and Expr must not reference this rel")));
-		return false;
+		return NULL;
 	}
 
 	if (varSide->varattno <= 0)
 	{
 		ereport(ColumnarPlannerDebugLevel,
 				(errmsg("columnar planner: cannot push down clause: "
-						"var is whole-row reference")));
-		return false;
+						"var is whole-row reference or system column")));
+		return NULL;
 	}
 
 	if (contain_volatile_functions((Node *) exprSide))
@@ -737,7 +861,7 @@ CheckPushdownClause(PlannerInfo *root, RelOptInfo *rel, Expr *clause)
 		ereport(ColumnarPlannerDebugLevel,
 				(errmsg("columnar planner: cannot push down clause: "
 						"expr contains volatile functions")));
-		return false;
+		return NULL;
 	}
 
 	/* only the default opclass is used for qual pushdown. */
@@ -753,7 +877,7 @@ CheckPushdownClause(PlannerInfo *root, RelOptInfo *rel, Expr *clause)
 				(errmsg("columnar planner: cannot push down clause: "
 						"cannot find default btree opclass and opfamily for type: %s",
 						format_type_be(varSide->vartype))));
-		return false;
+		return NULL;
 	}
 
 	if (!op_in_opfamily(opExpr->opno, varOpFamily))
@@ -762,7 +886,7 @@ CheckPushdownClause(PlannerInfo *root, RelOptInfo *rel, Expr *clause)
 				(errmsg("columnar planner: cannot push down clause: "
 						"operator %d not a member of opfamily %d",
 						opExpr->opno, varOpFamily)));
-		return false;
+		return NULL;
 	}
 
 	Oid sortop = get_opfamily_member(varOpFamily, varOpcInType,
@@ -773,15 +897,20 @@ CheckPushdownClause(PlannerInfo *root, RelOptInfo *rel, Expr *clause)
 	 * Check that statistics on the Var support the utility of this
 	 * clause.
 	 */
-	if (!CheckVarStats(root, varSide, sortop))
+	float4 absVarCorrelation = 0;
+	if (!CheckVarStats(root, varSide, sortop, &absVarCorrelation))
 	{
 		ereport(ColumnarPlannerDebugLevel,
 				(errmsg("columnar planner: cannot push down clause: "
-						"var attribute %d is uncorrelated", varSide->varattno)));
-		return false;
+						"absolute correlation (%.3f) of var attribute %d is "
+						"smaller than the value configured in "
+						"\"columnar.qual_pushdown_correlation_threshold\" "
+						"(%.3f)", absVarCorrelation, varSide->varattno,
+						ColumnarQualPushdownCorrelationThreshold)));
+		return NULL;
 	}
 
-	return true;
+	return (Expr *) node;
 }
 
 
@@ -806,12 +935,19 @@ FilterPushdownClauses(PlannerInfo *root, RelOptInfo *rel, List *inputClauses)
 		 * there's something we should do with pseudoconstants here.
 		 */
 		if (rinfo->pseudoconstant ||
-			!bms_is_member(rel->relid, rinfo->required_relids) ||
-			!CheckPushdownClause(root, rel, rinfo->clause))
+			!bms_is_member(rel->relid, rinfo->required_relids))
 		{
 			continue;
 		}
 
+		Expr *pushdownableExpr = ExtractPushdownClause(root, rel, (Node *) rinfo->clause);
+		if (!pushdownableExpr)
+		{
+			continue;
+		}
+
+		rinfo = copyObject(rinfo);
+		rinfo->clause = pushdownableExpr;
 		filteredClauses = lappend(filteredClauses, rinfo);
 	}
 

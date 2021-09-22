@@ -246,3 +246,6 @@ s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
 s/pg14\.idx.*/pg14\.xxxxx/g
 
 s/CREATE TABLESPACE test_tablespace LOCATION.*/CREATE TABLESPACE test_tablespace LOCATION XXXX/g
+
+# columnar log for var correlation
+s/(.*absolute correlation \()([0,1]\.[0-9]+)(\) of var attribute [0-9]+ is smaller than.*)/\1X\.YZ\3/g

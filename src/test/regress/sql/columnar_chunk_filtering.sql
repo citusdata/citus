@@ -374,3 +374,74 @@ select * from numrange_test natural join numrange_test2 order by nr;
 DROP TABLE atest1, atest2, t1, t2, t3, numrange_test, numrange_test2;
 
 set default_table_access_method to default;
+
+set columnar.planner_debug_level to notice;
+
+BEGIN;
+  SET LOCAL columnar.stripe_row_limit = 2000;
+  SET LOCAL columnar.chunk_group_row_limit = 1000;
+  create table pushdown_test (a int, b int) using columnar;
+  insert into pushdown_test values (generate_series(1, 200000));
+COMMIT;
+
+SET columnar.max_custom_scan_paths TO 50;
+SET columnar.qual_pushdown_correlation_threshold TO 0.0;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test WHERE a = 204356 or a = 104356 or a = 76556;
+SELECT sum(a) FROM pushdown_test WHERE a = 204356 or a = 104356 or a = 76556;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test WHERE a = 194356 or a = 104356 or a = 76556;
+SELECT sum(a) FROM pushdown_test WHERE a = 194356 or a = 104356 or a = 76556;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test WHERE a = 204356 or a > a*-1 + b;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where (a > 1000 and a < 10000) or (a > 20000 and a < 50000);
+SELECT sum(a) FROM pushdown_test where (a > 1000 and a < 10000) or (a > 20000 and a < 50000);
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where (a > random() and a < 2*a) or (a > 100);
+SELECT sum(a) FROM pushdown_test where (a > random() and a < 2*a) or (a > 100);
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 200000-1010);
+SELECT sum(a) FROM pushdown_test where (a > random() and a <= 2000) or (a > 200000-1010);
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where
+(
+  a > random()
+  and
+  (
+    (a < 200 and a not in (select a from pushdown_test)) or
+    (a > 1000 and a < 2000)
+  )
+)
+or
+(a > 200000-2010);
+SELECT sum(a) FROM pushdown_test where
+(
+  a > random()
+  and
+  (
+    (a < 200 and a not in (select a from pushdown_test)) or
+    (a > 1000 and a < 2000)
+  )
+)
+or
+(a > 200000-2010);
+
+create function stable_1(arg int) returns int language plpgsql STRICT IMMUTABLE as
+$$ BEGIN RETURN 1+arg; END; $$;
+
+EXPLAIN (analyze on, costs off, timing off, summary off)
+SELECT sum(a) FROM pushdown_test where (a = random() and a < stable_1(a) and a < stable_1(6000));
+SELECT sum(a) FROM pushdown_test where (a = random() and a < stable_1(a) and a < stable_1(6000));
+
+RESET columnar.max_custom_scan_paths;
+RESET columnar.qual_pushdown_correlation_threshold;
+RESET columnar.planner_debug_level;
+DROP TABLE pushdown_test;
