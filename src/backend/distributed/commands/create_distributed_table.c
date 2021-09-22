@@ -482,10 +482,11 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	/* we need to calculate these variables before creating distributed metadata */
 	bool localTableEmpty = TableEmpty(relationId);
 	Oid colocatedTableId = ColocatedTableId(colocationId);
+	bool autoConverted = false;
 
 	/* create an entry for distributed table in pg_dist_partition */
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
-							  colocationId, replicationModel);
+							  colocationId, replicationModel, autoConverted);
 
 	/*
 	 * Ensure that the sequences used in column defaults of the table

@@ -158,6 +158,18 @@ ShouldUndistributeCitusLocalTable(Oid relationId)
 	{
 		if (IsCitusTableType(relationOid, REFERENCE_TABLE))
 		{
+			/*
+			 * The relation is connected to a reference table via foreign keys,
+			 * we shouldn't undistribute it.
+			 */
+			return false;
+		}
+		if (!AutoConvertedViaCatalog(relationId))
+		{
+			/*
+			 * The relation is connected to a (or, is a) Citus Local Table created
+			 * by the user. We shouldn't undistribute it.
+			 */
 			return false;
 		}
 	}

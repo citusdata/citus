@@ -234,7 +234,7 @@ extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  int32 groupId);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
-									  char replicationModel);
+									  char replicationModel, bool autoConverted);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);

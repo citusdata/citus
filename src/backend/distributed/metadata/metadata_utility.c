@@ -1744,7 +1744,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 void
 InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 						  Var *distributionColumn, uint32 colocationId,
-						  char replicationModel)
+						  char replicationModel, bool autoConverted)
 {
 	char *distributionColumnString = NULL;
 
@@ -1764,6 +1764,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
+	newValues[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
 
 	/* set partkey column to NULL for reference tables */
 	if (distributionMethod != DISTRIBUTE_BY_NONE)

@@ -63,6 +63,7 @@ typedef struct
 	char partitionMethod;
 	uint32 colocationId;
 	char replicationModel;
+	bool autoConverted;
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
@@ -146,6 +147,7 @@ extern bool IsCitusTable(Oid relationId);
 extern char PgDistPartitionViaCatalog(Oid relationId);
 extern List * LookupDistShardTuples(Oid relationId);
 extern char PartitionMethodViaCatalog(Oid relationId);
+extern bool AutoConvertedViaCatalog(Oid relationId);
 extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
