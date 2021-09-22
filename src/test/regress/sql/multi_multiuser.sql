@@ -162,19 +162,15 @@ SELECT * FROM columnar.stripe;
 -- alter a columnar setting
 SET columnar.chunk_group_row_limit = 1050;
 
-DO $proc$
-BEGIN
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
-  EXECUTE $$
-    -- create columnar table
-    CREATE TABLE columnar_table (a int) USING columnar;
-    -- alter a columnar table that is created by that unprivileged user
-    SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
-    -- and drop it
-    DROP TABLE columnar_table;
-  $$;
-END IF;
-END$proc$;
+-- create columnar table
+CREATE TABLE columnar_table (a int) USING columnar;
+-- alter a columnar table that is created by that unprivileged user
+SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
+-- insert some data and read
+INSERT INTO columnar_table VALUES (1), (1);
+SELECT * FROM columnar_table;
+-- and drop it
+DROP TABLE columnar_table;
 
 -- cannot modify columnar metadata table as unprivileged user
 INSERT INTO columnar.stripe VALUES(99);
@@ -183,6 +179,8 @@ INSERT INTO columnar.stripe VALUES(99);
 -- (since citus extension has a dependency to it)
 DROP TABLE columnar.chunk;
 
+-- cannot read columnar.chunk since it could expose chunk min/max values
+SELECT * FROM columnar.chunk;
 
 -- test whether a read-only user can read from citus_tables view
 SELECT distribution_column FROM citus_tables WHERE table_name = 'test'::regclass;
