@@ -5,8 +5,8 @@ import upgrade_common as common
 BEFORE_PG_UPGRADE_SCHEDULE = './before_pg_upgrade_schedule'
 AFTER_PG_UPGRADE_SCHEDULE = './after_pg_upgrade_schedule'
 
-CUSTOM_CITUS_SCHEDULE = './custom_citus_schedule'
-CUSTOM_WORKER_SCHEDULE = './custom_worker_schedule'
+CUSTOM_CREATE_SCHEDULE = './custom_create_schedule'
+CUSTOM_SQL_SCHEDULE = './custom_sql_schedule'
 
 AFTER_CITUS_UPGRADE_COORD_SCHEDULE = './after_citus_upgrade_coord_schedule'
 BEFORE_CITUS_UPGRADE_COORD_SCHEDULE = './before_citus_upgrade_coord_schedule'

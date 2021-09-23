@@ -23,8 +23,8 @@ from config import (
     CitusSingleNodeSingleConnectionClusterConfig,
      USER, NODE_PORTS, WORKER1PORT,
     NODE_NAMES, DBNAME, COORDINATOR_NAME,
-    WORKER_PORTS, CUSTOM_CITUS_SCHEDULE,
-    CUSTOM_WORKER_SCHEDULE
+    WORKER_PORTS, CUSTOM_CREATE_SCHEDULE,
+    CUSTOM_SQL_SCHEDULE
 )
 
 testResults = {}
@@ -35,10 +35,14 @@ def run_for_config(config, name):
     common.initialize_citus_cluster(config.bindir, config.datadir, config.settings, config)
 
     exitCode = common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   NODE_PORTS[COORDINATOR_NAME], CUSTOM_CITUS_SCHEDULE)
-    if config.is_mx:               
+                   NODE_PORTS[COORDINATOR_NAME], CUSTOM_CREATE_SCHEDULE)
+    if config.is_mx:    
+        # TODO:: get the worker port in a generic way           
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   WORKER1PORT, CUSTOM_WORKER_SCHEDULE)               
+                   WORKER1PORT, CUSTOM_SQL_SCHEDULE)
+    else:
+        common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
+                   NODE_PORTS[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE)                             
     testResults[name] =  "success" if exitCode == 0 else "fail"               
     common.stop_databases(config.bindir, config.datadir)
                
