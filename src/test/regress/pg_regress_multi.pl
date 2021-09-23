@@ -456,7 +456,6 @@ push(@pgOptions, "citus.shard_max_size=1500kB");
 push(@pgOptions, "citus.defer_shard_delete_interval=-1");
 push(@pgOptions, "citus.repartition_join_bucket_count_per_node=2");
 push(@pgOptions, "citus.sort_returning='on'");
-push(@pgOptions, "citus.shard_replication_factor=2");
 push(@pgOptions, "citus.node_connection_timeout=${connectionTimeout}");
 push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
 push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
