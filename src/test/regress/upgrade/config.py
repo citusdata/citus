@@ -6,6 +6,7 @@ BEFORE_PG_UPGRADE_SCHEDULE = './before_pg_upgrade_schedule'
 AFTER_PG_UPGRADE_SCHEDULE = './after_pg_upgrade_schedule'
 
 CUSTOM_CITUS_SCHEDULE = './custom_citus_schedule'
+CUSTOM_WORKER_SCHEDULE = './custom_worker_schedule'
 
 AFTER_CITUS_UPGRADE_COORD_SCHEDULE = './after_citus_upgrade_coord_schedule'
 BEFORE_CITUS_UPGRADE_COORD_SCHEDULE = './before_citus_upgrade_coord_schedule'
@@ -47,6 +48,7 @@ class CitusBaseClusterConfig():
         self.temp_dir = './tmp_citus_test'
         self.worker_amount = 2
         self.datadir = self.temp_dir + '/data'
+        self.is_mx = False
         self.settings = {
             'shared_preload_libraries': 'citus',
             'citus.node_conninfo': 'sslmode=prefer',
@@ -87,6 +89,7 @@ class CitusSingleShardClusterConfig(CitusBaseClusterConfig):
 class CitusMxClusterConfig(CitusBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
+        self.is_mx = True
 
     def setup_steps(self):
         common.sync_metadata_to_workers(self.bindir)

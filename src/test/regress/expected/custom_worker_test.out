@@ -1,0 +1,6 @@
+SELECT COUNT(*) from dist;
+ count 
+-------
+   100
+(1 row)
+

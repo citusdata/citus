@@ -1,0 +1,1 @@
+SELECT COUNT(*) from dist;
