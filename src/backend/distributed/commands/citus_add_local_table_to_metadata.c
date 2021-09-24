@@ -451,7 +451,8 @@ ErrorIfAddingPartitionTableToMetadata(Oid relationId)
 /*
  * SetAutoConverted is the setter function for variable autoConverted.
  */
-void SetAutoConverted(bool autoConvertedValue)
+void
+SetAutoConverted(bool autoConvertedValue)
 {
 	autoConverted = autoConvertedValue;
 }
