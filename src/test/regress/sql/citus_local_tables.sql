@@ -317,7 +317,7 @@ BEGIN;
   SET client_min_messages TO ERROR;
   SELECT remove_local_tables_from_metadata();
 
-  -- should not see any citus local tables
+  -- should see only local_table_3, since it's the only one that is converted by the user
   SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
         schemaname='citus_local_tables_test_schema' AND

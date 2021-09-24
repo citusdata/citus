@@ -1289,7 +1289,9 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 			}
 			else
 			{
+				SetAutoConverted(true);
 				CreateCitusLocalTable(relationId, cascade);
+				SetAutoConverted(false);
 			}
 		}
 		PG_CATCH();

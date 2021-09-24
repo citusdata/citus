@@ -449,6 +449,15 @@ ErrorIfAddingPartitionTableToMetadata(Oid relationId)
 
 
 /*
+ * SetAutoConverted is the setter function for variable autoConverted.
+ */
+void SetAutoConverted(bool autoConvertedValue)
+{
+	autoConverted = autoConvertedValue;
+}
+
+
+/*
  * ErrorIfUnsupportedCreateCitusLocalTable errors out if we cannot create the
  * citus local table from the relation.
  */
