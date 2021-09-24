@@ -1,3 +1,22 @@
+### citus v10.2.1 (September 24, 2021) ###
+
+* Adds missing version-mismatch checks for columnar tables
+
+* Adds missing version-mismatch checks for internal functions
+
+* Fixes a bug that could cause partition shards being not co-located with
+  parent shards
+
+* Fixes a bug that prevents pushing down boolean expressions when using
+  columnar custom scan
+
+* Fixes a clog lookup failure that could occur when writing to a columnar table
+
+* Fixes an issue that could cause unexpected errors when there is an
+  in-progress write to a columnar table
+
+* Revokes read access to `columnar.chunk` from unprivileged user
+
 ### citus v10.2.0 (September 14, 2021) ###
 
 * Adds PostgreSQL 14 support
