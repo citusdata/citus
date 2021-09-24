@@ -87,6 +87,8 @@ PG_FUNCTION_INFO_V1(citus_add_local_table_to_metadata);
 PG_FUNCTION_INFO_V1(create_citus_local_table);
 PG_FUNCTION_INFO_V1(remove_local_tables_from_metadata);
 
+bool autoConverted = false;
+
 
 /*
  * citus_add_local_table_to_metadata creates a citus local table from the table with
@@ -258,6 +260,11 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 									"cascade_via_foreign_keys=>true)",
 									qualifiedRelationName, qualifiedRelationName)));
 		}
+		/* save the relation name, to obtain the shell relation id later */
+		char *relationName = get_rel_name(relationId);
+		Oid relationSchemaId = get_rel_namespace(relationId);
+
+		autoConverted = true;
 
 		/*
 		 * By acquiring AccessExclusiveLock, make sure that no modifications happen
@@ -265,6 +272,13 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		 */
 		CascadeOperationForFkeyConnectedRelations(relationId, lockMode,
 												  CASCADE_ADD_LOCAL_TABLE_TO_METADATA);
+
+		autoConverted = false;
+
+		Oid shellRelationId = get_relname_relid(relationName, relationSchemaId);
+
+		/* mark the shell relation with autoConverted=false, as it was a user request */
+		UpdatePartitionAutoConverted(shellRelationId, autoConverted);
 
 		/*
 		 * We converted every foreign key connected table in our subgraph
@@ -1102,7 +1116,7 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId)
 	Var *distributionColumn = NULL;
 	InsertIntoPgDistPartition(citusLocalTableId, distributionMethod,
 							  distributionColumn, colocationId,
-							  replicationModel, false);
+							  replicationModel, autoConverted);
 
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(citusLocalTableId);

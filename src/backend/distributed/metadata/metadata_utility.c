@@ -2071,6 +2071,56 @@ UpdatePlacementGroupId(uint64 placementId, int groupId)
 
 
 /*
+ * UpdatePartitionAutoConverted sets the autoConverted for the partition identified
+ * by distributedRelationId.
+ */
+void
+UpdatePartitionAutoConverted(Oid distributedRelationId, bool autoConverted)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_partition];
+	bool isnull[Natts_pg_dist_partition];
+	bool replace[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributedRelationId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													DistPartitionLogicalRelidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for partition oid: %u",
+							   distributedRelationId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
+	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
+	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistPartition, &heapTuple->t_self, heapTuple);
+
+	CitusInvalidateRelcacheByRelid(distributedRelationId);
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPartition, NoLock);
+}
+
+
+/*
  * Check that the current user has `mode` permissions on relationId, error out
  * if not. Superusers always have such permissions.
  */
