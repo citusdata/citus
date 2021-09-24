@@ -1178,8 +1178,18 @@ UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
 
 	heap_inplace_update(columnarStripes, modifiedTuple);
 
+	/*
+	 * Existing tuple now contains modifications, because we used
+	 * heap_inplace_update().
+	 */
+	HeapTuple newTuple = oldTuple;
+
+	/*
+	 * Must not pass modifiedTuple, because BuildStripeMetadata expects a real
+	 * heap tuple with MVCC fields.
+	 */
 	StripeMetadata *modifiedStripeMetadata = BuildStripeMetadata(columnarStripes,
-																 modifiedTuple);
+																 newTuple);
 
 	CommandCounterIncrement();
 
@@ -1233,6 +1243,8 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 
 /*
  * BuildStripeMetadata builds a StripeMetadata object from given heap tuple.
+ *
+ * NB: heapTuple must be a proper heap tuple with MVCC fields.
  */
 static StripeMetadata *
 BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
