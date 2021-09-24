@@ -45,7 +45,7 @@ def perform_postgres_upgrade(old_bindir, new_bindir, old_datadir, new_datadir):
                 '--old-datadir', abs_old_data_path,
                 '--new-datadir', abs_new_data_path
             ]
-            subprocess.call(command)
+            subprocess.run(command, check=True)
 
 
 def citus_finish_pg_upgrade(pg_path):

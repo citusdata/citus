@@ -24,7 +24,7 @@ def initialize_temp_dir_if_not_exists(temp_dir):
     os.chmod(temp_dir, 0o777)
 
 def initialize_db_for_cluster(pg_path, rel_data_path, settings):
-    subprocess.call(['mkdir', rel_data_path])
+    subprocess.run(['mkdir', rel_data_path], check=True)
     for node_name in NODE_NAMES:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         command = [
@@ -32,7 +32,7 @@ def initialize_db_for_cluster(pg_path, rel_data_path, settings):
             '--pgdata', abs_data_path,
             '--username', USER
         ]
-        subprocess.call(command)
+        subprocess.run(command, check=True)
         add_settings(abs_data_path, settings)
 
 
@@ -56,7 +56,7 @@ def start_databases(pg_path, rel_data_path):
             '-o', '-p {}'.format(NODE_PORTS[node_name]),
             '--log', os.path.join(abs_data_path, 'logfile_' + node_name)
         ]
-        subprocess.call(command)
+        subprocess.run(command, check=True)
 
 def create_citus_extension(pg_path):
     for port in NODE_PORTS.values():

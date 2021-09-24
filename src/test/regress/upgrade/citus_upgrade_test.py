@@ -56,7 +56,7 @@ def main(config):
 
 def install_citus(tar_path):
     with utils.cd('/'):
-        subprocess.call(['tar', 'xvf', tar_path])
+        subprocess.run(['tar', 'xvf', tar_path], check=True)
 
 
 def report_initial_version(config):
@@ -108,7 +108,7 @@ def restart_database(pg_path, abs_data_path, node_name):
         '-o', '-p {}'.format(NODE_PORTS[node_name]),
         '--log', os.path.join(abs_data_path, 'logfile_' + node_name)
     ]
-    subprocess.call(command)
+    subprocess.run(command, check=True)
 
 
 def run_alter_citus(pg_path, mixed_mode):
