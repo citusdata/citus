@@ -158,9 +158,9 @@ ShouldUndistributeCitusLocalTable(Oid relationId)
 	{
 		if (IsCitusTableType(relationOid, REFERENCE_TABLE))
 		{
-			/*
+			/* 
 			 * The relation is connected to a reference table via foreign keys,
-			 * we shouldn't undistribute it.
+			 * we shouldn't undistribute it. 
 			 */
 			return false;
 		}

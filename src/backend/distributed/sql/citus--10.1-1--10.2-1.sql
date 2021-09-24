@@ -31,6 +31,7 @@ CREATE FUNCTION pg_catalog.citus_drop_all_shards(logicalrelid regclass,
     AS 'MODULE_PATHNAME', $$citus_drop_all_shards$$;
 COMMENT ON FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text, boolean)
     IS 'drop all shards in a relation and update metadata';
+ALTER TABLE pg_dist_partition ADD COLUMN autoconverted boolean;
 #include "udfs/citus_drop_trigger/10.2-1.sql";
 #include "udfs/citus_prepare_pg_upgrade/10.2-1.sql"
 #include "udfs/citus_finish_pg_upgrade/10.2-1.sql"

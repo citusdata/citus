@@ -25,6 +25,7 @@ DROP PROCEDURE pg_catalog.drop_old_time_partitions(regclass, timestamptz);
 
 REVOKE ALL ON FUNCTION pg_catalog.worker_record_sequence_dependency(regclass,regclass,name) FROM PUBLIC;
 ALTER TABLE pg_catalog.pg_dist_placement DROP CONSTRAINT placement_shardid_groupid_unique_index;
+ALTER TABLE pg_catalog.pg_dist_partition DROP COLUMN autoconverted;
 
 DROP FUNCTION pg_catalog.citus_drop_all_shards(regclass, text, text, boolean);
 CREATE FUNCTION pg_catalog.citus_drop_all_shards(logicalrelid regclass,
