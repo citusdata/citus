@@ -14,6 +14,7 @@ import threading
 import atexit
 from docopt import docopt
 import os, shutil
+import time
 
 from config import (
     CitusDefaultClusterConfig, CitusSingleNodeClusterConfig,
@@ -36,6 +37,7 @@ testResults = {}
 
 def run_for_config(config, name):
     print ('Running test for: {}'.format(name))
+    start_time = time.time()
     common.initialize_citus_cluster(config.bindir, config.datadir, config.settings, config)
     
     copy_test_files(config)
@@ -47,9 +49,11 @@ def run_for_config(config, name):
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
                    config.random_worker_port(), CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir)
     else:
-        common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE)                             
-    testResults[name] =  "success" if exitCode == 0 else "fail: see {}".format(config.output_dir + '/run.out')               
+        exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
+                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir)    
+    run_time = time.time() - start_time                                        
+    testResults[name] =  "success" if exitCode == 0 else "fail: see {}".format(config.output_dir + '/run.out')  
+    testResults[name] += " runtime: {} seconds".format(run_time)             
     common.stop_databases(config.bindir, config.datadir, config.node_name_to_ports)
     common.save_regression_diff(type(config).__name__)           
 
@@ -94,6 +98,7 @@ if __name__ == '__main__':
 
     ]
 
+    start_time = time.time()
     testRunners = []
     common.initialize_temp_dir(CITUS_CUSTOM_TEST_DIR)
     for config, testName in configs:
@@ -107,4 +112,5 @@ if __name__ == '__main__':
     for testName, testResult in testResults.items():
         print('{}: {}'.format(testName, testResult))
 
-
+    end_time = time.time()
+    print('--- {} seconds to run all tests! ---'.format(end_time - start_time))
