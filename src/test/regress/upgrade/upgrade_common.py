@@ -89,11 +89,12 @@ def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir 
         sys.exit(exit_code)
     return exit_code    
 
-def save_regression_diff(name):
-    if not os.path.exists('regressions.diff'):
+def save_regression_diff(name, output_dir):
+    path = os.path.join(output_dir, 'regression.diffs')
+    if not os.path.exists(path):
         return
-    file_name = "./results/regression.{}".format(name)
-    shutil.move("regressions.diffs", file_name)
+    new_file_path = os.path_join(output_dir, "./regression_{}.diffs".format(name))
+    shutil.move(path, new_file_path)
 
 def sync_metadata_to_workers(pg_path, worker_ports, coordinator_port):
     for port in worker_ports:

@@ -146,6 +146,41 @@ class CitusSingleNodeSingleShardClusterConfig(CitusBaseClusterConfig):
         }
         self.settings.update(self.new_settings)
 
+class CitusShardReplicationFactorClusterConfig(CitusBaseClusterConfig):
+
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            'citus.shard_replication_factor': 2
+        }
+        self.settings.update(self.new_settings)  
+
+class CitusNoLocalExecutionClusterConfig(CitusBaseClusterConfig):
+
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            'citus.enable_local_execution': False
+        }
+        self.settings.update(self.new_settings)        
+
+class CitusComplexClusterConfig(CitusBaseClusterConfig):
+
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            'citus.enable_local_execution': False,
+            'citus.multi_shard_commit_protocol': '1pc',
+            'citus.multi_shard_modify_mode': 'sequential',
+            'citus.prevent_incomplete_connection_establishment': False
+        }
+        self.settings.update(self.new_settings) 
+        self.is_mx = True
+
+    def setup_steps(self):
+        common.sync_metadata_to_workers(self.bindir, self.worker_ports, self.node_name_to_ports[COORDINATOR_NAME])
+
+
 class CitusSingleShardClusterConfig(CitusBaseClusterConfig):
 
     def __init__(self, arguments):

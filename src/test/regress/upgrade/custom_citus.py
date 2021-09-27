@@ -25,6 +25,9 @@ from config import (
     CitusSingleNodeSingleSharedPoolSizeClusterConfig,
     CitusSingleNodeSingleConnectionClusterConfig,
     CitusSingleWorkerClusterConfig,
+    CitusShardReplicationFactorClusterConfig,
+    CitusNoLocalExecutionClusterConfig,
+    CitusComplexClusterConfig,
     CITUS_CUSTOM_TEST_DIR,
     CUSTOM_TEST_NAMES,
      USER, WORKER1PORT,
@@ -45,17 +48,20 @@ def run_for_config(config, name):
     exitCode = common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
                    config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_CREATE_SCHEDULE, config.output_dir,
                    config.input_dir)
+    common.save_regression_diff('create', config.output_dir)
     if config.is_mx:    
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
                    config.random_worker_port(), CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir)
     else:
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir)    
+                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir) 
+
     run_time = time.time() - start_time                                        
-    testResults[name] =  "success" if exitCode == 0 else "fail: see {}".format(config.output_dir + '/run.out')  
+    testResults[name] =  "SUCCESS" if exitCode == 0 else "FAIL: see {}".format(config.output_dir + '/run.out')  
     testResults[name] += " runtime: {} seconds".format(run_time)             
+
     common.stop_databases(config.bindir, config.datadir, config.node_name_to_ports)
-    common.save_regression_diff(type(config).__name__)           
+    common.save_regression_diff('sql', config.output_dir)           
 
 def copy_test_files(config):
 
@@ -93,9 +99,10 @@ if __name__ == '__main__':
         (CitusManyShardsClusterConfig(docoptRes), "citus cluster with many shards"),
         (CitusSingleNodeSingleSharedPoolSizeClusterConfig(docoptRes), "citus single node single shared pool cluster"),
         (CitusSingleNodeSingleConnectionClusterConfig(docoptRes), "citus single node single connection cluster"),
-        (CitusSingleWorkerClusterConfig(docoptRes), "citus single worker node cluster")
-
-
+        (CitusSingleWorkerClusterConfig(docoptRes), "citus single worker node cluster"),
+        (CitusShardReplicationFactorClusterConfig(docoptRes), "citus with shard replication factor 2 cluster"),
+        (CitusNoLocalExecutionClusterConfig(docoptRes), "citus with no local execution cluster"),
+        (CitusComplexClusterConfig(docoptRes), "citus different settings cluster")
     ]
 
     start_time = time.time()
