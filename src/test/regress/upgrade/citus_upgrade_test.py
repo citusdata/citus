@@ -171,5 +171,5 @@ if __name__ == '__main__':
         args['--citus-pre-tar'] = citus_tarball_paths[0]
         args['--citus-post-tar'] = citus_tarball_paths[1]
     config = CitusUpgradeConfig(args)
-    atexit.register(common.stop_databases, config.bindir, config.datadir)
+    atexit.register(common.stop_databases, config.bindir, config.datadir, config.node_name_to_ports)
     main(config)

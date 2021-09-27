@@ -93,18 +93,18 @@ def save_regression_diff(name):
     file_name = "./results/regression.{}".format(name)
     shutil.move("regressions.diffs", file_name)
 
-def sync_metadata_to_workers(pg_path):
-    for port in WORKER_PORTS:
+def sync_metadata_to_workers(pg_path, worker_ports, coordinator_port):
+    for port in worker_ports:
         command = "SELECT * from start_metadata_sync_to_node('localhost', {port});".format(
             port=port)
-        utils.psql(pg_path, NODE_PORTS[COORDINATOR_NAME], command)
+        utils.psql(pg_path, coordinator_port, command)
     
 
-def add_workers(pg_path, worker_ports):
+def add_workers(pg_path, worker_ports, coordinator_port):
     for port in worker_ports:
         command = "SELECT * from master_add_node('localhost', {port});".format(
             port=port)
-        utils.psql(pg_path, NODE_PORTS[COORDINATOR_NAME], command)
+        utils.psql(pg_path, coordinator_port, command)
 
 def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output = False):
     for node_name in node_name_to_ports.keys():
@@ -123,12 +123,12 @@ def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output = False
             subprocess.call(command)
 
 
-def initialize_citus_cluster(old_bindir, old_datadir, settings, config):
+def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
     stop_databases(config.bindir, config.datadir, config.node_name_to_ports, no_output=True)
-    initialize_db_for_cluster(old_bindir, old_datadir, settings, config.node_name_to_ports.keys())
-    start_databases(old_bindir, old_datadir, config.node_name_to_ports)
-    create_citus_extension(old_bindir, config.node_name_to_ports.values())
-    add_workers(old_bindir, config.worker_ports)
+    initialize_db_for_cluster(bindir, datadir, settings, config.node_name_to_ports.keys())
+    start_databases(bindir, datadir, config.node_name_to_ports)
+    create_citus_extension(bindir, config.node_name_to_ports.values())
+    add_workers(bindir, config.worker_ports, config.node_name_to_ports[COORDINATOR_NAME])
     if isinstance(config, CitusBaseClusterConfig):
         config.setup_steps()    

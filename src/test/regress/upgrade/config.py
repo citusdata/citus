@@ -1,6 +1,8 @@
 from os.path import expanduser
 import upgrade_common as common
 import random
+import socket
+from contextlib import closing
 
 
 USER = 'postgres'
@@ -33,6 +35,8 @@ BEFORE_CITUS_UPGRADE_COORD_SCHEDULE = './before_citus_upgrade_coord_schedule'
 MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE = './mixed_before_citus_upgrade_schedule'
 MIXED_AFTER_CITUS_UPGRADE_SCHEDULE = './mixed_after_citus_upgrade_schedule'
 
+CITUS_CUSTOM_TEST_DIR = './tmp_citus_test'
+
 MASTER = 'master'
 # This should be updated when citus version changes
 MASTER_VERSION = '10.2'
@@ -43,6 +47,12 @@ HOME = expanduser("~")
 CITUS_VERSION_SQL = "SELECT extversion FROM pg_extension WHERE extname = 'citus';"
 
 
+def find_free_port():
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(('', 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+
 class NewInitCaller(type):
     def __call__(cls, *args, **kwargs):
         obj = type.__call__(cls, *args, **kwargs)
@@ -50,10 +60,13 @@ class NewInitCaller(type):
         return obj
 
 class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
+
+    data_dir_counter = 0
+
     def __init__(self, arguments):
         self.bindir = arguments['--bindir']
         self.pg_srcdir = arguments['--pgxsdir']
-        self.temp_dir = './tmp_citus_test'
+        self.temp_dir = CITUS_CUSTOM_TEST_DIR
         self.worker_amount = 2
         self.datadir = self.temp_dir + '/data'
         self.is_mx = False
@@ -65,6 +78,10 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
     def init(self):    
         self._init_node_name_ports()
 
+        self.datadir += str(CitusBaseClusterConfig.data_dir_counter)
+        CitusBaseClusterConfig.data_dir_counter += 1
+
+
     def setup_steps(self):
         pass
 
@@ -74,14 +91,16 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
     def _init_node_name_ports(self):
         self.node_name_to_ports = {}
         self.worker_ports = []
-        cur_port = COORDINATOR_PORT
+        cur_port = self._get_and_update_next_port()
         self.node_name_to_ports[COORDINATOR_NAME] = cur_port
         for i in range(self.worker_amount):
-            cur_port += 1
+            cur_port = self._get_and_update_next_port()
             cur_worker_name = 'worker{}'.format(i)
             self.node_name_to_ports[cur_worker_name] = cur_port
             self.worker_ports.append(cur_port)
-        
+
+    def _get_and_update_next_port(self):
+        return find_free_port()
 
 class CitusUpgradeConfig(CitusBaseClusterConfig):
 
@@ -137,7 +156,7 @@ class CitusMxClusterConfig(CitusBaseClusterConfig):
         self.is_mx = True
 
     def setup_steps(self):
-        common.sync_metadata_to_workers(self.bindir)
+        common.sync_metadata_to_workers(self.bindir, self.worker_ports, self.node_name_to_ports[COORDINATOR_NAME])
 
 class CitusManyShardsClusterConfig(CitusBaseClusterConfig):
     def __init__(self, arguments):
