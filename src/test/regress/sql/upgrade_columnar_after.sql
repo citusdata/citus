@@ -110,7 +110,9 @@ BEGIN;
 	SELECT count(DISTINCT value) FROM text_data;
 
 	-- make sure that serial is preserved
-	SELECT max(id) FROM text_data;
+	-- since we run "after schedule" twice and "rollback" wouldn't undo
+	-- sequence changes, it can be 22 or 33, not a different value
+	SELECT max(id) in (22, 33) FROM text_data;
 
 	-- since we run "after schedule" twice, rollback the transaction
 	-- to avoid getting "table already exists" errors
