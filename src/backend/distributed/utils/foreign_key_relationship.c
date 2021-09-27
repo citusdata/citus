@@ -153,6 +153,13 @@ ShouldUndistributeCitusLocalTable(Oid relationId)
 	InvalidateForeignKeyGraph();
 
 	List *fkeyConnectedRelations = GetForeignKeyConnectedRelationIdList(relationId);
+
+	if (fkeyConnectedRelations == NIL)
+	{
+		/* if no fkey connection is found, we should only check the relation itself */
+		fkeyConnectedRelations = lappend_oid(fkeyConnectedRelations, relationId);
+	}
+
 	Oid relationOid = InvalidOid;
 	foreach_oid(relationOid, fkeyConnectedRelations)
 	{
