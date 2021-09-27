@@ -209,6 +209,28 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
 ALTER TABLE reference_table_1 DROP COLUMN r1 CASCADE;
 SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid IN ('reference_table_1'::regclass, 'citus_local_table_1'::regclass, 'citus_local_table_2'::regclass, 'citus_local_table_3'::regclass) ORDER BY logicalrelid;
 
+-- verify that citus local tables converted by the user will not be auto-undistributed
+DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3;
+CREATE TABLE citus_local_table_1(a INT UNIQUE);
+CREATE TABLE citus_local_table_2(a INT UNIQUE);
+CREATE TABLE citus_local_table_3(a INT UNIQUE);
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_cas_test FOREIGN KEY (a) REFERENCES citus_local_table_2 (a);
+SELECT citus_add_local_table_to_metadata('citus_local_table_1', cascade_via_foreign_keys=>true);
+SELECT citus_add_local_table_to_metadata('citus_local_table_3');
+ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_cas_test_2 FOREIGN KEY (a) REFERENCES citus_local_table_2 (a);
+ALTER TABLE citus_local_table_3 DROP CONSTRAINT fkey_cas_test_2;
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('citus_local_table_1'::regclass,
+                         'citus_local_table_2'::regclass,
+                         'citus_local_table_3'::regclass)
+  ORDER BY logicalrelid;
+ALTER TABLE citus_local_table_1 DROP CONSTRAINT fkey_cas_test;
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('citus_local_table_1'::regclass,
+                         'citus_local_table_2'::regclass,
+                         'citus_local_table_3'::regclass)
+  ORDER BY logicalrelid;
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
