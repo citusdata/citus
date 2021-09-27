@@ -67,11 +67,11 @@ def run_pg_regress(pg_path, pg_srcdir, port, schedule):
     should_exit = True
     _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit)
 
-def run_pg_regress_without_exit(pg_path, pg_srcdir, port, schedule):
+def run_pg_regress_without_exit(pg_path, pg_srcdir, port, schedule, output_dir = '.', input_dir = '.'):
     should_exit = False
-    return _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit)  
+    return _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir, input_dir)  
 
-def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit):
+def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir = '.', input_dir = '.'):
     command = [
         os.path.join(pg_srcdir, 'src/test/regress/pg_regress'),
         '--port', str(port),
@@ -79,6 +79,8 @@ def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit):
         '--bindir', pg_path,
         '--user', USER,
         '--dbname', DBNAME,
+        '--inputdir', input_dir,
+        '--outputdir', output_dir,
         '--use-existing'
     ]
     exit_code = subprocess.call(command)
@@ -131,4 +133,4 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     create_citus_extension(bindir, config.node_name_to_ports.values())
     add_workers(bindir, config.worker_ports, config.node_name_to_ports[COORDINATOR_NAME])
     if isinstance(config, CitusBaseClusterConfig):
-        config.setup_steps()    
+        config.setup_steps()

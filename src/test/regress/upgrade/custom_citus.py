@@ -13,6 +13,7 @@ import upgrade_common as common
 import threading
 import atexit
 from docopt import docopt
+import os, shutil
 
 from config import (
     CitusDefaultClusterConfig, CitusSingleNodeClusterConfig,
@@ -24,6 +25,7 @@ from config import (
     CitusSingleNodeSingleConnectionClusterConfig,
     CitusSingleWorkerClusterConfig,
     CITUS_CUSTOM_TEST_DIR,
+    CUSTOM_TEST_NAMES,
      USER, WORKER1PORT,
     NODE_NAMES, DBNAME, COORDINATOR_NAME,
     WORKER_PORTS, CUSTOM_CREATE_SCHEDULE,
@@ -35,18 +37,34 @@ testResults = {}
 def run_for_config(config, name):
     print ('Running test for: {}'.format(name))
     common.initialize_citus_cluster(config.bindir, config.datadir, config.settings, config)
+    
+    copy_test_files(config)
 
     exitCode = common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_CREATE_SCHEDULE)
+                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_CREATE_SCHEDULE, config.output_dir,
+                   config.input_dir)
     if config.is_mx:    
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   config.random_worker_port(), CUSTOM_SQL_SCHEDULE)
+                   config.random_worker_port(), CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir)
     else:
         common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
                    config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE)                             
-    testResults[name] =  "success" if exitCode == 0 else "fail"               
+    testResults[name] =  "success" if exitCode == 0 else "fail: see {}".format(config.output_dir + '/run.out')               
     common.stop_databases(config.bindir, config.datadir, config.node_name_to_ports)
     common.save_regression_diff(type(config).__name__)           
+
+def copy_test_files(config):
+
+    sql_dir_path = os.path.join(config.datadir, 'sql')
+    expected_dir_path = os.path.join(config.datadir, 'expected')
+
+    common.initialize_temp_dir(sql_dir_path)
+    common.initialize_temp_dir(expected_dir_path)
+    for test_name in CUSTOM_TEST_NAMES:
+        sql_name = os.path.join('./sql', test_name + '.sql')
+        output_name = os.path.join('./expected', test_name + '.out') 
+        shutil.copy(sql_name, sql_dir_path)
+        shutil.copy(output_name, expected_dir_path)
 
 
 

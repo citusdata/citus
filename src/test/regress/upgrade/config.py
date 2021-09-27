@@ -3,6 +3,7 @@ import upgrade_common as common
 import random
 import socket
 from contextlib import closing
+import os
 
 
 USER = 'postgres'
@@ -23,6 +24,7 @@ NODE_PORTS = {
     WORKER2: WORKER2PORT,
 }
 
+CUSTOM_TEST_NAMES = ['custom_sql_test', 'custom_create_test']
 
 BEFORE_PG_UPGRADE_SCHEDULE = './before_pg_upgrade_schedule'
 AFTER_PG_UPGRADE_SCHEDULE = './after_pg_upgrade_schedule'
@@ -79,6 +81,9 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self._init_node_name_ports()
 
         self.datadir += str(CitusBaseClusterConfig.data_dir_counter)
+        self.input_dir = self.datadir
+        self.output_dir = self.datadir
+        self.output_file = os.path.join(self.datadir, 'run.out')
         CitusBaseClusterConfig.data_dir_counter += 1
 
 
