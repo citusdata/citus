@@ -111,4 +111,7 @@ BEGIN;
 
 	-- make sure that serial is preserved
 	SELECT max(id) FROM text_data;
-COMMIT;
+
+	-- since we run "after schedule" twice, rollback the transaction
+	-- to avoid getting "table already exists" errors
+ROLLBACK;
