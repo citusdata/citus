@@ -13,12 +13,6 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 
 -- show that DROP CONSTRAINT cascades to undistributing citus_local_table
 CREATE TABLE citus_local_table(l1 int);
-SELECT citus_add_local_table_to_metadata('citus_local_table');
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
 CREATE TABLE reference_table(r1 int primary key);
 SELECT create_reference_table('reference_table');
  create_reference_table
@@ -30,8 +24,8 @@ ALTER TABLE citus_local_table ADD CONSTRAINT fkey_local_to_ref FOREIGN KEY(l1) R
 SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid IN ('citus_local_table'::regclass, 'reference_table'::regclass) ORDER BY logicalrelid;
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
- citus_local_table | n          | s
  reference_table   | n          | t
+ citus_local_table | n          | s
 (2 rows)
 
 CREATE OR REPLACE FUNCTION drop_constraint_cascade_via_perform_deletion(IN table_name regclass, IN constraint_name text)
@@ -50,8 +44,8 @@ BEGIN;
   SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid IN ('citus_local_table'::regclass, 'reference_table'::regclass) ORDER BY logicalrelid;
    logicalrelid    | partmethod | repmodel
 ---------------------------------------------------------------------
- citus_local_table | n          | s
  reference_table   | n          | t
+ citus_local_table | n          | s
 (2 rows)
 
 ROLLBACK;
@@ -454,6 +448,50 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
  reference_table_1 | n          | t
 (1 row)
 
+-- verify that citus local tables converted by the user will not be auto-undistributed
+DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3;
+CREATE TABLE citus_local_table_1(a INT UNIQUE);
+CREATE TABLE citus_local_table_2(a INT UNIQUE);
+CREATE TABLE citus_local_table_3(a INT UNIQUE);
+ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_cas_test FOREIGN KEY (a) REFERENCES citus_local_table_2 (a);
+SELECT citus_add_local_table_to_metadata('citus_local_table_1', cascade_via_foreign_keys=>true);
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_add_local_table_to_metadata('citus_local_table_3');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_cas_test_2 FOREIGN KEY (a) REFERENCES citus_local_table_2 (a);
+ALTER TABLE citus_local_table_3 DROP CONSTRAINT fkey_cas_test_2;
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('citus_local_table_1'::regclass,
+                         'citus_local_table_2'::regclass,
+                         'citus_local_table_3'::regclass)
+  ORDER BY logicalrelid;
+    logicalrelid     | autoconverted
+---------------------------------------------------------------------
+ citus_local_table_1 | f
+ citus_local_table_2 | t
+ citus_local_table_3 | f
+(3 rows)
+
+ALTER TABLE citus_local_table_1 DROP CONSTRAINT fkey_cas_test;
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('citus_local_table_1'::regclass,
+                         'citus_local_table_2'::regclass,
+                         'citus_local_table_3'::regclass)
+  ORDER BY logicalrelid;
+    logicalrelid     | autoconverted
+---------------------------------------------------------------------
+ citus_local_table_1 | f
+ citus_local_table_3 | f
+(2 rows)
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
@@ -491,9 +529,9 @@ ALTER TABLE reference_table_1 OWNER TO another_user;
 SELECT run_command_on_placements('reference_table_1', 'ALTER TABLE %s OWNER TO another_user');
          run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,57636,1810039,t,"ALTER TABLE")
- (localhost,57637,1810039,t,"ALTER TABLE")
- (localhost,57638,1810039,t,"ALTER TABLE")
+ (localhost,57636,1810042,t,"ALTER TABLE")
+ (localhost,57637,1810042,t,"ALTER TABLE")
+ (localhost,57638,1810042,t,"ALTER TABLE")
 (3 rows)
 
 SET citus.enable_ddl_propagation to ON;

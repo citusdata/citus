@@ -313,18 +313,6 @@ SET search_path TO citus_local_tables_test_schema;
 CREATE TABLE dummy_reference_table (a INT PRIMARY KEY);
 SELECT create_reference_table('dummy_reference_table');
 
-BEGIN;
-  SET client_min_messages TO ERROR;
-  SELECT remove_local_tables_from_metadata();
-
-  -- should see only local_table_3, since it's the only one that is converted by the user
-  SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
-  WHERE tablename=logicalrelid::regclass::text AND
-        schemaname='citus_local_tables_test_schema' AND
-        partmethod = 'n' AND repmodel = 's'
-  ORDER BY 1;
-ROLLBACK;
-
 -- define foreign keys between dummy_reference_table and citus local tables
 -- not to undistribute them automatically
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
