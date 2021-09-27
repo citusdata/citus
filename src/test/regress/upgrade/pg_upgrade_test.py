@@ -53,9 +53,9 @@ def citus_finish_pg_upgrade(pg_path):
         utils.psql(pg_path, port, "SELECT citus_finish_pg_upgrade();")
 
 
-def stop_all_databases(old_bindir, new_bindir, old_datadir, new_datadir):
-    common.stop_databases(old_bindir, old_datadir)
-    common.stop_databases(new_bindir, new_datadir)
+def stop_all_databases(old_bindir, new_bindir, old_datadir, new_datadir, config):
+    common.stop_databases(old_bindir, old_datadir, config.node_name_to_ports)
+    common.stop_databases(new_bindir, new_datadir, config.node_name_to_ports)
 
 
 def main(config):
@@ -69,13 +69,13 @@ def main(config):
     citus_prepare_pg_upgrade(config.old_bindir)
     # prepare should be idempotent, calling it a second time should never fail.
     citus_prepare_pg_upgrade(config.old_bindir)
-    common.stop_databases(config.old_bindir, config.old_datadir)
+    common.stop_databases(config.old_bindir, config.old_datadir, config.node_name_to_ports)
 
     common.initialize_db_for_cluster(
-        config.new_bindir, config.new_datadir, config.settings)
+        config.new_bindir, config.new_datadir, config.settings, config.node_name_to_ports.keys())
     perform_postgres_upgrade(
         config.old_bindir, config.new_bindir, config.old_datadir, config.new_datadir)
-    common.start_databases(config.new_bindir, config.new_datadir)
+    common.start_databases(config.new_bindir, config.new_datadir, config.node_name_to_ports)
     citus_finish_pg_upgrade(config.new_bindir)
 
     common.run_pg_regress(config.new_bindir, config.pg_srcdir,
@@ -85,5 +85,5 @@ def main(config):
 if __name__ == '__main__':
     config = PGUpgradeConfig(docopt(__doc__, version='upgrade_test'))
     atexit.register(stop_all_databases, config.old_bindir,
-                    config.new_bindir, config.old_datadir, config.new_datadir)
+                    config.new_bindir, config.old_datadir, config.new_datadir, config)
     main(config)

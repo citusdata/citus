@@ -1,5 +1,25 @@
 from os.path import expanduser
 import upgrade_common as common
+import random
+
+
+USER = 'postgres'
+DBNAME = 'postgres'
+
+COORDINATOR_NAME = 'coordinator'
+WORKER1 = 'worker1'
+WORKER2 = 'worker2'
+NODE_NAMES = [COORDINATOR_NAME, WORKER1, WORKER2]
+COORDINATOR_PORT = 57635
+WORKER1PORT = 57636
+WORKER2PORT = 57637
+
+WORKER_PORTS = [WORKER1PORT, WORKER2PORT]
+NODE_PORTS = {
+    COORDINATOR_NAME: COORDINATOR_PORT,
+    WORKER1: WORKER1PORT,
+    WORKER2: WORKER2PORT,
+}
 
 
 BEFORE_PG_UPGRADE_SCHEDULE = './before_pg_upgrade_schedule'
@@ -23,25 +43,13 @@ HOME = expanduser("~")
 CITUS_VERSION_SQL = "SELECT extversion FROM pg_extension WHERE extname = 'citus';"
 
 
-class CitusUpgradeConfig():
+class NewInitCaller(type):
+    def __call__(cls, *args, **kwargs):
+        obj = type.__call__(cls, *args, **kwargs)
+        obj.init()
+        return obj
 
-    def __init__(self, arguments):
-        self.bindir = arguments['--bindir']
-        self.pre_tar_path = arguments['--citus-pre-tar']
-        self.post_tar_path = arguments['--citus-post-tar']
-        self.pg_srcdir = arguments['--pgxsdir']
-        self.worker_amount = 2
-        self.temp_dir = './tmp_citus_upgrade'
-        self.datadir = self.temp_dir + '/data'
-        self.settings = {
-            'shared_preload_libraries': 'citus',
-            'citus.node_conninfo': 'sslmode=prefer',
-            'citus.enable_version_checks' : 'false'
-        }
-        self.mixed_mode = arguments['--mixed']
-
-
-class CitusBaseClusterConfig():
+class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
     def __init__(self, arguments):
         self.bindir = arguments['--bindir']
         self.pg_srcdir = arguments['--pgxsdir']
@@ -54,8 +62,40 @@ class CitusBaseClusterConfig():
             'citus.node_conninfo': 'sslmode=prefer',
         }
 
+    def init(self):    
+        self._init_node_name_ports()
+
     def setup_steps(self):
         pass
+
+    def random_worker_port(self):
+        return random.choice(self.worker_ports)
+
+    def _init_node_name_ports(self):
+        self.node_name_to_ports = {}
+        self.worker_ports = []
+        cur_port = COORDINATOR_PORT
+        self.node_name_to_ports[COORDINATOR_NAME] = cur_port
+        for i in range(self.worker_amount):
+            cur_port += 1
+            cur_worker_name = 'worker{}'.format(i)
+            self.node_name_to_ports[cur_worker_name] = cur_port
+            self.worker_ports.append(cur_port)
+        
+
+class CitusUpgradeConfig(CitusBaseClusterConfig):
+
+    def __init__(self, arguments):
+        self.pre_tar_path = arguments['--citus-pre-tar']
+        self.post_tar_path = arguments['--citus-post-tar']
+        self.temp_dir = './tmp_citus_upgrade'
+        self.new_settings = {
+            'citus.enable_version_checks' : 'false'
+        }
+        self.mixed_mode = arguments['--mixed']
+        self.settings.update(self.new_settings)
+
+
 
 class CitusDefaultClusterConfig(CitusBaseClusterConfig):
     pass
@@ -66,6 +106,11 @@ class CitusSingleNodeClusterConfig(CitusBaseClusterConfig):
         super().__init__(arguments)
         self.worker_amount = 0
 
+class CitusSingleWorkerClusterConfig(CitusBaseClusterConfig):
+
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.worker_amount = 1
 
 class CitusSingleNodeSingleShardClusterConfig(CitusBaseClusterConfig):
 
@@ -120,36 +165,10 @@ class CitusSingleNodeSingleSharedPoolSizeClusterConfig(CitusBaseClusterConfig):
 
         
 
-class PGUpgradeConfig():
+class PGUpgradeConfig(CitusBaseClusterConfig):
     def __init__(self, arguments):
         self.old_bindir = arguments['--old-bindir']
         self.new_bindir = arguments['--new-bindir']
-        self.pg_srcdir = arguments['--pgxsdir']
         self.temp_dir = './tmp_upgrade'
         self.old_datadir = self.temp_dir + '/oldData'
         self.new_datadir = self.temp_dir + '/newData'
-        self.worker_amount = 2
-
-        self.settings = {
-            'shared_preload_libraries': 'citus',
-            'citus.node_conninfo': 'sslmode=prefer'
-        }
-
-
-USER = 'postgres'
-DBNAME = 'postgres'
-
-COORDINATOR_NAME = 'coordinator'
-WORKER1 = 'worker1'
-WORKER2 = 'worker2'
-NODE_NAMES = [COORDINATOR_NAME, WORKER1, WORKER2]
-COORDINATOR_PORT = 57635
-WORKER1PORT = 57636
-WORKER2PORT = 57637
-
-WORKER_PORTS = [WORKER1PORT, WORKER2PORT]
-NODE_PORTS = {
-    COORDINATOR_NAME: COORDINATOR_PORT,
-    WORKER1: WORKER1PORT,
-    WORKER2: WORKER2PORT,
-}

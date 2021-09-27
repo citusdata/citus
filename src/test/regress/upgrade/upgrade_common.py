@@ -23,9 +23,9 @@ def initialize_temp_dir_if_not_exists(temp_dir):
     # Give full access to TEMP_DIR so that postgres user can use it.
     os.chmod(temp_dir, 0o777)
 
-def initialize_db_for_cluster(pg_path, rel_data_path, settings):
+def initialize_db_for_cluster(pg_path, rel_data_path, settings, node_names):
     subprocess.run(['mkdir', rel_data_path], check=True)
-    for node_name in NODE_NAMES:
+    for node_name in node_names:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         command = [
             os.path.join(pg_path, 'initdb'),
@@ -46,20 +46,21 @@ def add_settings(abs_data_path, settings):
             conf_file.write(setting)
 
 
-def start_databases(pg_path, rel_data_path):
-    for node_name in NODE_NAMES:
+def start_databases(pg_path, rel_data_path, node_name_to_ports):
+    for node_name in node_name_to_ports.keys():
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
+        node_port = node_name_to_ports[node_name]
         command = [
             os.path.join(pg_path, 'pg_ctl'), 'start',
             '--pgdata', abs_data_path,
             '-U', USER,
-            '-o', '-p {}'.format(NODE_PORTS[node_name]),
+            '-o', '-p {}'.format(node_port),
             '--log', os.path.join(abs_data_path, 'logfile_' + node_name)
         ]
         subprocess.run(command, check=True)
 
-def create_citus_extension(pg_path):
-    for port in NODE_PORTS.values():
+def create_citus_extension(pg_path, node_ports):
+    for port in node_ports:
         utils.psql(pg_path, port, "CREATE EXTENSION citus;")
 
 def run_pg_regress(pg_path, pg_srcdir, port, schedule):
@@ -86,6 +87,11 @@ def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit):
         sys.exit(exit_code)
     return exit_code    
 
+def save_regression_diff(name):
+    if not os.path.exists('regressions.diff'):
+        return
+    file_name = "./results/regression.{}".format(name)
+    shutil.move("regressions.diffs", file_name)
 
 def sync_metadata_to_workers(pg_path):
     for port in WORKER_PORTS:
@@ -94,30 +100,35 @@ def sync_metadata_to_workers(pg_path):
         utils.psql(pg_path, NODE_PORTS[COORDINATOR_NAME], command)
     
 
-def add_workers(pg_path):
-    for port in WORKER_PORTS:
+def add_workers(pg_path, worker_ports):
+    for port in worker_ports:
         command = "SELECT * from master_add_node('localhost', {port});".format(
             port=port)
         utils.psql(pg_path, NODE_PORTS[COORDINATOR_NAME], command)
 
-def stop_databases(pg_path, rel_data_path):
-    for node_name in NODE_NAMES:
+def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output = False):
+    for node_name in node_name_to_ports.keys():
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
+        node_port = node_name_to_ports[node_name]
         command = [
             os.path.join(pg_path, 'pg_ctl'), 'stop',
             '--pgdata', abs_data_path,
             '-U', USER,
-            '-o', '-p {}'.format(NODE_PORTS[node_name]),
+            '-o', '-p {}'.format(node_port),
             '--log', os.path.join(abs_data_path, 'logfile_' + node_name)
         ]
-        subprocess.call(command)
+        if no_output:
+            subprocess.call(command, stdout=subprocess.DEVNULL)
+        else:
+            subprocess.call(command)
 
 
 def initialize_citus_cluster(old_bindir, old_datadir, settings, config):
-    initialize_db_for_cluster(old_bindir, old_datadir, settings)
-    start_databases(old_bindir, old_datadir)
-    create_citus_extension(old_bindir)
-    if config.worker_amount > 0:
-        add_workers(old_bindir)
+    # In case there was a leftover from previous runs, stop the databases
+    stop_databases(config.bindir, config.datadir, config.node_name_to_ports, no_output=True)
+    initialize_db_for_cluster(old_bindir, old_datadir, settings, config.node_name_to_ports.keys())
+    start_databases(old_bindir, old_datadir, config.node_name_to_ports)
+    create_citus_extension(old_bindir, config.node_name_to_ports.values())
+    add_workers(old_bindir, config.worker_ports)
     if isinstance(config, CitusBaseClusterConfig):
         config.setup_steps()    
