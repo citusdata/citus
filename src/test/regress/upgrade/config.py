@@ -1,5 +1,4 @@
 from os.path import expanduser
-import upgrade_common as common
 import random
 import socket
 from contextlib import closing
@@ -175,9 +174,6 @@ class CitusComplexClusterConfig(CitusBaseClusterConfig):
         self.settings.update(self.new_settings)
         self.is_mx = True
 
-    def setup_steps(self):
-        common.sync_metadata_to_workers(self.bindir, self.worker_ports, self.node_name_to_ports[COORDINATOR_NAME])
-
 
 class CitusSingleShardClusterConfig(CitusBaseClusterConfig):
 
@@ -192,9 +188,6 @@ class CitusMxClusterConfig(CitusBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.is_mx = True
-
-    def setup_steps(self):
-        common.sync_metadata_to_workers(self.bindir, self.worker_ports, self.node_name_to_ports[COORDINATOR_NAME])
 
 class CitusManyShardsClusterConfig(CitusBaseClusterConfig):
     def __init__(self, arguments):

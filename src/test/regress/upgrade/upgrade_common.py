@@ -134,5 +134,5 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     start_databases(bindir, datadir, config.node_name_to_ports)
     create_citus_extension(bindir, config.node_name_to_ports.values())
     add_workers(bindir, config.worker_ports, config.node_name_to_ports[COORDINATOR_NAME])
-    if isinstance(config, CitusBaseClusterConfig):
-        config.setup_steps()
+    if config.is_mx:
+        sync_metadata_to_workers(bindir, config.worker_ports, config.node_name_to_ports[COORDINATOR_NAME])
