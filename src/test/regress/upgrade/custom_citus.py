@@ -35,32 +35,32 @@ from config import (
     CUSTOM_SQL_SCHEDULE
 )
 
-testResults = {}        
+testResults = {}
 
 def run_for_config(config, name):
     print ('Running test for: {}'.format(name))
     start_time = time.time()
     common.initialize_citus_cluster(config.bindir, config.datadir, config.settings, config)
-    
+
     copy_test_files(config)
 
     exitCode = common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
                    config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_CREATE_SCHEDULE, config.output_dir,
                    config.input_dir)
     common.save_regression_diff('create', config.output_dir)
-    if config.is_mx:    
+    if config.is_mx:
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
                    config.random_worker_port(), CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir)
     else:
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir) 
+                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir)
 
-    run_time = time.time() - start_time                                        
-    testResults[name] =  "SUCCESS" if exitCode == 0 else "FAIL: see {}".format(config.output_dir + '/run.out')  
-    testResults[name] += " runtime: {} seconds".format(run_time)             
+    run_time = time.time() - start_time
+    testResults[name] =  "SUCCESS" if exitCode == 0 else "FAIL: see {}".format(config.output_dir + '/run.out')
+    testResults[name] += " runtime: {} seconds".format(run_time)
 
     common.stop_databases(config.bindir, config.datadir, config.node_name_to_ports)
-    common.save_regression_diff('sql', config.output_dir)           
+    common.save_regression_diff('sql', config.output_dir)
 
 def copy_test_files(config):
 
@@ -71,7 +71,7 @@ def copy_test_files(config):
     common.initialize_temp_dir(expected_dir_path)
     for test_name in CUSTOM_TEST_NAMES:
         sql_name = os.path.join('./sql', test_name + '.sql')
-        output_name = os.path.join('./expected', test_name + '.out') 
+        output_name = os.path.join('./expected', test_name + '.out')
         shutil.copy(sql_name, sql_dir_path)
         shutil.copy(output_name, expected_dir_path)
 

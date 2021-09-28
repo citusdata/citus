@@ -70,7 +70,7 @@ def run_pg_regress(pg_path, pg_srcdir, port, schedule):
 
 def run_pg_regress_without_exit(pg_path, pg_srcdir, port, schedule, output_dir = '.', input_dir = '.'):
     should_exit = False
-    return _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir, input_dir)  
+    return _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir, input_dir)
 
 def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir = '.', input_dir = '.'):
     command = [
@@ -88,7 +88,7 @@ def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir 
     # subprocess.run('bin/copy_modified', check=True)
     if should_exit and exit_code != 0:
         sys.exit(exit_code)
-    return exit_code    
+    return exit_code
 
 def save_regression_diff(name, output_dir):
     path = os.path.join(output_dir, 'regression.diffs')
@@ -102,7 +102,7 @@ def sync_metadata_to_workers(pg_path, worker_ports, coordinator_port):
         command = "SELECT * from start_metadata_sync_to_node('localhost', {port});".format(
             port=port)
         utils.psql(pg_path, coordinator_port, command)
-    
+
 
 def add_workers(pg_path, worker_ports, coordinator_port):
     for port in worker_ports:

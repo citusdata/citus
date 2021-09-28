@@ -75,7 +75,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
             'citus.node_conninfo': 'sslmode=prefer',
         }
 
-    def init(self):    
+    def init(self):
         self._init_node_name_ports()
 
         self.datadir += str(CitusBaseClusterConfig.data_dir_counter)
@@ -151,7 +151,7 @@ class CitusShardReplicationFactorClusterConfig(CitusBaseClusterConfig):
         self.new_settings = {
             'citus.shard_replication_factor': 2
         }
-        self.settings.update(self.new_settings)  
+        self.settings.update(self.new_settings)
 
 class CitusNoLocalExecutionClusterConfig(CitusBaseClusterConfig):
 
@@ -160,7 +160,7 @@ class CitusNoLocalExecutionClusterConfig(CitusBaseClusterConfig):
         self.new_settings = {
             'citus.enable_local_execution': False
         }
-        self.settings.update(self.new_settings)        
+        self.settings.update(self.new_settings)
 
 class CitusComplexClusterConfig(CitusBaseClusterConfig):
 
@@ -172,7 +172,7 @@ class CitusComplexClusterConfig(CitusBaseClusterConfig):
             'citus.multi_shard_modify_mode': 'sequential',
             'citus.prevent_incomplete_connection_establishment': False
         }
-        self.settings.update(self.new_settings) 
+        self.settings.update(self.new_settings)
         self.is_mx = True
 
     def setup_steps(self):
@@ -220,7 +220,7 @@ class CitusSingleNodeSingleSharedPoolSizeClusterConfig(CitusBaseClusterConfig):
         }
         self.settings.update(self.new_settings)
 
-        
+
 
 class PGUpgradeConfig(CitusBaseClusterConfig):
     def __init__(self, arguments):
