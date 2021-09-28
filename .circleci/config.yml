@@ -169,6 +169,67 @@ jobs:
       - codecov/upload:
           flags: 'test_<< parameters.old_pg_major >>_<< parameters.new_pg_major >>,upgrade'
 
+  test-custom:
+    description: Runs custom citus tests
+    parameters:
+      pg_major:
+        description: 'postgres major version to use'
+        type: integer
+      image:
+        description: 'docker image to use as for the tests'
+        type: string
+        default: citus/pgupgradetester
+      image_tag:
+        description: 'docker image tag to use'
+        type: string
+        default: 12-13
+    docker:
+      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+    working_directory: /home/circleci/project
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: 'Install Extension'
+          command: |
+            tar xfv "${CIRCLE_WORKING_DIRECTORY}/install-<< parameters.pg_major >>.tar" --directory /
+      - run:
+          name: 'Configure'
+          command: |
+            chown -R circleci .
+            gosu circleci ./configure
+      - run:
+          name: 'Enable core dumps'
+          command: |
+            ulimit -c unlimited
+      - run:
+          name: 'Test custom'
+          command: |
+            gosu circleci \
+              make -C src/test/regress \
+                check-custom-citus
+          no_output_timeout: 2m
+      - run:
+          name: 'Copy coredumps'
+          command: |
+            mkdir -p /tmp/core_dumps
+            if ls core.* 1> /dev/null 2>&1; then
+                cp core.* /tmp/core_dumps
+            fi
+          when: on_fail
+      - store_artifacts:
+          name: 'Save regressions'
+          path: src/test/regress/regression.diffs
+          when: on_fail
+      - store_artifacts:
+          name: 'Save core dumps'
+          path: /tmp/core_dumps
+          when: on_fail
+      - codecov/upload:
+          flags: 'test_<< parameters.pg_major >>,upgrade'
+
+
   test-citus-upgrade:
     description: Runs citus upgrade tests
     parameters:
@@ -678,23 +739,20 @@ workflows:
           make: check-failure
           requires: [build-14]
 
-      - test-citus:
+      - test-custom:
           name: 'test-12_check-custom'
           pg_major: 12
-          image_tag: '12.8'
-          make: check-custom-citus
+          image_tag: '12.8-13.4-14rc1'
           requires: [build-12]
-      - test-citus:
+      - test-custom:
           name: 'test-13_check-custom'
           pg_major: 13
-          image_tag: '13.4'
-          make: check-custom-citus
+          image_tag: '12.8-13.4-14rc1'
           requires: [build-13]
-      - test-citus:
+      - test-custom:
           name: 'test-14_check-custom'
           pg_major: 14
-          image_tag: '14rc1'
-          make: check-custom-citus
+          image_tag: '12.8-13.4-14rc1'
           requires: [build-14]
 
       - test-pg-upgrade:
