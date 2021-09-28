@@ -15,6 +15,7 @@ import atexit
 from docopt import docopt
 import os, shutil
 import time
+import sys
 
 from config import (
     CitusDefaultClusterConfig, CitusSingleNodeClusterConfig,
@@ -36,6 +37,7 @@ from config import (
 )
 
 testResults = {}
+failCount = 0
 
 def run_for_config(config, name):
     print ('Running test for: {}'.format(name))
@@ -58,6 +60,9 @@ def run_for_config(config, name):
     run_time = time.time() - start_time
     testResults[name] =  "SUCCESS" if exitCode == 0 else "FAIL: see {}".format(config.output_dir + '/run.out')
     testResults[name] += " runtime: {} seconds".format(run_time)
+
+    if exitCode != 0:
+        failCount += 1
 
     common.stop_databases(config.bindir, config.datadir, config.node_name_to_ports)
     common.save_regression_diff('sql', config.output_dir)
@@ -85,6 +90,7 @@ class TestRunner(threading.Thread):
 
     def run(self):
       run_for_config(self.config, self.name)
+
 
 
 if __name__ == '__main__':
@@ -120,3 +126,6 @@ if __name__ == '__main__':
 
     end_time = time.time()
     print('--- {} seconds to run all tests! ---'.format(end_time - start_time))
+
+    if len(testResults) != len(configs) or failCount > 0:
+        sys.exit(1)
