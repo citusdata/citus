@@ -73,8 +73,6 @@ extern int ExecutorLevel;
 extern void CitusExecutorStart(QueryDesc *queryDesc, int eflags);
 extern void CitusExecutorRun(QueryDesc *queryDesc, ScanDirection direction, uint64 count,
 							 bool execute_once);
-extern void AdaptiveExecutorPreExecutorRun(CitusScanState *scanState);
-extern TupleTableSlot * AdaptiveExecutor(CitusScanState *scanState);
 
 
 /*

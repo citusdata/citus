@@ -1,7 +1,9 @@
 #ifndef ADAPTIVE_EXECUTOR_H
 #define ADAPTIVE_EXECUTOR_H
 
+#include "distributed/citus_custom_scan.h"
 #include "distributed/multi_physical_planner.h"
+
 
 /* GUC, determining whether Citus opens 1 connection per task */
 extern bool ForceMaxQueryParallelization;
@@ -14,6 +16,9 @@ extern int ExecutorSlowStartInterval;
 extern bool EnableCostBasedConnectionEstablishment;
 extern bool PreventIncompleteConnectionEstablishment;
 
+extern void AdaptiveExecutorPreExecutorRun(CitusScanState *scanState);
+extern void AdaptiveExecutorStart(CitusScanState *scanState);
+extern bool AdaptiveExecutorRun(CitusScanState *scanState);
 extern bool ShouldRunTasksSequentially(List *taskList);
 extern uint64 ExecuteUtilityTaskList(List *utilityTaskList, bool localExecutionSupported);
 extern uint64 ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize,

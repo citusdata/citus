@@ -266,7 +266,7 @@ typedef struct DistributedExecution
 	bool raiseInterrupts;
 
 	/* transactional properties of the current execution */
-	TransactionProperties *transactionProperties;
+	TransactionProperties transactionProperties;
 
 	/* indicates whether distributed execution has failed */
 	bool failed;
@@ -281,6 +281,13 @@ typedef struct DistributedExecution
 	 * a single replica's rows that are processed.
 	 */
 	uint64 rowsProcessed;
+
+	/*
+	 * RunDistributedExecution can be called multiple time to perform partial
+	 * execution. In that case, rowsReceivedInCurrentRun contains the number
+	 * of rows received.
+	 */
+	uint64 rowsReceivedInCurrentRun;
 
 	/*
 	 * The following fields are used while receiving results from remote nodes.
@@ -299,6 +306,11 @@ typedef struct DistributedExecution
 	 * do cleanup for repartition queries.
 	 */
 	List *jobIdList;
+
+	/*
+	 * Memory context for the execution.
+	 */
+	MemoryContext memoryContext;
 } DistributedExecution;
 
 
@@ -614,7 +626,7 @@ static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel
 														 int targetPoolSize,
 														 TupleDestination *
 														 defaultTupleDest,
-														 TransactionProperties *
+														 TransactionProperties
 														 xactProperties,
 														 List *jobIdList,
 														 bool localExecutionSupported);
@@ -625,7 +637,7 @@ static TransactionProperties DecideTransactionPropertiesForTaskList(RowModifyLev
 																	exludeFromTransaction);
 static void StartDistributedExecution(DistributedExecution *execution);
 static void RunLocalExecution(CitusScanState *scanState, DistributedExecution *execution);
-static void RunDistributedExecution(DistributedExecution *execution);
+static void RunDistributedExecution(DistributedExecution *execution, bool toCompletion);
 static void SequentialRunDistributedExecution(DistributedExecution *execution);
 static void FinishDistributedExecution(DistributedExecution *execution);
 static void CleanUpSessions(DistributedExecution *execution);
@@ -755,11 +767,9 @@ AdaptiveExecutorPreExecutorRun(CitusScanState *scanState)
  * first call of CitusExecScan. The function fills the tupleStore
  * of the input scanScate.
  */
-TupleTableSlot *
-AdaptiveExecutor(CitusScanState *scanState)
+void
+AdaptiveExecutorStart(CitusScanState *scanState)
 {
-	TupleTableSlot *resultSlot = NULL;
-
 	DistributedPlan *distributedPlan = scanState->distributedPlan;
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
@@ -774,14 +784,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 	/* we should only call this once before the scan finished */
 	Assert(!scanState->finishedRemoteScan);
 
-	MemoryContext localContext = AllocSetContextCreate(CurrentMemoryContext,
-													   "AdaptiveExecutor",
-													   ALLOCSET_DEFAULT_SIZES);
-	MemoryContext oldContext = MemoryContextSwitchTo(localContext);
-
-
-	/* Reset Task fields that are only valid for a single execution */
-	ResetExplainAnalyzeData(taskList);
+	MemoryContext memoryContext = AllocSetContextCreate(executorState->es_query_cxt,
+														"AdaptiveExecutor",
+														ALLOCSET_DEFAULT_SIZES);
+	MemoryContext oldContext = MemoryContextSwitchTo(memoryContext);
 
 	scanState->tuplestorestate =
 		tuplestore_begin_heap(randomAccess, interTransactions, work_mem);
@@ -789,6 +795,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 	TupleDesc tupleDescriptor = ScanStateGetTupleDescriptor(scanState);
 	TupleDestination *defaultTupleDest =
 		CreateTupleStoreTupleDest(scanState->tuplestorestate, tupleDescriptor);
+
+	/* Reset Task fields that are only valid for a single execution */
+	ResetExplainAnalyzeData(taskList);
 
 	if (RequestedForExplainAnalyze(scanState))
 	{
@@ -824,7 +833,7 @@ AdaptiveExecutor(CitusScanState *scanState)
 		paramListInfo,
 		targetPoolSize,
 		defaultTupleDest,
-		&xactProperties,
+		xactProperties,
 		jobIdList,
 		localExecutionSupported);
 
@@ -834,13 +843,53 @@ AdaptiveExecutor(CitusScanState *scanState)
 	 */
 	StartDistributedExecution(execution);
 
+	/* store the execution in the custom scan state */
+	scanState->execution = execution;
+
+	execution->memoryContext = MemoryContextSwitchTo(oldContext);
+}
+
+
+bool
+AdaptiveExecutorRun(CitusScanState *scanState)
+{
+	DistributedExecution *execution = scanState->execution;
+	DistributedPlan *distributedPlan = scanState->distributedPlan;
+	Job *job = distributedPlan->workerJob;
+	CmdType commandType = job->jobQuery->commandType;
+
+	Assert(execution != NULL);
+
+	MemoryContext oldContext = MemoryContextSwitchTo(execution->memoryContext);
+
+	EState *executorState = ScanStateGetExecutorState(scanState);
+	bool sortTupleStore = false;
+
+	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
+	{
+		/* sort the tuple store to get consistent DML output in tests */
+		sortTupleStore = true;
+	}
+
 	if (ShouldRunTasksSequentially(execution->remoteTaskList))
 	{
+		/* sequential execution always runs to completion */
 		SequentialRunDistributedExecution(execution);
 	}
 	else
 	{
-		RunDistributedExecution(execution);
+		/* if we need to sort the whole tuple store, run to completino */
+		bool runToCompletion = sortTupleStore;
+
+		RunDistributedExecution(execution, runToCompletion);
+
+		if (execution->unfinishedTaskCount > 0)
+		{
+			MemoryContextSwitchTo(oldContext);
+			return false;
+		}
+
+		/* done with remote tasks, finish the execution */
 	}
 
 	/* execute tasks local to the node (if any) */
@@ -850,7 +899,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 		RunLocalExecution(scanState, execution);
 	}
 
-	CmdType commandType = job->jobQuery->commandType;
 	if (commandType != CMD_SELECT)
 	{
 		executorState->es_processed = execution->rowsProcessed;
@@ -858,19 +906,14 @@ AdaptiveExecutor(CitusScanState *scanState)
 
 	FinishDistributedExecution(execution);
 
-	if (hasDependentJobs)
-	{
-		DoRepartitionCleanup(jobIdList);
-	}
-
-	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
+	if (sortTupleStore)
 	{
 		SortTupleStore(scanState);
 	}
 
 	MemoryContextSwitchTo(oldContext);
 
-	return resultSlot;
+	return true;
 }
 
 
@@ -1018,7 +1061,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 		CreateDistributedExecution(
 			executionParams->modLevel, executionParams->taskList,
 			paramListInfo, executionParams->targetPoolSize,
-			defaultTupleDest, &executionParams->xactProperties,
+			defaultTupleDest, executionParams->xactProperties,
 			executionParams->jobIdList, executionParams->localExecutionSupported);
 
 	/*
@@ -1036,7 +1079,10 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 
 	/* run the remote execution */
 	StartDistributedExecution(execution);
-	RunDistributedExecution(execution);
+
+	bool runToCompletion = true;
+	RunDistributedExecution(execution, runToCompletion);
+
 	FinishDistributedExecution(execution);
 
 	/* now, switch back to the local execution */
@@ -1087,7 +1133,7 @@ static DistributedExecution *
 CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 						   ParamListInfo paramListInfo,
 						   int targetPoolSize, TupleDestination *defaultTupleDest,
-						   TransactionProperties *xactProperties,
+						   TransactionProperties xactProperties,
 						   List *jobIdList, bool localExecutionSupported)
 {
 	DistributedExecution *execution =
@@ -1258,7 +1304,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 void
 StartDistributedExecution(DistributedExecution *execution)
 {
-	TransactionProperties *xactProperties = execution->transactionProperties;
+	TransactionProperties *xactProperties = &(execution->transactionProperties);
 
 	if (xactProperties->useRemoteTransactionBlocks == TRANSACTION_BLOCKS_REQUIRED)
 	{
@@ -1299,6 +1345,20 @@ StartDistributedExecution(DistributedExecution *execution)
 		 * shards are moved away.
 		 */
 		RecordParallelRelationAccessForTaskList(execution->remoteAndLocalTaskList);
+	}
+
+	/*
+	 * We skip AssignTasksToConnectionsOrWorkerPool for sequential executions,
+	 * because we do it separately for each task in SequentialRunDistributedExecution.
+	 */
+	if (!ShouldRunTasksSequentially(execution->remoteTaskList))
+	{
+		/*
+		 * If a (co-located) shard placement was accessed over a session earier in the
+		 * transaction, assign the task to the same session. Otherwise, assign it to
+		 * the general worker pool(s).
+		 */
+		AssignTasksToConnectionsOrWorkerPool(execution);
 	}
 }
 
@@ -1643,10 +1703,23 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 static void
 FinishDistributedExecution(DistributedExecution *execution)
 {
+	/*
+	 * Sequential executions unclaim connections separately.
+	 */
+	if (!ShouldRunTasksSequentially(execution->remoteTaskList))
+	{
+		CleanUpSessions(execution);
+	}
+
 	if (DistributedExecutionModifiesDatabase(execution))
 	{
 		/* prevent copying shards in same transaction */
 		XactModificationLevel = XACT_MODIFICATION_DATA;
+	}
+
+	if (list_length(execution->jobIdList) > 0)
+	{
+		DoRepartitionCleanup(execution->jobIdList);
 	}
 }
 
@@ -1831,7 +1904,7 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 			List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
 			MultiConnection *connection = NULL;
-			if (execution->transactionProperties->useRemoteTransactionBlocks !=
+			if (execution->transactionProperties.useRemoteTransactionBlocks !=
 				TRANSACTION_BLOCKS_DISALLOWED)
 			{
 				/*
@@ -2258,8 +2331,20 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
 			break;
 		}
 
+		/*
+		 * We skipped AssignTasksToConnectionsOrWorkerPool in StartDistributedExecution
+		 * when all the tasks were in the execution. Do it now instead.
+		 */
+		AssignTasksToConnectionsOrWorkerPool(execution);
+
 		/* simply call the regular execution function */
-		RunDistributedExecution(execution);
+		bool runToCompletion = true;
+		RunDistributedExecution(execution, runToCompletion);
+
+		/*
+		 * Unclaim connections since the current execution is technically finished.
+		 */
+		CleanUpSessions(execution);
 	}
 
 	/* set back the original execution mode */
@@ -2276,11 +2361,9 @@ SequentialRunDistributedExecution(DistributedExecution *execution)
  * has an event.
  */
 void
-RunDistributedExecution(DistributedExecution *execution)
+RunDistributedExecution(DistributedExecution *execution, bool toCompletion)
 {
 	WaitEvent *events = NULL;
-
-	AssignTasksToConnectionsOrWorkerPool(execution);
 
 	PG_TRY();
 	{
@@ -2297,6 +2380,10 @@ RunDistributedExecution(DistributedExecution *execution)
 
 		/* always (re)build the wait event set the first time */
 		execution->rebuildWaitEventSet = true;
+		execution->rowsReceivedInCurrentRun = 0;
+
+		/* TODO: GUC? be smart? */
+		int maxBatchSize = 10000;
 
 		/*
 		 * Iterate until all the tasks are finished. Once all the tasks
@@ -2316,8 +2403,10 @@ RunDistributedExecution(DistributedExecution *execution)
 		 * irrespective of the current status of the tasks or the connections.
 		 */
 		while (!cancellationReceived &&
-			   (execution->unfinishedTaskCount > 0 ||
-				HasIncompleteConnectionEstablishment(execution)))
+			   ((execution->unfinishedTaskCount > 0 ||
+				 HasIncompleteConnectionEstablishment(execution)) &&
+				(toCompletion ||
+				 execution->rowsReceivedInCurrentRun < maxBatchSize)))
 		{
 			WorkerPool *workerPool = NULL;
 			foreach_ptr(workerPool, execution->workerList)
@@ -2388,8 +2477,6 @@ RunDistributedExecution(DistributedExecution *execution)
 			FreeWaitEventSet(execution->waitEventSet);
 			execution->waitEventSet = NULL;
 		}
-
-		CleanUpSessions(execution);
 	}
 	PG_CATCH();
 	{
@@ -2591,7 +2678,7 @@ ManageWorkerPool(WorkerPool *workerPool)
 	/* increase the open rate every cycle (like TCP slow start) */
 	workerPool->maxNewConnectionsPerCycle += 1;
 
-	OpenNewConnections(workerPool, newConnectionCount, execution->transactionProperties);
+	OpenNewConnections(workerPool, newConnectionCount, &execution->transactionProperties);
 
 	/*
 	 * Cannot establish new connections to the local host, most probably because the
@@ -3087,7 +3174,7 @@ CheckConnectionTimeout(WorkerPool *workerPool)
 				 */
 				logLevel = DEBUG1;
 			}
-			else if (execution->transactionProperties->errorOnAnyFailure ||
+			else if (execution->transactionProperties.errorOnAnyFailure ||
 					 execution->failed)
 			{
 				/*
@@ -3434,7 +3521,7 @@ ConnectionStateMachine(WorkerSession *session)
 				 * or WorkerPoolFailed.
 				 */
 				if (execution->failed ||
-					(execution->transactionProperties->errorOnAnyFailure &&
+					(execution->transactionProperties.errorOnAnyFailure &&
 					 workerPool->failureState != WORKER_POOL_FAILED_OVER_TO_LOCAL))
 				{
 					/* a task has failed due to this connection failure */
@@ -3631,7 +3718,7 @@ TransactionModifiedDistributedTable(DistributedExecution *execution)
 	 * should not be pretending that we're in a coordinated transaction even
 	 * if XACT_MODIFICATION_DATA is set. That's why we implemented this workaround.
 	 */
-	return execution->transactionProperties->useRemoteTransactionBlocks ==
+	return execution->transactionProperties.useRemoteTransactionBlocks ==
 		   TRANSACTION_BLOCKS_REQUIRED &&
 		   XactModificationLevel == XACT_MODIFICATION_DATA;
 }
@@ -3646,7 +3733,7 @@ TransactionStateMachine(WorkerSession *session)
 	WorkerPool *workerPool = session->workerPool;
 	DistributedExecution *execution = workerPool->distributedExecution;
 	TransactionBlocksUsage useRemoteTransactionBlocks =
-		execution->transactionProperties->useRemoteTransactionBlocks;
+		execution->transactionProperties.useRemoteTransactionBlocks;
 
 	MultiConnection *connection = session->connection;
 	RemoteTransaction *transaction = &(connection->remoteTransaction);
@@ -4066,7 +4153,7 @@ StartPlacementExecutionOnSession(TaskPlacementExecution *placementExecution,
 	ShardPlacement *taskPlacement = placementExecution->shardPlacement;
 	List *placementAccessList = PlacementAccessListForTask(task, taskPlacement);
 
-	if (execution->transactionProperties->useRemoteTransactionBlocks !=
+	if (execution->transactionProperties.useRemoteTransactionBlocks !=
 		TRANSACTION_BLOCKS_DISALLOWED)
 	{
 		/*
@@ -4419,6 +4506,7 @@ ReceiveResults(WorkerSession *session, bool storeRows)
 			MemoryContextReset(rowContext);
 
 			execution->rowsProcessed++;
+			execution->rowsReceivedInCurrentRun++;
 		}
 
 		PQclear(result);
@@ -4924,7 +5012,7 @@ static bool
 ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution)
 {
 	if (!DistributedExecutionModifiesDatabase(execution) ||
-		execution->transactionProperties->errorOnAnyFailure)
+		execution->transactionProperties.errorOnAnyFailure)
 	{
 		/*
 		 * Failures that do not modify the database (e.g., mainly SELECTs) should
