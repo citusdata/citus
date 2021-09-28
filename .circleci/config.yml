@@ -678,6 +678,25 @@ workflows:
           make: check-failure
           requires: [build-14]
 
+      - test-citus:
+          name: 'test-12_check-custom'
+          pg_major: 12
+          image_tag: '12.8'
+          make: check-custom-citus
+          requires: [build-12]      
+      - test-citus:
+          name: 'test-13_check-custom'
+          pg_major: 13
+          image_tag: '13.4'
+          make: check-custom-citus
+          requires: [build-13]  
+      - test-citus:
+          name: 'test-14_check-custom'
+          pg_major: 14
+          image_tag: '14rc1'
+          make: check-custom-citus
+          requires: [build-14]  
+
       - test-pg-upgrade:
           name: 'test-12-13_check-pg-upgrade'
           old_pg_major: 12
