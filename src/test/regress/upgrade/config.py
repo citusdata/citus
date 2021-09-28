@@ -5,8 +5,6 @@ import socket
 from contextlib import closing
 import os
 
-
-USER = 'postgres'
 DBNAME = 'postgres'
 
 COORDINATOR_NAME = 'coordinator'

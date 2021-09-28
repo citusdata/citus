@@ -11,12 +11,13 @@ Options:
 """
 
 from config import (
-    PGUpgradeConfig, USER, NODE_PORTS,
+    PGUpgradeConfig, NODE_PORTS,
     NODE_NAMES, DBNAME, COORDINATOR_NAME,
     WORKER_PORTS, AFTER_PG_UPGRADE_SCHEDULE, BEFORE_PG_UPGRADE_SCHEDULE
 )
 from docopt import docopt
 import utils
+from utils import USER
 import atexit
 import subprocess
 import sys

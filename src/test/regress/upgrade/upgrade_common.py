@@ -5,8 +5,9 @@ import sys
 import subprocess
 
 import utils
+from utils import USER
 
-from config import NODE_NAMES, NODE_PORTS, COORDINATOR_NAME, USER, WORKER_PORTS, DBNAME, CitusBaseClusterConfig
+from config import NODE_NAMES, NODE_PORTS, COORDINATOR_NAME, WORKER_PORTS, DBNAME, CitusBaseClusterConfig
 
 
 def initialize_temp_dir(temp_dir):

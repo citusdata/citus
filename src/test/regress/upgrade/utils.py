@@ -1,6 +1,8 @@
 import subprocess
 import os
-from config import USER
+
+
+USER = 'postgres'
 
 
 def psql(pg_path, port, command):

@@ -20,6 +20,7 @@ import re
 import sys
 
 import utils
+from utils import USER
 
 from docopt import docopt
 
