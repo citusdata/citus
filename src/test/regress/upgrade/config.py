@@ -107,6 +107,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
 class CitusUpgradeConfig(CitusBaseClusterConfig):
 
     def __init__(self, arguments):
+        super().__init__(arguments)
         self.pre_tar_path = arguments['--citus-pre-tar']
         self.post_tar_path = arguments['--citus-post-tar']
         self.temp_dir = './tmp_citus_upgrade'
@@ -217,6 +218,7 @@ class CitusSingleNodeSingleSharedPoolSizeClusterConfig(CitusBaseClusterConfig):
 
 class PGUpgradeConfig(CitusBaseClusterConfig):
     def __init__(self, arguments):
+        super().__init__(arguments)
         self.old_bindir = arguments['--old-bindir']
         self.new_bindir = arguments['--new-bindir']
         self.temp_dir = './tmp_upgrade'
