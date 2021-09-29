@@ -3970,7 +3970,7 @@ WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%
 ---------------------------------------------------------------------
  part_table_with_long_long_long_long_name        | part_table_with_long_long_lon_long_named_integer_col_long_n_idx
  part_table_with_long_long_long_long_name_361172 | part_table_with_long_long_lon_long_named_intege_f9175544_361172
- part_table_with_long_long_long_long_name_361174 | part_table_with_long_long_lon_long_named_intege_5e6d2b3b_361174
+ part_table_with_long_long_long_long_name_361174 | part_table_with_long_long_lon_long_named_intege_f9175544_361174
  part_table_with_very_long_name                  | part_table_with_very_long_nam_long_named_integer_col_long_n_idx
  part_table_with_very_long_name_361168           | part_table_with_very_long_nam_long_named_intege_73d4b078_361168
  part_table_with_very_long_name_361170           | part_table_with_very_long_nam_long_named_intege_73d4b078_361170

@@ -1,5 +1,8 @@
 ---------------------------------------------------------------------
 -- multi_fix_partition_shard_index_names
+-- check the following two issues
+-- https://github.com/citusdata/citus/issues/4962
+-- https://github.com/citusdata/citus/issues/5138
 ---------------------------------------------------------------------
 SET citus.next_shard_id TO 910000;
 SET citus.shard_replication_factor TO 1;
@@ -74,18 +77,16 @@ SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
 
 \c - - - :worker_1_port
 -- shard id has been appended to all index names which didn't end in shard id
--- even though partition p wasn't problematic since the shard id was inside the name
--- and not truncated, we still append the shard id to the end of the name
 -- this goes in line with Citus's way of naming indexes of shards: always append shardid to the end
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
                  tablename                  |                            indexname
 ---------------------------------------------------------------------
  dist_partitioned_table_910004              | short_910004
  dist_partitioned_table_910006              | short_910006
- p_910012                                   | p_910012_another_col_partition_col_idx_910012
- p_910014                                   | p_910014_another_col_partition_col_idx_910014
+ p_910012                                   | p_another_col_partition_col_idx_910012
+ p_910014                                   | p_another_col_partition_col_idx_910014
  partition_table_with_very_long_name_910008 | partition_table_with_very_long_na_another_col_p_dd884a3b_910008
- partition_table_with_very_long_name_910010 | partition_table_with_very_long_n_another_col_pa_5fc96a91_910010
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_na_another_col_p_dd884a3b_910010
 (6 rows)
 
 \c - - - :master_port
@@ -118,11 +119,11 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
  dist_partitioned_table_910004              | short_910004
  dist_partitioned_table_910006              | short_910006
  p                                          | p_another_col_partition_col_idx
- p_910012                                   | p_910012_another_col_partition_col_idx_910012
- p_910014                                   | p_910014_another_col_partition_col_idx_910014
+ p_910012                                   | p_another_col_partition_col_idx_910012
+ p_910014                                   | p_another_col_partition_col_idx_910014
  partition_table_with_very_long_name        | partition_table_with_very_long_na_another_col_partition_col_idx
  partition_table_with_very_long_name_910008 | partition_table_with_very_long_na_another_col_p_dd884a3b_910008
- partition_table_with_very_long_name_910010 | partition_table_with_very_long_n_another_col_pa_5fc96a91_910010
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_na_another_col_p_dd884a3b_910010
 (9 rows)
 
 \c - - - :master_port
@@ -140,6 +141,16 @@ SELECT create_distributed_table('another_partition_table_with_very_long_name', '
 
 CREATE INDEX ON another_partition_table_with_very_long_name USING btree (another_col, partition_col);
 ALTER TABLE dist_partitioned_table ATTACH PARTITION another_partition_table_with_very_long_name FOR VALUES FROM ('2020-01-01') TO ('2021-01-01');
+-- check it works even if we give a weird index name
+CREATE TABLE yet_another_partition_table (dist_col int, another_col int, partition_col timestamp);
+SELECT create_distributed_table('yet_another_partition_table', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE INDEX "really weird index name !!" ON yet_another_partition_table USING btree (another_col, partition_col);
+ALTER TABLE dist_partitioned_table ATTACH PARTITION yet_another_partition_table FOR VALUES FROM ('2021-01-01') TO ('2022-01-01');
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
                   tablename                  |                            indexname
 ---------------------------------------------------------------------
@@ -147,7 +158,8 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
  dist_partitioned_table                      | short
  p                                           | p_another_col_partition_col_idx
  partition_table_with_very_long_name         | partition_table_with_very_long_na_another_col_partition_col_idx
-(4 rows)
+ yet_another_partition_table                 | really weird index name !!
+(5 rows)
 
 \c - - - :worker_1_port
 -- notice indexes of shards of another_partition_table_with_very_long_name already have shardid appended to the end
@@ -161,19 +173,23 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
  dist_partitioned_table_910004                      | short_910004
  dist_partitioned_table_910006                      | short_910006
  p                                                  | p_another_col_partition_col_idx
- p_910012                                           | p_910012_another_col_partition_col_idx_910012
- p_910014                                           | p_910014_another_col_partition_col_idx_910014
+ p_910012                                           | p_another_col_partition_col_idx_910012
+ p_910014                                           | p_another_col_partition_col_idx_910014
  partition_table_with_very_long_name                | partition_table_with_very_long_na_another_col_partition_col_idx
  partition_table_with_very_long_name_910008         | partition_table_with_very_long_na_another_col_p_dd884a3b_910008
- partition_table_with_very_long_name_910010         | partition_table_with_very_long_n_another_col_pa_5fc96a91_910010
-(12 rows)
+ partition_table_with_very_long_name_910010         | partition_table_with_very_long_na_another_col_p_dd884a3b_910010
+ yet_another_partition_table                        | really weird index name !!
+ yet_another_partition_table_910024                 | really weird index name !!_910024
+ yet_another_partition_table_910026                 | really weird index name !!_910026
+(15 rows)
 
 \c - - - :master_port
+SET search_path TO fix_idx_names, public;
 -- this command would not do anything
 SELECT fix_all_partition_shard_index_names();
  fix_all_partition_shard_index_names
 ---------------------------------------------------------------------
- fix_idx_names.dist_partitioned_table
+ dist_partitioned_table
 (1 row)
 
 \c - - - :worker_1_port
@@ -188,12 +204,15 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
  dist_partitioned_table_910004                      | short_910004
  dist_partitioned_table_910006                      | short_910006
  p                                                  | p_another_col_partition_col_idx
- p_910012                                           | p_910012_another_col_partition_col_idx_910012
- p_910014                                           | p_910014_another_col_partition_col_idx_910014
+ p_910012                                           | p_another_col_partition_col_idx_910012
+ p_910014                                           | p_another_col_partition_col_idx_910014
  partition_table_with_very_long_name                | partition_table_with_very_long_na_another_col_partition_col_idx
  partition_table_with_very_long_name_910008         | partition_table_with_very_long_na_another_col_p_dd884a3b_910008
- partition_table_with_very_long_name_910010         | partition_table_with_very_long_n_another_col_pa_5fc96a91_910010
-(12 rows)
+ partition_table_with_very_long_name_910010         | partition_table_with_very_long_na_another_col_p_dd884a3b_910010
+ yet_another_partition_table                        | really weird index name !!
+ yet_another_partition_table_910024                 | really weird index name !!_910024
+ yet_another_partition_table_910026                 | really weird index name !!_910026
+(15 rows)
 
 \c - - - :master_port
 SET search_path TO fix_idx_names, public;
@@ -204,11 +223,90 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 
 (1 row)
 
+DROP TABLE dist_partitioned_table;
+-- also, we cannot do any further operations (e.g. rename) on the indexes of partitions because
+-- the index names on shards of partitions have been generated by Postgres, not Citus
+-- it doesn't matter here whether the partition name is long or short
+-- replicate scenario from above but this time with one shard so that this test isn't flaky
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 910030;
+CREATE TABLE dist_partitioned_table (dist_col int, another_col int, partition_col timestamp) PARTITION BY RANGE (partition_col);
+SELECT create_distributed_table('dist_partitioned_table', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE partition_table_with_very_long_name PARTITION OF dist_partitioned_table FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
+CREATE TABLE p PARTITION OF dist_partitioned_table FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
+CREATE INDEX short ON dist_partitioned_table USING btree (another_col, partition_col);
+-- rename shouldn't work
+ALTER INDEX partition_table_with_very_long_na_another_col_partition_col_idx RENAME TO partition_table_with_very_long_name_idx;
+ERROR:  relation "fix_idx_names.partition_table_with_very_long_na_another_col_p_dd884a3b_910031" does not exist
+CONTEXT:  while executing command on localhost:xxxxx
+-- we currently can't drop index on detached partition
+-- https://github.com/citusdata/citus/issues/5138
+ALTER TABLE dist_partitioned_table DETACH PARTITION p;
+DROP INDEX p_another_col_partition_col_idx;
+ERROR:  index "p_another_col_partition_col_idx_910032" does not exist
+CONTEXT:  while executing command on localhost:xxxxx
+-- let's reattach and retry after fixing index names
+ALTER TABLE dist_partitioned_table ATTACH PARTITION p FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
+\c - - - :worker_1_port
+-- check the current broken index names
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+                 tablename                  |                            indexname
+---------------------------------------------------------------------
+ dist_partitioned_table_910030              | short_910030
+ p_910032                                   | p_910032_another_col_partition_col_idx
+ partition_table_with_very_long_name_910031 | partition_table_with_very_long_na_another_col_partition_col_idx
+(3 rows)
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+-- fix index names
+SELECT fix_all_partition_shard_index_names();
+ fix_all_partition_shard_index_names
+---------------------------------------------------------------------
+ dist_partitioned_table
+(1 row)
+
+\c - - - :worker_1_port
+-- check the fixed index names
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+                 tablename                  |                            indexname
+---------------------------------------------------------------------
+ dist_partitioned_table_910030              | short_910030
+ p_910032                                   | p_another_col_partition_col_idx_910032
+ partition_table_with_very_long_name_910031 | partition_table_with_very_long_na_another_col_p_dd884a3b_910031
+(3 rows)
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+-- should now work
+ALTER INDEX partition_table_with_very_long_na_another_col_partition_col_idx RENAME TO partition_table_with_very_long_name_idx;
+-- now we can drop index on detached partition
+ALTER TABLE dist_partitioned_table DETACH PARTITION p;
+DROP INDEX p_another_col_partition_col_idx;
+\c - - - :worker_1_port
+-- check that indexes have been renamed
+-- and that index on p has been dropped (it won't appear)
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+                 tablename                  |                   indexname
+---------------------------------------------------------------------
+ dist_partitioned_table_910030              | short_910030
+ partition_table_with_very_long_name_910031 | partition_table_with_very_long_name_idx_910031
+(2 rows)
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
 DROP SCHEMA fix_idx_names CASCADE;
-NOTICE:  drop cascades to 3 other objects
+NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table not_partitioned
 drop cascades to table not_distributed
 drop cascades to table dist_partitioned_table
+drop cascades to table p
 SELECT run_command_on_workers($$ DROP SCHEMA IF EXISTS fix_idx_names CASCADE $$);
       run_command_on_workers
 ---------------------------------------------------------------------

@@ -44,6 +44,7 @@
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "utils/varlena.h"
 
 static char * PartitionBound(Oid partitionId);
 static Relation try_relation_open_nolock(Oid relationId);
@@ -199,52 +200,59 @@ fix_partition_shard_index_names(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_fix_partition_shard_index_names fixes the index names of child indexes
- * given a parent index.
+ * worker_fix_partition_shard_index_names fixes the index name of the index on given
+ * partition shard that has parent the given parent index.
  * The parent index should be the index of a shard of a distributed partitioned table.
- * The child indexes should be the indexes of shards of the partitions of the distributed
- * partitioned table from above.
  */
 Datum
 worker_fix_partition_shard_index_names(PG_FUNCTION_ARGS)
 {
 	Oid shardIndexId = PG_GETARG_OID(0);
 
-	if (!has_subclass(shardIndexId))
-	{
-		ereport(ERROR, (errmsg("could not fix child index names: "
-							   "index is not partitioned")));
-	}
+	text *partitionShardName = PG_GETARG_TEXT_P(1);
 
-	List *partitionShardIndexIds = find_inheritance_children(shardIndexId,
-															 ShareRowExclusiveLock);
-	Oid partitionShardIndexId = InvalidOid;
-	foreach_oid(partitionShardIndexId, partitionShardIndexIds)
+	/* resolve partitionShardId from passed in schema and partition shard name */
+	List *partitionShardNameList = textToQualifiedNameList(partitionShardName);
+	RangeVar *partitionShard = makeRangeVarFromNameList(partitionShardNameList);
+
+	/* lock the relation with the lock mode */
+	Oid partitionShardId = RangeVarGetRelid(partitionShard, NoLock, RVR_MISSING_OK);
+
+	if (OidIsValid(partitionShardId))
 	{
-		/* check if this index name ends with shardid, if not rename it */
-		char *partitionShardIndexName = get_rel_name(partitionShardIndexId);
-		bool missing_ok = true;
-		if (ExtractShardIdFromTableName(partitionShardIndexName, missing_ok) ==
-			INVALID_SHARD_ID)
+		text *newPartitionShardIndexNameText = PG_GETARG_TEXT_P(2);
+		char *newPartitionShardIndexName = text_to_cstring(
+			newPartitionShardIndexNameText);
+
+		if (!has_subclass(shardIndexId))
 		{
-			/* get the shardId of the shard of the partition it is an index on */
-			Oid partitionShardTableId = IndexGetRelation(partitionShardIndexId, false);
-			char *partitionShardTableName = get_rel_name(partitionShardTableId);
-			missing_ok = false;
-			uint64 partitionShardId = ExtractShardIdFromTableName(partitionShardTableName,
-																  missing_ok);
+			ereport(ERROR, (errmsg("could not fix child index names: "
+								   "index is not partitioned")));
+		}
 
-			/* generate the new index name by appending the shardId to current name */
-			char *newPartitionShardIndexName = pstrdup(partitionShardIndexName);
-			AppendShardIdToName(&newPartitionShardIndexName, partitionShardId);
-
-			/* finally, rename the partition shard index */
-			bool is_internal = false;
-			bool is_index = true;
-			RenameRelationInternal(partitionShardIndexId, newPartitionShardIndexName,
-								   is_internal, is_index);
+		List *partitionShardIndexIds = find_inheritance_children(shardIndexId,
+																 ShareRowExclusiveLock);
+		Oid partitionShardIndexId = InvalidOid;
+		foreach_oid(partitionShardIndexId, partitionShardIndexIds)
+		{
+			if (IndexGetRelation(partitionShardIndexId, false) == partitionShardId)
+			{
+				char *partitionShardIndexName = get_rel_name(partitionShardIndexId);
+				if (ExtractShardIdFromTableName(partitionShardIndexName,
+												RVR_MISSING_OK) == INVALID_SHARD_ID)
+				{
+					/* rename the partition shard index if it doesn't end in shard id*/
+					bool is_internal = false;
+					bool is_index = true;
+					RenameRelationInternal(partitionShardIndexId,
+										   newPartitionShardIndexName,
+										   is_internal, is_index);
+				}
+				break;
+			}
 		}
 	}
+
 	PG_RETURN_VOID();
 }
 
@@ -382,8 +390,7 @@ WorkerFixPartitionConstraintCommandList(Oid relationId, uint64 shardId,
  * worker_fix_partition_shard_index_names UDF on worker nodes.
  *
  * We create parent_table_shard_count tasks,
- * each task with parent_indexes_count query strings.
- * Essentially, one query string per index of parent table shards.
+ * each task with parent_indexes_count x parent_partitions_count query strings.
  */
 static List *
 CreateFixPartitionShardIndexNamesTaskList(Oid relationId)
@@ -438,7 +445,7 @@ CreateFixPartitionShardIndexNamesTaskList(Oid relationId)
 
 /*
  * WorkerFixPartitionShardIndexNamesCommandList creates a list of queries that will fix
- * all child index names of parent indexes on given shard.
+ * all child index names of parent indexes on given shard of parent partitioned table.
  */
 static List *
 WorkerFixPartitionShardIndexNamesCommandList(uint64 shardId, List *indexIdList)
@@ -459,12 +466,58 @@ WorkerFixPartitionShardIndexNamesCommandList(uint64 shardId, List *indexIdList)
 		char *qualifiedShardIndexName = quote_qualified_identifier(schemaName,
 																   shardIndexName);
 
-		/* create worker_fix_partition_shard_index_names command */
-		StringInfo shardQueryString = makeStringInfo();
-		appendStringInfo(shardQueryString,
-						 "SELECT worker_fix_partition_shard_index_names(%s::regclass)",
-						 quote_literal_cstr(qualifiedShardIndexName));
-		commandList = lappend(commandList, shardQueryString->data);
+		/*
+		 * Get the list of all partition indexes that are children of current
+		 * index on parent
+		 */
+		List *partitionIndexIds = find_inheritance_children(indexId,
+															ShareRowExclusiveLock);
+		Oid partitionIndexId = InvalidOid;
+		foreach_oid(partitionIndexId, partitionIndexIds)
+		{
+			/* get info for this partition relation of this index*/
+			char *partitionIndexName = get_rel_name(partitionIndexId);
+			Oid partitionId = IndexGetRelation(partitionIndexId, false);
+			char *partitionName = get_rel_name(partitionId);
+			char *partitionSchemaName = get_namespace_name(get_rel_namespace(
+															   partitionId));
+			List *shardIntervalList = LoadShardIntervalList(partitionId);
+
+			/* lock metadata before getting placement lists */
+			LockShardListMetadata(shardIntervalList, ShareLock);
+
+			ShardInterval *shardInterval = NULL;
+			foreach_ptr(shardInterval, shardIntervalList)
+			{
+				/*
+				 * Prepare commands for each shard of current partition
+				 * to fix the index name that corresponds to the
+				 * current parent index name
+				 */
+				uint64 partitionShardId = shardInterval->shardId;
+
+				/* get qualified partition shard name */
+				char *partitionShardName = pstrdup(partitionName);
+				AppendShardIdToName(&partitionShardName, partitionShardId);
+				char *qualifiedPartitionShardName = quote_qualified_identifier(
+					partitionSchemaName,
+					partitionShardName);
+
+				/* generate the new correct index name */
+				char *newPartitionShardIndexName = pstrdup(partitionIndexName);
+				AppendShardIdToName(&newPartitionShardIndexName, partitionShardId);
+
+				/* create worker_fix_partition_shard_index_names command */
+				StringInfo shardQueryString = makeStringInfo();
+				appendStringInfo(shardQueryString,
+								 "SELECT worker_fix_partition_shard_index_names(%s::regclass, %s, %s)",
+								 quote_literal_cstr(qualifiedShardIndexName),
+								 quote_literal_cstr(qualifiedPartitionShardName),
+								 quote_literal_cstr(
+									 newPartitionShardIndexName));
+				commandList = lappend(commandList, shardQueryString->data);
+			}
+		}
 	}
 
 	return commandList;
