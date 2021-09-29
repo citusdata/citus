@@ -211,7 +211,7 @@ check-pg-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
 
 check-custom-citus:
-	${custom_citus_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir)
+	${custom_citus_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel)
 
 check-citus-upgrade:
 	$(citus_upgrade_check) \
