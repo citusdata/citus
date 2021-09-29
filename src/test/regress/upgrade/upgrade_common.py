@@ -129,7 +129,7 @@ def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output = False
 
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
-    stop_databases(config.bindir, config.datadir, config.node_name_to_ports, no_output=True)
+    stop_databases(bindir, datadir, config.node_name_to_ports, no_output=True)
     initialize_db_for_cluster(bindir, datadir, settings, config.node_name_to_ports.keys())
     start_databases(bindir, datadir, config.node_name_to_ports)
     create_citus_extension(bindir, config.node_name_to_ports.values())

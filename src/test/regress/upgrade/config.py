@@ -63,7 +63,8 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
     data_dir_counter = 0
 
     def __init__(self, arguments):
-        self.bindir = arguments['--bindir']
+        if '--bindir' in arguments:
+            self.bindir = arguments['--bindir']
         self.pg_srcdir = arguments['--pgxsdir']
         self.temp_dir = CITUS_CUSTOM_TEST_DIR
         self.worker_amount = 2
