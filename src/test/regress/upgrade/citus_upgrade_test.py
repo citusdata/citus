@@ -25,8 +25,7 @@ from utils import USER
 from docopt import docopt
 
 from config import (
-    CitusUpgradeConfig, NODE_PORTS, COORDINATOR_NAME, CITUS_VERSION_SQL, MASTER_VERSION,
-    NODE_NAMES, WORKER1PORT, MASTER, HOME,
+    CitusUpgradeConfig, COORDINATOR_NAME, CITUS_VERSION_SQL, MASTER_VERSION,
     AFTER_CITUS_UPGRADE_COORD_SCHEDULE, BEFORE_CITUS_UPGRADE_COORD_SCHEDULE,
     MIXED_AFTER_CITUS_UPGRADE_SCHEDULE, MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE
 )
@@ -46,9 +45,9 @@ def main(config):
     remove_citus(config.pre_tar_path)
     install_citus(config.post_tar_path)
 
-    restart_databases(config.bindir, config.datadir, config.mixed_mode)
-    run_alter_citus(config.bindir, config.mixed_mode)
-    verify_upgrade(config, config.mixed_mode)
+    restart_databases(config.bindir, config.datadir, config.mixed_mode, config)
+    run_alter_citus(config.bindir, config.mixed_mode, config)
+    verify_upgrade(config, config.mixed_mode, config.node_name_to_ports.values())
 
     after_upgrade_schedule = get_after_upgrade_schedule(config.mixed_mode)
     run_test_on_coordinator(config, after_upgrade_schedule)
@@ -61,7 +60,7 @@ def install_citus(tar_path):
 
 
 def report_initial_version(config):
-    for port in NODE_PORTS.values():
+    for port in config.node_name_to_ports.values():
         actual_citus_version = get_actual_citus_version(config.bindir, port)
         print("port:{} citus version {}".format(port, actual_citus_version))
 
@@ -78,7 +77,7 @@ def get_actual_citus_version(pg_path, port):
 
 def run_test_on_coordinator(config, schedule):
     common.run_pg_regress(config.bindir, config.pg_srcdir,
-                          NODE_PORTS[COORDINATOR_NAME], schedule)
+                          config.node_name_to_ports[COORDINATOR_NAME], schedule)
 
 
 def remove_citus(tar_path):
@@ -92,38 +91,38 @@ def remove_tar_files(tar_path):
     ps.wait()
 
 
-def restart_databases(pg_path, rel_data_path, mixed_mode):
-    for node_name in NODE_NAMES:
-        if mixed_mode and NODE_PORTS[node_name] == WORKER1PORT:
+def restart_databases(pg_path, rel_data_path, mixed_mode, config):
+    for node_name in config.node_name_to_ports.keys():
+        if mixed_mode and config.node_name_to_ports[node_name] == config.chosen_random_worker_port:
             continue
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         restart_database(
             pg_path=pg_path, abs_data_path=abs_data_path, node_name=node_name)
 
 
-def restart_database(pg_path, abs_data_path, node_name):
+def restart_database(pg_path, abs_data_path, node_name, node_ports):
     command = [
         os.path.join(pg_path, 'pg_ctl'), 'restart',
         '--pgdata', abs_data_path,
         '-U', USER,
-        '-o', '-p {}'.format(NODE_PORTS[node_name]),
+        '-o', '-p {}'.format(node_ports[node_name]),
         '--log', os.path.join(abs_data_path, 'logfile_' + node_name)
     ]
     subprocess.run(command, check=True)
 
 
-def run_alter_citus(pg_path, mixed_mode):
-    for port in NODE_PORTS.values():
-        if mixed_mode and port == WORKER1PORT:
+def run_alter_citus(pg_path, mixed_mode, config):
+    for port in config.node_name_to_ports.values():
+        if mixed_mode and port == config.chosen_random_worker_port:
             continue
         utils.psql(pg_path, port, "ALTER EXTENSION citus UPDATE;")
 
 
-def verify_upgrade(config, mixed_mode):
-    for port in NODE_PORTS.values():
+def verify_upgrade(config, mixed_mode, node_ports):
+    for port in node_ports:
         actual_citus_version = get_actual_citus_version(config.bindir, port)
         expected_citus_version = MASTER_VERSION
-        if expected_citus_version != actual_citus_version and not (mixed_mode and port == WORKER1PORT):
+        if expected_citus_version != actual_citus_version and not (mixed_mode and port == config.chosen_random_worker_port):
             print("port: {} citus version {} expected {}".format(
                 port, actual_citus_version, expected_citus_version))
             sys.exit(1)

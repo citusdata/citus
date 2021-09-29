@@ -9,17 +9,6 @@ DBNAME = 'postgres'
 COORDINATOR_NAME = 'coordinator'
 WORKER1 = 'worker1'
 WORKER2 = 'worker2'
-NODE_NAMES = [COORDINATOR_NAME, WORKER1, WORKER2]
-COORDINATOR_PORT = 57635
-WORKER1PORT = 57636
-WORKER2PORT = 57637
-
-WORKER_PORTS = [WORKER1PORT, WORKER2PORT]
-NODE_PORTS = {
-    COORDINATOR_NAME: COORDINATOR_PORT,
-    WORKER1: WORKER1PORT,
-    WORKER2: WORKER2PORT,
-}
 
 CUSTOM_TEST_NAMES = ['custom_sql_test', 'custom_create_test']
 
@@ -68,7 +57,6 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.pg_srcdir = arguments['--pgxsdir']
         self.temp_dir = CITUS_CUSTOM_TEST_DIR
         self.worker_amount = 2
-        self.datadir = self.temp_dir + '/data'
         self.is_mx = False
         self.settings = {
             'shared_preload_libraries': 'citus',
@@ -78,10 +66,13 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
     def init(self):
         self._init_node_name_ports()
 
+        self.datadir = self.temp_dir + '/data'
         self.datadir += str(CitusBaseClusterConfig.data_dir_counter)
         self.input_dir = self.datadir
         self.output_dir = self.datadir
         self.output_file = os.path.join(self.datadir, 'run.out')
+        if self.worker_amount > 0:
+            self.chosen_random_worker_port = self.random_worker_port()
         CitusBaseClusterConfig.data_dir_counter += 1
 
 
