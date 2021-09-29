@@ -1,0 +1,95 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-drop-table s2-fix-partition-shard-index-names s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s1-drop-table:
+    DROP TABLE dist_partitioned_table;
+
+step s2-fix-partition-shard-index-names:
+    SET client_min_messages TO NOTICE;
+    SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-fix-partition-shard-index-names: <... completed>
+ERROR:  could not fix partition shard index names: relation does not exist
+
+starting permutation: s1-begin s1-drop-table s2-fix-all-partition-shard-index-names s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s1-drop-table:
+    DROP TABLE dist_partitioned_table;
+
+step s2-fix-all-partition-shard-index-names:
+    SET client_min_messages TO NOTICE;
+    SELECT fix_all_partition_shard_index_names();
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-fix-all-partition-shard-index-names: <... completed>
+ERROR:  could not fix partition shard index names: relation does not exist
+
+starting permutation: s2-begin s2-fix-partition-shard-index-names s1-drop-table s2-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s2-fix-partition-shard-index-names:
+    SET client_min_messages TO NOTICE;
+    SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+
+fix_partition_shard_index_names
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-drop-table:
+    DROP TABLE dist_partitioned_table;
+
+step s2-commit:
+    COMMIT;
+
+
+starting permutation: s2-begin s2-fix-all-partition-shard-index-names s1-drop-table s2-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s2-fix-all-partition-shard-index-names:
+    SET client_min_messages TO NOTICE;
+    SELECT fix_all_partition_shard_index_names();
+
+fix_all_partition_shard_index_names
+---------------------------------------------------------------------
+dist_partitioned_table
+(1 row)
+
+step s1-drop-table:
+    DROP TABLE dist_partitioned_table;
+
+step s2-commit:
+    COMMIT;
+

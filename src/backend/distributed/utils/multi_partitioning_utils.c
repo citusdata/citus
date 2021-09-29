@@ -11,11 +11,13 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/partition.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_inherits.h"
+#include "commands/tablecmds.h"
 #include "common/string.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/adaptive_executor.h"
@@ -32,6 +34,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
 #include "pgstat.h"
@@ -47,6 +50,9 @@ static Relation try_relation_open_nolock(Oid relationId);
 static List * CreateFixPartitionConstraintsTaskList(Oid relationId);
 static List * WorkerFixPartitionConstraintCommandList(Oid relationId, uint64 shardId,
 													  List *checkConstraintList);
+static List * CreateFixPartitionShardIndexNamesTaskList(Oid relationId);
+static List * WorkerFixPartitionShardIndexNamesCommandList(uint64 shardId,
+														   List *indexIdList);
 static List * CheckConstraintNameListForRelation(Oid relationId);
 static bool RelationHasConstraint(Oid relationId, char *constraintName);
 static char * RenameConstraintCommand(Oid relationId, char *constraintName,
@@ -55,6 +61,8 @@ static char * RenameConstraintCommand(Oid relationId, char *constraintName,
 
 PG_FUNCTION_INFO_V1(fix_pre_citus10_partitioned_table_constraint_names);
 PG_FUNCTION_INFO_V1(worker_fix_pre_citus10_partitioned_table_constraint_names);
+PG_FUNCTION_INFO_V1(fix_partition_shard_index_names);
+PG_FUNCTION_INFO_V1(worker_fix_partition_shard_index_names);
 
 
 /*
@@ -125,6 +133,117 @@ worker_fix_pre_citus10_partitioned_table_constraint_names(PG_FUNCTION_ARGS)
 			RenameConstraintCommand(relationId, shardIdAppendedConstraintName,
 									constraintName);
 		ExecuteAndLogUtilityCommand(renameConstraintDDLCommand);
+	}
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * fix_partition_shard_index_names fixes the index names of shards of partitions of
+ * partitioned tables on workers.
+ *
+ * When running CREATE INDEX on parent_table, we didn't explicitly create the index on
+ * each partition as well. Postgres created indexes for partitions in the coordinator,
+ * and also in the workers. Actually, Postgres auto-generates index names when auto-creating
+ * indexes on each partition shard of the parent shards. If index name is too long, it
+ * truncates the name and adds _idx postfix to it. However, when truncating the name, the
+ * shardId of the partition shard can be lost. This may result in the same index name used for
+ * the partition shell table and one of the partition shards.
+ * For more details, check issue #4962 https://github.com/citusdata/citus/issues/4962
+ *
+ * fix_partition_shard_index_names renames indexes of shards of partition tables to include
+ * the shardId at the end of the name, regardless of whether index name was long or short
+ * As a result there will be no index name ending in _idx, rather all will end in _{shardid}
+ */
+Datum
+fix_partition_shard_index_names(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+	EnsureCoordinator();
+
+	Relation relation = try_relation_open(relationId, AccessShareLock);
+
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("could not fix partition shard index names: "
+							   "relation does not exist")));
+	}
+
+	if (relation->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
+	{
+		relation_close(relation, AccessShareLock);
+		ereport(ERROR, (errmsg("could not fix partition shard index names: "
+							   "relation is not partitioned")));
+	}
+
+	if (!IsCitusTable(relationId))
+	{
+		relation_close(relation, AccessShareLock);
+		ereport(ERROR, (errmsg("fix_partition_shard_index_names can "
+							   "only be called for distributed partitioned tables")));
+	}
+
+	List *taskList = CreateFixPartitionShardIndexNamesTaskList(relationId);
+
+	/* do not do anything if there are no index names to fix */
+	if (taskList != NIL)
+	{
+		bool localExecutionSupported = true;
+		ExecuteUtilityTaskList(taskList, localExecutionSupported);
+	}
+
+	relation_close(relation, AccessShareLock);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_fix_partition_shard_index_names fixes the index names of child indexes
+ * given a parent index.
+ * The parent index should be the index of a shard of a distributed partitioned table.
+ * The child indexes should be the indexes of shards of the partitions of the distributed
+ * partitioned table from above.
+ */
+Datum
+worker_fix_partition_shard_index_names(PG_FUNCTION_ARGS)
+{
+	Oid shardIndexId = PG_GETARG_OID(0);
+
+	if (!has_subclass(shardIndexId))
+	{
+		ereport(ERROR, (errmsg("could not fix child index names: "
+							   "index is not partitioned")));
+	}
+
+	List *partitionShardIndexIds = find_inheritance_children(shardIndexId,
+															 ShareRowExclusiveLock);
+	Oid partitionShardIndexId = InvalidOid;
+	foreach_oid(partitionShardIndexId, partitionShardIndexIds)
+	{
+		/* check if this index name ends with shardid, if not rename it */
+		char *partitionShardIndexName = get_rel_name(partitionShardIndexId);
+		bool missing_ok = true;
+		if (ExtractShardIdFromTableName(partitionShardIndexName, missing_ok) ==
+			INVALID_SHARD_ID)
+		{
+			/* get the shardId of the shard of the partition it is an index on */
+			Oid partitionShardTableId = IndexGetRelation(partitionShardIndexId, false);
+			char *partitionShardTableName = get_rel_name(partitionShardTableId);
+			missing_ok = false;
+			uint64 partitionShardId = ExtractShardIdFromTableName(partitionShardTableName,
+																  missing_ok);
+
+			/* generate the new index name by appending the shardId to current name */
+			char *newPartitionShardIndexName = pstrdup(partitionShardIndexName);
+			AppendShardIdToName(&newPartitionShardIndexName, partitionShardId);
+
+			/* finally, rename the partition shard index */
+			bool is_internal = false;
+			bool is_index = true;
+			RenameRelationInternal(partitionShardIndexId, newPartitionShardIndexName,
+								   is_internal, is_index);
+		}
 	}
 	PG_RETURN_VOID();
 }
@@ -250,6 +369,101 @@ WorkerFixPartitionConstraintCommandList(Oid relationId, uint64 shardId,
 						 UINT64_FORMAT ", %s::text)",
 						 quote_literal_cstr(quotedShardName), shardId,
 						 quote_literal_cstr(constraintName));
+		commandList = lappend(commandList, shardQueryString->data);
+	}
+
+	return commandList;
+}
+
+
+/*
+ * CreateFixPartitionShardIndexNamesTaskList goes over all the indexes of a distributed
+ * partitioned table, and creates the list of tasks to execute
+ * worker_fix_partition_shard_index_names UDF on worker nodes.
+ *
+ * We create parent_table_shard_count tasks,
+ * each task with parent_indexes_count query strings.
+ * Essentially, one query string per index of parent table shards.
+ */
+static List *
+CreateFixPartitionShardIndexNamesTaskList(Oid relationId)
+{
+	List *taskList = NIL;
+
+	/* enumerate the tasks when putting them to the taskList */
+	int taskId = 1;
+
+	Relation relation = RelationIdGetRelation(relationId);
+	List *indexIdList = RelationGetIndexList(relation);
+
+	/* early exit if the relation does not have any indexes */
+	if (indexIdList == NIL)
+	{
+		RelationClose(relation);
+		return NIL;
+	}
+
+	List *shardIntervalList = LoadShardIntervalList(relationId);
+
+	/* lock metadata before getting placement lists */
+	LockShardListMetadata(shardIntervalList, ShareLock);
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		uint64 shardId = shardInterval->shardId;
+
+		List *queryStringList = WorkerFixPartitionShardIndexNamesCommandList(shardId,
+																			 indexIdList);
+
+		Task *task = CitusMakeNode(Task);
+		task->jobId = INVALID_JOB_ID;
+		task->taskId = taskId++;
+
+		task->taskType = DDL_TASK;
+		SetTaskQueryStringList(task, queryStringList);
+		task->dependentTaskList = NULL;
+		task->replicationModel = REPLICATION_MODEL_INVALID;
+		task->anchorShardId = shardId;
+		task->taskPlacementList = ActiveShardPlacementList(shardId);
+
+		taskList = lappend(taskList, task);
+	}
+
+	RelationClose(relation);
+
+	return taskList;
+}
+
+
+/*
+ * WorkerFixPartitionShardIndexNamesCommandList creates a list of queries that will fix
+ * all child index names of parent indexes on given shard.
+ */
+static List *
+WorkerFixPartitionShardIndexNamesCommandList(uint64 shardId, List *indexIdList)
+{
+	List *commandList = NIL;
+	Oid indexId = InvalidOid;
+	foreach_oid(indexId, indexIdList)
+	{
+		/*
+		 * Get the qualified name of the corresponding index of given parent index
+		 * in the parent shard with given shardId
+		 */
+		char *indexName = get_rel_name(indexId);
+		char *shardIndexName = pstrdup(indexName);
+		AppendShardIdToName(&shardIndexName, shardId);
+		Oid schemaId = get_rel_namespace(indexId);
+		char *schemaName = get_namespace_name(schemaId);
+		char *qualifiedShardIndexName = quote_qualified_identifier(schemaName,
+																   shardIndexName);
+
+		/* create worker_fix_partition_shard_index_names command */
+		StringInfo shardQueryString = makeStringInfo();
+		appendStringInfo(shardQueryString,
+						 "SELECT worker_fix_partition_shard_index_names(%s::regclass)",
+						 quote_literal_cstr(qualifiedShardIndexName));
 		commandList = lappend(commandList, shardQueryString->data);
 	}
 
