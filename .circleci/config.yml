@@ -178,7 +178,7 @@ jobs:
       image:
         description: 'docker image to use as for the tests'
         type: string
-        default: citus/pgupgradetester
+        default: citus/failtester
       image_tag:
         description: 'docker image tag to use'
         type: string
@@ -742,17 +742,17 @@ workflows:
       - test-custom:
           name: 'test-12_check-custom'
           pg_major: 12
-          image_tag: '12.8-13.4-14rc1'
+          image_tag: '12.8'
           requires: [build-12]
       - test-custom:
           name: 'test-13_check-custom'
           pg_major: 13
-          image_tag: '12.8-13.4-14rc1'
+          image_tag: '13.4'
           requires: [build-13]
       - test-custom:
           name: 'test-14_check-custom'
           pg_major: 14
-          image_tag: '12.8-13.4-14rc1'
+          image_tag: '14rc1'
           requires: [build-14]
 
       - test-pg-upgrade:
