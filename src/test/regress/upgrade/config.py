@@ -10,6 +10,9 @@ COORDINATOR_NAME = 'coordinator'
 WORKER1 = 'worker1'
 WORKER2 = 'worker2'
 
+REGULAR_USER_NAME = 'regularuser'
+SUPER_USER_NAME = 'postgres'
+
 CUSTOM_TEST_NAMES = ['custom_sql_test', 'custom_create_test']
 
 BEFORE_PG_UPGRADE_SCHEDULE = './before_pg_upgrade_schedule'
@@ -57,6 +60,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.pg_srcdir = arguments['--pgxsdir']
         self.temp_dir = CITUS_CUSTOM_TEST_DIR
         self.worker_amount = 2
+        self.user = REGULAR_USER_NAME
         self.is_mx = False
         self.settings = {
             'shared_preload_libraries': 'citus',
@@ -106,6 +110,7 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.new_settings = {
             'citus.enable_version_checks' : 'false'
         }
+        self.user = SUPER_USER_NAME
         self.mixed_mode = arguments['--mixed']
         self.settings.update(self.new_settings)
 
@@ -216,3 +221,4 @@ class PGUpgradeConfig(CitusBaseClusterConfig):
         self.temp_dir = './tmp_upgrade'
         self.old_datadir = self.temp_dir + '/oldData'
         self.new_datadir = self.temp_dir + '/newData'
+        self.user = SUPER_USER_NAME

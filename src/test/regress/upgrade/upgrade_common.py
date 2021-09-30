@@ -47,6 +47,12 @@ def add_settings(abs_data_path, settings):
             conf_file.write(setting)
 
 
+def create_role(pg_path, port, node_ports, user_name):
+    for port in node_ports:
+        # this will fail in enterprise saying that the role already exists as we will propagate
+        command = 'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;'.format(user_name)
+        utils.psql(pg_path, port, command)
+
 def start_databases(pg_path, rel_data_path, node_name_to_ports):
     for node_name in node_name_to_ports.keys():
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
@@ -68,17 +74,17 @@ def run_pg_regress(pg_path, pg_srcdir, port, schedule):
     should_exit = True
     _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit)
 
-def run_pg_regress_without_exit(pg_path, pg_srcdir, port, schedule, output_dir = '.', input_dir = '.'):
+def run_pg_regress_without_exit(pg_path, pg_srcdir, port, schedule, output_dir = '.', input_dir = '.', user = 'postgres'):
     should_exit = False
-    return _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir, input_dir)
+    return _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir, input_dir, user)
 
-def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir = '.', input_dir = '.'):
+def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir = '.', input_dir = '.', user = 'postgres'):
     command = [
         os.path.join(pg_srcdir, 'src/test/regress/pg_regress'),
         '--port', str(port),
         '--schedule', schedule,
         '--bindir', pg_path,
-        '--user', USER,
+        '--user', user,
         '--dbname', DBNAME,
         '--inputdir', input_dir,
         '--outputdir', output_dir,
@@ -94,7 +100,8 @@ def save_regression_diff(name, output_dir):
     path = os.path.join(output_dir, 'regression.diffs')
     if not os.path.exists(path):
         return
-    new_file_path = os.path_join(output_dir, "./regression_{}.diffs".format(name))
+    new_file_path = os.path.join(output_dir, "./regression_{}.diffs".format(name))
+    print("new file path:", new_file_path)
     shutil.move(path, new_file_path)
 
 def sync_metadata_to_workers(pg_path, worker_ports, coordinator_port):

@@ -34,29 +34,33 @@ from config import (
     CUSTOM_TEST_NAMES,
     COORDINATOR_NAME,
     CUSTOM_CREATE_SCHEDULE,
-    CUSTOM_SQL_SCHEDULE
+    CUSTOM_SQL_SCHEDULE,
+    REGULAR_USER_NAME
 )
 
 testResults = {}
 failCount = 0
 
 def run_for_config(config, name):
+    global failCount
     print ('Running test for: {}'.format(name))
     start_time = time.time()
     common.initialize_citus_cluster(config.bindir, config.datadir, config.settings, config)
-
+    if config.user == REGULAR_USER_NAME:
+        common.create_role(config.bindir, config.node_name_to_ports[COORDINATOR_NAME], 
+            config.node_name_to_ports.values(), config.user)
     copy_test_files(config)
 
     exitCode = common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
                    config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_CREATE_SCHEDULE, config.output_dir,
-                   config.input_dir)
+                   config.input_dir, config.user)
     common.save_regression_diff('create', config.output_dir)
     if config.is_mx:
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   config.random_worker_port(), CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir)
+                   config.random_worker_port(), CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir, config.user)
     else:
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir)
+                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir, config.user)
 
     run_time = time.time() - start_time
     testResults[name] =  "SUCCESS" if exitCode == 0 else "FAIL: see {}".format(config.output_dir + '/run.out')
