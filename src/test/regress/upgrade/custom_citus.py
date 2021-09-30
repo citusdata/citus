@@ -30,6 +30,7 @@ from config import (
     CitusShardReplicationFactorClusterConfig,
     CitusNoLocalExecutionClusterConfig,
     CitusComplexClusterConfig,
+    CitusSuperUserDefaultClusterConfig,
     CITUS_CUSTOM_TEST_DIR,
     CUSTOM_TEST_NAMES,
     COORDINATOR_NAME,
@@ -112,7 +113,9 @@ if __name__ == '__main__':
         (CitusSingleWorkerClusterConfig(docoptRes), "citus single worker node cluster"),
         (CitusShardReplicationFactorClusterConfig(docoptRes), "citus with shard replication factor 2 cluster"),
         (CitusNoLocalExecutionClusterConfig(docoptRes), "citus with no local execution cluster"),
-        (CitusComplexClusterConfig(docoptRes), "citus different settings cluster")
+        (CitusComplexClusterConfig(docoptRes), "citus different settings cluster"),
+        (CitusSuperUserDefaultClusterConfig(docoptRes), "citus super user default cluster"),
+        
     ]
 
     start_time = time.time()

@@ -3,6 +3,7 @@ import random
 import socket
 from contextlib import closing
 import os
+from subprocess import SubprocessError
 
 DBNAME = 'postgres'
 
@@ -118,6 +119,11 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
 
 class CitusDefaultClusterConfig(CitusBaseClusterConfig):
     pass
+
+class CitusSuperUserDefaultClusterConfig(CitusBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.user = SUPER_USER_NAME
 
 class CitusSingleNodeClusterConfig(CitusBaseClusterConfig):
 
