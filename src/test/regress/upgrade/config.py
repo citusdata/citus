@@ -99,6 +99,10 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
             self.worker_ports.append(cur_port)
 
     def _get_and_update_next_port(self):
+        if hasattr(self, 'fixed_port'):
+            next_port = self.fixed_port
+            self.fixed_port += 1
+            return next_port
         return find_free_port()
 
 class CitusUpgradeConfig(CitusBaseClusterConfig):
@@ -114,6 +118,7 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments['--mixed']
         self.settings.update(self.new_settings)
+        self.fixed_port = 57635
 
 
 

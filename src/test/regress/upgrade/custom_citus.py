@@ -48,7 +48,7 @@ def run_for_config(config, name):
     start_time = time.time()
     common.initialize_citus_cluster(config.bindir, config.datadir, config.settings, config)
     if config.user == REGULAR_USER_NAME:
-        common.create_role(config.bindir, config.node_name_to_ports[COORDINATOR_NAME], 
+        common.create_role(config.bindir, config.node_name_to_ports[COORDINATOR_NAME],
             config.node_name_to_ports.values(), config.user)
     copy_test_files(config)
 
@@ -115,7 +115,7 @@ if __name__ == '__main__':
         (CitusNoLocalExecutionClusterConfig(docoptRes), "citus with no local execution cluster"),
         (CitusComplexClusterConfig(docoptRes), "citus different settings cluster"),
         (CitusSuperUserDefaultClusterConfig(docoptRes), "citus super user default cluster"),
-        
+
     ]
 
     start_time = time.time()
@@ -123,7 +123,7 @@ if __name__ == '__main__':
 
     parallel_thread_amount = 1
     if '--parallel' in docoptRes and docoptRes['--parallel'] != '':
-        parallel_thread_amount = int(docoptRes['--parallel'])    
+        parallel_thread_amount = int(docoptRes['--parallel'])
 
     testRunners = []
     common.initialize_temp_dir(CITUS_CUSTOM_TEST_DIR)

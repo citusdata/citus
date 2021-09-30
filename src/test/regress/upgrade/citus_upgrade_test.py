@@ -97,7 +97,8 @@ def restart_databases(pg_path, rel_data_path, mixed_mode, config):
             continue
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         restart_database(
-            pg_path=pg_path, abs_data_path=abs_data_path, node_name=node_name)
+            pg_path=pg_path, abs_data_path=abs_data_path, node_name=node_name, 
+            node_ports=config.node_name_to_ports)
 
 
 def restart_database(pg_path, abs_data_path, node_name, node_ports):
