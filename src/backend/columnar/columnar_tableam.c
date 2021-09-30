@@ -672,7 +672,7 @@ columnar_index_delete_tuples(Relation rel,
 	if (delstate->bottomup)
 	{
 		/*
-		 * Ignore any deletion bottom-up deletion requests.
+		 * Ignore any bottom-up deletion requests.
 		 *
 		 * Currently only caller in postgres that does bottom-up deletion is
 		 * _bt_bottomupdel_pass, which in turn calls _bt_delitems_delete_check.
@@ -686,11 +686,12 @@ columnar_index_delete_tuples(Relation rel,
 	{
 		/*
 		 * TableAM is not expected to set ndeltids to 0 for simple deletion
-		 * case so we cannot do what we do for bottomup case.
+		 * case, so here we cannot do the same trick that we do for
+		 * bottom-up deletion.
 		 * See the assertion around table_index_delete_tuples call in pg
 		 * function index_compute_xid_horizon_for_tuples.
 		 *
-		 * For this reason, not to encounter with simple deletion case for
+		 * For this reason, to avoid receiving simple deletion requests for
 		 * columnar tables (bottomup = false), columnar_index_fetch_tuple
 		 * doesn't ever set all_dead to true in order to prevent triggering
 		 * simple deletion of index tuples. But let's throw an error to be on
