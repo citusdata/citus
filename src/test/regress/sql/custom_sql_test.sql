@@ -1,3 +1,5 @@
+SET search_path to "te;'st", public;
+
 INSERT INTO dist SELECT *,* FROM generate_series(1,100);
 INSERT INTO ref SELECT *,* FROM generate_series(1,100);
 

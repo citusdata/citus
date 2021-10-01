@@ -67,6 +67,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
             'shared_preload_libraries': 'citus',
             'citus.node_conninfo': 'sslmode=prefer',
         }
+        self.add_coordinator_to_metadata = False
 
     def init(self):
         self._init_node_name_ports()
@@ -80,6 +81,8 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
             self.chosen_random_worker_port = self.random_worker_port()
         CitusBaseClusterConfig.data_dir_counter += 1
 
+    def coordinator_port(self):
+        return self.node_name_to_ports[COORDINATOR_NAME]
 
     def setup_steps(self):
         pass
@@ -105,6 +108,13 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
             return next_port
         return find_free_port()
 
+class CitusMXBaseClusterConfig(CitusBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.is_mx = True
+        self.add_coordinator_to_metadata = True
+
+
 class CitusUpgradeConfig(CitusBaseClusterConfig):
 
     def __init__(self, arguments):
@@ -125,24 +135,24 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
 class CitusDefaultClusterConfig(CitusBaseClusterConfig):
     pass
 
-class CitusSuperUserDefaultClusterConfig(CitusBaseClusterConfig):
+class CitusSuperUserDefaultClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.user = SUPER_USER_NAME
 
-class CitusSingleNodeClusterConfig(CitusBaseClusterConfig):
+class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
 
     def __init__(self, arguments):
         super().__init__(arguments)
         self.worker_amount = 0
 
-class CitusSingleWorkerClusterConfig(CitusBaseClusterConfig):
+class CitusSingleWorkerClusterConfig(CitusMXBaseClusterConfig):
 
     def __init__(self, arguments):
         super().__init__(arguments)
         self.worker_amount = 1
 
-class CitusSingleNodeSingleShardClusterConfig(CitusBaseClusterConfig):
+class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
 
     def __init__(self, arguments):
         super().__init__(arguments)
@@ -152,7 +162,7 @@ class CitusSingleNodeSingleShardClusterConfig(CitusBaseClusterConfig):
         }
         self.settings.update(self.new_settings)
 
-class CitusShardReplicationFactorClusterConfig(CitusBaseClusterConfig):
+class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
 
     def __init__(self, arguments):
         super().__init__(arguments)
@@ -161,7 +171,7 @@ class CitusShardReplicationFactorClusterConfig(CitusBaseClusterConfig):
         }
         self.settings.update(self.new_settings)
 
-class CitusNoLocalExecutionClusterConfig(CitusBaseClusterConfig):
+class CitusNoLocalExecutionClusterConfig(CitusMXBaseClusterConfig):
 
     def __init__(self, arguments):
         super().__init__(arguments)
@@ -170,7 +180,7 @@ class CitusNoLocalExecutionClusterConfig(CitusBaseClusterConfig):
         }
         self.settings.update(self.new_settings)
 
-class CitusComplexClusterConfig(CitusBaseClusterConfig):
+class CitusComplexClusterConfig(CitusMXBaseClusterConfig):
 
     def __init__(self, arguments):
         super().__init__(arguments)
@@ -181,10 +191,9 @@ class CitusComplexClusterConfig(CitusBaseClusterConfig):
             'citus.prevent_incomplete_connection_establishment': False
         }
         self.settings.update(self.new_settings)
-        self.is_mx = True
 
 
-class CitusSingleShardClusterConfig(CitusBaseClusterConfig):
+class CitusSingleShardClusterConfig(CitusMXBaseClusterConfig):
 
     def __init__(self, arguments):
         super().__init__(arguments)
@@ -193,12 +202,12 @@ class CitusSingleShardClusterConfig(CitusBaseClusterConfig):
         }
         self.settings.update(self.new_settings)
 
-class CitusMxClusterConfig(CitusBaseClusterConfig):
+class CitusNonMxClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
-        self.is_mx = True
+        self.is_mx = False
 
-class CitusManyShardsClusterConfig(CitusBaseClusterConfig):
+class CitusManyShardsClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
@@ -206,7 +215,7 @@ class CitusManyShardsClusterConfig(CitusBaseClusterConfig):
         }
         self.settings.update(self.new_settings)
 
-class CitusSingleNodeSingleConnectionClusterConfig(CitusBaseClusterConfig):
+class CitusSingleNodeSingleConnectionClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
@@ -214,7 +223,7 @@ class CitusSingleNodeSingleConnectionClusterConfig(CitusBaseClusterConfig):
         }
         self.settings.update(self.new_settings)
 
-class CitusSingleNodeSingleSharedPoolSizeClusterConfig(CitusBaseClusterConfig):
+class CitusSingleNodeSingleSharedPoolSizeClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {

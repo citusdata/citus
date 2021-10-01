@@ -61,9 +61,9 @@ def main(config):
     common.initialize_temp_dir(config.temp_dir)
     common.initialize_citus_cluster(config.old_bindir, config.old_datadir, config.settings, config)
     common.run_pg_regress(config.old_bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], BEFORE_PG_UPGRADE_SCHEDULE)
+                   config.coordinator_port(), BEFORE_PG_UPGRADE_SCHEDULE)
     common.run_pg_regress(config.old_bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], AFTER_PG_UPGRADE_SCHEDULE)
+                   config.coordinator_port(), AFTER_PG_UPGRADE_SCHEDULE)
 
     citus_prepare_pg_upgrade(config.old_bindir, config.node_name_to_ports.values())
     # prepare should be idempotent, calling it a second time should never fail.
@@ -79,7 +79,7 @@ def main(config):
     citus_finish_pg_upgrade(config.new_bindir, config.node_name_to_ports.values())
 
     common.run_pg_regress(config.new_bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], AFTER_PG_UPGRADE_SCHEDULE)
+                   config.coordinator_port(), AFTER_PG_UPGRADE_SCHEDULE)
 
 
 if __name__ == '__main__':

@@ -22,7 +22,7 @@ from config import (
     CitusDefaultClusterConfig, CitusSingleNodeClusterConfig,
     CitusSingleNodeSingleShardClusterConfig,
     CitusSingleShardClusterConfig,
-    CitusMxClusterConfig,
+    CitusNonMxClusterConfig,
     CitusManyShardsClusterConfig,
     CitusSingleNodeSingleSharedPoolSizeClusterConfig,
     CitusSingleNodeSingleConnectionClusterConfig,
@@ -48,20 +48,20 @@ def run_for_config(config, name):
     start_time = time.time()
     common.initialize_citus_cluster(config.bindir, config.datadir, config.settings, config)
     if config.user == REGULAR_USER_NAME:
-        common.create_role(config.bindir, config.node_name_to_ports[COORDINATOR_NAME],
+        common.create_role(config.bindir, config.coordinator_port(),
             config.node_name_to_ports.values(), config.user)
     copy_test_files(config)
 
     exitCode = common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_CREATE_SCHEDULE, config.output_dir,
+                   config.coordinator_port(), CUSTOM_CREATE_SCHEDULE, config.output_dir,
                    config.input_dir, config.user)
     common.save_regression_diff('create', config.output_dir)
-    if config.is_mx:
+    if config.is_mx and config.worker_amount > 0:
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
                    config.random_worker_port(), CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir, config.user)
     else:
         exitCode |= common.run_pg_regress_without_exit(config.bindir, config.pg_srcdir,
-                   config.node_name_to_ports[COORDINATOR_NAME], CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir, config.user)
+                   config.coordinator_port(), CUSTOM_SQL_SCHEDULE, config.output_dir, config.input_dir, config.user)
 
     run_time = time.time() - start_time
     testResults[name] =  "SUCCESS" if exitCode == 0 else "FAIL: see {}".format(config.output_dir + '/run.out')
@@ -95,8 +95,10 @@ class TestRunner(threading.Thread):
       self.name = name
 
     def run(self):
-      run_for_config(self.config, self.name)
-
+      try:
+        run_for_config(self.config, self.name)
+      except Exception as e:
+          print(e)
 
 
 if __name__ == '__main__':
@@ -106,7 +108,7 @@ if __name__ == '__main__':
         (CitusSingleNodeClusterConfig(docoptRes), "single node citus cluster"),
         (CitusSingleNodeSingleShardClusterConfig(docoptRes), "single node single shard cluster"),
         (CitusSingleShardClusterConfig(docoptRes), "single shard multiple workers cluster"),
-        (CitusMxClusterConfig(docoptRes), "mx citus cluster"),
+        (CitusNonMxClusterConfig(docoptRes), "mx citus cluster"),
         (CitusManyShardsClusterConfig(docoptRes), "citus cluster with many shards"),
         (CitusSingleNodeSingleSharedPoolSizeClusterConfig(docoptRes), "citus single node single shared pool cluster"),
         (CitusSingleNodeSingleConnectionClusterConfig(docoptRes), "citus single node single connection cluster"),

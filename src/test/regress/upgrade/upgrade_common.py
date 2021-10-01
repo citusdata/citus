@@ -49,9 +49,11 @@ def add_settings(abs_data_path, settings):
 
 def create_role(pg_path, port, node_ports, user_name):
     for port in node_ports:
-        # this will fail in enterprise saying that the role already exists as we will propagate
-        command = 'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;'.format(user_name)
+        command = 'SELECT worker_create_or_alter_role(\'{}\', \'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;\', NULL)'.format(user_name, user_name)
         utils.psql(pg_path, port, command)
+        command = 'GRANT CREATE ON DATABASE postgres to {}'.format(user_name)
+        utils.psql(pg_path, port, command)
+
 
 def start_databases(pg_path, rel_data_path, node_name_to_ports):
     for node_name in node_name_to_ports.keys():
@@ -110,6 +112,10 @@ def sync_metadata_to_workers(pg_path, worker_ports, coordinator_port):
             port=port)
         utils.psql(pg_path, coordinator_port, command)
 
+def add_coordinator_to_metadata(pg_path, coordinator_port):
+    command = "SELECT citus_add_node('localhost', {}, groupId := 0)".format(coordinator_port)
+    utils.psql(pg_path, coordinator_port, command)
+
 
 def add_workers(pg_path, worker_ports, coordinator_port):
     for port in worker_ports:
@@ -140,6 +146,8 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     initialize_db_for_cluster(bindir, datadir, settings, config.node_name_to_ports.keys())
     start_databases(bindir, datadir, config.node_name_to_ports)
     create_citus_extension(bindir, config.node_name_to_ports.values())
-    add_workers(bindir, config.worker_ports, config.node_name_to_ports[COORDINATOR_NAME])
+    add_workers(bindir, config.worker_ports, config.coordinator_port())
     if config.is_mx:
-        sync_metadata_to_workers(bindir, config.worker_ports, config.node_name_to_ports[COORDINATOR_NAME])
+        sync_metadata_to_workers(bindir, config.worker_ports, config.coordinator_port())
+    if config.add_coordinator_to_metadata:
+        add_coordinator_to_metadata(bindir, config.coordinator_port())
