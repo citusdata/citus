@@ -47,7 +47,7 @@ why we ask this as well as instructions for how to proceed, see the
        sudo apt-key add -
   sudo apt-get update
 
-  sudo apt-get install -y postgresql-server-dev-13 postgresql-13 \
+  sudo apt-get install -y postgresql-server-dev-14 postgresql-14 \
                           autoconf flex git libcurl4-gnutls-dev libicu-dev \
                           libkrb5-dev liblz4-dev libpam0g-dev libreadline-dev \
                           libselinux1-dev libssl-dev libxslt-dev libzstd-dev \
@@ -94,14 +94,14 @@ why we ask this as well as instructions for how to proceed, see the
   ```bash
   sudo yum update -y
   sudo yum groupinstall -y 'Development Tools'
-  sudo yum install -y postgresql13-devel postgresql13-server     \
+  sudo yum install -y postgresql14-devel postgresql14-server     \
                       git libcurl-devel libxml2-devel libxslt-devel \
                       libzstd-devel llvm-toolset-7-clang llvm5.0 lz4-devel \
                       openssl-devel pam-devel readline-devel
 
   git clone https://github.com/citusdata/citus.git
   cd citus
-  PG_CONFIG=/usr/pgsql-13/bin/pg_config ./configure
+  PG_CONFIG=/usr/pgsql-14/bin/pg_config ./configure
   make
   sudo make install
   cd src/test/regress
