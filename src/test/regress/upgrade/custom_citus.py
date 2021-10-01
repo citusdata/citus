@@ -18,29 +18,8 @@ import os, shutil
 import time
 import sys
 
-from config import (
-    CitusDefaultClusterConfig,
-    CitusSingleNodeClusterConfig,
-    CitusSingleWorkerClusterConfig,
-    CitusSuperUserDefaultClusterConfig,
-    CitusFiveWorkersManyShardsClusterConfig,
-    CitusSmallSharedPoolSizeConfig,
-    CitusSmallExecutorPoolSizeConfig,
-    CitusSequentialExecutionConfig,
-    CitusCacheManyConnectionsConfig,
-    CitusUnusualExecutorConfig,
-    CitusSmallCopyBuffersConfig,
-    CitusUnusualQuerySettingsConfig,
-    CitusSingleNodeSingleShardClusterConfig,
-    CitusShardReplicationFactorClusterConfig,
-    CitusSingleShardClusterConfig,
-    CitusNonMxClusterConfig,
-    CITUS_CUSTOM_TEST_DIR,
-    CUSTOM_TEST_NAMES,
-    CUSTOM_CREATE_SCHEDULE,
-    CUSTOM_SQL_SCHEDULE,
-    REGULAR_USER_NAME,
-)
+
+import config as cfg
 
 testResults = {}
 failCount = 0
@@ -54,7 +33,7 @@ def run_for_config(config):
     common.initialize_citus_cluster(
         config.bindir, config.datadir, config.settings, config
     )
-    if config.user == REGULAR_USER_NAME:
+    if config.user == cfg.REGULAR_USER_NAME:
         common.create_role(
             config.bindir,
             config.coordinator_port(),
@@ -67,7 +46,7 @@ def run_for_config(config):
         config.bindir,
         config.pg_srcdir,
         config.coordinator_port(),
-        CUSTOM_CREATE_SCHEDULE,
+        cfg.CUSTOM_CREATE_SCHEDULE,
         config.output_dir,
         config.input_dir,
         config.user,
@@ -78,7 +57,7 @@ def run_for_config(config):
             config.bindir,
             config.pg_srcdir,
             config.random_worker_port(),
-            CUSTOM_SQL_SCHEDULE,
+            cfg.CUSTOM_SQL_SCHEDULE,
             config.output_dir,
             config.input_dir,
             config.user,
@@ -88,7 +67,7 @@ def run_for_config(config):
             config.bindir,
             config.pg_srcdir,
             config.coordinator_port(),
-            CUSTOM_SQL_SCHEDULE,
+            cfg.CUSTOM_SQL_SCHEDULE,
             config.output_dir,
             config.input_dir,
             config.user,
@@ -116,7 +95,7 @@ def copy_test_files(config):
 
     common.initialize_temp_dir(sql_dir_path)
     common.initialize_temp_dir(expected_dir_path)
-    for test_name in CUSTOM_TEST_NAMES:
+    for test_name in cfg.CUSTOM_TEST_NAMES:
         sql_name = os.path.join("./sql", test_name + ".sql")
         output_name = os.path.join("./expected", test_name + ".out")
         shutil.copy(sql_name, sql_dir_path)
@@ -138,22 +117,22 @@ class TestRunner(threading.Thread):
 if __name__ == "__main__":
     docoptRes = docopt(__doc__)
     configs = [
-        CitusDefaultClusterConfig(docoptRes),
-        CitusSingleNodeClusterConfig(docoptRes),
-        CitusSingleNodeSingleShardClusterConfig(docoptRes),
-        CitusSingleShardClusterConfig(docoptRes),
-        CitusNonMxClusterConfig(docoptRes),
-        CitusSingleWorkerClusterConfig(docoptRes),
-        CitusShardReplicationFactorClusterConfig(docoptRes),
-        CitusSuperUserDefaultClusterConfig(docoptRes),
-        CitusFiveWorkersManyShardsClusterConfig(docoptRes),
-        CitusSmallSharedPoolSizeConfig(docoptRes),
-        CitusSmallExecutorPoolSizeConfig(docoptRes),
-        CitusSequentialExecutionConfig(docoptRes),
-        CitusUnusualExecutorConfig(docoptRes),
-        CitusCacheManyConnectionsConfig(docoptRes),
-        CitusSmallCopyBuffersConfig(docoptRes),
-        CitusUnusualQuerySettingsConfig(docoptRes),
+        cfg.CitusDefaultClusterConfig(docoptRes),
+        cfg.CitusSingleNodeClusterConfig(docoptRes),
+        cfg.CitusSingleNodeSingleShardClusterConfig(docoptRes),
+        cfg.CitusSingleShardClusterConfig(docoptRes),
+        cfg.CitusNonMxClusterConfig(docoptRes),
+        cfg.CitusSingleWorkerClusterConfig(docoptRes),
+        cfg.CitusShardReplicationFactorClusterConfig(docoptRes),
+        cfg.CitusSuperUserDefaultClusterConfig(docoptRes),
+        cfg.CitusFiveWorkersManyShardsClusterConfig(docoptRes),
+        cfg.CitusSmallSharedPoolSizeConfig(docoptRes),
+        cfg.CitusSmallExecutorPoolSizeConfig(docoptRes),
+        cfg.CitusSequentialExecutionConfig(docoptRes),
+        cfg.CitusUnusualExecutorConfig(docoptRes),
+        cfg.CitusCacheManyConnectionsConfig(docoptRes),
+        cfg.CitusSmallCopyBuffersConfig(docoptRes),
+        cfg.CitusUnusualQuerySettingsConfig(docoptRes),
     ]
 
     start_time = time.time()
@@ -163,7 +142,7 @@ if __name__ == "__main__":
         parallel_thread_amount = int(docoptRes["--parallel"])
 
     testRunners = []
-    common.initialize_temp_dir(CITUS_CUSTOM_TEST_DIR)
+    common.initialize_temp_dir(cfg.CITUS_CUSTOM_TEST_DIR)
     for config in configs:
         testRunner = TestRunner(config)
         testRunner.start()
