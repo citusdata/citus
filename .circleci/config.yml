@@ -169,8 +169,8 @@ jobs:
       - codecov/upload:
           flags: 'test_<< parameters.old_pg_major >>_<< parameters.new_pg_major >>,upgrade'
 
-  test-custom:
-    description: Runs custom citus tests
+  test-arbitrary-configs:
+    description: Runs tests on arbitrary configs
     parameters:
       pg_major:
         description: 'postgres major version to use'
@@ -204,11 +204,11 @@ jobs:
           command: |
             ulimit -c unlimited
       - run:
-          name: 'Test custom'
+          name: 'Test arbitrary configs'
           command: |
             gosu circleci \
               make -C src/test/regress \
-                check-custom-citus parallel=1
+                check-arbitrary-configs parallel=1
           no_output_timeout: 2m
       - run:
           name: 'Copy coredumps'
@@ -739,18 +739,18 @@ workflows:
           make: check-failure
           requires: [build-14]
 
-      - test-custom:
-          name: 'test-12_check-custom'
+      - test-arbitrary-configs:
+          name: 'test-12_check-arbitrary-configs'
           pg_major: 12
           image_tag: '12.8'
           requires: [build-12]
-      - test-custom:
-          name: 'test-13_check-custom'
+      - test-arbitrary-configs:
+          name: 'test-13_check-arbitrary-configs'
           pg_major: 13
           image_tag: '13.4'
           requires: [build-13]
-      - test-custom:
-          name: 'test-14_check-custom'
+      - test-arbitrary-configs:
+          name: 'test-14_check-arbitrary-configs'
           pg_major: 14
           image_tag: '14rc1'
           requires: [build-14]
