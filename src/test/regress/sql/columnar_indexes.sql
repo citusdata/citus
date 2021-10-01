@@ -546,5 +546,94 @@ begin;
   insert into uniq select generate_series(1,100);
 rollback;
 
+-- Show that we nicely ignore index deletion requests made to columnarAM.
+--
+-- An INSERT command might trigger index deletion if index already had dead
+-- entries for the key we are about to insert.
+-- There are two ways of index deletion:
+--   a) simple deletion
+--   b) bottom-up deletion (>= pg14)
+--
+-- Since columnar_index_fetch_tuple never sets all_dead to true, columnarAM
+-- doesn't expect to receive simple deletion as we don't mark any index
+-- entries as dead.
+-- Otherwise, columnarAM would throw an error for all of below six test cases.
+--
+-- However, since columnarAM doesn't delete any dead entries via simple
+-- deletion, postgres might ask for a more comprehensive deletion (bottom-up)
+-- at some point when pg >= 14.
+-- For this reason, all following six test cases would certainly trigger
+-- bottom-up deletion. Show that we gracefully ignore such requests.
+CREATE TABLE index_tuple_delete (a int UNIQUE) USING COLUMNAR;
+ALTER TABLE index_tuple_delete SET (autovacuum_enabled = false);
+
+BEGIN;
+  -- i) rollback before flushing
+	INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+ROLLBACK;
+
+-- index deletion test-1
+BEGIN;
+  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+ROLLBACK;
+COPY index_tuple_delete FROM PROGRAM 'seq 10000';
+
+TRUNCATE index_tuple_delete;
+
+BEGIN;
+  -- ii) rollback after flushing
+	INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+  SELECT SUM(a) > 0 FROM index_tuple_delete;
+ROLLBACK;
+
+-- index deletion test-2
+BEGIN;
+  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+ROLLBACK;
+COPY index_tuple_delete FROM PROGRAM 'seq 10000';
+
+TRUNCATE index_tuple_delete;
+
+BEGIN;
+  -- iii) rollback before flushing, use savepoint
+  SAVEPOINT sp1;
+	  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+  ROLLBACK TO sp1;
+
+  -- index deletion test-3
+  SAVEPOINT sp2;
+    INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+  ROLLBACK TO sp2;
+  COPY index_tuple_delete FROM PROGRAM 'seq 10000';
+ROLLBACK;
+
+-- index deletion test-4
+BEGIN;
+  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+ROLLBACK;
+COPY index_tuple_delete FROM PROGRAM 'seq 10000';
+
+TRUNCATE index_tuple_delete;
+
+BEGIN;
+  -- iv) rollback after flushing, use savepoint
+  SAVEPOINT sp1;
+	  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+    SELECT SUM(a) > 0 FROM index_tuple_delete;
+  ROLLBACK TO sp1;
+
+  -- index deletion test-5
+  SAVEPOINT sp2;
+    INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+  ROLLBACK TO sp2;
+  COPY index_tuple_delete FROM PROGRAM 'seq 10000';
+ROLLBACK;
+
+-- index deletion test-6
+BEGIN;
+  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+ROLLBACK;
+COPY index_tuple_delete FROM PROGRAM 'seq 10000';
+
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;
