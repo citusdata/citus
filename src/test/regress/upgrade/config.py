@@ -4,6 +4,7 @@ import socket
 from contextlib import closing
 import os
 from subprocess import SubprocessError
+import utils
 
 DBNAME = "postgres"
 
@@ -161,6 +162,9 @@ class CitusFiveWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
         self.new_settings = {"citus.shard_count": 494}
         self.worker_amount = 5
 
+    def setup_steps(self):
+        coordinator_should_haveshards(self.bindir, self.coordinator_port())
+
 
 class CitusSmallSharedPoolSizeConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
@@ -277,3 +281,10 @@ class PGUpgradeConfig(CitusBaseClusterConfig):
         self.old_datadir = self.temp_dir + "/oldData"
         self.new_datadir = self.temp_dir + "/newData"
         self.user = SUPER_USER_NAME
+
+
+def coordinator_should_haveshards(pg_path, port):
+    command = "SELECT citus_set_node_property('localhost', {}, 'shouldhaveshards', true)".format(
+        port
+    )
+    utils.psql(pg_path, port, command)

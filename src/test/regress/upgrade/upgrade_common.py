@@ -202,3 +202,4 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
         sync_metadata_to_workers(bindir, config.worker_ports, config.coordinator_port())
     if config.add_coordinator_to_metadata:
         add_coordinator_to_metadata(bindir, config.coordinator_port())
+    config.setup_steps()
