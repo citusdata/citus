@@ -223,6 +223,207 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 
 (1 row)
 
+DROP INDEX short;
+DROP TABLE yet_another_partition_table, another_partition_table_with_very_long_name;
+-- this will create constraint1 index on parent
+ALTER TABLE dist_partitioned_table ADD CONSTRAINT constraint1 UNIQUE (dist_col, partition_col);
+CREATE TABLE fk_table (id int, fk_column timestamp, FOREIGN KEY (id, fk_column) REFERENCES dist_partitioned_table (dist_col, partition_col));
+-- try creating index to foreign key
+CREATE INDEX ON dist_partitioned_table USING btree (dist_col, partition_col);
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+              tablename              |                           indexname
+---------------------------------------------------------------------
+ dist_partitioned_table              | constraint1
+ dist_partitioned_table              | dist_partitioned_table_dist_col_partition_col_idx
+ p                                   | p_dist_col_partition_col_idx
+ p                                   | p_dist_col_partition_col_key
+ partition_table_with_very_long_name | partition_table_with_very_long_name_dist_col_partition_col_idx
+ partition_table_with_very_long_name | partition_table_with_very_long_name_dist_col_partition_col_key
+(6 rows)
+
+\c - - - :worker_1_port
+-- index names don't end in shardid for partitions
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+                 tablename                  |                            indexname
+---------------------------------------------------------------------
+ dist_partitioned_table_910004              | constraint1_910004
+ dist_partitioned_table_910004              | dist_partitioned_table_dist_col_partition_col_idx_910004
+ dist_partitioned_table_910006              | constraint1_910006
+ dist_partitioned_table_910006              | dist_partitioned_table_dist_col_partition_col_idx_910006
+ p_910012                                   | p_910012_dist_col_partition_col_idx
+ p_910012                                   | p_910012_dist_col_partition_col_key
+ p_910014                                   | p_910014_dist_col_partition_col_idx
+ p_910014                                   | p_910014_dist_col_partition_col_key
+ partition_table_with_very_long_name_910008 | partition_table_with_very_long_name__dist_col_partition_col_idx
+ partition_table_with_very_long_name_910008 | partition_table_with_very_long_name__dist_col_partition_col_key
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_name_dist_col_partition_col_idx1
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_name_dist_col_partition_col_key1
+(12 rows)
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+SELECT fix_all_partition_shard_index_names();
+ fix_all_partition_shard_index_names
+---------------------------------------------------------------------
+ dist_partitioned_table
+(1 row)
+
+\c - - - :worker_1_port
+-- now index names end in shardid
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+                 tablename                  |                            indexname
+---------------------------------------------------------------------
+ dist_partitioned_table_910004              | constraint1_910004
+ dist_partitioned_table_910004              | dist_partitioned_table_dist_col_partition_col_idx_910004
+ dist_partitioned_table_910006              | constraint1_910006
+ dist_partitioned_table_910006              | dist_partitioned_table_dist_col_partition_col_idx_910006
+ p_910012                                   | p_dist_col_partition_col_idx_910012
+ p_910012                                   | p_dist_col_partition_col_key_910012
+ p_910014                                   | p_dist_col_partition_col_idx_910014
+ p_910014                                   | p_dist_col_partition_col_key_910014
+ partition_table_with_very_long_name_910008 | partition_table_with_very_long_name_dist_col_pa_781a5400_910008
+ partition_table_with_very_long_name_910008 | partition_table_with_very_long_name_dist_col_pa_ef25fb77_910008
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_name_dist_col_pa_781a5400_910010
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_name_dist_col_pa_ef25fb77_910010
+(12 rows)
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+ALTER TABLE dist_partitioned_table DROP CONSTRAINT constraint1 CASCADE;
+NOTICE:  drop cascades to constraint fk_table_id_fk_column_fkey on table fk_table
+DROP INDEX dist_partitioned_table_dist_col_partition_col_idx;
+-- try with index on only parent
+-- this is also an invalid index
+-- also try with hash method, not btree
+CREATE INDEX short_parent ON ONLY dist_partitioned_table USING hash (dist_col);
+-- only another_partition will have the index on dist_col inherited from short_parent
+-- hence short_parent will still be invalid
+CREATE TABLE another_partition (dist_col int, another_col int, partition_col timestamp);
+ALTER TABLE dist_partitioned_table ATTACH PARTITION another_partition FOR VALUES FROM ('2017-01-01') TO ('2018-01-01');
+SELECT c.relname AS indexname
+FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, pg_catalog.pg_index i
+WHERE  (i.indisvalid = false) AND i.indexrelid = c.oid AND c.relnamespace = n.oid AND n.nspname = 'fix_idx_names';
+  indexname
+---------------------------------------------------------------------
+ short_parent
+(1 row)
+
+-- try with index on only partition
+CREATE INDEX short_child ON ONLY p USING hash (dist_col);
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+       tablename        |           indexname
+---------------------------------------------------------------------
+ another_partition      | another_partition_dist_col_idx
+ dist_partitioned_table | short_parent
+ p                      | short_child
+(3 rows)
+
+\c - - - :worker_1_port
+-- index names are already correct except for inherited index for another_partition
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+           tablename           |               indexname
+---------------------------------------------------------------------
+ another_partition_361176      | another_partition_361176_dist_col_idx
+ another_partition_361178      | another_partition_361178_dist_col_idx
+ dist_partitioned_table_910004 | short_parent_910004
+ dist_partitioned_table_910006 | short_parent_910006
+ p_910012                      | short_child_910012
+ p_910014                      | short_child_910014
+(6 rows)
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+-- this will fix inherited index for another_partition
+SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+ fix_partition_shard_index_names
+---------------------------------------------------------------------
+
+(1 row)
+
+-- this will error out becuase p is not partitioned, it is rather a partition
+SELECT fix_partition_shard_index_names('p'::regclass);
+ERROR:  could not fix partition shard index names: relation is not partitioned
+\c - - - :worker_1_port
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+           tablename           |               indexname
+---------------------------------------------------------------------
+ another_partition_361176      | another_partition_dist_col_idx_361176
+ another_partition_361178      | another_partition_dist_col_idx_361178
+ dist_partitioned_table_910004 | short_parent_910004
+ dist_partitioned_table_910006 | short_parent_910006
+ p_910012                      | short_child_910012
+ p_910014                      | short_child_910014
+(6 rows)
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+DROP INDEX short_parent;
+DROP INDEX short_child;
+DROP TABLE another_partition;
+-- expression indexes have the same problem with naming
+CREATE INDEX expression_index ON dist_partitioned_table ((dist_col || ' ' || another_col));
+-- try with statistics on index
+CREATE INDEX statistics_on_index on dist_partitioned_table ((dist_col+another_col), (dist_col-another_col));
+ALTER INDEX statistics_on_index ALTER COLUMN 1 SET STATISTICS 3737;
+ALTER INDEX statistics_on_index ALTER COLUMN 3 SET STATISTICS 3737;
+ERROR:  column number 3 of relation "statistics_on_index" does not exist
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+              tablename              |                     indexname
+---------------------------------------------------------------------
+ dist_partitioned_table              | expression_index
+ dist_partitioned_table              | statistics_on_index
+ p                                   | p_expr_expr1_idx
+ p                                   | p_expr_idx
+ partition_table_with_very_long_name | partition_table_with_very_long_name_expr_expr1_idx
+ partition_table_with_very_long_name | partition_table_with_very_long_name_expr_idx
+(6 rows)
+
+\c - - - :worker_1_port
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+                 tablename                  |                         indexname
+---------------------------------------------------------------------
+ dist_partitioned_table_910004              | expression_index_910004
+ dist_partitioned_table_910004              | statistics_on_index_910004
+ dist_partitioned_table_910006              | expression_index_910006
+ dist_partitioned_table_910006              | statistics_on_index_910006
+ p_910012                                   | p_910012_expr_expr1_idx
+ p_910012                                   | p_910012_expr_idx
+ p_910014                                   | p_910014_expr_expr1_idx
+ p_910014                                   | p_910014_expr_idx
+ partition_table_with_very_long_name_910008 | partition_table_with_very_long_name_910008_expr_expr1_idx
+ partition_table_with_very_long_name_910008 | partition_table_with_very_long_name_910008_expr_idx
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_name_910010_expr_expr1_idx
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_name_910010_expr_idx
+(12 rows)
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+ fix_partition_shard_index_names
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+                 tablename                  |                         indexname
+---------------------------------------------------------------------
+ dist_partitioned_table_910004              | expression_index_910004
+ dist_partitioned_table_910004              | statistics_on_index_910004
+ dist_partitioned_table_910006              | expression_index_910006
+ dist_partitioned_table_910006              | statistics_on_index_910006
+ p_910012                                   | p_expr_expr1_idx_910012
+ p_910012                                   | p_expr_idx_910012
+ p_910014                                   | p_expr_expr1_idx_910014
+ p_910014                                   | p_expr_idx_910014
+ partition_table_with_very_long_name_910008 | partition_table_with_very_long_name_expr_expr1_idx_910008
+ partition_table_with_very_long_name_910008 | partition_table_with_very_long_name_expr_idx_910008
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_name_expr_expr1_idx_910010
+ partition_table_with_very_long_name_910010 | partition_table_with_very_long_name_expr_idx_910010
+(12 rows)
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
 DROP TABLE dist_partitioned_table;
 -- also, we cannot do any further operations (e.g. rename) on the indexes of partitions because
 -- the index names on shards of partitions have been generated by Postgres, not Citus
@@ -302,9 +503,10 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 \c - - - :master_port
 SET search_path TO fix_idx_names, public;
 DROP SCHEMA fix_idx_names CASCADE;
-NOTICE:  drop cascades to 4 other objects
+NOTICE:  drop cascades to 5 other objects
 DETAIL:  drop cascades to table not_partitioned
 drop cascades to table not_distributed
+drop cascades to table fk_table
 drop cascades to table dist_partitioned_table
 drop cascades to table p
 SELECT run_command_on_workers($$ DROP SCHEMA IF EXISTS fix_idx_names CASCADE $$);

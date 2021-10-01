@@ -103,6 +103,94 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 SET search_path TO fix_idx_names, public;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
+DROP INDEX short;
+DROP TABLE yet_another_partition_table, another_partition_table_with_very_long_name;
+-- this will create constraint1 index on parent
+ALTER TABLE dist_partitioned_table ADD CONSTRAINT constraint1 UNIQUE (dist_col, partition_col);
+CREATE TABLE fk_table (id int, fk_column timestamp, FOREIGN KEY (id, fk_column) REFERENCES dist_partitioned_table (dist_col, partition_col));
+
+-- try creating index to foreign key
+CREATE INDEX ON dist_partitioned_table USING btree (dist_col, partition_col);
+
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+\c - - - :worker_1_port
+-- index names don't end in shardid for partitions
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+SELECT fix_all_partition_shard_index_names();
+
+\c - - - :worker_1_port
+-- now index names end in shardid
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+
+ALTER TABLE dist_partitioned_table DROP CONSTRAINT constraint1 CASCADE;
+DROP INDEX dist_partitioned_table_dist_col_partition_col_idx;
+
+-- try with index on only parent
+-- this is also an invalid index
+-- also try with hash method, not btree
+CREATE INDEX short_parent ON ONLY dist_partitioned_table USING hash (dist_col);
+-- only another_partition will have the index on dist_col inherited from short_parent
+-- hence short_parent will still be invalid
+CREATE TABLE another_partition (dist_col int, another_col int, partition_col timestamp);
+ALTER TABLE dist_partitioned_table ATTACH PARTITION another_partition FOR VALUES FROM ('2017-01-01') TO ('2018-01-01');
+
+SELECT c.relname AS indexname
+FROM pg_catalog.pg_class c, pg_catalog.pg_namespace n, pg_catalog.pg_index i
+WHERE  (i.indisvalid = false) AND i.indexrelid = c.oid AND c.relnamespace = n.oid AND n.nspname = 'fix_idx_names';
+
+-- try with index on only partition
+CREATE INDEX short_child ON ONLY p USING hash (dist_col);
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :worker_1_port
+-- index names are already correct except for inherited index for another_partition
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+-- this will fix inherited index for another_partition
+SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+-- this will error out becuase p is not partitioned, it is rather a partition
+SELECT fix_partition_shard_index_names('p'::regclass);
+
+\c - - - :worker_1_port
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+
+DROP INDEX short_parent;
+DROP INDEX short_child;
+DROP TABLE another_partition;
+
+-- expression indexes have the same problem with naming
+CREATE INDEX expression_index ON dist_partitioned_table ((dist_col || ' ' || another_col));
+-- try with statistics on index
+CREATE INDEX statistics_on_index on dist_partitioned_table ((dist_col+another_col), (dist_col-another_col));
+ALTER INDEX statistics_on_index ALTER COLUMN 1 SET STATISTICS 3737;
+ALTER INDEX statistics_on_index ALTER COLUMN 3 SET STATISTICS 3737;
+
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :worker_1_port
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+
+\c - - - :worker_1_port
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+
 DROP TABLE dist_partitioned_table;
 
 -- also, we cannot do any further operations (e.g. rename) on the indexes of partitions because
