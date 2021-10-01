@@ -525,15 +525,15 @@ workflows:
       - build:
           name: build-12
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
       - build:
           name: build-13
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
       - build:
           name: build-14
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
 
       - check-style
       - check-sql-snapshots
@@ -541,222 +541,222 @@ workflows:
       - test-citus:
           name: 'test-12_check-multi'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-multi
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-multi-1'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-multi-1
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-mx'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-multi-mx
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-vanilla'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-vanilla
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-isolation'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-isolation
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-worker'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-worker
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-operations'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-operations
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-follower-cluster'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-follower-cluster
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-columnar'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-columnar
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-columnar-isolation'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-columnar-isolation
           requires: [build-12]
       - tap-test-citus:
           name: 'test_12_tap-recovery'
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           suite: recovery
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-failure'
           pg_major: 12
           image: citus/failtester
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           make: check-failure
           requires: [build-12]
 
       - test-citus:
           name: 'test-13_check-multi'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-multi
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-multi-1'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-multi-1
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-mx'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-multi-mx
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-vanilla'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-vanilla
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-isolation'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-isolation
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-worker'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-worker
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-operations'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-operations
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-follower-cluster'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-follower-cluster
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-columnar'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-columnar
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-columnar-isolation'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-columnar-isolation
           requires: [build-13]
       - tap-test-citus:
           name: 'test_13_tap-recovery'
           pg_major: 13
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           suite: recovery
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-failure'
           pg_major: 13
           image: citus/failtester
-          image_tag: '13.4-dev202110011740'
+          image_tag: '13.4-dev202110011809'
           make: check-failure
           requires: [build-13]
 
       - test-citus:
           name: 'test-14_check-multi'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-multi
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-multi-1'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-multi-1
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-mx'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-multi-mx
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-vanilla'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-vanilla
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-isolation'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-isolation
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-worker'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-worker
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-operations'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-operations
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-follower-cluster'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-follower-cluster
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-columnar'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-columnar
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-columnar-isolation'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-columnar-isolation
           requires: [build-14]
       - tap-test-citus:
           name: 'test_14_tap-recovery'
           pg_major: 14
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           suite: recovery
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-failure'
           pg_major: 14
           image: citus/failtester
-          image_tag: '14.0-dev202110011740'
+          image_tag: '14.0-dev202110011809'
           make: check-failure
           requires: [build-14]
 
@@ -780,27 +780,27 @@ workflows:
           name: 'test-12-13_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 13
-          image_tag: '12.8-13.4-14.0-dev202110011740'
+          image_tag: '12.8-13.4-14.0-dev202110011809'
           requires: [build-12,build-13]
 
       - test-pg-upgrade:
           name: 'test-12-14_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 14
-          image_tag: '12.8-13.4-14.0-dev202110011740'
+          image_tag: '12.8-13.4-14.0-dev202110011809'
           requires: [build-12,build-14]
 
       - test-pg-upgrade:
           name: 'test-13-14_check-pg-upgrade'
           old_pg_major: 13
           new_pg_major: 14
-          image_tag: '12.8-13.4-14.0-dev202110011740'
+          image_tag: '12.8-13.4-14.0-dev202110011809'
           requires: [build-13,build-14]
 
       - test-citus-upgrade:
           name: test-12_check-citus-upgrade
           pg_major: 12
-          image_tag: '12.8-dev202110011740'
+          image_tag: '12.8-dev202110011809'
           requires: [build-12]
 
       - ch_benchmark:
