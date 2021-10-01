@@ -6,8 +6,6 @@ import subprocess
 import utils
 from utils import USER
 
-from config import COORDINATOR_NAME, DBNAME
-
 
 def initialize_temp_dir(temp_dir):
     if os.path.exists(temp_dir):
@@ -58,6 +56,13 @@ def create_role(pg_path, port, node_ports, user_name):
         utils.psql(pg_path, port, command)
         command = "GRANT CREATE ON DATABASE postgres to {}".format(user_name)
         utils.psql(pg_path, port, command)
+
+
+def coordinator_should_haveshards(pg_path, port):
+    command = "SELECT citus_set_node_property('localhost', {}, 'shouldhaveshards', true)".format(
+        port
+    )
+    utils.psql(pg_path, port, command)
 
 
 def start_databases(pg_path, rel_data_path, node_name_to_ports):
@@ -119,7 +124,7 @@ def _run_pg_regress(
         "--user",
         user,
         "--dbname",
-        DBNAME,
+        "postgres",
         "--inputdir",
         input_dir,
         "--outputdir",

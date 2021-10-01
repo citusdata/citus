@@ -3,10 +3,7 @@ import random
 import socket
 from contextlib import closing
 import os
-from subprocess import SubprocessError
-import utils
-
-DBNAME = "postgres"
+import upgrade_common as common
 
 COORDINATOR_NAME = "coordinator"
 WORKER1 = "worker1"
@@ -163,7 +160,7 @@ class CitusFiveWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
         self.worker_amount = 5
 
     def setup_steps(self):
-        coordinator_should_haveshards(self.bindir, self.coordinator_port())
+        common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
 
 
 class CitusSmallSharedPoolSizeConfig(CitusMXBaseClusterConfig):
@@ -281,10 +278,3 @@ class PGUpgradeConfig(CitusBaseClusterConfig):
         self.old_datadir = self.temp_dir + "/oldData"
         self.new_datadir = self.temp_dir + "/newData"
         self.user = SUPER_USER_NAME
-
-
-def coordinator_should_haveshards(pg_path, port):
-    command = "SELECT citus_set_node_property('localhost', {}, 'shouldhaveshards', true)".format(
-        port
-    )
-    utils.psql(pg_path, port, command)
