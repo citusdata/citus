@@ -208,7 +208,7 @@ jobs:
           command: |
             gosu circleci \
               make -C src/test/regress \
-                check-custom-citus parallel=1000
+                check-custom-citus parallel=1
           no_output_timeout: 2m
       - run:
           name: 'Copy coredumps'
