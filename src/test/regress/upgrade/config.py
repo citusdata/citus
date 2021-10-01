@@ -217,7 +217,7 @@ class CitusSingleNodeSingleConnectionClusterConfig(CitusMXBaseClusterConfig):
 class CitusSingleNodeSingleSharedPoolSizeClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
-        self.new_settings = {"citus.max_shared_pool_size": 1}
+        self.new_settings = {"citus.max_shared_pool_size": 2}
         self.settings.update(self.new_settings)
 
 

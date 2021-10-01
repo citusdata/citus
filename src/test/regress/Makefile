@@ -247,5 +247,6 @@ clean-upgrade-artifacts:
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
 	rm -rf tmp_check/
+	rm -rf tmp_citus_test/
 
 all: create-tablespaces
