@@ -1,4 +1,3 @@
-
 import os
 import shutil
 import sys
@@ -17,6 +16,7 @@ def initialize_temp_dir(temp_dir):
     # Give full access to TEMP_DIR so that postgres user can use it.
     os.chmod(temp_dir, 0o777)
 
+
 def initialize_temp_dir_if_not_exists(temp_dir):
     if os.path.exists(temp_dir):
         return
@@ -24,34 +24,39 @@ def initialize_temp_dir_if_not_exists(temp_dir):
     # Give full access to TEMP_DIR so that postgres user can use it.
     os.chmod(temp_dir, 0o777)
 
+
 def initialize_db_for_cluster(pg_path, rel_data_path, settings, node_names):
-    subprocess.run(['mkdir', rel_data_path], check=True)
+    subprocess.run(["mkdir", rel_data_path], check=True)
     for node_name in node_names:
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         command = [
-            os.path.join(pg_path, 'initdb'),
-            '--pgdata', abs_data_path,
-            '--username', USER
+            os.path.join(pg_path, "initdb"),
+            "--pgdata",
+            abs_data_path,
+            "--username",
+            USER,
         ]
         subprocess.run(command, check=True)
         add_settings(abs_data_path, settings)
 
 
 def add_settings(abs_data_path, settings):
-    conf_path = os.path.join(abs_data_path, 'postgresql.conf')
-    with open(conf_path, 'a') as conf_file:
+    conf_path = os.path.join(abs_data_path, "postgresql.conf")
+    with open(conf_path, "a") as conf_file:
         for setting_key, setting_val in settings.items():
-            setting = "{setting_key} = \'{setting_val}\'\n".format(
-                setting_key=setting_key,
-                setting_val=setting_val)
+            setting = "{setting_key} = '{setting_val}'\n".format(
+                setting_key=setting_key, setting_val=setting_val
+            )
             conf_file.write(setting)
 
 
 def create_role(pg_path, port, node_ports, user_name):
     for port in node_ports:
-        command = 'SELECT worker_create_or_alter_role(\'{}\', \'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;\', NULL)'.format(user_name, user_name)
+        command = "SELECT worker_create_or_alter_role('{}', 'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;', NULL)".format(
+            user_name, user_name
+        )
         utils.psql(pg_path, port, command)
-        command = 'GRANT CREATE ON DATABASE postgres to {}'.format(user_name)
+        command = "GRANT CREATE ON DATABASE postgres to {}".format(user_name)
         utils.psql(pg_path, port, command)
 
 
@@ -60,37 +65,66 @@ def start_databases(pg_path, rel_data_path, node_name_to_ports):
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         node_port = node_name_to_ports[node_name]
         command = [
-            os.path.join(pg_path, 'pg_ctl'), 'start',
-            '--pgdata', abs_data_path,
-            '-U', USER,
-            '-o', '-p {}'.format(node_port),
-            '--log', os.path.join(abs_data_path, 'logfile_' + node_name)
+            os.path.join(pg_path, "pg_ctl"),
+            "start",
+            "--pgdata",
+            abs_data_path,
+            "-U",
+            USER,
+            "-o",
+            "-p {}".format(node_port),
+            "--log",
+            os.path.join(abs_data_path, "logfile_" + node_name),
         ]
         subprocess.run(command, check=True)
+
 
 def create_citus_extension(pg_path, node_ports):
     for port in node_ports:
         utils.psql(pg_path, port, "CREATE EXTENSION citus;")
 
+
 def run_pg_regress(pg_path, pg_srcdir, port, schedule):
     should_exit = True
     _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit)
 
-def run_pg_regress_without_exit(pg_path, pg_srcdir, port, schedule, output_dir = '.', input_dir = '.', user = 'postgres'):
-    should_exit = False
-    return _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir, input_dir, user)
 
-def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir = '.', input_dir = '.', user = 'postgres'):
+def run_pg_regress_without_exit(
+    pg_path, pg_srcdir, port, schedule, output_dir=".", input_dir=".", user="postgres"
+):
+    should_exit = False
+    return _run_pg_regress(
+        pg_path, pg_srcdir, port, schedule, should_exit, output_dir, input_dir, user
+    )
+
+
+def _run_pg_regress(
+    pg_path,
+    pg_srcdir,
+    port,
+    schedule,
+    should_exit,
+    output_dir=".",
+    input_dir=".",
+    user="postgres",
+):
     command = [
-        os.path.join(pg_srcdir, 'src/test/regress/pg_regress'),
-        '--port', str(port),
-        '--schedule', schedule,
-        '--bindir', pg_path,
-        '--user', user,
-        '--dbname', DBNAME,
-        '--inputdir', input_dir,
-        '--outputdir', output_dir,
-        '--use-existing'
+        os.path.join(pg_srcdir, "src/test/regress/pg_regress"),
+        "--port",
+        str(port),
+        "--schedule",
+        schedule,
+        "--bindir",
+        pg_path,
+        "--user",
+        user,
+        "--dbname",
+        DBNAME,
+        "--inputdir",
+        input_dir,
+        "--outputdir",
+        output_dir,
+        "--use-existing",
     ]
     exit_code = subprocess.call(command)
     # subprocess.run('bin/copy_modified', check=True)
@@ -98,41 +132,56 @@ def _run_pg_regress(pg_path, pg_srcdir, port, schedule, should_exit, output_dir 
         sys.exit(exit_code)
     return exit_code
 
+
 def save_regression_diff(name, output_dir):
-    path = os.path.join(output_dir, 'regression.diffs')
+    path = os.path.join(output_dir, "regression.diffs")
     if not os.path.exists(path):
         return
     new_file_path = os.path.join(output_dir, "./regression_{}.diffs".format(name))
     print("new file path:", new_file_path)
     shutil.move(path, new_file_path)
 
+
 def sync_metadata_to_workers(pg_path, worker_ports, coordinator_port):
     for port in worker_ports:
-        command = "SELECT * from start_metadata_sync_to_node('localhost', {port});".format(
-            port=port)
+        command = (
+            "SELECT * from start_metadata_sync_to_node('localhost', {port});".format(
+                port=port
+            )
+        )
         utils.psql(pg_path, coordinator_port, command)
 
+
 def add_coordinator_to_metadata(pg_path, coordinator_port):
-    command = "SELECT citus_add_node('localhost', {}, groupId := 0)".format(coordinator_port)
+    command = "SELECT citus_add_node('localhost', {}, groupId := 0)".format(
+        coordinator_port
+    )
     utils.psql(pg_path, coordinator_port, command)
 
 
 def add_workers(pg_path, worker_ports, coordinator_port):
     for port in worker_ports:
         command = "SELECT * from master_add_node('localhost', {port});".format(
-            port=port)
+            port=port
+        )
         utils.psql(pg_path, coordinator_port, command)
 
-def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output = False):
+
+def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output=False):
     for node_name in node_name_to_ports.keys():
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         node_port = node_name_to_ports[node_name]
         command = [
-            os.path.join(pg_path, 'pg_ctl'), 'stop',
-            '--pgdata', abs_data_path,
-            '-U', USER,
-            '-o', '-p {}'.format(node_port),
-            '--log', os.path.join(abs_data_path, 'logfile_' + node_name)
+            os.path.join(pg_path, "pg_ctl"),
+            "stop",
+            "--pgdata",
+            abs_data_path,
+            "-U",
+            USER,
+            "-o",
+            "-p {}".format(node_port),
+            "--log",
+            os.path.join(abs_data_path, "logfile_" + node_name),
         ]
         if no_output:
             subprocess.call(command, stdout=subprocess.DEVNULL)
@@ -143,7 +192,9 @@ def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output = False
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
     stop_databases(bindir, datadir, config.node_name_to_ports, no_output=True)
-    initialize_db_for_cluster(bindir, datadir, settings, config.node_name_to_ports.keys())
+    initialize_db_for_cluster(
+        bindir, datadir, settings, config.node_name_to_ports.keys()
+    )
     start_databases(bindir, datadir, config.node_name_to_ports)
     create_citus_extension(bindir, config.node_name_to_ports.values())
     add_workers(bindir, config.worker_ports, config.coordinator_port())
