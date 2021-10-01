@@ -21,20 +21,22 @@ import sys
 from config import (
     CitusDefaultClusterConfig,
     CitusSingleNodeClusterConfig,
+    CitusSingleWorkerClusterConfig,
+    CitusSuperUserDefaultClusterConfig,
+    CitusFiveWorkersManyShardsClusterConfig,
+    CitusSmallSharedPoolSizeConfig,
+    CitusSmallExecutorPoolSizeConfig,
+    CitusSequentialExecutionConfig,
+    CitusCacheManyConnectionsConfig,
+    CitusUnusualExecutorConfig,
+    CitusSmallCopyBuffersConfig,
+    CitusUnusualQuerySettingsConfig,
     CitusSingleNodeSingleShardClusterConfig,
+    CitusShardReplicationFactorClusterConfig,
     CitusSingleShardClusterConfig,
     CitusNonMxClusterConfig,
-    CitusManyShardsClusterConfig,
-    CitusSingleNodeSingleSharedPoolSizeClusterConfig,
-    CitusSingleNodeSingleConnectionClusterConfig,
-    CitusSingleWorkerClusterConfig,
-    CitusShardReplicationFactorClusterConfig,
-    CitusNoLocalExecutionClusterConfig,
-    CitusComplexClusterConfig,
-    CitusSuperUserDefaultClusterConfig,
     CITUS_CUSTOM_TEST_DIR,
     CUSTOM_TEST_NAMES,
-    COORDINATOR_NAME,
     CUSTOM_CREATE_SCHEDULE,
     CUSTOM_SQL_SCHEDULE,
     REGULAR_USER_NAME,
@@ -44,7 +46,8 @@ testResults = {}
 failCount = 0
 
 
-def run_for_config(config, name):
+def run_for_config(config):
+    name = config.name
     global failCount
     print("Running test for: {}".format(name))
     start_time = time.time()
@@ -121,14 +124,13 @@ def copy_test_files(config):
 
 
 class TestRunner(threading.Thread):
-    def __init__(self, config, name):
+    def __init__(self, config):
         threading.Thread.__init__(self)
         self.config = config
-        self.name = name
 
     def run(self):
         try:
-            run_for_config(self.config, self.name)
+            run_for_config(self.config)
         except Exception as e:
             print(e)
 
@@ -136,40 +138,22 @@ class TestRunner(threading.Thread):
 if __name__ == "__main__":
     docoptRes = docopt(__doc__)
     configs = [
-        (CitusDefaultClusterConfig(docoptRes), "default citus cluster"),
-        (CitusSingleNodeClusterConfig(docoptRes), "single node citus cluster"),
-        (
-            CitusSingleNodeSingleShardClusterConfig(docoptRes),
-            "single node single shard cluster",
-        ),
-        (
-            CitusSingleShardClusterConfig(docoptRes),
-            "single shard multiple workers cluster",
-        ),
-        (CitusNonMxClusterConfig(docoptRes), "mx citus cluster"),
-        (CitusManyShardsClusterConfig(docoptRes), "citus cluster with many shards"),
-        (
-            CitusSingleNodeSingleSharedPoolSizeClusterConfig(docoptRes),
-            "citus single node single shared pool cluster",
-        ),
-        (
-            CitusSingleNodeSingleConnectionClusterConfig(docoptRes),
-            "citus single node single connection cluster",
-        ),
-        (CitusSingleWorkerClusterConfig(docoptRes), "citus single worker node cluster"),
-        (
-            CitusShardReplicationFactorClusterConfig(docoptRes),
-            "citus with shard replication factor 2 cluster",
-        ),
-        (
-            CitusNoLocalExecutionClusterConfig(docoptRes),
-            "citus with no local execution cluster",
-        ),
-        (CitusComplexClusterConfig(docoptRes), "citus different settings cluster"),
-        (
-            CitusSuperUserDefaultClusterConfig(docoptRes),
-            "citus super user default cluster",
-        ),
+        CitusDefaultClusterConfig(docoptRes),
+        CitusSingleNodeClusterConfig(docoptRes),
+        CitusSingleNodeSingleShardClusterConfig(docoptRes),
+        CitusSingleShardClusterConfig(docoptRes),
+        CitusNonMxClusterConfig(docoptRes),
+        CitusSingleWorkerClusterConfig(docoptRes),
+        CitusShardReplicationFactorClusterConfig(docoptRes),
+        CitusSuperUserDefaultClusterConfig(docoptRes),
+        CitusFiveWorkersManyShardsClusterConfig(docoptRes),
+        CitusSmallSharedPoolSizeConfig(docoptRes),
+        CitusSmallExecutorPoolSizeConfig(docoptRes),
+        CitusSequentialExecutionConfig(docoptRes),
+        CitusUnusualExecutorConfig(docoptRes),
+        CitusCacheManyConnectionsConfig(docoptRes),
+        CitusSmallCopyBuffersConfig(docoptRes),
+        CitusUnusualQuerySettingsConfig(docoptRes),
     ]
 
     start_time = time.time()
@@ -180,8 +164,8 @@ if __name__ == "__main__":
 
     testRunners = []
     common.initialize_temp_dir(CITUS_CUSTOM_TEST_DIR)
-    for config, testName in configs:
-        testRunner = TestRunner(config, testName)
+    for config in configs:
+        testRunner = TestRunner(config)
         testRunner.start()
         testRunners.append(testRunner)
         if len(testRunners) >= parallel_thread_amount:
@@ -199,4 +183,9 @@ if __name__ == "__main__":
     print("--- {} seconds to run all tests! ---".format(end_time - start_time))
 
     if len(testResults) != len(configs) or failCount > 0:
+        print(
+            "actual {} expected {}, failCount: {}".format(
+                len(testResults), len(configs), failCount
+            )
+        )
         sys.exit(1)

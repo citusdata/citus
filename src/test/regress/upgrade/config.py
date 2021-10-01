@@ -65,10 +65,12 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.worker_amount = 2
         self.user = REGULAR_USER_NAME
         self.is_mx = False
+        self.name = type(self).__name__
         self.settings = {
             "shared_preload_libraries": "citus",
             "citus.node_conninfo": "sslmode=prefer",
         }
+        self.new_settings = {}
         self.add_coordinator_to_metadata = False
 
     def init(self):
@@ -82,6 +84,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         if self.worker_amount > 0:
             self.chosen_random_worker_port = self.random_worker_port()
         CitusBaseClusterConfig.data_dir_counter += 1
+        self.settings.update(self.new_settings)
 
     def coordinator_port(self):
         return self.node_name_to_ports[COORDINATOR_NAME]
@@ -127,18 +130,11 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.new_settings = {"citus.enable_version_checks": "false"}
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
-        self.settings.update(self.new_settings)
         self.fixed_port = 57635
 
 
 class CitusDefaultClusterConfig(CitusBaseClusterConfig):
     pass
-
-
-class CitusSuperUserDefaultClusterConfig(CitusMXBaseClusterConfig):
-    def __init__(self, arguments):
-        super().__init__(arguments)
-        self.user = SUPER_USER_NAME
 
 
 class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
@@ -153,72 +149,123 @@ class CitusSingleWorkerClusterConfig(CitusMXBaseClusterConfig):
         self.worker_amount = 1
 
 
+class CitusSuperUserDefaultClusterConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.user = SUPER_USER_NAME
+
+
+class CitusFiveWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {"citus.shard_count": 494}
+        self.worker_amount = 5
+
+
+class CitusSmallSharedPoolSizeConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            "citus.local_shared_pool_size": 2,
+            "citus.max_shared_pool_size": 2,
+        }
+
+
+class CitusSmallExecutorPoolSizeConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            "citus.max_adaptive_executor_pool_size": 2,
+        }
+
+
+class CitusSequentialExecutionConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            "citus.multi_shard_modify_mode": "sequential",
+        }
+
+
+class CitusCacheManyConnectionsConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            "citus.max_cached_conns_per_worker": 4,
+        }
+
+
+class CitusUnusualExecutorConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            "citus.max_adaptive_executor_pool_size": 7,
+            "citus.executor_slow_start_interval": 1,
+            "citus.prevent_incomplete_connection_establishment": False,
+            "citus.enable_cost_based_connection_establishment": False,
+            "citus.max_cached_connection_lifetime": "10ms",
+            "citus.force_max_query_parallelization": "on",
+            "citus.binary_worker_copy_format": False,
+            "citus.enable_binary_protocol": False,
+        }
+
+
+class CitusCacheManyConnectionsConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            "citus.copy_switchover_threshold": "1B",
+            "citus.local_copy_flush_threshold": "1B",
+            "citus.remote_copy_flush_threshold": "1B",
+        }
+
+
+class CitusSmallCopyBuffersConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            "citus.copy_switchover_threshold": "1B",
+            "citus.local_copy_flush_threshold": "1B",
+            "citus.remote_copy_flush_threshold": "1B",
+        }
+
+
+class CitusUnusualQuerySettingsConfig(CitusMXBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.new_settings = {
+            "citus.task_assignment_policy": "first-replica",
+            "citus.enable_fast_path_router_planner": False,
+            "citus.enable_local_execution": False,
+            "citus.enable_single_hash_repartition_joins": True,
+            "citus.recover_2pc_interval": "1s",
+            "citus.remote_task_check_interval": "1ms",
+        }
+
+
 class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.worker_amount = 0
         self.new_settings = {"citus.shard_count": 1}
-        self.settings.update(self.new_settings)
 
 
 class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_replication_factor": 2}
-        self.settings.update(self.new_settings)
-
-
-class CitusNoLocalExecutionClusterConfig(CitusMXBaseClusterConfig):
-    def __init__(self, arguments):
-        super().__init__(arguments)
-        self.new_settings = {"citus.enable_local_execution": False}
-        self.settings.update(self.new_settings)
-
-
-class CitusComplexClusterConfig(CitusMXBaseClusterConfig):
-    def __init__(self, arguments):
-        super().__init__(arguments)
-        self.new_settings = {
-            "citus.enable_local_execution": False,
-            "citus.multi_shard_commit_protocol": "1pc",
-            "citus.multi_shard_modify_mode": "sequential",
-            "citus.prevent_incomplete_connection_establishment": False,
-        }
-        self.settings.update(self.new_settings)
 
 
 class CitusSingleShardClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_count": 1}
-        self.settings.update(self.new_settings)
 
 
 class CitusNonMxClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.is_mx = False
-
-
-class CitusManyShardsClusterConfig(CitusMXBaseClusterConfig):
-    def __init__(self, arguments):
-        super().__init__(arguments)
-        self.new_settings = {"citus.shard_count": 500}
-        self.settings.update(self.new_settings)
-
-
-class CitusSingleNodeSingleConnectionClusterConfig(CitusMXBaseClusterConfig):
-    def __init__(self, arguments):
-        super().__init__(arguments)
-        self.new_settings = {"citus.max_adaptive_executor_pool_size": 1}
-        self.settings.update(self.new_settings)
-
-
-class CitusSingleNodeSingleSharedPoolSizeClusterConfig(CitusMXBaseClusterConfig):
-    def __init__(self, arguments):
-        super().__init__(arguments)
-        self.new_settings = {"citus.max_shared_pool_size": 2}
-        self.settings.update(self.new_settings)
 
 
 class PGUpgradeConfig(CitusBaseClusterConfig):
