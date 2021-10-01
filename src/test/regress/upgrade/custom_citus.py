@@ -17,6 +17,7 @@ from docopt import docopt
 import os, shutil
 import time
 import sys
+import inspect
 
 
 import config as cfg
@@ -116,24 +117,15 @@ class TestRunner(threading.Thread):
 
 if __name__ == "__main__":
     docoptRes = docopt(__doc__)
-    configs = [
-        cfg.CitusDefaultClusterConfig(docoptRes),
-        cfg.CitusSingleNodeClusterConfig(docoptRes),
-        cfg.CitusSingleNodeSingleShardClusterConfig(docoptRes),
-        cfg.CitusSingleShardClusterConfig(docoptRes),
-        cfg.CitusNonMxClusterConfig(docoptRes),
-        cfg.CitusSingleWorkerClusterConfig(docoptRes),
-        cfg.CitusShardReplicationFactorClusterConfig(docoptRes),
-        cfg.CitusSuperUserDefaultClusterConfig(docoptRes),
-        cfg.CitusFiveWorkersManyShardsClusterConfig(docoptRes),
-        cfg.CitusSmallSharedPoolSizeConfig(docoptRes),
-        cfg.CitusSmallExecutorPoolSizeConfig(docoptRes),
-        cfg.CitusSequentialExecutionConfig(docoptRes),
-        cfg.CitusUnusualExecutorConfig(docoptRes),
-        cfg.CitusCacheManyConnectionsConfig(docoptRes),
-        cfg.CitusSmallCopyBuffersConfig(docoptRes),
-        cfg.CitusUnusualQuerySettingsConfig(docoptRes),
-    ]
+    configs = []
+    # We fill the configs from all of the possible classes in config.py so that if we add a new config,
+    # we don't need to add it here. And this avoids the problem where we forget to add it here
+    for x in cfg.__dict__.values():
+        if inspect.isclass(x) and (
+            issubclass(x, cfg.CitusMXBaseClusterConfig)
+            or issubclass(x, cfg.CitusDefaultClusterConfig)
+        ):
+            configs.append(x(docoptRes))
 
     start_time = time.time()
 
