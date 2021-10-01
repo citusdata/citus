@@ -573,7 +573,10 @@ BEGIN;
 ROLLBACK;
 
 -- index deletion test-1
-INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+BEGIN;
+  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+ROLLBACK;
+COPY index_tuple_delete FROM PROGRAM 'seq 10000';
 
 TRUNCATE index_tuple_delete;
 
@@ -584,7 +587,10 @@ BEGIN;
 ROLLBACK;
 
 -- index deletion test-2
-INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+BEGIN;
+  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+ROLLBACK;
+COPY index_tuple_delete FROM PROGRAM 'seq 10000';
 
 TRUNCATE index_tuple_delete;
 
@@ -595,11 +601,17 @@ BEGIN;
   ROLLBACK TO sp1;
 
   -- index deletion test-3
-  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+  SAVEPOINT sp2;
+    INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+  ROLLBACK TO sp2;
+  COPY index_tuple_delete FROM PROGRAM 'seq 10000';
 ROLLBACK;
 
 -- index deletion test-4
-INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+BEGIN;
+  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+ROLLBACK;
+COPY index_tuple_delete FROM PROGRAM 'seq 10000';
 
 TRUNCATE index_tuple_delete;
 
@@ -611,11 +623,17 @@ BEGIN;
   ROLLBACK TO sp1;
 
   -- index deletion test-5
-  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+  SAVEPOINT sp2;
+    INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+  ROLLBACK TO sp2;
+  COPY index_tuple_delete FROM PROGRAM 'seq 10000';
 ROLLBACK;
 
 -- index deletion test-6
-INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+BEGIN;
+  INSERT INTO index_tuple_delete SELECT i FROM generate_series(0,10000)i;
+ROLLBACK;
+COPY index_tuple_delete FROM PROGRAM 'seq 10000';
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_indexes CASCADE;
