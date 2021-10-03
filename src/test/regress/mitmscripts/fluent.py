@@ -13,9 +13,9 @@ import traceback
 import queue
 
 from construct.lib import ListContainer
-from mitmproxy import ctx
+from mitmproxy import ctx, tcp
 from mitmproxy.utils import strutils
-from mitmproxy.proxy.protocol import TlsLayer, RawTCPLayer
+from mitmproxy.proxy.layers import TCPLayer, ClientTLSLayer, ServerTLSLayer
 
 import structs
 
@@ -140,6 +140,8 @@ class KillHandler(Handler):
     def __init__(self, root):
         super().__init__(root)
     def _handle(self, flow, message):
+        logging.debug("kill flow: %s", type(flow).__name__)
+        logging.debug("killable: %s", str(flow.killable))
         flow.kill()
         return 'done'
 
@@ -238,13 +240,18 @@ class OnPacket(Handler, ActionsMixin, FilterableMixin):
         self.packet_kind = packet_kind
         self.filters = kwargs
     def _handle(self, flow, message):
+        logging.debug("handler for %s", self.packet_kind)
+
         if not message.parsed:
             # if this is the first message in the connection we just skip it
             return 'done'
         for msg in message.parsed:
             typ = structs.message_type(msg, from_frontend=message.from_client)
+            logging.debug("%s == %s (%s)", typ, self.packet_kind, str(typ == self.packet_kind))
             if typ == self.packet_kind:
+                logging.debug("msg: %s", msg)
                 matches = structs.message_matches(msg, self.filters, message.from_client)
+                logging.debug("did we match: %s", str(matches))
                 if matches:
                     return 'pass'
         return 'done'
@@ -431,12 +438,12 @@ def next_layer(layer):
     part where it creates the TlsLayer (it happens in root_context.py) and instead creates
     a RawTCPLayer. That's the layer which calls our tcp_message hook
     '''
-    if isinstance(layer, TlsLayer):
-        replacement = RawTCPLayer(layer.ctx)
+    if isinstance(layer, ClientTLSLayer) or isinstance(layer, ServerTLSLayer):
+        replacement = TCPLayer(layer.ctx)
         layer.reply.send(replacement)
 
 
-def tcp_message(flow):
+def tcp_message(flow: tcp.TCPFlow):
     '''
     This callback is hit every time mitmproxy receives a packet. It's the main entrypoint
     into this script.
