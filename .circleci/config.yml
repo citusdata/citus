@@ -213,14 +213,14 @@ jobs:
       - run:
           name: 'Show regressions'
           command: |
-            find src/test/regress/tmp_citus_test/ -name "regression*.diffs" -exec cat {} + 
-            lines=$(find src/test/regress/tmp_citus_test/ -name "regression*.diffs" | wc -l) 
-            if [ $lines -ne 0 ]; then 
-               exit 1 
+            find src/test/regress/tmp_citus_test/ -name "regression*.diffs" -exec cat {} +
+            lines=$(find src/test/regress/tmp_citus_test/ -name "regression*.diffs" | wc -l)
+            if [ $lines -ne 0 ]; then
+               exit 1
             fi
 
           when: on_fail
-    
+
       - run:
           name: 'Copy coredumps'
           command: |
