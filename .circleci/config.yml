@@ -211,6 +211,17 @@ jobs:
                 check-arbitrary-configs parallel=1
           no_output_timeout: 2m
       - run:
+          name: 'Show regressions'
+          command: |
+            find src/test/regress/tmp_citus_test/ -name "regression*.diffs" -exec cat {} + 
+            lines=$(find src/test/regress/tmp_citus_test/ -name "regression*.diffs" | wc -l) 
+            if [ $lines -ne 0 ]; then 
+               exit 1 
+            fi
+
+          when: on_fail
+    
+      - run:
           name: 'Copy coredumps'
           command: |
             mkdir -p /tmp/core_dumps
@@ -220,12 +231,10 @@ jobs:
           when: on_fail
       - store_artifacts:
           name: 'Save regressions'
-          path: src/test/regress/regression.diffs
-          when: on_fail
+          path: src/test/regress/tmp_citus_test/*.diffs
       - store_artifacts:
           name: 'Save core dumps'
           path: /tmp/core_dumps
-          when: on_fail
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
 

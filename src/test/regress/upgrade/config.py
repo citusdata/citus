@@ -52,9 +52,6 @@ class NewInitCaller(type):
 
 
 class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
-
-    data_dir_counter = 0
-
     def __init__(self, arguments):
         if "--bindir" in arguments:
             self.bindir = arguments["--bindir"]
@@ -76,13 +73,12 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self._init_node_name_ports()
 
         self.datadir = self.temp_dir + "/data"
-        self.datadir += str(CitusBaseClusterConfig.data_dir_counter)
+        self.datadir += self.name
         self.input_dir = self.datadir
         self.output_dir = self.datadir
         self.output_file = os.path.join(self.datadir, "run.out")
         if self.worker_amount > 0:
             self.chosen_random_worker_port = self.random_worker_port()
-        CitusBaseClusterConfig.data_dir_counter += 1
         self.settings.update(self.new_settings)
 
     def coordinator_port(self):
