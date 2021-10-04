@@ -13,6 +13,7 @@ Options:
 import upgrade_common as common
 import threading
 import concurrent.futures
+import multiprocessing
 from docopt import docopt
 import os, shutil
 import time
@@ -26,7 +27,7 @@ testResults = {}
 failCount = 0
 
 
-def run_for_config(config):
+def run_for_config(config, lock):
     name = config.name
     print("Running test for: {}".format(name))
     start_time = time.time()
@@ -74,12 +75,13 @@ def run_for_config(config):
         )
 
     run_time = time.time() - start_time
-    testResults[name] = (
-        "SUCCESS"
-        if exitCode == 0
-        else "FAIL: see {}".format(config.output_dir + "/run.out")
-    )
-    testResults[name] += " runtime: {} seconds".format(run_time)
+    with lock:
+        testResults[name] = (
+            "SUCCESS"
+            if exitCode == 0
+            else "FAIL: see {}".format(config.output_dir + "/run.out")
+        )
+        testResults[name] += " runtime: {} seconds".format(run_time)
 
     common.stop_databases(config.bindir, config.datadir, config.node_name_to_ports)
     common.save_regression_diff("sql", config.output_dir)
@@ -135,7 +137,9 @@ if __name__ == "__main__":
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=parallel_thread_amount
     ) as executor:
-        futures = [executor.submit(run_for_config, config) for config in configs]
+        manager = multiprocessing.Manager()
+        lock = manager.Lock()
+        futures = [executor.submit(run_for_config, config, lock) for config in configs]
         for future in futures:
             exitCode = future.result()
             if exitCode != 0:
