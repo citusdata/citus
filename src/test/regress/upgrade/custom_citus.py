@@ -102,18 +102,6 @@ def copy_test_files(config):
         shutil.copy(output_name, expected_dir_path)
 
 
-class TestRunner(threading.Thread):
-    def __init__(self, config):
-        threading.Thread.__init__(self)
-        self.config = config
-
-    def run(self):
-        try:
-            run_for_config(self.config)
-        except Exception as e:
-            print(e)
-
-
 if __name__ == "__main__":
     docoptRes = docopt(__doc__)
     configs = []
@@ -132,7 +120,6 @@ if __name__ == "__main__":
     if "--parallel" in docoptRes and docoptRes["--parallel"] != "":
         parallel_thread_amount = int(docoptRes["--parallel"])
 
-    testRunners = []
     common.initialize_temp_dir(cfg.CITUS_CUSTOM_TEST_DIR)
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=parallel_thread_amount

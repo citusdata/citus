@@ -230,9 +230,6 @@ jobs:
             fi
           when: on_fail
       - store_artifacts:
-          name: 'Save regressions'
-          path: src/test/regress/tmp_citus_test/*.diffs
-      - store_artifacts:
           name: 'Save core dumps'
           path: /tmp/core_dumps
       - codecov/upload:
