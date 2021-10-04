@@ -67,6 +67,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.settings = {
             "shared_preload_libraries": "citus",
             "citus.node_conninfo": "sslmode=prefer",
+            "citus.enable_repartition_joins": True,
         }
         self.new_settings = {}
         self.add_coordinator_to_metadata = False

@@ -12,7 +12,7 @@ Options:
 
 import upgrade_common as common
 import threading
-import atexit
+import concurrent.futures
 from docopt import docopt
 import os, shutil
 import time
@@ -28,7 +28,6 @@ failCount = 0
 
 def run_for_config(config):
     name = config.name
-    global failCount
     print("Running test for: {}".format(name))
     start_time = time.time()
     common.initialize_citus_cluster(
@@ -82,11 +81,9 @@ def run_for_config(config):
     )
     testResults[name] += " runtime: {} seconds".format(run_time)
 
-    if exitCode != 0:
-        failCount += 1
-
     common.stop_databases(config.bindir, config.datadir, config.node_name_to_ports)
     common.save_regression_diff("sql", config.output_dir)
+    return exitCode
 
 
 def copy_test_files(config):
@@ -135,17 +132,14 @@ if __name__ == "__main__":
 
     testRunners = []
     common.initialize_temp_dir(cfg.CITUS_CUSTOM_TEST_DIR)
-    for config in configs:
-        testRunner = TestRunner(config)
-        testRunner.start()
-        testRunners.append(testRunner)
-        if len(testRunners) >= parallel_thread_amount:
-            for test in testRunners:
-                test.join()
-            testRunners = []
-
-    for testRunner in testRunners:
-        testRunner.join()
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=parallel_thread_amount
+    ) as executor:
+        futures = [executor.submit(run_for_config, config) for config in configs]
+        for future in futures:
+            exitCode = future.result()
+            if exitCode != 0:
+                failCount += 1
 
     for testName, testResult in testResults.items():
         print("{}: {}".format(testName, testResult))
