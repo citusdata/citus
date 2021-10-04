@@ -196,6 +196,35 @@ columnar_init_write_state(Relation relation, TupleDesc tupdesc,
 }
 
 
+
+ColumnarWriteState *
+FindWriteStateByStripeId(Oid relNode, uint64 stripeId)
+{
+	bool found = false;
+	WriteStateMapEntry *hashEntry = hash_search(WriteStateMap, &relNode,
+												HASH_FIND, &found);
+	if (!found)
+	{
+		ereport(ERROR, (errmsg("not found 1")));
+	}
+
+	SubXidWriteState *stackHead = hashEntry->writeStateStack;
+	while (stackHead)
+	{
+		ColumnarWriteState *writeState = stackHead->writeState;
+		if (stripeId != ColumnarWriteStripeId(writeState))
+		{
+			stackHead = stackHead->next;
+			continue;
+		}
+
+		return writeState;
+	}
+
+	ereport(ERROR, (errmsg("not found 2")));
+}
+
+
 /*
  * Flushes pending writes for given relfilenode in the given subtransaction.
  */

@@ -96,6 +96,8 @@ struct ColumnarReadState
 
 	Snapshot snapshot;
 	bool snapshotRegisteredByUs;
+
+	ColumnarWriteState *cachedWriteState;
 };
 
 /* static function declarations */
@@ -119,6 +121,12 @@ static StripeReadState * BeginStripeRead(StripeMetadata *stripeMetadata, Relatio
 										 List *whereClauseList, List *whereClauseVars,
 										 MemoryContext stripeReadContext,
 										 Snapshot snapshot);
+static StripeReadState * BeginBufferRead(StripeMetadata *stripeMetadata, Relation rel,
+										 TupleDesc tupleDesc, List *projectedColumnList,
+										 MemoryContext stripeReadContext);
+static StripeReadState * makeBasicStripeReadState(Relation rel, TupleDesc tupleDesc,
+						 					      List *projectedColumnList,
+											 	  MemoryContext stripeReadContext);
 static void AdvanceStripeRead(ColumnarReadState *readState);
 static bool SnapshotMightSeeUnflushedStripes(Snapshot snapshot);
 static bool ReadStripeNextRow(StripeReadState *stripeReadState, Datum *columnValues,
@@ -440,6 +448,108 @@ ColumnarReadRowByRowNumber(ColumnarReadState *readState,
 }
 
 
+struct ColumnarWriteState
+{
+	TupleDesc tupleDescriptor;
+	FmgrInfo **comparisonFunctionArray;
+	RelFileNode relfilenode;
+
+	MemoryContext stripeWriteContext;
+	MemoryContext perTupleContext;
+	StripeBuffers *stripeBuffers;
+	StripeSkipList *stripeSkipList;
+	EmptyStripeReservation *emptyStripeReservation;
+	ColumnarOptions options;
+	ChunkData *chunkData;
+
+	List *chunkGroupRowCounts;
+
+	/*
+	 * compressionBuffer buffer is used as temporary storage during
+	 * data value compression operation. It is kept here to minimize
+	 * memory allocations. It lives in stripeWriteContext and gets
+	 * deallocated when memory context is reset.
+	 */
+	StringInfo compressionBuffer;
+};
+
+void
+ColumnarReadBufferByRowNumber(ColumnarReadState *readState,
+			 		    	  uint64 rowNumber, Datum *columnValues,
+						   	  bool *columnNulls)
+{
+	Relation columnarRelation = readState->relation;
+
+	bool stripeCached =
+		readState->cachedWriteState &&
+		rowNumber >= readState->cachedWriteState->emptyStripeReservation->stripeFirstRowNumber &&
+		rowNumber < readState->cachedWriteState->emptyStripeReservation->stripeFirstRowNumber +
+					readState->cachedWriteState->stripeBuffers->rowCount;
+	Assert(!stripeCached || (readState->currentStripeMetadata &&
+							 readState->currentStripeMetadata->id ==
+							 readState->cachedWriteState->emptyStripeReservation->stripeId));
+
+	if (!stripeCached)
+	{
+		readState->currentStripeMetadata = FindStripeWithMatchingFirstRowNumber(columnarRelation,
+																			  	rowNumber,
+																			  	readState->snapshot);
+		if (!readState->currentStripeMetadata)
+		{
+			ereport(ERROR, (errmsg("not found 3")));
+		}
+
+
+		readState->cachedWriteState = FindWriteStateByStripeId(columnarRelation->rd_node.relNode,
+															   readState->currentStripeMetadata->id);
+		if (!readState->cachedWriteState)
+		{
+			ereport(ERROR, (errmsg("not found 4")));
+		}
+
+		TupleDesc relationTupleDesc = RelationGetDescr(columnarRelation);
+		readState->stripeReadState = BeginBufferRead(readState->currentStripeMetadata,
+													 columnarRelation,
+													 relationTupleDesc,
+													 readState->projectedColumnList,
+													 readState->stripeReadContext);
+	}
+
+	uint64 rowOffset = rowNumber - readState->currentStripeMetadata->firstRowNumber;
+	uint64 serializedRowCount = ColumnarWriteSerializedRowCount(readState->cachedWriteState);
+	if (rowOffset < serializedRowCount)
+	{
+		ReadStripeRowByRowNumber(readState, rowNumber, columnValues, columnNulls);
+	}
+	else
+	{
+		ChunkData *chunkData = ColumnarWriteChunkData(readState->cachedWriteState);
+		uint64 chunkDataOffset = rowOffset - serializedRowCount + 1;
+		for (uint32 columnIndex = 0; columnIndex < chunkData->columnCount; columnIndex++)
+		{
+			if (chunkData->existsArray[columnIndex][chunkDataOffset])
+			{
+				columnValues[columnIndex] = chunkData->valueArray[columnIndex][chunkDataOffset];
+				columnNulls[columnIndex] = false;
+			}
+			else
+			{
+				columnNulls[columnIndex] = true;
+			}
+		}
+	}
+}
+
+
+Snapshot
+ColumnarReadSetSnapshot(ColumnarReadState *readState, Snapshot snapshot)
+{
+	Snapshot oldSnapshot = readState->snapshot;
+	readState->snapshot = snapshot;
+	return oldSnapshot;
+}
+
+
 /*
  * ColumnarReadIsCurrentStripe returns true if stripe being read contains
  * row with given rowNumber.
@@ -651,6 +761,55 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 {
 	MemoryContext oldContext = MemoryContextSwitchTo(stripeReadContext);
 
+	StripeReadState *stripeReadState = makeBasicStripeReadState(rel, tupleDesc,
+														   projectedColumnList,
+														   stripeReadContext);
+
+	stripeReadState->stripeBuffers = LoadFilteredStripeBuffers(rel,
+								 							   stripeMetadata,
+															   tupleDesc,
+															   projectedColumnList,
+															   whereClauseList,
+															   whereClauseVars,
+															   &stripeReadState->
+															   chunkGroupsFiltered,
+															   snapshot);
+	stripeReadState->rowCount = stripeReadState->stripeBuffers->rowCount;
+
+	MemoryContextSwitchTo(oldContext);
+
+	return stripeReadState;
+}
+
+
+
+static StripeReadState *
+BeginBufferRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDesc,
+				List *projectedColumnList, MemoryContext stripeReadContext)
+{
+	MemoryContext oldContext = MemoryContextSwitchTo(stripeReadContext);
+
+	StripeReadState *stripeReadState = makeBasicStripeReadState(rel, tupleDesc,
+														   projectedColumnList,
+														   stripeReadContext);
+
+	stripeReadState->stripeBuffers =
+		ColumnarWriteStripeBuffers(FindWriteStateByStripeId(rel->rd_node.relNode,
+															stripeMetadata->id));
+	stripeReadState->rowCount = stripeReadState->stripeBuffers->rowCount;
+
+	MemoryContextSwitchTo(oldContext);
+
+	return stripeReadState;
+}
+
+
+
+static StripeReadState *
+makeBasicStripeReadState(Relation rel, TupleDesc tupleDesc,
+   					     List *projectedColumnList,
+						 MemoryContext stripeReadContext)
+{
 	StripeReadState *stripeReadState = palloc0(sizeof(StripeReadState));
 
 	stripeReadState->relation = rel;
@@ -659,21 +818,6 @@ BeginStripeRead(StripeMetadata *stripeMetadata, Relation rel, TupleDesc tupleDes
 	stripeReadState->chunkGroupReadState = NULL;
 	stripeReadState->projectedColumnList = projectedColumnList;
 	stripeReadState->stripeReadContext = stripeReadContext;
-
-	stripeReadState->stripeBuffers = LoadFilteredStripeBuffers(rel,
-															   stripeMetadata,
-															   tupleDesc,
-															   projectedColumnList,
-															   whereClauseList,
-															   whereClauseVars,
-															   &stripeReadState->
-															   chunkGroupsFiltered,
-															   snapshot);
-
-	stripeReadState->rowCount = stripeReadState->stripeBuffers->rowCount;
-
-	MemoryContextSwitchTo(oldContext);
-
 
 	return stripeReadState;
 }
@@ -924,7 +1068,7 @@ CreateEmptyChunkData(uint32 columnCount, bool *columnMask, uint32 chunkGroupRowC
 	chunkData->valueArray = palloc0(columnCount * sizeof(Datum *));
 	chunkData->valueBufferArray = palloc0(columnCount * sizeof(StringInfo));
 	chunkData->columnCount = columnCount;
-	chunkData->rowCount = chunkGroupRowCount;
+	chunkData->rowCount = 0;
 
 	/* allocate chunk memory for deserialized data */
 	for (columnIndex = 0; columnIndex < columnCount; columnIndex++)

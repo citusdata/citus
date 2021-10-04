@@ -217,6 +217,7 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 			char columnTypeAlign = attributeForm->attalign;
 
 			chunkData->existsArray[columnIndex][chunkRowIndex] = true;
+			chunkData->valueArray[columnIndex][chunkRowIndex] = columnValues[columnIndex];
 
 			SerializeSingleDatum(chunkData->valueBufferArray[columnIndex],
 								 columnValues[columnIndex], columnTypeByValue,
@@ -230,6 +231,8 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 		chunkSkipNode->rowCount++;
 	}
 
+	chunkData->rowCount++;
+
 	stripeSkipList->chunkCount = chunkIndex + 1;
 
 	/* last row of the chunk is inserted serialize the chunk */
@@ -241,6 +244,7 @@ ColumnarWriteRow(ColumnarWriteState *writeState, Datum *columnValues, bool *colu
 	uint64 writtenRowNumber = writeState->emptyStripeReservation->stripeFirstRowNumber +
 							  stripeBuffers->rowCount;
 	stripeBuffers->rowCount++;
+	stripeBuffers->selectedChunkGroupRowCounts[chunkIndex]++;
 	if (stripeBuffers->rowCount >= options->stripeRowCount)
 	{
 		ColumnarFlushPendingWrites(writeState);
@@ -300,6 +304,33 @@ ColumnarWritePerTupleContext(ColumnarWriteState *state)
 }
 
 
+uint64
+ColumnarWriteStripeId(ColumnarWriteState *writeState)
+{
+	return writeState->emptyStripeReservation->stripeId;
+}
+
+
+StripeBuffers *
+ColumnarWriteStripeBuffers(ColumnarWriteState *writeState)
+{
+	return writeState->stripeBuffers;
+}
+
+
+uint64
+ColumnarWriteSerializedRowCount(ColumnarWriteState *writeState)
+{
+	return writeState->stripeBuffers->rowCount - writeState->chunkData->rowCount;
+}
+
+
+ChunkData *
+ColumnarWriteChunkData(ColumnarWriteState *writeState)
+{
+	return writeState->chunkData;
+}
+
 /*
  * CreateEmptyStripeBuffers allocates an empty StripeBuffers structure with the given
  * column count.
@@ -334,6 +365,9 @@ CreateEmptyStripeBuffers(uint32 stripeMaxRowCount, uint32 chunkRowCount,
 	stripeBuffers->columnBuffersArray = columnBuffersArray;
 	stripeBuffers->columnCount = columnCount;
 	stripeBuffers->rowCount = 0;
+
+	stripeBuffers->selectedChunkGroupRowCounts =
+		palloc0((1 + ((stripeMaxRowCount - 1) / chunkRowCount)) * sizeof(uint32));
 
 	return stripeBuffers;
 }
@@ -632,6 +666,7 @@ SerializeChunkData(ColumnarWriteState *writeState, uint32 chunkIndex, uint32 row
 
 		/* valueBuffer needs to be reset for next chunk's data */
 		resetStringInfo(chunkData->valueBufferArray[columnIndex]);
+		chunkData->rowCount = 0;
 	}
 }
 

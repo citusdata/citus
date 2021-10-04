@@ -545,26 +545,13 @@ columnar_index_fetch_tuple(struct IndexFetchTableData *sscan,
 	{
 		if (stripeMetadata->insertedByCurrentXact)
 		{
-			/*
-			 * Stripe write is in progress and its entry is inserted by current
-			 * transaction, so obviously it must be written by me. Since caller
-			 * might want to use tupleslot datums for some reason, do another
-			 * look-up, but this time by first flushing our writes.
-			 *
-			 * XXX: For index scan, this is the only case that we flush pending
-			 * writes of the current backend. If we have taught reader how to
-			 * read from WriteStateMap. then we could guarantee that
-			 * index_fetch_tuple would never flush pending writes, but this seem
-			 * to be too much work for now, but should be doable.
-			 */
-			ColumnarReadFlushPendingWrites(scan->cs_readState);
+			Snapshot oldSnapshot = ColumnarReadSetSnapshot(scan->cs_readState, SnapshotSelf);
+			ColumnarReadBufferByRowNumber(scan->cs_readState, rowNumber,
+										  slot->tts_values, slot->tts_isnull);
+			ColumnarReadSetSnapshot(scan->cs_readState, oldSnapshot);
 
-			/*
-			 * Fill the tupleslot and fall through to return true, it
-			 * certainly exists.
-			 */
-			ColumnarReadRowByRowNumberOrError(scan->cs_readState, rowNumber,
-											  slot->tts_values, slot->tts_isnull);
+			/* make sure to copy slot out of writer's memory context */
+			slot->tts_ops->materialize(slot);
 		}
 		else
 		{
