@@ -13,7 +13,7 @@ WITH select_data AS MATERIALIZED (
 raw_data AS MATERIALIZED (
 	DELETE FROM table_2 WHERE key >= (SELECT min(key) FROM select_data WHERE key > 1) RETURNING *
 )
-SELECT * FROM raw_data;
+SELECT * FROM raw_data ORDER BY 1,2;
 ROLLBACK;
 
 -- select_data goes to a single node, because it is used in another subquery
@@ -27,7 +27,7 @@ WITH select_data AS MATERIALIZED (
 raw_data AS MATERIALIZED (
 	DELETE FROM table_2 WHERE value::int >= (SELECT min(key) FROM select_data WHERE key > 1 + random()) RETURNING *
 )
-SELECT * FROM raw_data;
+SELECT * FROM raw_data ORDER BY 1,2;
 ROLLBACK;
 
 -- now, we need only two intermediate results as the subquery in WHERE clause is
@@ -39,7 +39,7 @@ WITH select_data AS MATERIALIZED (
 raw_data AS MATERIALIZED (
 	DELETE FROM table_2 WHERE value::int >= (SELECT min(key) FROM table_1 WHERE key > random()) AND key = 6 RETURNING *
 )
-SELECT * FROM raw_data;
+SELECT * FROM raw_data ORDER BY 1,2;
 ROLLBACK;
 
 -- test with INSERT SELECT via coordinator
