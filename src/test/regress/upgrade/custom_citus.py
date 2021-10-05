@@ -2,12 +2,13 @@
 
 """custom_citus
 Usage:
-    custom_citus --bindir=<bindir> --pgxsdir=<pgxsdir> --parallel=<parallel>
+    custom_citus --bindir=<bindir> --pgxsdir=<pgxsdir> --parallel=<parallel> --extra-tests=<extra_tests>
 
 Options:
     --bindir=<bindir>              The PostgreSQL executable directory(ex: '~/.pgenv/pgsql-11.3/bin')
     --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
     --parallel=<parallel>           how many configs to run in parallel
+    --extra-tests=<extra-tests>     the config names to run
 """
 
 import upgrade_common as common
@@ -147,6 +148,15 @@ if __name__ == "__main__":
     parallel_thread_amount = 1
     if "--parallel" in docoptRes and docoptRes["--parallel"] != "":
         parallel_thread_amount = int(docoptRes["--parallel"])
+
+    if "--extra-tests" in docoptRes and docoptRes["--extra-tests"] != "":
+        extra_tests = docoptRes["--extra-tests"].split(",")
+        new_configs = []
+        for config in configs:
+            if config.name in extra_tests:
+                new_configs.append(config)
+        if len(new_configs) > 0:
+            configs = new_configs
 
     common.initialize_temp_dir(cfg.CITUS_CUSTOM_TEST_DIR)
     with concurrent.futures.ThreadPoolExecutor(
