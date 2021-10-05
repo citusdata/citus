@@ -12,12 +12,13 @@ WORKER2 = "worker2"
 REGULAR_USER_NAME = "regularuser"
 SUPER_USER_NAME = "postgres"
 
-CUSTOM_TEST_NAMES = ["custom_sql_test", "custom_create_test"]
+CUSTOM_TEST_NAMES = ["custom_sql_test", "custom_create_test", "custom_postgres"]
 
 BEFORE_PG_UPGRADE_SCHEDULE = "./before_pg_upgrade_schedule"
 AFTER_PG_UPGRADE_SCHEDULE = "./after_pg_upgrade_schedule"
 
 CUSTOM_CREATE_SCHEDULE = "./custom_create_schedule"
+CUSTOM_POSTGRES_SCHEDULE = "./custom_postgres_schedule"
 CUSTOM_SQL_SCHEDULE = "./custom_sql_schedule"
 
 AFTER_CITUS_UPGRADE_COORD_SCHEDULE = "./after_citus_upgrade_coord_schedule"
@@ -60,6 +61,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.worker_amount = 2
         self.user = REGULAR_USER_NAME
         self.is_mx = False
+        self.is_citus = True
         self.name = type(self).__name__
         self.settings = {
             "shared_preload_libraries": "citus",
@@ -130,6 +132,13 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
 
 class CitusDefaultClusterConfig(CitusBaseClusterConfig):
     pass
+
+
+class PostgresConfig(CitusDefaultClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.worker_amount = 0
+        self.is_citus = False
 
 
 class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):

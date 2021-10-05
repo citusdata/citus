@@ -11,7 +11,6 @@ Options:
 """
 
 import upgrade_common as common
-import threading
 import concurrent.futures
 import multiprocessing
 from docopt import docopt
@@ -43,7 +42,20 @@ def run_for_config(config, lock):
         )
     copy_test_files(config)
 
-    exitCode = common.run_pg_regress_without_exit(
+    exitCode = 0
+    if not config.is_citus:
+        exitCode |= common.run_pg_regress_without_exit(
+            config.bindir,
+            config.pg_srcdir,
+            config.coordinator_port(),
+            cfg.CUSTOM_POSTGRES_SCHEDULE,
+            config.output_dir,
+            config.input_dir,
+            cfg.SUPER_USER_NAME,
+        )
+        common.save_regression_diff("postgres", config.output_dir)
+
+    exitCode |= common.run_pg_regress_without_exit(
         config.bindir,
         config.pg_srcdir,
         config.coordinator_port(),
@@ -53,6 +65,7 @@ def run_for_config(config, lock):
         config.user,
     )
     common.save_regression_diff("create", config.output_dir)
+
     if config.is_mx and config.worker_amount > 0:
         exitCode |= common.run_pg_regress_without_exit(
             config.bindir,
@@ -99,7 +112,11 @@ def copy_test_files(config):
         sql_name = os.path.join("./sql", test_name + ".sql")
         output_name = os.path.join("./expected", test_name + ".out")
         shutil.copy(sql_name, sql_dir_path)
-        shutil.copy(output_name, expected_dir_path)
+        if os.path.isfile(output_name):
+            # it might be the first time we run this test and the expected file
+            # might not be there yet, in that case, we don't want to error out
+            # while copying the file.
+            shutil.copy(output_name, expected_dir_path)
 
 
 if __name__ == "__main__":

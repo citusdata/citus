@@ -2,15 +2,15 @@ CREATE SCHEMA "te;'st";
 SET search_path to "te;'st", public;
 CREATE TABLE dist(a int, b int);
 SELECT create_distributed_table('dist', 'a');
- create_distributed_table
----------------------------------------------------------------------
-
+ create_distributed_table 
+--------------------------
+ 
 (1 row)
 
 CREATE table ref(a int, b int);
 SELECT create_reference_table('ref');
- create_reference_table
----------------------------------------------------------------------
-
+ create_reference_table 
+------------------------
+ 
 (1 row)
 
