@@ -83,5 +83,6 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
 /* controlled via GUC */
 extern char *EnableManualMetadataChangesForUser;
+extern bool EnableMetadataSyncByDefault;
 
 #endif /* METADATA_SYNC_H */

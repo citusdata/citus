@@ -75,6 +75,8 @@ bool ReplicateReferenceTablesOnActivate = true;
 /* did current transaction modify pg_dist_node? */
 bool TransactionModifiedNodeMetadata = false;
 
+bool EnableMetadataSyncByDefault = true;
+
 typedef struct NodeMetadata
 {
 	int32 groupId;
@@ -835,6 +837,12 @@ ActivateNode(char *nodeName, int nodePort)
 	WorkerNode *newWorkerNode = SetNodeState(nodeName, nodePort, isActive);
 
 	SetUpDistributedTableDependencies(newWorkerNode);
+
+	if (EnableMetadataSyncByDefault)
+	{
+		StartMetadataSyncToNode(nodeName, nodePort);
+	}
+
 	return newWorkerNode->nodeId;
 }
 
