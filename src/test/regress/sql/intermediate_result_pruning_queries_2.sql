@@ -119,7 +119,7 @@ inserts AS MATERIALIZED (
   INSERT INTO table_2
   SELECT key, count(*)
   FROM table_1
-  WHERE key > (SELECT m FROM stats)
+  WHERE key >= (SELECT m FROM stats)
   GROUP BY key
   HAVING count(*) < (SELECT m FROM stats)
   LIMIT 1

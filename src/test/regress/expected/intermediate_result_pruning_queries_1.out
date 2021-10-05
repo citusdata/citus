@@ -20,10 +20,10 @@ WITH some_values_1 AS MATERIALIZED
 SELECT
 	count(*)
 FROM
-	some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 1;
+	some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 3;
  count 
 -------
-     0
+     1
 (1 row)
 
 -- a similar query, but with a reference table now
@@ -49,10 +49,10 @@ WITH some_values_1 AS MATERIALIZED
 SELECT
 	count(*)
 FROM
-	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 1;
+	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 3;
  count 
 -------
-     0
+     1
 (1 row)
 
 -- the second CTE does a join with a distributed table
@@ -92,14 +92,14 @@ FROM
 WITH some_values_1 AS MATERIALIZED
 	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
 	some_values_2 AS MATERIALIZED
-	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 1)
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 4)
 SELECT
 	count(*)
 FROM
-	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 4;
  count 
 -------
-     0
+     1
 (1 row)
 
 -- the first CTE is used both within second CTE and the final query
@@ -109,14 +109,14 @@ FROM
 WITH some_values_1 AS MATERIALIZED
 	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
 	some_values_2 AS MATERIALIZED
-	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 1)
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 3)
 SELECT
 	count(*)
 FROM
-	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 1;
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
  count 
 -------
-     0
+     1
 (1 row)
 
 -- the same query with the above, but the final query is hitting all shards
@@ -143,10 +143,10 @@ WITH some_values_1 AS MATERIALIZED
 SELECT
 	count(*)
 FROM
-	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 3;
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 4;
  count 
 -------
-     0
+     1
 (1 row)
 
 -- the reference table is joined with a distributed table and an intermediate
@@ -170,10 +170,10 @@ WITH some_values_1 AS MATERIALIZED
 SELECT
 	count(*)
 FROM
-	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key) WHERE table_2.key = 1;
+	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key) WHERE table_2.key = 4;
  count 
 -------
-     0
+     1
 (1 row)
 
 -- now, the second CTE has a single shard join with a distributed table
@@ -199,7 +199,7 @@ WITH top_cte as MATERIALIZED (
 		WITH some_values_1 AS MATERIALIZED
 		(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
 		some_values_2 AS MATERIALIZED
-		(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1)
+		(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 4)
 	SELECT
 		DISTINCT key
 	FROM
@@ -211,7 +211,7 @@ FROM
 	top_cte JOIN table_2 USING (key);
  count 
 -------
-     0
+     1
 (1 row)
 
 -- very much the same query, but this time the top query is also a router query
@@ -238,15 +238,21 @@ FROM
 -- some_values_1 is first used by a single shard-query, and than with a multi-shard
 -- CTE, finally a cartesian product join
 WITH some_values_1 AS MATERIALIZED
-	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	(SELECT key, random() FROM table_1 WHERE value IN ('6', '4')),
 	some_values_2 AS MATERIALIZED
-	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1),
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 4),
 	some_values_3 AS MATERIALIZED
 	(SELECT key FROM (some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key))
-SELECT * FROM some_values_3 JOIN ref_table ON (true);
+SELECT * FROM some_values_3 JOIN ref_table ON (true) ORDER BY 1,2,3;
  key | key | value 
 -----+-----+-------
-(0 rows)
+   4 |   1 | 1
+   4 |   2 | 2
+   4 |   3 | 3
+   4 |   4 | 4
+   4 |   5 | 5
+   4 |   6 | 6
+(6 rows)
 
 -- join on intermediate results, so should only
 -- go to a single node

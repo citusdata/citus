@@ -18,7 +18,7 @@ WITH some_values_1 AS MATERIALIZED
 SELECT
 	count(*)
 FROM
-	some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 1;
+	some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 3;
 
 -- a similar query, but with a reference table now
 -- given that reference tables are replicated to all nodes
@@ -40,7 +40,7 @@ WITH some_values_1 AS MATERIALIZED
 SELECT
 	count(*)
 FROM
-	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 1;
+	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 3;
 
 -- the second CTE does a join with a distributed table
 -- and the final query is a router query
@@ -71,11 +71,11 @@ FROM
 WITH some_values_1 AS MATERIALIZED
 	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
 	some_values_2 AS MATERIALIZED
-	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 1)
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 4)
 SELECT
 	count(*)
 FROM
-	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 4;
 
 -- the first CTE is used both within second CTE and the final query
 -- the second CTE does a join with a distributed table but a router query on a worker
@@ -84,11 +84,11 @@ FROM
 WITH some_values_1 AS MATERIALIZED
 	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
 	some_values_2 AS MATERIALIZED
-	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 1)
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 3)
 SELECT
 	count(*)
 FROM
-	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 1;
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
 
 -- the same query with the above, but the final query is hitting all shards
 WITH some_values_1 AS MATERIALIZED
@@ -110,7 +110,7 @@ WITH some_values_1 AS MATERIALIZED
 SELECT
 	count(*)
 FROM
-	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 3;
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 4;
 
 -- the reference table is joined with a distributed table and an intermediate
 -- result, but the distributed table hits all shards, so the intermediate
@@ -129,7 +129,7 @@ WITH some_values_1 AS MATERIALIZED
 SELECT
 	count(*)
 FROM
-	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key) WHERE table_2.key = 1;
+	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key) WHERE table_2.key = 4;
 
 
 -- now, the second CTE has a single shard join with a distributed table
@@ -152,7 +152,7 @@ WITH top_cte as MATERIALIZED (
 		WITH some_values_1 AS MATERIALIZED
 		(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
 		some_values_2 AS MATERIALIZED
-		(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1)
+		(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 4)
 	SELECT
 		DISTINCT key
 	FROM
@@ -185,12 +185,12 @@ FROM
 -- some_values_1 is first used by a single shard-query, and than with a multi-shard
 -- CTE, finally a cartesian product join
 WITH some_values_1 AS MATERIALIZED
-	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	(SELECT key, random() FROM table_1 WHERE value IN ('6', '4')),
 	some_values_2 AS MATERIALIZED
-	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1),
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 4),
 	some_values_3 AS MATERIALIZED
 	(SELECT key FROM (some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key))
-SELECT * FROM some_values_3 JOIN ref_table ON (true);
+SELECT * FROM some_values_3 JOIN ref_table ON (true) ORDER BY 1,2,3;
 
 
 
