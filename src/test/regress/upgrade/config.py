@@ -222,7 +222,8 @@ class CitusUnusualExecutorConfig(CitusMXBaseClusterConfig):
             "citus.prevent_incomplete_connection_establishment": False,
             "citus.enable_cost_based_connection_establishment": False,
             "citus.max_cached_connection_lifetime": "10ms",
-            "citus.force_max_query_parallelization": "on",
+            # https://github.com/citusdata/citus/issues/5345
+            # "citus.force_max_query_parallelization": "on",
             "citus.binary_worker_copy_format": False,
             "citus.enable_binary_protocol": False,
         }
