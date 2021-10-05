@@ -169,7 +169,7 @@ class CitusSuperUserDefaultClusterConfig(CitusMXBaseClusterConfig):
         self.user = SUPER_USER_NAME
 
 
-class CitusFiveWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
+class CitusThreeWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_count": 191}
@@ -183,7 +183,8 @@ class CitusSmallSharedPoolSizeConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
-            "citus.local_shared_pool_size": 5,
+            # can be uncommented after https://github.com/citusdata/citus/issues/5342
+            # "citus.local_shared_pool_size": 5,
             "citus.max_shared_pool_size": 5,
         }
 
