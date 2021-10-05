@@ -9,6 +9,12 @@ SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA fix_idx_names;
 SET search_path TO fix_idx_names, public;
 
+-- NULL input should automatically return NULL since
+-- fix_partition_shard_index_names is strict
+-- same for worker_fix_partition_shard_index_names
+SELECT fix_partition_shard_index_names(NULL);
+SELECT worker_fix_partition_shard_index_names(NULL, NULL, NULL);
+
 -- fix_partition_shard_index_names cannot be called for distributed
 -- and not partitioned tables
 CREATE TABLE not_partitioned(id int);
@@ -174,7 +180,7 @@ CREATE INDEX expression_index ON dist_partitioned_table ((dist_col || ' ' || ano
 -- try with statistics on index
 CREATE INDEX statistics_on_index on dist_partitioned_table ((dist_col+another_col), (dist_col-another_col));
 ALTER INDEX statistics_on_index ALTER COLUMN 1 SET STATISTICS 3737;
-ALTER INDEX statistics_on_index ALTER COLUMN 3 SET STATISTICS 3737;
+ALTER INDEX statistics_on_index ALTER COLUMN 2 SET STATISTICS 3737;
 
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 
@@ -191,6 +197,68 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 \c - - - :master_port
 SET search_path TO fix_idx_names, public;
 
+-- try with a table with no partitions
+ALTER TABLE dist_partitioned_table DETACH PARTITION p;
+ALTER TABLE dist_partitioned_table DETACH PARTITION partition_table_with_very_long_name;
+DROP TABLE p;
+DROP TABLE partition_table_with_very_long_name;
+
+-- still dist_partitioned_table has indexes
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+-- this does nothing
+SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+
+\c - - - :worker_1_port
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+DROP TABLE dist_partitioned_table;
+
+-- add test with replication factor = 2
+SET citus.shard_replication_factor TO 2;
+SET citus.next_shard_id TO 910050;
+
+CREATE TABLE dist_partitioned_table (dist_col int, another_col int, partition_col timestamp) PARTITION BY RANGE (partition_col);
+SELECT create_distributed_table('dist_partitioned_table', 'dist_col');
+
+-- create a partition with a long name
+CREATE TABLE partition_table_with_very_long_name PARTITION OF dist_partitioned_table FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
+
+-- create an index on parent table
+CREATE INDEX index_rep_factor_2 ON dist_partitioned_table USING btree (another_col, partition_col);
+
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :worker_2_port
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+-- let's fix the problematic table
+SET search_path TO fix_idx_names, public;
+SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+
+\c - - - :worker_2_port
+-- shard id has been appended to all index names which didn't end in shard id
+-- this goes in line with Citus's way of naming indexes of shards: always append shardid to the end
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+
+-- test with role that is not superuser
+SET client_min_messages TO warning;
+SET citus.enable_ddl_propagation TO off;
+CREATE USER user1;
+RESET client_min_messages;
+RESET citus.enable_ddl_propagation;
+
+SET ROLE user1;
+SELECT fix_partition_shard_index_names('fix_idx_names.dist_partitioned_table'::regclass);
+
+RESET ROLE;
+SET search_path TO fix_idx_names, public;
 DROP TABLE dist_partitioned_table;
 
 -- also, we cannot do any further operations (e.g. rename) on the indexes of partitions because

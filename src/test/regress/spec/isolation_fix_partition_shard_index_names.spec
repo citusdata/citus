@@ -39,18 +39,10 @@ step "s2-fix-partition-shard-index-names"
     SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
 }
 
-step "s2-fix-all-partition-shard-index-names"
-{
-    SET client_min_messages TO NOTICE;
-    SELECT fix_all_partition_shard_index_names();
-}
-
 step "s2-commit"
 {
     COMMIT;
 }
 
 permutation "s1-begin" "s1-drop-table" "s2-fix-partition-shard-index-names" "s1-commit"
-permutation "s1-begin" "s1-drop-table" "s2-fix-all-partition-shard-index-names" "s1-commit"
 permutation "s2-begin" "s2-fix-partition-shard-index-names" "s1-drop-table" "s2-commit"
-permutation "s2-begin" "s2-fix-all-partition-shard-index-names" "s1-drop-table" "s2-commit"
