@@ -208,7 +208,7 @@ jobs:
           command: |
             gosu circleci \
               make -C src/test/regress \
-                check-arbitrary-configs parallel=1
+                check-arbitrary-configs parallel=4
           no_output_timeout: 2m
       - run:
           name: 'Show regressions'
@@ -758,7 +758,7 @@ workflows:
       - test-arbitrary-configs:
           name: 'test-14_check-arbitrary-configs'
           pg_major: 14
-          image_tag: '14rc1'
+          image_tag: '14.0'
           requires: [build-14]
 
       - test-pg-upgrade:
