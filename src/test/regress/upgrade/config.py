@@ -166,8 +166,8 @@ class CitusSuperUserDefaultClusterConfig(CitusMXBaseClusterConfig):
 class CitusFiveWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
-        self.new_settings = {"citus.shard_count": 494}
-        self.worker_amount = 5
+        self.new_settings = {"citus.shard_count": 191}
+        self.worker_amount = 3
 
     def setup_steps(self):
         common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
