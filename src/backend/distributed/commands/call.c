@@ -49,9 +49,6 @@
 static bool CallFuncExprRemotely(CallStmt *callStmt,
 								 DistObjectCacheEntry *procedure,
 								 FuncExpr *funcExpr, DestReceiver *dest);
-#if PG_VERSION_NUM >= PG_VERSION_14
-static bool FunctionHasOutOnlyParameter(Oid functionOid);
-#endif
 
 /*
  * CallDistributedProcedureRemotely calls a stored procedure on the worker if possible.
@@ -117,8 +114,19 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	}
 	else
 	{
+		List *argumentList = NIL;
+		List *namedArgList;
+		int numberOfArgs;
+		Oid *argumentTypes;
+
+		if (!get_merged_argument_list(callStmt, &namedArgList, &argumentTypes,
+									  &argumentList, &numberOfArgs))
+		{
+			argumentList = funcExpr->args;
+		}
+
 		placement =
-			ShardPlacementForFunctionColocatedWithDistTable(procedure, funcExpr,
+			ShardPlacementForFunctionColocatedWithDistTable(procedure, argumentList,
 															partitionColumn, distTable,
 															NULL);
 	}
@@ -148,26 +156,12 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 		return false;
 	}
 
-
-#if PG_VERSION_NUM >= PG_VERSION_14
-
-	/*
-	 * We might need to add outargs to the funcExpr->args so that they can
-	 * be pushed down. We can implement in the future.
-	 */
-	if (FunctionHasOutOnlyParameter(funcExpr->funcid))
-	{
-		ereport(DEBUG1, (errmsg("not pushing down procedures with OUT parameters")));
-		return false;
-	}
-#endif
-
 	ereport(DEBUG1, (errmsg("pushing down the procedure")));
 
 	/* build remote command with fully qualified names */
 	StringInfo callCommand = makeStringInfo();
 
-	appendStringInfo(callCommand, "CALL %s", pg_get_rule_expr((Node *) funcExpr));
+	appendStringInfo(callCommand, "CALL %s", pg_get_rule_expr((Node *) callStmt));
 	{
 		Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);
@@ -227,53 +221,3 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 
 	return true;
 }
-
-
-#if PG_VERSION_NUM >= PG_VERSION_14
-
-/*
- * FunctionHasOutOnlyParameter is a helper function which takes
- * a function Oid and returns true if the input function has at least
- * one OUT parameter.
- */
-static bool
-FunctionHasOutOnlyParameter(Oid functionOid)
-{
-	Oid *argTypes = NULL;
-	char **argNames = NULL;
-	char *argModes = NULL;
-
-	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(functionOid));
-	if (!HeapTupleIsValid(proctup))
-	{
-		elog(ERROR, "cache lookup failed for function %u", functionOid);
-	}
-
-	int numberOfArgs = get_func_arg_info(proctup, &argTypes, &argNames, &argModes);
-
-	if (argModes == NULL)
-	{
-		/* short circuit, all arguments are IN */
-		ReleaseSysCache(proctup);
-
-		return false;
-	}
-
-	int argIndex = 0;
-	for (; argIndex < numberOfArgs; ++argIndex)
-	{
-		if (argModes[argIndex] == PROARGMODE_OUT)
-		{
-			ReleaseSysCache(proctup);
-
-			return true;
-		}
-	}
-
-	ReleaseSysCache(proctup);
-
-	return false;
-}
-
-
-#endif

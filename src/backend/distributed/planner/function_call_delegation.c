@@ -265,7 +265,8 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	}
 	else
 	{
-		placement = ShardPlacementForFunctionColocatedWithDistTable(procedure, funcExpr,
+		placement = ShardPlacementForFunctionColocatedWithDistTable(procedure,
+																	funcExpr->args,
 																	partitionColumn,
 																	distTable,
 																	planContext->plan);
@@ -346,19 +347,19 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
  */
 ShardPlacement *
 ShardPlacementForFunctionColocatedWithDistTable(DistObjectCacheEntry *procedure,
-												FuncExpr *funcExpr,
+												List *argumentList,
 												Var *partitionColumn,
 												CitusTableCacheEntry *cacheEntry,
 												PlannedStmt *plan)
 {
 	if (procedure->distributionArgIndex < 0 ||
-		procedure->distributionArgIndex >= list_length(funcExpr->args))
+		procedure->distributionArgIndex >= list_length(argumentList))
 	{
 		ereport(DEBUG1, (errmsg("cannot push down invalid distribution_argument_index")));
 		return NULL;
 	}
 
-	Node *partitionValueNode = (Node *) list_nth(funcExpr->args,
+	Node *partitionValueNode = (Node *) list_nth(argumentList,
 												 procedure->distributionArgIndex);
 	partitionValueNode = strip_implicit_coercions(partitionValueNode);
 
