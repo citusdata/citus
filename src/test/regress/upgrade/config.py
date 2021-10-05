@@ -115,7 +115,16 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         return find_free_port()
 
 
-class CitusMXBaseClusterConfig(CitusBaseClusterConfig):
+class CitusDefaultClusterConfig(CitusBaseClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        new_settings = {
+            "client_min_messages": "WARNING",
+        }
+        self.settings.update(new_settings)
+
+
+class CitusMXBaseClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.is_mx = True
@@ -132,10 +141,6 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
         self.fixed_port = 57635
-
-
-class CitusDefaultClusterConfig(CitusBaseClusterConfig):
-    pass
 
 
 class PostgresConfig(CitusDefaultClusterConfig):
