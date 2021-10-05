@@ -12,7 +12,11 @@ WORKER2 = "worker2"
 REGULAR_USER_NAME = "regularuser"
 SUPER_USER_NAME = "postgres"
 
-CUSTOM_TEST_NAMES = ["custom_sql_test", "custom_create_test", "custom_postgres"]
+CUSTOM_SCHEDULE_NAMES = [
+    "custom_create_schedule",
+    "custom_sql_schedule",
+    "custom_postgres_schedule",
+]
 
 BEFORE_PG_UPGRADE_SCHEDULE = "./before_pg_upgrade_schedule"
 AFTER_PG_UPGRADE_SCHEDULE = "./after_pg_upgrade_schedule"

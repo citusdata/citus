@@ -108,7 +108,18 @@ def copy_test_files(config):
 
     common.initialize_temp_dir(sql_dir_path)
     common.initialize_temp_dir(expected_dir_path)
-    for test_name in cfg.CUSTOM_TEST_NAMES:
+    for scheduleName in cfg.CUSTOM_SCHEDULE_NAMES:
+        with open(scheduleName) as file:
+            lines = file.readlines()
+            for line in lines:
+                colon_index = line.index(":")
+                line = line[colon_index + 1 :].strip()
+                test_names = line.split(" ")
+                copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path)
+
+
+def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path):
+    for test_name in test_names:
         sql_name = os.path.join("./sql", test_name + ".sql")
         output_name = os.path.join("./expected", test_name + ".out")
         shutil.copy(sql_name, sql_dir_path)
