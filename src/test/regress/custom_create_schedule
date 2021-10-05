@@ -1,2 +1,2 @@
 test: custom_create_test
-test: prepared_statements_create_load
+test: prepared_statements_create_load ch_benchmarks_create_load

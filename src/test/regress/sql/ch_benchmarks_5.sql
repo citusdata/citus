@@ -1,0 +1,52 @@
+SET search_path to "ch benchmarks";
+
+-- Query 21
+-- DATA SET DOES NOT COVER THIS QUERY
+SELECT
+    su_name,
+    count(*) AS numwait
+FROM
+    supplier,
+    order_line l1,
+    oorder,
+    stock,
+    nation
+WHERE ol_o_id = o_id
+  AND ol_w_id = o_w_id
+  AND ol_d_id = o_d_id
+  AND ol_w_id = s_w_id
+  AND ol_i_id = s_i_id
+  AND mod((s_w_id * s_i_id),10000) = su_suppkey
+  AND l1.ol_delivery_d > o_entry_d
+  AND NOT exists (SELECT *
+                  FROM order_line l2
+                  WHERE  l2.ol_o_id = l1.ol_o_id
+                    AND l2.ol_w_id = l1.ol_w_id
+                    AND l2.ol_d_id = l1.ol_d_id
+                    AND l2.ol_delivery_d > l1.ol_delivery_d)
+  AND su_nationkey = n_nationkey
+  AND n_name = 'Germany'
+GROUP BY su_name
+ORDER BY
+    numwait desc,
+    su_name;
+
+-- Query 22
+-- DATA SET DOES NOT COVER THIS QUERY
+SELECT
+    substr(c_state,1,1) AS country,
+    count(*) AS numcust,
+    sum(c_balance) AS totacctbal
+FROM customer
+WHERE substr(c_phone,1,1) in ('1','2','3','4','5','6','7')
+  AND c_balance > (SELECT avg(c_BALANCE)
+                   FROM customer
+                   WHERE  c_balance > 0.00
+                     AND substr(c_phone,1,1) in ('1','2','3','4','5','6','7'))
+  AND NOT exists (SELECT *
+                  FROM oorder
+                  WHERE o_c_id = c_id
+                    AND o_w_id = c_w_id
+                    AND o_d_id = c_d_id)
+GROUP BY substr(c_state,1,1)
+ORDER BY substr(c_state,1,1);
