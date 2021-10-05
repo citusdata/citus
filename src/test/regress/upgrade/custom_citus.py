@@ -24,7 +24,6 @@ import inspect
 import config as cfg
 
 testResults = {}
-failCount = 0
 
 
 def run_for_config(config, lock):
@@ -131,8 +130,7 @@ def copy_test_files_with_names(test_names, sql_dir_path, expected_dir_path):
             shutil.copy(output_name, expected_dir_path)
 
 
-if __name__ == "__main__":
-    docoptRes = docopt(__doc__)
+def read_configs(docoptRes):
     configs = []
     # We fill the configs from all of the possible classes in config.py so that if we add a new config,
     # we don't need to add it here. And this avoids the problem where we forget to add it here
@@ -142,6 +140,29 @@ if __name__ == "__main__":
             or issubclass(x, cfg.CitusDefaultClusterConfig)
         ):
             configs.append(x(docoptRes))
+    return configs
+
+
+def run_tests(configs):
+    failCount = 0
+    common.initialize_temp_dir(cfg.CITUS_CUSTOM_TEST_DIR)
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=parallel_thread_amount
+    ) as executor:
+        manager = multiprocessing.Manager()
+        lock = manager.Lock()
+        futures = [executor.submit(run_for_config, config, lock) for config in configs]
+        for future in futures:
+            exitCode = future.result()
+            if exitCode != 0:
+                failCount += 1
+
+    return failCount
+
+
+if __name__ == "__main__":
+    docoptRes = docopt(__doc__)
+    configs = read_configs(docoptRes)
 
     start_time = time.time()
 
@@ -158,17 +179,7 @@ if __name__ == "__main__":
         if len(new_configs) > 0:
             configs = new_configs
 
-    common.initialize_temp_dir(cfg.CITUS_CUSTOM_TEST_DIR)
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=parallel_thread_amount
-    ) as executor:
-        manager = multiprocessing.Manager()
-        lock = manager.Lock()
-        futures = [executor.submit(run_for_config, config, lock) for config in configs]
-        for future in futures:
-            exitCode = future.result()
-            if exitCode != 0:
-                failCount += 1
+    failCount = run_tests(configs)
 
     for testName, testResult in testResults.items():
         print("{}: {}".format(testName, testResult))
