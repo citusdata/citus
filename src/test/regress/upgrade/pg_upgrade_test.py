@@ -11,7 +11,10 @@ Options:
 """
 
 from config import (
-    PGUpgradeConfig, COORDINATOR_NAME, AFTER_PG_UPGRADE_SCHEDULE, BEFORE_PG_UPGRADE_SCHEDULE
+    PGUpgradeConfig,
+    COORDINATOR_NAME,
+    AFTER_PG_UPGRADE_SCHEDULE,
+    BEFORE_PG_UPGRADE_SCHEDULE,
 )
 from docopt import docopt
 import utils
@@ -24,12 +27,15 @@ import os
 
 import upgrade_common as common
 
+
 def citus_prepare_pg_upgrade(pg_path, node_ports):
     for port in node_ports:
         utils.psql(pg_path, port, "SELECT citus_prepare_pg_upgrade();")
 
 
-def perform_postgres_upgrade(old_bindir, new_bindir, old_datadir, new_datadir, node_names):
+def perform_postgres_upgrade(
+    old_bindir, new_bindir, old_datadir, new_datadir, node_names
+):
     for node_name in node_names:
         base_new_data_path = os.path.abspath(new_datadir)
         base_old_data_path = os.path.abspath(old_datadir)
@@ -37,12 +43,17 @@ def perform_postgres_upgrade(old_bindir, new_bindir, old_datadir, new_datadir, n
             abs_new_data_path = os.path.join(base_new_data_path, node_name)
             abs_old_data_path = os.path.join(base_old_data_path, node_name)
             command = [
-                os.path.join(new_bindir, 'pg_upgrade'),
-                '--username', USER,
-                '--old-bindir', old_bindir,
-                '--new-bindir', new_bindir,
-                '--old-datadir', abs_old_data_path,
-                '--new-datadir', abs_new_data_path
+                os.path.join(new_bindir, "pg_upgrade"),
+                "--username",
+                USER,
+                "--old-bindir",
+                old_bindir,
+                "--new-bindir",
+                new_bindir,
+                "--old-datadir",
+                abs_old_data_path,
+                "--new-datadir",
+                abs_new_data_path,
             ]
             subprocess.run(command, check=True)
 
@@ -53,37 +64,73 @@ def citus_finish_pg_upgrade(pg_path, node_ports):
 
 
 def stop_all_databases(old_bindir, new_bindir, old_datadir, new_datadir, config):
-    common.stop_databases(old_bindir, old_datadir, config.node_name_to_ports)
-    common.stop_databases(new_bindir, new_datadir, config.node_name_to_ports)
+    common.stop_databases(
+        old_bindir, old_datadir, config.node_name_to_ports, config.name
+    )
+    common.stop_databases(
+        new_bindir, new_datadir, config.node_name_to_ports, config.name
+    )
 
 
 def main(config):
     common.initialize_temp_dir(config.temp_dir)
-    common.initialize_citus_cluster(config.old_bindir, config.old_datadir, config.settings, config)
-    common.run_pg_regress(config.old_bindir, config.pg_srcdir,
-                   config.coordinator_port(), BEFORE_PG_UPGRADE_SCHEDULE)
-    common.run_pg_regress(config.old_bindir, config.pg_srcdir,
-                   config.coordinator_port(), AFTER_PG_UPGRADE_SCHEDULE)
+    common.initialize_citus_cluster(
+        config.old_bindir, config.old_datadir, config.settings, config
+    )
+    common.run_pg_regress(
+        config.old_bindir,
+        config.pg_srcdir,
+        config.coordinator_port(),
+        BEFORE_PG_UPGRADE_SCHEDULE,
+    )
+    common.run_pg_regress(
+        config.old_bindir,
+        config.pg_srcdir,
+        config.coordinator_port(),
+        AFTER_PG_UPGRADE_SCHEDULE,
+    )
 
     citus_prepare_pg_upgrade(config.old_bindir, config.node_name_to_ports.values())
     # prepare should be idempotent, calling it a second time should never fail.
     citus_prepare_pg_upgrade(config.old_bindir, config.node_name_to_ports.values())
-    common.stop_databases(config.old_bindir, config.old_datadir, config.node_name_to_ports)
+    common.stop_databases(
+        config.old_bindir, config.old_datadir, config.node_name_to_ports, config.name
+    )
 
     common.initialize_db_for_cluster(
-        config.new_bindir, config.new_datadir, config.settings, config.node_name_to_ports.keys())
+        config.new_bindir,
+        config.new_datadir,
+        config.settings,
+        config.node_name_to_ports.keys(),
+    )
     perform_postgres_upgrade(
-        config.old_bindir, config.new_bindir, config.old_datadir, config.new_datadir,
-        config.node_name_to_ports.keys())
-    common.start_databases(config.new_bindir, config.new_datadir, config.node_name_to_ports)
+        config.old_bindir,
+        config.new_bindir,
+        config.old_datadir,
+        config.new_datadir,
+        config.node_name_to_ports.keys(),
+    )
+    common.start_databases(
+        config.new_bindir, config.new_datadir, config.node_name_to_ports, config.name
+    )
     citus_finish_pg_upgrade(config.new_bindir, config.node_name_to_ports.values())
 
-    common.run_pg_regress(config.new_bindir, config.pg_srcdir,
-                   config.coordinator_port(), AFTER_PG_UPGRADE_SCHEDULE)
+    common.run_pg_regress(
+        config.new_bindir,
+        config.pg_srcdir,
+        config.coordinator_port(),
+        AFTER_PG_UPGRADE_SCHEDULE,
+    )
 
 
-if __name__ == '__main__':
-    config = PGUpgradeConfig(docopt(__doc__, version='upgrade_test'))
-    atexit.register(stop_all_databases, config.old_bindir,
-                    config.new_bindir, config.old_datadir, config.new_datadir, config)
+if __name__ == "__main__":
+    config = PGUpgradeConfig(docopt(__doc__, version="upgrade_test"))
+    atexit.register(
+        stop_all_databases,
+        config.old_bindir,
+        config.new_bindir,
+        config.old_datadir,
+        config.new_datadir,
+        config,
+    )
     main(config)

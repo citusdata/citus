@@ -96,7 +96,9 @@ def run_for_config(config, lock):
         )
         testResults[name] += " runtime: {} seconds".format(run_time)
 
-    common.stop_databases(config.bindir, config.datadir, config.node_name_to_ports)
+    common.stop_databases(
+        config.bindir, config.datadir, config.node_name_to_ports, config.name
+    )
     common.save_regression_diff("sql", config.output_dir)
     return exitCode
 

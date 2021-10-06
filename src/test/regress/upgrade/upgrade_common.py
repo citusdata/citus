@@ -65,7 +65,7 @@ def coordinator_should_haveshards(pg_path, port):
     utils.psql(pg_path, port, command)
 
 
-def start_databases(pg_path, rel_data_path, node_name_to_ports):
+def start_databases(pg_path, rel_data_path, node_name_to_ports, logfile_prefix):
     for node_name in node_name_to_ports.keys():
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         node_port = node_name_to_ports[node_name]
@@ -79,7 +79,7 @@ def start_databases(pg_path, rel_data_path, node_name_to_ports):
             "-o",
             "-p {}".format(node_port),
             "--log",
-            os.path.join(abs_data_path, "logfile_" + node_name),
+            os.path.join(abs_data_path, logfile_name(logfile_prefix, node_name)),
         ]
         subprocess.run(command, check=True)
 
@@ -172,7 +172,13 @@ def add_workers(pg_path, worker_ports, coordinator_port):
         utils.psql(pg_path, coordinator_port, command)
 
 
-def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output=False):
+def logfile_name(logfile_prefix, node_name):
+    return "logfile_" + logfile_prefix + "_" + node_name
+
+
+def stop_databases(
+    pg_path, rel_data_path, node_name_to_ports, logfile_prefix, no_output=False
+):
     for node_name in node_name_to_ports.keys():
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         node_port = node_name_to_ports[node_name]
@@ -186,7 +192,7 @@ def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output=False):
             "-o",
             "-p {}".format(node_port),
             "--log",
-            os.path.join(abs_data_path, "logfile_" + node_name),
+            os.path.join(abs_data_path, logfile_name(logfile_prefix, node_name)),
         ]
         if no_output:
             subprocess.call(command, stdout=subprocess.DEVNULL)
@@ -196,11 +202,13 @@ def stop_databases(pg_path, rel_data_path, node_name_to_ports, no_output=False):
 
 def initialize_citus_cluster(bindir, datadir, settings, config):
     # In case there was a leftover from previous runs, stop the databases
-    stop_databases(bindir, datadir, config.node_name_to_ports, no_output=True)
+    stop_databases(
+        bindir, datadir, config.node_name_to_ports, config.name, no_output=True
+    )
     initialize_db_for_cluster(
         bindir, datadir, settings, config.node_name_to_ports.keys()
     )
-    start_databases(bindir, datadir, config.node_name_to_ports)
+    start_databases(bindir, datadir, config.node_name_to_ports, config.name)
     create_citus_extension(bindir, config.node_name_to_ports.values())
     add_workers(bindir, config.worker_ports, config.coordinator_port())
     if config.is_mx:

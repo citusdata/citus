@@ -221,7 +221,12 @@ jobs:
             fi
 
           when: on_fail
-
+      - run:
+          name: 'Copy logfiles'
+          command: |
+            mkdir src/test/regress/tmp_citus_test/logfiles
+            find src/test/regress/tmp_citus_test/ -name "logfile_*" -exec cp -t src/test/regress/tmp_citus_test/logfiles/ {} +
+          when: on_fail
       - run:
           name: 'Copy coredumps'
           command: |
@@ -233,6 +238,9 @@ jobs:
       - store_artifacts:
           name: 'Save core dumps'
           path: /tmp/core_dumps
+      - store_artifacts:
+          name: "Save logfiles"
+          path: src/test/regress/tmp_citus_test/logfiles
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
 
