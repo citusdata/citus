@@ -211,10 +211,10 @@ check-pg-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
 
 check-arbitrary-configs:
-	${custom_citus_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --extra-tests=$(EXTRA_TESTS)
+	${custom_citus_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --extra-tests=$(EXTRA_TESTS) --seed=$(seed)
 
 check-arbitrary-base:
-	${custom_citus_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --extra-tests=$(EXTRA_TESTS)
+	${custom_citus_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --extra-tests=$(EXTRA_TESTS) --seed=$(seed)
 
 check-citus-upgrade:
 	$(citus_upgrade_check) \

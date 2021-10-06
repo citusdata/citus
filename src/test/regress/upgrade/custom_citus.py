@@ -2,13 +2,14 @@
 
 """custom_citus
 Usage:
-    custom_citus --bindir=<bindir> --pgxsdir=<pgxsdir> --parallel=<parallel> --extra-tests=<extra_tests>
+    custom_citus --bindir=<bindir> --pgxsdir=<pgxsdir> --parallel=<parallel> --extra-tests=<extra_tests> --seed=<seed>
 
 Options:
     --bindir=<bindir>              The PostgreSQL executable directory(ex: '~/.pgenv/pgsql-11.3/bin')
     --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
     --parallel=<parallel>           how many configs to run in parallel
     --extra-tests=<extra-tests>     the config names to run
+    --seed=<seed>                   random number seed
 """
 
 import upgrade_common as common
@@ -19,6 +20,7 @@ import os, shutil
 import time
 import sys
 import inspect
+import random
 
 
 import config as cfg
@@ -164,7 +166,6 @@ def run_tests(configs):
 
 if __name__ == "__main__":
     docoptRes = docopt(__doc__)
-    configs = read_configs(docoptRes)
 
     start_time = time.time()
 
@@ -172,6 +173,14 @@ if __name__ == "__main__":
     if "--parallel" in docoptRes and docoptRes["--parallel"] != "":
         parallel_thread_amount = int(docoptRes["--parallel"])
 
+    seed = random.randint(1, 1000000)
+
+    if "--seed" in docoptRes and docoptRes["--seed"] != "":
+        seed = int(docoptRes["--seed"])
+
+    random.seed(seed)
+
+    configs = read_configs(docoptRes)
     if "--extra-tests" in docoptRes and docoptRes["--extra-tests"] != "":
         extra_tests = docoptRes["--extra-tests"].split(",")
         new_configs = []
@@ -188,7 +197,7 @@ if __name__ == "__main__":
 
     end_time = time.time()
     print("--- {} seconds to run all tests! ---".format(end_time - start_time))
-
+    print("---SEED: {} ---".format(seed))
     if len(testResults) != len(configs) or failCount > 0:
         print(
             "actual {} expected {}, failCount: {}".format(
