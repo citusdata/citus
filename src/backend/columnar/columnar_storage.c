@@ -667,6 +667,7 @@ ReadFromBlock(Relation rel, BlockNumber blockno, uint32 offset, char *buf,
 			  uint32 len, bool force)
 {
 	Buffer buffer = ReadBuffer(rel, blockno);
+	LockBuffer(buffer, BUFFER_LOCK_SHARE);
 	Page page = BufferGetPage(buffer);
 	PageHeader phdr = (PageHeader) page;
 
@@ -678,7 +679,7 @@ ReadFromBlock(Relation rel, BlockNumber blockno, uint32 offset, char *buf,
 	}
 
 	memcpy_s(buf, len, page + offset, len);
-	ReleaseBuffer(buffer);
+	UnlockReleaseBuffer(buffer);
 }
 
 
