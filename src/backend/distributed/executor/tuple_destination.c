@@ -205,7 +205,7 @@ CreateTupleDestNone(void)
 
 
 /*
- * TupleStoreTupleDestPutTuple implements TupleDestination->putTuple for
+ * TupleDestNonePutTuple implements TupleDestination->putTuple for
  * no-op tuple destination.
  */
 static void
@@ -218,7 +218,7 @@ TupleDestNonePutTuple(TupleDestination *self, Task *task,
 
 
 /*
- * TupleStoreTupleDestTupleDescForQuery implements TupleDestination->TupleDescForQuery
+ * TupleDestNoneTupleDescForQuery implements TupleDestination->TupleDescForQuery
  * for no-op tuple destination.
  */
 static TupleDesc
@@ -262,7 +262,7 @@ TupleDestDestReceiverStartup(DestReceiver *destReceiver, int operation,
 
 
 /*
- * TupleDestDestReceiverStartup implements DestReceiver->receiveSlot for
+ * TupleDestDestReceiverReceive implements DestReceiver->receiveSlot for
  * TupleDestDestReceiver.
  */
 static bool
@@ -292,7 +292,7 @@ TupleDestDestReceiverReceive(TupleTableSlot *slot,
 
 
 /*
- * TupleDestDestReceiverStartup implements DestReceiver->rShutdown for
+ * TupleDestDestReceiverShutdown implements DestReceiver->rShutdown for
  * TupleDestDestReceiver.
  */
 static void
@@ -303,7 +303,7 @@ TupleDestDestReceiverShutdown(DestReceiver *destReceiver)
 
 
 /*
- * TupleDestDestReceiverStartup implements DestReceiver->rDestroy for
+ * TupleDestDestReceiverDestroy implements DestReceiver->rDestroy for
  * TupleDestDestReceiver.
  */
 static void

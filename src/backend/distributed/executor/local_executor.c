@@ -144,7 +144,7 @@ GetCurrentLocalExecutionStatus(void)
 
 
 /*
- * ExecuteLocalTasks executes the given tasks locally.
+ * ExecuteLocalTaskList executes the given tasks locally.
  *
  * The function goes over the task list and executes them locally.
  * The returning tuples (if any) is stored in the tupleStoreState.

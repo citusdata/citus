@@ -80,7 +80,7 @@ ForgetResults(MultiConnection *connection)
 
 
 /*
- * ClearResultsInternal clears a connection from pending activity,
+ * ClearResults clears a connection from pending activity,
  * returns true if all pending commands return success. It raises
  * error if raiseErrors flag is set, any command fails and transaction
  * is marked critical.

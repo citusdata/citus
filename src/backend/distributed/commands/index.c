@@ -331,7 +331,7 @@ ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcesso
 
 
 /*
- * SwitchToSequentialOrLocalExecutionIfIndexNameTooLong generates the longest index name
+ * SwitchToSequentialAndLocalExecutionIfIndexNameTooLong generates the longest index name
  * on the shards of the partitions, and if exceeds the limit switches to sequential and
  * local execution to prevent self-deadlocks.
  */

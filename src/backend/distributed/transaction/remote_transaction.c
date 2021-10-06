@@ -51,7 +51,7 @@ static void Assign2PCIdentifier(MultiConnection *connection);
 
 
 /*
- * StartRemoteTransactionBeging initiates beginning the remote transaction in
+ * StartRemoteTransactionBegin initiates beginning the remote transaction in
  * a non-blocking manner. The function sends "BEGIN" followed by
  * assign_distributed_transaction_id() to assign the distributed transaction
  * id on the remote node.

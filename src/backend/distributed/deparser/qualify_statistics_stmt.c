@@ -146,8 +146,8 @@ QualifyAlterStatisticsStmt(Node *node)
 #endif
 
 /*
- * QualifyAlterStatisticsStmt qualifies AlterOwnerStmt's with schema name for
- * ALTER STATISTICS .. OWNER TO statements.
+ * QualifyAlterStatisticsOwnerStmt qualifies AlterOwnerStmt's with schema
+ * name for ALTER STATISTICS .. OWNER TO statements.
  */
 void
 QualifyAlterStatisticsOwnerStmt(Node *node)

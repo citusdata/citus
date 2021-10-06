@@ -98,7 +98,7 @@ static bool ShouldUndistributeCitusLocalTables(void);
 
 
 /*
- * ProcessUtilityForParseTree is a convenience method to create a PlannedStmt out of
+ * ProcessUtilityParseTree is a convenience method to create a PlannedStmt out of
  * pieces of a utility statement before invoking ProcessUtility.
  */
 void

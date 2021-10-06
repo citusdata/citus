@@ -264,7 +264,7 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 
 /*
- * CreateSingleTaskRouterPlan creates a physical plan for given SELECT query.
+ * CreateSingleTaskRouterSelectPlan creates a physical plan for given SELECT query.
  * The returned plan is a router task that returns query results from a single worker.
  * If not router plannable, the returned plan's planningError describes the problem.
  */
@@ -1878,7 +1878,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 
 /*
- * SingleShardRouterTaskList is a wrapper around other corresponding task
+ * GenerateSingleShardRouterTaskList is a wrapper around other corresponding task
  * list generation functions specific to single shard selects and modifications.
  *
  * The function updates the input job's taskList in-place.

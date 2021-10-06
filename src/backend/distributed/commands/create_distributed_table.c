@@ -265,7 +265,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 
 
 /*
- * CreateReferenceTable creates a distributed table with the given relationId. The
+ * create_reference_table creates a distributed table with the given relationId. The
  * created table has one shard and replication factor is set to the active worker
  * count. In fact, the above is the definition of a reference table in Citus.
  */

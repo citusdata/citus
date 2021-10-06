@@ -974,7 +974,7 @@ ExecuteTaskListOutsideTransaction(RowModifyLevel modLevel, List *taskList,
 
 
 /*
- * ExecuteTaskListIntoTupleStore is a proxy to ExecuteTaskListExtended() with defaults
+ * ExecuteTaskListIntoTupleDest is a proxy to ExecuteTaskListExtended() with defaults
  * for some of the arguments.
  */
 uint64
@@ -2418,8 +2418,8 @@ RunDistributedExecution(DistributedExecution *execution)
 
 
 /*
- * ProcessSessionsWithFailedEventSetOperations goes over the session list and
- * processes sessions with failed wait event set operations.
+ * ProcessSessionsWithFailedWaitEventSetOperations goes over the session list
+ * and processes sessions with failed wait event set operations.
  *
  * Failed sessions are not going to generate any further events, so it is our
  * only chance to process the failure by calling into `ConnectionStateMachine`.
