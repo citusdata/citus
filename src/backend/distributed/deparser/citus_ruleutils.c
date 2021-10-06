@@ -48,6 +48,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/namespace_utils.h"
 #include "distributed/relay_utility.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
@@ -739,6 +740,12 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 												relationName),
 					 indexStmt->accessMethod);
 
+	/*
+	 * Switch to empty search_path to deparse_index_columns to produce fully-
+	 * qualified names in expressions.
+	 */
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
+
 	/* index column or expression list begins here */
 	appendStringInfoChar(buffer, '(');
 	deparse_index_columns(buffer, indexStmt->indexParams, deparseContext);
@@ -760,6 +767,9 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 																deparseContext, false,
 																false));
 	}
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
 }
 
 

@@ -10,6 +10,7 @@
 --
 
 CREATE SCHEMA multi_index_statements;
+CREATE SCHEMA multi_index_statements_2;
 SET search_path TO multi_index_statements;
 
 SET citus.next_shard_id TO 102080;
@@ -54,6 +55,28 @@ CREATE UNIQUE INDEX index_test_hash_index_a_b_partial ON index_test_hash(a,b) WH
 CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON index_test_range(a,b) WHERE c IS NOT NULL;
 CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON index_test_hash(a) INCLUDE (b,c);
 RESET client_min_messages;
+
+
+-- Verify that we can create expression indexes and be robust to different schemas
+CREATE OR REPLACE FUNCTION value_plus_one(a int)
+RETURNS int IMMUTABLE AS $$
+BEGIN
+	RETURN a + 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('value_plus_one(int)');
+
+CREATE OR REPLACE FUNCTION multi_index_statements_2.value_plus_one(a int)
+RETURNS int IMMUTABLE AS $$
+BEGIN
+	RETURN a + 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('multi_index_statements_2.value_plus_one(int)');
+
+CREATE INDEX ON index_test_hash ((value_plus_one(b)));
+CREATE INDEX ON index_test_hash ((multi_index_statements.value_plus_one(b)));
+CREATE INDEX ON index_test_hash ((multi_index_statements_2.value_plus_one(b)));
 
 -- Verify that we handle if not exists statements correctly
 CREATE INDEX lineitem_orderkey_index on public.lineitem(l_orderkey);
@@ -403,3 +426,4 @@ SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::
 DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
 
 DROP SCHEMA multi_index_statements CASCADE;
+DROP SCHEMA multi_index_statements_2 CASCADE;
