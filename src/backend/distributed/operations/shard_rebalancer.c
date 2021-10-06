@@ -2048,7 +2048,7 @@ CompareShardCostAsc(const void *void1, const void *void2)
 
 
 /*
- * CompareShardCostAsc can be used to sort shard costs from high cost to low
+ * CompareShardCostDesc can be used to sort shard costs from high cost to low
  * cost.
  */
 static int
@@ -2109,8 +2109,8 @@ CompareDisallowedPlacementAsc(const void *void1, const void *void2)
 
 
 /*
- * CompareDisallowedPlacementAsc can be used to sort disallowed placements from
- * low cost to high cost.
+ * CompareDisallowedPlacementDesc can be used to sort disallowed placements from
+ * high cost to low cost.
  */
 static int
 CompareDisallowedPlacementDesc(const void *a, const void *b)
@@ -2619,7 +2619,7 @@ ActivePlacementsHash(List *shardPlacementList)
 
 
 /*
- * PlacementsHashFinds returns true if there exists a shard placement with the
+ * PlacementsHashFind returns true if there exists a shard placement with the
  * given workerNode and shard id in the given placements hash, otherwise it
  * returns false.
  */
@@ -2681,7 +2681,7 @@ PlacementsHashRemove(HTAB *placementsHash, uint64 shardId, WorkerNode *workerNod
 
 
 /*
- * ShardPlacementCompare compares two shard placements using shard id, node name,
+ * PlacementsHashCompare compares two shard placements using shard id, node name,
  * and node port number.
  */
 static int
@@ -2722,7 +2722,7 @@ PlacementsHashCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 
 
 /*
- * ShardPlacementHashCode computes the hash code for a shard placement from the
+ * PlacementsHashHashCode computes the hash code for a shard placement from the
  * placement's shard id, node name, and node port number.
  */
 static uint32
@@ -2924,7 +2924,7 @@ EnsureNodeCapacityUDF(Oid functionOid)
 
 
 /*
- * EnsureNodeCapacityUDF checks that the UDF matching the oid has the correct
+ * EnsureShardAllowedOnNodeUDF checks that the UDF matching the oid has the correct
  * signature to be used as a NodeCapacity function. The expected signature is:
  *
  * shard_allowed_on_node(shardid bigint, nodeid int) returns boolean

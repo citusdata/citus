@@ -701,7 +701,7 @@ GroupForNode(char *nodeName, int nodePort)
 
 
 /*
- * NodeIsPrimaryAndLocal returns whether the argument represents the local
+ * NodeIsPrimaryAndRemote returns whether the argument represents the remote
  * primary node.
  */
 bool

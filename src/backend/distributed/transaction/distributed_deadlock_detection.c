@@ -220,7 +220,7 @@ CheckForDistributedDeadlocks(void)
 
 
 /*
- * CheckDeadlockForDistributedTransaction does a DFS starting with the given
+ * CheckDeadlockForTransactionNode does a DFS starting with the given
  * transaction node and checks for a cycle (i.e., the node can be reached again
  * while traversing the graph).
  *

@@ -1635,7 +1635,7 @@ ExplainOneQuery(Query *query, int cursorOptions,
 
 
 /*
- * ExplainAnalyzeWorkerPlan produces explain output into es. If es->analyze, it also executes
+ * ExplainWorkerPlan produces explain output into es. If es->analyze, it also executes
  * the given plannedStmt and sends the results to dest. It puts total time to execute in
  * executionDurationMillisec.
  *

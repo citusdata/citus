@@ -722,7 +722,7 @@ get_relation_constraint_oid_compat(HeapTuple heapTuple)
 
 
 /*
- * HasForeignKeyToLocalTable returns true if relation has foreign key
+ * HasForeignKeyWithLocalTable returns true if relation has foreign key
  * relationship with a local table.
  */
 bool
@@ -857,8 +857,8 @@ TableReferencing(Oid relationId)
 
 
 /*
- * ConstraintWithNameIsOfType is a wrapper around ConstraintWithNameIsOfType that returns true
- * if given constraint name identifies a uniqueness constraint, i.e:
+ * ConstraintIsAUniquenessConstraint is a wrapper around ConstraintWithNameIsOfType
+ * that returns true if given constraint name identifies a uniqueness constraint, i.e:
  *   - primary key constraint, or
  *   - unique constraint
  */

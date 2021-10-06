@@ -525,7 +525,7 @@ ErrorIfMoveUnsupportedTableType(Oid relationId)
 
 
 /*
- * BlockWritesToColocatedShardList blocks writes to all shards in the given shard
+ * BlockWritesToShardList blocks writes to all shards in the given shard
  * list. The function assumes that all the shards in the list are colocated.
  */
 void

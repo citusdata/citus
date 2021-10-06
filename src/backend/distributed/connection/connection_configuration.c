@@ -43,7 +43,7 @@ static Size CalculateMaxSize(void);
 static int uri_prefix_length(const char *connstr);
 
 /*
- * InitConnParms initializes the ConnParams field to point to enough memory to
+ * InitConnParams initializes the ConnParams field to point to enough memory to
  * store settings for every valid libpq value, though these regions are set to
  * zeros from the outset and the size appropriately also set to zero.
  *

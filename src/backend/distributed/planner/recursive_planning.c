@@ -564,8 +564,8 @@ RecursivelyPlanNonColocatedJoinWalker(Node *joinNode,
 
 
 /*
- * RecursivelyPlanNonColocatedJoinWalker gets a query and walks over its sublinks
- * to find subqueries that live in WHERE clause.
+ * RecursivelyPlanNonColocatedSubqueriesInWhere gets a query and walks over its
+ * sublinks to find subqueries that live in WHERE clause.
  *
  * When a subquery found, it's checked whether the subquery is colocated with the
  * anchor subquery specified in the nonColocatedJoinContext. If not,
@@ -1122,7 +1122,7 @@ IsRelationLocalTableOrMatView(Oid relationId)
 
 
 /*
- * RecursivelyPlanQuery recursively plans a query, replaces it with a
+ * RecursivelyPlanSubquery recursively plans a query, replaces it with a
  * result query and returns the subplan.
  *
  * Before we recursively plan the given subquery, we should ensure

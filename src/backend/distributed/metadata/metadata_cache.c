@@ -942,7 +942,7 @@ InitializeTableCacheEntry(int64 shardId)
 
 
 /*
- * RefreshInvalidTableCacheEntry checks if the cache entry is still valid and
+ * RefreshTableCacheEntryIfInvalid checks if the cache entry is still valid and
  * refreshes it in cache when it's not. It returns true if it refreshed the
  * entry in the cache and false if it didn't.
  */
@@ -3618,7 +3618,7 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 
 
 /*
- * RemoveShardIdCacheEntries removes all shard ID cache entries belonging to the
+ * RemoveStaleShardIdCacheEntries removes all shard ID cache entries belonging to the
  * given table entry. If the shard ID belongs to a different (newer) table entry,
  * we leave it in place.
  */
