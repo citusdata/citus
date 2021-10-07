@@ -49,19 +49,20 @@ execute p4(8);
 execute p4(8);
 execute p4(8);
 
-prepare p5(int) as INSERT INTO t1(a,c) VALUES (15, $1) ON CONFLICT (c) DO UPDATE SET a=EXCLUDED.a + 10 RETURNING *;
-execute p5(18);
-execute p5(19);
-execute p5(20);
-execute p5(21);
-execute p5(22);
-execute p5(23);
-execute p5(24);
-execute p5(25);
-execute p5(26);
-execute p5(27);
-execute p5(28);
-execute p5(29);
+-- https://github.com/citusdata/citus/issues/5355
+-- prepare p5(int) as INSERT INTO t1(a,c) VALUES (15, $1) ON CONFLICT (c) DO UPDATE SET a=EXCLUDED.a + 10 RETURNING *;
+-- execute p5(18);
+-- execute p5(19);
+-- execute p5(20);
+-- execute p5(21);
+-- execute p5(22);
+-- execute p5(23);
+-- execute p5(24);
+-- execute p5(25);
+-- execute p5(26);
+-- execute p5(27);
+-- execute p5(28);
+-- execute p5(29);
 
 
 -- show that all the tables prune to the same shard for the same distribution key
