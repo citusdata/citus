@@ -75,7 +75,7 @@ def run_for_config(config, lock):
         exitCode |= common.run_pg_regress_without_exit(
             config.bindir,
             config.pg_srcdir,
-            config.random_worker_port(),
+            config.random_port(),
             cfg.SQL_SCHEDULE,
             config.output_dir,
             config.input_dir,

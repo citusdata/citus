@@ -98,6 +98,9 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
     def random_worker_port(self):
         return random.choice(self.worker_ports)
 
+    def random_port(self):
+        return random.choice(list(self.node_name_to_ports.values()))
+
     def _init_node_name_ports(self):
         self.node_name_to_ports = {}
         self.worker_ports = []
