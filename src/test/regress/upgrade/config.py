@@ -124,13 +124,13 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
             "client_min_messages": "WARNING",
         }
         self.settings.update(new_settings)
+        self.add_coordinator_to_metadata = True
 
 
 class CitusMXBaseClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.is_mx = True
-        self.add_coordinator_to_metadata = True
 
 
 class CitusUpgradeConfig(CitusBaseClusterConfig):
@@ -156,6 +156,9 @@ class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.worker_amount = 0
+
+    def setup_steps(self):
+        common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
 
 
 class CitusSingleWorkerClusterConfig(CitusMXBaseClusterConfig):
@@ -268,6 +271,9 @@ class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
         super().__init__(arguments)
         self.worker_amount = 0
         self.new_settings = {"citus.shard_count": 1}
+
+    def setup_steps(self):
+        common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
 
 
 class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
