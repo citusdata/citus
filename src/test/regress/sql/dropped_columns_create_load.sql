@@ -1,9 +1,11 @@
 CREATE SCHEMA local_shard_execution_dropped_column;
 SET search_path TO local_shard_execution_dropped_column;
 
-CREATE TABLE t1 (a int, b int, c int UNIQUE);
+CREATE TABLE t1 (a int, b int, c int UNIQUE, d int, e int);
+ALTER TABLE t1 DROP COLUMN e;
 SELECT create_distributed_table('t1', 'c');
 ALTER TABLE t1 DROP COLUMN b;
+ALTER TABLE t1 DROP COLUMN d;
 
 
 -- create a partitioned table with some columns that

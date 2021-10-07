@@ -12,62 +12,62 @@ execute p1(8);
 execute p1(8);
 prepare p2(int) as SELECT count(*) FROM t1 WHERE c = $1 GROUP BY c;
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 execute p2(8);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -94,6 +94,79 @@ execute p4(8);
 execute p4(8);
 execute p4(8);
 execute p4(8);
+prepare p5(int) as INSERT INTO t1(a,c) VALUES (15, $1) ON CONFLICT (c) DO UPDATE SET a=EXCLUDED.a + 10 RETURNING *;
+execute p5(18);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 18
+(1 row)
+
+execute p5(19);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 19
+(1 row)
+
+execute p5(20);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 20
+(1 row)
+
+execute p5(21);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 21
+(1 row)
+
+execute p5(22);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 22
+(1 row)
+
+execute p5(23);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 23
+(1 row)
+
+execute p5(24);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 24
+(1 row)
+
+execute p5(25);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 25
+(1 row)
+
+execute p5(26);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 26
+(1 row)
+
+execute p5(27);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 27
+(1 row)
+
+execute p5(28);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 28
+(1 row)
+
+execute p5(29);
+ a  | c
+---------------------------------------------------------------------
+ 15 | 29
+(1 row)
+
 -- show that all the tables prune to the same shard for the same distribution key
 WITH
 	sensors_shardid AS (SELECT * FROM get_shard_id_for_distribution_column('sensors', 3)),
@@ -107,8 +180,8 @@ WITH
 					 UNION SELECT * FROM sensors_2003_shardid UNION SELECT * FROM sensors_2004_shardid)
 -- it is zero for PG only tests, and 1 for Citus
 SELECT count(DISTINCT row(shardminvalue, shardmaxvalue)) <= 1 FROM pg_dist_shard WHERE shardid IN (SELECT * FROM all_shardids);
- ?column? 
-----------
+ ?column?
+---------------------------------------------------------------------
  t
 (1 row)
 
@@ -119,69 +192,69 @@ INSERT INTO sensors VALUES (3, '2002-01-01', row_to_json(row(1)));
 INSERT INTO sensors VALUES (3, '2003-01-01', row_to_json(row(1)));
 INSERT INTO sensors VALUES (3, '2004-01-01', row_to_json(row(1)));
 SELECT count(*) FROM sensors WHERE measureid = 3 AND eventdatetime = '2000-02-02';
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(*) FROM sensors_2000 WHERE measureid = 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT count(*) FROM sensors_2001 WHERE measureid = 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(*) FROM sensors_2002 WHERE measureid = 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(*) FROM sensors_2003 WHERE measureid = 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 -- multi-shard queries
 SELECT count(DISTINCT row(measureid, eventdatetime, measure_data)) FROM sensors;
- count 
--------
+ count
+---------------------------------------------------------------------
      6
 (1 row)
 
 SELECT count(DISTINCT row(measureid, eventdatetime, measure_data)) FROM sensors_2000;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
 SELECT count(DISTINCT row(measureid, eventdatetime, measure_data)) FROM sensors_2001;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(DISTINCT row(measureid, eventdatetime, measure_data)) FROM sensors_2002;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(DISTINCT row(measureid, eventdatetime, measure_data)) FROM sensors_2003;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 SELECT count(DISTINCT row(measureid, eventdatetime, measure_data)) FROM sensors_2004;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -198,92 +271,92 @@ EXECUTE drop_col_prepare_insert(3, '2003-10-02', row_to_json(row(1)));
 EXECUTE drop_col_prepare_insert(4, '2003-10-03', row_to_json(row(1)));
 EXECUTE drop_col_prepare_insert(5, '2003-10-04', row_to_json(row(1)));
 EXECUTE drop_col_prepare_select(3, '2000-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_select(3, '2001-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_select(3, '2002-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_select(3, '2003-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_select(3, '2003-10-02');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_select(4, '2003-10-03');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_select(5, '2003-10-04');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_mshard_select('2000-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_mshard_select('2000-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_mshard_select('2001-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_mshard_select('2002-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_mshard_select('2002-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_mshard_select('2003-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_mshard_select('2003-10-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE drop_col_prepare_mshard_select('2004-01-01');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
