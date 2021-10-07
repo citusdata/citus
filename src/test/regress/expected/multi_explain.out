@@ -1070,11 +1070,14 @@ Aggregate
         Task Count: 4
         Tasks Shown: None, not supported for re-partition queries
         ->  MapMergeJob
-              Map Task Count: 1
+              Map Task Count: 4
               Merge Task Count: 4
               ->  MapMergeJob
                     Map Task Count: 2
-                    Merge Task Count: 1
+                    Merge Task Count: 4
+              ->  MapMergeJob
+                    Map Task Count: 1
+                    Merge Task Count: 4
         ->  MapMergeJob
               Map Task Count: 1
               Merge Task Count: 4
@@ -1102,12 +1105,16 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
               "Tasks Shown": "None, not supported for re-partition queries",
               "Dependent Jobs": [
                 {
-                  "Map Task Count": 1,
+                  "Map Task Count": 4,
                   "Merge Task Count": 4,
                   "Dependent Jobs": [
                     {
                       "Map Task Count": 2,
-                      "Merge Task Count": 1
+                      "Merge Task Count": 4
+                    },
+                    {
+                      "Map Task Count": 1,
+                      "Merge Task Count": 4
                     }
                   ]
                 },
@@ -1154,12 +1161,16 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
               <Tasks-Shown>None, not supported for re-partition queries</Tasks-Shown>
               <Dependent-Jobs>
                 <MapMergeJob>
-                  <Map-Task-Count>1</Map-Task-Count>
+                  <Map-Task-Count>4</Map-Task-Count>
                   <Merge-Task-Count>4</Merge-Task-Count>
                   <Dependent-Jobs>
                     <MapMergeJob>
                       <Map-Task-Count>2</Map-Task-Count>
-                      <Merge-Task-Count>1</Merge-Task-Count>
+                      <Merge-Task-Count>4</Merge-Task-Count>
+                    </MapMergeJob>
+                    <MapMergeJob>
+                      <Map-Task-Count>1</Map-Task-Count>
+                      <Merge-Task-Count>4</Merge-Task-Count>
                     </MapMergeJob>
                   </Dependent-Jobs>
                 </MapMergeJob>
