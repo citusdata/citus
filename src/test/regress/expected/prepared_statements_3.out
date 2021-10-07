@@ -11,8 +11,8 @@ EXECUTE prepared_function_evaluation_insert(5);
 EXECUTE prepared_function_evaluation_insert(6);
 EXECUTE prepared_function_evaluation_insert(7);
 SELECT key, value1 FROM prepare_func_table ORDER BY key, value1;
- key | value1 
------+--------
+ key | value1
+---------------------------------------------------------------------
  2   |      0
  3   |      0
  4   |      0
@@ -34,8 +34,8 @@ EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
 EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
 EXECUTE wrapped_parameter_evaluation('key', ARRAY['value']);
 SELECT key, value2 FROM prepare_func_table ORDER BY key, value2;
- key | value2 
------+--------
+ key | value2
+---------------------------------------------------------------------
  key | value
  key | value
  key | value

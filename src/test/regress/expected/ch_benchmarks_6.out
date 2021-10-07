@@ -23,8 +23,8 @@ WHERE su_suppkey in
   AND su_nationkey = n_nationkey
   AND n_name = 'Germany'
 ORDER BY su_name;
-          su_name          | su_address 
----------------------------+------------
+          su_name          | su_address
+---------------------------------------------------------------------
  abc                       | def
 (1 row)
 
@@ -35,8 +35,8 @@ select s_i_id
     where
         s_i_id in (select i_id from item)
         AND s_i_id not in (select i_im_id from item);
- s_i_id 
---------
+ s_i_id
+---------------------------------------------------------------------
 (0 rows)
 
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -45,8 +45,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -58,8 +58,8 @@ from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -71,8 +71,8 @@ from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 ORDER BY s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -84,8 +84,8 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -97,8 +97,8 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -111,8 +111,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -125,8 +125,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -138,8 +138,8 @@ from     stock
 group by s_i_id
 having   sum(s_order_cnt) > (select max(s_order_cnt) - 3 as having_query from stock)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -152,8 +152,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -166,8 +166,8 @@ where   s_order_cnt > (select sum(s_order_cnt) * .005 as where_query from stock)
 group by s_i_id
 having   (select false)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
 (0 rows)
 
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -175,8 +175,8 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3
@@ -188,8 +188,8 @@ from     stock s
 group by s_i_id
 having   (select false)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
 (0 rows)
 
 select     s_i_id, sum(s_order_cnt) as ordercount
@@ -197,8 +197,8 @@ from     stock s
 group by s_i_id
 having   (select true)
 order by s_i_id;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       1 |          1
       2 |          2
       3 |          3

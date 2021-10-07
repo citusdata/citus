@@ -12,8 +12,8 @@ raw_data AS MATERIALIZED (
 	DELETE FROM table_2 WHERE key >= (SELECT min(key) FROM select_data WHERE key > 1) RETURNING *
 )
 SELECT * FROM raw_data ORDER BY 1,2;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    3 | 3
    4 | 4
    5 | 5
@@ -33,8 +33,8 @@ raw_data AS MATERIALIZED (
 	DELETE FROM table_2 WHERE value::int >= (SELECT min(key) FROM select_data WHERE key > 1 + random()) RETURNING *
 )
 SELECT * FROM raw_data ORDER BY 1,2;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    3 | 3
    4 | 4
    5 | 5
@@ -52,8 +52,8 @@ raw_data AS MATERIALIZED (
 	DELETE FROM table_2 WHERE value::int >= (SELECT min(key) FROM table_1 WHERE key > random()) AND key = 6 RETURNING *
 )
 SELECT * FROM raw_data ORDER BY 1,2;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    6 | 6
 (1 row)
 
@@ -135,8 +135,8 @@ inserts AS MATERIALIZED (
   LIMIT 1
   RETURNING *
 ) SELECT count(*) FROM inserts;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 

@@ -7,8 +7,8 @@ select  s_i_id
         s_i_id in (select i_id from item)
         AND s_i_id = ol_i_id
     order by s_i_id;
- s_i_id 
---------
+ s_i_id
+---------------------------------------------------------------------
       1
       2
       3
@@ -30,7 +30,7 @@ where    su_suppkey in
      and su_nationkey = n_nationkey
      and n_name = 'Germany'
 order by su_name;
- su_name | su_address 
----------+------------
+ su_name | su_address
+---------------------------------------------------------------------
 (0 rows)
 

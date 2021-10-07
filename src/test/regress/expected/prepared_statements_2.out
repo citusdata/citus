@@ -14,50 +14,50 @@ EXECUTE prepared_insert('comment-7', '(7, 67)');
 PREPARE prepared_custom_type_select(test_composite_type) AS
 	SELECT count(*) FROM router_executor_table WHERE id = 1 AND stats = $1;
 EXECUTE prepared_custom_type_select('(1,10)');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_custom_type_select('(2,20)');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_custom_type_select('(3,30)');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_custom_type_select('(4,40)');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_custom_type_select('(5,50)');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_custom_type_select('(6,60)');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_custom_type_select('(7,67)');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_custom_type_select('(7,67)');
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -66,50 +66,50 @@ PREPARE prepared_select(integer, integer) AS
 	SELECT count(*) FROM router_executor_table
 		WHERE id = 1 AND stats = ROW($1, $2)::test_composite_type;
 EXECUTE prepared_select(1, 10);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(2, 20);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(3, 30);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(4, 40);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(5, 50);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(6, 60);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(7, 67);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
 EXECUTE prepared_select(7, 67);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -176,8 +176,8 @@ EXECUTE prepared_non_partition_parameter_insert(60);
 EXECUTE prepared_non_partition_parameter_insert(70);
 -- check inserted values
 SELECT count(*) FROM prepare_table;
- count 
--------
+ count
+---------------------------------------------------------------------
     42
 (1 row)
 
@@ -195,51 +195,51 @@ PREPARE prepared_router_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_router_partition_column_select(1);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    1 |    10
-   1 |      
+   1 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(2);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    2 |    20
-   2 |      
+   2 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(3);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    3 |    30
-   3 |      
+   3 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(4);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    4 |    40
-   4 |      
+   4 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(5);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    5 |    50
-   5 |      
+   5 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(6);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    6 |    60
-   6 |      
+   6 |
 (2 rows)
 
 EXECUTE prepared_router_partition_column_select(7);
- key | value 
------+-------
-   7 |      
+ key | value
+---------------------------------------------------------------------
+   7 |
 (1 row)
 
 PREPARE prepared_router_non_partition_column_select(int) AS
@@ -255,44 +255,44 @@ PREPARE prepared_router_non_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_router_non_partition_column_select(10);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(20);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    20
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(30);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    30
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(40);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    40
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(50);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    50
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(60);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    60
 (1 row)
 
 EXECUTE prepared_router_non_partition_column_select(67);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 -- check real-time executor
@@ -308,50 +308,50 @@ PREPARE prepared_real_time_non_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_real_time_non_partition_column_select(10);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(20);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    20
    2 |    20
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(30);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    30
    3 |    30
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(40);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    40
    4 |    40
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(50);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    50
    5 |    50
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(60);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    60
    6 |    60
 (2 rows)
 
 EXECUTE prepared_real_time_non_partition_column_select(70);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 PREPARE prepared_real_time_partition_column_select(int) AS
@@ -367,64 +367,64 @@ PREPARE prepared_real_time_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_real_time_partition_column_select(1);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
-   1 |      
+   1 |
 (3 rows)
 
 EXECUTE prepared_real_time_partition_column_select(2);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    2 |    20
-   2 |      
+   2 |
 (4 rows)
 
 EXECUTE prepared_real_time_partition_column_select(3);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    3 |    30
-   3 |      
+   3 |
 (4 rows)
 
 EXECUTE prepared_real_time_partition_column_select(4);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    4 |    40
-   4 |      
+   4 |
 (4 rows)
 
 EXECUTE prepared_real_time_partition_column_select(5);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    5 |    50
-   5 |      
+   5 |
 (4 rows)
 
 EXECUTE prepared_real_time_partition_column_select(6);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    6 |    60
-   6 |      
+   6 |
 (4 rows)
 
 EXECUTE prepared_real_time_partition_column_select(7);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
-   7 |      
+   7 |
 (3 rows)
 
 PREPARE prepared_task_tracker_non_partition_column_select(int) AS
@@ -439,50 +439,50 @@ PREPARE prepared_task_tracker_non_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_task_tracker_non_partition_column_select(10);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(20);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    20
    2 |    20
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(30);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    30
    3 |    30
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(40);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    40
    4 |    40
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(50);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    50
    5 |    50
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(60);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    60
    6 |    60
 (2 rows)
 
 EXECUTE prepared_task_tracker_non_partition_column_select(67);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
 (0 rows)
 
 PREPARE prepared_task_tracker_partition_column_select(int) AS
@@ -498,64 +498,64 @@ PREPARE prepared_task_tracker_partition_column_select(int) AS
 		key,
 		value;
 EXECUTE prepared_task_tracker_partition_column_select(1);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
-   1 |      
+   1 |
 (3 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(2);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    2 |    20
-   2 |      
+   2 |
 (4 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(3);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    3 |    30
-   3 |      
+   3 |
 (4 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(4);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    4 |    40
-   4 |      
+   4 |
 (4 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(5);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    5 |    50
-   5 |      
+   5 |
 (4 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(6);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
    6 |    60
-   6 |      
+   6 |
 (4 rows)
 
 EXECUTE prepared_task_tracker_partition_column_select(7);
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    10
    1 |    10
-   7 |      
+   7 |
 (3 rows)
 
 -- check updates
@@ -581,21 +581,21 @@ EXECUTE prepared_non_partition_parameter_update(60, 62);
 EXECUTE prepared_non_partition_parameter_update(70, 72);
 -- check after updates
 SELECT * FROM prepare_table ORDER BY key, value;
- key | value 
------+-------
+ key | value
+---------------------------------------------------------------------
    0 |    12
    0 |    22
    0 |    32
    0 |    42
    0 |    52
    0 |    62
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
    1 |    11
    1 |    11
    2 |    21
@@ -633,14 +633,14 @@ EXECUTE prepared_non_partition_parameter_delete(62);
 EXECUTE prepared_non_partition_parameter_delete(72);
 -- check after deletes
 SELECT * FROM prepare_table ORDER BY key, value;
- key | value 
------+-------
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
-   0 |      
+ key | value
+---------------------------------------------------------------------
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
+   0 |
 (7 rows)
 

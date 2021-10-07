@@ -9,8 +9,8 @@ EXECUTE prepared_relabel_insert('test');
 EXECUTE prepared_relabel_insert('test');
 EXECUTE prepared_relabel_insert('test');
 SELECT key, value FROM text_partition_column_table ORDER BY key;
- key  | value 
-------+-------
+ key  | value
+---------------------------------------------------------------------
  test |     1
  test |     1
  test |     1
@@ -45,8 +45,8 @@ EXECUTE foo;
 EXECUTE foo;
 EXECUTE foo;
 SELECT count(distinct ingest_time) FROM http_request WHERE site_id = 1;
- count 
--------
+ count
+---------------------------------------------------------------------
      8
 (1 row)
 

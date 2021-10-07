@@ -2,9 +2,9 @@ CREATE SCHEMA "prepared statements";
 SET search_path TO "prepared statements";
 CREATE TABLE repartition_prepared_test (a int, b int);
 SELECT create_distributed_table('repartition_prepared_test', 'a');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 INSERT INTO repartition_prepared_test SELECT i%2, i%3 FROM generate_series(0,24)i;
@@ -19,9 +19,9 @@ CREATE TABLE router_executor_table (
     stats test_composite_type
 );
 SELECT create_distributed_table('router_executor_table', 'id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test router executor with prepare statements
@@ -30,9 +30,9 @@ CREATE TABLE prepare_table (
 	value int
 );
 SELECT create_distributed_table('prepare_table','key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Testing parameters + function evaluation
@@ -43,9 +43,9 @@ CREATE TABLE prepare_func_table (
     value3 timestamptz DEFAULT now()
 );
 SELECT create_distributed_table('prepare_func_table', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- test function evaluation with parameters in an expression
@@ -57,9 +57,9 @@ CREATE TABLE text_partition_column_table (
     value int
 );
 SELECT create_distributed_table('text_partition_column_table', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Domain type columns can give issues
@@ -68,8 +68,8 @@ CREATE DOMAIN test_key AS text CHECK(VALUE ~ '^test-\d$');
 SELECT run_command_on_workers($$
   CREATE DOMAIN "prepared statements".test_key AS text CHECK(VALUE ~ '^test-\d$')
 $$) OFFSET 10000;
- run_command_on_workers 
-------------------------
+ run_command_on_workers
+---------------------------------------------------------------------
 (0 rows)
 
 CREATE TABLE domain_partition_column_table (
@@ -77,9 +77,9 @@ CREATE TABLE domain_partition_column_table (
     value int
 );
 SELECT create_distributed_table('domain_partition_column_table', 'key');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- verify we re-evaluate volatile functions every time
@@ -93,8 +93,8 @@ CREATE TABLE http_request (
   response_time_msec INT
 );
 SELECT create_distributed_table('http_request', 'site_id');
- create_distributed_table 
---------------------------
- 
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 

@@ -7,8 +7,8 @@ SELECT
 	count(*)
 FROM
 	some_values_1 JOIN table_2 USING (key);
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -21,8 +21,8 @@ SELECT
 	count(*)
 FROM
 	some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -35,8 +35,8 @@ SELECT
 	count(*)
 FROM
 	some_values_1 JOIN ref_table USING (key);
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -50,8 +50,8 @@ SELECT
 	count(*)
 FROM
 	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -65,8 +65,8 @@ SELECT
 	count(*)
 FROM
 	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -81,8 +81,8 @@ SELECT
 	count(*)
 FROM
 	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -97,8 +97,8 @@ SELECT
 	count(*)
 FROM
 	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 4;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -114,8 +114,8 @@ SELECT
 	count(*)
 FROM
 	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -128,8 +128,8 @@ SELECT
 	count(*)
 FROM
 	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 3;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -144,8 +144,8 @@ SELECT
 	count(*)
 FROM
 	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 4;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -158,8 +158,8 @@ SELECT
 	count(*)
 FROM
 	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key);
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -171,8 +171,8 @@ SELECT
 	count(*)
 FROM
 	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key) WHERE table_2.key = 4;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -188,8 +188,8 @@ SELECT
 	count(*)
 FROM
 	some_values_2;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -209,8 +209,8 @@ SELECT
 	count(*)
 FROM
 	top_cte JOIN table_2 USING (key);
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 
@@ -230,8 +230,8 @@ SELECT
 	count(*)
 FROM
 	top_cte JOIN table_2 USING (key) WHERE table_2.key = 2;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -244,8 +244,8 @@ WITH some_values_1 AS MATERIALIZED
 	some_values_3 AS MATERIALIZED
 	(SELECT key FROM (some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key))
 SELECT * FROM some_values_3 JOIN ref_table ON (true) ORDER BY 1,2,3;
- key | key | value 
------+-----+-------
+ key | key | value
+---------------------------------------------------------------------
    4 |   1 | 1
    4 |   2 | 2
    4 |   3 | 3
@@ -261,8 +261,8 @@ WITH some_values_1 AS MATERIALIZED
 	some_values_2 AS MATERIALIZED
 	(SELECT key, random() FROM table_2 WHERE value IN ('3', '4'))
 SELECT count(*) FROM some_values_2 JOIN some_values_1 USING (key);
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -273,8 +273,8 @@ WITH some_values_1 AS MATERIALIZED
 	some_values_2 AS MATERIALIZED
 	(SELECT key, random() FROM table_2 WHERE value IN ('3', '4'))
 SELECT count(*) FROM some_values_2 JOIN some_values_1 USING (key) WHERE false;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -290,8 +290,8 @@ SELECT
 	count(*)
 FROM
 	some_values_3;
- count 
--------
+ count
+---------------------------------------------------------------------
      2
 (1 row)
 
@@ -334,8 +334,8 @@ SELECT count(*) FROM
 	) as level_6, table_1 WHERE table_1.key::int = level_6.min::int
 	GROUP BY table_1.value
 ) as bar;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -377,8 +377,8 @@ SELECT count(*) FROM
 	WHERE table_1.key::int = level_6.min::int AND table_1.key = 4
 	GROUP BY table_1.value
 ) as bar;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -387,8 +387,8 @@ SELECT count(*) FROM
 (SELECT key FROM table_1 WHERE key = 1)
 INTERSECT
 (SELECT key FROM table_1 WHERE key = 2);
- key 
------
+ key
+---------------------------------------------------------------------
 (0 rows)
 
 -- the intermediate results should just hit a single worker
@@ -407,8 +407,8 @@ cte_2 AS MATERIALIZED
 SELECT * FROM cte_1
 	UNION
 SELECT * FROM cte_2;
- key 
------
+ key
+---------------------------------------------------------------------
 (0 rows)
 
 -- one final test with SET operations, where
@@ -426,8 +426,8 @@ cte_2 AS MATERIALIZED
 	SELECT count(*) FROM table_1 JOIN cte_1 USING (key)
 )
 SELECT * FROM cte_2;
- count 
--------
+ count
+---------------------------------------------------------------------
      0
 (1 row)
 
@@ -441,8 +441,8 @@ FROM
 	(SELECT key, random() FROM table_2) as bar
 WHERE
 	foo.key != bar.key;
- count 
--------
+ count
+---------------------------------------------------------------------
     14
 (1 row)
 
@@ -455,8 +455,8 @@ FROM
 	(SELECT key, random() FROM table_2) as bar
 WHERE
 	foo.key != bar.key;
- count 
--------
+ count
+---------------------------------------------------------------------
      4
 (1 row)
 
@@ -481,8 +481,8 @@ FROM
     FROM accounts_cte
     INNER JOIN joined_stats_cte_2 USING (account_id)
 ) inner_query;
- sum 
------
+ sum
+---------------------------------------------------------------------
  100
 (1 row)
 
@@ -502,8 +502,8 @@ HAVING (
            SELECT count(*)
            FROM accounts
        ) > 0;
- count | spent 
--------+-------
+ count | spent
+---------------------------------------------------------------------
      1 |   100
 (1 row)
 

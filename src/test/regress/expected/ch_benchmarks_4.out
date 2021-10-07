@@ -19,8 +19,8 @@ GROUP BY
     substr(i_data, 1, 3),
     i_price
 ORDER BY supplier_cnt DESC;
-  i_name  | brand | i_price | supplier_cnt 
-----------+-------+---------+--------------
+  i_name  | brand | i_price | supplier_cnt
+---------------------------------------------------------------------
  Keyboard | co    |   50.00 |            3
 (1 row)
 
@@ -39,8 +39,8 @@ FROM
        AND ol_i_id = i_id
      GROUP BY i_id) t
 WHERE ol_i_id = t.i_id;
-     avg_yearly      
----------------------
+     avg_yearly
+---------------------------------------------------------------------
  27.5000000000000000
 (1 row)
 
@@ -76,8 +76,8 @@ HAVING sum(ol_amount) > 5 -- was 200, but thats too big for the dataset
 ORDER BY
     sum(ol_amount) DESC,
     o_entry_d;
- c_last | o_id |        o_entry_d         | o_ol_cnt |  sum  
---------+------+--------------------------+----------+-------
+ c_last | o_id |        o_entry_d         | o_ol_cnt |  sum
+---------------------------------------------------------------------
  John   |   10 | Fri Oct 17 00:00:00 2008 |        1 | 10.00
  John   |    9 | Fri Oct 17 00:00:00 2008 |        1 |  9.00
  John   |    8 | Fri Oct 17 00:00:00 2008 |        1 |  8.00
@@ -109,8 +109,8 @@ WHERE (     ol_i_id = i_id
         AND ol_quantity <= 10
         AND i_price BETWEEN 1 AND 400000
         AND ol_w_id IN (1,5,3));
- revenue 
----------
+ revenue
+---------------------------------------------------------------------
     7.00
 (1 row)
 
@@ -129,7 +129,7 @@ where    su_suppkey in
      and su_nationkey = n_nationkey
      and n_name = 'GERMANY'
 order by su_name;
- su_name | su_address 
----------+------------
+ su_name | su_address
+---------------------------------------------------------------------
 (0 rows)
 

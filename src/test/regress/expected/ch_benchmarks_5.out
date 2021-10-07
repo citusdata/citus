@@ -29,8 +29,8 @@ GROUP BY su_name
 ORDER BY
     numwait desc,
     su_name;
- su_name | numwait 
----------+---------
+ su_name | numwait
+---------------------------------------------------------------------
 (0 rows)
 
 -- Query 22
@@ -52,7 +52,7 @@ WHERE substr(c_phone,1,1) in ('1','2','3','4','5','6','7')
                     AND o_d_id = c_d_id)
 GROUP BY substr(c_state,1,1)
 ORDER BY substr(c_state,1,1);
- country | numcust | totacctbal 
----------+---------+------------
+ country | numcust | totacctbal
+---------------------------------------------------------------------
 (0 rows)
 

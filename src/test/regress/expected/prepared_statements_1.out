@@ -9,8 +9,8 @@ PREPARE repartition_prepared(int) AS
 			USING (b)
 		WHERE t1.a = $1;
 EXECUTE repartition_prepared (1);
- count 
--------
+ count
+---------------------------------------------------------------------
    100
 (1 row)
 
@@ -18,8 +18,8 @@ BEGIN;
 	-- CREATE TABLE ... AS EXECUTE prepared_statement tests
 	CREATE TEMP TABLE repartition_prepared_tmp AS EXECUTE repartition_prepared(1);
 	SELECT count(*) from repartition_prepared_tmp;
- count 
--------
+ count
+---------------------------------------------------------------------
      1
 (1 row)
 

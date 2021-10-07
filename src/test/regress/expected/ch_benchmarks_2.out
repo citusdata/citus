@@ -33,8 +33,8 @@ WHERE i_id = s_i_id
   AND i_id = ol_i_id
 GROUP BY extract(YEAR FROM o_entry_d)
 ORDER BY l_year;
- l_year |       mkt_share        
---------+------------------------
+ l_year |       mkt_share
+---------------------------------------------------------------------
    2008 | 0.50000000000000000000
 (1 row)
 
@@ -65,8 +65,8 @@ GROUP BY
 ORDER BY
     n_name,
     l_year DESC;
-          n_name           | l_year | sum_profit 
----------------------------+--------+------------
+          n_name           | l_year | sum_profit
+---------------------------------------------------------------------
  Germany                   |   2008 |       3.00
  The Netherlands           |   2008 |       2.00
  United States             |   2008 |       1.00
@@ -101,19 +101,19 @@ GROUP BY
     c_phone,
     n_name
 ORDER BY revenue DESC;
- c_id | c_last | revenue |  c_city   |     c_phone      |          n_name           
-------+--------+---------+-----------+------------------+---------------------------
-   10 | John   |   10.00 | Some City | +1 000 0000000   | Cambodia                 
-    9 | John   |    9.00 | Some City | +1 000 0000000   | Cambodia                 
-    8 | John   |    8.00 | Some City | +1 000 0000000   | Cambodia                 
-    7 | John   |    7.00 | Some City | +1 000 0000000   | Cambodia                 
-    6 | John   |    6.00 | Some City | +1 000 0000000   | Cambodia                 
-    5 | John   |    5.00 | Some City | +1 000 0000000   | Cambodia                 
-    4 | John   |    4.00 | Some City | +1 000 0000000   | Cambodia                 
-    3 | John   |    3.00 | Some City | +1 000 0000000   | Cambodia                 
-    2 | John   |    2.00 | Some City | +1 000 0000000   | Cambodia                 
-    1 | John   |    1.00 | Some City | +1 000 0000000   | Cambodia                 
-    0 | John   |    0.00 | Some City | +1 000 0000000   | Cambodia                 
+ c_id | c_last | revenue |  c_city   |     c_phone      |          n_name
+---------------------------------------------------------------------
+   10 | John   |   10.00 | Some City | +1 000 0000000   | Cambodia
+    9 | John   |    9.00 | Some City | +1 000 0000000   | Cambodia
+    8 | John   |    8.00 | Some City | +1 000 0000000   | Cambodia
+    7 | John   |    7.00 | Some City | +1 000 0000000   | Cambodia
+    6 | John   |    6.00 | Some City | +1 000 0000000   | Cambodia
+    5 | John   |    5.00 | Some City | +1 000 0000000   | Cambodia
+    4 | John   |    4.00 | Some City | +1 000 0000000   | Cambodia
+    3 | John   |    3.00 | Some City | +1 000 0000000   | Cambodia
+    2 | John   |    2.00 | Some City | +1 000 0000000   | Cambodia
+    1 | John   |    1.00 | Some City | +1 000 0000000   | Cambodia
+    0 | John   |    0.00 | Some City | +1 000 0000000   | Cambodia
 (11 rows)
 
 -- Query 11
@@ -138,8 +138,8 @@ HAVING sum(s_order_cnt) >
             AND su_nationkey = n_nationkey
             AND n_name = 'Germany')
 ORDER BY ordercount DESC;
- s_i_id | ordercount 
---------+------------
+ s_i_id | ordercount
+---------------------------------------------------------------------
       3 |          3
 (1 row)
 
@@ -158,8 +158,8 @@ WHERE ol_w_id = o_w_id
   AND ol_delivery_d < '2020-01-01 00:00:00.000000'
 GROUP BY o_ol_cnt
 ORDER BY o_ol_cnt;
- o_ol_cnt | high_line_count | low_line_count 
-----------+-----------------+----------------
+ o_ol_cnt | high_line_count | low_line_count
+---------------------------------------------------------------------
         1 |               2 |              9
 (1 row)
 
@@ -181,8 +181,8 @@ GROUP BY c_count
 ORDER BY
     custdist DESC,
     c_count DESC;
- c_count | custdist 
----------+----------
+ c_count | custdist
+---------------------------------------------------------------------
        0 |        9
        1 |        2
 (2 rows)
@@ -196,8 +196,8 @@ FROM
 WHERE ol_i_id = i_id
   AND ol_delivery_d >= '2007-01-02 00:00:00.000000'
   AND ol_delivery_d < '2020-01-02 00:00:00.000000';
-     promo_revenue      
-------------------------
+     promo_revenue
+---------------------------------------------------------------------
  0.00000000000000000000
 (1 row)
 
@@ -225,8 +225,8 @@ FROM
 WHERE su_suppkey = supplier_no
   AND total_revenue = (SELECT max(total_revenue) FROM revenue)
 ORDER BY su_suppkey;
- su_suppkey |          su_name          | su_address |    su_phone     | total_revenue 
-------------+---------------------------+------------+-----------------+---------------
+ su_suppkey |          su_name          | su_address |    su_phone     | total_revenue
+---------------------------------------------------------------------
           9 | abc                       | def        | ghi             |          3.00
 (1 row)
 
