@@ -41,7 +41,7 @@ SET citus.shard_replication_factor to 1;
 -- for interval [8,10] repartition join logic will be triggered.
 SET citus.enable_repartition_joins to ON;
 SELECT count(*) FROM test_table_1, test_table_2 WHERE test_table_1.id = test_table_2.id;
-LOG:  join order: [ "test_table_1" ][ single range partition join "test_table_2" ]
+LOG:  join order: [ "test_table_1" ][ dual partition join "test_table_2" ]
  count
 ---------------------------------------------------------------------
      9
