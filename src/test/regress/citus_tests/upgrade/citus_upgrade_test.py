@@ -19,6 +19,9 @@ import os
 import re
 import sys
 
+# https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time/14132912#14132912
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import utils
 from utils import USER
 
@@ -26,7 +29,6 @@ from docopt import docopt
 
 from config import (
     CitusUpgradeConfig,
-    COORDINATOR_NAME,
     CITUS_VERSION_SQL,
     MASTER_VERSION,
     AFTER_CITUS_UPGRADE_COORD_SCHEDULE,
@@ -35,7 +37,7 @@ from config import (
     MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE,
 )
 
-import upgrade_common as common
+import common
 
 
 def main(config):

@@ -2,16 +2,14 @@ import subprocess
 import os
 
 
-USER = 'postgres'
+USER = "postgres"
 
 
 def psql(pg_path, port, command):
-    return subprocess.check_output([
-        os.path.join(pg_path, 'psql'),
-        '-U', USER,
-        '-p', str(port),
-        '-c', command]
+    return subprocess.check_output(
+        [os.path.join(pg_path, "psql"), "-U", USER, "-p", str(port), "-c", command]
     )
+
 
 # Taken from https://stackoverflow.com/questions/431684/how-do-i-change-directory-cd-in-python/13197763#13197763
 

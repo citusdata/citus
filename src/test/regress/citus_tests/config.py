@@ -3,7 +3,7 @@ import random
 import socket
 from contextlib import closing
 import os
-import upgrade_common as common
+import common
 
 COORDINATOR_NAME = "coordinator"
 WORKER1 = "worker1"

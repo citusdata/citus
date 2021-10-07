@@ -10,9 +10,13 @@ Options:
     --pgxsdir=<pgxsdir>           	       Path to the PGXS directory(ex: ~/.pgenv/src/postgresql-11.3)
 """
 
+import sys, os
+
+# https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time/14132912#14132912
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from config import (
     PGUpgradeConfig,
-    COORDINATOR_NAME,
     AFTER_PG_UPGRADE_SCHEDULE,
     BEFORE_PG_UPGRADE_SCHEDULE,
 )
@@ -21,11 +25,8 @@ import utils
 from utils import USER
 import atexit
 import subprocess
-import sys
-import shutil
-import os
 
-import upgrade_common as common
+import common
 
 
 def citus_prepare_pg_upgrade(pg_path, node_ports):

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-"""arbitrary_configs
+"""citus_arbitrary_configs
 Usage:
-    arbitrary_configs --bindir=<bindir> --pgxsdir=<pgxsdir> --parallel=<parallel> --extra-tests=<extra_tests> --seed=<seed>
+    citus_arbitrary_configs --bindir=<bindir> --pgxsdir=<pgxsdir> --parallel=<parallel> --extra-tests=<extra_tests> --seed=<seed>
 
 Options:
     --bindir=<bindir>              The PostgreSQL executable directory(ex: '~/.pgenv/pgsql-11.3/bin')
@@ -11,19 +11,22 @@ Options:
     --extra-tests=<extra-tests>     the config names to run
     --seed=<seed>                   random number seed
 """
+import sys
+import os, shutil
 
-import upgrade_common as common
+# https://stackoverflow.com/questions/14132789/relative-imports-for-the-billionth-time/14132912#14132912
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+import common
+import config as cfg
 import concurrent.futures
 import multiprocessing
 from docopt import docopt
-import os, shutil
 import time
-import sys
 import inspect
 import random
 
-
-import config as cfg
 
 testResults = {}
 
