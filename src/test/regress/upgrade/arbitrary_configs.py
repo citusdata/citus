@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-"""custom_citus
+"""arbitrary_configs
 Usage:
-    custom_citus --bindir=<bindir> --pgxsdir=<pgxsdir> --parallel=<parallel> --extra-tests=<extra_tests> --seed=<seed>
+    arbitrary_configs --bindir=<bindir> --pgxsdir=<pgxsdir> --parallel=<parallel> --extra-tests=<extra_tests> --seed=<seed>
 
 Options:
     --bindir=<bindir>              The PostgreSQL executable directory(ex: '~/.pgenv/pgsql-11.3/bin')
@@ -50,7 +50,7 @@ def run_for_config(config, lock):
             config.bindir,
             config.pg_srcdir,
             config.coordinator_port(),
-            cfg.CUSTOM_POSTGRES_SCHEDULE,
+            cfg.POSTGRES_SCHEDULE,
             config.output_dir,
             config.input_dir,
             cfg.SUPER_USER_NAME,
@@ -61,7 +61,7 @@ def run_for_config(config, lock):
         config.bindir,
         config.pg_srcdir,
         config.coordinator_port(),
-        cfg.CUSTOM_CREATE_SCHEDULE,
+        cfg.CREATE_SCHEDULE,
         config.output_dir,
         config.input_dir,
         config.user,
@@ -73,7 +73,7 @@ def run_for_config(config, lock):
             config.bindir,
             config.pg_srcdir,
             config.random_worker_port(),
-            cfg.CUSTOM_SQL_SCHEDULE,
+            cfg.SQL_SCHEDULE,
             config.output_dir,
             config.input_dir,
             config.user,
@@ -83,7 +83,7 @@ def run_for_config(config, lock):
             config.bindir,
             config.pg_srcdir,
             config.coordinator_port(),
-            cfg.CUSTOM_SQL_SCHEDULE,
+            cfg.SQL_SCHEDULE,
             config.output_dir,
             config.input_dir,
             config.user,
@@ -112,7 +112,7 @@ def copy_test_files(config):
 
     common.initialize_temp_dir(sql_dir_path)
     common.initialize_temp_dir(expected_dir_path)
-    for scheduleName in cfg.CUSTOM_SCHEDULE_NAMES:
+    for scheduleName in cfg.ARBITRARY_SCHEDULE_NAMES:
         with open(scheduleName) as file:
             lines = file.readlines()
             for line in lines:
@@ -149,7 +149,7 @@ def read_configs(docoptRes):
 
 def run_tests(configs):
     failCount = 0
-    common.initialize_temp_dir(cfg.CITUS_CUSTOM_TEST_DIR)
+    common.initialize_temp_dir(cfg.CITUS_ARBITRARY_TEST_DIR)
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=parallel_thread_amount
     ) as executor:

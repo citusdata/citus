@@ -1,4 +1,4 @@
-test: custom_sql_test
+test: sql_test
 test: prepared_statements_1 prepared_statements_2 prepared_statements_3
 test: prepared_statements_4
 test: ch_benchmarks_1 ch_benchmarks_2 ch_benchmarks_3

@@ -1,2 +1,2 @@
-test: custom_create_test intermediate_result_pruning_create
+test: create_test intermediate_result_pruning_create
 test: prepared_statements_create_load ch_benchmarks_create_load

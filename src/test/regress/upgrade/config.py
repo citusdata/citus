@@ -12,25 +12,25 @@ WORKER2 = "worker2"
 REGULAR_USER_NAME = "regularuser"
 SUPER_USER_NAME = "postgres"
 
-CUSTOM_SCHEDULE_NAMES = [
-    "custom_create_schedule",
-    "custom_sql_schedule",
-    "custom_postgres_schedule",
+ARBITRARY_SCHEDULE_NAMES = [
+    "create_schedule",
+    "sql_schedule",
+    "postgres_schedule",
 ]
 
 BEFORE_PG_UPGRADE_SCHEDULE = "./before_pg_upgrade_schedule"
 AFTER_PG_UPGRADE_SCHEDULE = "./after_pg_upgrade_schedule"
 
-CUSTOM_CREATE_SCHEDULE = "./custom_create_schedule"
-CUSTOM_POSTGRES_SCHEDULE = "./custom_postgres_schedule"
-CUSTOM_SQL_SCHEDULE = "./custom_sql_schedule"
+CREATE_SCHEDULE = "./create_schedule"
+POSTGRES_SCHEDULE = "./postgres_schedule"
+SQL_SCHEDULE = "./sql_schedule"
 
 AFTER_CITUS_UPGRADE_COORD_SCHEDULE = "./after_citus_upgrade_coord_schedule"
 BEFORE_CITUS_UPGRADE_COORD_SCHEDULE = "./before_citus_upgrade_coord_schedule"
 MIXED_BEFORE_CITUS_UPGRADE_SCHEDULE = "./mixed_before_citus_upgrade_schedule"
 MIXED_AFTER_CITUS_UPGRADE_SCHEDULE = "./mixed_after_citus_upgrade_schedule"
 
-CITUS_CUSTOM_TEST_DIR = "./tmp_citus_test"
+CITUS_ARBITRARY_TEST_DIR = "./tmp_citus_test"
 
 MASTER = "master"
 # This should be updated when citus version changes
@@ -61,7 +61,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         if "--bindir" in arguments:
             self.bindir = arguments["--bindir"]
         self.pg_srcdir = arguments["--pgxsdir"]
-        self.temp_dir = CITUS_CUSTOM_TEST_DIR
+        self.temp_dir = CITUS_ARBITRARY_TEST_DIR
         self.worker_amount = 2
         self.user = REGULAR_USER_NAME
         self.is_mx = False
