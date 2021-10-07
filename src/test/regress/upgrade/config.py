@@ -122,6 +122,7 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
         super().__init__(arguments)
         new_settings = {
             "client_min_messages": "WARNING",
+            "citus.sort_returning": True,
         }
         self.settings.update(new_settings)
         self.add_coordinator_to_metadata = True
