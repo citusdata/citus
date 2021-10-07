@@ -123,6 +123,8 @@ ORDER BY 1;
  function dump_global_wait_edges()
  function dump_local_wait_edges()
  function fetch_intermediate_results(text[],text,integer)
+ function fix_all_partition_shard_index_names()
+ function fix_partition_shard_index_names(regclass)
  function fix_pre_citus10_partitioned_table_constraint_names()
  function fix_pre_citus10_partitioned_table_constraint_names(regclass)
  function get_all_active_transactions()
@@ -202,6 +204,7 @@ ORDER BY 1;
  function worker_drop_distributed_table(text)
  function worker_fetch_foreign_file(text,text,bigint,text[],integer[])
  function worker_fetch_partition_file(bigint,integer,integer,integer,text,integer)
+ function worker_fix_partition_shard_index_names(regclass, text, text)
  function worker_fix_pre_citus10_partitioned_table_constraint_names(regclass,bigint,text)
  function worker_hash("any")
  function worker_hash_partition_table(bigint,integer,text,text,oid,anyarray)
@@ -258,5 +261,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(242 rows)
+(245 rows)
 

@@ -1886,6 +1886,46 @@ SELECT create_time_partitions('non_partitioned_table', INTERVAL '1 month', now()
 CALL drop_old_time_partitions('non_partitioned_table', now());
 DROP TABLE non_partitioned_table;
 
+-- https://github.com/citusdata/citus/issues/4962
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE part_table_with_very_long_name (
+    dist_col integer,
+    long_named_integer_col integer,
+    long_named_part_col timestamp
+) PARTITION BY RANGE (long_named_part_col);
+
+CREATE TABLE part_table_with_long_long_long_long_name
+PARTITION OF part_table_with_very_long_name
+FOR VALUES FROM ('2010-01-01') TO ('2015-01-01');
+
+SELECT create_distributed_table('part_table_with_very_long_name', 'dist_col');
+
+CREATE INDEX ON part_table_with_very_long_name
+USING btree (long_named_integer_col, long_named_part_col);
+
+-- shouldn't work
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+\c - - - :worker_1_port
+SELECT tablename, indexname FROM pg_indexes
+WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = partitioning_schema;
+-- fix problematic table
+SELECT fix_partition_shard_index_names('part_table_with_very_long_name'::regclass);
+-- should work
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+\c - - - :worker_1_port
+-- check that indexes are renamed
+SELECT tablename, indexname FROM pg_indexes
+WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
+
+\c - - - :master_port
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+
 DROP SCHEMA partitioning_schema CASCADE;
 RESET search_path;
 DROP TABLE IF EXISTS

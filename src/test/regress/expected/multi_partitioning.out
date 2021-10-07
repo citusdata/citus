@@ -3912,11 +3912,84 @@ CALL drop_old_time_partitions('non_partitioned_table', now());
 ERROR:  non_partitioned_table is not partitioned
 CONTEXT:  PL/pgSQL function drop_old_time_partitions(regclass,timestamp with time zone) line XX at RAISE
 DROP TABLE non_partitioned_table;
+-- https://github.com/citusdata/citus/issues/4962
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE part_table_with_very_long_name (
+    dist_col integer,
+    long_named_integer_col integer,
+    long_named_part_col timestamp
+) PARTITION BY RANGE (long_named_part_col);
+CREATE TABLE part_table_with_long_long_long_long_name
+PARTITION OF part_table_with_very_long_name
+FOR VALUES FROM ('2010-01-01') TO ('2015-01-01');
+SELECT create_distributed_table('part_table_with_very_long_name', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE INDEX ON part_table_with_very_long_name
+USING btree (long_named_integer_col, long_named_part_col);
+-- shouldn't work
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ERROR:  relation "part_table_with_long_long_lon_long_named_integer_col_long_n_idx" already exists
+CONTEXT:  while executing command on localhost:xxxxx
+\c - - - :worker_1_port
+SELECT tablename, indexname FROM pg_indexes
+WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
+                    tablename                    |                            indexname
+---------------------------------------------------------------------
+ part_table_with_long_long_long_long_name_361172 | part_table_with_long_long_lon_long_named_integer_col_long_n_idx
+ part_table_with_long_long_long_long_name_361174 | part_table_with_long_long_lon_long_named_integer_col_long__idx1
+ part_table_with_very_long_name_361168           | part_table_with_very_long_nam_long_named_intege_73d4b078_361168
+ part_table_with_very_long_name_361170           | part_table_with_very_long_nam_long_named_intege_73d4b078_361170
+(4 rows)
+
+\c - - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path = partitioning_schema;
+-- fix problematic table
+SELECT fix_partition_shard_index_names('part_table_with_very_long_name'::regclass);
+ fix_partition_shard_index_names
+---------------------------------------------------------------------
+
+(1 row)
+
+-- should work
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+-- check that indexes are renamed
+SELECT tablename, indexname FROM pg_indexes
+WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
+                    tablename                    |                            indexname
+---------------------------------------------------------------------
+ part_table_with_long_long_long_long_name        | part_table_with_long_long_lon_long_named_integer_col_long_n_idx
+ part_table_with_long_long_long_long_name_361172 | part_table_with_long_long_lon_long_named_intege_f9175544_361172
+ part_table_with_long_long_long_long_name_361174 | part_table_with_long_long_lon_long_named_intege_f9175544_361174
+ part_table_with_very_long_name                  | part_table_with_very_long_nam_long_named_integer_col_long_n_idx
+ part_table_with_very_long_name_361168           | part_table_with_very_long_nam_long_named_intege_73d4b078_361168
+ part_table_with_very_long_name_361170           | part_table_with_very_long_nam_long_named_intege_73d4b078_361170
+(6 rows)
+
+\c - - - :master_port
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 DROP SCHEMA partitioning_schema CASCADE;
-NOTICE:  drop cascades to 3 other objects
-DETAIL:  drop cascades to table "schema-test"
-drop cascades to table another_distributed_table
-drop cascades to table distributed_parent_table
+NOTICE:  drop cascades to 4 other objects
+DETAIL:  drop cascades to table partitioning_schema."schema-test"
+drop cascades to table partitioning_schema.another_distributed_table
+drop cascades to table partitioning_schema.distributed_parent_table
+drop cascades to table partitioning_schema.part_table_with_very_long_name
 RESET search_path;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,
