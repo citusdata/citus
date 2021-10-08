@@ -1,0 +1,12 @@
+SHOW citus.enable_metadata_sync_by_default;
+ citus.enable_metadata_sync_by_default
+---------------------------------------------------------------------
+ on
+(1 row)
+
+SELECT bool_and(metadatasynced) FROM pg_dist_node WHERE noderole = 'primary';
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+

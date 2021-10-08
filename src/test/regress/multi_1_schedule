@@ -15,6 +15,7 @@
 # ---
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
+test: turn_mx_off
 test: multi_extension
 test: single_node
 test: single_node_truncate

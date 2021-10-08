@@ -306,6 +306,7 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 
 \c - - - :master_port
 SET search_path TO fix_idx_names, public;
+SET citus.next_shard_id TO 361176;
 ALTER TABLE dist_partitioned_table DROP CONSTRAINT constraint1 CASCADE;
 NOTICE:  drop cascades to constraint fk_table_id_fk_column_fkey on table fk_table
 DROP INDEX dist_partitioned_table_dist_col_partition_col_idx;

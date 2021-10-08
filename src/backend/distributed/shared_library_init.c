@@ -877,6 +877,16 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_metadata_sync_by_default",
+		gettext_noop("Enables MX in the new nodes by default"),
+		NULL,
+		&EnableMetadataSyncByDefault,
+		true,
+		PGC_USERSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_object_propagation",
 		gettext_noop("Enables propagating object creation for more complex objects, "
 					 "schema's will always be created"),

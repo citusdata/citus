@@ -1888,6 +1888,7 @@ DROP TABLE non_partitioned_table;
 
 -- https://github.com/citusdata/citus/issues/4962
 SET citus.shard_replication_factor TO 1;
+SET citus.next_shard_id TO 361168;
 CREATE TABLE part_table_with_very_long_name (
     dist_col integer,
     long_named_integer_col integer,
