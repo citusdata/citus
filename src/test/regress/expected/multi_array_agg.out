@@ -3,11 +3,18 @@
 --
 SET citus.next_shard_id TO 520000;
 SET citus.coordinator_aggregation_strategy TO 'disabled';
+SELECT run_command_on_master_and_workers($r$
 CREATE OR REPLACE FUNCTION array_sort (ANYARRAY)
 RETURNS ANYARRAY LANGUAGE SQL
 AS $$
 SELECT ARRAY(SELECT unnest($1) ORDER BY 1)
 $$;
+$r$);
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
+(1 row)
+
 -- Check multi_cat_agg() aggregate which is used to implement array_agg()
 SELECT array_cat_agg(i) FROM (VALUES (ARRAY[1,2]), (NULL), (ARRAY[3,4])) AS t(i);
  array_cat_agg
@@ -132,17 +139,18 @@ SELECT l_quantity, array_sort(array_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE
 (4 rows)
 
 -- Check that we can execute array_agg() with an expression containing NULL values
-SELECT array_agg(case when l_quantity > 20 then l_quantity else NULL end)
-	FROM lineitem WHERE l_orderkey < 10;
-                                                                    array_agg
+SELECT array_sort(array_agg(case when l_quantity > 20 then l_quantity else NULL end))
+    FROM lineitem WHERE l_orderkey  < 10;
+                                                                    array_sort
 ---------------------------------------------------------------------
- {NULL,36.00,NULL,28.00,24.00,32.00,38.00,45.00,49.00,27.00,NULL,28.00,26.00,30.00,NULL,26.00,50.00,37.00,NULL,NULL,46.00,28.00,38.00,35.00,NULL}
+ {24.00,26.00,26.00,27.00,28.00,28.00,28.00,30.00,32.00,35.00,36.00,37.00,38.00,38.00,45.00,46.00,49.00,50.00,NULL,NULL,NULL,NULL,NULL,NULL,NULL}
 (1 row)
 
 -- Check that we return NULL in case there are no input rows to array_agg()
-SELECT array_agg(l_orderkey) FROM lineitem WHERE l_quantity < 0;
- array_agg
+SELECT array_sort(array_agg(l_orderkey))
+    FROM lineitem WHERE l_orderkey < 0;
+ array_sort
 ---------------------------------------------------------------------
-
+ {}
 (1 row)
 

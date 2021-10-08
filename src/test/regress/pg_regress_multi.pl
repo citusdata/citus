@@ -443,10 +443,15 @@ push(@pgOptions, "wal_receiver_status_interval=1");
 # src/backend/replication/logical/launcher.c.
 push(@pgOptions, "wal_retrieve_retry_interval=1000");
 
-# disable compute_query_id so that we don't get Query Identifiers
-# in explain outputs
 if ($majorversion >= "14") {
+    # disable compute_query_id so that we don't get Query Identifiers
+    # in explain outputs
     push(@pgOptions, "compute_query_id=off");
+
+    # reduce test flappiness and different PG14 plans
+    if (!$vanillatest) {
+        push(@pgOptions, "enable_incremental_sort=off");
+    }
 }
 
 # Citus options set for the tests

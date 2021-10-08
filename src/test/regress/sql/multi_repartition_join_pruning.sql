@@ -41,7 +41,7 @@ FROM
 	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
-	o_orderkey < 0;
+	o_orderkey < 0 AND o_orderkey > 0;
 
 -- Single range-repartition join with a selection clause on the base table to
 -- test the case when all sql tasks are pruned away.
@@ -87,14 +87,14 @@ FROM
 	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey AND
-	l_orderkey < 0;
+	l_orderkey < 0 AND l_orderkey > 0;
 SELECT
 	count(*)
 FROM
 	lineitem, customer_append
 WHERE
 	l_partkey = c_nationkey AND
-	l_orderkey < 0;
+	l_orderkey < 0 AND l_orderkey > 0;
 
 -- Test cases with false in the WHERE clause
 EXPLAIN (COSTS OFF)

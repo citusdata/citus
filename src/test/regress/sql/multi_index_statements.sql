@@ -116,7 +116,6 @@ SET search_path TO multi_index_statements, public;
 
 -- Verify that we error out on unsupported statement types
 
-CREATE UNIQUE INDEX try_index ON public.lineitem (l_orderkey);
 CREATE INDEX try_index ON lineitem (l_orderkey) TABLESPACE newtablespace;
 
 CREATE UNIQUE INDEX try_unique_range_index ON index_test_range(b);

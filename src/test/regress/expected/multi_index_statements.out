@@ -182,8 +182,6 @@ SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
 \c - - - :master_port
 SET search_path TO multi_index_statements, public;
 -- Verify that we error out on unsupported statement types
-CREATE UNIQUE INDEX try_index ON public.lineitem (l_orderkey);
-ERROR:  creating unique indexes on append-partitioned tables is currently unsupported
 CREATE INDEX try_index ON lineitem (l_orderkey) TABLESPACE newtablespace;
 ERROR:  specifying tablespaces with CREATE INDEX statements is currently unsupported
 CREATE UNIQUE INDEX try_unique_range_index ON index_test_range(b);
@@ -306,8 +304,8 @@ SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
     indrelid     |           indexrelid
 ---------------------------------------------------------------------
- lineitem_290000 | lineitem_l_orderkey_idx_290000
- lineitem_290000 | lineitem_l_shipdate_idx_290000
+ lineitem_360000 | lineitem_l_orderkey_idx_360000
+ lineitem_360000 | lineitem_l_shipdate_idx_360000
 (2 rows)
 
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;

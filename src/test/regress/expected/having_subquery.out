@@ -48,13 +48,13 @@ HAVING (
                            ->  Task
                                  Node: host=localhost port=xxxxx dbname=regression
                                  ->  Aggregate
-                                       ->  Seq Scan on customer_360001 customer
+                                       ->  Seq Scan on customer_360005 customer
                Task Count: 2
                Tasks Shown: One of 2
                ->  Task
                      Node: host=localhost port=xxxxx dbname=regression
                      ->  HashAggregate
                            Group Key: orders.o_orderstatus
-                           ->  Seq Scan on orders_290002 orders
+                           ->  Seq Scan on orders_360002 orders
 (23 rows)
 

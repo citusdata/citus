@@ -6,11 +6,13 @@
 SET citus.next_shard_id TO 520000;
 SET citus.coordinator_aggregation_strategy TO 'disabled';
 
+SELECT run_command_on_master_and_workers($r$
 CREATE OR REPLACE FUNCTION array_sort (ANYARRAY)
 RETURNS ANYARRAY LANGUAGE SQL
 AS $$
 SELECT ARRAY(SELECT unnest($1) ORDER BY 1)
 $$;
+$r$);
 
 -- Check multi_cat_agg() aggregate which is used to implement array_agg()
 
@@ -61,9 +63,10 @@ SELECT l_quantity, array_sort(array_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE
 
 -- Check that we can execute array_agg() with an expression containing NULL values
 
-SELECT array_agg(case when l_quantity > 20 then l_quantity else NULL end)
-	FROM lineitem WHERE l_orderkey < 10;
+SELECT array_sort(array_agg(case when l_quantity > 20 then l_quantity else NULL end))
+    FROM lineitem WHERE l_orderkey  < 10;
 
 -- Check that we return NULL in case there are no input rows to array_agg()
 
-SELECT array_agg(l_orderkey) FROM lineitem WHERE l_quantity < 0;
+SELECT array_sort(array_agg(l_orderkey))
+    FROM lineitem WHERE l_orderkey < 0;
