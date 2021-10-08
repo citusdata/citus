@@ -162,8 +162,7 @@ GetExplicitTriggerIdList(Oid relationId)
 		 */
 		if (!triggerForm->tgisinternal)
 		{
-			Oid triggerId = get_relation_trigger_oid_compat(heapTuple);
-			triggerIdList = lappend_oid(triggerIdList, triggerId);
+			triggerIdList = lappend_oid(triggerIdList, triggerForm->oid);
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -173,26 +172,6 @@ GetExplicitTriggerIdList(Oid relationId)
 	table_close(pgTrigger, NoLock);
 
 	return triggerIdList;
-}
-
-
-/*
- * get_relation_trigger_oid_compat returns OID of the trigger represented
- * by the constraintForm, which is passed as an heapTuple. OID of the
- * trigger is already stored in the triggerForm struct if major PostgreSQL
- * version is 12. However, in the older versions, we should utilize
- * HeapTupleGetOid to deduce that OID with no cost.
- */
-Oid
-get_relation_trigger_oid_compat(HeapTuple heapTuple)
-{
-	Assert(HeapTupleIsValid(heapTuple));
-
-
-	Form_pg_trigger triggerForm = (Form_pg_trigger) GETSTRUCT(heapTuple);
-	Oid triggerOid = triggerForm->oid;
-
-	return triggerOid;
 }
 
 

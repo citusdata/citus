@@ -478,7 +478,6 @@ extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumComm
 extern List * GetExplicitTriggerCommandList(Oid relationId);
 extern HeapTuple GetTriggerTupleById(Oid triggerId, bool missingOk);
 extern List * GetExplicitTriggerIdList(Oid relationId);
-extern Oid get_relation_trigger_oid_compat(HeapTuple heapTuple);
 extern List * PostprocessCreateTriggerStmt(Node *node, const char *queryString);
 extern ObjectAddress CreateTriggerStmtObjectAddress(Node *node, bool missingOk);
 extern void CreateTriggerEventExtendNames(CreateTrigStmt *createTriggerStmt,
