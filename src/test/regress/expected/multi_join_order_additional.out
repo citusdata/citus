@@ -169,7 +169,7 @@ LOG:  join order: [ "orders" ][ dual partition join "customer_hash" ]
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders_hash, customer_append
 	WHERE c_custkey = o_custkey;
-LOG:  join order: [ "orders_hash" ][ single range partition join "customer_append" ]
+LOG:  join order: [ "orders_hash" ][ dual partition join "customer_append" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate

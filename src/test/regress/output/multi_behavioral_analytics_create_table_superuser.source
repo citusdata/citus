@@ -7,9 +7,9 @@ SELECT run_command_on_master_and_workers($f$
 	IMMUTABLE
 	RETURNS NULL ON NULL INPUT;
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -20,9 +20,9 @@ SELECT run_command_on_master_and_workers($f$
 	IMMUTABLE
 	RETURNS NULL ON NULL INPUT;
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -33,9 +33,9 @@ SELECT run_command_on_master_and_workers($f$
 	IMMUTABLE
 	RETURNS NULL ON NULL INPUT;
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -45,9 +45,9 @@ SELECT run_command_on_master_and_workers($f$
 	AS 'record_eq'
 	IMMUTABLE;
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -58,9 +58,9 @@ SELECT run_command_on_master_and_workers($f$
 	IMMUTABLE
 	RETURNS NULL ON NULL INPUT;
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -71,9 +71,9 @@ SELECT run_command_on_master_and_workers($f$
 	IMMUTABLE
 	RETURNS NULL ON NULL INPUT;
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -84,9 +84,9 @@ SELECT run_command_on_master_and_workers($f$
 	    PROCEDURE = gt_user_composite_type_function
 	);
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -97,9 +97,9 @@ SELECT run_command_on_master_and_workers($f$
 	    PROCEDURE = ge_user_composite_type_function
 	);
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 -- ... use that function to create a custom equality operator...
@@ -117,9 +117,9 @@ SELECT run_command_on_master_and_workers($f$
 		hashes
 	);
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -130,9 +130,9 @@ SELECT run_command_on_master_and_workers($f$
 	    PROCEDURE = le_user_composite_type_function
 	);
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -143,9 +143,9 @@ SELECT run_command_on_master_and_workers($f$
 	    PROCEDURE = lt_user_composite_type_function
 	);
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 -- ... and create a custom operator family for hash indexes...
@@ -153,9 +153,9 @@ SELECT run_command_on_master_and_workers($f$
 
 	CREATE OPERATOR FAMILY cats_2_op_fam USING hash;
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 -- We need to define two different operator classes for the composite types
@@ -172,9 +172,9 @@ SELECT run_command_on_master_and_workers($f$
 
 	FUNCTION 1 cmp_user_composite_type_function(user_composite_type, user_composite_type);
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT run_command_on_master_and_workers($f$
@@ -184,9 +184,9 @@ SELECT run_command_on_master_and_workers($f$
 	OPERATOR 1 = (user_composite_type, user_composite_type),
 	FUNCTION 1 test_composite_type_hash(user_composite_type);
 $f$);
- run_command_on_master_and_workers 
------------------------------------
- 
+ run_command_on_master_and_workers
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE events (
@@ -195,10 +195,10 @@ CREATE TABLE events (
 	event_type character varying(255),
 	event_time bigint
 );
-SELECT master_create_distributed_table('events', 'composite_id', 'range');
- master_create_distributed_table 
----------------------------------
- 
+SELECT create_distributed_table('events', 'composite_id', 'range');
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT master_create_empty_shard('events') AS new_shard_id
@@ -222,12 +222,15 @@ CREATE TABLE users (
 	composite_id user_composite_type,
 	lastseen bigint
 );
-SELECT master_create_distributed_table('users', 'composite_id', 'range');
- master_create_distributed_table 
----------------------------------
- 
+SELECT create_distributed_table('users', 'composite_id', 'range');
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
+-- we will guarantee co-locatedness for these tables
+UPDATE pg_dist_partition SET colocationid = 20001
+WHERE logicalrelid = 'events'::regclass OR logicalrelid = 'users'::regclass;
 SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
 UPDATE pg_dist_shard SET shardminvalue = '(1,1)', shardmaxvalue = '(1,2000000000)'
@@ -264,10 +267,10 @@ CREATE TABLE lineitem_subquery (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-SELECT master_create_distributed_table('lineitem_subquery', 'l_orderkey', 'range');
- master_create_distributed_table 
----------------------------------
- 
+SELECT create_distributed_table('lineitem_subquery', 'l_orderkey', 'range');
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE orders_subquery (
@@ -281,12 +284,15 @@ CREATE TABLE orders_subquery (
 	o_shippriority integer not null,
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
-SELECT master_create_distributed_table('orders_subquery', 'o_orderkey', 'range');
- master_create_distributed_table 
----------------------------------
- 
+SELECT create_distributed_table('orders_subquery', 'o_orderkey', 'range');
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
+-- we will guarantee co-locatedness for these tabes
+UPDATE pg_dist_partition SET colocationid = 20002
+WHERE logicalrelid = 'orders_subquery'::regclass OR logicalrelid = 'lineitem_subquery'::regclass;
 SET citus.enable_router_execution TO 'false';
 -- Check that we don't crash if there are not any shards.
 SELECT
@@ -302,9 +308,9 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
- avg 
------
-    
+ avg
+---------------------------------------------------------------------
+
 (1 row)
 
 -- Load data into tables.

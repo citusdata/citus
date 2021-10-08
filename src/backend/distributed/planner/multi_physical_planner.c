@@ -171,10 +171,6 @@ static Task * QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 									  TaskType taskType,
 									  bool modifyRequiresCoordinatorEvaluation,
 									  DeferredErrorMessage **planningError);
-static bool ShardIntervalsEqual(FmgrInfo *comparisonFunction,
-								Oid collation,
-								ShardInterval *firstInterval,
-								ShardInterval *secondInterval);
 static List * SqlTaskList(Job *job);
 static bool DependsOnHashPartitionJob(Job *job);
 static uint32 AnchorRangeTableId(List *rangeTableList);
@@ -228,8 +224,6 @@ static List * MergeTaskList(MapMergeJob *mapMergeJob, List *mapTaskList,
 							uint32 taskIdIndex);
 static StringInfo ColumnNameArrayString(uint32 columnCount, uint64 generatingJobId);
 static StringInfo ColumnTypeArrayString(List *targetEntryList);
-static bool CoPlacedShardIntervals(ShardInterval *firstInterval,
-								   ShardInterval *secondInterval);
 
 static List * FetchEqualityAttrNumsForRTEOpExpr(OpExpr *opExpr);
 static List * FetchEqualityAttrNumsForRTEBoolExpr(BoolExpr *boolExpr);
@@ -2648,12 +2642,7 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 
 
 /*
- * CoPartitionedTables checks if given two distributed tables have 1-to-1 shard
- * placement matching. It first checks for the shard count, if tables don't have
- * same amount shard then it returns false. Note that, if any table does not
- * have any shard, it returns true. If two tables have same amount of shards,
- * we check colocationIds for hash distributed tables and shardInterval's min
- * max values for append and range distributed tables.
+ * CoPartitionedTables checks if given two distributed tables are co-located.
  */
 bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
@@ -2666,38 +2655,6 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	CitusTableCacheEntry *firstTableCache = GetCitusTableCacheEntry(firstRelationId);
 	CitusTableCacheEntry *secondTableCache = GetCitusTableCacheEntry(secondRelationId);
 
-	ShardInterval **sortedFirstIntervalArray = firstTableCache->sortedShardIntervalArray;
-	ShardInterval **sortedSecondIntervalArray =
-		secondTableCache->sortedShardIntervalArray;
-	uint32 firstListShardCount = firstTableCache->shardIntervalArrayLength;
-	uint32 secondListShardCount = secondTableCache->shardIntervalArrayLength;
-	FmgrInfo *comparisonFunction = firstTableCache->shardIntervalCompareFunction;
-
-	/* reference tables are always & only copartitioned with reference tables */
-	if (IsCitusTableTypeCacheEntry(firstTableCache, CITUS_TABLE_WITH_NO_DIST_KEY) &&
-		IsCitusTableTypeCacheEntry(secondTableCache, CITUS_TABLE_WITH_NO_DIST_KEY))
-	{
-		return true;
-	}
-	else if (IsCitusTableTypeCacheEntry(firstTableCache, CITUS_TABLE_WITH_NO_DIST_KEY) ||
-			 IsCitusTableTypeCacheEntry(secondTableCache, CITUS_TABLE_WITH_NO_DIST_KEY))
-	{
-		return false;
-	}
-
-	if (firstListShardCount != secondListShardCount)
-	{
-		return false;
-	}
-
-	/* if there are not any shards just return true */
-	if (firstListShardCount == 0)
-	{
-		return true;
-	}
-
-	Assert(comparisonFunction != NULL);
-
 	/*
 	 * Check if the tables have the same colocation ID - if so, we know
 	 * they're colocated.
@@ -2708,130 +2665,7 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 		return true;
 	}
 
-	/*
-	 * For hash distributed tables two tables are accepted as colocated only if
-	 * they have the same colocationId. Otherwise they may have same minimum and
-	 * maximum values for each shard interval, yet hash function may result with
-	 * different values for the same value. int vs bigint can be given as an
-	 * example.
-	 */
-	if (IsCitusTableTypeCacheEntry(firstTableCache, HASH_DISTRIBUTED) ||
-		IsCitusTableTypeCacheEntry(secondTableCache, HASH_DISTRIBUTED))
-	{
-		return false;
-	}
-
-
-	/*
-	 * Don't compare unequal types
-	 */
-	Oid collation = firstTableCache->partitionColumn->varcollid;
-	if (firstTableCache->partitionColumn->vartype !=
-		secondTableCache->partitionColumn->vartype ||
-		collation != secondTableCache->partitionColumn->varcollid)
-	{
-		return false;
-	}
-
-
-	/*
-	 * If not known to be colocated check if the remaining shards are
-	 * anyway. Do so by comparing the shard interval arrays that are sorted on
-	 * interval minimum values. Then it compares every shard interval in order
-	 * and if any pair of shard intervals are not equal or they are not located
-	 * in the same node it returns false.
-	 */
-	for (uint32 intervalIndex = 0; intervalIndex < firstListShardCount; intervalIndex++)
-	{
-		ShardInterval *firstInterval = sortedFirstIntervalArray[intervalIndex];
-		ShardInterval *secondInterval = sortedSecondIntervalArray[intervalIndex];
-
-		bool shardIntervalsEqual = ShardIntervalsEqual(comparisonFunction,
-													   collation,
-													   firstInterval,
-													   secondInterval);
-		if (!shardIntervalsEqual || !CoPlacedShardIntervals(firstInterval,
-															secondInterval))
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
-
-/*
- * CoPlacedShardIntervals checks whether the given intervals located in the same nodes.
- */
-static bool
-CoPlacedShardIntervals(ShardInterval *firstInterval, ShardInterval *secondInterval)
-{
-	List *firstShardPlacementList = ShardPlacementListWithoutOrphanedPlacements(
-		firstInterval->shardId);
-	List *secondShardPlacementList = ShardPlacementListWithoutOrphanedPlacements(
-		secondInterval->shardId);
-	ListCell *firstShardPlacementCell = NULL;
-	ListCell *secondShardPlacementCell = NULL;
-
-	/* Shards must have same number of placements */
-	if (list_length(firstShardPlacementList) != list_length(secondShardPlacementList))
-	{
-		return false;
-	}
-
-	firstShardPlacementList = SortList(firstShardPlacementList, CompareShardPlacements);
-	secondShardPlacementList = SortList(secondShardPlacementList, CompareShardPlacements);
-
-	forboth(firstShardPlacementCell, firstShardPlacementList, secondShardPlacementCell,
-			secondShardPlacementList)
-	{
-		ShardPlacement *firstShardPlacement = (ShardPlacement *) lfirst(
-			firstShardPlacementCell);
-		ShardPlacement *secondShardPlacement = (ShardPlacement *) lfirst(
-			secondShardPlacementCell);
-
-		if (firstShardPlacement->nodeId != secondShardPlacement->nodeId)
-		{
-			return false;
-		}
-	}
-
-	return true;
-}
-
-
-/*
- * ShardIntervalsEqual checks if given shard intervals have equal min/max values.
- */
-static bool
-ShardIntervalsEqual(FmgrInfo *comparisonFunction, Oid collation,
-					ShardInterval *firstInterval, ShardInterval *secondInterval)
-{
-	bool shardIntervalsEqual = false;
-
-	Datum firstMin = firstInterval->minValue;
-	Datum firstMax = firstInterval->maxValue;
-	Datum secondMin = secondInterval->minValue;
-	Datum secondMax = secondInterval->maxValue;
-
-	if (firstInterval->minValueExists && firstInterval->maxValueExists &&
-		secondInterval->minValueExists && secondInterval->maxValueExists)
-	{
-		Datum minDatum = FunctionCall2Coll(comparisonFunction, collation, firstMin,
-										   secondMin);
-		Datum maxDatum = FunctionCall2Coll(comparisonFunction, collation, firstMax,
-										   secondMax);
-		int firstComparison = DatumGetInt32(minDatum);
-		int secondComparison = DatumGetInt32(maxDatum);
-
-		if (firstComparison == 0 && secondComparison == 0)
-		{
-			shardIntervalsEqual = true;
-		}
-	}
-
-	return shardIntervalsEqual;
+	return false;
 }
 
 
