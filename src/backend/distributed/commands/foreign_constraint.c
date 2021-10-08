@@ -76,7 +76,6 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  int *referencedAttrIndex);
 static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 										int searchForeignKeyColumnFlags);
-static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 static List * GetForeignKeysWithLocalTables(Oid relationId);
 static bool IsTableTypeIncluded(Oid relationId, int flags);
 static void UpdateConstraintIsValid(Oid constraintId, bool isValid);
@@ -600,9 +599,8 @@ GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 		if (HeapTupleOfForeignConstraintIncludesColumn(heapTuple, relationId,
 													   pgConstraintKey, columnName))
 		{
-			Oid foreignKeyOid = get_relation_constraint_oid_compat(heapTuple);
 			foreignKeyIdsColumnAppeared = lappend_oid(foreignKeyIdsColumnAppeared,
-													  foreignKeyOid);
+													  constraintForm->oid);
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -698,26 +696,6 @@ GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 	PopOverrideSearchPath();
 
 	return foreignKeyCommands;
-}
-
-
-/*
- * get_relation_constraint_oid_compat returns OID of the constraint represented
- * by the constraintForm, which is passed as an heapTuple. OID of the contraint
- * is already stored in the constraintForm struct if major PostgreSQL version is
- * 12. However, in the older versions, we should utilize HeapTupleGetOid to deduce
- * that OID with no cost.
- */
-static Oid
-get_relation_constraint_oid_compat(HeapTuple heapTuple)
-{
-	Assert(heapTuple != NULL);
-
-
-	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-	Oid constraintOid = constraintForm->oid;
-
-	return constraintOid;
 }
 
 
@@ -1050,7 +1028,7 @@ GetForeignKeyOids(Oid relationId, int flags)
 			continue;
 		}
 
-		Oid constraintId = get_relation_constraint_oid_compat(heapTuple);
+		Oid constraintId = constraintForm->oid;
 
 		bool isSelfReference = (constraintForm->conrelid == constraintForm->confrelid);
 		if (excludeSelfReference && isSelfReference)
