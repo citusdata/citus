@@ -1029,12 +1029,6 @@ HINT:  Connect to worker nodes directly to manually move all tables.
 DROP TABLESPACE super_fast_ssd;
 -- Cleanup the table and its shards
 SET citus.enable_ddl_propagation to true;
-SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
- master_apply_delete_command 
------------------------------
-                           3
-(1 row)
-
 DROP TABLE lineitem_alter;
 -- check that nothing's left over on workers, other than the leftover shard created
 -- during the unsuccessful COPY

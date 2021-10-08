@@ -14,7 +14,7 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
   AND deptype = 'e'
   AND e.extname='citus'
 ORDER BY 1;
-                                               description
+                                                   description
 ---------------------------------------------------------------------
  access method columnar
  event trigger citus_cascade_to_partition
@@ -147,7 +147,6 @@ ORDER BY 1;
  function master_add_node(text,integer,integer,noderole,name)
  function master_add_secondary_node(text,integer,text,integer,name)
  function master_append_table_to_shard(bigint,text,text,integer)
- function master_apply_delete_command(text)
  function master_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
  function master_create_empty_shard(text)
  function master_disable_node(text,integer)
@@ -204,7 +203,7 @@ ORDER BY 1;
  function worker_drop_distributed_table(text)
  function worker_fetch_foreign_file(text,text,bigint,text[],integer[])
  function worker_fetch_partition_file(bigint,integer,integer,integer,text,integer)
- function worker_fix_partition_shard_index_names(regclass, text, text)
+ function worker_fix_partition_shard_index_names(regclass,text,text)
  function worker_fix_pre_citus10_partitioned_table_constraint_names(regclass,bigint,text)
  function worker_hash("any")
  function worker_hash_partition_table(bigint,integer,text,text,oid,anyarray)
@@ -261,5 +260,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(245 rows)
+(244 rows)
 

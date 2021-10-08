@@ -65,7 +65,6 @@ FROM
 WHERE	'multi_append_table_to_shard_right_reference_hash'::regclass::oid = logicalrelid;
 
 -- Clean up after test
-SELECT master_apply_delete_command('DELETE FROM multi_append_table_to_shard_left');
 DROP TABLE multi_append_table_to_shard_stage;
 DROP TABLE multi_append_table_to_shard_right_reference;
 DROP TABLE multi_append_table_to_shard_left;

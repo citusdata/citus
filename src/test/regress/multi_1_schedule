@@ -130,7 +130,6 @@ test: with_executors with_join with_partitioning with_transactions with_dml
 # Tests to check our large record loading and shard deletion behavior
 # ----------
 test: multi_load_large_records
-test: multi_master_delete_protocol
 
 # ----------
 # Tests around DDL statements run on distributed tables

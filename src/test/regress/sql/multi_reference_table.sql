@@ -895,9 +895,6 @@ ALTER TABLE reference_schema.reference_table_ddl_test RENAME TO reference_table_
 
 -- now test reference tables against some helper UDFs that Citus provides
 
--- cannot delete / drop shards from a reference table
-SELECT master_apply_delete_command('DELETE FROM reference_schema.reference_table_ddl');
-
 -- cannot add shards
 SELECT master_create_empty_shard('reference_schema.reference_table_ddl');
 

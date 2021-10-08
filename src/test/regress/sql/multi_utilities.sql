@@ -43,11 +43,8 @@ EXECUTE sharded_query;
 EXECUTE sharded_delete;
 EXECUTE sharded_query;
 
--- try to drop shards with where clause
-SELECT master_apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
-
 -- drop all shards
-SELECT master_apply_delete_command('DELETE FROM sharded_table');
+SELECT citus_drop_all_shards('sharded_table','','');
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 999001;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1400000;

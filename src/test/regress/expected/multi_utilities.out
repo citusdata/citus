@@ -59,16 +59,13 @@ EXECUTE sharded_query;
 ---------------------------------------------------------------------
 (0 rows)
 
--- try to drop shards with where clause
-SELECT master_apply_delete_command('DELETE FROM sharded_table WHERE id > 0');
-ERROR:  cannot delete from hash distributed table with this command
-DETAIL:  Delete statements on hash-partitioned tables are not supported with master_apply_delete_command.
-HINT:  Use the DELETE command instead.
 -- drop all shards
-SELECT master_apply_delete_command('DELETE FROM sharded_table');
-ERROR:  cannot delete from hash distributed table with this command
-DETAIL:  Delete statements on hash-partitioned tables are not supported with master_apply_delete_command.
-HINT:  Use the DELETE command instead.
+SELECT citus_drop_all_shards('sharded_table','','');
+ citus_drop_all_shards
+---------------------------------------------------------------------
+                     2
+(1 row)
+
 SET citus.shard_count TO 4;
 SET citus.next_shard_id TO 999001;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1400000;
