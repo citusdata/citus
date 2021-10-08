@@ -185,26 +185,26 @@ SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as t
 (3 rows)
 
 SELECT
-	l_orderkey,
+	l_partkey,
 	count(l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
 	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
 	count(DISTINCT CASE WHEN l_shipmode = 'AIR' THEN l_partkey ELSE NULL END)
 	FROM lineitem
-	GROUP BY l_orderkey
+	GROUP BY l_partkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
- l_orderkey | count | count | count
+ l_partkey | count | count | count
 ---------------------------------------------------------------------
-      12005 |     4 |     4 |     4
-       5409 |     4 |     4 |     4
-       4964 |     4 |     4 |     4
-      14848 |     3 |     3 |     3
-      14496 |     3 |     3 |     3
-      13473 |     3 |     3 |     3
-      13122 |     3 |     3 |     3
-      12929 |     3 |     3 |     3
-      12645 |     3 |     3 |     3
-      12417 |     3 |     3 |     3
+    147722 |     2 |     1 |     1
+     87191 |     2 |     1 |     1
+     78600 |     2 |     1 |     1
+      1927 |     2 |     1 |     1
+    199943 |     1 |     1 |     1
+    199929 |     1 |     1 |     1
+    199810 |     1 |     1 |     1
+    199792 |     1 |     1 |     1
+    199716 |     1 |     1 |     1
+    199699 |     1 |     1 |     1
 (10 rows)
 
 -- Check that we can revert config and disable count(distinct) approximations

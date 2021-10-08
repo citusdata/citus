@@ -121,12 +121,12 @@ SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as t
 	LIMIT 10;
 
 SELECT
-	l_orderkey,
+	l_partkey,
 	count(l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
 	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
 	count(DISTINCT CASE WHEN l_shipmode = 'AIR' THEN l_partkey ELSE NULL END)
 	FROM lineitem
-	GROUP BY l_orderkey
+	GROUP BY l_partkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 

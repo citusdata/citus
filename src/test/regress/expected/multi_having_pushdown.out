@@ -47,23 +47,24 @@ EXPLAIN (COSTS FALSE)
     FROM lineitem
     GROUP BY l_orderkey HAVING sum(l_quantity) > 24
     ORDER BY 2 DESC, 1 ASC LIMIT 3;
-                                 QUERY PLAN
+                                            QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
-         Sort Key: (sum(remote_scan.revenue)) DESC, remote_scan.l_orderkey
-         ->  HashAggregate
-               Group Key: remote_scan.l_orderkey
-               Filter: (sum(remote_scan.worker_column_3) > '24'::numeric)
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 2
-                     Tasks Shown: One of 2
-                     ->  Task
-                           Node: host=localhost port=xxxxx dbname=regression
-                           ->  HashAggregate
-                                 Group Key: l_orderkey
-                                 ->  Seq Scan on lineitem_290000 lineitem
-(14 rows)
+         Sort Key: remote_scan.revenue DESC, remote_scan.l_orderkey
+         ->  Custom Scan (Citus Adaptive)
+               Task Count: 2
+               Tasks Shown: One of 2
+               ->  Task
+                     Node: host=localhost port=xxxxx dbname=regression
+                     ->  Limit
+                           ->  Sort
+                                 Sort Key: (sum((l_extendedprice * l_discount))) DESC, l_orderkey
+                                 ->  HashAggregate
+                                       Group Key: l_orderkey
+                                       Filter: (sum(l_quantity) > '24'::numeric)
+                                       ->  Seq Scan on lineitem_360000 lineitem
+(15 rows)
 
 -- and don't push down when not grouped by partition column
 EXPLAIN (COSTS FALSE)

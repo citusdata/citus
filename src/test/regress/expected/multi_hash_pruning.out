@@ -368,13 +368,15 @@ DEBUG:  assigned task to node localhost:xxxxx
  12000
 (1 row)
 
--- Check whether we support range queries with append distributed table
+-- Check whether we support range queries
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey >= 1 AND l_orderkey <= 3;
-DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  constraint (lteq) value: '3'::bigint
-DEBUG:  constraint (gteq) value: '1'::bigint
-DEBUG:  shard count after pruning for lineitem: 1
+DEBUG:  no sharding pruning constraints on lineitem found
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no sharding pruning constraints on lineitem found
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
 ---------------------------------------------------------------------
@@ -383,24 +385,31 @@ DEBUG:  assigned task to node localhost:xxxxx
 
 SELECT count(*) FROM lineitem
 	WHERE (l_orderkey >= 1 AND l_orderkey <= 3) AND (l_quantity > 11 AND l_quantity < 22);
-DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  constraint (lteq) value: '3'::bigint
-DEBUG:  constraint (gteq) value: '1'::bigint
-DEBUG:  shard count after pruning for lineitem: 1
+DEBUG:  no sharding pruning constraints on lineitem found
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no sharding pruning constraints on lineitem found
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
 ---------------------------------------------------------------------
      1
 (1 row)
 
--- Check whether we support IN/ANY in subquery with append and range distributed table
+-- Check whether we support IN/ANY in subquery
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey = ANY ('{1,2,3}');
-DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  constraint value: '1'::bigint
 DEBUG:  constraint value: '2'::bigint
 DEBUG:  constraint value: '3'::bigint
-DEBUG:  shard count after pruning for lineitem: 1
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  constraint value: '1'::bigint
+DEBUG:  constraint value: '2'::bigint
+DEBUG:  constraint value: '3'::bigint
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
 ---------------------------------------------------------------------
@@ -409,11 +418,16 @@ DEBUG:  assigned task to node localhost:xxxxx
 
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey IN (1,2,3);
-DEBUG:  Router planner does not support append-partitioned tables.
 DEBUG:  constraint value: '1'::bigint
 DEBUG:  constraint value: '2'::bigint
 DEBUG:  constraint value: '3'::bigint
-DEBUG:  shard count after pruning for lineitem: 1
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  constraint value: '1'::bigint
+DEBUG:  constraint value: '2'::bigint
+DEBUG:  constraint value: '3'::bigint
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
  count
 ---------------------------------------------------------------------
@@ -422,7 +436,9 @@ DEBUG:  assigned task to node localhost:xxxxx
 
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey = ANY(NULL) OR TRUE;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no sharding pruning constraints on lineitem found
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  no sharding pruning constraints on lineitem found
 DEBUG:  shard count after pruning for lineitem: 2
 DEBUG:  assigned task to node localhost:xxxxx

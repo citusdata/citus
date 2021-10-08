@@ -6,6 +6,7 @@
 SET citus.next_shard_id TO 520000;
 SET citus.coordinator_aggregation_strategy TO 'disabled';
 
+SELECT run_command_on_master_and_workers($r$
 CREATE OR REPLACE FUNCTION array_sort (json)
 RETURNS json LANGUAGE SQL
 AS $$
@@ -13,6 +14,7 @@ SELECT json_agg(value) FROM (
 	SELECT value FROM json_array_elements($1) ORDER BY value::jsonb
 ) t
 $$;
+$r$);
 
 -- Check multi_cat_agg() aggregate which is used to implement json_agg()
 
@@ -64,24 +66,24 @@ SELECT l_quantity, array_sort(json_agg(l_orderkey * 2 + 1)) FROM lineitem WHERE 
 
 -- Check that we can execute json_agg() with an expression containing NULL values
 
-SELECT json_agg(case when l_quantity > 20 then l_quantity else NULL end)
+SELECT array_sort(json_agg(case when l_quantity > 20 then l_quantity else NULL end))
 	FROM lineitem WHERE l_orderkey < 5;
 
 -- Check that we can execute json_agg() with an expression containing different types
 
-SELECT json_agg(case when l_quantity > 20 then to_json(l_quantity) else '"f"'::json end)
+SELECT array_sort(json_agg(case when l_quantity > 20 then to_json(l_quantity) else '"f"'::json end))
 	FROM lineitem WHERE l_orderkey < 5;
 
 -- Check that we can execute json_agg() with an expression containing json arrays
 
-SELECT json_agg(json_build_array(l_quantity, l_shipdate))
+SELECT array_sort(json_agg(json_build_array(l_quantity, l_shipdate)))
 	FROM lineitem WHERE l_orderkey < 3;
 
 -- Check that we can execute json_agg() with an expression containing arrays
 
-SELECT json_agg(ARRAY[l_quantity, l_orderkey])
+SELECT array_sort(json_agg(ARRAY[l_quantity, l_orderkey]))
 	FROM lineitem WHERE l_orderkey < 3;
 
 -- Check that we return NULL in case there are no input rows to json_agg()
 
-SELECT json_agg(l_orderkey) FROM lineitem WHERE l_quantity < 0;
+SELECT array_sort(json_agg(l_orderkey)) FROM lineitem WHERE l_quantity < 0;

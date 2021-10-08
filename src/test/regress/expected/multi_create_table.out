@@ -4,7 +4,7 @@
 -- Create new table definitions for use in testing in distributed planning and
 -- execution functionality. Also create indexes to boost performance. Since we
 -- need to cover both reference join and partitioned join, we have created
--- reference and append distributed version of orders, customer and part tables.
+-- reference and hash-distributed version of orders, customer and part tables.
 SET citus.next_shard_id TO 360000;
 -- this function is dropped in Citus10, added here for tests
 CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
@@ -41,10 +41,7 @@ CREATE TABLE lineitem (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-SELECT create_distributed_table('lineitem', 'l_orderkey', 'append');
-WARNING:  table "lineitem" has a UNIQUE or EXCLUDE constraint
-DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
-HINT:  Consider using hash partitioning.
+SELECT create_distributed_table('lineitem', 'l_orderkey', 'hash', shard_count := 2);
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -62,10 +59,7 @@ CREATE TABLE orders (
 	o_shippriority integer not null,
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
-SELECT create_distributed_table('orders', 'o_orderkey', 'append');
-WARNING:  table "orders" has a UNIQUE or EXCLUDE constraint
-DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
-HINT:  Consider using hash partitioning.
+SELECT create_distributed_table('orders', 'o_orderkey', 'hash', colocate_with := 'lineitem');
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -189,14 +183,14 @@ CREATE TABLE supplier_single_shard
   	s_acctbal decimal(15,2) not null,
   	s_comment varchar(101) not null
 );
-SELECT create_distributed_table('supplier_single_shard', 's_suppkey', 'append');
+SELECT create_distributed_table('supplier_single_shard', 's_suppkey', 'hash', shard_count := 1);
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 CREATE TABLE mx_table_test (col1 int, col2 text);
-SET citus.next_shard_id TO 360009;
+SET citus.next_shard_id TO 360013;
 -- Test initial data loading
 CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
 INSERT INTO data_load_test VALUES (132, 'hello');

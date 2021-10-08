@@ -39,7 +39,7 @@ DEBUG:  push down of limit count: 600
     153937 | 2761321906
     199283 | 2726988572
     185925 | 2672114100
-    196629 | 2622637602
+    157064 | 2614644408
     149926 | 2606013732
 (10 rows)
 
@@ -82,9 +82,9 @@ DEBUG:  push down of limit count: 150
        685 | Customer#000000685 |             37
        472 | Customer#000000472 |             36
        643 | Customer#000000643 |             34
-       226 | Customer#000000226 |             33
-       496 | Customer#000000496 |             32
        304 | Customer#000000304 |             31
+       556 | Customer#000000556 |             31
+       613 | Customer#000000613 |             31
 (10 rows)
 
 -- We now test scenarios where applying the limit optimization wouldn't produce

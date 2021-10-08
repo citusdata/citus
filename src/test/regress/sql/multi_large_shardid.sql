@@ -9,11 +9,8 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 100200300400500;
 
-
--- Load additional data to start using large shard identifiers.
-
-\copy lineitem FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-\copy lineitem FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
+CREATE TABLE lineitem_large_shard_id AS SELECT * FROM lineitem;
+SELECT create_distributed_table('lineitem_large_shard_id', 'l_orderkey');
 
 -- Query #1 from the TPC-H decision support benchmark.
 
@@ -29,7 +26,7 @@ SELECT
 	avg(l_discount) as avg_disc,
 	count(*) as count_order
 FROM
-	lineitem
+	lineitem_large_shard_id
 WHERE
 	l_shipdate <= date '1998-12-01' - interval '90 days'
 GROUP BY
@@ -44,7 +41,7 @@ ORDER BY
 SELECT
 	sum(l_extendedprice * l_discount) as revenue
 FROM
-	lineitem
+	lineitem_large_shard_id
 WHERE
 	l_shipdate >= date '1994-01-01'
 	and l_shipdate < date '1994-01-01' + interval '1 year'

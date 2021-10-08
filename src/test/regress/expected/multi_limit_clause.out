@@ -257,6 +257,7 @@ SELECT l_orderkey, max(l_shipdate)
 	FROM lineitem
 	GROUP BY l_orderkey
 	ORDER BY 2 DESC, 1 LIMIT 5;
+DEBUG:  push down of limit count: 5
  l_orderkey |    max
 ---------------------------------------------------------------------
        4678 | 11-27-1998

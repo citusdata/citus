@@ -73,10 +73,10 @@ SET client_min_messages TO DEBUG2;
 EXPLAIN (COSTS OFF)
 SELECT l1.l_quantity FROM lineitem l1, lineitem l2
 	WHERE l1.l_orderkey = l2.l_orderkey AND l1.l_quantity > 5;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "lineitem" ][ local partition join "lineitem" ]
-DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
-DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
+DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
+DEBUG:  join prunable for intervals [0,2147483647] and [-2147483648,-1]
                           QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -106,7 +106,7 @@ ERROR:  complex joins are only supported when all distributed tables are joined 
 EXPLAIN (COSTS OFF)
 SELECT count(*) FROM orders, lineitem_hash
 	WHERE o_orderkey = l_orderkey;
-LOG:  join order: [ "orders" ][ single range partition join "lineitem_hash" ]
+LOG:  join order: [ "orders" ][ dual partition join "lineitem_hash" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate

@@ -32,12 +32,6 @@ where logicalrelid='lineitem'::regclass or
 	  logicalrelid='orders'::regclass
 order by shardid;
 
-set citus.explain_distributed_queries to on;
--- explain the query before actually executing it
-EXPLAIN SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
-	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
-set citus.explain_distributed_queries to off;
-
 set client_min_messages to debug3;
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
