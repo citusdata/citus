@@ -112,7 +112,9 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 DROP INDEX short;
 DROP TABLE yet_another_partition_table, another_partition_table_with_very_long_name;
 -- this will create constraint1 index on parent
+SET citus.max_adaptive_executor_pool_size TO 1;
 ALTER TABLE dist_partitioned_table ADD CONSTRAINT constraint1 UNIQUE (dist_col, partition_col);
+RESET citus.max_adaptive_executor_pool_size;
 CREATE TABLE fk_table (id int, fk_column timestamp, FOREIGN KEY (id, fk_column) REFERENCES dist_partitioned_table (dist_col, partition_col));
 
 -- try creating index to foreign key
