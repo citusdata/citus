@@ -98,7 +98,7 @@ WITH
 	all_shardids AS (SELECT * FROM sensors_shardid UNION SELECT * FROM sensors_2000_shardid UNION
 					 SELECT * FROM sensors_2001_shardid UNION SELECT * FROM sensors_2002_shardid
 					 UNION SELECT * FROM sensors_2003_shardid UNION SELECT * FROM sensors_2004_shardid)
-SELECT logicalrelid, shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid IN (SELECT * FROM all_shardids);
+SELECT logicalrelid, shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid IN (SELECT * FROM all_shardids) ORDER BY 1,2,3,4;
 
 VACUUM ANALYZE sensors, sensors_2000, sensors_2001, sensors_2002, sensors_2003;
 
