@@ -2005,7 +2005,7 @@ WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%
 \c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SET search_path = partitioning_schema;
-SELECT citus_add_node('localhost', :master_port, groupid=>0);
+SELECT 1 from citus_add_node('localhost', :master_port, groupid=>0);
 -- test attaching citus local table to distributed table
 -- citus local table should be distributed
 CREATE TABLE dist_table_parent (a INT UNIQUE) PARTITION BY RANGE(a);
@@ -2023,7 +2023,9 @@ select citus_add_local_table_to_metadata('citus_local_parent', false);
 -- this should error out
 alter table citus_local_parent attach partition dist_table_child default ;
 
+SET client_min_messages TO ERROR;
 DROP SCHEMA partitioning_schema CASCADE;
+SET client_min_messages to notice;
 SELECT citus_remove_node('localhost', :master_port);
 RESET search_path;
 DROP TABLE IF EXISTS

@@ -4326,7 +4326,7 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 (1 row)
 
 SET search_path = partitioning_schema;
-SELECT citus_add_node('localhost', :master_port, groupid=>0);
+SELECT 1 from citus_add_node('localhost', :master_port, groupid=>0);
 NOTICE:  Replicating reference table "orders_reference" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "customer" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "nation" to the node localhost:xxxxx
@@ -4335,9 +4335,9 @@ NOTICE:  Replicating reference table "supplier" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "users_ref_test_table" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "events_reference_table" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "users_reference_table" to the node localhost:xxxxx
- citus_add_node
+ ?column?
 ---------------------------------------------------------------------
-             33
+        1
 (1 row)
 
 -- test attaching citus local table to distributed table
@@ -4382,18 +4382,9 @@ select citus_add_local_table_to_metadata('citus_local_parent', false);
 -- this should error out
 alter table citus_local_parent attach partition dist_table_child default ;
 ERROR:  non-distributed partitioned tables cannot have distributed partitions
+SET client_min_messages TO ERROR;
 DROP SCHEMA partitioning_schema CASCADE;
-NOTICE:  drop cascades to 10 other objects
-DETAIL:  drop cascades to table "schema-test"
-drop cascades to table another_distributed_table
-drop cascades to table distributed_parent_table
-drop cascades to table date_partitioned_citus_local_table
-drop cascades to table date_partitioned_citus_local_table_2
-drop cascades to table part_table_with_very_long_name
-drop cascades to table dist_table_parent
-drop cascades to table dist_table_child
-drop cascades to table citus_local_parent_361577
-drop cascades to table citus_local_parent
+SET client_min_messages to notice;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------
