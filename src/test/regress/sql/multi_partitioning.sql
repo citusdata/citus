@@ -2004,8 +2004,27 @@ WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%
 
 \c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SET search_path = partitioning_schema;
+SELECT citus_add_node('localhost', :master_port, groupid=>0);
+-- test attaching citus local table to distributed table
+-- citus local table should be distributed
+CREATE TABLE dist_table_parent (a INT UNIQUE) PARTITION BY RANGE(a);
+SELECT create_distributed_table('dist_table_parent','a');
+CREATE TABLE citus_local_child (a int unique);
+select citus_add_local_table_to_metadata('citus_local_child', false);
+alter table dist_table_parent attach partition  citus_local_child default ;
+select * from pg_dist_partition where logicalrelid::text in ('dist_table_parent', 'citus_local_child');
+
+-- test attaching distributed table to citus local table
+CREATE TABLE dist_table_child (a INT UNIQUE);
+SELECT create_distributed_table('dist_table_child','a');
+CREATE TABLE citus_local_parent (a INT UNIQUE) PARTITION BY RANGE(a);
+select citus_add_local_table_to_metadata('citus_local_parent', false);
+-- this should error out
+alter table citus_local_parent attach partition dist_table_child default ;
 
 DROP SCHEMA partitioning_schema CASCADE;
+SELECT citus_remove_node('localhost', :master_port);
 RESET search_path;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,

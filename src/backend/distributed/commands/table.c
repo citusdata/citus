@@ -525,7 +525,7 @@ PreprocessAttachCitusPartitionToCitusTable(Oid relationId, Oid partitionRelation
 			 IsCitusTableType(relationId, DISTRIBUTED_TABLE))
 	{
 		/* if the parent is a distributed table, distribute the partition too */
-		PreprocessAttachCitusPartitionToCitusTable(relationId, partitionRelationId);
+		DistributePartitionUsingParent(relationId, partitionRelationId);
 	}
 }
 
