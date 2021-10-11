@@ -296,7 +296,7 @@ ERROR:  distributing multi-level partitioned tables is not supported
 BEGIN;
     CREATE TABLE partitioned_mx_4(a INT UNIQUE) PARTITION BY RANGE (a);
     alter table partitioned_mx attach partition partitioned_mx_4 FOR VALUES FROM (13) TO (16);
-ERROR:  distributing multi-level partitioned tables is not supported
+ERROR:  Citus doesn't support multi-level partitioned tables
 END;
 CREATE TABLE multi_level_p (a INT UNIQUE) PARTITION BY RANGE (a);
 CREATE TABLE IF NOT EXISTS multi_level_c PARTITION OF multi_level_p FOR VALUES FROM (13) TO (16) PARTITION BY RANGE (a);

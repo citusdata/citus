@@ -310,7 +310,7 @@ SELECT create_distributed_table('partitioning_test_failure_2009', 'id');
 (1 row)
 
 ALTER TABLE partitioning_test_failure ATTACH PARTITION partitioning_test_failure_2009 FOR VALUES FROM ('2009-01-01') TO ('2010-01-01');
-ERROR:  non-distributed tables cannot have distributed partitions
+ERROR:  non-citus partitioned tables cannot have distributed partitions
 HINT:  Distribute the partitioned table "partitioning_test_failure" instead
 -- multi-level partitioning is not allowed
 DROP TABLE partitioning_test_failure_2009;
