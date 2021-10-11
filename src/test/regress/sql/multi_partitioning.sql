@@ -1785,6 +1785,61 @@ ROLLBACK;
 
 DROP TABLE pi_table;
 
+-- 6) test with citus local table
+select 1 from citus_add_node('localhost', :master_port, groupid=>0);
+CREATE TABLE date_partitioned_citus_local_table(
+ measureid integer,
+ eventdate date,
+ measure_data jsonb) PARTITION BY RANGE(eventdate);
+
+SELECT citus_add_local_table_to_metadata('date_partitioned_citus_local_table');
+
+-- test interval must be multiple days for date partitioned table
+SELECT create_time_partitions('date_partitioned_citus_local_table', INTERVAL '6 hours', '2022-01-01', '2021-01-01');
+SELECT create_time_partitions('date_partitioned_citus_local_table', INTERVAL '1 week 1 day 1 hour', '2022-01-01', '2021-01-01');
+
+-- test with various intervals
+BEGIN;
+  SELECT create_time_partitions('date_partitioned_citus_local_table', INTERVAL '1 day', '2021-02-01', '2021-01-01');
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_citus_local_table'::regclass ORDER BY 3;
+ROLLBACK;
+
+BEGIN;
+  SELECT create_time_partitions('date_partitioned_citus_local_table', INTERVAL '1 week', '2022-01-01', '2021-01-01');
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_citus_local_table'::regclass ORDER BY 3;
+ROLLBACK;
+
+set client_min_messages to error;
+DROP TABLE date_partitioned_citus_local_table;
+-- also test with foreign key
+CREATE TABLE date_partitioned_citus_local_table(
+ measureid integer,
+ eventdate date,
+ measure_data jsonb, PRIMARY KEY (measureid, eventdate)) PARTITION BY RANGE(eventdate);
+
+SELECT citus_add_local_table_to_metadata('date_partitioned_citus_local_table');
+
+-- test interval must be multiple days for date partitioned table
+SELECT create_time_partitions('date_partitioned_citus_local_table', INTERVAL '1 day', '2021-02-01', '2021-01-01');
+
+CREATE TABLE date_partitioned_citus_local_table_2(
+ measureid integer,
+ eventdate date,
+ measure_data jsonb, PRIMARY KEY (measureid, eventdate)) PARTITION BY RANGE(eventdate);
+
+SELECT citus_add_local_table_to_metadata('date_partitioned_citus_local_table_2');
+ALTER TABLE date_partitioned_citus_local_table_2 ADD CONSTRAINT fkey_1 FOREIGN KEY (measureid, eventdate) REFERENCES date_partitioned_citus_local_table(measureid, eventdate);
+SELECT create_time_partitions('date_partitioned_citus_local_table_2', INTERVAL '1 day', '2021-02-01', '2021-01-01');
+-- after the above work, these should also work for creating new partitions
+BEGIN;
+  SELECT create_time_partitions('date_partitioned_citus_local_table', INTERVAL '1 day', '2021-03-01', '2021-02-01');
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_citus_local_table'::regclass ORDER BY 3;
+ROLLBACK;
+BEGIN;
+  SELECT create_time_partitions('date_partitioned_citus_local_table_2', INTERVAL '1 day', '2021-03-01', '2021-02-01');
+  SELECT * FROM time_partitions WHERE parent_table = 'date_partitioned_citus_local_table'::regclass ORDER BY 3;
+ROLLBACK;
+set client_min_messages to notice;
 -- c) test drop_old_time_partitions
 -- 1) test with date partitioned table
 CREATE TABLE date_partitioned_table_to_exp (event_date date, event int) partition by range (event_date);
@@ -1857,6 +1912,29 @@ SELECT partition FROM time_partitions WHERE parent_table = '"test !/ \n _dist_12
 
 \set VERBOSITY default
 DROP TABLE "test !/ \n _dist_123_table_exp";
+
+-- 4) test with citus local tables
+CREATE TABLE date_partitioned_table_to_exp (event_date date, event int) partition by range (event_date);
+SELECT citus_add_local_table_to_metadata('date_partitioned_table_to_exp');
+
+CREATE TABLE date_partitioned_table_to_exp_d00 PARTITION OF date_partitioned_table_to_exp FOR VALUES FROM ('2000-01-01') TO ('2009-12-31');
+CREATE TABLE date_partitioned_table_to_exp_d10 PARTITION OF date_partitioned_table_to_exp FOR VALUES FROM ('2010-01-01') TO ('2019-12-31');
+CREATE TABLE date_partitioned_table_to_exp_d20 PARTITION OF date_partitioned_table_to_exp FOR VALUES FROM ('2020-01-01') TO ('2029-12-31');
+
+\set VERBOSITY terse
+
+-- expire no partitions
+CALL drop_old_time_partitions('date_partitioned_table_to_exp', '1999-01-01');
+SELECT partition FROM time_partitions WHERE parent_table = 'date_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+
+-- expire 2 old partitions
+CALL drop_old_time_partitions('date_partitioned_table_to_exp', '2021-01-01');
+SELECT partition FROM time_partitions WHERE parent_table = 'date_partitioned_table_to_exp'::regclass ORDER BY partition::text;
+
+\set VERBOSITY default
+DROP TABLE date_partitioned_table_to_exp;
+
+SELECT citus_remove_node('localhost', :master_port);
 
 -- d) invalid tables for helper UDFs
 CREATE TABLE multiple_partition_column_table(

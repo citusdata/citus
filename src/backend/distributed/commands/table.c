@@ -78,10 +78,6 @@ static List * GetRelationIdListFromRangeVarList(List *rangeVarList, LOCKMODE loc
 static bool AlterTableCommandTypeIsTrigger(AlterTableType alterTableType);
 static bool AlterTableDropsForeignKey(AlterTableStmt *alterTableStatement);
 static void ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement);
-static void ErrorIfCitusLocalTablePartitionCommand(AlterTableCmd *alterTableCmd,
-												   Oid parentRelationId);
-static Oid GetPartitionCommandChildRelationId(AlterTableCmd *alterTableCmd,
-											  bool missingOk);
 static List * InterShardDDLTaskList(Oid leftRelationId, Oid rightRelationId,
 									const char *commandString);
 static bool AlterInvolvesPartitionColumn(AlterTableStmt *alterTableStatement,
@@ -360,6 +356,13 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 	 */
 	if (IsCitusTable(parentRelationId))
 	{
+		if (IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
+		{
+			CreateCitusLocalTablePartitionOf(createStatement, relationId,
+											 parentRelationId);
+			return;
+		}
+
 		Var *parentDistributionColumn = DistPartitionKeyOrError(parentRelationId);
 		char parentDistributionMethod = DISTRIBUTE_BY_HASH;
 		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
@@ -442,6 +445,24 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			if (IsCitusTable(relationId) &&
 				!IsCitusTable(partitionRelationId))
 			{
+				if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+				{
+					if (PartitionedTable(partitionRelationId))
+					{
+						char *relationName = get_rel_name(partitionRelationId);
+						char *parentRelationName = get_rel_name(relationId);
+						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+										errmsg("distributing multi-level partitioned "
+											   "tables is not supported"),
+										errdetail("Relation \"%s\" is partitioned table "
+												  "itself and it is also partition of "
+												  "relation \"%s\".",
+												  relationName, parentRelationName)));
+					}
+					CreateCitusLocalTable(partitionRelationId, false);
+					return NIL;
+				}
+
 				Var *distributionColumn = DistPartitionKeyOrError(relationId);
 				char *distributionColumnName = ColumnToColumnName(relationId,
 																  nodeToString(
@@ -1113,7 +1134,23 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 		PG_TRY();
 		{
 			bool cascade = true;
-			CreateCitusLocalTable(relationId, cascade);
+
+			/*
+			 * Withoud this check, we would be erroring out in CreateCitusLocalTable
+			 * for this case anyway. The purpose of this check&error is to provide
+			 * a more meaningful message for the user.
+			 */
+			if (PartitionTable(relationId))
+			{
+				ereport(ERROR, (errmsg("cannot build foreign key between"
+									   " reference table and a partition"),
+								errhint("Try using parent table: %s",
+										get_rel_name(PartitionParentOid(relationId)))));
+			}
+			else
+			{
+				CreateCitusLocalTable(relationId, cascade);
+			}
 		}
 		PG_CATCH();
 		{
@@ -2477,7 +2514,17 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 											"separately.")));
 				}
 
-				ErrorIfCitusLocalTablePartitionCommand(command, relationId);
+				if (IsCitusTableType(partitionRelationId, CITUS_LOCAL_TABLE) ||
+					IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+				{
+					/*
+					 * Citus Local Tables cannot be colocated with other tables.
+					 * If either of two relations is not a Citus Local Table, then we
+					 * don't need to check colocation since CreateCitusLocalTable would
+					 * anyway throw an error.
+					 */
+					break;
+				}
 
 				if (IsCitusTable(partitionRelationId) &&
 					!TablesColocated(relationId, partitionRelationId))
@@ -2521,7 +2568,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 										   "unsupported.")));
 				}
 				#endif
-				ErrorIfCitusLocalTablePartitionCommand(command, relationId);
 
 				break;
 			}
@@ -2593,52 +2639,6 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 			}
 		}
 	}
-}
-
-
-/*
- * ErrorIfCitusLocalTablePartitionCommand errors out if given alter table subcommand is
- * an ALTER TABLE ATTACH / DETACH PARTITION command run for a citus local table.
- */
-static void
-ErrorIfCitusLocalTablePartitionCommand(AlterTableCmd *alterTableCmd, Oid parentRelationId)
-{
-	AlterTableType alterTableType = alterTableCmd->subtype;
-	if (alterTableType != AT_AttachPartition && alterTableType != AT_DetachPartition)
-	{
-		return;
-	}
-
-	bool missingOK = false;
-	Oid childRelationId = GetPartitionCommandChildRelationId(alterTableCmd, missingOK);
-	if (!IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE) &&
-		!IsCitusTableType(childRelationId, CITUS_LOCAL_TABLE))
-	{
-		return;
-	}
-
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					errmsg("cannot execute ATTACH/DETACH PARTITION command as "
-						   "local tables added to metadata cannot be involved in "
-						   "partition relationships with other tables")));
-}
-
-
-/*
- * GetPartitionCommandChildRelationId returns child relationId for given
- * ALTER TABLE ATTACH / DETACH PARTITION subcommand.
- */
-static Oid
-GetPartitionCommandChildRelationId(AlterTableCmd *alterTableCmd, bool missingOk)
-{
-	AlterTableType alterTableType PG_USED_FOR_ASSERTS_ONLY = alterTableCmd->subtype;
-	Assert(alterTableType == AT_AttachPartition || alterTableType == AT_DetachPartition);
-
-	PartitionCmd *partitionCommand = (PartitionCmd *) alterTableCmd->def;
-	RangeVar *childRelationRangeVar = partitionCommand->name;
-	Oid childRelationId = RangeVarGetRelid(childRelationRangeVar, AccessExclusiveLock,
-										   missingOk);
-	return childRelationId;
 }
 
 

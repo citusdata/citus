@@ -301,5 +301,40 @@ BEGIN;
     SELECT * FROM reference_table;
 ROLLBACK;
 
+-- test on partitioned citus local tables
+CREATE TABLE par_citus_local_table (val int) PARTITION BY RANGE(val);
+CREATE TABLE par_citus_local_table_1 PARTITION OF par_citus_local_table FOR VALUES FROM (1) TO (10000);
+CREATE TABLE par_another_citus_local_table (val int unique) PARTITION BY RANGE(val);
+CREATE TABLE par_another_citus_local_table_1 PARTITION OF par_another_citus_local_table FOR VALUES FROM (1) TO (10000);
+
+ALTER TABLE par_another_citus_local_table ADD CONSTRAINT fkey_self FOREIGN KEY(val) REFERENCES par_another_citus_local_table(val);
+ALTER TABLE par_citus_local_table ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(val) REFERENCES par_another_citus_local_table(val) ON UPDATE CASCADE;
+
+SELECT citus_add_local_table_to_metadata('par_another_citus_local_table', cascade_via_foreign_keys=>true);
+
+CREATE TABLE par_reference_table(val int);
+SELECT create_reference_table('par_reference_table');
+
+CREATE FUNCTION par_insert_100() RETURNS trigger AS $par_insert_100$
+BEGIN
+    INSERT INTO par_reference_table VALUES (100);
+    RETURN NEW;
+END;
+$par_insert_100$ LANGUAGE plpgsql;
+
+BEGIN;
+    CREATE TRIGGER par_insert_100_trigger
+    AFTER TRUNCATE ON par_another_citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION par_insert_100();
+
+    CREATE TRIGGER insert_100_trigger
+    AFTER TRUNCATE ON par_citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION par_insert_100();
+
+    TRUNCATE par_another_citus_local_table CASCADE;
+    -- we should see two rows with "100"
+    SELECT * FROM par_reference_table;
+ROLLBACK;
+
 -- cleanup at exit
 DROP SCHEMA citus_local_table_triggers, "interesting!schema" CASCADE;

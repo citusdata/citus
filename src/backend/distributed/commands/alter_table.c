@@ -527,8 +527,8 @@ ConvertTable(TableConversionState *con)
 		 * Acquire ExclusiveLock as UndistributeTable does in order to
 		 * make sure that no modifications happen on the relations.
 		 */
-		CascadeOperationForConnectedRelations(con->relationId, ExclusiveLock,
-											  CASCADE_FKEY_UNDISTRIBUTE_TABLE);
+		CascadeOperationForFkeyConnectedRelations(con->relationId, ExclusiveLock,
+												  CASCADE_FKEY_UNDISTRIBUTE_TABLE);
 
 		/*
 		 * Undistributed every foreign key connected relation in our foreign key
