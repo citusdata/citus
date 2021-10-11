@@ -482,6 +482,14 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 }
 
 
+/*
+ * PreprocessAttachPartitionToCitusTable takes a parent relation, which is a Citus table,
+ * and a partition to be attached to it.
+ * If the partition table is a regular Postgres table:
+ * - Converts the partition to Citus Local Table, if the parent is a Citus Local Table.
+ * - Distributes the partition, if the parent is a distributed table.
+ * If not, calls PreprocessAttachCitusPartitionToCitusTable
+ */
 static void
 PreprocessAttachPartitionToCitusTable(Oid relationId, Oid partitionRelationId)
 {
@@ -508,6 +516,13 @@ PreprocessAttachPartitionToCitusTable(Oid relationId, Oid partitionRelationId)
 }
 
 
+/*
+ * PreprocessAttachCitusPartitionToCitusTable takes a parent relation, and a partition
+ * to be attached to it. Both of them are Citus tables.
+ * Errors out if the partition is a reference table.
+ * Errors out if the partition is distributed and the parent is a Citus Local Table.
+ * Distributes the partition, if it's a Citus Local Table, and the parent is distributed.
+ */
 static void
 PreprocessAttachCitusPartitionToCitusTable(Oid relationId, Oid partitionRelationId)
 {
@@ -527,9 +542,21 @@ PreprocessAttachCitusPartitionToCitusTable(Oid relationId, Oid partitionRelation
 		/* if the parent is a distributed table, distribute the partition too */
 		DistributePartitionUsingParent(relationId, partitionRelationId);
 	}
+
+	/*
+	 * We don't need to add other cases here, like distributed-distributed and
+	 * citus_local-citus_local, as ATTACH commands are already handled successfully
+	 * for these cases.
+	 */
 }
 
 
+/*
+ * DistributePartitionUsingParent takes a parent and a partition relation and
+ * distributed the partition, using the same distribution column as the parent.
+ * It creates a *hash* distributed table by default, as partitioned tables can only be
+ * distributed by hash.
+ */
 static void
 DistributePartitionUsingParent(Oid relationId, Oid partitionRelationId)
 {
