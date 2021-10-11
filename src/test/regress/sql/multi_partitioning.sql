@@ -2013,7 +2013,7 @@ SELECT create_distributed_table('dist_table_parent','a');
 CREATE TABLE citus_local_child (a int unique);
 select citus_add_local_table_to_metadata('citus_local_child', false);
 alter table dist_table_parent attach partition  citus_local_child default ;
-select * from pg_dist_partition where logicalrelid::text in ('dist_table_parent', 'citus_local_child');
+select logicalrelid, partmethod from pg_dist_partition where logicalrelid::text in ('dist_table_parent', 'citus_local_child');
 
 -- test attaching distributed table to citus local table
 CREATE TABLE dist_table_child (a INT UNIQUE);
