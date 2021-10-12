@@ -237,6 +237,14 @@ INSERT INTO local(c, d) SELECT a, b FROM ref;
 SELECT count(*) from local;
 ROLLBACK;
 
+-- values materialization test
+WITH cte_1 (num,letter) AS (VALUES (1, 'one'), (2, 'two'), (3, 'three'))
+SELECT
+	count(*)
+FROM
+	test
+WHERE x IN (SELECT num FROM cte_1);
+
 -- query fails on the shards should be handled
 -- nicely
 \set VERBOSITY terse
