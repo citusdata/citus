@@ -183,16 +183,6 @@ ShouldUseSubqueryPushDown(Query *originalQuery, Query *rewrittenQuery,
 		return true;
 	}
 
-	/*
-	 * Some unsupported join clauses in logical planner
-	 * may be supported by subquery pushdown planner.
-	 */
-	List *qualifierList = QualifierList(rewrittenQuery->jointree);
-	if (DeferErrorIfUnsupportedClause(qualifierList) != NULL)
-	{
-		return true;
-	}
-
 	/* check if the query has a window function and it is safe to pushdown */
 	if (originalQuery->hasWindowFuncs &&
 		SafeToPushdownWindowFunction(originalQuery, NULL))
