@@ -1,0 +1,13 @@
+#!/bin/bash
+
+set -euo pipefail
+
+## Set mydir to the directory containing the script
+## The ${var%pattern} format will remove the shortest match of
+## pattern from the end of the string. Here, it will remove the
+## script's name,. leaving only the directory.
+datadir="${0%/*}"
+cd "${datadir}"
+
+# shellcheck source=copy_modified
+source copy_modified
