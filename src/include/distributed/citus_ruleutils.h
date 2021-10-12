@@ -48,6 +48,9 @@ extern const char * RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier);
 
 /* Function declarations for version dependent PostgreSQL ruleutils functions */
 extern void pg_get_query_def(Query *query, StringInfo buffer);
+bool get_merged_argument_list(CallStmt *stmt, List **mergedNamedArgList,
+							  Oid **mergedNamedArgTypes, List **mergedArgumentList,
+							  int *totalArguments);
 char * pg_get_rule_expr(Node *expression);
 extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid,
 								StringInfo buffer);

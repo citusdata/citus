@@ -413,6 +413,8 @@ static bool looks_like_function(Node *node);
 static void get_oper_expr(OpExpr *expr, deparse_context *context);
 static void get_func_expr(FuncExpr *expr, deparse_context *context,
 			  bool showimplicit);
+static void get_proc_expr(CallStmt *stmt, deparse_context *context,
+			  bool showimplicit);
 static void get_agg_expr(Aggref *aggref, deparse_context *context,
 			 Aggref *original_aggref);
 static void get_agg_combine_expr(Node *node, deparse_context *context,
@@ -472,7 +474,142 @@ pg_get_query_def(Query *query, StringInfo buffer)
 	get_query_def(query, buffer, NIL, NULL, 0, WRAP_COLUMN_DEFAULT, 0);
 }
 
+/*
+ * get_merged_argument_list merges both the IN and OUT arguments lists into one and
+ * also eliminates the INOUT duplicates(present in both the lists). After merging both
+ * the lists, it returns all the named-arguments in a list(mergedNamedArgList) along
+ * with their types(mergedNamedArgTypes), final argument list(mergedArgumentList), and
+ * the total number of arguments(totalArguments).
+ */
+bool
+get_merged_argument_list(CallStmt *stmt, List **mergedNamedArgList,
+					   Oid **mergedNamedArgTypes,
+					   List **mergedArgumentList,
+					   int *totalArguments)
+{
 
+	Oid  functionOid = stmt->funcexpr->funcid;
+	List *namedArgList = NIL;
+	List *finalArgumentList = NIL;
+	Oid  finalArgTypes[FUNC_MAX_ARGS];
+	Oid  *argTypes = NULL;
+	char *argModes = NULL;
+	char **argNames = NULL;
+	int  argIndex = 0;
+
+	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(functionOid));
+	if (!HeapTupleIsValid(proctup))
+	{
+		elog(ERROR, "cache lookup failed for function %u", functionOid);
+	}
+
+	int defArgs = get_func_arg_info(proctup, &argTypes, &argNames, &argModes);
+	ReleaseSysCache(proctup);
+
+	if (argModes == NULL)
+	{
+		/* No OUT arguments */
+		return false;
+	}
+
+	/*
+	 * Passed arguments Includes IN, OUT, INOUT (in both the lists) and VARIADIC arguments,
+	 * which means INOUT arguments are double counted.
+	 */
+	int numberOfArgs = list_length(stmt->funcexpr->args) + list_length(stmt->outargs);
+	int totalInoutArgs = 0;
+
+	/* Let's count INOUT arguments from the defined number of arguments */
+	for (argIndex=0; argIndex < defArgs; ++argIndex)
+	{
+		if (argModes[argIndex] == PROARGMODE_INOUT)
+			totalInoutArgs++;
+	}
+
+	/* Remove the duplicate INOUT counting */
+	numberOfArgs = numberOfArgs - totalInoutArgs;
+
+	ListCell *inArgCell = list_head(stmt->funcexpr->args);
+	ListCell *outArgCell = list_head(stmt->outargs);
+
+	for (argIndex=0; argIndex < numberOfArgs; ++argIndex)
+	{
+		switch (argModes[argIndex])
+		{
+			case PROARGMODE_IN:
+			case PROARGMODE_VARIADIC:
+			{
+				Node *arg = (Node *) lfirst(inArgCell);
+
+				if (IsA(arg, NamedArgExpr))
+					namedArgList = lappend(namedArgList, ((NamedArgExpr *) arg)->name);
+				finalArgTypes[argIndex] = exprType(arg);
+				finalArgumentList = lappend(finalArgumentList, arg);
+				inArgCell = lnext(stmt->funcexpr->args, inArgCell);
+				break;
+			}
+
+			case PROARGMODE_OUT:
+			{
+				Node *arg = (Node *) lfirst(outArgCell);
+
+				if (IsA(arg, NamedArgExpr))
+					namedArgList = lappend(namedArgList, ((NamedArgExpr *) arg)->name);
+				finalArgTypes[argIndex] = exprType(arg);
+				finalArgumentList = lappend(finalArgumentList, arg);
+				outArgCell = lnext(stmt->outargs, outArgCell);
+				break;
+			}
+
+			case PROARGMODE_INOUT:
+			{
+				Node *arg = (Node *) lfirst(inArgCell);
+
+				if (IsA(arg, NamedArgExpr))
+					namedArgList = lappend(namedArgList, ((NamedArgExpr *) arg)->name);
+				finalArgTypes[argIndex] = exprType(arg);
+				finalArgumentList = lappend(finalArgumentList, arg);
+				inArgCell = lnext(stmt->funcexpr->args, inArgCell);
+				outArgCell = lnext(stmt->outargs, outArgCell);
+				break;
+			}
+
+			case PROARGMODE_TABLE:
+			default:
+			{
+				elog(ERROR, "Unhandled procedure argument mode[%d]", argModes[argIndex]);
+				break;
+			}
+		}
+	}
+
+	/*
+	 * After eliminating INOUT duplicates and merging OUT arguments, we now
+	 * have the final list of arguments.
+	 */
+	if (defArgs != list_length(finalArgumentList))
+	{
+		elog(ERROR, "Insufficient number of args passed[%d] for function[%s]",
+											list_length(finalArgumentList),
+											get_func_name(functionOid));
+	}
+
+	if (list_length(finalArgumentList) > FUNC_MAX_ARGS)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_TOO_MANY_ARGUMENTS),
+				 errmsg("too many arguments[%d] for function[%s]",
+											list_length(finalArgumentList),
+											get_func_name(functionOid))));
+	}
+
+	*mergedNamedArgList =  namedArgList;
+	*mergedNamedArgTypes = finalArgTypes;
+	*mergedArgumentList = finalArgumentList;
+	*totalArguments = numberOfArgs;
+
+	return true;
+}
 /*
  * pg_get_rule_expr deparses an expression and returns the result as a string.
  */
@@ -6216,6 +6353,10 @@ get_rule_expr(Node *node, deparse_context *context,
 			get_tablefunc((TableFunc *) node, context, showimplicit);
 			break;
 
+		case T_CallStmt:
+			get_proc_expr((CallStmt *) node, context, showimplicit);
+			break;
+
 		default:
 			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(node));
 			break;
@@ -6437,6 +6578,52 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 			appendStringInfoString(buf, "VARIADIC ");
 		get_rule_expr((Node *) lfirst(l), context, true);
 	}
+
+	appendStringInfoChar(buf, ')');
+}
+
+
+/*
+ * get_proc_expr			- Parse back a CallStmt node
+ */
+static void
+get_proc_expr(CallStmt *stmt, deparse_context *context,
+			  bool showimplicit)
+{
+	StringInfo buf = context->buf;
+	Oid        functionOid = stmt->funcexpr->funcid;
+	bool       use_variadic;
+	Oid        *argumentTypes;
+	List       *finalArgumentList = NIL;
+	ListCell   *argumentCell;
+	List       *namedArgList = NIL;
+	int        numberOfArgs = -1;
+
+	if (!get_merged_argument_list(stmt, &namedArgList, &argumentTypes,
+										&finalArgumentList, &numberOfArgs))
+	{
+		/* Nothing merged i.e. no OUT arguments */
+		get_func_expr((FuncExpr *) stmt->funcexpr, context, showimplicit);
+		return;
+	}
+
+	appendStringInfo(buf, "%s(",
+					 generate_function_name(functionOid, numberOfArgs,
+										namedArgList, argumentTypes,
+										stmt->funcexpr->funcvariadic,
+										&use_variadic,
+										context->special_exprkind));
+	int argNumber = 0;
+	foreach(argumentCell, finalArgumentList)
+	{
+		if (argNumber++ > 0)
+			appendStringInfoString(buf, ", ");
+		if (use_variadic && lnext(finalArgumentList, argumentCell) == NULL)
+			appendStringInfoString(buf, "VARIADIC ");
+		get_rule_expr((Node *) lfirst(argumentCell), context, true);
+		argNumber++;
+	}
+
 	appendStringInfoChar(buf, ')');
 }
 

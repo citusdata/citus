@@ -269,6 +269,351 @@ SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regcla
 
 RESET citus.multi_shard_modify_mode;
 -- test procedure OUT parameters with procedure pushdown
+CREATE TABLE prctbl(val int primary key);
+CREATE OR REPLACE PROCEDURE insert_data(arg1 integer)
+LANGUAGE PLPGSQL
+AS $$
+BEGIN
+RAISE NOTICE 'Proc with no OUT args';
+INSERT INTO pg14.prctbl VALUES (arg1);
+END;
+$$;
+CREATE PROCEDURE insert_data_out(val integer, OUT res text)
+LANGUAGE PLPGSQL
+AS $$
+BEGIN
+RAISE NOTICE 'Proc with OUT args';
+INSERT INTO pg14.prctbl VALUES (val);
+res := 'insert_data_out():proc-result'::text;
+END
+$$;
+CREATE FUNCTION insert_data_out_fn(val integer, OUT res text)
+RETURNS TEXT
+LANGUAGE PLPGSQL
+AS $$
+BEGIN
+RAISE NOTICE 'Func with OUT args';
+INSERT INTO pg14.prctbl VALUES (val);
+res := 'insert_data_out_fn():func-result'::text;
+END;
+$$;
+CREATE OR REPLACE PROCEDURE proc_varargs(
+    IN inp INT,
+    OUT total NUMERIC,
+    OUT average NUMERIC,
+    VARIADIC list NUMERIC[])
+AS $$
+BEGIN
+   SELECT INTO total SUM(list[i])
+   FROM generate_subscripts(list, 1) g(i);
+
+   SELECT INTO average AVG(list[i])
+   FROM generate_subscripts(list, 1) g(i);
+
+END; $$
+LANGUAGE plpgsql;
+CREATE OR REPLACE PROCEDURE proc_varargs_inout(
+    IN inp INT,
+    OUT total NUMERIC,
+    OUT average NUMERIC,
+    INOUT result TEXT,
+    VARIADIC list NUMERIC[])
+AS $$
+BEGIN
+
+   SELECT 'Final:' || result INTO result;
+   SELECT INTO total SUM(list[i])
+   FROM generate_subscripts(list, 1) g(i);
+
+   SELECT INTO average AVG(list[i])
+   FROM generate_subscripts(list, 1) g(i);
+
+END; $$
+LANGUAGE plpgsql;
+-- Named arguments
+CREATE OR REPLACE PROCEDURE proc_namedargs(
+    IN inp INT,
+    OUT total NUMERIC,
+    OUT average NUMERIC,
+    INOUT result TEXT)
+AS $$
+BEGIN
+
+   RAISE NOTICE 'IN passed: %', inp;
+   SELECT 'Final:' || result INTO result;                                                                                                                       total := 999;                                                                                                                                                average := 99;
+END; $$
+LANGUAGE plpgsql;
+-- Mix of IN, OUT, INOUT and Variadic
+CREATE OR REPLACE PROCEDURE proc_namedargs_var(
+    IN inp1 INT,
+	IN inp2 INT,
+	INOUT inout1 TEXT,
+	OUT out1 INT,
+    VARIADIC list INT[])
+AS $$
+DECLARE  sum INT;
+BEGIN
+out1 := 5;
+SELECT INTO sum SUM(list[i])
+FROM generate_subscripts(list, 1) g(i);
+RAISE NOTICE 'Input-1: % Input-2: % VarSum: %', inp1, inp2, sum;
+SELECT 'Final : ' || inout1 INTO inout1;
+END; $$
+LANGUAGE plpgsql;
+CREATE OR REPLACE PROCEDURE proc_varargs_inout2(
+    INOUT result TEXT,
+    OUT total NUMERIC,
+    OUT average NUMERIC,
+    IN inp INT,
+    VARIADIC list NUMERIC[])
+AS $$
+BEGIN
+
+   RAISE NOTICE 'IN passed: %', inp;
+   SELECT 'Final:' || result INTO result;
+   SELECT INTO total SUM(list[i])
+   FROM generate_subscripts(list, 1) g(i);
+
+   SELECT INTO average AVG(list[i])
+   FROM generate_subscripts(list, 1) g(i);
+
+END; $$
+LANGUAGE plpgsql;
+CREATE OR REPLACE PROCEDURE proc_varargs_inout3(
+    OUT total NUMERIC,
+    OUT average NUMERIC,
+    INOUT result TEXT,
+    IN inp INT,
+    VARIADIC list NUMERIC[])
+AS $$
+BEGIN
+
+   RAISE NOTICE 'IN passed: %', inp;
+   SELECT 'Final:' || result INTO result;
+   SELECT INTO total SUM(list[i])
+   FROM generate_subscripts(list, 1) g(i);
+
+   SELECT INTO average AVG(list[i])
+   FROM generate_subscripts(list, 1) g(i);
+
+END; $$
+LANGUAGE plpgsql;
+-- Function overload
+CREATE PROCEDURE proc_namedargs_overload(
+    IN inp INT)
+AS $$
+BEGIN
+
+   RAISE NOTICE 'IN passed INT: %', inp;
+END; $$
+LANGUAGE plpgsql;
+CREATE PROCEDURE proc_namedargs_overload(
+    IN inp NUMERIC)
+AS $$
+BEGIN
+
+   RAISE NOTICE 'IN passed NUMERIC: %', inp;
+END; $$
+LANGUAGE plpgsql;
+-- Before distribution
+CALL insert_data(1);
+NOTICE:  Proc with no OUT args
+CONTEXT:  PL/pgSQL function insert_data(integer) line XX at RAISE
+CALL insert_data_out(2, 'whythisarg');
+NOTICE:  Proc with OUT args
+CONTEXT:  PL/pgSQL function insert_data_out(integer) line XX at RAISE
+              res
+---------------------------------------------------------------------
+ insert_data_out():proc-result
+(1 row)
+
+SELECT insert_data_out_fn(3);
+NOTICE:  Func with OUT args
+CONTEXT:  PL/pgSQL function insert_data_out_fn(integer) line XX at RAISE
+        insert_data_out_fn
+---------------------------------------------------------------------
+ insert_data_out_fn():func-result
+(1 row)
+
+-- Return the average and the sum of 2, 8, 20
+CALL proc_varargs(1, 1, 1, 2, 8, 20);
+ total |       average
+---------------------------------------------------------------------
+    30 | 10.0000000000000000
+(1 row)
+
+CALL proc_varargs_inout(1, 1, 1, 'Testing in/out/var arguments'::text, 2, 8, 20);
+ total |       average       |               result
+---------------------------------------------------------------------
+    30 | 10.0000000000000000 | Final:Testing in/out/var arguments
+(1 row)
+
+CALL proc_varargs_inout(2, 1, 1, to_char(99,'FM99'), 2, 8, 20);
+ total |       average       |  result
+---------------------------------------------------------------------
+    30 | 10.0000000000000000 | Final:99
+(1 row)
+
+CALL proc_varargs_inout(3, 1, 1, TRIM( BOTH FROM ' TEST COERCE_SQL_SYNTAX    '), 2, 8, 20);
+ total |       average       |            result
+---------------------------------------------------------------------
+    30 | 10.0000000000000000 | Final:TEST COERCE_SQL_SYNTAX
+(1 row)
+
+CALL proc_namedargs(total=>3, result=>'Named args'::text, average=>2::NUMERIC, inp=>4);
+NOTICE:  IN passed: 4
+CONTEXT:  PL/pgSQL function proc_namedargs(integer,text) line XX at RAISE
+ total | average |      result
+---------------------------------------------------------------------
+   999 |      99 | Final:Named args
+(1 row)
+
+CALL proc_namedargs_var(inout1=> 'INOUT third argument'::text, out1=>4, inp2=>2, inp1=>1, variadic list=>'{9, 9, 9}');
+NOTICE:  Input-1: 1 Input-2: 2 VarSum: 27
+CONTEXT:  PL/pgSQL function proc_namedargs_var(integer,integer,text,integer[]) line XX at RAISE
+            inout1            | out1
+---------------------------------------------------------------------
+ Final : INOUT third argument |    5
+(1 row)
+
+CALL proc_varargs_inout2('In Out', 1, 1, 5, 2, 8, 20);
+NOTICE:  IN passed: 5
+CONTEXT:  PL/pgSQL function proc_varargs_inout2(text,integer,numeric[]) line XX at RAISE
+    result    | total |       average
+---------------------------------------------------------------------
+ Final:In Out |    30 | 10.0000000000000000
+(1 row)
+
+CALL proc_varargs_inout3(1, 1, 'In Out', 6, 2, 8, 20);
+NOTICE:  IN passed: 6
+CONTEXT:  PL/pgSQL function proc_varargs_inout3(text,integer,numeric[]) line XX at RAISE
+ total |       average       |    result
+---------------------------------------------------------------------
+    30 | 10.0000000000000000 | Final:In Out
+(1 row)
+
+CALL proc_namedargs_overload(3);
+NOTICE:  IN passed INT: 3
+CONTEXT:  PL/pgSQL function proc_namedargs_overload(integer) line XX at RAISE
+CALL proc_namedargs_overload(4.0);
+NOTICE:  IN passed NUMERIC: 4.0
+CONTEXT:  PL/pgSQL function proc_namedargs_overload(numeric) line XX at RAISE
+CALL proc_namedargs_overload(inp=>5);
+NOTICE:  IN passed INT: 5
+CONTEXT:  PL/pgSQL function proc_namedargs_overload(integer) line XX at RAISE
+CALL proc_namedargs_overload(inp=>6.0);
+NOTICE:  IN passed NUMERIC: 6.0
+CONTEXT:  PL/pgSQL function proc_namedargs_overload(numeric) line XX at RAISE
+-- Distribute the table, procedure and function
+SELECT create_distributed_table('prctbl', 'val', colocate_with := 'none');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg14.prctbl$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'insert_data(int)', 'arg1',
+  colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'insert_data_out(int)', 'val',
+  colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'insert_data_out_fn(int)', 'val',
+  colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'proc_varargs(int, NUMERIC[])', 'inp',
+  colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'proc_varargs_inout(int, text, NUMERIC[])', 'inp',
+  colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'proc_namedargs(int, text)', 'inp',
+  colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'proc_namedargs_var(int, int, text, int[])', 'inp1',
+  colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'proc_varargs_inout2(text, int, NUMERIC[])', 'inp',
+  colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'proc_varargs_inout3(text, int, NUMERIC[])', 'inp',
+  colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+ SELECT create_distributed_function(
+   'proc_namedargs_overload(int)', 'inp',
+   colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+   'proc_namedargs_overload(numeric)', 'inp',
+   colocate_with := 'prctbl'
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE TABLE test_proc_table (a int);
 create or replace procedure proc_pushdown(dist_key integer, OUT created int4[], OUT res_out text)
 language plpgsql
@@ -296,22 +641,6 @@ CALL proc_pushdown(1, ARRAY[2000,1], 'AAAA');
  {2}     | 2
 (1 row)
 
-SELECT create_distributed_table('test_proc_table', 'a');
-NOTICE:  Copying data from local table...
-NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg14.test_proc_table$$)
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT create_distributed_function('proc_pushdown(integer)', 'dist_key', 'test_proc_table' );
- create_distributed_function
----------------------------------------------------------------------
-
-(1 row)
-
 -- make sure that metadata is synced, it may take few seconds
 CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
     RETURNS void
@@ -329,22 +658,141 @@ SELECT bool_and(hasmetadata) FROM pg_dist_node WHERE nodeport IN (:worker_1_port
  t
 (1 row)
 
--- still, we do not pushdown procedures with OUT parameters
+SELECT create_distributed_table('test_proc_table', 'a');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$pg14.test_proc_table$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function('proc_pushdown(integer)', 'dist_key', 'test_proc_table' );
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+-- pushdown procedures with OUT parameters
 SET client_min_messages TO DEBUG1;
 CALL proc_pushdown(1, NULL, NULL);
-DEBUG:  not pushing down procedures with OUT parameters
+DEBUG:  pushing down the procedure
  created | res_out
 ---------------------------------------------------------------------
  {3}     | 3
 (1 row)
 
 CALL proc_pushdown(1, ARRAY[2000,1], 'AAAA');
-DEBUG:  not pushing down procedures with OUT parameters
+DEBUG:  pushing down the procedure
  created | res_out
 ---------------------------------------------------------------------
  {4}     | 4
 (1 row)
 
+CALL insert_data(4);
+DEBUG:  pushing down the procedure
+NOTICE:  Proc with no OUT args
+DETAIL:  from localhost:xxxxx
+CALL insert_data_out(5, 'whythisarg');
+DEBUG:  pushing down the procedure
+NOTICE:  Proc with OUT args
+DETAIL:  from localhost:xxxxx
+              res
+---------------------------------------------------------------------
+ insert_data_out():proc-result
+(1 row)
+
+SELECT insert_data_out_fn(6);
+DEBUG:  pushing down the function call
+NOTICE:  Func with OUT args
+DETAIL:  from localhost:xxxxx
+        insert_data_out_fn
+---------------------------------------------------------------------
+ insert_data_out_fn():func-result
+(1 row)
+
+-- Return the average and the sum of 2, 8, 20
+CALL proc_varargs(1, 1, 1, 2, 8, 20);
+DEBUG:  pushing down the procedure
+ total |       average
+---------------------------------------------------------------------
+    30 | 10.0000000000000000
+(1 row)
+
+CALL proc_varargs_inout(1, 1, 1, 'Testing in/out/var arguments'::text, 2, 8, 20);
+DEBUG:  pushing down the procedure
+ total |       average       |               result
+---------------------------------------------------------------------
+    30 | 10.0000000000000000 | Final:Testing in/out/var arguments
+(1 row)
+
+CALL proc_varargs_inout(2, 1, 1, to_char(99,'FM99'), 2, 8, 20);
+DEBUG:  pushing down the procedure
+ total |       average       |  result
+---------------------------------------------------------------------
+    30 | 10.0000000000000000 | Final:99
+(1 row)
+
+CALL proc_varargs_inout(3, 1, 1, TRIM( BOTH FROM ' TEST COERCE_SQL_SYNTAX    '), 2, 8, 20);
+DEBUG:  pushing down the procedure
+ total |       average       |            result
+---------------------------------------------------------------------
+    30 | 10.0000000000000000 | Final:TEST COERCE_SQL_SYNTAX
+(1 row)
+
+CALL proc_namedargs(total=>3, result=>'Named args'::text, average=>2::NUMERIC, inp=>4);
+DEBUG:  pushing down the procedure
+NOTICE:  IN passed: 4
+DETAIL:  from localhost:xxxxx
+ total | average |      result
+---------------------------------------------------------------------
+   999 |      99 | Final:Named args
+(1 row)
+
+CALL proc_namedargs_var(inout1=> 'INOUT third argument'::text, out1=>4, inp2=>2, inp1=>1, variadic list=>'{9, 9, 9}');
+DEBUG:  pushing down the procedure
+NOTICE:  Input-1: 1 Input-2: 2 VarSum: 27
+DETAIL:  from localhost:xxxxx
+            inout1            | out1
+---------------------------------------------------------------------
+ Final : INOUT third argument |    5
+(1 row)
+
+CALL proc_varargs_inout2('In Out', 1, 1, 5, 2, 8, 20);
+DEBUG:  pushing down the procedure
+NOTICE:  IN passed: 5
+DETAIL:  from localhost:xxxxx
+    result    | total |       average
+---------------------------------------------------------------------
+ Final:In Out |    30 | 10.0000000000000000
+(1 row)
+
+CALL proc_varargs_inout3(1, 1, 'In Out', 6, 2, 8, 20);
+DEBUG:  pushing down the procedure
+NOTICE:  IN passed: 6
+DETAIL:  from localhost:xxxxx
+ total |       average       |    result
+---------------------------------------------------------------------
+    30 | 10.0000000000000000 | Final:In Out
+(1 row)
+
+CALL proc_namedargs_overload(3);
+DEBUG:  pushing down the procedure
+NOTICE:  IN passed INT: 3
+DETAIL:  from localhost:xxxxx
+CALL proc_namedargs_overload(4.0);
+DEBUG:  pushing down the procedure
+NOTICE:  IN passed NUMERIC: 4.0
+DETAIL:  from localhost:xxxxx
+CALL proc_namedargs_overload(inp=>5);
+DEBUG:  pushing down the procedure
+NOTICE:  IN passed INT: 5
+DETAIL:  from localhost:xxxxx
+CALL proc_namedargs_overload(inp=>6.0);
+DEBUG:  pushing down the procedure
+NOTICE:  IN passed NUMERIC: 6.0
+DETAIL:  from localhost:xxxxx
 RESET client_min_messages;
 -- we don't need metadata syncing anymore
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
