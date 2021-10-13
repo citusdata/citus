@@ -367,6 +367,12 @@ select citus_add_local_table_to_metadata('citus_local_parent', false);
 -- this should error out
 alter table citus_local_parent attach partition dist_table_child default ;
 
+-- error out attaching
+CREATE TABLE pg_local (a INT UNIQUE) PARTITION BY RANGE(a);
+CREATE TABLE citus_local_attach_to_pglocal (a INT UNIQUE) PARTITION BY RANGE(a);
+select citus_add_local_table_to_metadata('citus_local_attach_to_pglocal', false);
+alter table citus_local_attach_to_pglocal attach partition pg_local default ;
+
 SELECT master_remove_distributed_table_metadata_from_workers('citus_local_table_4'::regclass::oid, 'citus_local_tables_mx', 'citus_local_table_4');
 
 -- both workers should print 0 as master_remove_distributed_table_metadata_from_workers
