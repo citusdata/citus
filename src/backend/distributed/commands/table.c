@@ -542,6 +542,19 @@ PreprocessAttachCitusPartitionToCitusTable(Oid relationId, Oid partitionRelation
 		/* if the parent is a distributed table, distribute the partition too */
 		DistributePartitionUsingParent(relationId, partitionRelationId);
 	}
+	else if (IsCitusTableType(partitionRelationId, CITUS_LOCAL_TABLE) &&
+			 IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		/*
+		 * We should ensure that the partition relation has no foreign keys,
+		 * as Citus Local Table partitions can only have inherited foreign keys.
+		 */
+		if (TableHasExternalForeignKeys(partitionRelationId))
+		{
+			ereport(ERROR, (errmsg("partition citus local tables cannot have "
+								   "non-inherited foreign keys")));
+		}
+	}
 
 	/*
 	 * We don't need to add other cases here, like distributed-distributed and

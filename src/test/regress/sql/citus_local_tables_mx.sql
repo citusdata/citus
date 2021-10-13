@@ -342,6 +342,13 @@ set client_min_messages to error;
 alter table citus_local_parent_1 drop constraint fkey_to_drop_test;
 select logicalrelid from pg_dist_partition where logicalrelid::text like 'citus_local_parent%';
 
+-- verify attaching partition with a foreign key errors out
+CREATE TABLE citus_local_parent (b TEXT, a INT UNIQUE REFERENCES ref(a), d INT) PARTITION BY RANGE(a);
+CREATE TABLE citus_local_with_fkey (d INT);
+ALTER TABLE citus_local_with_fkey ADD CONSTRAINT cl_to_cl FOREIGN KEY(d) REFERENCES citus_local_parent(a);
+-- error out
+ALTER TABLE citus_local_parent ATTACH PARTITION citus_local_with_fkey DEFAULT;
+
 SELECT master_remove_distributed_table_metadata_from_workers('citus_local_table_4'::regclass::oid, 'citus_local_tables_mx', 'citus_local_table_4');
 
 -- both workers should print 0 as master_remove_distributed_table_metadata_from_workers
