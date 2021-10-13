@@ -205,9 +205,8 @@ def read_arguments(docoptRes):
             configs = new_configs
 
     sql_schedule_name = cfg.SQL_SCHEDULE
-    if "--base" in docoptRes:
+    if "--base" in docoptRes and docoptRes["--base"]:
         sql_schedule_name = cfg.SQL_BASE_SCHEDULE
-
     return configs, sql_schedule_name, seed
 
 
