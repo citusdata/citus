@@ -1416,34 +1416,12 @@ DistributedExecutionRequiresRollback(List *taskList)
 
 	if (list_length(task->taskPlacementList) > 1)
 	{
-		if (SingleShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-		{
-			/*
-			 * Adaptive executor opts to error out on queries if a placement is unhealthy,
-			 * not marking the placement itself unhealthy in the process.
-			 * Use 2PC to rollback placements before the unhealthy replica failed.
-			 */
-			return true;
-		}
-
 		/*
-		 * Some tasks don't set replicationModel thus we only
-		 * rely on the anchorShardId, not replicationModel.
-		 *
-		 * TODO: Do we ever need replicationModel in the Task structure?
-		 * Can't we always rely on anchorShardId?
+		 * Single DML/DDL tasks with replicated tables (including
+		 * reference and non-reference tables) should require
+		 * BEGIN/COMMIT/ROLLBACK.
 		 */
-		if (task->anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(
-				task->anchorShardId))
-		{
-			return true;
-		}
-
-		/*
-		 * Single DML/DDL tasks with replicated tables (non-reference)
-		 * should not require BEGIN/COMMIT/ROLLBACK.
-		 */
-		return false;
+		return true;
 	}
 
 	return false;
@@ -1467,21 +1445,13 @@ TaskListRequires2PC(List *taskList)
 	}
 
 	Task *task = (Task *) linitial(taskList);
-	if (task->replicationModel == REPLICATION_MODEL_2PC)
+	if (list_length(task->taskPlacementList) > 1)
 	{
-		return true;
-	}
-
-	/*
-	 * Some tasks don't set replicationModel thus we rely on
-	 * the anchorShardId as well replicationModel.
-	 *
-	 * TODO: Do we ever need replicationModel in the Task structure?
-	 * Can't we always rely on anchorShardId?
-	 */
-	uint64 anchorShardId = task->anchorShardId;
-	if (anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(anchorShardId))
-	{
+		/*
+		 * Even single DML/DDL tasks with replicated tables
+		 * (including reference and non-reference tables)
+		 * should require BEGIN/COMMIT/ROLLBACK.
+		 */
 		return true;
 	}
 

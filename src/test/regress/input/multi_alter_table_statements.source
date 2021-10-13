@@ -308,14 +308,15 @@ COMMIT;
 -- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
 
--- Now try with 2pc off
+-- Even if 1PC is picked for multi-shard commands
+-- Citus always uses 2PC for replication > 1
 SET citus.multi_shard_commit_protocol TO '1pc';
 BEGIN;
 CREATE INDEX single_index_2 ON single_shard_items(id);
 CREATE INDEX single_index_3 ON single_shard_items(name);
 COMMIT;
 
--- The block should have committed with a warning
+-- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
 
 \c - - - :worker_2_port

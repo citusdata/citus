@@ -1193,16 +1193,10 @@ GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 CREATE USER router_user;
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 \c - router_user - :master_port
--- first test that it is marked invalid inside a transaction block
 -- we will fail to connect to worker 2, since the user does not exist
+-- still, we never mark placements inactive. Instead, fail the transaction
 BEGIN;
 INSERT INTO failure_test VALUES (1, 1);
-SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
-	WHERE shardid IN (
-		SELECT shardid FROM pg_dist_shard
-		WHERE logicalrelid = 'failure_test'::regclass
-	)
-	ORDER BY placementid;
 ROLLBACK;
 INSERT INTO failure_test VALUES (2, 1);
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement

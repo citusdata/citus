@@ -1643,21 +1643,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomEnumVariable(
-		"citus.single_shard_commit_protocol",
-		gettext_noop(
-			"Sets the commit protocol for commands modifying a single shards with multiple replicas."),
-		gettext_noop("When a failure occurs during commands that modify multiple "
-					 "replicas, two-phase commit is required to ensure data is never lost "
-					 "and this is the default. However, changing to 1pc may give small "
-					 "performance benefits."),
-		&SingleShardCommitProtocol,
-		COMMIT_PROTOCOL_2PC,
-		shard_commit_protocol_options,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
 	DefineCustomBoolVariable(
 		"citus.sort_returning",
 		gettext_noop("Sorts the RETURNING clause to get consistent test output"),

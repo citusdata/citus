@@ -129,11 +129,8 @@ SELECT master_create_worker_shards('second_dustbunnies', 1, 2);
 
 -- run VACUUM and ANALYZE against the table on the master
 \c - - :master_host :master_port
-SET citus.log_remote_commands TO ON;
-
 VACUUM dustbunnies;
 ANALYZE dustbunnies;
-
 
 -- send a VACUUM FULL and a VACUUM ANALYZE
 
@@ -148,8 +145,6 @@ SELECT relfrozenxid AS frozenxid FROM pg_class WHERE oid='dustbunnies_990002'::r
 
 -- send a VACUUM FREEZE after adding a new row
 \c - - :master_host :master_port
-SET citus.log_remote_commands TO ON;
-
 INSERT INTO dustbunnies VALUES (5, 'peter');
 VACUUM (FREEZE) dustbunnies;
 
@@ -164,8 +159,6 @@ WHERE tablename = 'dustbunnies_990002' ORDER BY attname;
 
 -- add NULL values, then perform column-specific ANALYZE
 \c - - :master_host :master_port
-SET citus.log_remote_commands TO ON;
-
 INSERT INTO dustbunnies VALUES (6, NULL, NULL);
 ANALYZE dustbunnies (name);
 

@@ -1,5 +1,10 @@
 \c - - - :master_port
 
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE the_replicated_table (a int, b int, z bigserial);
+SELECT create_distributed_table('the_replicated_table', 'a');
+
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE the_table (a int, b int, z bigserial);
 SELECT create_distributed_table('the_table', 'a');
 
@@ -21,20 +26,27 @@ INSERT INTO reference_table (a, b, z) VALUES (1, 2, 2);
 INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 2);
 
 -- We can allow DML on a writable standby coordinator.
--- Note that it doesn't help to enable writes for citus local tables
--- and coordinator replicated reference tables. This is because, the
--- data is in the coordinator and will hit read-only tranaction checks
--- on Postgres
+-- Note that it doesn't help to enable writes for
+--   (a) citus local tables
+--   (b) coordinator replicated reference tables.
+--   (c) reference tables or replication > 1 distributed tables
+-- (a) and (b) is because the data is in the coordinator and will hit
+-- read-only tranaction checks on Postgres
+-- (c) is because citus uses 2PC, where a transaction record should
+-- be inserted to pg_dist_node, which is not allowed
 SET citus.writable_standby_coordinator TO on;
 
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
 SELECT * FROM the_table;
+INSERT INTO the_replicated_table (a, b, z) VALUES (1, 2, 2);
+SELECT * FROM the_replicated_table;
 INSERT INTO reference_table (a, b, z) VALUES (1, 2, 2);
 SELECT * FROM reference_table;
 INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 2);
 SELECT * FROM citus_local_table;
 
 UPDATE the_table SET z = 3 WHERE a = 1;
+UPDATE the_replicated_table SET z = 3 WHERE a = 1;
 UPDATE reference_table SET z = 3 WHERE a = 1;
 UPDATE citus_local_table SET z = 3 WHERE a = 1;
 SELECT * FROM the_table;
@@ -42,6 +54,7 @@ SELECT * FROM reference_table;
 SELECT * FROM citus_local_table;
 
 DELETE FROM the_table WHERE a = 1;
+DELETE FROM the_replicated_table WHERE a = 1;
 DELETE FROM reference_table WHERE a = 1;
 DELETE FROM citus_local_table WHERE a = 1;
 
@@ -51,16 +64,23 @@ SELECT * FROM citus_local_table;
 
 -- drawing from a sequence is not possible
 INSERT INTO the_table (a, b) VALUES (1, 2);
+INSERT INTO the_replicated_table (a, b) VALUES (1, 2);
 INSERT INTO reference_table (a, b) VALUES (1, 2);
 INSERT INTO citus_local_table (a, b) VALUES (1, 2);
 
 -- 2PC is not possible
 INSERT INTO the_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
+INSERT INTO the_replicated_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 INSERT INTO reference_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 
 -- COPY is not possible in 2PC mode
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
+10,10,10
+11,11,11
+\.
+-- COPY is not possible in 2PC mode
+COPY the_replicated_table (a, b, z) FROM STDIN WITH CSV;
 10,10,10
 11,11,11
 \.
@@ -86,6 +106,8 @@ SELECT * FROM citus_local_table ORDER BY a;
 WITH del AS (DELETE FROM the_table RETURNING *)
 SELECT * FROM del ORDER BY a;
 WITH del AS (DELETE FROM reference_table RETURNING *)
+SELECT * FROM del ORDER BY a;
+WITH del AS (DELETE FROM the_replicated_table RETURNING *)
 SELECT * FROM del ORDER BY a;
 WITH del AS (DELETE FROM citus_local_table RETURNING *)
 SELECT * FROM del ORDER BY a;

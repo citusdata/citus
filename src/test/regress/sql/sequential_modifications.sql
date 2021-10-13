@@ -94,7 +94,8 @@ SELECT recover_prepared_transactions();
 ALTER TABLE test_table ADD CONSTRAINT b_check CHECK(b > 0);
 SELECT distributed_2PCs_are_equal_to_placement_count();
 
--- with 1PC, we should not see and distributed TXs in the pg_dist_transaction
+-- even if 1PC used, we use 2PC as we modify replicated tables
+-- see distributed TXs in the pg_dist_transaction
 SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
@@ -129,7 +130,7 @@ SET citus.shard_replication_factor TO 2;
 CREATE TABLE test_table_rep_2 (a int);
 SELECT create_distributed_table('test_table_rep_2', 'a');
 
--- 1PC should never use 2PC with rep > 1
+-- even if 1PC used, we use 2PC with rep > 1
 SET citus.multi_shard_commit_protocol TO '1pc';
 
 SET citus.multi_shard_modify_mode TO 'sequential';

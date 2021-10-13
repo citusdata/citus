@@ -136,12 +136,18 @@ SELECT recover_prepared_transactions();
                              0
 (1 row)
 
--- plain INSERT does not use 2PC
+-- plain INSERT uses 2PC
 INSERT INTO test_recovery VALUES ('hello');
 SELECT count(*) FROM pg_dist_transaction;
  count
 ---------------------------------------------------------------------
-     0
+     2
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             0
 (1 row)
 
 -- Aborted DDL commands should not write transaction recovery records

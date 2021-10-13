@@ -2448,28 +2448,14 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 \c - router_user - :master_port
--- first test that it is marked invalid inside a transaction block
 -- we will fail to connect to worker 2, since the user does not exist
+-- still, we never mark placements inactive. Instead, fail the transaction
 BEGIN;
 INSERT INTO failure_test VALUES (1, 1);
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
-SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
-	WHERE shardid IN (
-		SELECT shardid FROM pg_dist_shard
-		WHERE logicalrelid = 'failure_test'::regclass
-	)
-	ORDER BY placementid;
- shardid | shardstate | nodename  | nodeport
----------------------------------------------------------------------
-  840017 |          1 | localhost |    57637
-  840017 |          3 | localhost |    57638
-  840018 |          1 | localhost |    57638
-  840018 |          1 | localhost |    57637
-(4 rows)
-
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
 ROLLBACK;
 INSERT INTO failure_test VALUES (2, 1);
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	WHERE shardid IN (
 		SELECT shardid FROM pg_dist_shard
@@ -2480,7 +2466,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 ---------------------------------------------------------------------
   840017 |          1 | localhost |    57637
   840017 |          1 | localhost |    57638
-  840018 |          3 | localhost |    57638
+  840018 |          1 | localhost |    57638
   840018 |          1 | localhost |    57637
 (4 rows)
 
