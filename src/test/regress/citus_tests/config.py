@@ -290,6 +290,7 @@ class CitusUnusualQuerySettingsConfig(CitusMXBaseClusterConfig):
             "citus.enable_single_hash_repartition_joins": True,
             "citus.recover_2pc_interval": "1s",
             "citus.remote_task_check_interval": "1ms",
+            "citus.values_materialization_threshold" : "0"
         }
 
 
