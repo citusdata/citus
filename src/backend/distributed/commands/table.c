@@ -58,11 +58,12 @@ bool EnableLocalReferenceForeignKeys = true;
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
-static void PreprocessAttachPartitionToCitusTable(Oid relationId,
+static void PreprocessAttachPartitionToCitusTable(Oid parentRelationId,
 												  Oid partitionRelationId);
-static void PreprocessAttachCitusPartitionToCitusTable(Oid relationId,
+static void PreprocessAttachCitusPartitionToCitusTable(Oid parentRelationId,
 													   Oid partitionRelationId);
-static void DistributePartitionUsingParent(Oid relationId, Oid partitionRelationId);
+static void DistributePartitionUsingParent(Oid parentRelationId,
+										   Oid partitionRelationId);
 static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
 	AlterTableStmt *alterTableStatement);
 static bool RelationIdListContainsCitusTableType(List *relationIdList,
@@ -425,13 +426,14 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			 * and want to ensure we acquire the locks in the same order with Postgres
 			 */
 			LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-			Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+			Oid parentRelationId = AlterTableLookupRelation(alterTableStatement,
+															lockmode);
 			PartitionCmd *partitionCommand = (PartitionCmd *) alterTableCommand->def;
 			bool partitionMissingOk = false;
 			Oid partitionRelationId = RangeVarGetRelid(partitionCommand->name, lockmode,
 													   partitionMissingOk);
 
-			if (!IsCitusTable(relationId) &&
+			if (!IsCitusTable(parentRelationId) &&
 				!IsCitusTable(partitionRelationId))
 			{
 				/*
@@ -445,7 +447,7 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			if (PartitionedTable(partitionRelationId))
 			{
 				char *relationName = get_rel_name(partitionRelationId);
-				char *parentRelationName = get_rel_name(relationId);
+				char *parentRelationName = get_rel_name(parentRelationId);
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 								errmsg("Citus doesn't support multi-level "
 									   "partitioned tables"),
@@ -459,10 +461,10 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			 * If user first distributes the table then tries to attach it to non
 			 * distributed table, we error out.
 			 */
-			if (!IsCitusTable(relationId) &&
+			if (!IsCitusTable(parentRelationId) &&
 				IsCitusTable(partitionRelationId))
 			{
-				char *parentRelationName = get_rel_name(relationId);
+				char *parentRelationName = get_rel_name(parentRelationId);
 
 				ereport(ERROR, (errmsg("non-citus partitioned tables cannot have "
 									   "distributed partitions"),
@@ -470,10 +472,10 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 										"instead", parentRelationName)));
 			}
 
-			if (IsCitusTable(relationId))
+			if (IsCitusTable(parentRelationId))
 			{
 				/* attaching to a Citus table */
-				PreprocessAttachPartitionToCitusTable(relationId, partitionRelationId);
+				PreprocessAttachPartitionToCitusTable(parentRelationId, partitionRelationId);
 			}
 		}
 	}
@@ -491,27 +493,27 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
  * If not, calls PreprocessAttachCitusPartitionToCitusTable
  */
 static void
-PreprocessAttachPartitionToCitusTable(Oid relationId, Oid partitionRelationId)
+PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelationId)
 {
 	/* reference tables cannot be partitioned */
-	Assert(!IsCitusTableType(relationId, REFERENCE_TABLE));
+	Assert(!IsCitusTableType(parentRelationId, REFERENCE_TABLE));
 
 	/* if parent of this table is distributed, distribute this table too */
 	if (!IsCitusTable(partitionRelationId))
 	{
-		if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		if (IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
 		{
 			CreateCitusLocalTable(partitionRelationId, false);
 		}
-		else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
+		else if (IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
 		{
-			DistributePartitionUsingParent(relationId, partitionRelationId);
+			DistributePartitionUsingParent(parentRelationId, partitionRelationId);
 		}
 	}
 	else
 	{
 		/* both the parent and child are Citus tables */
-		PreprocessAttachCitusPartitionToCitusTable(relationId, partitionRelationId);
+		PreprocessAttachCitusPartitionToCitusTable(parentRelationId, partitionRelationId);
 	}
 }
 
@@ -524,26 +526,26 @@ PreprocessAttachPartitionToCitusTable(Oid relationId, Oid partitionRelationId)
  * Distributes the partition, if it's a Citus Local Table, and the parent is distributed.
  */
 static void
-PreprocessAttachCitusPartitionToCitusTable(Oid relationId, Oid partitionRelationId)
+PreprocessAttachCitusPartitionToCitusTable(Oid parentRelationId, Oid partitionRelationId)
 {
 	if (IsCitusTableType(partitionRelationId, REFERENCE_TABLE))
 	{
 		ereport(ERROR, (errmsg("partitioned reference tables are not supported")));
 	}
 	else if (IsCitusTableType(partitionRelationId, DISTRIBUTED_TABLE) &&
-			 IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+			 IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
 	{
 		ereport(ERROR, (errmsg("non-distributed partitioned tables cannot have "
 							   "distributed partitions")));
 	}
 	else if (IsCitusTableType(partitionRelationId, CITUS_LOCAL_TABLE) &&
-			 IsCitusTableType(relationId, DISTRIBUTED_TABLE))
+			 IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
 	{
 		/* if the parent is a distributed table, distribute the partition too */
-		DistributePartitionUsingParent(relationId, partitionRelationId);
+		DistributePartitionUsingParent(parentRelationId, partitionRelationId);
 	}
 	else if (IsCitusTableType(partitionRelationId, CITUS_LOCAL_TABLE) &&
-			 IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+			 IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
 	{
 		/*
 		 * We should ensure that the partition relation has no foreign keys,
@@ -571,23 +573,23 @@ PreprocessAttachCitusPartitionToCitusTable(Oid relationId, Oid partitionRelation
  * distributed by hash.
  */
 static void
-DistributePartitionUsingParent(Oid relationId, Oid partitionRelationId)
+DistributePartitionUsingParent(Oid parentRelationId, Oid partitionRelationId)
 {
-	Var *distributionColumn = DistPartitionKeyOrError(relationId);
+	Var *distributionColumn = DistPartitionKeyOrError(parentRelationId);
 	char *distributionColumnName =
-		ColumnToColumnName(relationId,
+		ColumnToColumnName(parentRelationId,
 						   nodeToString(distributionColumn));
 	distributionColumn =
-		FindColumnWithNameOnTargetRelation(relationId,
+		FindColumnWithNameOnTargetRelation(parentRelationId,
 										   distributionColumnName,
 										   partitionRelationId);
 
 	char distributionMethod = DISTRIBUTE_BY_HASH;
-	char *parentRelationName = generate_qualified_relation_name(relationId);
+	char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 	bool viaDeprecatedAPI = false;
 
 	SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(
-		relationId, partitionRelationId);
+		parentRelationId, partitionRelationId);
 
 	CreateDistributedTable(partitionRelationId, distributionColumn,
 						   distributionMethod, ShardCount, false,
