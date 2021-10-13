@@ -470,7 +470,8 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
  * If the partition table is a regular Postgres table:
  * - Converts the partition to Citus Local Table, if the parent is a Citus Local Table.
  * - Distributes the partition, if the parent is a distributed table.
- * If not, calls PreprocessAttachCitusPartitionToCitusTable
+ * If not, calls PreprocessAttachCitusPartitionToCitusTable to attach given partition to
+ * the parent relation.
  */
 static void
 PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelationId)
@@ -485,7 +486,12 @@ PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelatio
 	{
 		if (IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
 		{
-			CreateCitusLocalTable(partitionRelationId, false);
+			/*
+			 * We pass the cascade option as false, since Citus Local Table partitions
+			 * cannot have non-inherited foreign keys.
+			 */
+			bool cascadeViaForeignKeys = false;
+			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys);
 		}
 		else if (IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
 		{
@@ -541,9 +547,9 @@ PreprocessAttachCitusPartitionToCitusTable(Oid parentRelationId, Oid partitionRe
 	}
 
 	/*
-	 * We don't need to add other cases here, like distributed-distributed and
-	 * citus_local-citus_local, as ATTACH commands are already handled successfully
-	 * for these cases.
+	 * We don't need to add other cases here, like distributed - distributed and
+	 * citus_local - citus_local, as PreprocessAlterTableStmt and standard process
+	 * utility would do the work to attach partitions to shell and shard relations.
 	 */
 }
 
@@ -616,9 +622,9 @@ ErrorIfAttachCitusTableToPgLocalTable(Oid parentRelationId, Oid partitionRelatio
 		char *parentRelationName = get_rel_name(parentRelationId);
 
 		ereport(ERROR, (errmsg("non-citus partitioned tables cannot have "
-							   "distributed partitions"),
+							   "citus table partitions"),
 						errhint("Distribute the partitioned table \"%s\" "
-								"instead", parentRelationName)));
+								"instead, or add it to metadata", parentRelationName)));
 	}
 }
 
