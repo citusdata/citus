@@ -11,7 +11,7 @@ BEGIN
     --
     -- We are dropping the aggregates because postgres 14 changed
     -- array_cat type from anyarray to anycompatiblearray. When
-    -- upgrading to pg14, spegifically when running pg_restore on
+    -- upgrading to pg14, specifically when running pg_restore on
     -- array_cat_agg we would get an error. So we drop the aggregate
     -- and create the right one on citus_finish_pg_upgrade.
 

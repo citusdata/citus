@@ -101,7 +101,7 @@ typedef struct DependencyDefinition
 		/*
 		 * address is used for dependencies that are artificially added during the
 		 * chasing. Since they are added by citus code we assume the dependency needs to
-		 * be chased anyway, ofcourse it will only actually be chased if the object is a
+		 * be chased anyway, of course it will only actually be chased if the object is a
 		 * supported object by citus
 		 */
 		ObjectAddress address;
