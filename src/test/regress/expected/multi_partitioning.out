@@ -4325,72 +4325,14 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 
 (1 row)
 
-SET search_path = partitioning_schema;
-SELECT 1 from citus_add_node('localhost', :master_port, groupid=>0);
-NOTICE:  Replicating reference table "orders_reference" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "customer" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "nation" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "part" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "supplier" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "users_ref_test_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "events_reference_table" to the node localhost:xxxxx
-NOTICE:  Replicating reference table "users_reference_table" to the node localhost:xxxxx
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
--- test attaching citus local table to distributed table
--- citus local table should be distributed
-CREATE TABLE dist_table_parent (a INT UNIQUE) PARTITION BY RANGE(a);
-SELECT create_distributed_table('dist_table_parent','a');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-CREATE TABLE citus_local_child (a int unique);
-select citus_add_local_table_to_metadata('citus_local_child', false);
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
-alter table dist_table_parent attach partition  citus_local_child default ;
-select logicalrelid, partmethod from pg_dist_partition where logicalrelid::text in ('dist_table_parent', 'citus_local_child');
-   logicalrelid    | partmethod
----------------------------------------------------------------------
- dist_table_parent | h
- citus_local_child | h
-(2 rows)
-
--- test attaching distributed table to citus local table
-CREATE TABLE dist_table_child (a INT UNIQUE);
-SELECT create_distributed_table('dist_table_child','a');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-CREATE TABLE citus_local_parent (a INT UNIQUE) PARTITION BY RANGE(a);
-select citus_add_local_table_to_metadata('citus_local_parent', false);
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
--- this should error out
-alter table citus_local_parent attach partition dist_table_child default ;
-ERROR:  non-distributed partitioned tables cannot have distributed partitions
-SET client_min_messages TO ERROR;
 DROP SCHEMA partitioning_schema CASCADE;
-SET client_min_messages to notice;
-SELECT citus_remove_node('localhost', :master_port);
- citus_remove_node
----------------------------------------------------------------------
-
-(1 row)
-
+NOTICE:  drop cascades to 6 other objects
+DETAIL:  drop cascades to table partitioning_schema."schema-test"
+drop cascades to table partitioning_schema.another_distributed_table
+drop cascades to table partitioning_schema.distributed_parent_table
+drop cascades to table partitioning_schema.date_partitioned_citus_local_table
+drop cascades to table partitioning_schema.date_partitioned_citus_local_table_2
+drop cascades to table partitioning_schema.part_table_with_very_long_name
 RESET search_path;
 DROP TABLE IF EXISTS
 	partitioning_hash_test,

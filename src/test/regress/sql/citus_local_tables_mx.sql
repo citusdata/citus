@@ -348,6 +348,24 @@ CREATE TABLE citus_local_with_fkey (d INT);
 ALTER TABLE citus_local_with_fkey ADD CONSTRAINT cl_to_cl FOREIGN KEY(d) REFERENCES citus_local_parent(a);
 -- error out
 ALTER TABLE citus_local_parent ATTACH PARTITION citus_local_with_fkey DEFAULT;
+DROP TABLE citus_local_parent CASCADE;
+
+-- test attaching citus local table to distributed table
+-- citus local table should be distributed
+CREATE TABLE dist_table_parent (a INT UNIQUE) PARTITION BY RANGE(a);
+SELECT create_distributed_table('dist_table_parent','a');
+CREATE TABLE citus_local_child (a int unique);
+select citus_add_local_table_to_metadata('citus_local_child', false);
+alter table dist_table_parent attach partition  citus_local_child default ;
+select logicalrelid, partmethod from pg_dist_partition where logicalrelid::text in ('dist_table_parent', 'citus_local_child');
+
+-- test attaching distributed table to citus local table
+CREATE TABLE dist_table_child (a INT UNIQUE);
+SELECT create_distributed_table('dist_table_child','a');
+CREATE TABLE citus_local_parent (a INT UNIQUE) PARTITION BY RANGE(a);
+select citus_add_local_table_to_metadata('citus_local_parent', false);
+-- this should error out
+alter table citus_local_parent attach partition dist_table_child default ;
 
 SELECT master_remove_distributed_table_metadata_from_workers('citus_local_table_4'::regclass::oid, 'citus_local_tables_mx', 'citus_local_table_4');
 

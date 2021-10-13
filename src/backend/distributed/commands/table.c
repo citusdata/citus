@@ -475,7 +475,8 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			if (IsCitusTable(parentRelationId))
 			{
 				/* attaching to a Citus table */
-				PreprocessAttachPartitionToCitusTable(parentRelationId, partitionRelationId);
+				PreprocessAttachPartitionToCitusTable(parentRelationId,
+													  partitionRelationId);
 			}
 		}
 	}
