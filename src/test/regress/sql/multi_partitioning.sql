@@ -2004,7 +2004,6 @@ WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%
 
 \c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-
 DROP SCHEMA partitioning_schema CASCADE;
 RESET search_path;
 DROP TABLE IF EXISTS

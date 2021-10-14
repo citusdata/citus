@@ -58,6 +58,15 @@ bool EnableLocalReferenceForeignKeys = true;
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
+static void PreprocessAttachPartitionToCitusTable(Oid parentRelationId,
+												  Oid partitionRelationId);
+static void PreprocessAttachCitusPartitionToCitusTable(Oid parentCitusRelationId,
+													   Oid partitionRelationId);
+static void DistributePartitionUsingParent(Oid parentRelationId,
+										   Oid partitionRelationId);
+static void ErrorIfMultiLevelPartitioning(Oid parentRelationId, Oid partitionRelationId);
+static void ErrorIfAttachCitusTableToPgLocalTable(Oid parentRelationId,
+												  Oid partitionRelationId);
 static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
 	AlterTableStmt *alterTableStatement);
 static bool RelationIdListContainsCitusTableType(List *relationIdList,
@@ -420,72 +429,204 @@ PreprocessAlterTableStmtAttachPartition(AlterTableStmt *alterTableStatement,
 			 * and want to ensure we acquire the locks in the same order with Postgres
 			 */
 			LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
-			Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+			Oid parentRelationId = AlterTableLookupRelation(alterTableStatement,
+															lockmode);
 			PartitionCmd *partitionCommand = (PartitionCmd *) alterTableCommand->def;
 			bool partitionMissingOk = false;
 			Oid partitionRelationId = RangeVarGetRelid(partitionCommand->name, lockmode,
 													   partitionMissingOk);
 
-			/*
-			 * If user first distributes the table then tries to attach it to non
-			 * distributed table, we error out.
-			 */
-			if (!IsCitusTable(relationId) &&
-				IsCitusTable(partitionRelationId))
+			if (!IsCitusTable(parentRelationId))
 			{
-				char *parentRelationName = get_rel_name(relationId);
+				/*
+				 * If the parent is a regular Postgres table, but the partition is a
+				 * Citus table, we error out.
+				 */
+				ErrorIfAttachCitusTableToPgLocalTable(parentRelationId,
+													  partitionRelationId);
 
-				ereport(ERROR, (errmsg("non-distributed tables cannot have "
-									   "distributed partitions"),
-								errhint("Distribute the partitioned table \"%s\" "
-										"instead", parentRelationName)));
+				/*
+				 * If both the parent and the child table are Postgres tables,
+				 * we can just skip preprocessing this command.
+				 */
+				continue;
 			}
 
-			/* if parent of this table is distributed, distribute this table too */
-			if (IsCitusTable(relationId) &&
-				!IsCitusTable(partitionRelationId))
-			{
-				if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-				{
-					if (PartitionedTable(partitionRelationId))
-					{
-						char *relationName = get_rel_name(partitionRelationId);
-						char *parentRelationName = get_rel_name(relationId);
-						ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-										errmsg("distributing multi-level partitioned "
-											   "tables is not supported"),
-										errdetail("Relation \"%s\" is partitioned table "
-												  "itself and it is also partition of "
-												  "relation \"%s\".",
-												  relationName, parentRelationName)));
-					}
-					CreateCitusLocalTable(partitionRelationId, false);
-					return NIL;
-				}
+			/* Citus doesn't support multi-level partitioned tables */
+			ErrorIfMultiLevelPartitioning(parentRelationId, partitionRelationId);
 
-				Var *distributionColumn = DistPartitionKeyOrError(relationId);
-				char *distributionColumnName = ColumnToColumnName(relationId,
-																  nodeToString(
-																	  distributionColumn));
-				distributionColumn = FindColumnWithNameOnTargetRelation(relationId,
-																		distributionColumnName,
-																		partitionRelationId);
-
-				char distributionMethod = DISTRIBUTE_BY_HASH;
-				char *parentRelationName = generate_qualified_relation_name(relationId);
-				bool viaDeprecatedAPI = false;
-
-				SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(
-					relationId, partitionRelationId);
-
-				CreateDistributedTable(partitionRelationId, distributionColumn,
-									   distributionMethod, ShardCount, false,
-									   parentRelationName, viaDeprecatedAPI);
-			}
+			/* attaching to a Citus table */
+			PreprocessAttachPartitionToCitusTable(parentRelationId, partitionRelationId);
 		}
 	}
 
 	return NIL;
+}
+
+
+/*
+ * PreprocessAttachPartitionToCitusTable takes a parent relation, which is a Citus table,
+ * and a partition to be attached to it.
+ * If the partition table is a regular Postgres table:
+ * - Converts the partition to Citus Local Table, if the parent is a Citus Local Table.
+ * - Distributes the partition, if the parent is a distributed table.
+ * If not, calls PreprocessAttachCitusPartitionToCitusTable to attach given partition to
+ * the parent relation.
+ */
+static void
+PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelationId)
+{
+	Assert(IsCitusTable(parentRelationId));
+
+	/* reference tables cannot be partitioned */
+	Assert(!IsCitusTableType(parentRelationId, REFERENCE_TABLE));
+
+	/* if parent of this table is distributed, distribute this table too */
+	if (!IsCitusTable(partitionRelationId))
+	{
+		if (IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
+		{
+			/*
+			 * We pass the cascade option as false, since Citus Local Table partitions
+			 * cannot have non-inherited foreign keys.
+			 */
+			bool cascadeViaForeignKeys = false;
+			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys);
+		}
+		else if (IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
+		{
+			DistributePartitionUsingParent(parentRelationId, partitionRelationId);
+		}
+	}
+	else
+	{
+		/* both the parent and child are Citus tables */
+		PreprocessAttachCitusPartitionToCitusTable(parentRelationId, partitionRelationId);
+	}
+}
+
+
+/*
+ * PreprocessAttachCitusPartitionToCitusTable takes a parent relation, and a partition
+ * to be attached to it. Both of them are Citus tables.
+ * Errors out if the partition is a reference table.
+ * Errors out if the partition is distributed and the parent is a Citus Local Table.
+ * Distributes the partition, if it's a Citus Local Table, and the parent is distributed.
+ */
+static void
+PreprocessAttachCitusPartitionToCitusTable(Oid parentCitusRelationId, Oid
+										   partitionRelationId)
+{
+	if (IsCitusTableType(partitionRelationId, REFERENCE_TABLE))
+	{
+		ereport(ERROR, (errmsg("partitioned reference tables are not supported")));
+	}
+	else if (IsCitusTableType(partitionRelationId, DISTRIBUTED_TABLE) &&
+			 IsCitusTableType(parentCitusRelationId, CITUS_LOCAL_TABLE))
+	{
+		ereport(ERROR, (errmsg("non-distributed partitioned tables cannot have "
+							   "distributed partitions")));
+	}
+	else if (IsCitusTableType(partitionRelationId, CITUS_LOCAL_TABLE) &&
+			 IsCitusTableType(parentCitusRelationId, DISTRIBUTED_TABLE))
+	{
+		/* if the parent is a distributed table, distribute the partition too */
+		DistributePartitionUsingParent(parentCitusRelationId, partitionRelationId);
+	}
+	else if (IsCitusTableType(partitionRelationId, CITUS_LOCAL_TABLE) &&
+			 IsCitusTableType(parentCitusRelationId, CITUS_LOCAL_TABLE))
+	{
+		/*
+		 * We should ensure that the partition relation has no foreign keys,
+		 * as Citus Local Table partitions can only have inherited foreign keys.
+		 */
+		if (TableHasExternalForeignKeys(partitionRelationId))
+		{
+			ereport(ERROR, (errmsg("partition local tables added to citus metadata "
+								   "cannot have non-inherited foreign keys")));
+		}
+	}
+
+	/*
+	 * We don't need to add other cases here, like distributed - distributed and
+	 * citus_local - citus_local, as PreprocessAlterTableStmt and standard process
+	 * utility would do the work to attach partitions to shell and shard relations.
+	 */
+}
+
+
+/*
+ * DistributePartitionUsingParent takes a parent and a partition relation and
+ * distributes the partition, using the same distribution column as the parent.
+ * It creates a *hash* distributed table by default, as partitioned tables can only be
+ * distributed by hash.
+ */
+static void
+DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationId)
+{
+	Var *distributionColumn = DistPartitionKeyOrError(parentCitusRelationId);
+	char *distributionColumnName =
+		ColumnToColumnName(parentCitusRelationId,
+						   nodeToString(distributionColumn));
+	distributionColumn =
+		FindColumnWithNameOnTargetRelation(parentCitusRelationId,
+										   distributionColumnName,
+										   partitionRelationId);
+
+	char distributionMethod = DISTRIBUTE_BY_HASH;
+	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
+	bool viaDeprecatedAPI = false;
+
+	SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(
+		parentCitusRelationId, partitionRelationId);
+
+	CreateDistributedTable(partitionRelationId, distributionColumn,
+						   distributionMethod, ShardCount, false,
+						   parentRelationName, viaDeprecatedAPI);
+}
+
+
+/*
+ * ErrorIfMultiLevelPartitioning takes a parent, and a partition relation to be attached
+ * and errors out if the partition is also a partitioned table, which means we are
+ * trying to build a multi-level partitioned table.
+ */
+static void
+ErrorIfMultiLevelPartitioning(Oid parentRelationId, Oid partitionRelationId)
+{
+	if (PartitionedTable(partitionRelationId))
+	{
+		char *relationName = get_rel_name(partitionRelationId);
+		char *parentRelationName = get_rel_name(parentRelationId);
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("Citus doesn't support multi-level "
+							   "partitioned tables"),
+						errdetail("Relation \"%s\" is partitioned table "
+								  "itself and it is also partition of "
+								  "relation \"%s\".",
+								  relationName, parentRelationName)));
+	}
+}
+
+
+/*
+ * ErrorIfAttachCitusTableToPgLocalTable takes a parent, and a partition relation
+ * to be attached. Errors out if the partition is a Citus table, and the parent is a
+ * regular Postgres table.
+ */
+static void
+ErrorIfAttachCitusTableToPgLocalTable(Oid parentRelationId, Oid partitionRelationId)
+{
+	if (!IsCitusTable(parentRelationId) &&
+		IsCitusTable(partitionRelationId))
+	{
+		char *parentRelationName = get_rel_name(parentRelationId);
+
+		ereport(ERROR, (errmsg("non-citus partitioned tables cannot have "
+							   "citus table partitions"),
+						errhint("Distribute the partitioned table \"%s\" "
+								"instead, or add it to metadata", parentRelationName)));
+	}
 }
 
 
