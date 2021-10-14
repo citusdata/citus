@@ -651,7 +651,7 @@ CREATE TABLE citus_local_with_fkey (d INT);
 ALTER TABLE citus_local_with_fkey ADD CONSTRAINT cl_to_cl FOREIGN KEY(d) REFERENCES citus_local_parent(a);
 -- error out
 ALTER TABLE citus_local_parent ATTACH PARTITION citus_local_with_fkey DEFAULT;
-ERROR:  partition citus local tables cannot have non-inherited foreign keys
+ERROR:  partition local tables added to citus metadata cannot have non-inherited foreign keys
 DROP TABLE citus_local_parent CASCADE;
 -- test attaching citus local table to distributed table
 -- citus local table should be distributed
