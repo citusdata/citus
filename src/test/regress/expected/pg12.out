@@ -414,6 +414,7 @@ where val = 'asdf';
 -- not replicate reference tables from other test files
 SET citus.replicate_reference_tables_on_activate TO off;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1

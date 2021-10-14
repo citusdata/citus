@@ -3,7 +3,6 @@ SET search_path TO drop_column_partitioned_table;
 
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 2580000;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- create a partitioned table with some columns that
 -- are going to be dropped within the tests
@@ -207,6 +206,3 @@ WHERE
 \c - - - :master_port
 SET client_min_messages TO WARNING;
 DROP SCHEMA drop_column_partitioned_table CASCADE;
-
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-
