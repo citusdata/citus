@@ -260,6 +260,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 									"cascade_via_foreign_keys=>true)",
 									qualifiedRelationName, qualifiedRelationName)));
 		}
+
 		/* save the relation name, to obtain the shell relation id later */
 		char *relationName = get_rel_name(relationId);
 		Oid relationSchemaId = get_rel_namespace(relationId);
