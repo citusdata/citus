@@ -268,12 +268,12 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 (1 row)
 
 \c - - - :worker_2_port
-SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
+SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx\_%table%';
  worker_drop_distributed_table
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT count(*) FROM pg_dist_partition;
+SELECT count(*) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx\_%table%';
  count
 ---------------------------------------------------------------------
      0
@@ -379,7 +379,7 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 
 \c - - - :worker_1_port
 DELETE FROM pg_dist_node;
-SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
+SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx\_%table%';
  worker_drop_distributed_table
 ---------------------------------------------------------------------
 (0 rows)

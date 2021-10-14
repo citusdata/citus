@@ -335,7 +335,7 @@ SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text = 'child_index' 
 SET search_path TO multi_index_statements;
 
 -- show that child indices of partition shards also inherit from parent indices of parent shards
-SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index%' AND inhparent::regclass::text LIKE 'parent_index%';
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index\_%' AND inhparent::regclass::text LIKE 'parent_index\_%';
 
 \c - - - :master_port
 SET search_path TO multi_index_statements;

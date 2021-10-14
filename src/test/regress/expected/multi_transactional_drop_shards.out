@@ -379,10 +379,10 @@ ORDER BY
 -- verify shards are not dropped
 \c - - - :worker_1_port
 \dt transactional_drop_reference*
-                        List of relations
- Schema |                 Name                 | Type  |  Owner
+                    List of relations
+ Schema |             Name             | Type  |  Owner
 ---------------------------------------------------------------------
- public | transactional_drop_reference_1410006 | table | postgres
+ public | transactional_drop_reference | table | postgres
 (1 row)
 
 \c - - - :master_port
@@ -656,7 +656,7 @@ ORDER BY
 \c - - - :master_port
 SET client_min_messages TO WARNING;
 -- try using the coordinator as a worker and then dropping the table
-SELECT 1 FROM master_add_node('localhost', :master_port);
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid := 0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -679,12 +679,6 @@ SELECT master_remove_node('localhost', :master_port);
 
 -- clean the workspace
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 -- test DROP TABLE as a non-superuser in a transaction block
 CREATE USER try_drop_table WITH LOGIN;
 SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');

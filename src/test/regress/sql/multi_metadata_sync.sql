@@ -108,9 +108,9 @@ SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND node
 \c - - - :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
-SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
-SELECT * FROM pg_dist_shard ORDER BY shardid;
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
+SELECT * FROM pg_dist_shard  WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
@@ -158,9 +158,9 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 \c - - - :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
-SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
-SELECT * FROM pg_dist_shard ORDER BY shardid;
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
+SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
@@ -294,8 +294,8 @@ ORDER BY
 \d mx_test_schema_1.mx_table_1
 \d mx_test_schema_2.mx_table_2
 
-SELECT * FROM pg_dist_partition;
-SELECT * FROM pg_dist_shard;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_test_schema%';
+SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_test_schema%';
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 
 -- Check that CREATE INDEX statement is propagated

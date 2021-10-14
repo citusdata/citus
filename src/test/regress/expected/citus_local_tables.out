@@ -960,7 +960,7 @@ select count(*) from pg_constraint where conname = 'fkey_test_drop';
 select inhrelid::regclass from pg_inherits where (select inhparent::regclass::text) ~ '^parent_1_\d{7}$' order by 1;
          inhrelid
 ---------------------------------------------------------------------
- parent_1_child_1_1190084
+ parent_1_child_1_1190082
 (1 row)
 
 -- check the shell partition
