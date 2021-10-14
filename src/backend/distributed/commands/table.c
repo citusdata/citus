@@ -60,7 +60,7 @@ static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
 												  const char *queryString);
 static void PreprocessAttachPartitionToCitusTable(Oid parentRelationId,
 												  Oid partitionRelationId);
-static void PreprocessAttachCitusPartitionToCitusTable(Oid parentRelationId,
+static void PreprocessAttachCitusPartitionToCitusTable(Oid parentCitusRelationId,
 													   Oid partitionRelationId);
 static void DistributePartitionUsingParent(Oid parentRelationId,
 										   Oid partitionRelationId);
@@ -514,26 +514,27 @@ PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelatio
  * Distributes the partition, if it's a Citus Local Table, and the parent is distributed.
  */
 static void
-PreprocessAttachCitusPartitionToCitusTable(Oid parentRelationId, Oid partitionRelationId)
+PreprocessAttachCitusPartitionToCitusTable(Oid parentCitusRelationId, Oid
+										   partitionRelationId)
 {
 	if (IsCitusTableType(partitionRelationId, REFERENCE_TABLE))
 	{
 		ereport(ERROR, (errmsg("partitioned reference tables are not supported")));
 	}
 	else if (IsCitusTableType(partitionRelationId, DISTRIBUTED_TABLE) &&
-			 IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
+			 IsCitusTableType(parentCitusRelationId, CITUS_LOCAL_TABLE))
 	{
 		ereport(ERROR, (errmsg("non-distributed partitioned tables cannot have "
 							   "distributed partitions")));
 	}
 	else if (IsCitusTableType(partitionRelationId, CITUS_LOCAL_TABLE) &&
-			 IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
+			 IsCitusTableType(parentCitusRelationId, DISTRIBUTED_TABLE))
 	{
 		/* if the parent is a distributed table, distribute the partition too */
-		DistributePartitionUsingParent(parentRelationId, partitionRelationId);
+		DistributePartitionUsingParent(parentCitusRelationId, partitionRelationId);
 	}
 	else if (IsCitusTableType(partitionRelationId, CITUS_LOCAL_TABLE) &&
-			 IsCitusTableType(parentRelationId, CITUS_LOCAL_TABLE))
+			 IsCitusTableType(parentCitusRelationId, CITUS_LOCAL_TABLE))
 	{
 		/*
 		 * We should ensure that the partition relation has no foreign keys,
@@ -541,8 +542,8 @@ PreprocessAttachCitusPartitionToCitusTable(Oid parentRelationId, Oid partitionRe
 		 */
 		if (TableHasExternalForeignKeys(partitionRelationId))
 		{
-			ereport(ERROR, (errmsg("partition citus local tables cannot have "
-								   "non-inherited foreign keys")));
+			ereport(ERROR, (errmsg("partition local tables added to citus metadata "
+								   "cannot have non-inherited foreign keys")));
 		}
 	}
 
@@ -556,28 +557,28 @@ PreprocessAttachCitusPartitionToCitusTable(Oid parentRelationId, Oid partitionRe
 
 /*
  * DistributePartitionUsingParent takes a parent and a partition relation and
- * distributed the partition, using the same distribution column as the parent.
+ * distributes the partition, using the same distribution column as the parent.
  * It creates a *hash* distributed table by default, as partitioned tables can only be
  * distributed by hash.
  */
 static void
-DistributePartitionUsingParent(Oid parentRelationId, Oid partitionRelationId)
+DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationId)
 {
-	Var *distributionColumn = DistPartitionKeyOrError(parentRelationId);
+	Var *distributionColumn = DistPartitionKeyOrError(parentCitusRelationId);
 	char *distributionColumnName =
-		ColumnToColumnName(parentRelationId,
+		ColumnToColumnName(parentCitusRelationId,
 						   nodeToString(distributionColumn));
 	distributionColumn =
-		FindColumnWithNameOnTargetRelation(parentRelationId,
+		FindColumnWithNameOnTargetRelation(parentCitusRelationId,
 										   distributionColumnName,
 										   partitionRelationId);
 
 	char distributionMethod = DISTRIBUTE_BY_HASH;
-	char *parentRelationName = generate_qualified_relation_name(parentRelationId);
+	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
 	bool viaDeprecatedAPI = false;
 
 	SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(
-		parentRelationId, partitionRelationId);
+		parentCitusRelationId, partitionRelationId);
 
 	CreateDistributedTable(partitionRelationId, distributionColumn,
 						   distributionMethod, ShardCount, false,
