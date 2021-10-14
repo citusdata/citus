@@ -309,7 +309,7 @@ BEGIN;
 
   -- show that we validate foreign key constraints, errors out
   INSERT INTO local_table_5 VALUES (300);
-ERROR:  insert or update on table "local_table_5_1518073" violates foreign key constraint "local_table_5_col_1_fkey1_1518073"
+ERROR:  insert or update on table "local_table_5_1518069" violates foreign key constraint "local_table_5_col_1_fkey1_1518069"
 ROLLBACK;
 BEGIN;
   CREATE TABLE local_table_6 (col_1 INT PRIMARY KEY);
