@@ -1,3 +1,17 @@
+### citus v10.2.2 (October 14, 2021) ###
+
+* Fixes a bug that causes reading columnar metapage as all-zeros when
+  writing to a columnar table
+
+* Fixes a bug that could cause prerequisite columnar table access method
+  objects being not created during pg upgrades
+
+* Fixes a bug that could cause `CREATE INDEX` to fail for expressions when
+  using custom `search_path`
+
+* Fixes an unexpected error that occurs due to aborted writes to a columnar
+  table with an index
+
 ### citus v10.2.1 (September 24, 2021) ###
 
 * Adds missing version-mismatch checks for columnar tables
