@@ -2445,16 +2445,6 @@ ErrorIfUnsupportedShardDistribution(Query *query)
 		}
 		else
 		{
-			CitusTableCacheEntry *distTableEntry = GetCitusTableCacheEntry(relationId);
-			if (distTableEntry->hasOverlappingShardInterval)
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot push down this subquery"),
-								errdetail("Currently append partitioned relations "
-										  "with overlapping shard intervals are "
-										  "not supported")));
-			}
-
 			appendDistributedRelationCount++;
 		}
 	}
@@ -2647,13 +2637,18 @@ QueryPushdownTaskCreate(Query *originalQuery, int shardIndex,
 bool
 CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 {
-	if (firstRelationId == secondRelationId)
-	{
-		return true;
-	}
-
 	CitusTableCacheEntry *firstTableCache = GetCitusTableCacheEntry(firstRelationId);
 	CitusTableCacheEntry *secondTableCache = GetCitusTableCacheEntry(secondRelationId);
+
+	if (firstTableCache->partitionMethod == DISTRIBUTE_BY_APPEND ||
+		secondTableCache->partitionMethod == DISTRIBUTE_BY_APPEND)
+	{
+		/*
+		 * Append-distributed tables can have overlapping shards. Therefore they are
+		 * never co-partitioned, not even with themselves.
+		 */
+		return false;
+	}
 
 	/*
 	 * Check if the tables have the same colocation ID - if so, we know
@@ -2662,6 +2657,15 @@ CoPartitionedTables(Oid firstRelationId, Oid secondRelationId)
 	if (firstTableCache->colocationId != INVALID_COLOCATION_ID &&
 		firstTableCache->colocationId == secondTableCache->colocationId)
 	{
+		return true;
+	}
+
+	if (firstRelationId == secondRelationId)
+	{
+		/*
+		 * Even without an explicit co-location ID, non-append tables can be considered
+		 * co-located with themselves.
+		 */
 		return true;
 	}
 

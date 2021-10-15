@@ -234,6 +234,12 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 			continue;
 		}
 
+		/* append-distributed tables do not have a strict partition column */
+		if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
+		{
+			continue;
+		}
+
 		if (isPartitionColumn)
 		{
 			FieldSelect *compositeField = CompositeFieldRecursive(targetExpression,
