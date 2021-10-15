@@ -831,6 +831,7 @@ DROP TABLE table_option_reference, table_option_reference_2;
 SET citus.shard_replication_factor TO 1;
 -- test options on a citus local table
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1
