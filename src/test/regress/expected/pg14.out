@@ -194,10 +194,10 @@ SELECT attname || ' ' || attcompression AS column_compression FROM pg_attribute 
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
 SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
-   column_compression
+         column_compression
 ---------------------------------------------------------------------
- {"a p","a p","b ","b "}
- {"a p","a p","b ","b "}
+ {"a p","a p","a p","b ","b ","b "}
+ {"a p","a p","a p","b ","b ","b "}
 (2 rows)
 
 -- test column compression propagation in rebalance
@@ -220,10 +220,10 @@ NOTICE:  cleaned up 1 orphaned shards
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
 SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
-   column_compression
+         column_compression
 ---------------------------------------------------------------------
- {"a p","a p","b ","b "}
- {"a p","a p","b ","b "}
+ {"a p","a p","a p","b ","b ","b "}
+ {"a p","a p","a p","b ","b ","b "}
 (2 rows)
 
 -- test propagation of ALTER TABLE .. ALTER COLUMN .. SET COMPRESSION ..
@@ -232,10 +232,10 @@ ALTER TABLE col_compression ALTER COLUMN a SET COMPRESSION default;
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
 SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
-   column_compression
+         column_compression
 ---------------------------------------------------------------------
- {"a ","a ","b p","b p"}
- {"a ","a ","b p","b p"}
+ {"a ","a ","a ","b p","b p","b p"}
+ {"a ","a ","a ","b p","b p","b p"}
 (2 rows)
 
 -- test propagation of ALTER TABLE .. ADD COLUMN .. COMPRESSION ..
@@ -243,10 +243,10 @@ ALTER TABLE col_compression ADD COLUMN c TEXT COMPRESSION pglz;
 SELECT result AS column_compression FROM run_command_on_workers($$SELECT ARRAY(
 SELECT attname || ' ' || attcompression FROM pg_attribute WHERE attrelid::regclass::text LIKE 'pg14.col\_compression%' AND attnum > 0 ORDER BY 1
 )$$);
-         column_compression
+                  column_compression
 ---------------------------------------------------------------------
- {"a ","a ","b p","b p","c p","c p"}
- {"a ","a ","b p","b p","c p","c p"}
+ {"a ","a ","a ","b p","b p","b p","c p","c p","c p"}
+ {"a ","a ","a ","b p","b p","b p","c p","c p","c p"}
 (2 rows)
 
 -- test attaching to a partitioned table with column compression
@@ -641,17 +641,7 @@ CALL proc_pushdown(1, ARRAY[2000,1], 'AAAA');
  {2}     | 2
 (1 row)
 
--- make sure that metadata is synced, it may take few seconds
-CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
-SELECT wait_until_metadata_sync(30000);
- wait_until_metadata_sync
----------------------------------------------------------------------
-
-(1 row)
-
+-- make sure that metadata is synced
 SELECT bool_and(hasmetadata) FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port);
  bool_and
 ---------------------------------------------------------------------
@@ -794,21 +784,6 @@ DEBUG:  pushing down the procedure
 NOTICE:  IN passed NUMERIC: 6.0
 DETAIL:  from localhost:xxxxx
 RESET client_min_messages;
--- we don't need metadata syncing anymore
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-NOTICE:  dropping metadata on the node (localhost,57637)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-NOTICE:  dropping metadata on the node (localhost,57638)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 -- ALTER STATISTICS .. OWNER TO CURRENT_ROLE
 CREATE TABLE st1 (a int, b int);
 CREATE STATISTICS role_s1 ON a, b FROM st1;

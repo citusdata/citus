@@ -361,12 +361,7 @@ end;$$;
 CALL proc_pushdown(1, NULL, NULL);
 CALL proc_pushdown(1, ARRAY[2000,1], 'AAAA');
 
--- make sure that metadata is synced, it may take few seconds
-CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
-SELECT wait_until_metadata_sync(30000);
+-- make sure that metadata is synced
 SELECT bool_and(hasmetadata) FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port);
 
 SELECT create_distributed_table('test_proc_table', 'a');
@@ -394,9 +389,6 @@ CALL proc_namedargs_overload(inp=>5);
 CALL proc_namedargs_overload(inp=>6.0);
 RESET client_min_messages;
 
--- we don't need metadata syncing anymore
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 -- ALTER STATISTICS .. OWNER TO CURRENT_ROLE
 CREATE TABLE st1 (a int, b int);

@@ -87,8 +87,8 @@ SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::regclass::t
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,6)
- (localhost,57638,t,6)
+ (localhost,57637,t,9)
+ (localhost,57638,t,9)
 (2 rows)
 
 SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
@@ -150,8 +150,8 @@ SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::regclass::t
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,6)
- (localhost,57638,t,6)
+ (localhost,57637,t,9)
+ (localhost,57638,t,9)
 (2 rows)
 
 SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
