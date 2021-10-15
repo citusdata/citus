@@ -20,9 +20,9 @@
  * in parallel.
  *
  * For hash-partitioned tables, if it fails to connect to a worker, the master
- * marks the placement for which it was trying to open a connection as inactive,
- * similar to the way DML statements are handled. If a failure occurs after
- * connecting, the transaction is rolled back on all the workers. Note that,
+ * rollbacks the distributed transaction, similar to the way DML statements
+ * are handled. If a failure occurs after connecting, the transaction
+ * is rolled back on all the workers. Note that,
  * in the case of append-partitioned tables, if a fail occurs, immediately
  * metadata changes are rolled back on the master node, but shard placements
  * are left on the worker nodes.
@@ -242,8 +242,7 @@ static void CopyToExistingShards(CopyStmt *copyStatement,
 static void CopyToNewShards(CopyStmt *copyStatement, QueryCompletionCompat *completionTag,
 							Oid relationId);
 static void OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
-											ShardConnections *shardConnections, bool
-											stopOnFailure,
+											ShardConnections *shardConnections,
 											bool useBinaryCopyFormat);
 static List * RemoveOptionFromList(List *optionList, char *optionName);
 static bool BinaryOutputFunctionDefined(Oid typeId);
@@ -281,12 +280,11 @@ static HTAB * CreateShardStateHash(MemoryContext memoryContext);
 static CopyConnectionState * GetConnectionState(HTAB *connectionStateHash,
 												MultiConnection *connection);
 static CopyShardState * GetShardState(uint64 shardId, HTAB *shardStateHash,
-									  HTAB *connectionStateHash, bool stopOnFailure,
+									  HTAB *connectionStateHash,
 									  bool *found, bool shouldUseLocalCopy, CopyOutState
 									  copyOutState, bool isColocatedIntermediateResult);
 static MultiConnection * CopyGetPlacementConnection(HTAB *connectionStateHash,
 													ShardPlacement *placement,
-													bool stopOnFailure,
 													bool colocatedIntermediateResult);
 static bool HasReachedAdaptiveExecutorPoolSize(List *connectionStateHash);
 static MultiConnection * GetLeastUtilisedCopyConnection(List *connectionStateList,
@@ -296,7 +294,7 @@ static List * ConnectionStateListToNode(HTAB *connectionStateHash,
 										const char *hostname, int32 port);
 static void InitializeCopyShardState(CopyShardState *shardState,
 									 HTAB *connectionStateHash,
-									 uint64 shardId, bool stopOnFailure,
+									 uint64 shardId,
 									 bool canUseLocalCopy,
 									 CopyOutState copyOutState,
 									 bool colocatedIntermediateResult);
@@ -461,9 +459,6 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	List *columnNameList = NIL;
 	int partitionColumnIndex = INVALID_PARTITION_COLUMN_INDEX;
 
-
-	bool stopOnFailure = false;
-
 	uint64 processedRowCount = 0;
 
 	ErrorContextCallback errorCallback;
@@ -509,16 +504,10 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
 	ExprContext *executorExpressionContext = GetPerTupleExprContext(executorState);
 
-	if (IsCitusTableType(tableId, REFERENCE_TABLE))
-	{
-		stopOnFailure = true;
-	}
-
 	/* set up the destination for the COPY */
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(tableId, columnNameList,
 																  partitionColumnIndex,
-																  executorState,
-																  stopOnFailure, NULL);
+																  executorState, NULL);
 	DestReceiver *dest = (DestReceiver *) copyDest;
 	dest->rStartup(dest, 0, tupleDescriptor);
 
@@ -610,9 +599,6 @@ CopyToExistingShards(CopyStmt *copyStatement, QueryCompletionCompat *completionT
 	ExecDropSingleTupleTableSlot(tupleTableSlot);
 	FreeExecutorState(executorState);
 	table_close(distributedRelation, NoLock);
-
-	/* mark failed placements as inactive */
-	MarkFailedShardPlacements();
 
 	CHECK_FOR_INTERRUPTS();
 
@@ -856,13 +842,12 @@ RemoveOptionFromList(List *optionList, char *optionName)
 /*
  * OpenCopyConnectionsForNewShards opens a connection for each placement of a shard and
  * starts a COPY transaction if necessary. If a connection cannot be opened,
- * then the shard placement is marked as inactive and the COPY continues with the remaining
- * shard placements.
+ * then the transaction is rollbacked.
  */
 static void
 OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 								ShardConnections *shardConnections,
-								bool stopOnFailure, bool useBinaryCopyFormat)
+								bool useBinaryCopyFormat)
 {
 	int failedPlacementCount = 0;
 	ListCell *placementCell = NULL;
@@ -907,19 +892,7 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 
 		if (PQstatus(connection->pgConn) != CONNECTION_OK)
 		{
-			if (stopOnFailure)
-			{
-				ReportConnectionError(connection, ERROR);
-			}
-			else
-			{
-				const bool raiseErrors = true;
-
-				HandleRemoteTransactionConnectionError(connection, raiseErrors);
-
-				failedPlacementCount++;
-				continue;
-			}
+			ReportConnectionError(connection, ERROR);
 		}
 
 		/*
@@ -954,10 +927,10 @@ OpenCopyConnectionsForNewShards(CopyStmt *copyStatement,
 	}
 
 	/*
-	 * If stopOnFailure is true, we just error out and code execution should
-	 * never reach to this point. This is the case for reference tables.
+	 * We should just error out and code execution should
+	 * never reach to this point. This is the case for all tables.
 	 */
-	Assert(!stopOnFailure || failedPlacementCount == 0);
+	Assert(failedPlacementCount == 0);
 
 	shardConnections->connectionList = connectionList;
 
@@ -1869,14 +1842,13 @@ StartCopyToNewShard(ShardConnections *shardConnections, CopyStmt *copyStatement,
 	char *schemaName = copyStatement->relation->schemaname;
 	char *qualifiedName = quote_qualified_identifier(schemaName, relationName);
 	int64 shardId = CreateEmptyShard(qualifiedName);
-	bool stopOnFailure = true;
 
 	shardConnections->shardId = shardId;
 
 	shardConnections->connectionList = NIL;
 
 	/* connect to shards placements and start transactions */
-	OpenCopyConnectionsForNewShards(copyStatement, shardConnections, stopOnFailure,
+	OpenCopyConnectionsForNewShards(copyStatement, shardConnections,
 									useBinaryCopyFormat);
 
 	return shardId;
@@ -2166,7 +2138,7 @@ CopyFlushOutput(CopyOutState cstate, char *start, char *pointer)
  */
 CitusCopyDestReceiver *
 CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColumnIndex,
-							EState *executorState, bool stopOnFailure,
+							EState *executorState,
 							char *intermediateResultIdPrefix)
 {
 	CitusCopyDestReceiver *copyDest = (CitusCopyDestReceiver *) palloc0(
@@ -2184,7 +2156,6 @@ CreateCitusCopyDestReceiver(Oid tableId, List *columnNameList, int partitionColu
 	copyDest->columnNameList = columnNameList;
 	copyDest->partitionColumnIndex = partitionColumnIndex;
 	copyDest->executorState = executorState;
-	copyDest->stopOnFailure = stopOnFailure;
 	copyDest->colocatedIntermediateResultIdPrefix = intermediateResultIdPrefix;
 	copyDest->memoryContext = CurrentMemoryContext;
 
@@ -2527,8 +2498,6 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 	bool cachedShardStateFound = false;
 	bool firstTupleInShard = false;
 
-	bool stopOnFailure = copyDest->stopOnFailure;
-
 
 	EState *executorState = copyDest->executorState;
 	MemoryContext executorTupleContext = GetPerTupleMemoryContext(executorState);
@@ -2548,7 +2517,6 @@ CitusSendTupleToPlacements(TupleTableSlot *slot, CitusCopyDestReceiver *copyDest
 
 	CopyShardState *shardState = GetShardState(shardId, copyDest->shardStateHash,
 											   copyDest->connectionStateHash,
-											   stopOnFailure,
 											   &cachedShardStateFound,
 											   copyDest->shouldUseLocalCopy,
 											   copyDest->copyOutState,
@@ -3234,7 +3202,7 @@ CitusCopyTo(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 
 			if (PQstatus(connection->pgConn) != CONNECTION_OK)
 			{
-				HandleRemoteTransactionConnectionError(connection, raiseErrors);
+				ReportConnectionError(connection, ERROR);
 				continue;
 			}
 
@@ -3242,7 +3210,7 @@ CitusCopyTo(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 
 			if (!SendRemoteCommand(connection, copyCommand->data))
 			{
-				HandleRemoteTransactionConnectionError(connection, raiseErrors);
+				ReportConnectionError(connection, ERROR);
 				continue;
 			}
 
@@ -3610,7 +3578,7 @@ ConnectionStateListToNode(HTAB *connectionStateHash, const char *hostname, int32
  */
 static CopyShardState *
 GetShardState(uint64 shardId, HTAB *shardStateHash,
-			  HTAB *connectionStateHash, bool stopOnFailure, bool *found, bool
+			  HTAB *connectionStateHash, bool *found, bool
 			  shouldUseLocalCopy, CopyOutState copyOutState,
 			  bool isColocatedIntermediateResult)
 {
@@ -3619,7 +3587,7 @@ GetShardState(uint64 shardId, HTAB *shardStateHash,
 	if (!*found)
 	{
 		InitializeCopyShardState(shardState, connectionStateHash,
-								 shardId, stopOnFailure, shouldUseLocalCopy,
+								 shardId, shouldUseLocalCopy,
 								 copyOutState, isColocatedIntermediateResult);
 	}
 
@@ -3635,7 +3603,7 @@ GetShardState(uint64 shardId, HTAB *shardStateHash,
 static void
 InitializeCopyShardState(CopyShardState *shardState,
 						 HTAB *connectionStateHash, uint64 shardId,
-						 bool stopOnFailure, bool shouldUseLocalCopy,
+						 bool shouldUseLocalCopy,
 						 CopyOutState copyOutState,
 						 bool colocatedIntermediateResult)
 {
@@ -3685,7 +3653,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 		}
 
 		MultiConnection *connection =
-			CopyGetPlacementConnection(connectionStateHash, placement, stopOnFailure,
+			CopyGetPlacementConnection(connectionStateHash, placement,
 									   colocatedIntermediateResult);
 		if (connection == NULL)
 		{
@@ -3729,10 +3697,10 @@ InitializeCopyShardState(CopyShardState *shardState,
 	}
 
 	/*
-	 * If stopOnFailure is true, we just error out and code execution should
-	 * never reach to this point. This is the case for reference tables.
+	 * We just error out and code execution should never reach to this
+	 * point. This is the case for all tables.
 	 */
-	Assert(!stopOnFailure || failedPlacementCount == 0);
+	Assert(failedPlacementCount == 0);
 
 	MemoryContextReset(localContext);
 }
@@ -3798,7 +3766,7 @@ LogLocalCopyToFileExecution(uint64 shardId)
  */
 static MultiConnection *
 CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
-						   bool stopOnFailure, bool colocatedIntermediateResult)
+						   bool colocatedIntermediateResult)
 {
 	if (colocatedIntermediateResult)
 	{
@@ -3984,18 +3952,7 @@ CopyGetPlacementConnection(HTAB *connectionStateHash, ShardPlacement *placement,
 
 	if (PQstatus(connection->pgConn) != CONNECTION_OK)
 	{
-		if (stopOnFailure)
-		{
-			ReportConnectionError(connection, ERROR);
-		}
-		else
-		{
-			const bool raiseErrors = true;
-
-			HandleRemoteTransactionConnectionError(connection, raiseErrors);
-
-			return NULL;
-		}
+		ReportConnectionError(connection, ERROR);
 	}
 
 	/*

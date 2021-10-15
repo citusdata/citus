@@ -577,7 +577,7 @@ SET session_replication_role = DEFAULT;
 ALTER USER test_user WITH nologin;
 \c - test_user - :master_port
 
--- reissue copy
+-- reissue copy, and it should fail
 COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 1,1
 2,2
@@ -589,7 +589,7 @@ COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 8,8
 \.
 
--- verify shards in the first worker as marked invalid
+-- verify shards in the none of the workers as marked invalid
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;

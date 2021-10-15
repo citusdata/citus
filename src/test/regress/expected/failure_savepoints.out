@@ -165,7 +165,7 @@ connection not open
 connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
-ERROR:  could not make changes to shard xxxxx on any node
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name
 ---------------------------------------------------------------------
@@ -255,7 +255,7 @@ connection not open
 connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 COMMIT;
-ERROR:  could not make changes to shard xxxxx on any node
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM artists WHERE id IN (4, 5);
  id |      name
 ---------------------------------------------------------------------
@@ -340,7 +340,7 @@ connection not open
 connection not open
 connection not open
 COMMIT;
-ERROR:  could not make changes to shard xxxxx on any node
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT * FROM artists WHERE id=6;
  id | name
 ---------------------------------------------------------------------

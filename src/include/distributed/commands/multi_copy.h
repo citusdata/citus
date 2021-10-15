@@ -108,8 +108,6 @@ typedef struct CitusCopyDestReceiver
 	/* template for COPY statement to send to workers */
 	CopyStmt *copyStatement;
 
-	bool stopOnFailure;
-
 	/*
 	 * shardId to CopyShardState map. Also used in insert_select_executor.c for
 	 * task pruning.
@@ -154,7 +152,6 @@ extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   List *columnNameList,
 														   int partitionColumnIndex,
 														   EState *executorState,
-														   bool stopOnFailure,
 														   char *intermediateResultPrefix);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern bool CanUseBinaryCopyFormat(TupleDesc tupleDescription);
