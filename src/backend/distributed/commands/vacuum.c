@@ -170,20 +170,6 @@ ExecuteVacuumOnDistributedTables(VacuumStmt *vacuumStmt, List *relationIdList,
 	{
 		if (IsCitusTable(relationId))
 		{
-			/*
-			 * VACUUM commands cannot run inside a transaction block, so we use
-			 * the "bare" commit protocol without BEGIN/COMMIT. However, ANALYZE
-			 * commands can run inside a transaction block. Notice that we do this
-			 * once even if there are multiple distributed tables to be vacuumed.
-			 */
-			if (executedVacuumCount == 0 && (vacuumParams.options & VACOPT_VACUUM) != 0)
-			{
-				/* save old commit protocol to restore at xact end */
-				Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
-				SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
-				MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
-			}
-
 			List *vacuumColumnList = VacuumColumnList(vacuumStmt, relationIndex);
 			List *taskList = VacuumTaskList(relationId, vacuumParams, vacuumColumnList);
 
@@ -304,6 +290,7 @@ VacuumTaskList(Oid relationId, CitusVacuumParams vacuumParams, List *vacuumColum
 		task->replicationModel = REPLICATION_MODEL_INVALID;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction = ((vacuumParams.options) & VACOPT_VACUUM);
 
 		taskList = lappend(taskList, task);
 	}

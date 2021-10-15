@@ -253,7 +253,6 @@ SELECT * FROM researchers WHERE lab_id = 6;
 SELECT count(*) FROM pg_dist_transaction;
 
 -- 2pc failure and success tests
-SET citus.multi_shard_commit_protocol TO '2pc';
 SELECT recover_prepared_transactions();
 -- copy with unique index violation
 BEGIN;
@@ -281,7 +280,6 @@ SELECT * FROM researchers WHERE lab_id = 6;
 -- verify 2pc
 SELECT count(*) FROM pg_dist_transaction;
 
-RESET citus.multi_shard_commit_protocol;
 
 -- create a check function
 SELECT * from run_command_on_workers('CREATE FUNCTION reject_large_id() RETURNS trigger AS $rli$
@@ -304,7 +302,6 @@ ORDER BY nodeport, shardid;
 -- for replicated tables use 2PC even if multi-shard commit protocol
 -- is set to 2PC
 BEGIN;
-SET LOCAL citus.multi_shard_commit_protocol TO '1pc';
 DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 31, 6, 'Bjarne Stroustrup'

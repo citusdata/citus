@@ -46,10 +46,6 @@
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 
-/* GUC, the commit protocol to use for commands affecting more than one connection */
-int MultiShardCommitProtocol = COMMIT_PROTOCOL_2PC;
-int SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
-
 /*
  * GUC that determines whether a SELECT in a transaction block should also run in
  * a transaction block on the worker even if no writes have occurred yet.
@@ -94,9 +90,9 @@ MemoryContext CommitContext = NULL;
 
 /*
  * Should this coordinated transaction use 2PC? Set by
- * CoordinatedTransactionUse2PC(), e.g. if DDL was issued and
- * MultiShardCommitProtocol was set to 2PC. But, even if this
- * flag is set, the transaction manager is smart enough to only
+ * CoordinatedTransactionUse2PC(), e.g. if any modification
+ * is issued and us 2PC. But, even if this flag is set,
+ * the transaction manager is smart enough to only
  * do 2PC on the remote connections that did a modification.
  *
  * As a variable name ShouldCoordinatedTransactionUse2PC could
@@ -119,7 +115,6 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 											  SubTransactionId parentSubid, void *arg);
 
 /* remaining functions */
-static void ResetShardPlacementTransactionState(void);
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
@@ -268,13 +263,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			MemoryContext previousContext = CurrentMemoryContext;
 			MemoryContextSwitchTo(CommitContext);
 
-			/*
-			 * Call other parts of citus that need to integrate into
-			 * transaction management. Do so before doing other work, so the
-			 * callbacks still can perform work if needed.
-			 */
-			ResetShardPlacementTransactionState();
-
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
 			{
 				/* handles both already prepared and open transactions */
@@ -320,8 +308,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			DisableWorkerMessagePropagation();
 
 			RemoveIntermediateResultsDirectory();
-
-			ResetShardPlacementTransactionState();
 
 			/* handles both already prepared and open transactions */
 			if (CurrentCoordinatedTransactionState > COORD_TRANS_IDLE)
@@ -573,21 +559,6 @@ ResetGlobalVariables()
 	TransactionModifiedNodeMetadata = false;
 	MetadataSyncOnCommit = false;
 	ResetWorkerErrorIndication();
-}
-
-
-/*
- * ResetShardPlacementTransactionState performs cleanup after the end of a
- * transaction.
- */
-static void
-ResetShardPlacementTransactionState(void)
-{
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
-	{
-		MultiShardCommitProtocol = SavedMultiShardCommitProtocol;
-		SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
-	}
 }
 
 

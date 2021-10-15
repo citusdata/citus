@@ -319,7 +319,7 @@ EnsureModificationsCanRunOnRelation(Oid relationId)
 		return;
 	}
 
-	if (!IsCitusTable(relationId))
+	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
 	{
 		/* we are not interested in PG tables */
 		return;

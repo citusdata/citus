@@ -20,8 +20,6 @@ test: failure_create_reference_table
 test: failure_create_distributed_table_non_empty
 test: failure_create_table
 
-test: failure_1pc_copy_hash
-test: failure_1pc_copy_append
 test: failure_multi_shard_update_delete
 test: failure_cte_subquery
 test: failure_insert_select_via_coordinator

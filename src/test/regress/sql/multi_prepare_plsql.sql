@@ -533,7 +533,6 @@ DROP FUNCTION insert_with_max(text);
 DROP TABLE func_parameter_test;
 
 -- test prepared DDL, mainly to verify we don't mess up the query tree
-SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE TABLE prepare_ddl (x int, y int);
 SELECT create_distributed_table('prepare_ddl', 'x');
 

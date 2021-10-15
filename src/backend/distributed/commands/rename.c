@@ -128,7 +128,6 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = tableRelationId;
-	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = renameCommand;
 	ddlJob->taskList = DDLTaskList(tableRelationId, renameCommand);
 

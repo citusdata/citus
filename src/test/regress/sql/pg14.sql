@@ -29,7 +29,6 @@ create index idx on dist(a);
 
 set citus.log_remote_commands to on;
 -- make sure that we send the tablespace option
-SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 reindex(TABLESPACE test_tablespace) index idx;
 reindex(TABLESPACE test_tablespace, verbose) index idx;

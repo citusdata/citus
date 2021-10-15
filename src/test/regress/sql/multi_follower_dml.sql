@@ -74,31 +74,25 @@ INSERT INTO the_replicated_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 INSERT INTO reference_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 
--- COPY is not possible in 2PC mode
+-- COPY is not possible because Citus user 2PC
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
--- COPY is not possible in 2PC mode
 COPY the_replicated_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 COPY reference_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 
--- 1PC is possible
-SET citus.multi_shard_commit_protocol TO '1pc';
+-- all multi-shard modifications require 2PC hence not supported
 INSERT INTO the_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 SELECT * FROM the_table ORDER BY a;
+
+-- all modifications to reference tables use 2PC, hence not supported
 INSERT INTO reference_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 SELECT * FROM reference_table ORDER BY a;
+
+-- citus local tables are on the coordinator, and coordinator is read-only
 INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 SELECT * FROM citus_local_table ORDER BY a;
 
@@ -112,25 +106,21 @@ SELECT * FROM del ORDER BY a;
 WITH del AS (DELETE FROM citus_local_table RETURNING *)
 SELECT * FROM del ORDER BY a;
 
--- COPY is possible in 1PC mode
+-- multi-shard COPY is not possible due to 2PC
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 COPY reference_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 SELECT * FROM the_table ORDER BY a;
 SELECT * FROM reference_table ORDER BY a;
 SELECT * FROM citus_local_table ORDER BY a;
-DELETE FROM the_table;
 DELETE FROM reference_table;
 DELETE FROM citus_local_table;
+
+-- multi-shard modification always uses 2PC, so not supported
+DELETE FROM the_table;
 
 -- DDL is not possible
 TRUNCATE the_table;

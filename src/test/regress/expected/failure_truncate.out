@@ -16,8 +16,7 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
--- we'll start with replication factor 1, 1PC and parallel mode
-SET citus.multi_shard_commit_protocol TO '1pc';
+-- we'll start with replication factor 1, 2PC and parallel mode
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 CREATE TABLE test_table (key int, value int);
@@ -205,11 +204,9 @@ SELECT count(*) FROM test_table;
     20
 (1 row)
 
--- kill as soon as the coordinator sends COMMIT
--- One shard should not get truncated but the other should
--- since it is sent from another connection.
--- Thus, we should see a partially successful truncate
--- Note: This is the result of using 1pc and there is no way to recover from it
+-- kill as soon as the coordinator sends COMMIT PREPARED
+-- the transaction succeeds on one placement, and we need to
+-- recover prepared statements to see the other placement as well
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -223,6 +220,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             2
+(1 row)
+
 SELECT * FROM unhealthy_shard_count;
  count
 ---------------------------------------------------------------------
@@ -232,7 +235,7 @@ SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
  count
 ---------------------------------------------------------------------
-     8
+     0
 (1 row)
 
 -- refill the table
@@ -304,8 +307,6 @@ WARNING:  server closed the connection unexpectedly
 connection not open
 connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  could not commit transaction for shard xxxxx on any active node
-WARNING:  could not commit transaction for shard xxxxx on any active node
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -582,8 +583,6 @@ SELECT count(*) FROM test_table;
     20
 (1 row)
 
--- now, lets test with 2PC
-SET citus.multi_shard_commit_protocol TO '2pc';
 -- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
@@ -943,7 +942,6 @@ SELECT count(*) FROM test_table;
 (1 row)
 
 -- final set of tests with 2PC and replication factor = 2
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 2;
 -- re-create the table with replication factor 2

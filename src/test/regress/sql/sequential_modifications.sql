@@ -96,13 +96,11 @@ SELECT distributed_2PCs_are_equal_to_placement_count();
 
 -- even if 1PC used, we use 2PC as we modify replicated tables
 -- see distributed TXs in the pg_dist_transaction
-SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
 ALTER TABLE test_table ADD CONSTRAINT c_check CHECK(a > 0);
 SELECT no_distributed_2PCs();
 
-SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
 ALTER TABLE test_table ADD CONSTRAINT d_check CHECK(a > 0);
@@ -110,7 +108,6 @@ SELECT no_distributed_2PCs();
 
 CREATE TABLE ref_test(a int);
 SELECT create_reference_table('ref_test');
-SET citus.multi_shard_commit_protocol TO '1pc';
 
 -- reference tables should always use 2PC
 SET citus.multi_shard_modify_mode TO 'sequential';
@@ -125,13 +122,12 @@ CREATE INDEX ref_test_seq_index_2 ON ref_test(a);
 SELECT distributed_2PCs_are_equal_to_worker_count();
 
 -- tables with replication factor > 1 should also obey
--- both multi_shard_commit_protocol and multi_shard_modify_mode
+-- multi_shard_modify_mode
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE test_table_rep_2 (a int);
 SELECT create_distributed_table('test_table_rep_2', 'a');
 
 -- even if 1PC used, we use 2PC with rep > 1
-SET citus.multi_shard_commit_protocol TO '1pc';
 
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
@@ -144,7 +140,6 @@ CREATE INDEX test_table_rep_2_i_2 ON test_table_rep_2(a);
 SELECT no_distributed_2PCs();
 
 -- 2PC should always use 2PC with rep > 1
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
 CREATE INDEX test_table_rep_2_i_3 ON test_table_rep_2(a);
@@ -157,7 +152,6 @@ SELECT distributed_2PCs_are_equal_to_placement_count();
 
 -- CREATE INDEX CONCURRENTLY should work fine with rep > 1
 -- with both 2PC and different parallel modes
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT recover_prepared_transactions();
 CREATE INDEX CONCURRENTLY test_table_rep_2_i_5 ON test_table_rep_2(a);
@@ -165,7 +159,6 @@ CREATE INDEX CONCURRENTLY test_table_rep_2_i_5 ON test_table_rep_2(a);
 -- we shouldn't see any distributed transactions
 SELECT no_distributed_2PCs();
 
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.multi_shard_modify_mode TO 'parallel';
 SELECT recover_prepared_transactions();
 CREATE INDEX CONCURRENTLY test_table_rep_2_i_6 ON test_table_rep_2(a);

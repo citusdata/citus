@@ -47,10 +47,156 @@ SELECT count(*) FROM t2;
      7
 (1 row)
 
-SHOW citus.multi_shard_commit_protocol ;
- citus.multi_shard_commit_protocol
+-- DELETION TESTS
+-- delete using a filter on non-partition column filter
+-- test both kill and cancellation
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").kill()');
+ mitmproxy
 ---------------------------------------------------------------------
- 2pc
+
+(1 row)
+
+-- issue a multi shard delete
+DELETE FROM t2 WHERE b = 2;
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+-- verify nothing is deleted
+SELECT count(*) FROM t2;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+-- kill just one connection
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+DELETE FROM t2 WHERE b = 2;
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+-- verify nothing is deleted
+SELECT count(*) FROM t2;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+-- cancellation
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+-- issue a multi shard delete
+DELETE FROM t2 WHERE b = 2;
+ERROR:  canceling statement due to user request
+-- verify nothing is deleted
+SELECT count(*) FROM t2;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+-- cancel just one connection
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+DELETE FROM t2 WHERE b = 2;
+ERROR:  canceling statement due to user request
+-- verify nothing is deleted
+SELECT count(*) FROM t2;
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+-- UPDATE TESTS
+-- update non-partition column based on a filter on another non-partition column
+-- DELETION TESTS
+-- delete using a filter on non-partition column filter
+-- test both kill and cancellation
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
+ b2 | c4
+---------------------------------------------------------------------
+  3 |  1
+(1 row)
+
+SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+-- issue a multi shard update
+UPDATE t2 SET c = 4 WHERE b = 2;
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+-- verify nothing is updated
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
+ b2 | c4
+---------------------------------------------------------------------
+  3 |  1
+(1 row)
+
+-- kill just one connection
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+UPDATE t2 SET c = 4 WHERE b = 2;
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+-- verify nothing is updated
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
+ b2 | c4
+---------------------------------------------------------------------
+  3 |  1
+(1 row)
+
+-- cancellation
+SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+-- issue a multi shard update
+UPDATE t2 SET c = 4 WHERE b = 2;
+ERROR:  canceling statement due to user request
+-- verify nothing is updated
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
+ b2 | c4
+---------------------------------------------------------------------
+  3 |  1
+(1 row)
+
+-- cancel just one connection
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+UPDATE t2 SET c = 4 WHERE b = 2;
+ERROR:  canceling statement due to user request
+-- verify nothing is updated
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
+ b2 | c4
+---------------------------------------------------------------------
+  3 |  1
 (1 row)
 
 -- DELETION TESTS
@@ -205,161 +351,6 @@ SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 
   3 |  1
 (1 row)
 
--- switch to 1PC
-SET citus.multi_shard_commit_protocol TO '1PC';
--- DELETION TESTS
--- delete using a filter on non-partition column filter
--- test both kill and cancellation
-SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
--- issue a multi shard delete
-DELETE FROM t2 WHERE b = 2;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
--- verify nothing is deleted
-SELECT count(*) FROM t2;
- count
----------------------------------------------------------------------
-     7
-(1 row)
-
--- kill just one connection
-SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-DELETE FROM t2 WHERE b = 2;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
--- verify nothing is deleted
-SELECT count(*) FROM t2;
- count
----------------------------------------------------------------------
-     7
-(1 row)
-
--- cancellation
-SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").cancel(' || :pid || ')');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
--- issue a multi shard delete
-DELETE FROM t2 WHERE b = 2;
-ERROR:  canceling statement due to user request
--- verify nothing is deleted
-SELECT count(*) FROM t2;
- count
----------------------------------------------------------------------
-     7
-(1 row)
-
--- cancel just one connection
-SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").cancel(' || :pid || ')');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-DELETE FROM t2 WHERE b = 2;
-ERROR:  canceling statement due to user request
--- verify nothing is deleted
-SELECT count(*) FROM t2;
- count
----------------------------------------------------------------------
-     7
-(1 row)
-
--- UPDATE TESTS
--- update non-partition column based on a filter on another non-partition column
--- DELETION TESTS
--- delete using a filter on non-partition column filter
--- test both kill and cancellation
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
- b2 | c4
----------------------------------------------------------------------
-  3 |  1
-(1 row)
-
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
--- issue a multi shard update
-UPDATE t2 SET c = 4 WHERE b = 2;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
--- verify nothing is updated
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
- b2 | c4
----------------------------------------------------------------------
-  3 |  1
-(1 row)
-
--- kill just one connection
-SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-UPDATE t2 SET c = 4 WHERE b = 2;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
--- verify nothing is updated
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
- b2 | c4
----------------------------------------------------------------------
-  3 |  1
-(1 row)
-
--- cancellation
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").cancel(' || :pid || ')');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
--- issue a multi shard update
-UPDATE t2 SET c = 4 WHERE b = 2;
-ERROR:  canceling statement due to user request
--- verify nothing is updated
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
- b2 | c4
----------------------------------------------------------------------
-  3 |  1
-(1 row)
-
--- cancel just one connection
-SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").cancel(' || :pid || ')');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-UPDATE t2 SET c = 4 WHERE b = 2;
-ERROR:  canceling statement due to user request
--- verify nothing is updated
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
- b2 | c4
----------------------------------------------------------------------
-  3 |  1
-(1 row)
-
-RESET citus.multi_shard_commit_protocol;
 --
 -- fail when cascading deletes from foreign key
 -- unfortunately cascading deletes from foreign keys
@@ -610,8 +601,6 @@ SELECT count(*) FILTER (WHERE b = 1) b1, count(*) FILTER (WHERE b = 2) AS b2 FRO
   3 |  3
 (1 row)
 
--- switch to 1PC
-SET citus.multi_shard_commit_protocol TO '1PC';
 SELECT count(*) FILTER (WHERE b = 1) b1, count(*) FILTER (WHERE b = 2) AS b2 FROM t3;
  b1 | b2
 ---------------------------------------------------------------------

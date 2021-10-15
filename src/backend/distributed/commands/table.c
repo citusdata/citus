@@ -1095,7 +1095,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 	/* fill them here as it is possible to use them in some conditional blocks below */
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = leftRelationId;
-	ddlJob->concurrentIndexCmd = false;
 
 	const char *sqlForTaskList = alterTableCommand;
 	if (deparseAT)
@@ -1659,7 +1658,6 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
 	ddlJob->targetRelationId = relationId;
-	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = DeparseTreeNode((Node *) stmt);
 	ddlJob->taskList = DDLTaskList(relationId, ddlJob->commandString);
 	return list_make1(ddlJob);

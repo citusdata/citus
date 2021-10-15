@@ -10,7 +10,6 @@ SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.shard_count = 1;
 SET citus.shard_replication_factor = 2; -- one shard per worker
-SET citus.multi_shard_commit_protocol TO '1pc';
 CREATE TABLE vacuum_test (key int, value int);
 SELECT create_distributed_table('vacuum_test', 'key');
  create_distributed_table

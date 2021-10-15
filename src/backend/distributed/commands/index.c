@@ -463,7 +463,6 @@ GenerateCreateIndexDDLJob(IndexStmt *createIndexStatement, const char *createInd
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
 	ddlJob->targetRelationId = CreateIndexStmtGetRelationId(createIndexStatement);
-	ddlJob->concurrentIndexCmd = createIndexStatement->concurrent;
 	ddlJob->startNewTransaction = createIndexStatement->concurrent;
 	ddlJob->commandString = createIndexCommand;
 	ddlJob->taskList = CreateIndexTaskList(createIndexStatement);
@@ -598,8 +597,6 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 
 			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 			ddlJob->targetRelationId = relationId;
-			ddlJob->concurrentIndexCmd = IsReindexWithParam_compat(reindexStatement,
-																   "concurrently");
 			ddlJob->startNewTransaction = IsReindexWithParam_compat(reindexStatement,
 																	"concurrently");
 			ddlJob->commandString = reindexCommand;
@@ -707,7 +704,6 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		}
 
 		ddlJob->targetRelationId = distributedRelationId;
-		ddlJob->concurrentIndexCmd = dropIndexStatement->concurrent;
 
 		/*
 		 * We do not want DROP INDEX CONCURRENTLY to commit locally before
@@ -866,6 +862,7 @@ CreateIndexTaskList(IndexStmt *indexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction = indexStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 
@@ -910,6 +907,8 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction =
+			IsReindexWithParam_compat(reindexStmt, "concurrently");
 
 		taskList = lappend(taskList, task);
 
@@ -1205,6 +1204,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction = dropStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 

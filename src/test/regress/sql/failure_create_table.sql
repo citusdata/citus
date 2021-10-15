@@ -164,9 +164,6 @@ DROP SCHEMA failure_create_table;
 CREATE SCHEMA failure_create_table;
 CREATE TABLE test_table(id int, value_1 int);
 
--- Test inside transaction and with 1PC
-SET citus.multi_shard_commit_protocol TO "1pc";
-
 -- Kill connection before sending query to the worker with 1pc.
 SELECT citus.mitmproxy('conn.kill()');
 
@@ -242,7 +239,6 @@ CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name tex
     LANGUAGE C STRICT;
 
 -- Test master_create_worker_shards with 2pc
-SET citus.multi_shard_commit_protocol TO "2pc";
 CREATE TABLE test_table_2(id int, value_1 int);
 SELECT master_create_distributed_table('test_table_2', 'id', 'hash');
 
