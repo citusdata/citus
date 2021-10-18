@@ -899,10 +899,6 @@ ALTER TABLE reference_schema.reference_table_ddl_test RENAME TO reference_table_
 SELECT master_create_empty_shard('reference_schema.reference_table_ddl');
 
 -- get/update the statistics
-SELECT part_storage_type, part_key, part_replica_count, part_max_size,
-           part_placement_policy
-  FROM master_get_table_metadata('reference_schema.reference_table_ddl');
-
 SELECT shardid AS a_shard_id  FROM pg_dist_shard WHERE logicalrelid = 'reference_schema.reference_table_ddl'::regclass \gset
 SELECT master_update_shard_statistics(:a_shard_id);
 

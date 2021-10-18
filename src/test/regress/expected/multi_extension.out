@@ -895,10 +895,11 @@ SELECT * FROM multi_extension.print_extension_changes();
                   previous_object                   |                              current_object
 ---------------------------------------------------------------------
  function master_apply_delete_command(text) integer |
+ function master_get_table_metadata(text) record    |
                                                     | function fix_all_partition_shard_index_names() SETOF regclass
                                                     | function fix_partition_shard_index_names(regclass) void
                                                     | function worker_fix_partition_shard_index_names(regclass,text,text) void
-(4 rows)
+(5 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
