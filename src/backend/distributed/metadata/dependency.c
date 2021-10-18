@@ -208,6 +208,31 @@ GetDependenciesForObject(const ObjectAddress *target)
 
 
 /*
+ * GetAllDependenciesForObject returns a list of all the ObjectAddresses to be
+ * created in order before the target object could safely be created on a
+ * worker. As a caller, you probably need GetDependenciesForObject() which
+ * eliminates already distributed objects from the returned list.
+ *
+ * Some of the object might already be created on a worker. It should be created
+ * in an idempotent way.
+ */
+List *
+GetAllDependenciesForObject(const ObjectAddress *target)
+{
+	ObjectAddressCollector collector = { 0 };
+	InitObjectAddressCollector(&collector);
+
+	RecurseObjectDependencies(*target,
+							  &ExpandCitusSupportedTypes,
+							  &FollowAllSupportedDependencies,
+							  &ApplyAddToDependencyList,
+							  &collector);
+
+	return collector.dependencyList;
+}
+
+
+/*
  * OrderObjectAddressListInDependencyOrder given a list of ObjectAddresses return a new
  * list of the same ObjectAddresses ordered on dependency order where dependencies
  * precedes the corresponding object in the list.

@@ -98,6 +98,8 @@ test: binary_protocol
 test: alter_table_set_access_method
 test: alter_distributed_table
 test: issue_5248
+test: object_propagation_debug
+
 
 # ---------
 # test that no tests leaked intermediate results. This should always be last
