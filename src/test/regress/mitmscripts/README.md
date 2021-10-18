@@ -42,15 +42,15 @@ $ make check-failure
 $ mkfifo /tmp/mitm.fifo  # first, you need a fifo
 $ cd src/test/regress
 $ pipenv shell
-$ mitmdump --rawtcp -p 9702 --mode reverse:localhost:9700 -s mitmscripts/fluent.py --set fifo=/tmp/mitm.fifo
+$ mitmdump --rawtcp -p 9703 --mode reverse:localhost:9702 -s mitmscripts/fluent.py --set fifo=/tmp/mitm.fifo
 ```
 
-The specific port numbers will be different depending on your setup. The above string means mitmdump will accept connections on port `9702` and forward them to the worker listening on port `9700`.
+The specific port numbers will be different depending on your setup. The above string means mitmdump will accept connections on port `9703` and forward them to the worker listening on port `9702`.
 
 Now, open psql and run:
 
 ```psql
-# UPDATE pg_dist_node SET nodeport = 9702 WHERE nodeport = 9700;
+# UPDATE pg_dist_node SET nodeport = 9703 WHERE nodeport = 9702;
 ```
 
 Again, the specific port numbers depend on your setup.
@@ -61,6 +61,12 @@ In a psql front-end run
 ```psql
 # \i src/test/regress/sql/failure_test_helpers.sql
 ```
+
+> **_NOTE:_**  To make the script above work start psql as follows
+> ```bash
+> psql -p9700 --variable=worker_2_port=9702
+> ```
+> Assuming the coordinator is running on 9700 and worker 2 (which is going to be intercepted) runs on 9702
 
 The above file creates some UDFs and also disables a few citus features which make connections in the background.
 

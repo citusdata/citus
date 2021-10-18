@@ -14,6 +14,8 @@ import queue
 
 from construct.lib import ListContainer
 from mitmproxy import ctx, tcp
+from mitmproxy.proxy import commands
+from mitmproxy.script import concurrent
 from mitmproxy.utils import strutils
 from mitmproxy.proxy.layers import TCPLayer, ClientTLSLayer, ServerTLSLayer
 
@@ -344,10 +346,10 @@ def listen_for_commands(fifoname):
         global connection_count
         result = ''
 
-        if recorder.command is 'reset':
+        if recorder.command == 'reset':
             result = ''
             connection_count = count()
-        elif recorder.command is not 'dump':
+        elif recorder.command != 'dump':
             # this should never happen
             raise Exception('Unrecognized command: {}'.format(recorder.command))
 
@@ -355,7 +357,7 @@ def listen_for_commands(fifoname):
         messages = all_items(captured_messages)
         messages = drop_terminate_messages(messages)
         for message in messages:
-            if recorder.command is 'reset':
+            if recorder.command == 'reset':
                 continue
             results.append(emit_message(message))
         result = '\n'.join(results)
@@ -431,16 +433,16 @@ def configure(updated):
         create_thread(fifoname)
 
 
-def next_layer(layer):
-    '''
-    mitmproxy wasn't really meant for intercepting raw tcp streams, it tries to wrap the
-    upsteam connection (the one to the worker) in a tls stream. This hook intercepts the
-    part where it creates the TlsLayer (it happens in root_context.py) and instead creates
-    a RawTCPLayer. That's the layer which calls our tcp_message hook
-    '''
-    if isinstance(layer, ClientTLSLayer) or isinstance(layer, ServerTLSLayer):
-        replacement = TCPLayer(layer.ctx)
-        layer.reply.send(replacement)
+# def next_layer(layer):
+#     '''
+#     mitmproxy wasn't really meant for intercepting raw tcp streams, it tries to wrap the
+#     upsteam connection (the one to the worker) in a tls stream. This hook intercepts the
+#     part where it creates the TlsLayer (it happens in root_context.py) and instead creates
+#     a RawTCPLayer. That's the layer which calls our tcp_message hook
+#     '''
+#     if isinstance(layer, ClientTLSLayer) or isinstance(layer, ServerTLSLayer):
+#         replacement = TCPLayer(layer.ctx)
+#         layer.reply.send(replacement)
 
 
 def tcp_message(flow: tcp.TCPFlow):
@@ -449,6 +451,8 @@ def tcp_message(flow: tcp.TCPFlow):
     into this script.
     '''
     global connection_count
+
+    logging.info("tcp_message: %s, %s", type(flow).__name__, str(flow.live))
 
     tcp_msg = flow.messages[-1]
 
