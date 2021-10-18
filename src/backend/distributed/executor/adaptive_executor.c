@@ -1407,12 +1407,7 @@ DistributedExecutionRequiresRollback(List *taskList)
 
 
 /*
- * TaskListRequires2PC determines whether the given task list requires 2PC
- * because the tasks provided operates on a reference table or there are multiple
- * tasks and the commit protocol is 2PC.
- *
- * Note that we currently do not generate tasks lists that involves multiple different
- * tables, thus we only check the first task in the list for reference tables.
+ * TaskListRequires2PC determines whether the given task list requires 2PC.
  */
 static bool
 TaskListRequires2PC(List *taskList)
@@ -1423,29 +1418,28 @@ TaskListRequires2PC(List *taskList)
 	}
 
 	Task *task = (Task *) linitial(taskList);
-	if (list_length(task->taskPlacementList) > 1)
+	if (ReadOnlyTask(task->taskType))
 	{
-		/*
-		 * Even single DML/DDL tasks with replicated tables
-		 * (including reference and non-reference tables)
-		 * should require BEGIN/COMMIT/ROLLBACK.
+		/* we do not trigger 2PC for ReadOnly queries */
+		return false;
+	}
+
+	bool singleTask = list_length(taskList) == 1;
+	if (singleTask && list_length(task->taskPlacementList) == 1)
+	{
+		/* we do not trigger 2PC for modifications that are:
+		 *    - single task
+		 *    - single placement
 		 */
-		return true;
+		return false;
 	}
 
-	bool multipleTasks = list_length(taskList) > 1;
-	if (!ReadOnlyTask(task->taskType) && multipleTasks)
-	{
-		/* all multi-shard modifications use 2PC */
-		return true;
-	}
-
-	if (task->taskType == DDL_TASK)
-	{
-		return true;
-	}
-
-	return false;
+	/*
+	 * Otherwise, all modifications are done via 2PC. This includes:
+	 *    - Multi-shard commands irrespective of the replication factor
+	 *    - Single-shard commands that are targeting more than one replica
+	 */
+	return true;
 }
 
 
@@ -3398,8 +3392,16 @@ ConnectionStateMachine(WorkerSession *session)
 				/*
 				 * The execution may have failed as a result of WorkerSessionFailed
 				 * or WorkerPoolFailed.
+				 *
+				 * Even if this execution has not failed -- but just a single session is
+				 * failed -- and an earlier execution in this transaction which marked
+				 * the remote transaction as critical, we should fail right away as the
+				 * transaction will fail anyway on PREPARE/COMMIT time.
 				 */
-				if (execution->failed ||
+				RemoteTransaction *transaction = &connection->remoteTransaction;
+
+				if (transaction->transactionCritical ||
+					execution->failed ||
 					(execution->transactionProperties->errorOnAnyFailure &&
 					 workerPool->failureState != WORKER_POOL_FAILED_OVER_TO_LOCAL))
 				{
