@@ -51,3 +51,6 @@ lib*.pc
 
 # style related temporary outputs
 *.uncrustify
+
+# auto generated tests
+tests.txt

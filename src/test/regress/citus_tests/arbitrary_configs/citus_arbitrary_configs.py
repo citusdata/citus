@@ -173,10 +173,7 @@ def read_configs(docoptRes):
     # We fill the configs from all of the possible classes in config.py so that if we add a new config,
     # we don't need to add it here. And this avoids the problem where we forget to add it here
     for x in cfg.__dict__.values():
-        if inspect.isclass(x) and (
-            issubclass(x, cfg.CitusMXBaseClusterConfig)
-            or issubclass(x, cfg.CitusDefaultClusterConfig)
-        ):
+        if cfg.should_include_config(x):
             configs.append(x(docoptRes))
     return configs
 

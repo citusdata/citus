@@ -171,6 +171,7 @@ jobs:
 
   test-arbitrary-configs:
     description: Runs tests on arbitrary configs
+    parallelism: 6
     parameters:
       pg_major:
         description: 'postgres major version to use'
@@ -207,9 +208,11 @@ jobs:
       - run:
           name: 'Test arbitrary configs'
           command: |
+            TESTS=$(src/test/regress/citus_tests/print_test_names.py | circleci tests split)
+            TESTS=$(echo $TESTS | tr ' ' ',')
             gosu circleci \
               make -C src/test/regress \
-                check-arbitrary-configs parallel=4
+                check-arbitrary-configs parallel=4 CONFIGS=$TESTS
           no_output_timeout: 2m
       - run:
           name: 'Show regressions'
