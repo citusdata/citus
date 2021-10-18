@@ -923,6 +923,7 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "shardlength, groupid, placementid)  AS (VALUES ");
 
 	ShardInterval *shardInterval = NULL;
+	bool isFirstValue = true;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
@@ -931,6 +932,16 @@ ShardListInsertCommand(List *shardIntervalList)
 		ShardPlacement *placement = NULL;
 		foreach_ptr(placement, shardPlacementList)
 		{
+			if (!isFirstValue)
+			{
+				/*
+				 * As long as this is not the first placement of the first shard,
+				 * append the comma.
+				 */
+				appendStringInfo(insertPlacementCommand, ", ");
+			}
+			isFirstValue = false;
+
 			appendStringInfo(insertPlacementCommand,
 							 "(%ld, %d, %ld, %d, %ld)",
 							 shardId,
@@ -938,16 +949,6 @@ ShardListInsertCommand(List *shardIntervalList)
 							 placement->shardLength,
 							 placement->groupId,
 							 placement->placementId);
-
-			if (!(llast(shardPlacementList) == placement &&
-				  llast(shardIntervalList) == shardInterval))
-			{
-				/*
-				 * As long as this is not the last placement of the last shard,
-				 * append the comma.
-				 */
-				appendStringInfo(insertPlacementCommand, ", ");
-			}
 		}
 	}
 
