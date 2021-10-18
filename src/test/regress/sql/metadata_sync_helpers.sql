@@ -225,14 +225,6 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT citus_internal_add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 'c');
 ROLLBACK;
 
--- not-matching replication model for hash table
-BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
-	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
-	SET application_name to 'citus';
-	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 't');
-ROLLBACK;
-
-
 -- add entry for super user table
 \c - postgres - :worker_1_port
 SET search_path TO metadata_sync_helpers;

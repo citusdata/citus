@@ -429,6 +429,7 @@ SELECT create_distributed_table('table_range', 'id', 'range');
 CREATE FOREIGN TABLE table3_groupD ( id int ) SERVER fake_fdw_server;
 SELECT create_distributed_table('table3_groupD', 'id');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -1356,3 +1357,4 @@ DROP TABLE range_table;
 DROP TABLE none;
 DROP TABLE ref;
 DROP TABLE local_table;
+DROP FOREIGN TABLE table3_groupD CASCADE;
