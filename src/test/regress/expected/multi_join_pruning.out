@@ -101,7 +101,7 @@ EXPLAIN (COSTS OFF)
 SELECT count(*)
 	FROM array_partitioned_table table1, array_partitioned_table table2
 	WHERE table1.array_column = table2.array_column;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [{},{AZZXSP27F21T6,AZZXSP27F21T6}] and [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}]
 DEBUG:  join prunable for intervals [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}] and [{},{AZZXSP27F21T6,AZZXSP27F21T6}]
                              QUERY PLAN
@@ -115,7 +115,7 @@ EXPLAIN (COSTS OFF)
 SELECT count(*)
 	FROM composite_partitioned_table table1, composite_partitioned_table table2
 	WHERE table1.composite_column = table2.composite_column;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [(a,3,b),(b,4,c)] and [(c,5,d),(d,6,e)]
 DEBUG:  join prunable for intervals [(c,5,d),(d,6,e)] and [(a,3,b),(b,4,c)]
                              QUERY PLAN
@@ -130,7 +130,7 @@ EXPLAIN (COSTS OFF)
 SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
 	WHERE table1.varchar_column = table2.varchar_column;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [AA1000U2AMO4ZGX,AZZXSP27F21T6] and [BA1000U2AMO4ZGX,BZZXSP27F21T6]
 DEBUG:  join prunable for intervals [BA1000U2AMO4ZGX,BZZXSP27F21T6] and [AA1000U2AMO4ZGX,AZZXSP27F21T6]
                              QUERY PLAN

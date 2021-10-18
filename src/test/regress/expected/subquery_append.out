@@ -1,0 +1,233 @@
+CREATE SCHEMA subquery_append;
+SET search_path TO subquery_append;
+CREATE TABLE append_table (key text, value int, extra int default 0);
+CREATE INDEX ON append_table (key);
+SELECT create_distributed_table('append_table', 'key', 'append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 1 FROM master_create_empty_shard('append_table');
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT 1 FROM master_create_empty_shard('append_table');
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE TABLE ref_table (value int);
+CREATE INDEX ON ref_table (value);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\COPY append_table (key,value) FROM STDIN WITH CSV
+\COPY append_table (key,value) FROM STDIN WITH CSV
+\COPY ref_table FROM STDIN WITH CSV
+-- exercise some optimizer pushdown features with subqueries
+SELECT count(*) FROM (SELECT random() FROM append_table) u;
+ count
+---------------------------------------------------------------------
+    12
+(1 row)
+
+SELECT * FROM (SELECT DISTINCT key FROM append_table) sub ORDER BY 1 LIMIT 3;
+ key
+---------------------------------------------------------------------
+ abc
+ bcd
+ cde
+(3 rows)
+
+SELECT DISTINCT key FROM (SELECT key FROM append_table) sub ORDER BY 1 LIMIT 3;
+ key
+---------------------------------------------------------------------
+ abc
+ bcd
+ cde
+(3 rows)
+
+SELECT key, max(v) FROM (SELECT key, value + 1 AS v FROM append_table) sub GROUP BY key ORDER BY 1,2 LIMIT 3;
+ key | max
+---------------------------------------------------------------------
+ abc | 235
+ bcd | 235
+ cde | 346
+(3 rows)
+
+SELECT v, max(key) FROM (SELECT key, value + 1 AS v FROM append_table) sub GROUP BY v ORDER BY 1,2 LIMIT 3;
+  v  | max
+---------------------------------------------------------------------
+   1 | jkl
+   2 | ijk
+ 124 | hij
+(3 rows)
+
+SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+ key | row_number
+---------------------------------------------------------------------
+ abc |          6
+ abc |          9
+ bcd |          4
+(3 rows)
+
+SELECT key, row_number() OVER (ORDER BY value PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+ERROR:  syntax error at or near "PARTITION"
+SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+ key | row_number
+---------------------------------------------------------------------
+ abc |          6
+ abc |          9
+ bcd |          4
+(3 rows)
+
+SELECT key, row_number() OVER (PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+ key | row_number
+---------------------------------------------------------------------
+ abc |          1
+ abc |          2
+ bcd |          1
+(3 rows)
+
+-- try some joins in subqueries
+SELECT key, count(*) FROM (SELECT *, random() FROM append_table a JOIN append_table b USING (key)) u GROUP BY key ORDER BY 1,2 LIMIT 3;
+ERROR:  the query contains a join that requires repartitioning
+HINT:  Set citus.enable_repartition_joins to on to enable repartitioning
+SELECT key, count(*) FROM (SELECT *, random() FROM append_table a JOIN ref_table b USING (value)) u GROUP BY key ORDER BY 1,2 LIMIT 3;
+ key | count
+---------------------------------------------------------------------
+ abc |     1
+ abc |     1
+ bcd |     2
+(3 rows)
+
+SELECT key, value FROM append_table a WHERE value IN (SELECT * FROM ref_table) ORDER BY 1,2;
+ key | value
+---------------------------------------------------------------------
+ abc |   123
+ abc |   234
+ bcd |   123
+ bcd |   234
+ cde |   345
+ efg |   123
+ efg |   234
+ hij |   123
+ hij |   234
+(9 rows)
+
+SELECT key, value FROM append_table a WHERE key IN (SELECT key FROM append_table WHERE value > 100) ORDER BY 1,2;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+SELECT key, value FROM append_table a WHERE value = (SELECT max(value) FROM ref_table) ORDER BY 1,2;
+ key | value
+---------------------------------------------------------------------
+ cde |   345
+(1 row)
+
+SELECT key, value FROM append_table a WHERE value = (SELECT max(value) FROM ref_table r WHERE a.value = r.value) ORDER BY 1,2;
+ key | value
+---------------------------------------------------------------------
+ abc |   123
+ abc |   234
+ bcd |   123
+ bcd |   234
+ cde |   345
+ efg |   123
+ efg |   234
+ hij |   123
+ hij |   234
+(9 rows)
+
+SELECT key, (SELECT max(value) FROM ref_table r WHERE r.value = a.value) FROM append_table a ORDER BY 1,2;
+ key | max
+---------------------------------------------------------------------
+ abc | 123
+ abc | 234
+ bcd | 123
+ bcd | 234
+ cde | 345
+ def |
+ efg | 123
+ efg | 234
+ hij | 123
+ hij | 234
+ ijk |
+ jkl |
+(12 rows)
+
+-- Test delete
+BEGIN;
+DELETE FROM append_table a WHERE a.value IN (SELECT s FROM generate_series(1,100) s);
+SELECT count(*) FROM append_table;
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
+DELETE FROM append_table a USING ref_table r WHERE a.value = r.value;
+SELECT count(*) FROM append_table;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+DELETE FROM append_table WHERE value < 2;
+SELECT count(*) FROM append_table;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+DELETE FROM append_table;
+SELECT count(*) FROM append_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+DELETE FROM append_table a USING append_table b WHERE a.key = b.key;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+END;
+-- Test update
+BEGIN;
+UPDATE append_table a SET extra = 1 WHERE a.value IN (SELECT s FROM generate_series(1,100) s);
+SELECT count(*) FROM append_table WHERE extra = 1;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+UPDATE append_table a SET extra = 1 FROM ref_table r WHERE a.value = r.value;
+SELECT count(*) FROM append_table WHERE extra = 1;
+ count
+---------------------------------------------------------------------
+    10
+(1 row)
+
+UPDATE append_table SET extra = 1 WHERE value < 2;
+SELECT count(*) FROM append_table WHERE extra = 1;
+ count
+---------------------------------------------------------------------
+    11
+(1 row)
+
+UPDATE append_table SET extra = 1;
+SELECT count(*) FROM append_table WHERE extra = 1;
+ count
+---------------------------------------------------------------------
+    12
+(1 row)
+
+UPDATE append_table a sET extra = 1 FROM append_table b WHERE a.key = b.key;
+ERROR:  complex joins are only supported when all distributed tables are co-located and joined on their distribution columns
+END;
+DROP SCHEMA subquery_append CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table append_table
+drop cascades to table ref_table

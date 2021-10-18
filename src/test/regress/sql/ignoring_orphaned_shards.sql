@@ -128,12 +128,16 @@ CREATE TABLE range2(id int);
 SELECT create_distributed_table('range2', 'id', 'range');
 CALL public.create_range_partitioned_shards('range2', '{0,3}','{2,5}');
 
+-- Mark tables co-located
+UPDATE pg_dist_partition SET colocationid = 30001
+WHERE logicalrelid = 'range1'::regclass OR logicalrelid = 'range2'::regclass;
+
 -- Move shard placement and DON'T clean it up, now range1 and range2 are
 -- colocated, but only range2 has an orphaned shard.
 SELECT citus_move_shard_placement(92448600, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes');
 SELECT shardid, shardstate, nodeport FROM pg_dist_shard_placement WHERE shardid = 92448600 ORDER BY placementid;
 
--- Make sure that tables are detected as colocated
+-- Make sure co-located join works
 SELECT * FROM range1 JOIN range2 ON range1.id = range2.id;
 
 -- Make sure we can create a foreign key on community edition, because

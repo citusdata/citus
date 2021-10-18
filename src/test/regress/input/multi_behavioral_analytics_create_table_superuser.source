@@ -141,7 +141,7 @@ CREATE TABLE events (
 	event_type character varying(255),
 	event_time bigint
 );
-SELECT master_create_distributed_table('events', 'composite_id', 'range');
+SELECT create_distributed_table('events', 'composite_id', 'range');
 
 SELECT master_create_empty_shard('events') AS new_shard_id
 \gset
@@ -181,7 +181,11 @@ CREATE TABLE users (
 	composite_id user_composite_type,
 	lastseen bigint
 );
-SELECT master_create_distributed_table('users', 'composite_id', 'range');
+SELECT create_distributed_table('users', 'composite_id', 'range');
+
+-- we will guarantee co-locatedness for these tables
+UPDATE pg_dist_partition SET colocationid = 20001
+WHERE logicalrelid = 'events'::regclass OR logicalrelid = 'users'::regclass;
 
 SELECT master_create_empty_shard('users') AS new_shard_id
 \gset
@@ -228,7 +232,7 @@ CREATE TABLE lineitem_subquery (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-SELECT master_create_distributed_table('lineitem_subquery', 'l_orderkey', 'range');
+SELECT create_distributed_table('lineitem_subquery', 'l_orderkey', 'range');
 
 CREATE TABLE orders_subquery (
 	o_orderkey bigint not null,
@@ -241,7 +245,11 @@ CREATE TABLE orders_subquery (
 	o_shippriority integer not null,
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
-SELECT master_create_distributed_table('orders_subquery', 'o_orderkey', 'range');
+SELECT create_distributed_table('orders_subquery', 'o_orderkey', 'range');
+
+-- we will guarantee co-locatedness for these tabes
+UPDATE pg_dist_partition SET colocationid = 20002
+WHERE logicalrelid = 'orders_subquery'::regclass OR logicalrelid = 'lineitem_subquery'::regclass;
 
 SET citus.enable_router_execution TO 'false';
 

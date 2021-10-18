@@ -53,7 +53,7 @@ GROUP BY
 ORDER BY
 	revenue DESC,
 	o_orderdate;
-LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range partition join "customer_append" ]
+LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ dual partition join "customer_append" ]
                                            QUERY PLAN
 ---------------------------------------------------------------------
  Sort
@@ -97,16 +97,14 @@ GROUP BY
 	c_comment
 ORDER BY
 	revenue DESC;
-LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ single range partition join "customer_append" ][ reference join "nation" ]
-                                                                                 QUERY PLAN
+LOG:  join order: [ "orders" ][ local partition join "lineitem" ][ dual partition join "customer_append" ][ reference join "nation" ]
+                             QUERY PLAN
 ---------------------------------------------------------------------
  Sort
-   Sort Key: (sum(remote_scan.revenue)) DESC
-   ->  HashAggregate
-         Group Key: remote_scan.c_custkey, remote_scan.c_name, remote_scan.c_acctbal, remote_scan.c_phone, remote_scan.n_name, remote_scan.c_address, remote_scan.c_comment
-         ->  Custom Scan (Citus Adaptive)
-               explain statements for distributed queries are not enabled
-(6 rows)
+   Sort Key: remote_scan.revenue DESC
+   ->  Custom Scan (Citus Adaptive)
+         explain statements for distributed queries are not enabled
+(4 rows)
 
 -- Query #19 from the TPC-H decision support benchmark (modified)
 EXPLAIN (COSTS OFF)
@@ -139,7 +137,7 @@ WHERE
 		AND l_shipmode in ('AIR', 'AIR REG', 'TRUCK')
 		AND l_shipinstruct = 'DELIVER IN PERSON'
 	);
-LOG:  join order: [ "lineitem" ][ single range partition join "part_append" ]
+LOG:  join order: [ "lineitem" ][ dual partition join "part_append" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -159,7 +157,7 @@ WHERE
 	c_custkey = o_custkey
 GROUP BY
       l_partkey;
-LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ single range partition join "part_append" ][ single range partition join "customer_append" ]
+LOG:  join order: [ "lineitem" ][ local partition join "orders" ][ dual partition join "part_append" ][ dual partition join "customer_append" ]
                              QUERY PLAN
 ---------------------------------------------------------------------
  HashAggregate

@@ -36,9 +36,9 @@ SELECT master_create_distributed_table('test_table_2', 'id', 'append');
 
 SET citus.log_multi_join_order to TRUE;
 SET client_min_messages to DEBUG1;
+SET citus.enable_repartition_joins TO on;
 
--- Since we both have same amount of shards and they are colocated on the same node
--- local join logic will be triggered.
+-- when joining append tables we always get dual re-partition joins
 SELECT count(*) FROM test_table_1, test_table_2 WHERE test_table_1.id = test_table_2.id;
 
 -- Add two shards placement of interval [8,10] to test_table_1

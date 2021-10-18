@@ -85,6 +85,7 @@ typedef struct AttributeEquivalenceClassMember
 
 
 static bool ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext);
+static bool ContextContainsAppendRelation(RelationRestrictionContext *restrictionContext);
 static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Var * FindUnionAllVar(PlannerInfo *root, List *translatedVars, Oid relationOid,
 							 Index relationRteIndex, Index *partitionKeyIndex);
@@ -227,6 +228,29 @@ ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext)
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
 
 		if (!relationRestriction->distributedRelation)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * ContextContainsAppendRelation determines whether the given
+ * RelationRestrictionContext contains any append-distributed tables.
+ */
+static bool
+ContextContainsAppendRelation(RelationRestrictionContext *restrictionContext)
+{
+	ListCell *relationRestrictionCell = NULL;
+
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+
+		if (IsCitusTableType(relationRestriction->relationId, APPEND_DISTRIBUTED))
 		{
 			return true;
 		}
@@ -503,6 +527,12 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *restrictionCon
 	{
 		/* there is a single distributed relation, no need to continue */
 		return true;
+	}
+	else if (ContextContainsAppendRelation(
+				 restrictionContext->relationRestrictionContext))
+	{
+		/* we never consider append-distributed tables co-located */
+		return false;
 	}
 
 	List *attributeEquivalenceList = GenerateAllAttributeEquivalences(restrictionContext);
@@ -1904,6 +1934,17 @@ AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictio
 		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
 			continue;
+		}
+
+		if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
+		{
+			/*
+			 * If we got to this point, it means there are multiple distributed
+			 * relations and at least one of them is append-distributed. Since
+			 * we do not consider append-distributed tables to be co-located,
+			 * we can immediately return false.
+			 */
+			return false;
 		}
 
 		int colocationId = TableColocationId(relationId);

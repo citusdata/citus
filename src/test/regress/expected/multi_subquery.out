@@ -823,8 +823,7 @@ FROM
 		l_orderkey = o_orderkey
 	GROUP BY
 		l_orderkey) AS unit_prices;
-ERROR:  cannot push down this subquery
-DETAIL:  Shards of relations in subquery need to have 1-to-1 shard partitioning
+ERROR:  shard counts of co-located tables do not match
 -- Check that we can prune shards in subqueries with VARCHAR partition columns
 CREATE TABLE subquery_pruning_varchar_test_table
 (
