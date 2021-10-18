@@ -553,5 +553,4 @@ DROP TABLE range_table;
 DROP TABLE none;
 DROP TABLE ref;
 DROP TABLE local_table;
-
-
+DROP FOREIGN TABLE table3_groupD CASCADE;

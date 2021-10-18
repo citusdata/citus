@@ -10,6 +10,11 @@ SET search_path TO citus_mx_test_schema;
 \COPY citus_mx_test_schema_join_1.nation_hash_2 FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
 \COPY citus_mx_test_schema_join_2.nation_hash FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
 
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE citus_mx_test_schema.nation_hash_replicated AS SELECT * FROM citus_mx_test_schema.nation_hash;
+SELECT create_distributed_table('citus_mx_test_schema.nation_hash_replicated', 'n_nationkey');
+\COPY nation_hash_replicated FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+
 -- now try loading data from worker node
 \c - - - :worker_1_port
 SET search_path TO public;
@@ -17,10 +22,13 @@ SET search_path TO public;
 \COPY lineitem_mx FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
 \COPY lineitem_mx FROM '@abs_srcdir@/data/lineitem.2.data' with delimiter '|'
 
+\COPY citus_mx_test_schema.nation_hash_replicated FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
+
 \c - - - :worker_2_port
 -- and use second worker as well
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+\COPY citus_mx_test_schema.nation_hash_replicated FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
 
 -- get ready for the next test
 TRUNCATE orders_mx;
@@ -34,6 +42,8 @@ SELECT pg_sleep(0.1);
 show citus.local_shared_pool_size;
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.1.data' with delimiter '|'
 \COPY orders_mx FROM '@abs_srcdir@/data/orders.2.data' with delimiter '|'
+
+\COPY citus_mx_test_schema.nation_hash_replicated FROM '@abs_srcdir@/data/nation.data' with delimiter '|';
 
 -- set it back
 ALTER SYSTEM RESET citus.local_shared_pool_size;

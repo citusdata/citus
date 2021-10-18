@@ -563,6 +563,23 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.allow_modifications_from_workers_to_replicated_tables",
+		gettext_noop("Enables modifications from workers to replicated "
+					 "tables such as reference tables or hash "
+					 "distributed tables with replication factor "
+					 "greater than 1."),
+		gettext_noop("Allowing modifications from the worker nodes "
+					 "requires extra locking which might decrease "
+					 "the throughput. Disabling this GUC skips the "
+					 "extra locking and prevents modifications from "
+					 "worker nodes."),
+		&AllowModificationsFromWorkersToReplicatedTables,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.binary_worker_copy_format",
 		gettext_noop("Use the binary worker copy format."),
 		gettext_noop("When enabled, data is copied from workers to workers "

@@ -1721,20 +1721,30 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	}
 
 	/* now, iterate on the tasks and acquire the executor locks on the shards */
+	List *anchorShardIntervalList = NIL;
+	List *relationRowLockList = NIL;
+	List *requiresConsistentSnapshotRelationShardList = NIL;
+
 	Task *task = NULL;
 	foreach_ptr(task, taskList)
 	{
-		/*
-		 * If we are dealing with a partition we are also taking locks on parent table
-		 * to prevent deadlocks on concurrent operations on a partition and its parent.
-		 */
-		LockParentShardResourceIfPartition(task->anchorShardId, lockMode);
-
 		ShardInterval *anchorShardInterval = LoadShardInterval(task->anchorShardId);
-		SerializeNonCommutativeWrites(list_make1(anchorShardInterval), lockMode);
+		anchorShardIntervalList = lappend(anchorShardIntervalList, anchorShardInterval);
 
 		/* Acquire additional locks for SELECT .. FOR UPDATE on reference tables */
 		AcquireExecutorShardLocksForRelationRowLockList(task->relationRowLockList);
+
+		/*
+		 * Due to PG commit 5ee190f8ec37c1bbfb3061e18304e155d600bc8e we copy the
+		 * second parameter in pre-13.
+		 */
+		relationRowLockList =
+			list_concat(relationRowLockList,
+#if (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13)
+						list_copy(task->relationRowLockList));
+#else
+						task->relationRowLockList);
+#endif
 
 		/*
 		 * If the task has a subselect, then we may need to lock the shards from which
@@ -1749,8 +1759,62 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 			 * concurrently.
 			 */
 
-			LockRelationShardResources(task->relationShardList, ExclusiveLock);
+			/*
+			 * Due to PG commit 5ee190f8ec37c1bbfb3061e18304e155d600bc8e we copy the
+			 * second parameter in pre-13.
+			 */
+			requiresConsistentSnapshotRelationShardList =
+				list_concat(requiresConsistentSnapshotRelationShardList,
+#if (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13)
+
+							list_copy(task->relationShardList));
+#else
+							task->relationShardList);
+#endif
 		}
+	}
+
+	/*
+	 * Acquire the locks in a sorted way to avoid deadlocks due to lock
+	 * ordering across concurrent sessions.
+	 */
+	anchorShardIntervalList =
+		SortList(anchorShardIntervalList, CompareShardIntervalsById);
+
+	/*
+	 * If we are dealing with a partition we are also taking locks on parent table
+	 * to prevent deadlocks on concurrent operations on a partition and its parent.
+	 *
+	 * Note that this function currently does not acquire any remote locks as that
+	 * is necessary to control the concurrency across multiple nodes for replicated
+	 * tables. That is because Citus currently does not allow modifications to
+	 * partitions from any node other than the coordinator.
+	 */
+	LockParentShardResourceIfPartition(anchorShardIntervalList, lockMode);
+
+	/* Acquire distribution execution locks on the affected shards */
+	SerializeNonCommutativeWrites(anchorShardIntervalList, lockMode);
+
+	if (relationRowLockList != NIL)
+	{
+		/* Acquire additional locks for SELECT .. FOR UPDATE on reference tables */
+		AcquireExecutorShardLocksForRelationRowLockList(relationRowLockList);
+	}
+
+
+	if (requiresConsistentSnapshotRelationShardList != NIL)
+	{
+		/*
+		 * If the task has a subselect, then we may need to lock the shards from which
+		 * the query selects as well to prevent the subselects from seeing different
+		 * results on different replicas.
+		 *
+		 * ExclusiveLock conflicts with all lock types used by modifications
+		 * and therefore prevents other modifications from running
+		 * concurrently.
+		 */
+		LockRelationShardResources(requiresConsistentSnapshotRelationShardList,
+								   ExclusiveLock);
 	}
 }
 

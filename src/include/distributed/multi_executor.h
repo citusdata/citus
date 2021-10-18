@@ -63,6 +63,7 @@ typedef struct TransactionProperties
 
 extern int MultiShardConnectionType;
 extern bool WritableStandbyCoordinator;
+extern bool AllowModificationsFromWorkersToReplicatedTables;
 extern bool ForceMaxQueryParallelization;
 extern int MaxAdaptiveExecutorPoolSize;
 extern int ExecutorSlowStartInterval;

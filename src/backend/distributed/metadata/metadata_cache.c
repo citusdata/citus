@@ -34,6 +34,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/multi_executor.h"
 #include "distributed/function_utils.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
@@ -309,6 +310,32 @@ EnsureModificationsCanRunOnRelation(Oid relationId)
 {
 	EnsureModificationsCanRun();
 
+	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
+	{
+		/* we are not interested in PG tables */
+		return;
+	}
+
+	bool modifiedTableReplicated =
+		IsCitusTableType(relationId, REFERENCE_TABLE) ||
+		!SingleReplicatedTable(relationId);
+
+	if (!IsCoordinator() && !AllowModificationsFromWorkersToReplicatedTables &&
+		modifiedTableReplicated)
+	{
+		ereport(ERROR, (errmsg("modifications via the worker nodes are not "
+							   "allowed for replicated tables such as reference "
+							   "tables or hash distributed tables with replication "
+							   "factor greater than 1."),
+						errhint("All modifications to replicated tables should "
+								"happen via the coordinator unless "
+								"citus.allow_modifications_from_workers_to_replicated_tables "
+								" = true."),
+						errdetail("Allowing modifications from the worker nodes "
+								  "requires extra locking which might decrease "
+								  "the throughput.")));
+	}
+
 	/*
 	 * Even if user allows writes from standby, we should not allow for
 	 * replicated tables as they require 2PC. And, 2PC needs to write a log
@@ -319,21 +346,15 @@ EnsureModificationsCanRunOnRelation(Oid relationId)
 		return;
 	}
 
-	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
-	{
-		/* we are not interested in PG tables */
-		return;
-	}
-
-	if (IsCitusTableType(relationId, REFERENCE_TABLE) ||
-		!SingleReplicatedTable(relationId))
+	if (modifiedTableReplicated)
 	{
 		ereport(ERROR, (errmsg("writing to worker nodes is not currently "
 							   "allowed for replicated tables such as reference "
 							   "tables or hash distributed tables with replication "
 							   "factor greater than 1."),
-						errhint("All modifications to replicated tables happen via 2PC, "
-								"and 2PC requires the database to be in a writable state."),
+						errhint("All modifications to replicated tables "
+								"happen via 2PC, and 2PC requires the "
+								"database to be in a writable state."),
 						errdetail("the database is read-only")));
 	}
 }

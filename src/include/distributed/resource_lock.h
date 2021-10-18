@@ -145,7 +145,8 @@ extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMod
 extern List * GetSortedReferenceShardIntervals(List *relationList);
 
 /* Lock parent table's colocated shard resource */
-extern void LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode);
+extern void LockParentShardResourceIfPartition(List *shardIntervalList,
+											   LOCKMODE lockMode);
 
 /* Lock mode translation between text and enum */
 extern LOCKMODE LockModeTextToLockMode(const char *lockModeName);
