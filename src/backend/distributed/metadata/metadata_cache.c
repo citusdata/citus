@@ -3697,6 +3697,7 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	cacheEntry->hasUninitializedShardInterval = false;
 	cacheEntry->hasUniformHashDistribution = false;
 	cacheEntry->hasOverlappingShardInterval = false;
+	cacheEntry->autoConverted = false;
 
 	pfree(cacheEntry);
 }
