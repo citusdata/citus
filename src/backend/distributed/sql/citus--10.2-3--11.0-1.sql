@@ -6,5 +6,6 @@
 #include "udfs/fix_all_partition_shard_index_names/11.0-1.sql"
 #include "udfs/worker_fix_partition_shard_index_names/11.0-1.sql"
 
+ALTER TABLE pg_catalog.pg_dist_partition ADD COLUMN autoconverted boolean;
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);
