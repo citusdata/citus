@@ -21,6 +21,16 @@ SELECT create_distributed_table('on_update_fkey_table', 'id');
 ALTER TABLE on_update_fkey_table ADD CONSTRAINT fkey FOREIGN KEY(value_1) REFERENCES "refer'ence_table"(id) ON UPDATE CASCADE;
 INSERT INTO "refer'ence_table" SELECT i FROM generate_series(0, 100) i;
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
+-- also have one replicated table
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE replicated_table(id int PRIMARY KEY, value_1 int);
+SELECT create_distributed_table('replicated_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO replicated_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 -- first, make sure that truncate from the coordinator workers as expected
 TRUNCATE on_update_fkey_table;
 SELECT count(*) FROM on_update_fkey_table;
@@ -29,8 +39,24 @@ SELECT count(*) FROM on_update_fkey_table;
      0
 (1 row)
 
--- fill the table again
+TRUNCATE replicated_table;
+SELECT count(*) FROM replicated_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SET citus.task_assignment_policy TO "round-robin";
+SELECT count(*) FROM replicated_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+RESET citus.task_assignment_policy;
+-- fill the tables again
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
+INSERT INTO replicated_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 -- now, show that TRUNCATE CASCADE works expected from the coordinator
 TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
@@ -60,6 +86,16 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
+BEGIN;
+	ALTER TABLE replicated_table ADD COLUMN x INT;
+	TRUNCATE replicated_table;
+	SELECT count(*) FROM replicated_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
 \c - - - :worker_1_port
 SET search_path TO 'truncate_from_workers';
 -- make sure that TRUNCATE workes expected from the worker node
@@ -70,8 +106,17 @@ SELECT count(*) FROM on_update_fkey_table;
      0
 (1 row)
 
+-- make sure that TRUNCATE workes expected from the worker node
+TRUNCATE replicated_table;
+SELECT count(*) FROM replicated_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
 -- load some data
 INSERT INTO on_update_fkey_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
+INSERT INTO replicated_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
 -- now, show that TRUNCATE CASCADE works expected from the worker
 TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
@@ -96,6 +141,10 @@ BEGIN;
 ROLLBACK;
 -- test within transaction blocks
 BEGIN;
+	TRUNCATE replicated_table;
+ROLLBACK;
+-- test within transaction blocks
+BEGIN;
 	TRUNCATE "refer'ence_table" CASCADE;
 NOTICE:  truncate cascades to table "on_update_fkey_table"
 NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
@@ -111,6 +160,11 @@ NOTICE:  truncate cascades to table "on_update_fkey_table"
 NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
 NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
 NOTICE:  truncate cascades to table "on_update_fkey_table_xxxxxxx"
+ROLLBACK;
+-- test with sequential mode and CASCADE
+BEGIN;
+	SET LOCAL citus.multi_shard_modify_mode TO sequential;
+	TRUNCATE replicated_table CASCADE;
 ROLLBACK;
 -- fill some data for the next test
 \c - - - :master_port
@@ -137,6 +191,26 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
+-- make sure that DMLs-SELECTs works along with TRUNCATE worker fine
+TRUNCATE replicated_table;
+BEGIN;
+	-- we can enable local execution when truncate can be executed locally.
+	SET citus.enable_local_execution = 'off';
+	INSERT INTO replicated_table SELECT i, i % 100  FROM generate_series(0, 1000) i;
+	SELECT count(*) FROM replicated_table;
+ count
+---------------------------------------------------------------------
+  1001
+(1 row)
+
+	TRUNCATE replicated_table;
+	SELECT count(*) FROM replicated_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+ROLLBACK;
 RESET client_min_messages;
 \c - - - :master_port
 -- also test the infrastructure that is used for supporting
@@ -157,6 +231,16 @@ BEGIN;
 	-- should work since the schema is in the search path
 	SET search_path TO 'truncate_from_workers';
 	SELECT lock_relation_if_exists('on_update_fkey_table', 'ACCESS SHARE');
+ lock_relation_if_exists
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+BEGIN;
+	-- should work since the schema is in the search path
+	SET search_path TO 'truncate_from_workers';
+	SELECT lock_relation_if_exists('replicated_table', 'ACCESS SHARE');
  lock_relation_if_exists
 ---------------------------------------------------------------------
  t
@@ -249,7 +333,8 @@ BEGIN;
 
 COMMIT;
 DROP SCHEMA truncate_from_workers CASCADE;
-NOTICE:  drop cascades to 2 other objects
+NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to table truncate_from_workers."refer'ence_table"
 drop cascades to table truncate_from_workers.on_update_fkey_table
+drop cascades to table truncate_from_workers.replicated_table
 SET search_path TO public;

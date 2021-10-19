@@ -316,7 +316,7 @@ class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
         common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
 
 
-class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
+class CitusShardReplicationFactorClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_replication_factor": 2}
