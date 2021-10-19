@@ -491,7 +491,7 @@ PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelatio
 			 * cannot have non-inherited foreign keys.
 			 */
 			bool cascadeViaForeignKeys = false;
-			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys);
+			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys, true);
 		}
 		else if (IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
 		{
@@ -1289,9 +1289,7 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 			}
 			else
 			{
-				SetAutoConverted(true);
-				CreateCitusLocalTable(relationId, cascade);
-				SetAutoConverted(false);
+				CreateCitusLocalTable(relationId, cascade, true);
 			}
 		}
 		PG_CATCH();

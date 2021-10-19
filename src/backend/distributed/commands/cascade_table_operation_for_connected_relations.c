@@ -478,7 +478,7 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 			{
 				if (!IsCitusTable(relationId))
 				{
-					CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+					CreateCitusLocalTable(relationId, cascadeViaForeignKeys, true);
 				}
 
 				break;

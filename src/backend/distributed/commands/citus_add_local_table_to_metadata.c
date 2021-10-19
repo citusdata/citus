@@ -79,15 +79,13 @@ static void DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelat
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
-static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId);
+static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId, bool autoConverted);
 static void FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList);
 
 
 PG_FUNCTION_INFO_V1(citus_add_local_table_to_metadata);
 PG_FUNCTION_INFO_V1(create_citus_local_table);
 PG_FUNCTION_INFO_V1(remove_local_tables_from_metadata);
-
-bool autoConverted = false;
 
 
 /*
@@ -132,7 +130,7 @@ citus_add_local_table_to_metadata_internal(Oid relationId, bool cascadeViaForeig
 								  "to 'off' to disable this behavior")));
 	}
 
-	CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+	CreateCitusLocalTable(relationId, cascadeViaForeignKeys, false);
 }
 
 
@@ -192,7 +190,7 @@ remove_local_tables_from_metadata(PG_FUNCTION_ARGS)
  * single placement is only allowed to be on the coordinator.
  */
 void
-CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
+CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConverted)
 {
 	/*
 	 * These checks should be done before acquiring any locks on relation.
@@ -265,8 +263,6 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		char *relationName = get_rel_name(relationId);
 		Oid relationSchemaId = get_rel_namespace(relationId);
 
-		autoConverted = true;
-
 		/*
 		 * By acquiring AccessExclusiveLock, make sure that no modifications happen
 		 * on the relations.
@@ -274,12 +270,10 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		CascadeOperationForFkeyConnectedRelations(relationId, lockMode,
 												  CASCADE_ADD_LOCAL_TABLE_TO_METADATA);
 
-		autoConverted = false;
-
 		Oid shellRelationId = get_relname_relid(relationName, relationSchemaId);
 
 		/* mark the shell relation with autoConverted=false, as it was a user request */
-		UpdatePartitionAutoConverted(shellRelationId, autoConverted);
+		UpdatePartitionAutoConverted(shellRelationId, false);
 
 		/*
 		 * We converted every foreign key connected table in our subgraph
@@ -350,7 +344,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(shardRelationId,
 														 shellRelationId);
 
-	InsertMetadataForCitusLocalTable(shellRelationId, shardId);
+	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
 
 	/*
 	 * Ensure that the sequences used in column defaults of the table
@@ -418,7 +412,7 @@ CreateCitusLocalTablePartitionOf(CreateStmt *createStatement, Oid relationId,
 	 * again with the attach command
 	 */
 	DropRelationForeignKeys(relationId, fKeyFlags);
-	CreateCitusLocalTable(relationId, false);
+	CreateCitusLocalTable(relationId, false, false);
 	ExecuteAndLogUtilityCommand(attachCommand);
 }
 
@@ -446,16 +440,6 @@ ErrorIfAddingPartitionTableToMetadata(Oid relationId)
 							   relationName, parentRelationName,
 							   parentRelationName)));
 	}
-}
-
-
-/*
- * SetAutoConverted is the setter function for variable autoConverted.
- */
-void
-SetAutoConverted(bool autoConvertedValue)
-{
-	autoConverted = autoConvertedValue;
 }
 
 
@@ -1115,7 +1099,7 @@ TransferSequenceOwnership(Oid sequenceId, Oid targetRelationId, char *targetColu
  * pg_dist_partition, pg_dist_shard & pg_dist_placement.
  */
 static void
-InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId)
+InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId, bool autoConverted)
 {
 	Assert(OidIsValid(citusLocalTableId));
 	Assert(shardId != INVALID_SHARD_ID);
