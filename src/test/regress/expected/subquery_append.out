@@ -70,25 +70,31 @@ SELECT v, max(key) FROM (SELECT key, value + 1 AS v FROM append_table) sub GROUP
  124 | hij
 (3 rows)
 
-SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (ORDER BY key, value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
  key | row_number
 ---------------------------------------------------------------------
- abc |          6
- abc |          9
- bcd |          4
+ abc |          1
+ abc |          2
+ bcd |          3
 (3 rows)
 
-SELECT key, row_number() OVER (ORDER BY value PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
-ERROR:  syntax error at or near "PARTITION"
-SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (PARTITION BY key ORDER BY key,value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
  key | row_number
 ---------------------------------------------------------------------
- abc |          6
- abc |          9
- bcd |          4
+ abc |          1
+ abc |          2
+ bcd |          1
 (3 rows)
 
-SELECT key, row_number() OVER (PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (ORDER BY key, value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+ key | row_number
+---------------------------------------------------------------------
+ abc |          1
+ abc |          2
+ bcd |          3
+(3 rows)
+
+SELECT key, row_number() OVER (PARTITION BY key ORDER BY key,value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
  key | row_number
 ---------------------------------------------------------------------
  abc |          1

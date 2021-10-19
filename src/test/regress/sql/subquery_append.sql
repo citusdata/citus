@@ -45,11 +45,11 @@ SELECT DISTINCT key FROM (SELECT key FROM append_table) sub ORDER BY 1 LIMIT 3;
 SELECT key, max(v) FROM (SELECT key, value + 1 AS v FROM append_table) sub GROUP BY key ORDER BY 1,2 LIMIT 3;
 SELECT v, max(key) FROM (SELECT key, value + 1 AS v FROM append_table) sub GROUP BY v ORDER BY 1,2 LIMIT 3;
 
-SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
-SELECT key, row_number() OVER (ORDER BY value PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (ORDER BY key, value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (PARTITION BY key ORDER BY key,value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
 
-SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
-SELECT key, row_number() OVER (PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (ORDER BY key, value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (PARTITION BY key ORDER BY key,value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
 
 -- try some joins in subqueries
 SELECT key, count(*) FROM (SELECT *, random() FROM append_table a JOIN append_table b USING (key)) u GROUP BY key ORDER BY 1,2 LIMIT 3;
