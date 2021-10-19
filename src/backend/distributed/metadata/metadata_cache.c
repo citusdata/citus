@@ -518,44 +518,6 @@ PartitionMethodViaCatalog(Oid relationId)
 
 
 /*
- * AutoConvertedViaCatalog gets a relationId and returns the auto converted
- * column from pg_dist_partition via reading from catalog.
- */
-bool
-AutoConvertedViaCatalog(Oid relationId)
-{
-	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
-	if (!HeapTupleIsValid(partitionTuple))
-	{
-		ereport(ERROR, (errmsg("relation not found with oid: %u", relationId)));
-	}
-
-	Datum datumArray[Natts_pg_dist_partition];
-	bool isNullArray[Natts_pg_dist_partition];
-
-	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
-
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
-	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
-
-	if (isNullArray[Anum_pg_dist_partition_autoconverted - 1])
-	{
-		heap_freetuple(partitionTuple);
-		table_close(pgDistPartition, NoLock);
-		return false;
-	}
-
-	Datum autoConvertedDatum = datumArray[Anum_pg_dist_partition_autoconverted - 1];
-	bool autoConvertedBool = DatumGetBool(autoConvertedDatum);
-
-	heap_freetuple(partitionTuple);
-	table_close(pgDistPartition, NoLock);
-
-	return autoConvertedBool;
-}
-
-
-/*
  * PgDistPartitionTupleViaCatalog is a helper function that searches
  * pg_dist_partition for the given relationId. The caller is responsible
  * for ensuring that the returned heap tuple is valid before accessing
