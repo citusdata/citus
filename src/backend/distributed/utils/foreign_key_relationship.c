@@ -171,7 +171,8 @@ ShouldUndistributeCitusLocalTable(Oid relationId)
 			 */
 			return false;
 		}
-		if (!AutoConvertedViaCatalog(relationOid))
+		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationOid);
+		if (!cacheEntry->autoConverted)
 		{
 			/*
 			 * The relation is connected to a (or, is a) Citus Local Table created
