@@ -99,7 +99,14 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.user = REGULAR_USER_NAME
         self.is_mx = False
         self.is_citus = True
+        self.run_test_on_coordinator = (
+            True if "run_test_on_coordinator" in arguments else False
+        )
+        self.class_name = type(self).__name__
         self.name = type(self).__name__
+        if self.run_test_on_coordinator:
+            self.name += "_coordinator"
+
         self.settings = {
             "shared_preload_libraries": "citus",
             "log_error_verbosity": "terse",
@@ -122,6 +129,11 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         if self.worker_amount > 0:
             self.chosen_random_worker_port = self.random_worker_port()
         self.settings.update(self.new_settings)
+        self.sql_port = (
+            self.coordinator_port()
+            if self.run_test_on_coordinator
+            else self.random_worker_port()
+        )
 
     def coordinator_port(self):
         return self.node_name_to_ports[COORDINATOR_NAME]
@@ -130,6 +142,8 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         pass
 
     def random_worker_port(self):
+        if len(self.worker_ports) == 0:
+            return self.coordinator_port()
         return random.choice(self.worker_ports)
 
     def random_port(self):

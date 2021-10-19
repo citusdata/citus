@@ -84,7 +84,7 @@ def run_for_config(config, lock, sql_schedule_name):
     extra_tests = os.getenv("EXTRA_TESTS", "")
     if config.is_mx and config.worker_amount > 0:
         exitCode |= _run_pg_regress_on_port(
-            config, config.random_port(), sql_schedule_name, extra_tests=extra_tests
+            config, config.sql_port, sql_schedule_name, extra_tests=extra_tests
         )
     else:
         exitCode |= _run_pg_regress_on_port(
@@ -171,9 +171,13 @@ def read_configs(docoptRes):
     configs = []
     # We fill the configs from all of the possible classes in config.py so that if we add a new config,
     # we don't need to add it here. And this avoids the problem where we forget to add it here
-    for x in cfg.__dict__.values():
-        if cfg.should_include_config(x):
-            configs.append(x(docoptRes))
+    for class_name in cfg.__dict__.values():
+        if cfg.should_include_config(class_name):
+            if issubclass(class_name, cfg.CitusMXBaseClusterConfig):
+                arguments = dict(docoptRes)
+                arguments["run_test_on_coordinator"] = True
+                configs.append(class_name(arguments))
+            configs.append(class_name(docoptRes))
     return configs
 
 
@@ -195,7 +199,7 @@ def read_arguments(docoptRes):
         given_configs = docoptRes["--configs"].split(",")
         new_configs = []
         for config in configs:
-            if config.name in given_configs:
+            if config.class_name in given_configs:
                 new_configs.append(config)
         if len(new_configs) > 0:
             configs = new_configs
