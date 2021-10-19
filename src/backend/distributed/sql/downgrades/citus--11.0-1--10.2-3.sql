@@ -4,8 +4,6 @@ DROP FUNCTION pg_catalog.fix_all_partition_shard_index_names();
 DROP FUNCTION pg_catalog.fix_partition_shard_index_names(regclass);
 DROP FUNCTION pg_catalog.worker_fix_partition_shard_index_names(regclass, text, text);
 
-ALTER TABLE pg_catalog.pg_dist_partition DROP COLUMN autoconverted;
-
 CREATE FUNCTION pg_catalog.master_apply_delete_command(text)
     RETURNS integer
     LANGUAGE C STRICT
@@ -26,3 +24,4 @@ CREATE FUNCTION pg_catalog.master_get_table_metadata(
     AS 'MODULE_PATHNAME', $$master_get_table_metadata$$;
 COMMENT ON FUNCTION master_get_table_metadata(relation_name text)
     IS 'fetch metadata values for the table';
+ALTER TABLE pg_catalog.pg_dist_partition DROP COLUMN autoconverted;

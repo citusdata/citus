@@ -79,7 +79,8 @@ static void DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelat
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
-static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId, bool autoConverted);
+static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
+											 bool autoConverted);
 static void FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList);
 
 
@@ -1099,7 +1100,8 @@ TransferSequenceOwnership(Oid sequenceId, Oid targetRelationId, char *targetColu
  * pg_dist_partition, pg_dist_shard & pg_dist_placement.
  */
 static void
-InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId, bool autoConverted)
+InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
+								 bool autoConverted)
 {
 	Assert(OidIsValid(citusLocalTableId));
 	Assert(shardId != INVALID_SHARD_ID);
