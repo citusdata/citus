@@ -838,7 +838,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	SetUpDistributedTableDependencies(newWorkerNode);
 
-	if (EnableMetadataSyncByDefault)
+	if (EnableMetadataSyncByDefault && NodeIsPrimary(newWorkerNode))
 	{
 		StartMetadataSyncToNode(nodeName, nodePort);
 	}
