@@ -5,6 +5,7 @@ from contextlib import closing
 import os
 import threading
 import common
+import inspect
 
 COORDINATOR_NAME = "coordinator"
 WORKER1 = "worker1"
@@ -53,6 +54,16 @@ next_port = 10200
 PORT_UPPER = 32768
 
 port_lock = threading.Lock()
+
+
+def should_include_config(class_name):
+
+    if inspect.isclass(class_name) and (
+        issubclass(class_name, CitusMXBaseClusterConfig)
+        or issubclass(class_name, CitusDefaultClusterConfig)
+    ):
+        return True
+    return False
 
 
 def find_free_port():
