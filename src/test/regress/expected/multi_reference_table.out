@@ -1401,10 +1401,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_sche
 ALTER TABLE reference_schema.reference_table_ddl RENAME TO reference_table_ddl_test;
 ALTER TABLE reference_schema.reference_table_ddl_test RENAME TO reference_table_ddl;
 -- now test reference tables against some helper UDFs that Citus provides
--- cannot delete / drop shards from a reference table
-SELECT master_apply_delete_command('DELETE FROM reference_schema.reference_table_ddl');
-ERROR:  cannot delete from table
-DETAIL:  Delete statements on reference and local tables are not supported.
 -- cannot add shards
 SELECT master_create_empty_shard('reference_schema.reference_table_ddl');
 ERROR:  relation "reference_schema.reference_table_ddl" is a reference table

@@ -172,16 +172,6 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
      5
 (1 row)
 
--- master_apply_delete_command
-SELECT master_apply_delete_command('DELETE FROM mx_table');
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-SELECT count(*) FROM mx_table;
- count
----------------------------------------------------------------------
-     5
-(1 row)
-
 -- master_add_inactive_node
 SELECT 1 FROM master_add_inactive_node('localhost', 5432);
 ERROR:  operation is not allowed on this node

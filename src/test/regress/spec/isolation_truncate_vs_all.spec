@@ -34,7 +34,6 @@ step "s1-ddl-drop-column" { ALTER TABLE truncate_append DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE truncate_append RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('truncate_append'); }
 step "s1-master-modify-multiple-shards" { DELETE FROM truncate_append; }
-step "s1-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM truncate_append WHERE id <= 4;'); }
 step "s1-master-drop-all-shards" { SELECT citus_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append'); }
 step "s1-create-non-distributed-table" { CREATE TABLE truncate_append(id integer, data text); }
 step "s1-distribute-table" { SELECT create_distributed_table('truncate_append', 'id', 'append'); }
@@ -56,7 +55,6 @@ step "s2-ddl-drop-column" { ALTER TABLE truncate_append DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE truncate_append RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('truncate_append'); }
 step "s2-master-modify-multiple-shards" { DELETE FROM truncate_append; }
-step "s2-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM truncate_append WHERE id <= 4;'); }
 step "s2-master-drop-all-shards" { SELECT citus_drop_all_shards('truncate_append'::regclass, 'public', 'truncate_append'); }
 step "s2-distribute-table" { SELECT create_distributed_table('truncate_append', 'id', 'append'); }
 step "s2-commit" { COMMIT; }
@@ -75,7 +73,6 @@ permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-trunca
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-ddl-rename-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-table-size" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-master-modify-multiple-shards" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-master-apply-delete-command" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-truncate" "s2-master-drop-all-shards" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s2-begin" "s1-truncate" "s2-distribute-table" "s1-commit" "s2-commit" "s1-select-count"
 
@@ -89,6 +86,5 @@ permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-ddl-dr
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-rename-column" "s2-truncate" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-truncate" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-master-modify-multiple-shards" "s2-truncate" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-master-apply-delete-command" "s2-truncate" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-begin" "s1-master-drop-all-shards" "s2-truncate" "s1-commit" "s2-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s2-begin" "s1-distribute-table" "s2-truncate" "s1-commit" "s2-commit" "s1-select-count"

@@ -25,36 +25,6 @@ step s1-commit:
 
 step s2-truncate: <... completed>
 
-starting permutation: s1-begin s1-drop-all-shards s2-apply-delete-command s1-commit
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s1-begin:
- BEGIN;
-
-step s1-drop-all-shards:
- SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
-
-citus_drop_all_shards
----------------------------------------------------------------------
-                   16
-(1 row)
-
-step s2-apply-delete-command:
- SELECT master_apply_delete_command('DELETE FROM append_table');
- <waiting ...>
-step s1-commit: 
- COMMIT;
-
-step s2-apply-delete-command: <... completed>
-master_apply_delete_command
----------------------------------------------------------------------
-                          0
-(1 row)
-
-
 starting permutation: s1-begin s1-drop-all-shards s2-drop-all-shards s1-commit
 ?column?
 ---------------------------------------------------------------------
@@ -114,91 +84,6 @@ test_id|data
 (0 rows)
 
 
-starting permutation: s1-begin s1-apply-delete-command s2-truncate s1-commit
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s1-begin:
- BEGIN;
-
-step s1-apply-delete-command:
- SELECT master_apply_delete_command('DELETE FROM append_table');
-
-master_apply_delete_command
----------------------------------------------------------------------
-                         16
-(1 row)
-
-step s2-truncate:
- TRUNCATE append_table;
- <waiting ...>
-step s1-commit: 
- COMMIT;
-
-step s2-truncate: <... completed>
-
-starting permutation: s1-begin s1-apply-delete-command s2-apply-delete-command s1-commit
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s1-begin:
- BEGIN;
-
-step s1-apply-delete-command:
- SELECT master_apply_delete_command('DELETE FROM append_table');
-
-master_apply_delete_command
----------------------------------------------------------------------
-                         16
-(1 row)
-
-step s2-apply-delete-command:
- SELECT master_apply_delete_command('DELETE FROM append_table');
- <waiting ...>
-step s1-commit: 
- COMMIT;
-
-step s2-apply-delete-command: <... completed>
-master_apply_delete_command
----------------------------------------------------------------------
-                          0
-(1 row)
-
-
-starting permutation: s1-begin s1-apply-delete-command s2-drop-all-shards s1-commit
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s1-begin:
- BEGIN;
-
-step s1-apply-delete-command:
- SELECT master_apply_delete_command('DELETE FROM append_table');
-
-master_apply_delete_command
----------------------------------------------------------------------
-                         16
-(1 row)
-
-step s2-drop-all-shards:
- SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
- <waiting ...>
-step s1-commit: 
- COMMIT;
-
-step s2-drop-all-shards: <... completed>
-citus_drop_all_shards
----------------------------------------------------------------------
-                    0
-(1 row)
-
-
 starting permutation: s1-begin s1-truncate s2-truncate s1-commit
 ?column?
 ---------------------------------------------------------------------
@@ -218,31 +103,6 @@ step s1-commit:
  COMMIT;
 
 step s2-truncate: <... completed>
-
-starting permutation: s1-begin s1-truncate s2-apply-delete-command s1-commit
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s1-begin:
- BEGIN;
-
-step s1-truncate:
- TRUNCATE append_table;
-
-step s2-apply-delete-command:
- SELECT master_apply_delete_command('DELETE FROM append_table');
- <waiting ...>
-step s1-commit: 
- COMMIT;
-
-step s2-apply-delete-command: <... completed>
-master_apply_delete_command
----------------------------------------------------------------------
-                          0
-(1 row)
-
 
 starting permutation: s1-begin s1-truncate s2-drop-all-shards s1-commit
 ?column?

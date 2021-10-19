@@ -458,7 +458,6 @@ ROLLBACK;
 SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with => 'none');
 
 SELECT master_create_empty_shard('citus_local_table_4');
-SELECT master_apply_delete_command('DELETE FROM citus_local_table_4');
 
 CREATE TABLE postgres_local_table (a int);
 SELECT master_append_table_to_shard(shardId, 'postgres_local_table', 'localhost', :master_port)

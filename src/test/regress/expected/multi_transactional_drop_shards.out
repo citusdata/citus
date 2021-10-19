@@ -120,10 +120,10 @@ SELECT master_create_empty_shard('transactional_drop_shards');
 (1 row)
 
 BEGIN;
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
- master_apply_delete_command
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
+ citus_drop_all_shards
 ---------------------------------------------------------------------
-                           1
+                     1
 (1 row)
 
 ROLLBACK;
@@ -160,10 +160,10 @@ ORDER BY
 \c - - - :master_port
 -- test master_delete_protocol in transaction, then COMMIT
 BEGIN;
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
- master_apply_delete_command
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
+ citus_drop_all_shards
 ---------------------------------------------------------------------
-                           1
+                     1
 (1 row)
 
 COMMIT;
@@ -244,13 +244,13 @@ ORDER BY
 (1 row)
 
 \c - - - :master_port
--- test master_apply_delete_command in a transaction after insertion
+-- test citus_drop_all_shards in a transaction after insertion
 BEGIN;
 INSERT INTO transactional_drop_shards VALUES (1);
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
- master_apply_delete_command
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
+ citus_drop_all_shards
 ---------------------------------------------------------------------
-                           1
+                     1
 (1 row)
 
 ROLLBACK;
@@ -386,9 +386,9 @@ ORDER BY
 (1 row)
 
 \c - - - :master_port
--- test master_apply_delete_command table with failing worker
+-- test citus_drop_all_shards table with failing worker
 \set VERBOSITY terse
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
 ERROR:  illegal value
 \set VERBOSITY default
 -- verify metadata is not deleted

@@ -68,7 +68,7 @@ SELECT create_distributed_table('transactional_drop_shards', 'column1', 'append'
 SELECT master_create_empty_shard('transactional_drop_shards');
 
 BEGIN;
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
 ROLLBACK;
 
 -- verify metadata is not deleted
@@ -90,7 +90,7 @@ ORDER BY
 
 -- test master_delete_protocol in transaction, then COMMIT
 BEGIN;
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
 COMMIT;
 
 -- verify metadata is deleted
@@ -138,10 +138,10 @@ ORDER BY
 \c - - - :master_port
 
 
--- test master_apply_delete_command in a transaction after insertion
+-- test citus_drop_all_shards in a transaction after insertion
 BEGIN;
 INSERT INTO transactional_drop_shards VALUES (1);
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
 ROLLBACK;
 
 -- verify metadata is not deleted
@@ -223,9 +223,9 @@ ORDER BY
 \c - - - :master_port
 
 
--- test master_apply_delete_command table with failing worker
+-- test citus_drop_all_shards table with failing worker
 \set VERBOSITY terse
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
 \set VERBOSITY default
 
 -- verify metadata is not deleted

@@ -69,11 +69,6 @@
 
 
 /* Local functions forward declarations */
-static void CheckTableCount(Query *deleteQuery);
-static void CheckDeleteCriteria(Node *deleteCriteria);
-static void CheckPartitionColumn(Oid relationId, Node *whereClause);
-static List * ShardsMatchingDeleteCriteria(Oid relationId, List *shardList,
-										   Node *deleteCriteria);
 static int DropShards(Oid relationId, char *schemaName, char *relationName,
 					  List *deletableShardIntervalList, bool dropShardsMetadataOnly);
 static List * DropTaskList(Oid relationId, char *schemaName, char *relationName,
@@ -94,118 +89,22 @@ PG_FUNCTION_INFO_V1(master_drop_sequences);
 
 
 /*
- * master_apply_delete_command takes in a delete command, finds shards that
- * match the criteria defined in the delete command, drops the found shards from
- * the worker nodes, and updates the corresponding metadata on the master node.
- * This function drops a shard if and only if all rows in the shard satisfy
- * the conditions in the delete command. Note that this function only accepts
- * conditions on the partition key and if no condition is provided then all
- * shards are deleted.
- *
- * We mark shard placements that we couldn't drop as to be deleted later. If a
- * shard satisfies the given conditions, we delete it from shard metadata table
- * even though related shard placements are not deleted.
+ * master_apply_delete_command is a deprecated function for dropping shards
+ * in an append-distributed tables.
  */
 Datum
 master_apply_delete_command(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-
-	text *queryText = PG_GETARG_TEXT_P(0);
-	char *queryString = text_to_cstring(queryText);
-	List *deletableShardIntervalList = NIL;
-	bool failOK = false;
-	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
-	Node *queryTreeNode = rawStmt->stmt;
-
-	if (!IsA(queryTreeNode, DeleteStmt))
-	{
-		ereport(ERROR, (errmsg("query \"%s\" is not a delete statement",
-							   ApplyLogRedaction(queryString))));
-	}
-
-	DeleteStmt *deleteStatement = (DeleteStmt *) queryTreeNode;
-
-	char *schemaName = deleteStatement->relation->schemaname;
-	char *relationName = deleteStatement->relation->relname;
-
-	/*
-	 * We take an exclusive lock while dropping shards to prevent concurrent
-	 * writes. We don't want to block SELECTs, which means queries might fail
-	 * if they access a shard that has just been dropped.
-	 */
-	LOCKMODE lockMode = ExclusiveLock;
-
-	Oid relationId = RangeVarGetRelid(deleteStatement->relation, lockMode, failOK);
-
-	/* schema-prefix if it is not specified already */
-	if (schemaName == NULL)
-	{
-		Oid schemaId = get_rel_namespace(relationId);
-		schemaName = get_namespace_name(schemaId);
-	}
-
-	CheckDistributedTable(relationId);
-	EnsureTablePermissions(relationId, ACL_DELETE);
-
-	List *queryTreeList = pg_analyze_and_rewrite(rawStmt, queryString, NULL, 0, NULL);
-	Query *deleteQuery = (Query *) linitial(queryTreeList);
-	CheckTableCount(deleteQuery);
-
-	/* get where clause and flatten it */
-	Node *whereClause = (Node *) deleteQuery->jointree->quals;
-	Node *deleteCriteria = eval_const_expressions(NULL, whereClause);
-
-	if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot delete from hash distributed table with this "
-							   "command"),
-						errdetail("Delete statements on hash-partitioned tables "
-								  "are not supported with master_apply_delete_command."),
-						errhint("Use the DELETE command instead.")));
-	}
-	else if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot delete from table"),
-						errdetail("Delete statements on reference and "
-								  "local tables are not supported.")));
-	}
-
-
-	CheckDeleteCriteria(deleteCriteria);
-	CheckPartitionColumn(relationId, deleteCriteria);
-
-	List *shardIntervalList = LoadShardIntervalList(relationId);
-
-	/* drop all shards if where clause is not present */
-	if (deleteCriteria == NULL)
-	{
-		deletableShardIntervalList = shardIntervalList;
-		ereport(DEBUG2, (errmsg("dropping all shards for \"%s\"", relationName)));
-	}
-	else
-	{
-		deletableShardIntervalList = ShardsMatchingDeleteCriteria(relationId,
-																  shardIntervalList,
-																  deleteCriteria);
-	}
-
-	bool dropShardsMetadataOnly = false;
-	int droppedShardCount = DropShards(relationId, schemaName, relationName,
-									   deletableShardIntervalList,
-									   dropShardsMetadataOnly);
-
-	PG_RETURN_INT32(droppedShardCount);
+	ereport(ERROR, (errmsg("master_apply_delete_command has been deprecated")));
 }
 
 
 /*
  * citus_drop_all_shards attempts to drop all shards for a given relation.
- * Unlike master_apply_delete_command, this function can be called even
- * if the table has already been dropped.
+ * This function can be called even if the table has already been dropped.
+ * In that case, the schema name and relation name arguments are used to
+ * determine that table name. Otherwise, the relation ID is used and the
+ * other arguments are ignored.
  */
 Datum
 citus_drop_all_shards(PG_FUNCTION_ARGS)
@@ -583,152 +482,4 @@ CreateDropShardPlacementCommand(const char *schemaName, const char *shardRelatio
 	}
 
 	return workerDropQuery->data;
-}
-
-
-/* Checks that delete is only on one table. */
-static void
-CheckTableCount(Query *deleteQuery)
-{
-	int rangeTableCount = list_length(deleteQuery->rtable);
-	if (rangeTableCount > 1)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot delete from distributed table"),
-						errdetail("Delete on multiple tables is not supported")));
-	}
-}
-
-
-/* Checks that delete criteria only consists of simple operator expressions. */
-static void
-CheckDeleteCriteria(Node *deleteCriteria)
-{
-	bool simpleOpExpression = true;
-
-	if (deleteCriteria == NULL)
-	{
-		return;
-	}
-
-	if (is_opclause(deleteCriteria))
-	{
-		simpleOpExpression = SimpleOpExpression((Expr *) deleteCriteria);
-	}
-	else if (IsA(deleteCriteria, BoolExpr))
-	{
-		BoolExpr *deleteCriteriaExpression = (BoolExpr *) deleteCriteria;
-		List *opExpressionList = deleteCriteriaExpression->args;
-		Expr *opExpression = NULL;
-		foreach_ptr(opExpression, opExpressionList)
-		{
-			if (!SimpleOpExpression(opExpression))
-			{
-				simpleOpExpression = false;
-				break;
-			}
-		}
-	}
-	else
-	{
-		simpleOpExpression = false;
-	}
-
-	if (!simpleOpExpression)
-	{
-		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						errmsg("cannot delete from distributed table"),
-						errdetail("Delete query has a complex operator expression")));
-	}
-}
-
-
-/*
- * CheckPartitionColumn checks that the given where clause is based only on the
- * partition key of the given relation id.
- */
-static void
-CheckPartitionColumn(Oid relationId, Node *whereClause)
-{
-	Var *partitionColumn = DistPartitionKeyOrError(relationId);
-
-	List *columnList = pull_var_clause_default(whereClause);
-	Var *var = NULL;
-	foreach_ptr(var, columnList)
-	{
-		if (var->varattno != partitionColumn->varattno)
-		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("cannot delete from distributed table"),
-							errdetail("Where clause includes a column other than "
-									  "partition column")));
-		}
-	}
-}
-
-
-/*
- * ShardsMatchingDeleteCriteria selects shards to be deleted from the shard
- * interval list based on the delete criteria, and returns selected shards in
- * another list. We add a shard to the list if and only if all rows in the shard
- * satisfy the delete criteria. Note that this function does not expect
- * deleteCriteria to be NULL.
- */
-static List *
-ShardsMatchingDeleteCriteria(Oid relationId, List *shardIntervalList,
-							 Node *deleteCriteria)
-{
-	List *dropShardIntervalList = NIL;
-
-	/* build the base expression for constraint */
-	Index rangeTableIndex = 1;
-	Var *partitionColumn = PartitionColumn(relationId, rangeTableIndex);
-	Node *baseConstraint = BuildBaseConstraint(partitionColumn);
-
-	Assert(deleteCriteria != NULL);
-	List *deleteCriteriaList = list_make1(deleteCriteria);
-
-
-	/* walk over shard list and check if shards can be dropped */
-	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
-	{
-		if (shardInterval->minValueExists && shardInterval->maxValueExists)
-		{
-			List *restrictInfoList = NIL;
-
-			/* set the min/max values in the base constraint */
-			UpdateConstraint(baseConstraint, shardInterval);
-
-			BoolExpr *andExpr = (BoolExpr *) baseConstraint;
-			Expr *lessThanExpr = (Expr *) linitial(andExpr->args);
-			Expr *greaterThanExpr = (Expr *) lsecond(andExpr->args);
-
-			/*
-			 * passing NULL for plannerInfo will be problematic if we have placeholder
-			 * vars. However, it won't be the case here because we are building
-			 * the expression from shard intervals which don't have placeholder vars.
-			 * Note that this is only the case with PG14 as the parameter doesn't exist
-			 * prior to that.
-			 */
-			RestrictInfo *lessThanRestrictInfo = make_simple_restrictinfo_compat(NULL,
-																				 lessThanExpr);
-			RestrictInfo *greaterThanRestrictInfo = make_simple_restrictinfo_compat(NULL,
-																					greaterThanExpr);
-
-			restrictInfoList = lappend(restrictInfoList, lessThanRestrictInfo);
-			restrictInfoList = lappend(restrictInfoList, greaterThanRestrictInfo);
-
-			bool dropShard = predicate_implied_by(deleteCriteriaList, restrictInfoList,
-												  false);
-			if (dropShard)
-			{
-				dropShardIntervalList = lappend(dropShardIntervalList, shardInterval);
-				ereport(DEBUG2, (errmsg("delete criteria includes shardId "
-										UINT64_FORMAT, shardInterval->shardId)));
-			}
-		}
-	}
-
-	return dropShardIntervalList;
 }

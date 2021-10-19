@@ -443,7 +443,7 @@ CREATE TABLE test_schema_support.nation_hash_collation(
     n_comment varchar(152)
 );
 SELECT master_get_table_ddl_events('test_schema_support.nation_hash_collation') ORDER BY 1;
-                                                                                               master_get_table_ddl_events
+                                                                                                     master_get_table_ddl_events
 ---------------------------------------------------------------------
  ALTER TABLE test_schema_support.nation_hash_collation OWNER TO postgres
  CREATE TABLE test_schema_support.nation_hash_collation (n_nationkey integer NOT NULL, n_name character(25) NOT NULL COLLATE test_schema_support.english, n_regionkey integer NOT NULL, n_comment character varying(152))
@@ -759,31 +759,6 @@ SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid
           1 | localhost |    57638
 (2 rows)
 
--- test master_apply_delete_command with schemas
-SET search_path TO public;
-SELECT master_apply_delete_command('DELETE FROM test_schema_support.nation_append') ;
- master_apply_delete_command
----------------------------------------------------------------------
-                           1
-(1 row)
-
--- verify shard is dropped
-\c - - - :worker_1_port
-\d test_schema_support.nation_append_119*
-\c - - - :master_port
--- test with search_path is set
-SET search_path TO test_schema_support;
-\copy nation_append FROM STDIN with delimiter '|';
-SELECT master_apply_delete_command('DELETE FROM nation_append') ;
- master_apply_delete_command
----------------------------------------------------------------------
-                           1
-(1 row)
-
--- verify shard is dropped
-\c - - - :worker_1_port
-\d test_schema_support.nation_append_119*
-\c - - - :master_port
 -- check joins of tables which are in schemas other than public
 -- we create new tables with replication factor of 1
 -- so that we guarantee to have repartitions when necessary
