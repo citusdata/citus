@@ -169,9 +169,8 @@ SELECT create_distributed_table('test_table', 'a');
 
 (1 row)
 
--- we currently don't support this
+-- operator class options are supported
 CREATE INDEX test_table_index ON test_table USING gist (b tsvector_ops(siglen = 100));
-ERROR:  citus currently doesn't support operator class parameters in indexes
 -- testing WAL
 CREATE TABLE test_wal(a int, b int);
 -- test WAL without ANALYZE, this should raise an error
