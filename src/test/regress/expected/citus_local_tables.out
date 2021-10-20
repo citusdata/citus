@@ -416,6 +416,29 @@ SELECT create_reference_table('dummy_reference_table');
 
 (1 row)
 
+BEGIN;
+  SET client_min_messages TO ERROR;
+  SELECT remove_local_tables_from_metadata();
+ remove_local_tables_from_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+  -- should see only citus local tables that are not converted automatically
+  SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
+  WHERE tablename=logicalrelid::regclass::text AND
+        schemaname='citus_local_tables_test_schema' AND
+        partmethod = 'n' AND repmodel = 's'
+  ORDER BY 1;
+    logicalrelid
+---------------------------------------------------------------------
+ citus_local_table_1
+ citus_local_table_2
+ local_table_3
+ unlogged_table
+(4 rows)
+
+ROLLBACK;
 -- define foreign keys between dummy_reference_table and citus local tables
 -- not to undistribute them automatically
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_to_dummy_ref FOREIGN KEY (a) REFERENCES dummy_reference_table(a);
