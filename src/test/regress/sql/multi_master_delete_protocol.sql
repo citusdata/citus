@@ -1,56 +1,17 @@
 --
--- MULTI_MASTER_DELETE_PROTOCOL
+-- MULTI_MASTER_PROTOCOL
 --
+-- Tests that check the metadata returned by the master node.
 
 
-SET citus.next_shard_id TO 320000;
+SET citus.next_shard_id TO 740000;
 
 
--- Create a new range partitioned customer_delete_protocol table and load data into it.
-CREATE TABLE customer_delete_protocol (
-        c_custkey integer not null,
-        c_name varchar(25) not null,
-        c_address varchar(40) not null,
-        c_nationkey integer not null,
-        c_phone char(15) not null,
-        c_acctbal decimal(15,2) not null,
-        c_mktsegment char(10) not null,
-        c_comment varchar(117) not null);
-SELECT master_create_distributed_table('customer_delete_protocol', 'c_custkey', 'append');
+SELECT part_storage_type, part_key, part_replica_count, part_max_size,
+	   part_placement_policy FROM master_get_table_metadata('lineitem');
 
-\copy customer_delete_protocol FROM '/home/ahmet/citus/src/test/regress/data/customer.1.data' with delimiter '|'
-\copy customer_delete_protocol FROM '/home/ahmet/citus/src/test/regress/data/customer.2.data' with delimiter '|'
-\copy customer_delete_protocol FROM '/home/ahmet/citus/src/test/regress/data/customer.3.data' with delimiter '|'
+SELECT * FROM master_get_table_ddl_events('lineitem') order by 1;
 
--- Testing master_apply_delete_command
--- Check that we don't support conditions on columns other than partition key.
+SELECT * FROM master_get_new_shardid();
 
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
-                                           WHERE c_acctbal > 0.0');
--- Check that we delete a shard if and only if all rows in the shard satisfy the condition.
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
-                                           WHERE c_custkey > 6500');
-SELECT count(*) from customer_delete_protocol;
-
--- Delete one shard that satisfies the given conditions.
-
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
-                                           WHERE c_custkey > 1000 AND c_custkey < 3000');
-SELECT count(*) from customer_delete_protocol;
-
--- Delete all shards if no condition is provided.
-
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
-SELECT count(*) FROM customer_delete_protocol;
-
--- Verify that empty shards are deleted if no condition is provided
-SELECT 1 AS one FROM master_create_empty_shard('customer_delete_protocol');
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol
-                                           WHERE c_custkey > 1000');
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
-
--- Verify that master_apply_delete_command can be called in a transaction block
-SELECT 1 AS one FROM master_create_empty_shard('customer_delete_protocol');
-BEGIN;
-SELECT master_apply_delete_command('DELETE FROM customer_delete_protocol');
-COMMIT;
+SELECT * FROM master_get_active_worker_nodes();
