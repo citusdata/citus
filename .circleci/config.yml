@@ -186,7 +186,7 @@ jobs:
         default: 12-13
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >>'
-    resource_class: xlarge
+    resource_class: large
     working_directory: /home/circleci/project
     steps:
       - checkout
