@@ -273,8 +273,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 
 		Oid shellRelationId = get_relname_relid(relationName, relationSchemaId);
 
-		/* mark the shell relation with autoConverted=false, as it was a user request */
-		UpdatePartitionAutoConverted(shellRelationId, false);
+		UpdatePartitionAutoConverted(shellRelationId, autoConverted);
 
 		/*
 		 * We converted every foreign key connected table in our subgraph
