@@ -502,10 +502,12 @@ PathBasedPlannerRelationHook(PlannerInfo *root,
 
 			/* TODO figure out costing for our grouping */
 			AggClauseCosts costs = {
+#if PG_VERSION_NUM < 140000
 				.numAggs = numAggs,
 				.numOrderedAggs = 0,
 				.hasNonPartial = false,
 				.hasNonSerial = false,
+#endif
 
 				.transCost.startup = 0,
 				.transCost.per_tuple = 0,
