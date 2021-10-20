@@ -97,9 +97,9 @@ SELECT count(*) FROM single_replicatated;
 
 SET citus.force_max_query_parallelization TO OFF;
 
--- one similar test, but this time on modification queries
+-- one similar test, and this time on modification queries
 -- to see that connection establishement failures could
--- mark placement INVALID
+-- fail the transaction (but not mark any placements as INVALID)
 SELECT citus.mitmproxy('conn.allow()');
 BEGIN;
 SELECT
@@ -120,7 +120,7 @@ WHERE
 	shardstate = 3 AND
 	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
 
--- show that INSERT went through
+-- show that INSERT failed
 SELECT count(*) FROM products WHERE product_no = 100;
 
 

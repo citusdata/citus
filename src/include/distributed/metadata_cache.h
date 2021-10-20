@@ -196,6 +196,7 @@ extern bool InstalledAndAvailableVersionsSame(void);
 extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
 extern void ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
+extern void EnsureModificationsCanRunOnRelation(Oid relationId);
 extern char LookupDistributionMethod(Oid distributionMethodOid);
 extern bool RelationExists(Oid relationId);
 extern ShardInterval * TupleToShardInterval(HeapTuple heapTuple,

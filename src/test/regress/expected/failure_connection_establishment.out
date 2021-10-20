@@ -174,9 +174,9 @@ SELECT citus.mitmproxy('conn.delay(500)');
 SELECT count(*) FROM single_replicatated;
 ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 SET citus.force_max_query_parallelization TO OFF;
--- one similar test, but this time on modification queries
+-- one similar test, and this time on modification queries
 -- to see that connection establishement failures could
--- mark placement INVALID
+-- fail the transaction (but not mark any placements as INVALID)
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -203,6 +203,7 @@ SELECT citus.mitmproxy('conn.delay(500)');
 (1 row)
 
 INSERT INTO products VALUES (100, '100', 100);
+ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 COMMIT;
 SELECT
 	count(*) as invalid_placement_count
@@ -213,14 +214,14 @@ WHERE
 	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
  invalid_placement_count
 ---------------------------------------------------------------------
-                       1
+                       0
 (1 row)
 
--- show that INSERT went through
+-- show that INSERT failed
 SELECT count(*) FROM products WHERE product_no = 100;
  count
 ---------------------------------------------------------------------
-     1
+     0
 (1 row)
 
 RESET client_min_messages;

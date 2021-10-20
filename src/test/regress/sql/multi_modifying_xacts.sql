@@ -301,7 +301,8 @@ ORDER BY nodeport, shardid;
 
 -- hide postgresql version dependend messages for next test only
 \set VERBOSITY terse
--- deferred check should abort the transaction
+-- for replicated tables use 2PC even if multi-shard commit protocol
+-- is set to 2PC
 BEGIN;
 SET LOCAL citus.multi_shard_commit_protocol TO '1pc';
 DELETE FROM researchers WHERE lab_id = 6;
@@ -487,16 +488,17 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 \c - - - :master_port
 
 -- should be the same story as before, just at COMMIT time
+-- as we use 2PC, the transaction is rollbacked
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (9, 'Umbrella Corporation');
 COMMIT;
 
--- data should be persisted
+-- data should not persisted
 SELECT * FROM objects WHERE id = 2;
 
--- but one placement should be bad
+-- and nonne of the placements should be bad
 SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
@@ -560,11 +562,11 @@ INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 \set VERBOSITY default
 
--- data to objects should be persisted, but labs should not...
+-- none of the changes should be persisted
 SELECT * FROM objects WHERE id = 1;
 SELECT * FROM labs WHERE id = 8;
 
--- labs should be healthy, but one object placement shouldn't be
+-- all placements should be healthy
 SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s

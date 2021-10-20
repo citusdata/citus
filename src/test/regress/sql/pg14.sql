@@ -8,7 +8,7 @@ SELECT substring(:'server_version', '\d+')::int > 13 AS server_version_above_thi
 
 create schema pg14;
 set search_path to pg14;
-
+SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 980000;
 SET citus.shard_count TO 2;
 

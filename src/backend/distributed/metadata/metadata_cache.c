@@ -299,6 +299,47 @@ EnsureModificationsCanRun(void)
 
 
 /*
+ * EnsureModificationsCanRunOnRelation firsts calls into EnsureModificationsCanRun() and
+ * then does one more additional check. The additional check is to give a proper error
+ * message if any relation that is modified is replicated, as replicated tables use
+ * 2PC and 2PC cannot happen when recovery is in progress.
+ */
+void
+EnsureModificationsCanRunOnRelation(Oid relationId)
+{
+	EnsureModificationsCanRun();
+
+	/*
+	 * Even if user allows writes from standby, we should not allow for
+	 * replicated tables as they require 2PC. And, 2PC needs to write a log
+	 * record on the coordinator.
+	 */
+	if (!(RecoveryInProgress() && WritableStandbyCoordinator))
+	{
+		return;
+	}
+
+	if (!IsCitusTable(relationId))
+	{
+		/* we are not interested in PG tables */
+		return;
+	}
+
+	if (IsCitusTableType(relationId, REFERENCE_TABLE) ||
+		!SingleReplicatedTable(relationId))
+	{
+		ereport(ERROR, (errmsg("writing to worker nodes is not currently "
+							   "allowed for replicated tables such as reference "
+							   "tables or hash distributed tables with replication "
+							   "factor greater than 1."),
+						errhint("All modifications to replicated tables happen via 2PC, "
+								"and 2PC requires the database to be in a writable state."),
+						errdetail("the database is read-only")));
+	}
+}
+
+
+/*
  * IsCitusTableType returns true if the given table with relationId
  * belongs to a citus table that matches the given table type. If cache
  * entry already exists, prefer using IsCitusTableTypeCacheEntry to avoid

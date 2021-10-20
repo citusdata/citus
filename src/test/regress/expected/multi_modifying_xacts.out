@@ -369,7 +369,8 @@ ORDER BY nodeport, shardid;
 
 -- hide postgresql version dependend messages for next test only
 \set VERBOSITY terse
--- deferred check should abort the transaction
+-- for replicated tables use 2PC even if multi-shard commit protocol
+-- is set to 2PC
 BEGIN;
 SET LOCAL citus.multi_shard_commit_protocol TO '1pc';
 DELETE FROM researchers WHERE lab_id = 6;
@@ -377,11 +378,8 @@ DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  could not commit transaction for shard xxxxx on any active node
-ERROR:  could not commit transaction on any active node
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
+ERROR:  illegal value
 \unset VERBOSITY
 -- verify everyhing including delete is rolled back
 SELECT * FROM researchers WHERE lab_id = 6;
@@ -614,21 +612,20 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 \c - - - :master_port
 -- should be the same story as before, just at COMMIT time
+-- as we use 2PC, the transaction is rollbacked
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (9, 'Umbrella Corporation');
 COMMIT;
-WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
--- data should be persisted
+ERROR:  illegal value
+-- data should not persisted
 SELECT * FROM objects WHERE id = 2;
  id | name
 ---------------------------------------------------------------------
-  2 | BAD
-(1 row)
+(0 rows)
 
--- but one placement should be bad
+-- and nonne of the placements should be bad
 SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
@@ -639,7 +636,7 @@ AND    sp.shardstate = 3
 AND    s.logicalrelid = 'objects'::regclass;
  count
 ---------------------------------------------------------------------
-     1
+     0
 (1 row)
 
 DELETE FROM objects;
@@ -663,12 +660,8 @@ INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  could not commit transaction for shard xxxxx on any active node
-WARNING:  could not commit transaction for shard xxxxx on any active node
-ERROR:  could not commit transaction on any active node
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
+ERROR:  illegal value
 -- data should NOT be persisted
 SELECT * FROM objects WHERE id = 1;
  id | name
@@ -703,23 +696,20 @@ INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO labs VALUES (8, 'Aperture Science');
 INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
-WARNING:  illegal value
-WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  could not commit transaction for shard xxxxx on any active node
+ERROR:  illegal value
 \set VERBOSITY default
--- data to objects should be persisted, but labs should not...
+-- none of the changes should be persisted
 SELECT * FROM objects WHERE id = 1;
  id | name
 ---------------------------------------------------------------------
-  1 | apple
-(1 row)
+(0 rows)
 
 SELECT * FROM labs WHERE id = 8;
  id | name
 ---------------------------------------------------------------------
 (0 rows)
 
--- labs should be healthy, but one object placement shouldn't be
+-- all placements should be healthy
 SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
@@ -731,9 +721,8 @@ ORDER BY s.logicalrelid, sp.shardstate;
  logicalrelid | shardstate | count
 ---------------------------------------------------------------------
  labs         |          1 |     1
- objects      |          1 |     1
- objects      |          3 |     1
-(3 rows)
+ objects      |          1 |     2
+(2 rows)
 
 -- some append-partitioned tests for good measure
 CREATE TABLE append_researchers ( LIKE researchers );
