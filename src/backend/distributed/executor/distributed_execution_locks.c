@@ -19,9 +19,7 @@
 #include "distributed/transaction_management.h"
 
 
-static bool RequiresConsistentSnapshot(Task *task);
 static void AcquireExecutorShardLockForRowModify(Task *task, RowModifyLevel modLevel);
-static void AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList);
 
 
 /*
@@ -88,84 +86,7 @@ AcquireExecutorShardLocks(Task *task, RowModifyLevel modLevel)
  */
 void
 AcquireExecutorMultiShardLocks(List *taskList)
-{
-	Task *task = NULL;
-	foreach_ptr(task, taskList)
-	{
-		LOCKMODE lockMode = NoLock;
-
-		if (task->anchorShardId == INVALID_SHARD_ID)
-		{
-			/* no shard locks to take if the task is not anchored to a shard */
-			continue;
-		}
-
-		if (AllModificationsCommutative || list_length(task->taskPlacementList) == 1)
-		{
-			/*
-			 * When all writes are commutative then we only need to prevent multi-shard
-			 * commands from running concurrently with each other and with commands
-			 * that are explicitly non-commutative. When there is no replication then
-			 * we only need to prevent concurrent multi-shard commands.
-			 *
-			 * In either case, ShareUpdateExclusive has the desired effect, since
-			 * it conflicts with itself and ExclusiveLock (taken by non-commutative
-			 * writes).
-			 *
-			 * However, some users find this too restrictive, so we allow them to
-			 * reduce to a RowExclusiveLock when citus.enable_deadlock_prevention
-			 * is enabled, which lets multi-shard modifications run in parallel as
-			 * long as they all disable the GUC.
-			 *
-			 * We also skip taking a heavy-weight lock when running a multi-shard
-			 * commands from workers, since we cannot prevent concurrency across
-			 * workers anyway.
-			 */
-
-			if (EnableDeadlockPrevention && IsCoordinator())
-			{
-				lockMode = ShareUpdateExclusiveLock;
-			}
-			else
-			{
-				lockMode = RowExclusiveLock;
-			}
-		}
-		else
-		{
-			/*
-			 * When there is replication, prevent all concurrent writes to the same
-			 * shards to ensure the writes are ordered.
-			 */
-
-			lockMode = ExclusiveLock;
-		}
-
-		/*
-		 * If we are dealing with a partition we are also taking locks on parent table
-		 * to prevent deadlocks on concurrent operations on a partition and its parent.
-		 */
-		LockParentShardResourceIfPartition(task->anchorShardId, lockMode);
-		LockShardResource(task->anchorShardId, lockMode);
-
-		/*
-		 * If the task has a subselect, then we may need to lock the shards from which
-		 * the query selects as well to prevent the subselects from seeing different
-		 * results on different replicas.
-		 */
-
-		if (RequiresConsistentSnapshot(task))
-		{
-			/*
-			 * ExclusiveLock conflicts with all lock types used by modifications
-			 * and therefore prevents other modifications from running
-			 * concurrently.
-			 */
-
-			LockRelationShardResources(task->relationShardList, ExclusiveLock);
-		}
-	}
-}
+{ }
 
 
 /*
@@ -173,7 +94,7 @@ AcquireExecutorMultiShardLocks(List *taskList)
  * the necessary locks to ensure that a subquery in the modify query
  * returns the same output for all task placements.
  */
-static bool
+bool
 RequiresConsistentSnapshot(Task *task)
 {
 	bool requiresIsolation = false;
@@ -248,111 +169,10 @@ AcquireMetadataLocks(List *taskList)
 
 static void
 AcquireExecutorShardLockForRowModify(Task *task, RowModifyLevel modLevel)
-{
-	LOCKMODE lockMode = NoLock;
-	int64 shardId = task->anchorShardId;
-
-	if (shardId == INVALID_SHARD_ID)
-	{
-		return;
-	}
-
-	if (modLevel <= ROW_MODIFY_READONLY)
-	{
-		/*
-		 * The executor shard lock is used to maintain consistency between
-		 * replicas and therefore no lock is required for read-only queries
-		 * or in general when there is only one replica.
-		 */
-
-		lockMode = NoLock;
-	}
-	else if (list_length(task->taskPlacementList) == 1)
-	{
-		if (task->replicationModel == REPLICATION_MODEL_2PC)
-		{
-			/*
-			 * While we don't need a lock to ensure writes are applied in
-			 * a consistent order when there is a single replica. We also use
-			 * shard resource locks as a crude implementation of SELECT..
-			 * FOR UPDATE on reference tables, so we should always take
-			 * a lock that conflicts with the FOR UPDATE/SHARE locks.
-			 */
-			lockMode = RowExclusiveLock;
-		}
-		else
-		{
-			/*
-			 * When there is no replication, the worker itself can decide on
-			 * on the order in which writes are applied.
-			 */
-			lockMode = NoLock;
-		}
-	}
-	else if (AllModificationsCommutative)
-	{
-		/*
-		 * Bypass commutativity checks when citus.all_modifications_commutative
-		 * is enabled.
-		 *
-		 * A RowExclusiveLock does not conflict with itself and therefore allows
-		 * multiple commutative commands to proceed concurrently. It does
-		 * conflict with ExclusiveLock, which may still be obtained by another
-		 * session that executes an UPDATE/DELETE/UPSERT command with
-		 * citus.all_modifications_commutative disabled.
-		 */
-
-		lockMode = RowExclusiveLock;
-	}
-	else if (modLevel < ROW_MODIFY_NONCOMMUTATIVE)
-	{
-		/*
-		 * An INSERT commutes with other INSERT commands, since performing them
-		 * out-of-order only affects the table order on disk, but not the
-		 * contents.
-		 *
-		 * When a unique constraint exists, INSERTs are not strictly commutative,
-		 * but whichever INSERT comes last will error out and thus has no effect.
-		 * INSERT is not commutative with UPDATE/DELETE/UPSERT, since the
-		 * UPDATE/DELETE/UPSERT may consider the INSERT, depending on execution
-		 * order.
-		 *
-		 * A RowExclusiveLock does not conflict with itself and therefore allows
-		 * multiple INSERT commands to proceed concurrently. It conflicts with
-		 * ExclusiveLock obtained by UPDATE/DELETE/UPSERT, ensuring those do
-		 * not run concurrently with INSERT.
-		 */
-
-		lockMode = RowExclusiveLock;
-	}
-	else
-	{
-		/*
-		 * UPDATE/DELETE/UPSERT commands do not commute with other modifications
-		 * since the rows modified by one command may be affected by the outcome
-		 * of another command.
-		 *
-		 * We need to handle upsert before INSERT, because PostgreSQL models
-		 * upsert commands as INSERT with an ON CONFLICT section.
-		 *
-		 * ExclusiveLock conflicts with all lock types used by modifications
-		 * and therefore prevents other modifications from running
-		 * concurrently.
-		 */
-
-		lockMode = ExclusiveLock;
-	}
-
-	if (lockMode != NoLock)
-	{
-		ShardInterval *shardInterval = LoadShardInterval(shardId);
-
-		SerializeNonCommutativeWrites(list_make1(shardInterval), lockMode);
-	}
-}
+{ }
 
 
-static void
+void
 AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList)
 {
 	LOCKMODE rowLockMode = NoLock;

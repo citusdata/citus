@@ -17,7 +17,9 @@
 #include "distributed/multi_physical_planner.h"
 
 extern void AcquireExecutorShardLocks(Task *task, RowModifyLevel modLevel);
+extern void AcquireExecutorShardLocksForRelationRowLockList(List *relationRowLockList);
 extern void AcquireExecutorMultiShardLocks(List *taskList);
+extern bool RequiresConsistentSnapshot(Task *task);
 extern void AcquireMetadataLocks(List *taskList);
 extern void LockPartitionsInRelationList(List *relationIdList, LOCKMODE lockmode);
 extern void LockPartitionRelations(Oid relationId, LOCKMODE lockMode);

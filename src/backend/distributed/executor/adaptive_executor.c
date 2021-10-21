@@ -632,6 +632,7 @@ static void CleanUpSessions(DistributedExecution *execution);
 
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
 static void AcquireExecutorShardLocksForExecution(DistributedExecution *execution);
+static bool AnyAnchorTableIsReplicated(List *taskList);
 static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution);
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(List *taskList);
@@ -1577,22 +1578,135 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 		return;
 	}
 
-	/*
-	 * When executing in sequential mode or only executing a single task, we
-	 * do not need multi-shard locks.
-	 */
-	if (list_length(taskList) == 1 || ShouldRunTasksSequentially(taskList))
+	bool parallelExecutionNotPossible =
+		list_length(taskList) == 1 || ShouldRunTasksSequentially(taskList);
+
+	bool anyAnchorTableIsReplicated = AnyAnchorTableIsReplicated(taskList);
+	if (!anyAnchorTableIsReplicated && parallelExecutionNotPossible)
 	{
-		Task *task = NULL;
-		foreach_ptr(task, taskList)
+		/*
+		 * When a distributed query on tables with replication
+		 * replication factor == 1, we rely on Postgres to handle the
+		 * serialization of the concurrent operations on the workers.
+		 *
+		 * For reference tables, even if their placements are replicated
+		 * ones (e.g., single node), we acquire the distributed execution
+		 * locks to be consistent when new node(s) are added.
+		 */
+		return;
+	}
+
+	/*
+	 * We first assume that all the remaining modifications are going to
+	 * be serialized. So, start with an ExclusiveLock and lower the lock level
+	 * as much as possible.
+	 */
+	int lockMode = ExclusiveLock;
+
+	if (!anyAnchorTableIsReplicated && IsCoordinator())
+	{
+		/*
+		 * When all writes are commutative then we only need to prevent multi-shard
+		 * commands from running concurrently with each other and with commands
+		 * that are explicitly non-commutative. When there is no replication then
+		 * we only need to prevent concurrent multi-shard commands.
+		 *
+		 * In either case, ShareUpdateExclusive has the desired effect, since
+		 * it conflicts with itself and ExclusiveLock (taken by non-commutative
+		 * writes).
+		 *
+		 * However, some users find this too restrictive, so we allow them to
+		 * reduce to a RowExclusiveLock when citus.enable_deadlock_prevention
+		 * is enabled, which lets multi-shard modifications run in parallel as
+		 * long as they all disable the GUC.
+		 *
+		 * We also skip taking a heavy-weight lock when running a multi-shard
+		 * commands from workers, since we currently do not prevent concurrency
+		 * across workers anyway.
+		 */
+		lockMode =
+			EnableDeadlockPrevention ? ShareUpdateExclusiveLock : RowExclusiveLock;
+	}
+
+	if (AllModificationsCommutative ||
+		(parallelExecutionNotPossible && modLevel < ROW_MODIFY_NONCOMMUTATIVE))
+	{
+		/*
+		 * If either the user allows via a GUC or the commands are
+		 * single shard commutative commands (e.g., INSERT), we
+		 * lower the level to RowExclusiveLock to allow concurrency
+		 * among the tasks.
+		 */
+		lockMode = RowExclusiveLock;
+	}
+
+	/* now, iterate on the tasks and acquire the executor locks on the shards */
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		/*
+		 * If we are dealing with a partition we are also taking locks on parent table
+		 * to prevent deadlocks on concurrent operations on a partition and its parent.
+		 */
+		LockParentShardResourceIfPartition(task->anchorShardId, lockMode);
+
+		ShardInterval *anchorShardInterval = LoadShardInterval(task->anchorShardId);
+		SerializeNonCommutativeWrites(list_make1(anchorShardInterval), lockMode);
+
+		/* Acquire additional locks for SELECT .. FOR UPDATE on reference tables */
+		AcquireExecutorShardLocksForRelationRowLockList(task->relationRowLockList);
+
+		/*
+		 * If the task has a subselect, then we may need to lock the shards from which
+		 * the query selects as well to prevent the subselects from seeing different
+		 * results on different replicas.
+		 */
+		if (RequiresConsistentSnapshot(task))
 		{
-			AcquireExecutorShardLocks(task, modLevel);
+			/*
+			 * ExclusiveLock conflicts with all lock types used by modifications
+			 * and therefore prevents other modifications from running
+			 * concurrently.
+			 */
+
+			LockRelationShardResources(task->relationShardList, ExclusiveLock);
 		}
 	}
-	else if (list_length(taskList) > 1)
+}
+
+
+/*
+ * AnyAnchorTableIsReplicated iterates on the task list and returns true
+ * if any of the tasks' anchor shard is a replicated table. We qualify
+ * replicated tables as any reference table or any distributed table with
+ * replication factor > 1.
+ */
+static bool
+AnyAnchorTableIsReplicated(List *taskList)
+{
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
 	{
-		AcquireExecutorMultiShardLocks(taskList);
+		int64 shardId = task->anchorShardId;
+
+		if (shardId == INVALID_SHARD_ID)
+		{
+			continue;
+		}
+
+		if (ReferenceTableShardId(shardId))
+		{
+			return true;
+		}
+
+		Oid relationId = RelationIdForShard(shardId);
+		if (!SingleReplicatedTable(relationId))
+		{
+			return true;
+		}
 	}
+
+	return false;
 }
 
 
