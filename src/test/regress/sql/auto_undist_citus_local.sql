@@ -249,6 +249,44 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
                          'auto_local_table_2'::regclass)
   ORDER BY logicalrelid;
 
+-- test with partitioned tables
+CREATE TABLE partitioned_table_1 (a int unique) partition by range(a);
+CREATE TABLE partitioned_table_1_1 partition of partitioned_table_1 FOR VALUES FROM (0) TO (10);
+CREATE TABLE partitioned_table_2 (a int unique) partition by range(a);
+CREATE TABLE partitioned_table_2_1 partition of partitioned_table_2 FOR VALUES FROM (0) TO (10);
+CREATE TABLE ref_fkey_to_partitioned (a int unique references partitioned_table_1(a), b int unique references partitioned_table_2(a));
+SELECT create_reference_table('ref_fkey_to_partitioned');
+
+-- verify that partitioned tables and partitions are converted automatically
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('partitioned_table_1'::regclass,
+                         'partitioned_table_1_1'::regclass,
+                         'partitioned_table_2'::regclass,
+                         'partitioned_table_2_1'::regclass)
+  ORDER BY logicalrelid;
+
+BEGIN;
+  SELECT citus_add_local_table_to_metadata('partitioned_table_2');
+
+  -- verify that they are now marked as auto-converted = false
+  SELECT logicalrelid, autoconverted FROM pg_dist_partition
+    WHERE logicalrelid IN ('partitioned_table_1'::regclass,
+                          'partitioned_table_1_1'::regclass,
+                          'partitioned_table_2'::regclass,
+                          'partitioned_table_2_1'::regclass)
+    ORDER BY logicalrelid;
+ROLLBACK;
+
+-- now they should be undistributed
+DROP TABLE ref_fkey_to_partitioned;
+-- verify that they are undistributed
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('partitioned_table_1'::regclass,
+                        'partitioned_table_1_1'::regclass,
+                        'partitioned_table_2'::regclass,
+                        'partitioned_table_2_1'::regclass)
+  ORDER BY logicalrelid;
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
