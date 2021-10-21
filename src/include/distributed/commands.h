@@ -414,6 +414,7 @@ extern Node * SkipForeignKeyValidationIfConstraintIsFkey(AlterTableStmt *alterTa
 extern bool IsAlterTableRenameStmt(RenameStmt *renameStmt);
 extern void ErrorIfAlterDropsPartitionColumn(AlterTableStmt *alterTableStatement);
 extern void PostprocessAlterTableStmt(AlterTableStmt *pStmt);
+extern void FixAlterTableStmtIndexNames(AlterTableStmt *pStmt);
 extern void ErrorUnsupportedAlterTableAddColumn(Oid relationId, AlterTableCmd *command,
 												Constraint *constraint);
 extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMethod,
@@ -423,6 +424,7 @@ extern ObjectAddress AlterTableSchemaStmtObjectAddress(Node *stmt,
 													   bool missing_ok);
 extern List * MakeNameListFromRangeVar(const RangeVar *rel);
 extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
+extern bool ConstrTypeUsesIndex(ConstrType constrType);
 
 
 /* truncate.c - forward declarations */

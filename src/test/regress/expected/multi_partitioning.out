@@ -4275,32 +4275,16 @@ SELECT create_distributed_table('part_table_with_very_long_name', 'dist_col');
 
 CREATE INDEX ON part_table_with_very_long_name
 USING btree (long_named_integer_col, long_named_part_col);
--- shouldn't work
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-ERROR:  relation "part_table_with_long_long_lon_long_named_integer_col_long_n_idx" already exists
-CONTEXT:  while executing command on localhost:xxxxx
-\c - - - :worker_1_port
+-- index is created
 SELECT tablename, indexname FROM pg_indexes
 WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
-                    tablename                    |                            indexname
+                tablename                 |                            indexname
 ---------------------------------------------------------------------
- part_table_with_long_long_long_long_name_361172 | part_table_with_long_long_lon_long_named_integer_col_long_n_idx
- part_table_with_long_long_long_long_name_361174 | part_table_with_long_long_lon_long_named_integer_col_long__idx1
- part_table_with_very_long_name_361168           | part_table_with_very_long_nam_long_named_intege_73d4b078_361168
- part_table_with_very_long_name_361170           | part_table_with_very_long_nam_long_named_intege_73d4b078_361170
-(4 rows)
+ part_table_with_long_long_long_long_name | part_table_with_long_long_lon_long_named_integer_col_long_n_idx
+ part_table_with_very_long_name           | part_table_with_very_long_nam_long_named_integer_col_long_n_idx
+(2 rows)
 
-\c - - - :master_port
-SET citus.shard_replication_factor TO 1;
-SET search_path = partitioning_schema;
--- fix problematic table
-SELECT fix_partition_shard_index_names('part_table_with_very_long_name'::regclass);
- fix_partition_shard_index_names
----------------------------------------------------------------------
-
-(1 row)
-
--- should work
+-- should work properly - no names clashes
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -4308,7 +4292,7 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 (1 row)
 
 \c - - - :worker_1_port
--- check that indexes are renamed
+-- check that indexes are named properly
 SELECT tablename, indexname FROM pg_indexes
 WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
                     tablename                    |                            indexname
