@@ -140,6 +140,12 @@ typedef struct CitusCopyDestReceiver
 	 * files as if they are shards.
 	 */
 	char *colocatedIntermediateResultIdPrefix;
+
+	/*
+	 * When copying into append-partitioned tables, the destination shard is chosen
+	 * upfront.
+	 */
+	uint64 appendShardId;
 } CitusCopyDestReceiver;
 
 

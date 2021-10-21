@@ -98,6 +98,7 @@ CREATE TABLE customer_append (
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
 SELECT create_distributed_table('customer_append', 'c_custkey', 'append');
+SELECT master_create_empty_shard('customer_append');
 
 CREATE TABLE nation (
 	n_nationkey integer not null,
@@ -130,6 +131,7 @@ CREATE TABLE part_append (
 	p_retailprice decimal(15,2) not null,
 	p_comment varchar(23) not null);
 SELECT create_distributed_table('part_append', 'p_partkey', 'append');
+SELECT master_create_empty_shard('part_append');
 
 CREATE TABLE supplier
 (

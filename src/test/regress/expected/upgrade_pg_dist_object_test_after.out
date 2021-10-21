@@ -24,7 +24,7 @@ drop cascades to table upgrade_basic.t_ab
 drop cascades to table upgrade_basic.t2
 drop cascades to table upgrade_basic.r
 drop cascades to table upgrade_basic.tr
-drop cascades to table upgrade_basic.t_append
+drop cascades to table upgrade_basic.t_range
 -- as we updated citus to available version,
 --   "isn" extension
 --   "new_schema" schema

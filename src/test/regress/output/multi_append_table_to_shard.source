@@ -25,6 +25,8 @@ SELECT create_distributed_table('multi_append_table_to_shard_left', 'left_number
  
 (1 row)
 
+SELECT master_create_empty_shard('multi_append_table_to_shard_left') AS shardid1 \gset
+SELECT master_create_empty_shard('multi_append_table_to_shard_left') AS shardid2 \gset
 CREATE TABLE multi_append_table_to_shard_right_reference_hash
 (
 	right_number INTEGER not null,
@@ -45,8 +47,8 @@ SELECT set_config('citus.shard_replication_factor', '2', false);
  2
 (1 row)
 
-\copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
-\copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
+copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data' with (append_to_shard :shardid1);
+copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data' with (append_to_shard :shardid2);
 -- Place 'right' table on both workers
 \copy multi_append_table_to_shard_right_reference FROM '@abs_srcdir@/data/agg.data'
 -- Reset shard replication factor to ensure tasks will be assigned to both workers
@@ -81,7 +83,7 @@ SELECT	master_append_table_to_shard(shardid, 'multi_append_table_to_shard_stage'
 FROM
 		pg_dist_shard
 WHERE	'multi_append_table_to_shard_right_reference_hash'::regclass::oid = logicalrelid;
-ERROR:  cannot append to shardId 230001
+ERROR:  cannot append to shardId 230003
 DETAIL:  We currently don't support appending to shards in hash-partitioned, reference and local tables
 -- Clean up after test
 DROP TABLE multi_append_table_to_shard_stage;

@@ -44,7 +44,6 @@ test: isolation_create_distributed_table isolation_master_append_table
 test: isolation_multi_shard_modify_vs_all
 test: isolation_modify_with_subquery_vs_dml
 test: isolation_hash_copy_vs_all
-test: isolation_append_copy_vs_all
 test: isolation_range_copy_vs_all
 test: isolation_partitioned_copy_vs_all
 test: isolation_select_vs_all

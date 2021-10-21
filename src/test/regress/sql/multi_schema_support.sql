@@ -82,9 +82,10 @@ CREATE TABLE nation_append_search_path(
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT master_create_distributed_table('nation_append_search_path', 'n_nationkey', 'append');
+SELECT create_distributed_table('nation_append_search_path', 'n_nationkey', 'append');
+SELECT master_create_empty_shard('nation_append_search_path') AS shardid \gset
 
-\copy nation_append_search_path FROM STDIN with delimiter '|';
+copy nation_append_search_path FROM STDIN with (delimiter '|', append_to_shard :shardid);
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special

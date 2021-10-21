@@ -20,6 +20,8 @@ CREATE TABLE multi_append_table_to_shard_left
 	left_text TEXT not null
 );
 SELECT create_distributed_table('multi_append_table_to_shard_left', 'left_number', 'append');
+SELECT master_create_empty_shard('multi_append_table_to_shard_left') AS shardid1 \gset
+SELECT master_create_empty_shard('multi_append_table_to_shard_left') AS shardid2 \gset
 
 CREATE TABLE multi_append_table_to_shard_right_reference_hash
 (
@@ -32,8 +34,8 @@ SELECT create_distributed_table('multi_append_table_to_shard_right_reference_has
 
 -- Replicate 'left' table on both workers
 SELECT set_config('citus.shard_replication_factor', '2', false);
-\copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
-\copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data'
+copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data' with (append_to_shard :shardid1);
+copy multi_append_table_to_shard_left FROM '@abs_srcdir@/data/agg.data' with (append_to_shard :shardid2);
 
 -- Place 'right' table on both workers
 \copy multi_append_table_to_shard_right_reference FROM '@abs_srcdir@/data/agg.data'

@@ -625,6 +625,19 @@ BEGIN;
 32
 	INSERT INTO test SELECT i,i FROM generate_series(0,100)i;
 ROLLBACK;
+-- master_create_empty_shard on coordinator
+BEGIN;
+CREATE TABLE append_table (a INT, b INT);
+SELECT create_distributed_table('append_table','a','append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+NOTICE:  Creating placements for the append partitioned tables on the coordinator is not supported, skipping coordinator ...
+ERROR:  could only create 0 of 1 of required shard replicas
+END;
 -- alter table inside a tx block
 BEGIN;
 	ALTER TABLE test ADD COLUMN z single_node.new_type;

@@ -53,7 +53,6 @@ test: insert_select_connection_leak
 # ----------
 test: subquery_basics subquery_local_tables subquery_executors set_operations set_operation_and_local_tables
 test: subquery_partitioning subquery_complex_target_list subqueries_not_supported
-test: non_colocated_join_order
 test: subquery_prepared_statements pg12 cte_inline
 
 # ----------
@@ -114,8 +113,6 @@ test: with_executors with_partitioning with_dml
 # ----------
 # Tests to check our large record loading and shard deletion behavior
 # ----------
-test: multi_load_large_records
-test: multi_master_delete_protocol
 test: multi_shard_modify
 
 # ----------

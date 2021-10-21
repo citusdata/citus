@@ -59,7 +59,7 @@ test: multi_partitioning_utils
 # ----------
 test: subquery_local_tables subquery_executors subquery_and_cte set_operations set_operation_and_local_tables
 test: subqueries_deep subquery_view subquery_partitioning subqueries_not_supported subquery_in_where
-test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
+test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins
 test: subquery_prepared_statements pg12 cte_inline
 
 # ----------
@@ -122,20 +122,12 @@ test: with_executors with_partitioning with_dml
 # ----------
 # Tests to check our large record loading and shard deletion behavior
 # ----------
-test: multi_load_large_records
-test: multi_master_delete_protocol
 test: multi_shard_modify
 
 # ----------
 # Tests around DDL statements run on distributed tables
 # ----------
 test: multi_alter_table_add_constraints
-
-# ----------
-# multi_create_schema tests creation, loading, and querying of a table in a new
-# schema (namespace).
-# ----------
-test: multi_create_schema
 
 # ----------
 # Tests to check the sequential and parallel executions of DDL and modification

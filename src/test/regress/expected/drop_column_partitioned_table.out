@@ -124,7 +124,8 @@ FROM
 WHERE
 	logicalrelid IN ('sensors'::regclass, 'sensors_2000'::regclass,
 					 'sensors_2001'::regclass, 'sensors_2002'::regclass,
-					 'sensors_2003'::regclass, 'sensors_2004'::regclass);
+					 'sensors_2003'::regclass, 'sensors_2004'::regclass)
+ORDER BY 1,2;
  logicalrelid | column_to_column_name
 ---------------------------------------------------------------------
  sensors      | measureid
@@ -357,7 +358,8 @@ FROM
 WHERE
 	logicalrelid IN ('sensors'::regclass, 'sensors_2000'::regclass,
 					 'sensors_2001'::regclass, 'sensors_2002'::regclass,
-					 'sensors_2003'::regclass, 'sensors_2004'::regclass);
+					 'sensors_2003'::regclass, 'sensors_2004'::regclass)
+ORDER BY 1,2;
  logicalrelid | column_to_column_name
 ---------------------------------------------------------------------
  sensors      | measureid
@@ -377,7 +379,8 @@ FROM
 WHERE
 	logicalrelid IN ('sensors'::regclass, 'sensors_2000'::regclass,
 					 'sensors_2001'::regclass, 'sensors_2002'::regclass,
-					 'sensors_2003'::regclass, 'sensors_2004'::regclass);
+					 'sensors_2003'::regclass, 'sensors_2004'::regclass)
+ORDER BY 1,2;
  logicalrelid | column_to_column_name
 ---------------------------------------------------------------------
  sensors      | measureid
