@@ -419,8 +419,7 @@ BEGIN;
   SELECT count(*) FROM pg_locks where relation='citus_local_table_4'::regclass;
 COMMIT;
 
--- hide first column (relationId) as it might change
-SELECT part_storage_type, part_method, part_key, part_replica_count, part_max_size, part_placement_policy FROM master_get_table_metadata('citus_local_table_4');
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'citus_local_table_4'::regclass;
 SELECT master_get_table_ddl_events('citus_local_table_4');
 
 SELECT column_to_column_name(logicalrelid, partkey)

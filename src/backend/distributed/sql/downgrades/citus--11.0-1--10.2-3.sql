@@ -11,4 +11,16 @@ CREATE FUNCTION pg_catalog.master_apply_delete_command(text)
 COMMENT ON FUNCTION pg_catalog.master_apply_delete_command(text)
     IS 'drop shards matching delete criteria and update metadata';
 
-
+CREATE FUNCTION pg_catalog.master_get_table_metadata(
+                                          relation_name text,
+                                          OUT logical_relid oid,
+                                          OUT part_storage_type "char",
+                                          OUT part_method "char", OUT part_key text,
+                                          OUT part_replica_count integer,
+                                          OUT part_max_size bigint,
+                                          OUT part_placement_policy integer)
+    RETURNS record
+    LANGUAGE C STABLE STRICT
+    AS 'MODULE_PATHNAME', $$master_get_table_metadata$$;
+COMMENT ON FUNCTION master_get_table_metadata(relation_name text)
+    IS 'fetch metadata values for the table';
