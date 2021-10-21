@@ -48,7 +48,6 @@ extern int UtilityHookLevel;
 typedef struct DDLJob
 {
 	Oid targetRelationId;      /* oid of the target distributed relation */
-	bool concurrentIndexCmd;   /* related to a CONCURRENTLY index command? */
 
 	/*
 	 * Whether to commit and start a new transaction before sending commands

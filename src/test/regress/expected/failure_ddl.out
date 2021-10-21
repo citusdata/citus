@@ -17,8 +17,7 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 SET citus.next_shard_id TO 100800;
--- we'll start with replication factor 1, 1PC and parallel mode
-SET citus.multi_shard_commit_protocol TO '1pc';
+-- we'll start with replication factor 1, 2PC and parallel mode
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 CREATE TABLE test_table (key int, value int);
@@ -137,7 +136,6 @@ SELECT citus.mitmproxy('conn.allow()');
 
 DROP TABLE test_table;
 SET citus.next_shard_id TO 100800;
-SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 CREATE TABLE test_table (key int, value int);
@@ -325,8 +323,6 @@ SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORD
  (localhost,57637,100803,t,"{key,new_column,value}")
 (4 rows)
 
--- now, lets test with 2PC
-SET citus.multi_shard_commit_protocol TO '2pc';
 -- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
@@ -686,7 +682,6 @@ SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORD
 (4 rows)
 
 -- another set of tests with 2PC and replication factor = 2
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 2;
 -- re-create the table with replication factor 2

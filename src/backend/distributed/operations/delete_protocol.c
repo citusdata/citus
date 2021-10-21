@@ -242,14 +242,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 	/* DROP table commands are currently only supported from the coordinator */
 	Assert(localGroupId == COORDINATOR_GROUP_ID);
 
-	/*
-	 * At this point we intentionally decided to not use 2PC for reference
-	 * tables
-	 */
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-	{
-		Use2PCForCoordinatedTransaction();
-	}
+	Use2PCForCoordinatedTransaction();
 
 	List *dropTaskList = DropTaskList(relationId, schemaName, relationName,
 									  deletableShardIntervalList);

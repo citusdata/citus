@@ -275,6 +275,7 @@ static List * CopyGetAttnums(TupleDesc tupDesc, Relation rel, List *attnamelist)
 #endif
 static bool CopyStatementHasFormat(CopyStmt *copyStatement, char *formatName);
 static void CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag);
+static void EnsureCopyCanRunOnRelation(Oid relationId);
 static HTAB * CreateConnectionStateHash(MemoryContext memoryContext);
 static HTAB * CreateShardStateHash(MemoryContext memoryContext);
 static CopyConnectionState * GetConnectionState(HTAB *connectionStateHash,
@@ -392,7 +393,11 @@ CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 		}
 	}
 
+
 	Oid relationId = RangeVarGetRelid(copyStatement->relation, NoLock, false);
+
+	EnsureCopyCanRunOnRelation(relationId);
+
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	/* disallow modifications to a partition table which have rep. factor > 1 */
@@ -415,6 +420,30 @@ CitusCopyFrom(CopyStmt *copyStatement, QueryCompletionCompat *completionTag)
 	}
 
 	XactModificationLevel = XACT_MODIFICATION_DATA;
+}
+
+
+/*
+ * EnsureCopyCanRunOnRelation throws error is the database in read-only mode.
+ */
+static void
+EnsureCopyCanRunOnRelation(Oid relationId)
+{
+	/* first, do the regular check and give consistent errors with regular queries */
+	EnsureModificationsCanRunOnRelation(relationId);
+
+	/*
+	 * We use 2PC for all COPY commands. It means that we cannot allow any COPY
+	 * on replicas even if the user allows via WritableStandbyCoordinator GUC.
+	 */
+	if (RecoveryInProgress() && WritableStandbyCoordinator)
+	{
+		ereport(ERROR, (errmsg("COPY command to Citus tables is not allowed in "
+							   "read-only mode"),
+						errhint("All COPY commands to citus tables happen via 2PC, "
+								"and 2PC requires the database to be in a writable state."),
+						errdetail("the database is read-only")));
+	}
 }
 
 
@@ -2304,11 +2333,8 @@ CitusCopyDestReceiverStartup(DestReceiver *dest, int operation,
 
 	UseCoordinatedTransaction();
 
-	if (cacheEntry->replicationModel == REPLICATION_MODEL_2PC ||
-		MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-	{
-		Use2PCForCoordinatedTransaction();
-	}
+	/* all modifications use 2PC */
+	Use2PCForCoordinatedTransaction();
 
 	/* define how tuples will be serialised */
 	CopyOutState copyOutState = (CopyOutState) palloc0(sizeof(CopyOutStateData));

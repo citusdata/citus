@@ -881,7 +881,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 	bool localExecutionSupported = true;
 
-	if (!ddlJob->concurrentIndexCmd)
+	if (!TaskListCannotBeExecutedInTransaction(ddlJob->taskList))
 	{
 		if (shouldSyncMetadata)
 		{
@@ -940,10 +940,6 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			StartTransactionCommand();
 		}
 
-		/* save old commit protocol to restore at xact end */
-		Assert(SavedMultiShardCommitProtocol == COMMIT_PROTOCOL_BARE);
-		SavedMultiShardCommitProtocol = MultiShardCommitProtocol;
-		MultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
 		MemoryContext savedContext = CurrentMemoryContext;
 
 		PG_TRY();
@@ -1044,7 +1040,6 @@ CreateCustomDDLTaskList(Oid relationId, TableDDLCommand *command)
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = relationId;
-	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = GetTableDDLCommand(command);
 	ddlJob->taskList = taskList;
 
@@ -1295,7 +1290,6 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = InvalidOid;
-	ddlJob->concurrentIndexCmd = false;
 	ddlJob->commandString = NULL;
 	ddlJob->taskList = list_make1(task);
 

@@ -633,7 +633,6 @@ static void CleanUpSessions(DistributedExecution *execution);
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
 static void AcquireExecutorShardLocksForExecution(DistributedExecution *execution);
 static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution);
-static bool IsMultiShardModification(RowModifyLevel modLevel, List *taskList);
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(List *taskList);
 static bool TaskListRequires2PC(List *taskList);
@@ -1198,7 +1197,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
+	if (TaskListCannotBeExecutedInTransaction(taskList))
 	{
 		/*
 		 * We prefer to error on any failures for CREATE INDEX
@@ -1224,15 +1223,6 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 			 */
 			xactProperties.errorOnAnyFailure = true;
 			xactProperties.requires2PC = true;
-		}
-		else if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC &&
-				 IsMultiShardModification(modLevel, taskList))
-		{
-			/*
-			 * Even if we're not using 2PC, we prefer to error out
-			 * on any failures during multi shard modifications/DDLs.
-			 */
-			xactProperties.errorOnAnyFailure = true;
 		}
 	}
 	else if (InCoordinatedTransaction())
@@ -1327,17 +1317,6 @@ DistributedPlanModifiesDatabase(DistributedPlan *plan)
 
 
 /*
- * IsMultiShardModification returns true if the task list is a modification
- * across shards.
- */
-static bool
-IsMultiShardModification(RowModifyLevel modLevel, List *taskList)
-{
-	return list_length(taskList) > 1 && TaskListModifiesDatabase(modLevel, taskList);
-}
-
-
-/*
  *  TaskListModifiesDatabase is a helper function for DistributedExecutionModifiesDatabase and
  *  DistributedPlanModifiesDatabase.
  */
@@ -1376,17 +1355,17 @@ DistributedExecutionRequiresRollback(List *taskList)
 {
 	int taskCount = list_length(taskList);
 
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
-	{
-		return false;
-	}
-
 	if (taskCount == 0)
 	{
 		return false;
 	}
 
 	Task *task = (Task *) linitial(taskList);
+	if (task->cannotBeExecutedInTransction)
+	{
+		/* vacuum, create index concurrently etc. */
+		return false;
+	}
 
 	bool selectForUpdate = task->relationRowLockList != NIL;
 	if (selectForUpdate)
@@ -1456,18 +1435,15 @@ TaskListRequires2PC(List *taskList)
 	}
 
 	bool multipleTasks = list_length(taskList) > 1;
-	if (!ReadOnlyTask(task->taskType) &&
-		multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
+	if (!ReadOnlyTask(task->taskType) && multipleTasks)
 	{
+		/* all multi-shard modifications use 2PC */
 		return true;
 	}
 
 	if (task->taskType == DDL_TASK)
 	{
-		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-		{
-			return true;
-		}
+		return true;
 	}
 
 	return false;
@@ -1496,6 +1472,27 @@ ReadOnlyTask(TaskType taskType)
 			return false;
 		}
 	}
+}
+
+
+/*
+ * TaskListCannotBeExecutedInTransaction returns true if any of the
+ * tasks in the input cannot be executed in a transaction. These are
+ * tasks like VACUUM or CREATE INDEX CONCURRENTLY etc.
+ */
+bool
+TaskListCannotBeExecutedInTransaction(List *taskList)
+{
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		if (task->cannotBeExecutedInTransction)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -3566,12 +3563,6 @@ HandleMultiConnectionSuccess(WorkerSession *session)
 static void
 Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session)
 {
-	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC)
-	{
-		/* we don't need 2PC, so no need to continue */
-		return;
-	}
-
 	DistributedExecution *execution = session->workerPool->distributedExecution;
 	if (TransactionModifiedDistributedTable(execution) &&
 		DistributedExecutionModifiesDatabase(execution) &&

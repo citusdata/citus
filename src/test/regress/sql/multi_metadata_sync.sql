@@ -214,7 +214,6 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
 -- Test DDL propagation in MX tables
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SET citus.shard_count = 5;
-SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE SCHEMA mx_test_schema_1;
 CREATE SCHEMA mx_test_schema_2;
 
@@ -301,7 +300,6 @@ SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 
 -- Check that CREATE INDEX statement is propagated
 \c - - - :master_port
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET client_min_messages TO 'ERROR';
 CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
 ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1);
@@ -313,7 +311,6 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 
 -- Check that DROP INDEX statement is propagated
 \c - - - :master_port
-SET citus.multi_shard_commit_protocol TO '2pc';
 DROP INDEX mx_test_schema_2.mx_index_3;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
@@ -321,7 +318,6 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 
 -- Check that ALTER TABLE statements are propagated
 \c - - - :master_port
-SET citus.multi_shard_commit_protocol TO '2pc';
 ALTER TABLE mx_test_schema_1.mx_table_1 ADD COLUMN col3 NUMERIC;
 ALTER TABLE mx_test_schema_1.mx_table_1 ALTER COLUMN col3 SET DATA TYPE INT;
 ALTER TABLE
@@ -338,7 +334,6 @@ SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1
 
 -- Check that foreign key constraint with NOT VALID works as well
 \c - - - :master_port
-SET citus.multi_shard_commit_protocol TO '2pc';
 ALTER TABLE mx_test_schema_1.mx_table_1 DROP CONSTRAINT mx_fk_constraint;
 ALTER TABLE
 	mx_test_schema_1.mx_table_1
@@ -822,7 +817,6 @@ DROP TABLE dist_table_1, dist_table_2;
 
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
-RESET citus.multi_shard_commit_protocol;
 
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;

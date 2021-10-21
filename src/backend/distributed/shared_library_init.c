@@ -179,12 +179,6 @@ static const struct config_enum_entry coordinator_aggregation_options[] = {
 	{ NULL, 0, false }
 };
 
-static const struct config_enum_entry shard_commit_protocol_options[] = {
-	{ "1pc", COMMIT_PROTOCOL_1PC, false },
-	{ "2pc", COMMIT_PROTOCOL_2PC, false },
-	{ NULL, 0, false }
-};
-
 static const struct config_enum_entry log_level_options[] = {
 	{ "off", CITUS_LOG_LEVEL_OFF, false },
 	{ "debug5", DEBUG5, false},
@@ -1339,20 +1333,6 @@ RegisterCitusConfigVariables(void)
 		5 * MS_PER_SECOND, 1, 7 * MS_PER_DAY,
 		PGC_SIGHUP,
 		GUC_UNIT_MS | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomEnumVariable(
-		"citus.multi_shard_commit_protocol",
-		gettext_noop("Sets the commit protocol for commands modifying multiple shards."),
-		gettext_noop("When a failure occurs during commands that modify multiple "
-					 "shards, two-phase commit is required to ensure data is never lost "
-					 "and this is the default. However, changing to 1pc may give small "
-					 "performance benefits."),
-		&MultiShardCommitProtocol,
-		COMMIT_PROTOCOL_2PC,
-		shard_commit_protocol_options,
-		PGC_USERSET,
-		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(

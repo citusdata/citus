@@ -331,6 +331,11 @@ typedef struct Task
 	 * isLocalTableModification is true if the task is on modifying a local table.
 	 */
 	bool isLocalTableModification;
+
+	/*
+	 * Vacuum, create/drop/reindex concurrently cannot be executed in a transaction.
+	 */
+	bool cannotBeExecutedInTransction;
 } Task;
 
 
