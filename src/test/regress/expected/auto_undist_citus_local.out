@@ -476,7 +476,7 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
     logicalrelid     | autoconverted
 ---------------------------------------------------------------------
  citus_local_table_1 | f
- citus_local_table_2 | t
+ citus_local_table_2 | f
  citus_local_table_3 | f
 (3 rows)
 
@@ -489,8 +489,9 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
     logicalrelid     | autoconverted
 ---------------------------------------------------------------------
  citus_local_table_1 | f
+ citus_local_table_2 | f
  citus_local_table_3 | f
-(2 rows)
+(3 rows)
 
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;

@@ -512,8 +512,11 @@ typedef enum CascadeOperationType
 	/* execute UndistributeTable on each relation */
 	CASCADE_FKEY_UNDISTRIBUTE_TABLE = 1 << 1,
 
-	/* execute CreateCitusLocalTable on each relation */
-	CASCADE_ADD_LOCAL_TABLE_TO_METADATA = 1 << 2,
+	/* execute CreateCitusLocalTable on each relation, with autoConverted = false */
+	CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA = 1 << 2,
+
+	/* execute CreateCitusLocalTable on each relation, with autoConverted = true */
+	CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA = 1 << 3,
 } CascadeOperationType;
 
 extern void CascadeOperationForFkeyConnectedRelations(Oid relationId,

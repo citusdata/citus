@@ -52,6 +52,7 @@ static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
+static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
 static uint64 ConvertLocalTableToShard(Oid relationId);
 static void RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId);
@@ -260,20 +261,14 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 									qualifiedRelationName, qualifiedRelationName)));
 		}
 
-		/* save the relation name, to obtain the shell relation id later */
-		char *relationName = get_rel_name(relationId);
-		Oid relationSchemaId = get_rel_namespace(relationId);
+		CascadeOperationType cascadeType =
+			GetCascadeTypeForCitusLocalTables(autoConverted);
 
 		/*
 		 * By acquiring AccessExclusiveLock, make sure that no modifications happen
 		 * on the relations.
 		 */
-		CascadeOperationForFkeyConnectedRelations(relationId, lockMode,
-												  CASCADE_ADD_LOCAL_TABLE_TO_METADATA);
-
-		Oid shellRelationId = get_relname_relid(relationName, relationSchemaId);
-
-		UpdatePartitionAutoConverted(shellRelationId, autoConverted);
+		CascadeOperationForFkeyConnectedRelations(relationId, lockMode, cascadeType);
 
 		/*
 		 * We converted every foreign key connected table in our subgraph
@@ -289,8 +284,11 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 		{
 			relationList = lappend_oid(relationList, relationId);
 
+			CascadeOperationType cascadeType =
+				GetCascadeTypeForCitusLocalTables(autoConverted);
+
 			CascadeOperationForRelationIdList(relationList, AccessExclusiveLock,
-											  CASCADE_ADD_LOCAL_TABLE_TO_METADATA);
+											  cascadeType);
 			return;
 		}
 	}
@@ -546,6 +544,22 @@ ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation)
 							   generate_qualified_relation_name(relationId)),
 						errhint("Drop the identity columns and re-try the command")));
 	}
+}
+
+
+/*
+ * GetCascadeTypeForCitusLocalTables returns CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA
+ * if autoConverted is true. Returns CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA otherwise.
+ */
+static CascadeOperationType
+GetCascadeTypeForCitusLocalTables(bool autoConverted)
+{
+	if (autoConverted)
+	{
+		return CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA;
+	}
+
+	return CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA;
 }
 
 
