@@ -7,7 +7,6 @@ from construct import (
 import construct.lib as cl
 
 import re
-import logging
 
 # For all possible message formats see:
 # https://www.postgresql.org/docs/current/protocol-message-formats.html
