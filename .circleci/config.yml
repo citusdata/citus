@@ -395,6 +395,10 @@ jobs:
           path: src/test/regress/regression.diffs
           when: on_fail
       - store_artifacts:
+          name: 'Save mitmproxy output (failure test specific)'
+          path: src/test/regress/proxy.output
+          when: on_fail
+      - store_artifacts:
           name: 'Save results'
           path: src/test/regress/results/
           when: on_fail
