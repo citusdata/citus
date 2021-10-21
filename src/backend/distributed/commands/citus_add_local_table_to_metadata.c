@@ -116,23 +116,8 @@ citus_add_local_table_to_metadata_internal(Oid relationId, bool cascadeViaForeig
 {
 	CheckCitusVersion(ERROR);
 
-	if (ShouldEnableLocalReferenceForeignKeys())
-	{
-		/*
-		 * When foreign keys between reference tables and postgres tables are
-		 * enabled, we automatically undistribute citus local tables that are
-		 * not chained with any reference tables back to postgres tables.
-		 * So give a warning to user for that.
-		 */
-		ereport(WARNING, (errmsg("local tables that are added to metadata but not "
-								 "chained with reference tables via foreign keys might "
-								 "be automatically converted back to postgres tables"),
-						  errhint("Consider setting "
-								  "citus.enable_local_reference_table_foreign_keys "
-								  "to 'off' to disable this behavior")));
-	}
-
-	CreateCitusLocalTable(relationId, cascadeViaForeignKeys, false);
+	bool autoConverted = false;
+	CreateCitusLocalTable(relationId, cascadeViaForeignKeys, autoConverted);
 }
 
 
@@ -194,6 +179,22 @@ remove_local_tables_from_metadata(PG_FUNCTION_ARGS)
 void
 CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConverted)
 {
+	if (autoConverted && ShouldEnableLocalReferenceForeignKeys())
+	{
+		/*
+		 * When foreign keys between reference tables and postgres tables are
+		 * enabled, we automatically undistribute citus local tables that are
+		 * not chained with any reference tables back to postgres tables.
+		 * So give a warning to user for that.
+		 */
+		ereport(WARNING, (errmsg("local tables that are added to metadata but not "
+								 "chained with reference tables via foreign keys might "
+								 "be automatically converted back to postgres tables"),
+						  errhint("Consider setting "
+								  "citus.enable_local_reference_table_foreign_keys "
+								  "to 'off' to disable this behavior")));
+	}
+
 	/*
 	 * These checks should be done before acquiring any locks on relation.
 	 * This is because we don't allow creating citus local tables in worker
