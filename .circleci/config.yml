@@ -763,17 +763,17 @@ workflows:
       - test-arbitrary-configs:
           name: 'test-12_check-arbitrary-configs'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '12.8-dev202110211711'
           requires: [build-12]
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '13.4-dev202110211711'
           requires: [build-13]
       - test-arbitrary-configs:
           name: 'test-14_check-arbitrary-configs'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '14.0-dev202110211711'
           requires: [build-14]
 
       - test-pg-upgrade:
