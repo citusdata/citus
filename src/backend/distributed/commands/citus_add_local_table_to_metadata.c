@@ -215,6 +215,20 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 */
 	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 
+	if (IsCitusTable(relationId) && IsCitusTableType(relationId, CITUS_LOCAL_TABLE) &&
+		!autoConverted)
+	{
+		/* we should mark this relation and connected ones as autoConverted = false */
+		List *relationIdList = GetForeignKeyConnectedRelationIdList(relationId);
+		Oid relid = InvalidOid;
+		foreach_oid(relid, relationIdList)
+		{
+			UpdatePartitionAutoConverted(relid, autoConverted);
+		}
+
+		return;
+	}
+
 	/*
 	 * Lock target relation with an AccessExclusiveLock as we don't want
 	 * multiple backends manipulating this relation. We could actually simply
