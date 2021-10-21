@@ -1223,7 +1223,9 @@ CreateCitusTableLike(TableConversionState *con)
 	}
 	else if (IsCitusTableType(con->relationId, CITUS_LOCAL_TABLE))
 	{
-		CreateCitusLocalTable(con->newRelationId, false, false);
+		bool cascade = false;
+		bool autoConverted = false;
+		CreateCitusLocalTable(con->newRelationId, cascade, autoConverted);
 
 		/*
 		 * creating Citus local table adds a shell table on top

@@ -425,7 +425,10 @@ CreateCitusLocalTablePartitionOf(CreateStmt *createStatement, Oid relationId,
 	 * again with the attach command
 	 */
 	DropRelationForeignKeys(relationId, fKeyFlags);
-	CreateCitusLocalTable(relationId, false, false);
+
+	bool cascade = false;
+	bool autoConverted = false;
+	CreateCitusLocalTable(relationId, cascade, autoConverted);
 	ExecuteAndLogUtilityCommand(attachCommand);
 }
 
