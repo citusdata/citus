@@ -230,6 +230,25 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
                          'citus_local_table_3'::regclass)
   ORDER BY logicalrelid;
 
+-- verify that tables that are connected to reference tables are marked as autoConverted = true
+CREATE TABLE ref_test(a int UNIQUE);
+SELECT create_reference_table('ref_test');
+CREATE TABLE auto_local_table_1(a int UNIQUE);
+CREATE TABLE auto_local_table_2(a int UNIQUE REFERENCES auto_local_table_1(a));
+ALTER TABLE auto_local_table_1 ADD CONSTRAINT fkey_to_ref_tbl FOREIGN KEY (a) REFERENCES ref_test(a);
+
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('auto_local_table_1'::regclass,
+                         'auto_local_table_2'::regclass)
+  ORDER BY logicalrelid;
+
+-- verify that we can mark both of them with autoConverted = false, by converting one of them manually
+SELECT citus_add_local_table_to_metadata('auto_local_table_1');
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('auto_local_table_1'::regclass,
+                         'auto_local_table_2'::regclass)
+  ORDER BY logicalrelid;
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
