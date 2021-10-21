@@ -1,0 +1,22 @@
+ReadOnly
+	citus.all_modifications_commutative
+		RequiresParallelExecution
+			 TableReplicated
+				NoLock
+				Commutative Modification
+					ExclusiveLock
+					RowExclusiveLock
+			TableReplicated
+				IsCoordinator
+					RowExclusive Lock
+					citus.enable_deadlock_preventio
+						ShareUpdateExclusiveLock
+						RowExclusiveLock
+				ExclusiveLock
+		RowExclusiveLock
+	Select For Update On Reference Table
+		NoLock
+		For Share
+			ExclusiveLock
+			ShareLock
+
