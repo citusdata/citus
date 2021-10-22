@@ -1387,10 +1387,14 @@ BuildCitusTableCacheEntry(Oid relationId)
 		cacheEntry->replicationModel = DatumGetChar(replicationModelDatum);
 	}
 
-	cacheEntry->autoConverted = datumArray[Anum_pg_dist_partition_autoconverted - 1];
 	if (isNullArray[Anum_pg_dist_partition_autoconverted - 1])
 	{
 		cacheEntry->autoConverted = false;
+	}
+	else
+	{
+		cacheEntry->autoConverted = DatumGetBool(
+			datumArray[Anum_pg_dist_partition_autoconverted - 1]);
 	}
 
 	heap_freetuple(distPartitionTuple);
