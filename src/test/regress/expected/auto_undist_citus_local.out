@@ -594,6 +594,73 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
 ---------------------------------------------------------------------
 (0 rows)
 
+-- verify creating fkeys update auto-converted to false
+CREATE TABLE table_ref(a int unique);
+CREATE TABLE table_auto_conv(a int unique references table_ref(a)) partition by range(a);
+CREATE TABLE table_auto_conv_child partition of table_auto_conv FOR VALUES FROM (1) TO (4);
+CREATE TABLE table_auto_conv_2(a int unique references table_auto_conv(a));
+CREATE TABLE table_not_auto_conv(a int unique);
+select create_reference_table('table_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- table_not_auto_conv should not be here, as it's not converted yet
+-- other tables should be marked as auto-converted
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('table_auto_conv'::regclass,
+                        'table_auto_conv_child'::regclass,
+                        'table_auto_conv_2'::regclass,
+                        'table_not_auto_conv'::regclass)
+  ORDER BY logicalrelid;
+     logicalrelid      | autoconverted
+---------------------------------------------------------------------
+ table_auto_conv       | t
+ table_auto_conv_2     | t
+ table_auto_conv_child | t
+(3 rows)
+
+select citus_add_local_table_to_metadata('table_not_auto_conv');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+alter table table_not_auto_conv add constraint fkey_to_mark_not_autoconverted foreign key (a) references table_auto_conv_2(a);
+-- all of them should be marked as auto-converted = false
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('table_auto_conv'::regclass,
+                        'table_auto_conv_child'::regclass,
+                        'table_auto_conv_2'::regclass,
+                        'table_not_auto_conv'::regclass)
+  ORDER BY logicalrelid;
+     logicalrelid      | autoconverted
+---------------------------------------------------------------------
+ table_auto_conv       | f
+ table_auto_conv_2     | f
+ table_auto_conv_child | f
+ table_not_auto_conv   | f
+(4 rows)
+
+-- create&attach new partition, it should be marked as auto-converted = false, too
+CREATE TABLE table_auto_conv_child_2 partition of table_auto_conv FOR VALUES FROM (5) TO (8);
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('table_auto_conv'::regclass,
+                        'table_auto_conv_child'::regclass,
+                        'table_auto_conv_2'::regclass,
+                        'table_not_auto_conv'::regclass,
+                        'table_auto_conv_child_2'::regclass)
+  ORDER BY logicalrelid;
+      logicalrelid       | autoconverted
+---------------------------------------------------------------------
+ table_auto_conv         | f
+ table_auto_conv_2       | f
+ table_auto_conv_child   | f
+ table_not_auto_conv     | f
+ table_auto_conv_child_2 | f
+(5 rows)
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
@@ -631,9 +698,9 @@ ALTER TABLE reference_table_1 OWNER TO another_user;
 SELECT run_command_on_placements('reference_table_1', 'ALTER TABLE %s OWNER TO another_user');
          run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,57636,1810050,t,"ALTER TABLE")
- (localhost,57637,1810050,t,"ALTER TABLE")
- (localhost,57638,1810050,t,"ALTER TABLE")
+ (localhost,57636,1810056,t,"ALTER TABLE")
+ (localhost,57637,1810056,t,"ALTER TABLE")
+ (localhost,57638,1810056,t,"ALTER TABLE")
 (3 rows)
 
 SET citus.enable_ddl_propagation to ON;

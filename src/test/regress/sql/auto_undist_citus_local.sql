@@ -287,6 +287,44 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
                         'partitioned_table_2_1'::regclass)
   ORDER BY logicalrelid;
 
+-- verify creating fkeys update auto-converted to false
+CREATE TABLE table_ref(a int unique);
+CREATE TABLE table_auto_conv(a int unique references table_ref(a)) partition by range(a);
+CREATE TABLE table_auto_conv_child partition of table_auto_conv FOR VALUES FROM (1) TO (4);
+CREATE TABLE table_auto_conv_2(a int unique references table_auto_conv(a));
+CREATE TABLE table_not_auto_conv(a int unique);
+select create_reference_table('table_ref');
+
+-- table_not_auto_conv should not be here, as it's not converted yet
+-- other tables should be marked as auto-converted
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('table_auto_conv'::regclass,
+                        'table_auto_conv_child'::regclass,
+                        'table_auto_conv_2'::regclass,
+                        'table_not_auto_conv'::regclass)
+  ORDER BY logicalrelid;
+
+select citus_add_local_table_to_metadata('table_not_auto_conv');
+alter table table_not_auto_conv add constraint fkey_to_mark_not_autoconverted foreign key (a) references table_auto_conv_2(a);
+
+-- all of them should be marked as auto-converted = false
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('table_auto_conv'::regclass,
+                        'table_auto_conv_child'::regclass,
+                        'table_auto_conv_2'::regclass,
+                        'table_not_auto_conv'::regclass)
+  ORDER BY logicalrelid;
+
+-- create&attach new partition, it should be marked as auto-converted = false, too
+CREATE TABLE table_auto_conv_child_2 partition of table_auto_conv FOR VALUES FROM (5) TO (8);
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('table_auto_conv'::regclass,
+                        'table_auto_conv_child'::regclass,
+                        'table_auto_conv_2'::regclass,
+                        'table_not_auto_conv'::regclass,
+                        'table_auto_conv_child_2'::regclass)
+  ORDER BY logicalrelid;
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
