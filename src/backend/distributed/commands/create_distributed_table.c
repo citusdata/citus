@@ -482,6 +482,8 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	/* we need to calculate these variables before creating distributed metadata */
 	bool localTableEmpty = TableEmpty(relationId);
 	Oid colocatedTableId = ColocatedTableId(colocationId);
+
+	/* setting to false since this flag is only valid for citus local tables */
 	bool autoConverted = false;
 
 	/* create an entry for distributed table in pg_dist_partition */

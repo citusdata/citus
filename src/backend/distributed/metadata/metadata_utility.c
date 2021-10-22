@@ -2072,10 +2072,10 @@ UpdatePlacementGroupId(uint64 placementId, int groupId)
 
 /*
  * UpdatePartitionAutoConverted sets the autoConverted for the partition identified
- * by distributedRelationId.
+ * by citusTableId.
  */
 void
-UpdatePartitionAutoConverted(Oid distributedRelationId, bool autoConverted)
+UpdatePartitionAutoConverted(Oid citusTableId, bool autoConverted)
 {
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
@@ -2087,7 +2087,7 @@ UpdatePartitionAutoConverted(Oid distributedRelationId, bool autoConverted)
 	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
 	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
 	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
-				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(distributedRelationId));
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(citusTableId));
 
 	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
 													DistPartitionLogicalRelidIndexId(),
@@ -2097,8 +2097,8 @@ UpdatePartitionAutoConverted(Oid distributedRelationId, bool autoConverted)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	if (!HeapTupleIsValid(heapTuple))
 	{
-		ereport(ERROR, (errmsg("could not find valid entry for partition oid: %u",
-							   distributedRelationId)));
+		ereport(ERROR, (errmsg("could not find valid entry for citus table with oid: %u",
+							   citusTableId)));
 	}
 
 	memset(replace, 0, sizeof(replace));
@@ -2111,7 +2111,7 @@ UpdatePartitionAutoConverted(Oid distributedRelationId, bool autoConverted)
 
 	CatalogTupleUpdate(pgDistPartition, &heapTuple->t_self, heapTuple);
 
-	CitusInvalidateRelcacheByRelid(distributedRelationId);
+	CitusInvalidateRelcacheByRelid(citusTableId);
 
 	CommandCounterIncrement();
 

@@ -70,6 +70,8 @@ static void ErrorIfAttachCitusTableToPgLocalTable(Oid parentRelationId,
 												  Oid partitionRelationId);
 static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
 	AlterTableStmt *alterTableStatement);
+static bool ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId,
+														 Oid rightRelationId);
 static void MarkConnectedRelationsNotAutoConverted(Oid leftRelationId,
 												   Oid rightRelationId);
 static bool RelationIdListContainsCitusTableType(List *relationIdList,
@@ -494,7 +496,8 @@ PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelatio
 			 * cannot have non-inherited foreign keys.
 			 */
 			bool cascadeViaForeignKeys = false;
-			bool autoConverted = true;
+			CitusTableCacheEntry *entry = GetCitusTableCacheEntry(parentRelationId);
+			bool autoConverted = entry->autoConverted;
 			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys,
 								  autoConverted);
 		}
@@ -863,7 +866,12 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
 												   alterTableStatement->missing_ok);
 
-				MarkConnectedRelationsNotAutoConverted(leftRelationId, rightRelationId);
+				if (ShouldMarkConnectedRelationsNotAutoConverted(leftRelationId,
+																 rightRelationId))
+				{
+					MarkConnectedRelationsNotAutoConverted(leftRelationId,
+														   rightRelationId);
+				}
 
 				/*
 				 * Foreign constraint validations will be done in workers. If we do not
@@ -1178,36 +1186,42 @@ AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(AlterTableStmt *alterTableSt
 
 
 /*
- * MarkConnectedRelationsNotAutoConverted takes two relations. If both of them are Citus Local
- * Tables, and one of them is auto-converted while the other one is not; then it
- * marks both of them as not-auto-converted, as well as other connected relations.
+ * ShouldMarkConnectedRelationsNotAutoConverted takes two relations.
+ * If both of them are Citus Local Tables, and one of them is auto-converted while the
+ * other one is not; then it returns true. False otherwise.
  */
-static void
-MarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelationId)
+static bool
+ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelationId)
 {
 	if (!IsCitusTable(leftRelationId) || !IsCitusTable(rightRelationId))
 	{
-		return;
+		return false;
 	}
 
 	if (!IsCitusTableType(leftRelationId, CITUS_LOCAL_TABLE))
 	{
-		return;
+		return false;
 	}
 
 	if (!IsCitusTableType(rightRelationId, CITUS_LOCAL_TABLE))
 	{
-		return;
+		return false;
 	}
 
 	CitusTableCacheEntry *entryLeft = GetCitusTableCacheEntry(leftRelationId);
 	CitusTableCacheEntry *entryRight = GetCitusTableCacheEntry(rightRelationId);
 
-	if (entryLeft->autoConverted == entryRight->autoConverted)
-	{
-		return;
-	}
+	return entryLeft->autoConverted != entryRight->autoConverted;
+}
 
+
+/*
+ * MarkConnectedRelationsNotAutoConverted takes two relations.
+ * Marks both of them as not-auto-converted, as well as other connected relations.
+ */
+static void
+MarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelationId)
+{
 	List *leftConnectedRelIds = GetForeignKeyConnectedRelationIdList(leftRelationId);
 	List *rightConnectedRelIds = GetForeignKeyConnectedRelationIdList(rightRelationId);
 	List *allConnectedRelations = list_concat_unique_oid(leftConnectedRelIds,
