@@ -1180,7 +1180,7 @@ AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(AlterTableStmt *alterTableSt
 /*
  * MarkConnectedRelationsNotAutoConverted takes two relations. If both of them are Citus Local
  * Tables, and one of them is auto-converted while the other one is not; then it
- * marks both of them as not-auto-converted.
+ * marks both of them as not-auto-converted, as well as other connected relations.
  */
 static void
 MarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelationId)
