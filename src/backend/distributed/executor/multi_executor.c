@@ -322,7 +322,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 	{
 		/*
 		 * If there is a very selective qual on the Citus Scan node we might block
-		 * interupts for a longer time if we would not check for interrupts in this loop
+		 * interrupts for a longer time if we would not check for interrupts in this loop
 		 */
 		CHECK_FOR_INTERRUPTS();
 

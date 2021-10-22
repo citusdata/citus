@@ -234,7 +234,7 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 	{
 		/*
 		 * extensions should be created separately on the workers, sequences cascading
-		 * from an extension should therefor not be propagated here.
+		 * from an extension should therefore not be propagated here.
 		 */
 		return NIL;
 	}

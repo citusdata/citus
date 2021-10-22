@@ -565,7 +565,7 @@ UPDATE partitioning_test SET time = '2010-10-10' WHERE id = 25;
 -- see the data is updated
 SELECT * FROM partitioning_test WHERE id = 25 ORDER BY 1;
 
--- perform operations on partition and partioned tables together
+-- perform operations on partition and partitioned tables together
 INSERT INTO partitioning_test VALUES(26, '2010-02-02', 26);
 INSERT INTO partitioning_test_2010 VALUES(26, '2010-02-02', 26);
 COPY partitioning_test FROM STDIN WITH CSV;

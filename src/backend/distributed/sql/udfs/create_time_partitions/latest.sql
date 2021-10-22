@@ -11,7 +11,7 @@ DECLARE
     schema_name_text name;
     table_name_text name;
 
-    -- record for to-be-created parttion
+    -- record for to-be-created partition
     missing_partition_record record;
 
     -- result indiciates whether any partitions were created

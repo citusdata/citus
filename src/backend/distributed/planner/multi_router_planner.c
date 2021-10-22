@@ -1957,7 +1957,7 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 		 * because the user is trying to distributed the load across nodes via
 		 * round-robin policy. Otherwise, the local execution would prioritize
 		 * executing the local tasks and especially for reference tables on the
-		 * coordinator this would prevent load balancing accross nodes.
+		 * coordinator this would prevent load balancing across nodes.
 		 *
 		 * For other worker nodes in Citus MX, we let the local execution to kick-in
 		 * even for round-robin policy, that's because we expect the clients to evenly

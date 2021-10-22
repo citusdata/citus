@@ -948,7 +948,7 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 		if (eventCount == 0)
 		{
 			/*
-			 * timeout has occured on waitset, double check the timeout since
+			 * timeout has occurred on waitset, double check the timeout since
 			 * connectionStart and if passed close all non-finished connections
 			 */
 

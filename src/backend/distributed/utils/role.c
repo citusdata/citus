@@ -63,7 +63,7 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
  * If the role does exist it will run the query provided in alter_role_utility_query to
  * change the existing user in such a way that it is compatible with the user on the
  * coordinator. This query is expected to be a AlterRoleStmt, if a different statement is
- * provdided the function will raise an error.
+ * provided the function will raise an error.
  *
  * For both queries a NULL value can be passed to omit the execution of that condition.
  *

@@ -78,7 +78,7 @@ INSERT INTO item SELECT c, 'abc', c, 'abc', c FROM generate_series(1, 3) as c;
 INSERT INTO item SELECT 10+c, 'abc', c, 'abc', c FROM generate_series(1, 3) as c;
 
 
--- Subquery + repartion is supported when it is an IN query where the subquery
+-- Subquery + repartition is supported when it is an IN query where the subquery
 -- returns unique results (because it's converted to an INNER JOIN)
 select  s_i_id
     from stock, order_line
@@ -88,7 +88,7 @@ select  s_i_id
     order by s_i_id;
 
 
--- Subquery + repartion is not supported when it is an IN query where the
+-- Subquery + repartition is not supported when it is an IN query where the
 -- subquery doesn't return unique results
 select  s_i_id
     from stock, order_line
@@ -96,7 +96,7 @@ select  s_i_id
         s_i_id in (select i_im_id from item)
         AND s_i_id = ol_i_id;
 
--- Subquery + repartion is supported when it is a NOT IN query where the subquery
+-- Subquery + repartition is supported when it is a NOT IN query where the subquery
 -- returns unique results
 select  s_i_id
     from stock, order_line
@@ -104,7 +104,7 @@ select  s_i_id
         s_i_id not in (select i_id from item)
         AND s_i_id = ol_i_id;
 
--- Subquery + repartion is not supported when it is a NOT IN where the subquery
+-- Subquery + repartition is not supported when it is a NOT IN where the subquery
 -- doesn't return unique results
 select  s_i_id
     from stock, order_line
@@ -120,7 +120,7 @@ select s_i_id
         s_i_id in (select i_id from item)
         AND s_i_id not in (select i_im_id from item);
 
--- Subquery + repartion is not supported when it contains both an IN and a NOT IN
+-- Subquery + repartition is not supported when it contains both an IN and a NOT IN
 -- where both subqueries return unique results
 select  s_i_id
     from stock, order_line
@@ -129,7 +129,7 @@ select  s_i_id
         AND s_i_id not in (select i_id from item)
         AND s_i_id = ol_i_id;
 
--- Subquery + repartion is not supported when it contains both an IN and a NOT IN
+-- Subquery + repartition is not supported when it contains both an IN and a NOT IN
 -- where the IN subquery returns unique results and the NOT IN returns non unique results
 select  s_i_id
     from stock, order_line
@@ -139,7 +139,7 @@ select  s_i_id
         AND s_i_id = ol_i_id;
 
 
--- Subquery + repartion is not supported when it contains both an IN and a NOT IN
+-- Subquery + repartition is not supported when it contains both an IN and a NOT IN
 -- where the IN subquery returns non unique results and the NOT IN returns unique results
 select  s_i_id
     from stock, order_line
@@ -148,7 +148,7 @@ select  s_i_id
         AND s_i_id not in (select i_id from item)
         AND s_i_id = ol_i_id;
 
--- Subquery + repartion is not supported when it contains both an IN and a NOT IN
+-- Subquery + repartition is not supported when it contains both an IN and a NOT IN
 -- where both subqueries return non unique results
 select  s_i_id
     from stock, order_line

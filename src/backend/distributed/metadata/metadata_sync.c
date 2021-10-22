@@ -239,7 +239,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
  * EnsureSequentialModeMetadataOperations makes sure that the current transaction is
  * already in sequential mode, or can still safely be put in sequential mode,
  * it errors if that is not possible. The error contains information for the user to
- * retry the transaction with sequential mode set from the begining.
+ * retry the transaction with sequential mode set from the beginning.
  *
  * Metadata objects (e.g., distributed table on the workers) exists only 1 instance of
  * the type used by potentially multiple other shards/connections. To make sure all

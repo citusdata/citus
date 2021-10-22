@@ -3,7 +3,7 @@
  * citus_dist_stat_activity.c
  *
  *	This file contains functions for monitoring the distributed transactions
- *	accross the cluster.
+ *	across the cluster.
  *
  * Copyright (c) Citus Data, Inc.
  *

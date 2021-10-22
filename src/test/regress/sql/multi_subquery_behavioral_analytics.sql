@@ -725,7 +725,7 @@ GROUP BY
 SET citus.subquery_pushdown to ON;
 
 -- multi-subquery-join
--- The first query has filters on partion column to make it router plannable
+-- The first query has filters on partition column to make it router plannable
 -- but it is processed by logical planner since we disabled router execution
 SELECT
   e1.user_id,

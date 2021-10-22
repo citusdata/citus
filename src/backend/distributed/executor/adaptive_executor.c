@@ -5199,7 +5199,7 @@ RebuildWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
  * ModifyWaitEvent may throw hard errors. For example, when the underlying
  * socket for a connection is closed by the remote server and already
  * reflected by the OS, however Citus hasn't had a chance to get this
- * information. In that case, if repliction factor is >1, Citus can
+ * information. In that case, if replication factor is >1, Citus can
  * failover to other nodes for executing the query. Even if replication
  * factor = 1, Citus can give much nicer errors.
  *

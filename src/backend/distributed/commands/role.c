@@ -630,7 +630,7 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
 
 
 /*
- * MakeSetStatementArgs parses a configuraton value and creates an List of A_Const
+ * MakeSetStatementArgs parses a configuration value and creates an List of A_Const
  * Nodes with appropriate types.
  *
  * The allowed A_Const types are Integer, Float, and String.

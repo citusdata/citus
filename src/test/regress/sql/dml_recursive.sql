@@ -174,7 +174,7 @@ RESET citus.enable_repartition_joins;
 
 
 -- there is a lateral join (e.g., correlated subquery) thus the subqueries cannot be
--- recursively planned, this one can not be planned by the repartion planner
+-- recursively planned, this one can not be planned by the repartition planner
 -- because of the IN query on a non unique column
 UPDATE
 	second_distributed_table

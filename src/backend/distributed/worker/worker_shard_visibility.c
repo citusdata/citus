@@ -275,7 +275,7 @@ ReplaceTableVisibleFunction(Node *inputNode)
 
 
 /*
- * ReplaceTableVisibleFunction replaces all occurences of
+ * ReplaceTableVisibleFunction replaces all occurrences of
  * pg_catalog.pg_table_visible() to
  * pg_catalog.citus_table_visible() in the given input node.
  *

@@ -1276,7 +1276,7 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 			bool cascade = true;
 
 			/*
-			 * Withoud this check, we would be erroring out in CreateCitusLocalTable
+			 * Without this check, we would be erroring out in CreateCitusLocalTable
 			 * for this case anyway. The purpose of this check&error is to provide
 			 * a more meaningful message for the user.
 			 */

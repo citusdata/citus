@@ -614,7 +614,7 @@ GetColocatedRebalanceSteps(List *placementUpdateList)
 /*
  * AcquireColocationLock tries to acquire a lock for rebalance/replication. If
  * this is it not possible it fails instantly because this means another
- * rebalance/repliction is currently happening. This would really mess up
+ * rebalance/replication is currently happening. This would really mess up
  * planning.
  */
 static void

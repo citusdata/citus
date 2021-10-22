@@ -1,5 +1,5 @@
 SET search_path to "ch benchmarks";
--- Subquery + repartion is supported when it is an IN query where the subquery
+-- Subquery + repartition is supported when it is an IN query where the subquery
 -- returns unique results (because it's converted to an INNER JOIN)
 select  s_i_id
     from stock, order_line
