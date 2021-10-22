@@ -25,3 +25,6 @@ CREATE FUNCTION pg_catalog.master_get_table_metadata(
 COMMENT ON FUNCTION master_get_table_metadata(relation_name text)
     IS 'fetch metadata values for the table';
 ALTER TABLE pg_catalog.pg_dist_partition DROP COLUMN autoconverted;
+
+GRANT ALL ON FUNCTION start_metadata_sync_to_node(text, integer) TO PUBLIC;
+GRANT ALL ON FUNCTION stop_metadata_sync_to_node(text, integer,bool) TO PUBLIC;
