@@ -302,6 +302,7 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 	}
 
 	UseCoordinatedTransaction();
+	Use2PCForCoordinatedTransaction();
 
 	/* issue command to append table to each shard placement */
 	ShardPlacement *shardPlacement = NULL;
@@ -327,19 +328,10 @@ master_append_table_to_shard(PG_FUNCTION_ARGS)
 
 		RemoteTransactionBeginIfNecessary(connection);
 
-		int executeResult = ExecuteOptionalRemoteCommand(connection,
-														 workerAppendQuery->data,
-														 &queryResult);
+		ExecuteCriticalRemoteCommand(connection, workerAppendQuery->data);
 		PQclear(queryResult);
 		ForgetResults(connection);
-
-		if (executeResult != 0)
-		{
-			MarkRemoteTransactionFailed(connection, false);
-		}
 	}
-
-	MarkFailedShardPlacements();
 
 	/* update shard statistics and get new shard size */
 	uint64 newShardSize = UpdateShardStatistics(shardId);

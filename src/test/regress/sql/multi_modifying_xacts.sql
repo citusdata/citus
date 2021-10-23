@@ -310,6 +310,29 @@ DELETE FROM researchers WHERE lab_id = 6;
 30, 6, 'Dennis Ritchie'
 \.
 COMMIT;
+
+-- single row, multi-row INSERTs should also fail
+-- with or without transaction blocks on the COMMIT time
+INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup');
+INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup'), (32, 7, 'Bjarne Stroustrup');
+
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup');
+COMMIT;
+
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup'), (32, 7, 'Bjarne Stroustrup');
+COMMIT;
+
+-- and, rollback should be fine
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup');
+ROLLBACK;
+
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup'), (32, 7, 'Bjarne Stroustrup');
+ROLLBACK;
+
 \unset VERBOSITY
 
 -- verify everyhing including delete is rolled back
@@ -935,19 +958,19 @@ AND      s.logicalrelid = 'reference_failure_test'::regclass
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
 
+-- any failure rollbacks the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
 1,1
 2,2
 \.
+ABORT;
 
--- some placements are invalid before abort
+-- none of placements are invalid after abort
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
-
-ABORT;
 
 -- verify nothing is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
@@ -958,27 +981,21 @@ FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
 
+-- all failures roll back the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
 1,1
 2,2
 \.
-
--- check shard states before commit
-SELECT shardid, shardstate, nodename, nodeport
-FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
-WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
-ORDER BY shardid, nodeport;
-
 COMMIT;
 
--- expect some placements to be market invalid after commit
+-- expect none of the placements to be market invalid after commit
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
 
--- verify data is inserted
+-- verify no data is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
 
 -- break the other node as well

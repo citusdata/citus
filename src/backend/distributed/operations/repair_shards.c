@@ -1081,7 +1081,17 @@ EnsureShardCanBeRepaired(int64 shardId, const char *sourceNodeName, int32 source
 		shardPlacementList,
 		targetNodeName,
 		targetNodePort);
-	if (targetPlacement->shardState != SHARD_STATE_INACTIVE)
+
+	/*
+	 * shardStateInactive is a legacy state for a placement. As of Citus 11,
+	 * we never mark any placement as INACTIVE.
+	 *
+	 * Still, we prefer to keep this function/code here, as users may need
+	 * to recover placements that are marked as inactive pre Citus 11.
+	 *
+	 */
+	int shardStateInactive = 3;
+	if (targetPlacement->shardState != shardStateInactive)
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 						errmsg("target placement must be in inactive state")));

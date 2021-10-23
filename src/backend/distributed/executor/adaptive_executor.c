@@ -690,7 +690,6 @@ static void ScheduleNextPlacementExecution(TaskPlacementExecution *placementExec
 										   bool succeeded);
 static bool CanFailoverPlacementExecutionToLocalExecution(TaskPlacementExecution *
 														  placementExecution);
-static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution);
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
 													shardCommandExecution);
@@ -4683,20 +4682,6 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	}
 	else
 	{
-		if (ShouldMarkPlacementsInvalidOnFailure(execution))
-		{
-			ShardPlacement *shardPlacement = placementExecution->shardPlacement;
-
-			/*
-			 * We only set shard state if it currently is SHARD_STATE_ACTIVE, which
-			 * prevents overwriting shard state if it was already set somewhere else.
-			 */
-			if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
-			{
-				MarkShardPlacementInactive(shardPlacement);
-			}
-		}
-
 		if (placementExecution->executionState == PLACEMENT_EXECUTION_NOT_READY)
 		{
 			/*
@@ -4874,30 +4859,6 @@ ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution, bool 
 			}
 		} while (nextPlacementExecution->executionState == PLACEMENT_EXECUTION_FAILED);
 	}
-}
-
-
-/*
- * ShouldMarkPlacementsInvalidOnFailure returns true if the failure
- * should trigger marking placements invalid.
- */
-static bool
-ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution)
-{
-	if (!DistributedExecutionModifiesDatabase(execution) ||
-		execution->transactionProperties->errorOnAnyFailure)
-	{
-		/*
-		 * Failures that do not modify the database (e.g., mainly SELECTs) should
-		 * never lead to invalid placement.
-		 *
-		 * Failures that lead throwing error, no need to mark any placement
-		 * invalid.
-		 */
-		return false;
-	}
-
-	return true;
 }
 
 

@@ -377,6 +377,35 @@ COMMIT;
 WARNING:  illegal value
 WARNING:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
 ERROR:  illegal value
+-- single row, multi-row INSERTs should also fail
+-- with or without transaction blocks on the COMMIT time
+INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup');
+WARNING:  illegal value
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
+ERROR:  illegal value
+INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup'), (32, 7, 'Bjarne Stroustrup');
+WARNING:  illegal value
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
+ERROR:  illegal value
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup');
+COMMIT;
+WARNING:  illegal value
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
+ERROR:  illegal value
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup'), (32, 7, 'Bjarne Stroustrup');
+COMMIT;
+WARNING:  illegal value
+WARNING:  connection to the remote node localhost:xxxxx failed with the following error: another command is already in progress
+ERROR:  illegal value
+-- and, rollback should be fine
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup');
+ROLLBACK;
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup'), (32, 7, 'Bjarne Stroustrup');
+ROLLBACK;
 \unset VERBOSITY
 -- verify everyhing including delete is rolled back
 SELECT * FROM researchers WHERE lab_id = 6;
@@ -1195,28 +1224,28 @@ ORDER BY s.logicalrelid, sp.shardstate;
  reference_failure_test |          1 |     2
 (1 row)
 
+-- any failure rollbacks the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
--- some placements are invalid before abort
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
+ABORT;
+-- none of placements are invalid after abort
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1200016 |          3 | localhost |    57637
+ 1200016 |          1 | localhost |    57637
  1200016 |          1 | localhost |    57638
  1200017 |          1 | localhost |    57637
  1200017 |          1 | localhost |    57638
  1200018 |          1 | localhost |    57637
  1200018 |          1 | localhost |    57638
- 1200019 |          3 | localhost |    57637
+ 1200019 |          1 | localhost |    57637
  1200019 |          1 | localhost |    57638
 (8 rows)
 
-ABORT;
 -- verify nothing is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
 WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
@@ -1243,52 +1272,35 @@ ORDER BY shardid, nodeport;
  1200019 |          1 | localhost |    57638
 (8 rows)
 
+-- all failures roll back the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
--- check shard states before commit
-SELECT shardid, shardstate, nodename, nodeport
-FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
-WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
-ORDER BY shardid, nodeport;
- shardid | shardstate | nodename  | nodeport
----------------------------------------------------------------------
- 1200016 |          3 | localhost |    57637
- 1200016 |          1 | localhost |    57638
- 1200017 |          1 | localhost |    57637
- 1200017 |          1 | localhost |    57638
- 1200018 |          1 | localhost |    57637
- 1200018 |          1 | localhost |    57638
- 1200019 |          3 | localhost |    57637
- 1200019 |          1 | localhost |    57638
-(8 rows)
-
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 COMMIT;
--- expect some placements to be market invalid after commit
+-- expect none of the placements to be market invalid after commit
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
- 1200016 |          3 | localhost |    57637
+ 1200016 |          1 | localhost |    57637
  1200016 |          1 | localhost |    57638
  1200017 |          1 | localhost |    57637
  1200017 |          1 | localhost |    57638
  1200018 |          1 | localhost |    57637
  1200018 |          1 | localhost |    57638
- 1200019 |          3 | localhost |    57637
+ 1200019 |          1 | localhost |    57637
  1200019 |          1 | localhost |    57638
 (8 rows)
 
--- verify data is inserted
+-- verify no data is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
 WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
 WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" does not exist
  count
 ---------------------------------------------------------------------
-     2
+     0
 (1 row)
 
 -- break the other node as well

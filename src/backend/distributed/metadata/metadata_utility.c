@@ -1958,63 +1958,6 @@ DeleteShardPlacementRow(uint64 placementId)
 
 
 /*
- * UpdatePartitionShardPlacementStates gets a shard placement which is asserted to belong
- * to partitioned table. The function goes over the corresponding placements of its
- * partitions, and sets their state to the input shardState.
- */
-void
-UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement, char shardState)
-{
-	ShardInterval *parentShardInterval =
-		LoadShardInterval(parentShardPlacement->shardId);
-	Oid partitionedTableOid = parentShardInterval->relationId;
-
-	/* this function should only be called for partitioned tables */
-	Assert(PartitionedTable(partitionedTableOid));
-
-	List *partitionList = PartitionList(partitionedTableOid);
-	Oid partitionOid = InvalidOid;
-	foreach_oid(partitionOid, partitionList)
-	{
-		uint64 partitionShardId =
-			ColocatedShardIdInRelation(partitionOid, parentShardInterval->shardIndex);
-
-		ShardPlacement *partitionPlacement =
-			ShardPlacementOnGroupIncludingOrphanedPlacements(
-				parentShardPlacement->groupId, partitionShardId);
-
-		/* the partition should have a placement with the same group */
-		Assert(partitionPlacement != NULL);
-
-		UpdateShardPlacementState(partitionPlacement->placementId, shardState);
-	}
-}
-
-
-/*
- * MarkShardPlacementInactive is a wrapper around UpdateShardPlacementState where
- * the state is set to SHARD_STATE_INACTIVE. It also marks partitions of the
- * shard placements as inactive if shardPlacement belongs to a partitioned table.
- */
-void
-MarkShardPlacementInactive(ShardPlacement *shardPlacement)
-{
-	UpdateShardPlacementState(shardPlacement->placementId, SHARD_STATE_INACTIVE);
-
-	/*
-	 * In case the shard belongs to a partitioned table, we make sure to update
-	 * the states of its partitions. Repairing shards already ensures to recreate
-	 * all the partitions.
-	 */
-	ShardInterval *shardInterval = LoadShardInterval(shardPlacement->shardId);
-	if (PartitionedTable(shardInterval->relationId))
-	{
-		UpdatePartitionShardPlacementStates(shardPlacement, SHARD_STATE_INACTIVE);
-	}
-}
-
-
-/*
  * UpdateShardPlacementState sets the shardState for the placement identified
  * by placementId.
  */

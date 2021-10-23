@@ -784,29 +784,23 @@ SET session_replication_role = DEFAULT;
 \c - :default_user - :worker_1_port
 ALTER USER test_user WITH nologin;
 \c - test_user - :master_port
--- reissue copy
+-- reissue copy, and it should fail
 COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" is not permitted to log in
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" is not permitted to log in
 CONTEXT:  COPY numbers_hash, line 1: "1,1"
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" is not permitted to log in
-CONTEXT:  COPY numbers_hash, line 2: "2,2"
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" is not permitted to log in
-CONTEXT:  COPY numbers_hash, line 3: "3,3"
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" is not permitted to log in
-CONTEXT:  COPY numbers_hash, line 6: "6,6"
--- verify shards in the first worker as marked invalid
+-- verify shards in the none of the workers as marked invalid
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_hash'::regclass order by shardid, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
-  560169 |          3 | localhost |    57637
+  560169 |          1 | localhost |    57637
   560169 |          1 | localhost |    57638
-  560170 |          3 | localhost |    57637
+  560170 |          1 | localhost |    57637
   560170 |          1 | localhost |    57638
-  560171 |          3 | localhost |    57637
+  560171 |          1 | localhost |    57637
   560171 |          1 | localhost |    57638
-  560172 |          3 | localhost |    57637
+  560172 |          1 | localhost |    57637
   560172 |          1 | localhost |    57638
 (8 rows)
 
@@ -828,12 +822,8 @@ SELECT shardid, shardstate, nodename, nodeport
 -- since it can not insert into either copies of a shard. shards are expected to
 -- stay valid since the operation is rolled back.
 COPY numbers_hash_other FROM STDIN WITH (FORMAT 'csv');
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" is not permitted to log in
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" is not permitted to log in
 CONTEXT:  COPY numbers_hash_other, line 1: "1,1"
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" is not permitted to log in
-CONTEXT:  COPY numbers_hash_other, line 2: "2,2"
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "test_user" is not permitted to log in
-CONTEXT:  COPY numbers_hash_other, line 3: "3,3"
 -- verify shards for numbers_hash_other are still valid
 -- since copy has failed altogether
 SELECT shardid, shardstate, nodename, nodeport
@@ -841,13 +831,13 @@ SELECT shardid, shardstate, nodename, nodeport
 	WHERE logicalrelid = 'numbers_hash_other'::regclass order by shardid, nodeport;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
-  560174 |          3 | localhost |    57637
+  560174 |          1 | localhost |    57637
   560174 |          1 | localhost |    57638
-  560175 |          3 | localhost |    57637
+  560175 |          1 | localhost |    57637
   560175 |          1 | localhost |    57638
   560176 |          1 | localhost |    57637
   560176 |          1 | localhost |    57638
-  560177 |          3 | localhost |    57637
+  560177 |          1 | localhost |    57637
   560177 |          1 | localhost |    57638
 (8 rows)
 

@@ -424,14 +424,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * fails, which can lead to divergence when not using 2PC.
 			 */
 
-			/*
-			 * Check whether the coordinated transaction is in a state we want
-			 * to persist, or whether we want to error out.  This handles the
-			 * case where iteratively executed commands marked all placements
-			 * as invalid.
-			 */
-			MarkFailedShardPlacements();
-
 			if (ShouldCoordinatedTransactionUse2PC)
 			{
 				CoordinatedRemoteTransactionsPrepare();
@@ -458,9 +450,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			/*
 			 * Check again whether shards/placement successfully
-			 * committed. This handles failure at COMMIT/PREPARE time.
+			 * committed. This handles failure at COMMIT time.
 			 */
-			PostCommitMarkFailedShardPlacements(ShouldCoordinatedTransactionUse2PC);
+			ErrorIfPostCommitFailedShardPlacements();
 			break;
 		}
 

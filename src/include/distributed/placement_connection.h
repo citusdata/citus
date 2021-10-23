@@ -32,8 +32,7 @@ extern void AssignPlacementListToConnection(List *placementAccessList,
 											MultiConnection *connection);
 
 extern void ResetPlacementConnectionManagement(void);
-extern void MarkFailedShardPlacements(void);
-extern void PostCommitMarkFailedShardPlacements(bool using2PC);
+extern void ErrorIfPostCommitFailedShardPlacements(void);
 
 extern void CloseShardPlacementAssociation(struct MultiConnection *connection);
 extern void ResetShardPlacementAssociation(struct MultiConnection *connection);
