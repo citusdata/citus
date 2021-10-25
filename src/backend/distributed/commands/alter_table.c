@@ -1223,8 +1223,9 @@ CreateCitusTableLike(TableConversionState *con)
 	}
 	else if (IsCitusTableType(con->relationId, CITUS_LOCAL_TABLE))
 	{
+		CitusTableCacheEntry *entry = GetCitusTableCacheEntry(con->relationId);
+		bool autoConverted = entry->autoConverted;
 		bool cascade = false;
-		bool autoConverted = false;
 		CreateCitusLocalTable(con->newRelationId, cascade, autoConverted);
 
 		/*
