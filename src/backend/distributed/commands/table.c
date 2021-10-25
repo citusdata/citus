@@ -79,7 +79,7 @@ static bool RelationIdListContainsCitusTableType(List *relationIdList,
 static bool RelationIdListContainsPostgresTable(List *relationIdList);
 static void ConvertPostgresLocalTablesToCitusLocalTables(
 	AlterTableStmt *alterTableStatement);
-static bool AnyConnectedRelationIsNotAutoConverted(List *relationRangeVarList,
+static bool RelationListHasRelationConvertedByUser(List *relationRangeVarList,
 												   AlterTableStmt *alterTableStatement);
 static int CompareRangeVarsByOid(const void *leftElement, const void *rightElement);
 static List * GetAlterTableAddFKeyRightRelationIdList(
@@ -1299,7 +1299,7 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 
 	bool autoConverted = true;
 
-	if (AnyConnectedRelationIsNotAutoConverted(relationRangeVarList, alterTableStatement))
+	if (RelationListHasRelationConvertedByUser(relationRangeVarList, alterTableStatement))
 	{
 		autoConverted = false;
 	}
@@ -1402,13 +1402,13 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 
 
 /*
- * AnyConnectedRelationIsNotAutoConverted takes a list of relations and returns true
+ * RelationListHasRelationConvertedByUser takes a list of relations and returns true
  * if any of these relations is marked as auto-converted = false. Returns true otherwise.
  * This function also takes the current alterTableStatement command, to obtain the
  * necessary locks.
  */
 static bool
-AnyConnectedRelationIsNotAutoConverted(List *relationRangeVarList,
+RelationListHasRelationConvertedByUser(List *relationRangeVarList,
 									   AlterTableStmt *alterTableStatement)
 {
 	RangeVar *relationRangeVar;
