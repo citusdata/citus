@@ -85,7 +85,6 @@ typedef struct ColumnarScanDescData
 	List *scanQual;
 } ColumnarScanDescData;
 
-typedef struct ColumnarScanDescData *ColumnarScanDesc;
 
 /*
  * IndexFetchColumnarData is the scan state passed between index_fetch_begin,
