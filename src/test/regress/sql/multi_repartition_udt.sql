@@ -36,12 +36,18 @@ LANGUAGE SQL
 IMMUTABLE
 RETURNS NULL ON NULL INPUT;
 
+CREATE FUNCTION test_udt_cmp(test_udt,test_udt) RETURNS int
+AS 'SELECT CASE WHEN $1.i < $2.i THEN -1 ELSE CASE WHEN $1.i > $2.i THEN 1 ELSE CASE WHEN $1.i2 < $2.i2 THEN -1 ELSE CASE WHEN $1.i2 > $2.i2 THEN 1 ELSE 0 END END END END'
+LANGUAGE SQL
+IMMUTABLE
+RETURNS NULL ON NULL INPUT;
 
 -- We need to define two different operator classes for the composite types
 -- One uses BTREE the other uses HASH
 CREATE OPERATOR CLASS tudt_op_fam_clas3
 DEFAULT FOR TYPE test_udt USING BTREE AS
-OPERATOR 3 = (test_udt, test_udt);
+OPERATOR 3 = (test_udt, test_udt),
+FUNCTION 1 test_udt_cmp(test_udt, test_udt);
 
 CREATE OPERATOR CLASS tudt_op_fam_class
 DEFAULT FOR TYPE test_udt USING HASH AS
@@ -85,7 +91,8 @@ CREATE OPERATOR FAMILY tudt_op_fam USING hash;
 -- One uses BTREE the other uses HASH
 CREATE OPERATOR CLASS tudt_op_fam_clas3
 DEFAULT FOR TYPE test_udt USING BTREE AS
-OPERATOR 3 = (test_udt, test_udt);
+OPERATOR 3 = (test_udt, test_udt),
+FUNCTION 1 test_udt_cmp(test_udt, test_udt);
 
 CREATE OPERATOR CLASS tudt_op_fam_class
 DEFAULT FOR TYPE test_udt USING HASH AS
@@ -113,7 +120,8 @@ CREATE OPERATOR FAMILY tudt_op_fam USING hash;
 -- One uses BTREE the other uses HASH
 CREATE OPERATOR CLASS tudt_op_fam_clas3
 DEFAULT FOR TYPE test_udt USING BTREE AS
-OPERATOR 3 = (test_udt, test_udt);
+OPERATOR 3 = (test_udt, test_udt),
+FUNCTION 1 test_udt_cmp(test_udt, test_udt);
 
 CREATE OPERATOR CLASS tudt_op_fam_class
 DEFAULT FOR TYPE test_udt USING HASH AS

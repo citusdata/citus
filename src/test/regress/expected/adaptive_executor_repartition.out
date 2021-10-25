@@ -52,9 +52,12 @@ SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT
 ROLLBACK;
 BEGIN;
 INSERT INTO ab values(1, 2);
--- DDL happened before repartition query in a transaction block, so this should error.
 SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
-ERROR:  cannot open new connections after the first modification command within a transaction
+ count
+---------------------------------------------------------------------
+    14
+(1 row)
+
 ROLLBACK;
 SET citus.enable_single_hash_repartition_joins TO ON;
 CREATE TABLE single_hash_repartition_first (id int, sum int, avg float);
