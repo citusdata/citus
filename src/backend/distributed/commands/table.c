@@ -79,6 +79,8 @@ static bool RelationIdListContainsCitusTableType(List *relationIdList,
 static bool RelationIdListContainsPostgresTable(List *relationIdList);
 static void ConvertPostgresLocalTablesToCitusLocalTables(
 	AlterTableStmt *alterTableStatement);
+static bool AnyConnectedRelationIsNotAutoConverted(List *relationRangeVarList,
+												   AlterTableStmt *alterTableStatement);
 static int CompareRangeVarsByOid(const void *leftElement, const void *rightElement);
 static List * GetAlterTableAddFKeyRightRelationIdList(
 	AlterTableStmt *alterTableStatement);
@@ -1296,35 +1298,17 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 	relationRangeVarList = SortList(relationRangeVarList, CompareRangeVarsByOid);
 
 	bool autoConverted = true;
-	RangeVar *relationRangeVar;
-	foreach_ptr(relationRangeVar, relationRangeVarList)
+
+	if (AnyConnectedRelationIsNotAutoConverted(relationRangeVarList, alterTableStatement))
 	{
-		/*
-		 * Here we iterate the relation list, and if at least one of the relations
-		 * is marked as not-auto-converted, we should mark all of them as
-		 * not-auto-converted. In that case, we set the local variable autoConverted
-		 * to false here, to later use it when converting relations.
-		 */
-		List *commandList = alterTableStatement->cmds;
-		LOCKMODE lockMode = AlterTableGetLockLevel(commandList);
-		bool missingOk = alterTableStatement->missing_ok;
-		Oid relationId = RangeVarGetRelid(relationRangeVar, lockMode, missingOk);
-		if (OidIsValid(relationId) && IsCitusTable(relationId) &&
-			IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-		{
-			CitusTableCacheEntry *entry = GetCitusTableCacheEntry(relationId);
-			if (!entry->autoConverted)
-			{
-				autoConverted = false;
-				break;
-			}
-		}
+		autoConverted = false;
 	}
 
 	/*
 	 * Here we should operate on RangeVar objects since relations oid's would
 	 * change in below loop due to CreateCitusLocalTable.
 	 */
+	RangeVar *relationRangeVar;
 	foreach_ptr(relationRangeVar, relationRangeVarList)
 	{
 		List *commandList = alterTableStatement->cmds;
@@ -1414,6 +1398,43 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 		}
 		PG_END_TRY();
 	}
+}
+
+
+/*
+ * AnyConnectedRelationIsNotAutoConverted takes a list of relations and returns true
+ * if any of these relations is marked as auto-converted = false. Returns true otherwise.
+ * This function also takes the current alterTableStatement command, to obtain the
+ * necessary locks.
+ */
+static bool
+AnyConnectedRelationIsNotAutoConverted(List *relationRangeVarList,
+									   AlterTableStmt *alterTableStatement)
+{
+	RangeVar *relationRangeVar;
+	foreach_ptr(relationRangeVar, relationRangeVarList)
+	{
+		/*
+		 * Here we iterate the relation list, and if at least one of the relations
+		 * is marked as not-auto-converted, we should mark all of them as
+		 * not-auto-converted. In that case, we return true here.
+		 */
+		List *commandList = alterTableStatement->cmds;
+		LOCKMODE lockMode = AlterTableGetLockLevel(commandList);
+		bool missingOk = alterTableStatement->missing_ok;
+		Oid relationId = RangeVarGetRelid(relationRangeVar, lockMode, missingOk);
+		if (OidIsValid(relationId) && IsCitusTable(relationId) &&
+			IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		{
+			CitusTableCacheEntry *entry = GetCitusTableCacheEntry(relationId);
+			if (!entry->autoConverted)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 
