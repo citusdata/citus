@@ -661,6 +661,21 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
  table_auto_conv_child_2 | f
 (5 rows)
 
+-- get the autoconverted field from the parent in case of
+-- CREATE TABLE .. PARTITION OF ..
+create table citus_local_parent_t(a int, b int REFERENCES table_ref(a)) PARTITION BY RANGE (b);
+create table citus_child_t  PARTITION OF citus_local_parent_t FOR VALUES FROM (1) TO (10);
+-- should be set to true
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('citus_local_parent_t'::regclass,
+                        'citus_child_t'::regclass)
+  ORDER BY logicalrelid;
+     logicalrelid     | autoconverted
+---------------------------------------------------------------------
+ citus_local_parent_t | t
+ citus_child_t        | t
+(2 rows)
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
@@ -698,9 +713,9 @@ ALTER TABLE reference_table_1 OWNER TO another_user;
 SELECT run_command_on_placements('reference_table_1', 'ALTER TABLE %s OWNER TO another_user');
          run_command_on_placements
 ---------------------------------------------------------------------
- (localhost,57636,1810056,t,"ALTER TABLE")
- (localhost,57637,1810056,t,"ALTER TABLE")
- (localhost,57638,1810056,t,"ALTER TABLE")
+ (localhost,57636,1810058,t,"ALTER TABLE")
+ (localhost,57637,1810058,t,"ALTER TABLE")
+ (localhost,57638,1810058,t,"ALTER TABLE")
 (3 rows)
 
 SET citus.enable_ddl_propagation to ON;
