@@ -53,7 +53,9 @@ static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
 static void NoticeIfAutoConvertingLocalTables(bool autoConverted);
+static void NoticeRelationIsAlreadyAddedToMetadata(Oid relationId);
 static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
+static void UpdateAutoConvertedForConnectedRelations(Oid relationId, bool autoConverted);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
 static uint64 ConvertLocalTableToShard(Oid relationId);
 static void RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId);
@@ -200,18 +202,18 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 */
 	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE) && !autoConverted)
+	if (!autoConverted && IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		/*
 		 * We allow users to mark local tables already added to metadata
 		 * as "autoConverted = false".
+		 * If the user called citus_add_local_table_to_metadata for a table that is
+		 * already added to metadata, we should mark this one and connected relations
+		 * as auto-converted = false.
 		 */
-		List *relationIdList = GetForeignKeyConnectedRelationIdList(relationId);
-		Oid relid = InvalidOid;
-		foreach_oid(relid, relationIdList)
-		{
-			UpdatePartitionAutoConverted(relid, autoConverted);
-		}
+		UpdateAutoConvertedForConnectedRelations(relationId, autoConverted);
+
+		NoticeRelationIsAlreadyAddedToMetadata(relationId);
 
 		return;
 	}
@@ -584,6 +586,24 @@ NoticeIfAutoConvertingLocalTables(bool autoConverted)
 
 
 /*
+ * NoticeRelationIsAlreadyAddedToMetadata logs a NOTICE message that informs the user
+ * that the given relation is already added to metadata.
+ * We set the field autoConverted for these cases to false.
+ * This function tells the user that the given table will not be removed from metadata,
+ * as it was a user request.
+ */
+static void
+NoticeRelationIsAlreadyAddedToMetadata(Oid relationId)
+{
+	char *relname = get_rel_name(relationId);
+	ereport(NOTICE, (errmsg("relation \"%s\" is already added to metadata", relname),
+					 errdetail("This relation will not be removed from metadata even if "
+					 		   "it is not connected to a reference table via foreign "
+							   "key(s), since it is added to metadata by the user")));
+}
+
+
+/*
  * GetCascadeTypeForCitusLocalTables returns CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA
  * if autoConverted is true. Returns CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA otherwise.
  */
@@ -596,6 +616,23 @@ GetCascadeTypeForCitusLocalTables(bool autoConverted)
 	}
 
 	return CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA;
+}
+
+
+/*
+ * UpdateAutoConvertedForConnectedRelations updates the autoConverted field on
+ * pg_dist_partition for the foreign key connected relations of the given relation.
+ * Sets it to given autoConverted value for all of the connected relations.
+ */
+static void
+UpdateAutoConvertedForConnectedRelations(Oid relationId, bool autoConverted)
+{
+	List *relationIdList = GetForeignKeyConnectedRelationIdList(relationId);
+	Oid relid = InvalidOid;
+	foreach_oid(relid, relationIdList)
+	{
+		UpdatePartitionAutoConverted(relid, false);
+	}
 }
 
 
