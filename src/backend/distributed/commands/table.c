@@ -1222,6 +1222,7 @@ ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelati
 static void
 MarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelationId)
 {
+	InvalidateForeignKeyGraph();
 	List *leftConnectedRelIds = GetForeignKeyConnectedRelationIdList(leftRelationId);
 	List *rightConnectedRelIds = GetForeignKeyConnectedRelationIdList(rightRelationId);
 	List *allConnectedRelations = list_concat_unique_oid(leftConnectedRelIds,
