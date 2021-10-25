@@ -217,7 +217,10 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 
 	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE) && !autoConverted)
 	{
-		/* we should mark this relation and connected ones as autoConverted = false */
+		/*
+		 * We allow users to mark local tables already added to metadata
+		 * as "autoConverted = false".
+		 */
 		List *relationIdList = GetForeignKeyConnectedRelationIdList(relationId);
 		Oid relid = InvalidOid;
 		foreach_oid(relid, relationIdList)
