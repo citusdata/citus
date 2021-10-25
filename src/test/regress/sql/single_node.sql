@@ -529,7 +529,7 @@ SELECT count(*) FROM local;
 SELECT * FROM local ORDER BY c;
 SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
--- Check repartion joins are supported
+-- Check repartition joins are supported
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
 SET citus.enable_single_hash_repartition_joins TO ON;

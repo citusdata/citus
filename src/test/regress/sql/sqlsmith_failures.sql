@@ -77,7 +77,7 @@ create table events (
 );
 create index event_time_idx on events using BRIN (event_time);
 create index event_json_idx on events using gin(payload);
-select create_distributed_table('events', 'user_id'); -- on purpose don't collocate on correctly on org_id
+select create_distributed_table('events', 'user_id'); -- on purpose don't colocate on correctly on org_id
 
 create table local_data(
       id bigserial primary key

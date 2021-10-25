@@ -373,7 +373,7 @@ EXECUTE test_values_pushdown(1,2,3);
 EXECUTE test_values_pushdown(1,2,3);
 EXECUTE test_values_pushdown(1,2,3);
 
--- prepared statements with volatile functtions should be still pushed down
+-- prepared statements with volatile functions should be still pushed down
 -- because the function is evaluated on the coordinator
 CREATE OR REPLACE FUNCTION fixed_volatile_value() RETURNS integer VOLATILE AS $$
         BEGIN

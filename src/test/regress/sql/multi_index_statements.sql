@@ -45,7 +45,7 @@ CREATE INDEX lineitem_partial_index ON public.lineitem (l_shipdate)
 
 CREATE INDEX lineitem_colref_index ON public.lineitem (record_ne(lineitem.*, NULL));
 
-SET client_min_messages = ERROR; -- avoid version dependant warning about WAL
+SET client_min_messages = ERROR; -- avoid version dependent warning about WAL
 CREATE INDEX lineitem_orderkey_hash_index ON public.lineitem USING hash (l_partkey);
 CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range(a);
 CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range(a,b);

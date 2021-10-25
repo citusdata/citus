@@ -306,8 +306,8 @@ Aggregate (actual rows=1 loops=1)
               Merge Task Count: 4
 -- Confirm repartiton join in distributed subplan works
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
-WITH repartion AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
-SELECT count(*) from repartion;
+WITH repartition AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
+SELECT count(*) from repartition;
 Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Distributed Subplan XXX_1
         Intermediate Data Size: 14 bytes

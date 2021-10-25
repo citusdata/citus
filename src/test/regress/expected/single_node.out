@@ -953,7 +953,7 @@ SELECT * FROM ref, local WHERE a = c ORDER BY a;
  7 | 8 | 7 | 8
 (2 rows)
 
--- Check repartion joins are supported
+-- Check repartition joins are supported
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
  x | y | x | y

@@ -933,7 +933,7 @@ SELECT * FROM partitioning_test WHERE id = 25 ORDER BY 1;
  25 | 10-10-2010 |
 (2 rows)
 
--- perform operations on partition and partioned tables together
+-- perform operations on partition and partitioned tables together
 INSERT INTO partitioning_test VALUES(26, '2010-02-02', 26);
 INSERT INTO partitioning_test_2010 VALUES(26, '2010-02-02', 26);
 COPY partitioning_test FROM STDIN WITH CSV;

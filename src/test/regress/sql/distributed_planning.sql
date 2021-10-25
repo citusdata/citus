@@ -141,7 +141,7 @@ WHERE
 ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC
 LIMIT 1;
 
--- Check repartion joins are supported
+-- Check repartition joins are supported
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x, t2.x, t1.y, t2.y;
 
 

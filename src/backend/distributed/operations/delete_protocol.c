@@ -234,7 +234,7 @@ DropShards(Oid relationId, char *schemaName, char *relationName,
 	UseCoordinatedTransaction();
 
 	/*
-	 * We will use below variable accross this function to decide if we can
+	 * We will use below variable across this function to decide if we can
 	 * use local execution
 	 */
 	int32 localGroupId = GetLocalGroupId();
