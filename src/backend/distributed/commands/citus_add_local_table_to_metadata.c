@@ -426,8 +426,11 @@ CreateCitusLocalTablePartitionOf(CreateStmt *createStatement, Oid relationId,
 	 */
 	DropRelationForeignKeys(relationId, fKeyFlags);
 
+	/* get the autoconverted field from the parent */
+	CitusTableCacheEntry *entry = GetCitusTableCacheEntry(parentRelationId);
+
 	bool cascade = false;
-	bool autoConverted = false;
+	bool autoConverted = entry->autoConverted;
 	CreateCitusLocalTable(relationId, cascade, autoConverted);
 	ExecuteAndLogUtilityCommand(attachCommand);
 }

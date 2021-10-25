@@ -325,6 +325,16 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
                         'table_auto_conv_child_2'::regclass)
   ORDER BY logicalrelid;
 
+-- get the autoconverted field from the parent in case of
+-- CREATE TABLE .. PARTITION OF ..
+create table citus_local_parent_t(a int, b int REFERENCES table_ref(a)) PARTITION BY RANGE (b);
+create table citus_child_t  PARTITION OF citus_local_parent_t FOR VALUES FROM (1) TO (10);
+-- should be set to true
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('citus_local_parent_t'::regclass,
+                        'citus_child_t'::regclass)
+  ORDER BY logicalrelid;
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
