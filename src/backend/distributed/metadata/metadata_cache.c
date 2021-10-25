@@ -1389,6 +1389,10 @@ BuildCitusTableCacheEntry(Oid relationId)
 
 	if (isNullArray[Anum_pg_dist_partition_autoconverted - 1])
 	{
+		/*
+		 * We don't expect this to happen, but set it to false (the default value)
+		 * to not break if anything goes wrong.
+		 */
 		cacheEntry->autoConverted = false;
 	}
 	else
