@@ -598,7 +598,7 @@ NoticeRelationIsAlreadyAddedToMetadata(Oid relationId)
 	char *relname = get_rel_name(relationId);
 	ereport(NOTICE, (errmsg("relation \"%s\" is already added to metadata", relname),
 					 errdetail("This relation will not be removed from metadata even if "
-					 		   "it is not connected to a reference table via foreign "
+							   "it is not connected to a reference table via foreign "
 							   "key(s), since it is added to metadata by the user")));
 }
 
@@ -627,6 +627,7 @@ GetCascadeTypeForCitusLocalTables(bool autoConverted)
 static void
 UpdateAutoConvertedForConnectedRelations(Oid relationId, bool autoConverted)
 {
+	InvalidateForeignKeyGraph();
 	List *relationIdList = GetForeignKeyConnectedRelationIdList(relationId);
 	Oid relid = InvalidOid;
 	foreach_oid(relid, relationIdList)
