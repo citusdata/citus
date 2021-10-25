@@ -146,6 +146,16 @@ GetForeignKeyConnectedRelationIdList(Oid relationId)
 bool
 ShouldUndistributeCitusLocalTable(Oid relationId)
 {
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	if (!cacheEntry->autoConverted)
+	{
+		/*
+		 * The relation is not added to metadata automatically,
+		 * we shouldn't undistribute it.
+		 */
+		return false;
+	}
+
 	/*
 	 * As we will operate on foreign key connected relations, here we
 	 * invalidate foreign key graph so that we act on fresh graph.
@@ -168,15 +178,6 @@ ShouldUndistributeCitusLocalTable(Oid relationId)
 			/*
 			 * The relation is connected to a reference table via foreign keys,
 			 * we shouldn't undistribute it.
-			 */
-			return false;
-		}
-		CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationOid);
-		if (!cacheEntry->autoConverted)
-		{
-			/*
-			 * The relation is connected to a (or, is a) Citus Local Table created
-			 * by the user. We shouldn't undistribute it.
 			 */
 			return false;
 		}
