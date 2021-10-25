@@ -215,8 +215,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 */
 	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
 
-	if (IsCitusTable(relationId) && IsCitusTableType(relationId, CITUS_LOCAL_TABLE) &&
-		!autoConverted)
+	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE) && !autoConverted)
 	{
 		/* we should mark this relation and connected ones as autoConverted = false */
 		List *relationIdList = GetForeignKeyConnectedRelationIdList(relationId);
