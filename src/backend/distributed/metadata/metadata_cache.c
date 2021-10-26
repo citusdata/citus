@@ -3971,23 +3971,19 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		bool isNull = false;
+		bool isNullArray[Natts_pg_dist_partition];
+		Datum datumArray[Natts_pg_dist_partition];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-		Datum partMethodDatum =
-			heap_getattr(heapTuple, Anum_pg_dist_partition_partmethod,
-						 tupleDescriptor, &isNull);
-		Datum replicationModelDatum =
-			heap_getattr(heapTuple, Anum_pg_dist_partition_repmodel,
-						 tupleDescriptor, &isNull);
+		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
+		Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
 
 		Oid partitionMethod = DatumGetChar(partMethodDatum);
 		Oid replicationModel = DatumGetChar(replicationModelDatum);
 
 		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, citusTableType))
 		{
-			Datum relationIdDatum = heap_getattr(heapTuple,
-												 Anum_pg_dist_partition_logicalrelid,
-												 tupleDescriptor, &isNull);
+			Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 
 			Oid relationId = DatumGetObjectId(relationIdDatum);
 
