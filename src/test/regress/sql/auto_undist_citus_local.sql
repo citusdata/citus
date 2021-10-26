@@ -335,6 +335,15 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
                         'citus_child_t'::regclass)
   ORDER BY logicalrelid;
 
+-- test CREATE TABLE REFERENCES
+CREATE TABLE citus_local_user_created(a int unique);
+SELECT citus_add_local_table_to_metadata('citus_local_user_created');
+CREATE TABLE citus_local_references(a int unique references citus_local_user_created(a));
+SELECT logicalrelid, autoconverted FROM pg_dist_partition
+  WHERE logicalrelid IN ('citus_local_user_created'::regclass,
+                        'citus_local_references'::regclass)
+  ORDER BY logicalrelid;
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
