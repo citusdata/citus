@@ -164,7 +164,7 @@ ShouldUndistributeCitusLocalTable(Oid relationId)
 
 	List *fkeyConnectedRelations = GetForeignKeyConnectedRelationIdList(relationId);
 
-	return RelationIdListHasReferenceTable(fkeyConnectedRelations);
+	return !RelationIdListHasReferenceTable(fkeyConnectedRelations);
 }
 
 
