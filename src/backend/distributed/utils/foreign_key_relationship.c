@@ -164,26 +164,7 @@ ShouldUndistributeCitusLocalTable(Oid relationId)
 
 	List *fkeyConnectedRelations = GetForeignKeyConnectedRelationIdList(relationId);
 
-	if (fkeyConnectedRelations == NIL)
-	{
-		/* if no fkey connection is found, we should only check the relation itself */
-		fkeyConnectedRelations = lappend_oid(fkeyConnectedRelations, relationId);
-	}
-
-	Oid relationOid = InvalidOid;
-	foreach_oid(relationOid, fkeyConnectedRelations)
-	{
-		if (IsCitusTableType(relationOid, REFERENCE_TABLE))
-		{
-			/*
-			 * The relation is connected to a reference table via foreign keys,
-			 * we shouldn't undistribute it.
-			 */
-			return false;
-		}
-	}
-
-	return true;
+	return RelationIdListHasReferenceTable(fkeyConnectedRelations);
 }
 
 
