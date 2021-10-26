@@ -1195,11 +1195,6 @@ AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(AlterTableStmt *alterTableSt
 static bool
 ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelationId)
 {
-	if (!IsCitusTable(leftRelationId) || !IsCitusTable(rightRelationId))
-	{
-		return false;
-	}
-
 	if (!IsCitusTableType(leftRelationId, CITUS_LOCAL_TABLE))
 	{
 		return false;
