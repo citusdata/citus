@@ -631,10 +631,12 @@ UpdateAutoConvertedForConnectedRelations(Oid relationId, bool autoConverted)
 {
 	InvalidateForeignKeyGraph();
 	List *relationIdList = GetForeignKeyConnectedRelationIdList(relationId);
+	relationIdList = SortList(relationIdList, CompareOids);
+
 	Oid relid = InvalidOid;
 	foreach_oid(relid, relationIdList)
 	{
-		UpdatePartitionAutoConverted(relid, false);
+		UpdatePgDistPartitionAutoConverted(relid, false);
 	}
 }
 

@@ -1224,11 +1224,12 @@ MarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelationId)
 	List *rightConnectedRelIds = GetForeignKeyConnectedRelationIdList(rightRelationId);
 	List *allConnectedRelations = list_concat_unique_oid(leftConnectedRelIds,
 														 rightConnectedRelIds);
+	allConnectedRelations = SortList(allConnectedRelations, CompareOids);
 
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, allConnectedRelations)
 	{
-		UpdatePartitionAutoConverted(relationId, false);
+		UpdatePgDistPartitionAutoConverted(relationId, false);
 	}
 }
 

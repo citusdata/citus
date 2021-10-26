@@ -2071,11 +2071,11 @@ UpdatePlacementGroupId(uint64 placementId, int groupId)
 
 
 /*
- * UpdatePartitionAutoConverted sets the autoConverted for the partition identified
+ * UpdatePgDistPartitionAutoConverted sets the autoConverted for the partition identified
  * by citusTableId.
  */
 void
-UpdatePartitionAutoConverted(Oid citusTableId, bool autoConverted)
+UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted)
 {
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;

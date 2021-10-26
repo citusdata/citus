@@ -718,6 +718,7 @@ UndistributeDisconnectedCitusLocalTables(void)
 		if (PartitionTable(citusLocalTableId))
 		{
 			/* we skip here, we'll undistribute from the parent if necessary */
+			UnlockRelationOid(citusLocalTableId, lockMode);
 			continue;
 		}
 
