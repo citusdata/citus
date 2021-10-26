@@ -87,7 +87,7 @@ See [`src/test/regress/spec/README.md`](https://github.com/citusdata/citus/blob/
 
 ## Upgrade testing
 
-See [`src/test/regress/upgrade/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/citus_tests/upgrade/README.md)
+See [`src/test/regress/citus_tests/upgrade/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/citus_tests/upgrade/README.md)
 
 ## Failure testing
 
