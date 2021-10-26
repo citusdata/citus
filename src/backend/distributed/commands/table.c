@@ -1318,7 +1318,7 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 			 */
 			continue;
 		}
-		else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		else if (IsCitusTable(relationId))
 		{
 			CitusTableCacheEntry *entry = GetCitusTableCacheEntry(relationId);
 			if (!entry->autoConverted || autoConverted)
