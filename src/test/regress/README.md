@@ -18,6 +18,7 @@ Which sql scripts to run is defined in a schedule file, e.g. `multi_schedule`,
 
 In our `Makefile` we have rules to run the different types of test schedules.
 You can run them from the root of the repository like so:
+
 ```bash
 # e.g. the multi_schedule
 make install -j9 && make -C src/test/regress/ check-multi
@@ -29,6 +30,7 @@ Take a look at the makefile for a list of all the testing targets.
 
 Often you want to run a specific test and don't want to run everything. You can
 use one of the following commands to do so:
+
 ```bash
 # If your tests needs almost no setup you can use check-minimal
 make install -j9 && make -C src/test/regress/ check-minimal EXTRA_TESTS='multi_utility_warnings'
@@ -56,7 +58,6 @@ Instead we use `src/test/regress/bin/diff` which does the following things:
 3. Compare the changed `results` and `expected` files with the system `diff`
    command.
 
-
 ## Updating the expected test output
 
 Sometimes you add a test to an existing file, or test output changes in a way
@@ -70,7 +71,6 @@ make install -j9 && make -C src/test/regress/ check-minimal EXTRA_TESTS='multi_u
 cp src/test/regress/{results,expected}/multi_utility_warnings.out
 ```
 
-
 ## Adding a new test file
 
 Adding a new test file is quite simple:
@@ -82,10 +82,12 @@ Adding a new test file is quite simple:
 5. Copy the `.out` file from `results` to `expected`
 
 ## Isolation testing
+
 See [`src/test/regress/spec/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/spec/README.md)
 
 ## Upgrade testing
-See [`src/test/regress/upgrade/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/upgrade/README.md)
+
+See [`src/test/regress/upgrade/README.md`](https://github.com/citusdata/citus/blob/master/src/test/regress/citus_tests/upgrade/README.md)
 
 ## Failure testing
 
