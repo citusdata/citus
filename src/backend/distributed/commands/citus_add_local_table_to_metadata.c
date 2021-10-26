@@ -623,6 +623,8 @@ GetCascadeTypeForCitusLocalTables(bool autoConverted)
  * UpdateAutoConvertedForConnectedRelations updates the autoConverted field on
  * pg_dist_partition for the foreign key connected relations of the given relation.
  * Sets it to given autoConverted value for all of the connected relations.
+ * We don't need to update partition relations separately, since the foreign key
+ * graph already includes them, as they have the same (inherited) fkeys as their parents.
  */
 static void
 UpdateAutoConvertedForConnectedRelations(Oid relationId, bool autoConverted)
