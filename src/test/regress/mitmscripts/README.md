@@ -17,7 +17,7 @@ Automated Failure Testing works by inserting a network proxy (mitmproxy) between
 
 ## Getting Started
 
-First off, to use this you'll need mitmproxy, I recommend version `3.0.4`, and I also recommend running it with `python 3.6`. This script integrates pretty deeply with mitmproxy so other versions might fail to work.
+First off, to use this you'll need mitmproxy, I recommend version `7.0.4`, and I also recommend running it with `python 3.9`. This script integrates pretty deeply with mitmproxy so other versions might fail to work.
 
 I highly recommend using pipenv to install mitmproxy. It lets you easily manage isolated environments (instead of installing python packages globally). If you've heard of virtualenv, pipenv is that but much easier to use.
 
@@ -25,7 +25,7 @@ Once you've installed it:
 
 ```bash
 $ cd src/test/regress
-$ pipenv --python 3.6 --python=`which python3.6`
+$ pipenv --rm # removes any previous available pipenv 
 $ pipenv install  # there's already a Pipfile.lock in src/test/regress with packages
 $ pipenv shell  # this enters the virtual environment, putting mitmproxy onto $PATH
 ```
