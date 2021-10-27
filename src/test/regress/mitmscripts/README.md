@@ -25,7 +25,7 @@ Once you've installed it:
 
 ```bash
 $ cd src/test/regress
-$ pipenv --rm # removes any previous available pipenv 
+$ pipenv --rm # removes any previous available pipenv
 $ pipenv install  # there's already a Pipfile.lock in src/test/regress with packages
 $ pipenv shell  # this enters the virtual environment, putting mitmproxy onto $PATH
 ```
