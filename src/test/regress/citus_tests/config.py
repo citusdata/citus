@@ -181,6 +181,7 @@ class CitusUpgradeConfig(CitusBaseClusterConfig):
         self.user = SUPER_USER_NAME
         self.mixed_mode = arguments["--mixed"]
         self.fixed_port = 57635
+        self.add_coordinator_to_metadata = True
 
 
 class PostgresConfig(CitusDefaultClusterConfig):

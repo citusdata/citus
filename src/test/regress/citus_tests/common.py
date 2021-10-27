@@ -189,7 +189,7 @@ def sync_metadata_to_workers(pg_path, worker_ports, coordinator_port):
 
 
 def add_coordinator_to_metadata(pg_path, coordinator_port):
-    command = "SELECT citus_add_node('localhost', {}, groupId := 0)".format(
+    command = "SELECT master_add_node('localhost', {}, groupId := 0)".format(
         coordinator_port
     )
     utils.psql(pg_path, coordinator_port, command)
