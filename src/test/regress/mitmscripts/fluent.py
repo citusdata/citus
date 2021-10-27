@@ -3,7 +3,6 @@ from itertools import count
 import logging
 import re
 import os
-import pprint
 import signal
 import socket
 import struct
@@ -14,10 +13,6 @@ import queue
 
 from construct.lib import ListContainer
 from mitmproxy import ctx, tcp
-from mitmproxy.proxy import commands
-from mitmproxy.script import concurrent
-from mitmproxy.utils import strutils
-from mitmproxy.proxy.layers import TCPLayer, ClientTLSLayer, ServerTLSLayer
 
 import structs
 
