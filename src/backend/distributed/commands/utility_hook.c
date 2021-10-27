@@ -54,6 +54,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
 #include "distributed/multi_physical_planner.h"
@@ -717,6 +718,16 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 
 				FixPartitionShardIndexNames(relationId, indexRelationId);
 			}
+		}
+
+		/*
+		 * Since we must have objects on workers before distributing them,
+		 * mark object distributed as the last step.
+		 */
+		if (ops && ops->markDistributed)
+		{
+			ObjectAddress address = GetObjectAddressFromParseTree(parsetree, false);
+			MarkObjectDistributed(&address);
 		}
 	}
 

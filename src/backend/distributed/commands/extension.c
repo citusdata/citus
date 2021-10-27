@@ -188,8 +188,6 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 
 	EnsureDependenciesExistOnAllNodes(&extensionAddress);
 
-	MarkObjectDistributed(&extensionAddress);
-
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
@@ -510,15 +508,6 @@ PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString,
 void
 PostprocessAlterExtensionCitusUpdateStmt(Node *node)
 {
-	/*
-	 * We should not postprocess this command in workers as they do not keep track
-	 * of citus.pg_dist_object.
-	 */
-	if (!IsCoordinator())
-	{
-		return;
-	}
-
 	bool citusIsUpdatedToLatestVersion = InstalledAndAvailableVersionsSame();
 
 	/*

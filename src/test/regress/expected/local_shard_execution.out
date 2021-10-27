@@ -1702,7 +1702,9 @@ COMMIT;
 TRUNCATE collections_list;
 -- make sure that even if local execution is used, the sequence values
 -- are generated locally
+SET citus.enable_ddl_propagation TO OFF;
 ALTER SEQUENCE collections_list_key_seq NO MINVALUE NO MAXVALUE;
+RESET citus.enable_ddl_propagation;
 PREPARE serial_prepared_local AS INSERT INTO collections_list (collection_id) VALUES (0) RETURNING key, ser;
 SELECT setval('collections_list_key_seq', 4);
  setval
@@ -2281,6 +2283,7 @@ CALL register_for_event(19, 1, 'yes');
 SET citus.log_local_commands TO ON;
 SET client_min_messages TO DEBUG2;
 CALL register_for_event(19, 1, 'yes');
+DEBUG:  not pushing down procedure to the same node
 NOTICE:  executing the command locally: INSERT INTO public.event_responses_1480001 AS citus_table_alias (event_id, user_id, response) VALUES (19, 1, 'yes'::public.invite_resp) ON CONFLICT(event_id, user_id) DO UPDATE SET response = excluded.response
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.event_responses_1480001 event_responses WHERE (event_id OPERATOR(pg_catalog.=) 19)
 NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT NULL::integer AS event_id, NULL::integer AS user_id, NULL::public.invite_resp AS response WHERE false) event_responses(event_id, user_id, response) WHERE ((event_id OPERATOR(pg_catalog.=) 19) AND false)
@@ -2338,6 +2341,7 @@ NOTICE:  executing the command locally: INSERT INTO public.event_responses_14800
 SET citus.enable_local_execution TO false;
 SET citus.enable_fast_path_router_planner TO false;
 CALL register_for_event(19, 1, 'yes');
+DEBUG:  not pushing down procedure to the same node
 -- should be fine even if no parameters exists in the query
 SELECT count(*) FROM event_responses WHERE event_id = 16;
 DEBUG:  Creating router plan

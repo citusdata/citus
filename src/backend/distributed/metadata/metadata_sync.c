@@ -47,6 +47,7 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -60,6 +61,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
+#include "distributed/commands/utility_hook.h"
 #include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "miscadmin.h"
@@ -67,6 +69,7 @@
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/postmaster.h"
+#include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -81,7 +84,10 @@ char *EnableManualMetadataChangesForUser = "";
 
 
 static void EnsureSequentialModeMetadataOperations(void);
+static List * DistributedObjectMetadataSyncCommandList(void);
 static List * GetDistributedTableDDLEvents(Oid relationId);
+static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
+									   int colocationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
 static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
@@ -100,6 +106,7 @@ static GrantStmt * GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 													  Oid schemaOid,
 													  char *permission,
 													  bool withGrantOption);
+static void SetLocalEnableDependencyCreation(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
@@ -133,6 +140,7 @@ PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
+PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
 
 
 static bool got_SIGTERM = false;
@@ -520,6 +528,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
  * (iii) Queries that populate pg_dist_partition table referenced by (ii)
  * (iv)  Queries that populate pg_dist_shard table referenced by (iii)
  * (v)   Queries that populate pg_dist_placement table referenced by (iv)
+ * (vi)  Queries that populate pg_dist_object table
  */
 List *
 MetadataCreateCommands(void)
@@ -571,6 +580,14 @@ MetadataCreateCommands(void)
 		 * and committed immediately so they become visible to all sessions creating shards.
 		 */
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+
+		/*
+		 * Set object propagation to off as we will mark objects distributed
+		 * at the end of this function.
+		 */
+		bool prevDependencyCreationValue = EnableDependencyCreation;
+		SetLocalEnableDependencyCreation(false);
+
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 		/*
@@ -580,7 +597,16 @@ MetadataCreateCommands(void)
 		List *dependentSequenceList = NIL;
 		GetDependentSequencesWithRelation(relationId, &attnumList,
 										  &dependentSequenceList, 0);
-		MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
+
+		Oid sequenceOid = InvalidOid;
+		foreach_oid(sequenceOid, dependentSequenceList)
+		{
+			ObjectAddress sequenceAddress = { 0 };
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+			EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+		}
+
+		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
 
 		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
@@ -667,7 +693,105 @@ MetadataCreateCommands(void)
 												  shardCreateCommandList);
 	}
 
+	/* As the last step, propagate the pg_dist_object entities */
+	if (ShouldPropagate())
+	{
+		List *distributedObjectSyncCommandList =
+			DistributedObjectMetadataSyncCommandList();
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  distributedObjectSyncCommandList);
+	}
+
 	return metadataSnapshotCommandList;
+}
+
+
+/*
+ * DistributedObjectMetadataSyncCommandList returns the necessary commands to create
+ * pg_dist_object entries on the new node.
+ */
+static List *
+DistributedObjectMetadataSyncCommandList(void)
+{
+	HeapTuple pgDistObjectTup = NULL;
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
+	Relation pgDistObjectIndexRel = index_open(DistObjectPrimaryKeyIndexId(),
+											   AccessShareLock);
+	TupleDesc pgDistObjectDesc = RelationGetDescr(pgDistObjectRel);
+
+	List *objectAddressList = NIL;
+	List *distArgumentIndexList = NIL;
+	List *colocationIdList = NIL;
+
+	/* It is not strictly necessary to read the tuples in order.
+	 * However, it is useful to get consistent behavior, both for regression
+	 * tests and also in production systems.
+	 */
+	SysScanDesc pgDistObjectScan = systable_beginscan_ordered(pgDistObjectRel,
+															  pgDistObjectIndexRel, NULL,
+															  0, NULL);
+	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext_ordered(pgDistObjectScan,
+																	   ForwardScanDirection)))
+	{
+		Form_pg_dist_object pg_dist_object = (Form_pg_dist_object) GETSTRUCT(
+			pgDistObjectTup);
+
+		ObjectAddress *address = palloc(sizeof(ObjectAddress));
+
+		ObjectAddressSubSet(*address, pg_dist_object->classid, pg_dist_object->objid,
+							pg_dist_object->objsubid);
+
+		bool distributionArgumentIndexIsNull = false;
+		Datum distributionArgumentIndexDatum =
+			heap_getattr(pgDistObjectTup,
+						 Anum_pg_dist_object_distribution_argument_index,
+						 pgDistObjectDesc,
+						 &distributionArgumentIndexIsNull);
+		int32 distributionArgumentIndex = DatumGetInt32(distributionArgumentIndexDatum);
+
+		bool colocationIdIsNull = false;
+		Datum colocationIdDatum =
+			heap_getattr(pgDistObjectTup,
+						 Anum_pg_dist_object_colocationid,
+						 pgDistObjectDesc,
+						 &colocationIdIsNull);
+		int32 colocationId = DatumGetInt32(colocationIdDatum);
+
+		objectAddressList = lappend(objectAddressList, address);
+
+		if (distributionArgumentIndexIsNull)
+		{
+			distArgumentIndexList = lappend_int(distArgumentIndexList,
+												INVALID_DISTRIBUTION_ARGUMENT_INDEX);
+		}
+		else
+		{
+			distArgumentIndexList = lappend_int(distArgumentIndexList,
+												distributionArgumentIndex);
+		}
+
+		if (colocationIdIsNull)
+		{
+			colocationIdList = lappend_int(colocationIdList,
+										   INVALID_COLOCATION_ID);
+		}
+		else
+		{
+			colocationIdList = lappend_int(colocationIdList, colocationId);
+		}
+	}
+
+	systable_endscan_ordered(pgDistObjectScan);
+	index_close(pgDistObjectIndexRel, AccessShareLock);
+	relation_close(pgDistObjectRel, NoLock);
+
+	char *workerMetadataUpdateCommand =
+		MarkObjectsDistributedCreateCommand(objectAddressList,
+											distArgumentIndexList,
+											colocationIdList);
+	List *commandList = list_make1(workerMetadataUpdateCommand);
+
+	return commandList;
 }
 
 
@@ -689,10 +813,6 @@ GetDistributedTableDDLEvents(Oid relationId)
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
 	if (!tableOwnedByExtension)
 	{
-		/* commands to create sequences */
-		List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-		commandList = list_concat(commandList, sequenceDDLCommands);
-
 		/*
 		 * Commands to create the table, these commands are TableDDLCommands so lets
 		 * materialize to the non-sharded version
@@ -760,6 +880,7 @@ GetDistributedTableDDLEvents(Oid relationId)
  * (v)   Queries that delete all the rows from pg_dist_shard table referenced by (iv)
  * (vi)  Queries that delete all the rows from pg_dist_placement table
  *        referenced by (v)
+ * (vii) Queries that delete all the rows from pg_dist_object table
  */
 List *
 MetadataDropCommands(void)
@@ -774,6 +895,8 @@ MetadataDropCommands(void)
 									  REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
 
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList, DELETE_ALL_NODES);
+	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
+									  DELETE_ALL_DISTRIBUTED_OBJECTS);
 
 	return dropSnapshotCommandList;
 }
@@ -846,6 +969,194 @@ NodeListInsertCommand(List *workerNodeList)
 	}
 
 	return nodeListInsertCommand->data;
+}
+
+
+/*
+ * MarkObjectsDistributedCreateCommand generates a command that can be executed to
+ * insert or update the provided objects into pg_dist_object on a worker node.
+ */
+char *
+MarkObjectsDistributedCreateCommand(List *addresses,
+									List *distributionArgumentIndexes,
+									List *colocationIds)
+{
+	StringInfo insertDistributedObjectsCommand = makeStringInfo();
+
+	Assert(list_length(addresses) == list_length(distributionArgumentIndexes));
+	Assert(list_length(distributionArgumentIndexes) == list_length(colocationIds));
+
+	appendStringInfo(insertDistributedObjectsCommand,
+					 "WITH distributed_object_data(typetext, objnames, "
+					 "objargs, distargumentindex, colocationid)  AS (VALUES ");
+
+	bool isFirstObject = true;
+	for (int currentObjectCounter = 0; currentObjectCounter < list_length(addresses);
+		 currentObjectCounter++)
+	{
+		ObjectAddress *address = list_nth(addresses, currentObjectCounter);
+		int distributionArgumentIndex = list_nth_int(distributionArgumentIndexes,
+													 currentObjectCounter);
+		int colocationId = list_nth_int(colocationIds, currentObjectCounter);
+		List *names = NIL;
+		List *args = NIL;
+		char *objectType = NULL;
+
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		objectType = getObjectTypeDescription(address, false);
+		getObjectIdentityParts(address, &names, &args, false);
+		#else
+		objectType = getObjectTypeDescription(address);
+		getObjectIdentityParts(address, &names, &args);
+		#endif
+
+		if (!isFirstObject)
+		{
+			appendStringInfo(insertDistributedObjectsCommand, ", ");
+		}
+		isFirstObject = false;
+
+		appendStringInfo(insertDistributedObjectsCommand,
+						 "(%s, ARRAY[",
+						 quote_literal_cstr(objectType));
+
+		char *name = NULL;
+		bool firstInNameLoop = true;
+		foreach_ptr(name, names)
+		{
+			if (!firstInNameLoop)
+			{
+				appendStringInfo(insertDistributedObjectsCommand, ", ");
+			}
+			firstInNameLoop = false;
+			appendStringInfoString(insertDistributedObjectsCommand,
+								   quote_literal_cstr(name));
+		}
+
+		appendStringInfo(insertDistributedObjectsCommand, "]::text[], ARRAY[");
+
+		char *arg;
+		bool firstInArgLoop = true;
+		foreach_ptr(arg, args)
+		{
+			if (!firstInArgLoop)
+			{
+				appendStringInfo(insertDistributedObjectsCommand, ", ");
+			}
+			firstInArgLoop = false;
+			appendStringInfoString(insertDistributedObjectsCommand,
+								   quote_literal_cstr(arg));
+		}
+
+		appendStringInfo(insertDistributedObjectsCommand, "]::text[], ");
+
+		appendStringInfo(insertDistributedObjectsCommand, "%d, ",
+						 distributionArgumentIndex);
+
+		appendStringInfo(insertDistributedObjectsCommand, "%d)",
+						 colocationId);
+	}
+
+	appendStringInfo(insertDistributedObjectsCommand, ") ");
+
+	appendStringInfo(insertDistributedObjectsCommand,
+					 "SELECT citus_internal_add_object_metadata("
+					 "typetext, objnames, objargs, distargumentindex::int, colocationid::int) "
+					 "FROM distributed_object_data;");
+
+	return insertDistributedObjectsCommand->data;
+}
+
+
+/*
+ * citus_internal_add_object_metadata is an internal UDF to
+ * add a row to pg_dist_object.
+ */
+Datum
+citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
+{
+	char *textType = TextDatumGetCString(PG_GETARG_DATUM(0));
+	ArrayType *nameArray = PG_GETARG_ARRAYTYPE_P(1);
+	ArrayType *argsArray = PG_GETARG_ARRAYTYPE_P(2);
+	int distributionArgumentIndex = PG_GETARG_INT32(3);
+	int colocationId = PG_GETARG_INT32(4);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		/*
+		 * Ensure given distributionArgumentIndex and colocationId values are
+		 * sane. Since we check sanity of object related parameters within
+		 * PgGetObjectAddress below, we are not checking them here.
+		 */
+		EnsureObjectMetadataIsSane(distributionArgumentIndex, colocationId);
+	}
+
+	/*
+	 * We check the acl/ownership while getting the object address. That
+	 * funtion also checks the sanity of given textType, nameArray and
+	 * argsArray parameters
+	 */
+	ObjectAddress objectAddress = PgGetObjectAddress(textType, nameArray,
+													 argsArray);
+
+	/* First, disable propagation off to not to cause infinite propagation */
+	bool prevDependencyCreationValue = EnableDependencyCreation;
+	SetLocalEnableDependencyCreation(false);
+
+	MarkObjectDistributed(&objectAddress);
+
+	if (distributionArgumentIndex != INVALID_DISTRIBUTION_ARGUMENT_INDEX ||
+		colocationId != INVALID_COLOCATION_ID)
+	{
+		int *distributionArgumentIndexAddress =
+			distributionArgumentIndex == INVALID_DISTRIBUTION_ARGUMENT_INDEX ?
+			NULL :
+			&distributionArgumentIndex;
+
+		int *colocationIdAddress =
+			colocationId == INVALID_COLOCATION_ID ?
+			NULL :
+			&colocationId;
+
+		UpdateFunctionDistributionInfo(&objectAddress,
+									   distributionArgumentIndexAddress,
+									   colocationIdAddress);
+	}
+
+	SetLocalEnableDependencyCreation(prevDependencyCreationValue);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsureObjectMetadataIsSane checks whether the distribution argument index and
+ * colocation id metadata params for distributed object is sane. You can look
+ * PgGetObjectAddress to find checks related to object sanity.
+ */
+static void
+EnsureObjectMetadataIsSane(int distributionArgumentIndex, int colocationId)
+{
+	if (distributionArgumentIndex != INVALID_DISTRIBUTION_ARGUMENT_INDEX)
+	{
+		if (distributionArgumentIndex < 0 ||
+			distributionArgumentIndex > FUNC_MAX_ARGS)
+		{
+			ereport(ERROR, errmsg("distribution_argument_index must be between"
+								  " 0 and %d", FUNC_MAX_ARGS));
+		}
+	}
+
+	if (colocationId != INVALID_COLOCATION_ID)
+	{
+		if (colocationId < 0)
+		{
+			ereport(ERROR, errmsg("colocationId must be a positive number"));
+		}
+	}
 }
 
 
@@ -1187,7 +1498,7 @@ LocalGroupIdUpdateCommand(int32 groupId)
 List *
 SequenceDDLCommandsForTable(Oid relationId)
 {
-	List *sequenceDDLList = NIL;
+	List *allSequencesDDLList = NIL;
 
 	List *attnumList = NIL;
 	List *dependentSequenceList = NIL;
@@ -1198,28 +1509,43 @@ SequenceDDLCommandsForTable(Oid relationId)
 	Oid sequenceOid = InvalidOid;
 	foreach_oid(sequenceOid, dependentSequenceList)
 	{
-		char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
-		char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
-		StringInfo wrappedSequenceDef = makeStringInfo();
-		StringInfo sequenceGrantStmt = makeStringInfo();
-		char *sequenceName = generate_qualified_relation_name(sequenceOid);
-		Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceOid);
-		Oid sequenceTypeOid = sequenceData->seqtypid;
-		char *typeName = format_type_be(sequenceTypeOid);
-
-		/* create schema if needed */
-		appendStringInfo(wrappedSequenceDef,
-						 WORKER_APPLY_SEQUENCE_COMMAND,
-						 escapedSequenceDef,
-						 quote_literal_cstr(typeName));
-
-		appendStringInfo(sequenceGrantStmt,
-						 "ALTER SEQUENCE %s OWNER TO %s", sequenceName,
-						 quote_identifier(ownerName));
-
-		sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
-		sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
+		List *sequenceDDLCommands = DDLCommandsForSequence(sequenceOid, ownerName);
+		allSequencesDDLList = list_concat(allSequencesDDLList, sequenceDDLCommands);
 	}
+
+	return allSequencesDDLList;
+}
+
+
+/*
+ * DDLCommandsForSequence returns the DDL commands needs to be run to create the
+ * sequence and alter the owner to the given owner name.
+ */
+List *
+DDLCommandsForSequence(Oid sequenceOid, char *ownerName)
+{
+	List *sequenceDDLList = NIL;
+	char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
+	char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
+	StringInfo wrappedSequenceDef = makeStringInfo();
+	StringInfo sequenceGrantStmt = makeStringInfo();
+	char *sequenceName = generate_qualified_relation_name(sequenceOid);
+	Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceOid);
+	Oid sequenceTypeOid = sequenceData->seqtypid;
+	char *typeName = format_type_be(sequenceTypeOid);
+
+	/* create schema if needed */
+	appendStringInfo(wrappedSequenceDef,
+					 WORKER_APPLY_SEQUENCE_COMMAND,
+					 escapedSequenceDef,
+					 quote_literal_cstr(typeName));
+
+	appendStringInfo(sequenceGrantStmt,
+					 "ALTER SEQUENCE %s OWNER TO %s", sequenceName,
+					 quote_identifier(ownerName));
+
+	sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
+	sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
 
 	return sequenceDDLList;
 }
@@ -1639,6 +1965,18 @@ GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 }
 
 
+/*
+ * SetLocalEnableDependencyCreation sets the enable_object_propagation locally
+ */
+static void
+SetLocalEnableDependencyCreation(bool state)
+{
+	set_config_option("citus.enable_object_propagation", state == true ? "on" : "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
+
 static char *
 GenerateSetRoleQuery(Oid roleOid)
 {
@@ -1794,12 +2132,15 @@ DetachPartitionCommandList(void)
  * SyncMetadataToNodes tries recreating the metadata snapshot in the
  * metadata workers that are out of sync. Returns the result of
  * synchronization.
+ *
+ * This function must be called within coordinated transaction
+ * since updates on the pg_dist_node metadata must be rollbacked if anything
+ * goes wrong.
  */
 static MetadataSyncResult
 SyncMetadataToNodes(void)
 {
 	MetadataSyncResult result = METADATA_SYNC_SUCCESS;
-
 	if (!IsCoordinator())
 	{
 		return METADATA_SYNC_SUCCESS;
@@ -1902,8 +2243,8 @@ SyncMetadataToNodesMain(Datum main_arg)
 		else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
 		{
 			UseCoordinatedTransaction();
-			MetadataSyncResult result = SyncMetadataToNodes();
 
+			MetadataSyncResult result = SyncMetadataToNodes();
 			syncedAllNodes = (result == METADATA_SYNC_SUCCESS);
 
 			/* we use LISTEN/NOTIFY to wait for metadata syncing in tests */

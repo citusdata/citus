@@ -147,6 +147,15 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	/*
+	 * Since access control needs to be handled manually on community, we need to support
+	 * such queries by handling them locally on worker nodes.
+	 */
+	if (!IsCoordinator())
+	{
+		return NIL;
+	}
+
 	List *originalObjects = stmt->objects;
 
 	stmt->objects = distributedSchemas;
@@ -176,6 +185,8 @@ PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
 
 	/* fully qualify */
 	QualifyTreeNode(node);

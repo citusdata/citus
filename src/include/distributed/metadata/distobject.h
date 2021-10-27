@@ -15,6 +15,7 @@
 
 #include "catalog/objectaddress.h"
 
+#define INVALID_DISTRIBUTION_ARGUMENT_INDEX -1
 
 extern bool ObjectExists(const ObjectAddress *address);
 extern bool CitusExtensionObject(const ObjectAddress *objectAddress);
@@ -25,6 +26,8 @@ extern void UnmarkObjectDistributed(const ObjectAddress *address);
 extern bool IsTableOwnedByExtension(Oid relationId);
 extern bool IsObjectAddressOwnedByExtension(const ObjectAddress *target,
 											ObjectAddress *extensionAddress);
+extern ObjectAddress PgGetObjectAddress(char *ttype, ArrayType *namearr,
+										ArrayType *argsarr);
 
 extern List * GetDistributedObjectAddressList(void);
 extern void UpdateDistributedObjectColocationId(uint32 oldColocationId, uint32

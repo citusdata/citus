@@ -974,7 +974,8 @@ SELECT * FROM multi_extension.print_extension_changes();
  function master_get_table_metadata(text) record                      |
                                                                       | function citus_check_connection_to_node(text,integer) boolean
                                                                       | function citus_disable_node(text,integer,boolean) void
-(6 rows)
+                                                                      | function citus_internal_add_object_metadata(text,text[],text[],integer,integer) void
+(7 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
