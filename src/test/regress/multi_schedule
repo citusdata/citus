@@ -85,7 +85,8 @@ test: set_operation_and_local_tables
 
 test: subqueries_deep subquery_view subquery_partitioning subquery_complex_target_list subqueries_not_supported subquery_in_where
 test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
-test: subquery_prepared_statements pg12 cte_inline pg13 recursive_view_local_table
+test: subquery_prepared_statements
+test: pg12 cte_inline pg13 recursive_view_local_table
 test: tableam drop_column_partitioned_table
 
 # ----------
