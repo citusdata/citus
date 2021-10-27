@@ -866,7 +866,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
 												   alterTableStatement->missing_ok);
 
-				if (ShouldMarkConnectedRelationsNotAutoConverted(leftRelationId,
+				if (processUtilityContext != PROCESS_UTILITY_SUBCOMMAND &&
+					ShouldMarkConnectedRelationsNotAutoConverted(leftRelationId,
 																 rightRelationId))
 				{
 					List *relationList = list_make2_oid(leftRelationId, rightRelationId);
