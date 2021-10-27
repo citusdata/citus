@@ -451,6 +451,7 @@ BEGIN;
     -- reference to citus local, use alter table attach partition
     CREATE TABLE part_citus_loc_2_2 (a INT UNIQUE);
     ALTER TABLE part_citus_loc_2 ATTACH PARTITION part_citus_loc_2_2 FOR VALUES FROM (3) TO (5);
+    CREATE TABLE part_citus_loc_2_3 PARTITION OF part_citus_loc_2 FOR VALUES FROM (7) TO (8);
 
     SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
       WHERE logicalrelid IN ('citus_loc_1'::regclass,
@@ -459,7 +460,8 @@ BEGIN;
                              'citus_loc_4'::regclass,
                              'part_citus_loc_2'::regclass,
                              'part_citus_loc_2_1'::regclass,
-                             'part_citus_loc_2_2'::regclass)
+                             'part_citus_loc_2_2'::regclass,
+                             'part_citus_loc_2_3'::regclass)
       ORDER BY logicalrelid;
 ROLLBACK;
 
@@ -558,7 +560,7 @@ ROLLBACK;
 -- alter table foreign key reverse order
 BEGIN;
     CREATE TABLE part_citus_loc_2 (a INT UNIQUE) PARTITION BY RANGE (a);
-    ALTER TABLE part_citus_loc_2 ADD CONSTRAINT fkey_from_to_partitioned FOREIGN KEY (a) references part_citus_loc_1(a);
+    ALTER TABLE part_citus_loc_1 ADD CONSTRAINT fkey_from_to_partitioned FOREIGN KEY (a) references part_citus_loc_2(a);
 
     SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
       WHERE logicalrelid IN ('distr_table'::regclass,
@@ -611,6 +613,8 @@ BEGIN;
     CREATE TABLE part_citus_loc_2_2(a INT UNIQUE);
     ALTER TABLE part_citus_loc_2 ATTACH PARTITION part_citus_loc_2_2 FOR VALUES FROM (3) TO (5);
 
+    CREATE TABLE part_citus_loc_2_3 PARTITION OF part_citus_loc_2 FOR VALUES FROM (7) TO (9);
+
     SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
       WHERE logicalrelid IN ('distr_table'::regclass,
                             'citus_loc_1'::regclass,
@@ -623,7 +627,8 @@ BEGIN;
                             'part_citus_loc_1_2'::regclass,
                             'part_citus_loc_2'::regclass,
                             'part_citus_loc_2_1'::regclass,
-                            'part_citus_loc_2_2'::regclass)
+                            'part_citus_loc_2_2'::regclass,
+                            'part_citus_loc_2_3'::regclass)
       ORDER BY logicalrelid;
 ROLLBACK;
 
