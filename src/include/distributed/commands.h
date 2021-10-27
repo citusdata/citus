@@ -545,5 +545,7 @@ extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *set
 
 extern void CreateCitusLocalTablePartitionOf(CreateStmt *createStatement,
 											 Oid relationId, Oid parentRelationId);
+extern void UpdateAutoConvertedForConnectedRelations(List *relationId, bool
+													 autoConverted);
 
 #endif /*CITUS_COMMANDS_H */

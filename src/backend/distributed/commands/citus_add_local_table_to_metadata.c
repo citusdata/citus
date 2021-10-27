@@ -55,7 +55,6 @@ static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
 static void NoticeIfAutoConvertingLocalTables(bool autoConverted);
 static void NoticeRelationIsAlreadyAddedToMetadata(Oid relationId);
 static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
-static void UpdateAutoConvertedForConnectedRelations(Oid relationId, bool autoConverted);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
 static uint64 ConvertLocalTableToShard(Oid relationId);
 static void RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId);
@@ -211,7 +210,8 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 		 * already added to metadata, we should mark this one and connected relations
 		 * as auto-converted = false.
 		 */
-		UpdateAutoConvertedForConnectedRelations(relationId, autoConverted);
+		UpdateAutoConvertedForConnectedRelations(list_make1_oid(relationId),
+												 autoConverted);
 
 		NoticeRelationIsAlreadyAddedToMetadata(relationId);
 
@@ -621,19 +621,26 @@ GetCascadeTypeForCitusLocalTables(bool autoConverted)
 
 /*
  * UpdateAutoConvertedForConnectedRelations updates the autoConverted field on
- * pg_dist_partition for the foreign key connected relations of the given relation.
+ * pg_dist_partition for the foreign key connected relations of the given relations.
  * Sets it to given autoConverted value for all of the connected relations.
  * We don't need to update partition relations separately, since the foreign key
  * graph already includes them, as they have the same (inherited) fkeys as their parents.
  */
-static void
-UpdateAutoConvertedForConnectedRelations(Oid relationId, bool autoConverted)
+void
+UpdateAutoConvertedForConnectedRelations(List *relationIds, bool autoConverted)
 {
 	InvalidateForeignKeyGraph();
-	List *relationIdList = GetForeignKeyConnectedRelationIdList(relationId);
+
+	List *relationIdList = NIL;
+	Oid relid = InvalidOid;
+	foreach_oid(relid, relationIds)
+	{
+		List *connectedRelations = GetForeignKeyConnectedRelationIdList(relid);
+		relationIdList = list_concat_unique_oid(relationIdList, connectedRelations);
+	}
+
 	relationIdList = SortList(relationIdList, CompareOids);
 
-	Oid relid = InvalidOid;
 	foreach_oid(relid, relationIdList)
 	{
 		UpdatePgDistPartitionAutoConverted(relid, false);

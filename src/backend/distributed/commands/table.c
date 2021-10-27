@@ -72,8 +72,6 @@ static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
 	AlterTableStmt *alterTableStatement);
 static bool ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId,
 														 Oid rightRelationId);
-static void MarkConnectedRelationsNotAutoConverted(Oid leftRelationId,
-												   Oid rightRelationId);
 static bool RelationIdListContainsCitusTableType(List *relationIdList,
 												 CitusTableType citusTableType);
 static bool RelationIdListContainsPostgresTable(List *relationIdList);
@@ -871,8 +869,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				if (ShouldMarkConnectedRelationsNotAutoConverted(leftRelationId,
 																 rightRelationId))
 				{
-					MarkConnectedRelationsNotAutoConverted(leftRelationId,
-														   rightRelationId);
+					List *relationList = list_make2_oid(leftRelationId, rightRelationId);
+					UpdateAutoConvertedForConnectedRelations(relationList, false);
 				}
 
 				/*
@@ -1209,28 +1207,6 @@ ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelati
 	CitusTableCacheEntry *entryRight = GetCitusTableCacheEntry(rightRelationId);
 
 	return entryLeft->autoConverted != entryRight->autoConverted;
-}
-
-
-/*
- * MarkConnectedRelationsNotAutoConverted takes two relations.
- * Marks both of them as not-auto-converted, as well as other connected relations.
- */
-static void
-MarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelationId)
-{
-	InvalidateForeignKeyGraph();
-	List *leftConnectedRelIds = GetForeignKeyConnectedRelationIdList(leftRelationId);
-	List *rightConnectedRelIds = GetForeignKeyConnectedRelationIdList(rightRelationId);
-	List *allConnectedRelations = list_concat_unique_oid(leftConnectedRelIds,
-														 rightConnectedRelIds);
-	allConnectedRelations = SortList(allConnectedRelations, CompareOids);
-
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, allConnectedRelations)
-	{
-		UpdatePgDistPartitionAutoConverted(relationId, false);
-	}
 }
 
 
