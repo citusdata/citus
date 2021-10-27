@@ -344,6 +344,289 @@ SELECT logicalrelid, autoconverted FROM pg_dist_partition
                         'citus_local_references'::regclass)
   ORDER BY logicalrelid;
 
+SET citus.shard_replication_factor to 1;
+-- test with a graph that includes distributed table
+CREATE TABLE distr_table (a INT UNIQUE);
+SELECT create_distributed_table('distr_table','a');
+
+-- test converting in create_reference_table time
+CREATE TABLE refr_table (a INT UNIQUE, b INT UNIQUE);
+CREATE TABLE citus_loc_1 (a INT UNIQUE REFERENCES refr_table(a), b INT UNIQUE);
+CREATE TABLE citus_loc_2 (a INT UNIQUE REFERENCES citus_loc_1(a), b INT UNIQUE REFERENCES citus_loc_1(b), c INT UNIQUE REFERENCES refr_table(a));
+CREATE TABLE citus_loc_3 (a INT UNIQUE REFERENCES citus_loc_3(a));
+CREATE TABLE citus_loc_4 (a INT UNIQUE REFERENCES citus_loc_2(b), b INT UNIQUE REFERENCES citus_loc_2(a), c INT UNIQUE REFERENCES citus_loc_3(a));
+ALTER TABLE refr_table ADD CONSTRAINT fkey_ref_to_loc FOREIGN KEY (b) REFERENCES citus_loc_2(a);
+SELECT create_reference_table('refr_table');
+ALTER TABLE distr_table ADD CONSTRAINT fkey_dist_to_ref FOREIGN KEY (a) REFERENCES refr_table(a);
+
+SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+  WHERE logicalrelid IN ('distr_table'::regclass,
+                         'citus_loc_1'::regclass,
+                         'citus_loc_2'::regclass,
+                         'citus_loc_3'::regclass,
+                         'citus_loc_4'::regclass,
+                         'refr_table'::regclass)
+  ORDER BY logicalrelid;
+
+BEGIN;
+  SELECT citus_add_local_table_to_metadata('citus_loc_3');
+  SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+    WHERE logicalrelid IN ('distr_table'::regclass,
+                          'citus_loc_1'::regclass,
+                          'citus_loc_2'::regclass,
+                          'citus_loc_3'::regclass,
+                          'citus_loc_4'::regclass,
+                          'refr_table'::regclass)
+    ORDER BY logicalrelid;
+ROLLBACK;
+
+SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+  WHERE logicalrelid IN ('distr_table'::regclass,
+                         'citus_loc_1'::regclass,
+                         'citus_loc_2'::regclass,
+                         'citus_loc_3'::regclass,
+                         'citus_loc_4'::regclass,
+                         'refr_table'::regclass)
+  ORDER BY logicalrelid;
+
+BEGIN;
+  SELECT citus_add_local_table_to_metadata('citus_loc_2');
+  SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+    WHERE logicalrelid IN ('distr_table'::regclass,
+                          'citus_loc_1'::regclass,
+                          'citus_loc_2'::regclass,
+                          'citus_loc_3'::regclass,
+                          'citus_loc_4'::regclass,
+                          'refr_table'::regclass)
+    ORDER BY logicalrelid;
+ROLLBACK;
+
+SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+  WHERE logicalrelid IN ('distr_table'::regclass,
+                         'citus_loc_1'::regclass,
+                         'citus_loc_2'::regclass,
+                         'citus_loc_3'::regclass,
+                         'citus_loc_4'::regclass,
+                         'refr_table'::regclass)
+  ORDER BY logicalrelid;
+
+BEGIN;
+  CREATE TABLE part_citus_loc_1 (a INT UNIQUE) PARTITION BY RANGE (a);
+  CREATE TABLE part_citus_loc_2 (a INT UNIQUE) PARTITION BY RANGE (a);
+
+  select citus_add_local_table_to_metadata('part_citus_loc_2');
+
+  ALTER TABLE part_citus_loc_1 ADD CONSTRAINT fkey_partitioned_rels FOREIGN KEY (a) references part_citus_loc_2(a);
+
+  SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+    WHERE logicalrelid IN ('part_citus_loc_1'::regclass,
+                           'part_citus_loc_2'::regclass)
+    ORDER BY logicalrelid;
+ROLLBACK;
+
+BEGIN;
+    CREATE TABLE part_citus_loc_2 (a INT UNIQUE) PARTITION BY RANGE (a);
+    CREATE TABLE part_citus_loc_2_1 PARTITION OF part_citus_loc_2 FOR VALUES FROM (0) TO (2);
+
+    select citus_add_local_table_to_metadata('part_citus_loc_2');
+
+    ALTER TABLE part_citus_loc_2 ADD CONSTRAINT fkey_partitioned_test FOREIGN KEY (a) references refr_table(a);
+
+    CREATE TABLE part_citus_loc_2_2 PARTITION OF part_citus_loc_2 FOR VALUES FROM (4) TO (5);
+    SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+      WHERE logicalrelid IN ('part_citus_loc_2'::regclass,
+                             'part_citus_loc_2_1'::regclass,
+                             'part_citus_loc_2_2'::regclass)
+      ORDER BY logicalrelid;
+ROLLBACK;
+
+BEGIN;
+    CREATE TABLE part_citus_loc_2 (a INT UNIQUE) PARTITION BY RANGE (a);
+    CREATE TABLE part_citus_loc_2_1 PARTITION OF part_citus_loc_2 FOR VALUES FROM (0) TO (2);
+
+    select citus_add_local_table_to_metadata('part_citus_loc_2');
+
+    ALTER TABLE part_citus_loc_2 ADD CONSTRAINT fkey_partitioned_test FOREIGN KEY (a) references citus_loc_4(a);
+
+    -- reference to citus local, use alter table attach partition
+    CREATE TABLE part_citus_loc_2_2 (a INT UNIQUE);
+    ALTER TABLE part_citus_loc_2 ATTACH PARTITION part_citus_loc_2_2 FOR VALUES FROM (3) TO (5);
+
+    SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+      WHERE logicalrelid IN ('citus_loc_1'::regclass,
+                             'citus_loc_2'::regclass,
+                             'citus_loc_3'::regclass,
+                             'citus_loc_4'::regclass,
+                             'part_citus_loc_2'::regclass,
+                             'part_citus_loc_2_1'::regclass,
+                             'part_citus_loc_2_2'::regclass)
+      ORDER BY logicalrelid;
+ROLLBACK;
+
+--
+-- now mark whole graph as autoConverted = false
+--
+select citus_add_local_table_to_metadata('citus_loc_1');
+SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+  WHERE logicalrelid IN ('distr_table'::regclass,
+                         'citus_loc_1'::regclass,
+                         'citus_loc_2'::regclass,
+                         'citus_loc_3'::regclass,
+                         'citus_loc_4'::regclass,
+                         'refr_table'::regclass)
+  ORDER BY logicalrelid;
+
+BEGIN;
+  CREATE TABLE part_citus_loc_1 (a INT UNIQUE REFERENCES citus_loc_1(a)) PARTITION BY RANGE (a);
+  SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+    WHERE logicalrelid IN ('distr_table'::regclass,
+                          'citus_loc_1'::regclass,
+                          'citus_loc_2'::regclass,
+                          'citus_loc_3'::regclass,
+                          'citus_loc_4'::regclass,
+                          'refr_table'::regclass,
+                          'part_citus_loc_1'::regclass)
+    ORDER BY logicalrelid;
+ROLLBACK;
+
+begin;
+  CREATE TABLE part_citus_loc_1 (a INT UNIQUE) PARTITION BY RANGE (a);
+  ALTER TABLE part_citus_loc_1 ADD CONSTRAINT fkey_testt FOREIGN KEY (a) references citus_loc_3(a);
+  SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+    WHERE logicalrelid IN ('distr_table'::regclass,
+                          'citus_loc_1'::regclass,
+                          'citus_loc_2'::regclass,
+                          'citus_loc_3'::regclass,
+                          'citus_loc_4'::regclass,
+                          'refr_table'::regclass,
+                          'part_citus_loc_1'::regclass)
+    ORDER BY logicalrelid;
+rollback;
+
+CREATE TABLE part_citus_loc_1 (a INT UNIQUE) PARTITION BY RANGE (a);
+CREATE TABLE part_citus_loc_1_1 PARTITION OF part_citus_loc_1 FOR VALUES FROM (0) TO (2);
+CREATE TABLE part_citus_loc_1_2 PARTITION OF part_citus_loc_1 FOR VALUES FROM (3) TO (5);
+ALTER TABLE citus_loc_4 ADD CONSTRAINT fkey_to_part_table FOREIGN KEY (a) REFERENCES part_citus_loc_1(a);
+
+SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+  WHERE logicalrelid IN ('distr_table'::regclass,
+                         'citus_loc_1'::regclass,
+                         'citus_loc_2'::regclass,
+                         'citus_loc_3'::regclass,
+                         'citus_loc_4'::regclass,
+                         'refr_table'::regclass,
+                         'part_citus_loc_1'::regclass,
+                         'part_citus_loc_1_1'::regclass,
+                         'part_citus_loc_1_2'::regclass)
+  ORDER BY logicalrelid;
+
+BEGIN;
+    CREATE TABLE part_citus_loc_2 (a INT UNIQUE REFERENCES part_citus_loc_1(a)) PARTITION BY RANGE (a);
+    SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+      WHERE logicalrelid IN ('distr_table'::regclass,
+                            'citus_loc_1'::regclass,
+                            'citus_loc_2'::regclass,
+                            'citus_loc_3'::regclass,
+                            'citus_loc_4'::regclass,
+                            'refr_table'::regclass,
+                            'part_citus_loc_1'::regclass,
+                            'part_citus_loc_1_1'::regclass,
+                            'part_citus_loc_1_2'::regclass,
+                            'part_citus_loc_2'::regclass)
+      ORDER BY logicalrelid;
+ROLLBACK;
+
+-- use alter table
+BEGIN;
+    CREATE TABLE part_citus_loc_2 (a INT UNIQUE) PARTITION BY RANGE (a);
+    ALTER TABLE part_citus_loc_2 ADD CONSTRAINT fkey_from_to_partitioned FOREIGN KEY (a) references part_citus_loc_1(a);
+
+    SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+      WHERE logicalrelid IN ('distr_table'::regclass,
+                            'citus_loc_1'::regclass,
+                            'citus_loc_2'::regclass,
+                            'citus_loc_3'::regclass,
+                            'citus_loc_4'::regclass,
+                            'refr_table'::regclass,
+                            'part_citus_loc_1'::regclass,
+                            'part_citus_loc_1_1'::regclass,
+                            'part_citus_loc_1_2'::regclass,
+                            'part_citus_loc_2'::regclass)
+      ORDER BY logicalrelid;
+ROLLBACK;
+
+-- alter table foreign key reverse order
+BEGIN;
+    CREATE TABLE part_citus_loc_2 (a INT UNIQUE) PARTITION BY RANGE (a);
+    ALTER TABLE part_citus_loc_2 ADD CONSTRAINT fkey_from_to_partitioned FOREIGN KEY (a) references part_citus_loc_1(a);
+
+    SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+      WHERE logicalrelid IN ('distr_table'::regclass,
+                            'citus_loc_1'::regclass,
+                            'citus_loc_2'::regclass,
+                            'citus_loc_3'::regclass,
+                            'citus_loc_4'::regclass,
+                            'refr_table'::regclass,
+                            'part_citus_loc_1'::regclass,
+                            'part_citus_loc_1_1'::regclass,
+                            'part_citus_loc_1_2'::regclass,
+                            'part_citus_loc_2'::regclass)
+      ORDER BY logicalrelid;
+ROLLBACK;
+
+BEGIN;
+    CREATE TABLE part_citus_loc_2 (a INT UNIQUE) PARTITION BY RANGE (a);
+    CREATE TABLE part_citus_loc_2_1 PARTITION OF part_citus_loc_2 FOR VALUES FROM (0) TO (2);
+
+    -- reference to ref
+    ALTER TABLE part_citus_loc_2 ADD CONSTRAINT fkey_to_ref_test FOREIGN KEY (a) REFERENCES refr_table(a);
+
+    CREATE TABLE part_citus_loc_2_2 PARTITION OF part_citus_loc_2 FOR VALUES FROM (3) TO (5);
+
+    SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+      WHERE logicalrelid IN ('distr_table'::regclass,
+                            'citus_loc_1'::regclass,
+                            'citus_loc_2'::regclass,
+                            'citus_loc_3'::regclass,
+                            'citus_loc_4'::regclass,
+                            'refr_table'::regclass,
+                            'part_citus_loc_1'::regclass,
+                            'part_citus_loc_1_1'::regclass,
+                            'part_citus_loc_1_2'::regclass,
+                            'part_citus_loc_2'::regclass,
+                            'part_citus_loc_2_1'::regclass,
+                            'part_citus_loc_2_2'::regclass)
+      ORDER BY logicalrelid;
+ROLLBACK;
+
+-- the same, but fkey to citus local, not reference table
+-- also with attach partition
+BEGIN;
+    CREATE TABLE part_citus_loc_2 (a INT UNIQUE) PARTITION BY RANGE (a);
+    CREATE TABLE part_citus_loc_2_1 PARTITION OF part_citus_loc_2 FOR VALUES FROM (0) TO (2);
+
+    ALTER TABLE part_citus_loc_2 ADD CONSTRAINT fkey_to_ref_test FOREIGN KEY (a) REFERENCES citus_loc_4(a);
+
+    -- reference to citus local, use create table partition of
+    CREATE TABLE part_citus_loc_2_2(a INT UNIQUE);
+    ALTER TABLE part_citus_loc_2 ATTACH PARTITION part_citus_loc_2_2 FOR VALUES FROM (3) TO (5);
+
+    SELECT logicalrelid, autoconverted, partmethod FROM pg_dist_partition
+      WHERE logicalrelid IN ('distr_table'::regclass,
+                            'citus_loc_1'::regclass,
+                            'citus_loc_2'::regclass,
+                            'citus_loc_3'::regclass,
+                            'citus_loc_4'::regclass,
+                            'refr_table'::regclass,
+                            'part_citus_loc_1'::regclass,
+                            'part_citus_loc_1_1'::regclass,
+                            'part_citus_loc_1_2'::regclass,
+                            'part_citus_loc_2'::regclass,
+                            'part_citus_loc_2_1'::regclass,
+                            'part_citus_loc_2_2'::regclass)
+      ORDER BY logicalrelid;
+ROLLBACK;
+
 -- a single drop table cascades into multiple undistributes
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3, citus_local_table_2, reference_table_1;
 CREATE TABLE reference_table_1(r1 int UNIQUE, r2 int);
