@@ -343,3 +343,4 @@ class PGUpgradeConfig(CitusBaseClusterConfig):
         self.old_datadir = self.temp_dir + "/oldData"
         self.new_datadir = self.temp_dir + "/newData"
         self.user = SUPER_USER_NAME
+        self.add_coordinator_to_metadata = True

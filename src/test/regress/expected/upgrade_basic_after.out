@@ -3,10 +3,17 @@ BEGIN;
 SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' ORDER BY tablename;
   schemaname   | tablename | indexname | tablespace |                            indexdef
 ---------------------------------------------------------------------
- upgrade_basic | r         | r_pkey    |            | CREATE UNIQUE INDEX r_pkey ON upgrade_basic.r USING btree (a)
- upgrade_basic | t         | t_a_idx   |            | CREATE INDEX t_a_idx ON upgrade_basic.t USING hash (a)
- upgrade_basic | tp        | tp_pkey   |            | CREATE UNIQUE INDEX tp_pkey ON upgrade_basic.tp USING btree (a)
-(3 rows)
+ upgrade_basic | citus_local_autoconverted            | citus_local_autoconverted_a_key            |            | CREATE UNIQUE INDEX citus_local_autoconverted_a_key ON upgrade_basic.citus_local_autoconverted USING btree (a)
+ upgrade_basic | citus_local_autoconverted_102141     | citus_local_autoconverted_a_key_102141     |            | CREATE UNIQUE INDEX citus_local_autoconverted_a_key_102141 ON upgrade_basic.citus_local_autoconverted_102141 USING btree (a)
+ upgrade_basic | citus_local_not_autoconverted        | citus_local_not_autoconverted_a_key        |            | CREATE UNIQUE INDEX citus_local_not_autoconverted_a_key ON upgrade_basic.citus_local_not_autoconverted USING btree (a)
+ upgrade_basic | citus_local_not_autoconverted_102142 | citus_local_not_autoconverted_a_key_102142 |            | CREATE UNIQUE INDEX citus_local_not_autoconverted_a_key_102142 ON upgrade_basic.citus_local_not_autoconverted_102142 USING btree (a)
+ upgrade_basic | r                                    | r_pkey                                     |            | CREATE UNIQUE INDEX r_pkey ON upgrade_basic.r USING btree (a)
+ upgrade_basic | r_102104                             | r_pkey_102104                              |            | CREATE UNIQUE INDEX r_pkey_102104 ON upgrade_basic.r_102104 USING btree (a)
+ upgrade_basic | ref_not_autoconverted                | ref_not_autoconverted_a_key                |            | CREATE UNIQUE INDEX ref_not_autoconverted_a_key ON upgrade_basic.ref_not_autoconverted USING btree (a)
+ upgrade_basic | ref_not_autoconverted_102140         | ref_not_autoconverted_a_key_102140         |            | CREATE UNIQUE INDEX ref_not_autoconverted_a_key_102140 ON upgrade_basic.ref_not_autoconverted_102140 USING btree (a)
+ upgrade_basic | t                                    | t_a_idx                                    |            | CREATE INDEX t_a_idx ON upgrade_basic.t USING hash (a)
+ upgrade_basic | tp                                   | tp_pkey                                    |            | CREATE UNIQUE INDEX tp_pkey ON upgrade_basic.tp USING btree (a)
+(10 rows)
 
 SELECT nextval('pg_dist_shardid_seq') = MAX(shardid)+1 FROM pg_dist_shard;
  ?column?
@@ -69,7 +76,10 @@ SELECT logicalrelid FROM pg_dist_partition
  r
  tr
  t_append
-(6 rows)
+ ref_not_autoconverted
+ citus_local_autoconverted
+ citus_local_not_autoconverted
+(9 rows)
 
 SELECT tgrelid::regclass, tgfoid::regproc, tgisinternal, tgenabled, tgtype::int4::bit(8)
   FROM pg_dist_partition
@@ -87,7 +97,10 @@ SELECT tgrelid::regclass, tgfoid::regproc, tgisinternal, tgenabled, tgtype::int4
  r        | citus_truncate_trigger | t            | O         | 00100000
  tr       | citus_truncate_trigger | t            | O         | 00100000
  t_append | citus_truncate_trigger | t            | O         | 00100000
-(6 rows)
+ ref_not_autoconverted         | citus_truncate_trigger | t            | O         | 00100000
+ citus_local_autoconverted     | citus_truncate_trigger | t            | O         | 00100000
+ citus_local_not_autoconverted | citus_truncate_trigger | t            | O         | 00100000
+(9 rows)
 
 SELECT * FROM t ORDER BY a;
  a
@@ -349,3 +362,12 @@ SELECT * FROM t_append ORDER BY id;
 (9 rows)
 
 ROLLBACK;
+select logicalrelid, autoconverted from pg_dist_partition
+    where logicalrelid IN ('citus_local_autoconverted'::regclass,
+                           'citus_local_not_autoconverted'::regclass);
+         logicalrelid          | autoconverted 
+-------------------------------+---------------
+ citus_local_autoconverted     | t
+ citus_local_not_autoconverted | f
+(2 rows)
+

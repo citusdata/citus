@@ -78,3 +78,27 @@ SELECT master_create_distributed_table('t_append', 'id', 'append');
 
 \copy t_append FROM STDIN DELIMITER ','
 \copy t_append FROM STDIN DELIMITER ','
+CREATE TABLE ref_not_autoconverted(a int unique);
+CREATE TABLE citus_local_autoconverted(a int unique references ref_not_autoconverted(a));
+CREATE TABLE citus_local_not_autoconverted(a int unique);
+select create_reference_table('ref_not_autoconverted');
+ create_reference_table 
+------------------------
+ 
+(1 row)
+
+select citus_add_local_table_to_metadata('citus_local_not_autoconverted');
+ citus_add_local_table_to_metadata 
+-----------------------------------
+ 
+(1 row)
+
+select logicalrelid, autoconverted from pg_dist_partition
+    where logicalrelid IN ('citus_local_autoconverted'::regclass,
+                           'citus_local_not_autoconverted'::regclass);
+         logicalrelid          | autoconverted 
+-------------------------------+---------------
+ citus_local_autoconverted     | t
+ citus_local_not_autoconverted | f
+(2 rows)
+
