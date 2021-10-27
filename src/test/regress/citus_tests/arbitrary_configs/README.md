@@ -19,7 +19,7 @@ To run only some configs:
 
 ```bash
 # Config names should be comma separated
-make check-arbitrary-base CONFIGS=CitusSingleNodeClusterConfig,CitusSmallSharedPoolSizeConfig
+make check-arbitrary-configs CONFIGS=CitusSingleNodeClusterConfig,CitusSmallSharedPoolSizeConfig
 ```
 
 To run only some test files with some config:
