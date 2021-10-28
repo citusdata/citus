@@ -2075,6 +2075,9 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 	char *distributionColumnString = NULL;
 	Var *distributionColumnVar = NULL;
 
+	/* this flag is only valid for citus local tables, so set it to false */
+	bool autoConverted = false;
+
 	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
 	EnsureTableOwner(relationId);
 
@@ -2123,7 +2126,7 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 	}
 
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumnVar,
-							  colocationId, replicationModel);
+							  colocationId, replicationModel, autoConverted);
 
 	PG_RETURN_VOID();
 }

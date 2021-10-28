@@ -24,11 +24,12 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/deparser.h"
 #include "distributed/deparse_shard_query.h"
 #include "distributed/distribution_column.h"
+#include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
@@ -69,11 +70,15 @@ static void ErrorIfAttachCitusTableToPgLocalTable(Oid parentRelationId,
 												  Oid partitionRelationId);
 static bool AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(
 	AlterTableStmt *alterTableStatement);
+static bool ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId,
+														 Oid rightRelationId);
 static bool RelationIdListContainsCitusTableType(List *relationIdList,
 												 CitusTableType citusTableType);
 static bool RelationIdListContainsPostgresTable(List *relationIdList);
 static void ConvertPostgresLocalTablesToCitusLocalTables(
 	AlterTableStmt *alterTableStatement);
+static bool RangeVarListHasRelationConvertedByUser(List *relationRangeVarList,
+												   AlterTableStmt *alterTableStatement);
 static int CompareRangeVarsByOid(const void *leftElement, const void *rightElement);
 static List * GetAlterTableAddFKeyRightRelationIdList(
 	AlterTableStmt *alterTableStatement);
@@ -491,7 +496,10 @@ PreprocessAttachPartitionToCitusTable(Oid parentRelationId, Oid partitionRelatio
 			 * cannot have non-inherited foreign keys.
 			 */
 			bool cascadeViaForeignKeys = false;
-			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys);
+			CitusTableCacheEntry *entry = GetCitusTableCacheEntry(parentRelationId);
+			bool autoConverted = entry->autoConverted;
+			CreateCitusLocalTable(partitionRelationId, cascadeViaForeignKeys,
+								  autoConverted);
 		}
 		else if (IsCitusTableType(parentRelationId, DISTRIBUTED_TABLE))
 		{
@@ -858,6 +866,14 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				rightRelationId = RangeVarGetRelid(constraint->pktable, lockmode,
 												   alterTableStatement->missing_ok);
 
+				if (processUtilityContext != PROCESS_UTILITY_SUBCOMMAND &&
+					ShouldMarkConnectedRelationsNotAutoConverted(leftRelationId,
+																 rightRelationId))
+				{
+					List *relationList = list_make2_oid(leftRelationId, rightRelationId);
+					UpdateAutoConvertedForConnectedRelations(relationList, false);
+				}
+
 				/*
 				 * Foreign constraint validations will be done in workers. If we do not
 				 * set this flag, PostgreSQL tries to do additional checking when we drop
@@ -1171,6 +1187,31 @@ AlterTableDefinesFKeyBetweenPostgresAndNonDistTable(AlterTableStmt *alterTableSt
 
 
 /*
+ * ShouldMarkConnectedRelationsNotAutoConverted takes two relations.
+ * If both of them are Citus Local Tables, and one of them is auto-converted while the
+ * other one is not; then it returns true. False otherwise.
+ */
+static bool
+ShouldMarkConnectedRelationsNotAutoConverted(Oid leftRelationId, Oid rightRelationId)
+{
+	if (!IsCitusTableType(leftRelationId, CITUS_LOCAL_TABLE))
+	{
+		return false;
+	}
+
+	if (!IsCitusTableType(rightRelationId, CITUS_LOCAL_TABLE))
+	{
+		return false;
+	}
+
+	CitusTableCacheEntry *entryLeft = GetCitusTableCacheEntry(leftRelationId);
+	CitusTableCacheEntry *entryRight = GetCitusTableCacheEntry(rightRelationId);
+
+	return entryLeft->autoConverted != entryRight->autoConverted;
+}
+
+
+/*
  * RelationIdListContainsCitusTableType returns true if given relationIdList
  * contains a citus table with given type.
  */
@@ -1229,6 +1270,13 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 	 */
 	relationRangeVarList = SortList(relationRangeVarList, CompareRangeVarsByOid);
 
+	bool autoConverted = true;
+
+	if (RangeVarListHasRelationConvertedByUser(relationRangeVarList, alterTableStatement))
+	{
+		autoConverted = false;
+	}
+
 	/*
 	 * Here we should operate on RangeVar objects since relations oid's would
 	 * change in below loop due to CreateCitusLocalTable.
@@ -1248,14 +1296,30 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 			 */
 			continue;
 		}
+		else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		{
+			CitusTableCacheEntry *entry = GetCitusTableCacheEntry(relationId);
+			if (!entry->autoConverted || autoConverted)
+			{
+				/*
+				 * relationRangeVarList has also reference and citus local tables
+				 * involved in this ADD FOREIGN KEY command. Moreover, even if
+				 * relationId was belonging to a postgres  local table initially,
+				 * we might had already converted it to a citus local table by cascading.
+				 * Note that we cannot skip here, if the relation is marked as
+				 * auto-converted, but we are marking the relations in the command
+				 * auto-converted = false. Because in that case, it means that this
+				 * relation is marked as auto-converted because of a connection
+				 * with a reference table, but now it is connected to a Citus
+				 * Local Table. In that case, we need to mark this relation as
+				 * auto-converted = false, so cannot do a "continue" here.
+				 */
+				continue;
+			}
+		}
 		else if (IsCitusTable(relationId))
 		{
-			/*
-			 * relationRangeVarList has also reference and citus local tables
-			 * involved in this ADD FOREIGN KEY command. Moreover, even if
-			 * relationId was belonging to a postgres  local table initially,
-			 * we might had already converted it to a citus local table by cascading.
-			 */
+			/* we can directly skip for table types other than citus local tables */
 			continue;
 		}
 
@@ -1289,7 +1353,7 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 			}
 			else
 			{
-				CreateCitusLocalTable(relationId, cascade);
+				CreateCitusLocalTable(relationId, cascade, autoConverted);
 			}
 		}
 		PG_CATCH();
@@ -1312,6 +1376,43 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 		}
 		PG_END_TRY();
 	}
+}
+
+
+/*
+ * RangeVarListHasRelationConvertedByUser takes a list of relations and returns true
+ * if any of these relations is marked as auto-converted = false. Returns true otherwise.
+ * This function also takes the current alterTableStatement command, to obtain the
+ * necessary locks.
+ */
+static bool
+RangeVarListHasRelationConvertedByUser(List *relationRangeVarList,
+									   AlterTableStmt *alterTableStatement)
+{
+	RangeVar *relationRangeVar;
+	foreach_ptr(relationRangeVar, relationRangeVarList)
+	{
+		/*
+		 * Here we iterate the relation list, and if at least one of the relations
+		 * is marked as not-auto-converted, we should mark all of them as
+		 * not-auto-converted. In that case, we return true here.
+		 */
+		List *commandList = alterTableStatement->cmds;
+		LOCKMODE lockMode = AlterTableGetLockLevel(commandList);
+		bool missingOk = alterTableStatement->missing_ok;
+		Oid relationId = RangeVarGetRelid(relationRangeVar, lockMode, missingOk);
+		if (OidIsValid(relationId) && IsCitusTable(relationId) &&
+			IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		{
+			CitusTableCacheEntry *entry = GetCitusTableCacheEntry(relationId);
+			if (!entry->autoConverted)
+			{
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 

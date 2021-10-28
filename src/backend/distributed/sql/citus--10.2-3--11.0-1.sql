@@ -8,3 +8,4 @@
 
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);
+ALTER TABLE pg_catalog.pg_dist_partition ADD COLUMN autoconverted boolean DEFAULT false;

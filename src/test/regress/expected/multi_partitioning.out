@@ -4208,7 +4208,11 @@ SELECT partition FROM time_partitions WHERE parent_table = 'date_partitioned_tab
 (1 row)
 
 \set VERBOSITY default
+set client_min_messages to error;
 DROP TABLE date_partitioned_table_to_exp;
+DROP TABLE date_partitioned_citus_local_table CASCADE;
+DROP TABLE date_partitioned_citus_local_table_2;
+set client_min_messages to notice;
 SELECT citus_remove_node('localhost', :master_port);
  citus_remove_node
 ---------------------------------------------------------------------
@@ -4326,12 +4330,10 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 (1 row)
 
 DROP SCHEMA partitioning_schema CASCADE;
-NOTICE:  drop cascades to 6 other objects
+NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table partitioning_schema."schema-test"
 drop cascades to table partitioning_schema.another_distributed_table
 drop cascades to table partitioning_schema.distributed_parent_table
-drop cascades to table partitioning_schema.date_partitioned_citus_local_table
-drop cascades to table partitioning_schema.date_partitioned_citus_local_table_2
 drop cascades to table partitioning_schema.part_table_with_very_long_name
 RESET search_path;
 DROP TABLE IF EXISTS

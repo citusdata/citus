@@ -63,6 +63,7 @@ typedef struct
 	char partitionMethod;
 	uint32 colocationId;
 	char replicationModel;
+	bool autoConverted; /* table auto-added to metadata, valid for citus local tables */
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
