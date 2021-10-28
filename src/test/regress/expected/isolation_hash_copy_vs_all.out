@@ -222,7 +222,7 @@ count
    10
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -249,7 +249,7 @@ count
    10
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,0)
@@ -275,7 +275,7 @@ count
    10
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -778,7 +778,7 @@ count
    10
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -805,7 +805,7 @@ count
    10
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,0)

@@ -46,7 +46,7 @@ step "s1-master-drop-all-shards" { SELECT citus_drop_all_shards('hash_copy'::reg
 step "s1-create-non-distributed-table" { CREATE TABLE hash_copy(id integer, data text, int_data int); COPY hash_copy FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV; }
 step "s1-distribute-table" { SELECT create_distributed_table('hash_copy', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM hash_copy; }
-step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy%'''); }
+step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''hash_copy\_%'''); }
 step "s1-show-columns" { SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''hash_copy%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1'); }
 step "s1-commit" { COMMIT; }
 step "s1-recreate-with-replication-2"
