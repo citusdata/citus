@@ -1,7 +1,7 @@
 SET search_path TO upgrade_basic, public, pg_catalog;
 BEGIN;
 
-SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' ORDER BY tablename;
+SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' and tablename NOT LIKE "r_%" ORDER BY tablename;
 
 SELECT nextval('pg_dist_shardid_seq') = MAX(shardid)+1 FROM pg_dist_shard;
 SELECT nextval('pg_dist_placement_placementid_seq') = MAX(placementid)+1 FROM pg_dist_placement;
