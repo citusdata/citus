@@ -864,6 +864,41 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Test downgrade to 10.2-2 from 10.2-3
+ALTER EXTENSION citus UPDATE TO '10.2-3';
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.2-3
+ALTER EXTENSION citus UPDATE TO '10.2-3';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Test downgrade to 10.2-3 from 10.2-4
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+ALTER EXTENSION citus UPDATE TO '10.2-3';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.2-4
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |                              current_object
+---------------------------------------------------------------------
+                 | function fix_all_partition_shard_index_names() SETOF regclass
+                 | function fix_partition_shard_index_names(regclass) void
+                 | function worker_fix_partition_shard_index_names(regclass,text,text) void
+(3 rows)
+
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
