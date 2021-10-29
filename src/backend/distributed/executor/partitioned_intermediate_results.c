@@ -86,7 +86,7 @@ static void PartitionedResultDestReceiverStartup(DestReceiver *dest, int operati
 static bool PartitionedResultDestReceiverReceive(TupleTableSlot *slot,
 												 DestReceiver *dest);
 static void PartitionedResultDestReceiverShutdown(DestReceiver *destReceiver);
-static void PartitionedResultDestReceiverDestroy(DestReceiver *destReceiver);
+static void PartitionedResultDestReceiverDestroy(DestReceiver *copyDest);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(worker_partition_query_result);
@@ -498,22 +498,14 @@ PartitionedResultDestReceiverShutdown(DestReceiver *copyDest)
  * PartitionedResultDestReceiver.
  */
 static void
-PartitionedResultDestReceiverDestroy(DestReceiver *copyDest)
+PartitionedResultDestReceiverDestroy(DestReceiver *dest)
 {
-	PartitionedResultDestReceiver *partitionedDest =
-		(PartitionedResultDestReceiver *) copyDest;
-	int partitionCount = partitionedDest->partitionCount;
-	for (int partitionIndex = 0; partitionIndex < partitionCount; partitionIndex++)
-	{
-		DestReceiver *partitionDest =
-			partitionedDest->partitionDestReceivers[partitionIndex];
-		if (partitionDest != NULL)
-		{
-			/* this call should also free partitionDest, so no need to free it after */
-			partitionDest->rDestroy(partitionDest);
-		}
-	}
+	PartitionedResultDestReceiver *self = (PartitionedResultDestReceiver *) dest;
 
-	pfree(partitionedDest->partitionDestReceivers);
-	pfree(partitionedDest);
+	int x = -1;
+	while ((x = bms_next_member(self->startupmap, x)) >= 0)
+	{
+		DestReceiver *partitionDest = self->partitionDestReceivers[x];
+		partitionDest->rDestroy(partitionDest);
+	}
 }
