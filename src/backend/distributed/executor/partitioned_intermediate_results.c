@@ -44,19 +44,18 @@ typedef struct PartitionedResultDestReceiver
 	/* public DestReceiver interface */
 	DestReceiver pub;
 
-	/* partition file $i is stored at file named $resultIdPrefix_$i. */
-	char *resultIdPrefix;
+	/* on lazy startup we only startup the DestReceiver once they receive a tuple */
+	bool lazyStartup;
 
-	/* use binary copy or just text copy format? */
-	bool binaryCopy;
+	/* cached startup information for use in lazy startup */
+	struct
+	{
+		int operation;
+		TupleDesc tupleDescriptor;
+	} startupCache;
 
-	/* used for deciding which partition a shard belongs to. */
-	CitusTableCacheEntry *shardSearchInfo;
-
-	MemoryContext perTupleContext;
-
-	/* how does stream tuples look like? */
-	TupleDesc tupleDescriptor;
+	/* identify which DestReceivers have already been started */
+	Bitmapset *startupmap;
 
 	/* which column of streamed tuples to use as partition column? */
 	int partitionColumnIndex;
@@ -64,10 +63,10 @@ typedef struct PartitionedResultDestReceiver
 	/* how many partitions do we have? */
 	int partitionCount;
 
-	/*
-	 * Tuples for partition[i] are sent to partitionDestReceivers[i], which
-	 * writes it to a result file.
-	 */
+	/* used for deciding which partition a shard belongs to. */
+	CitusTableCacheEntry *shardSearchInfo;
+
+	/* Tuples matching shardSearchInfo[i] are sent to partitionDestReceivers[i] */
 	DestReceiver **partitionDestReceivers;
 } PartitionedResultDestReceiver;
 
@@ -76,19 +75,12 @@ static CitusTableCacheEntry * QueryTupleShardSearchInfo(ArrayType *minValuesArra
 														ArrayType *maxValuesArray,
 														char partitionMethod,
 														Var *partitionColumn);
-static PartitionedResultDestReceiver * CreatePartitionedResultDestReceiver(char *resultId,
-																		   int
-																		   partitionColumnIndex,
-																		   int
-																		   partitionCount,
-																		   TupleDesc
-																		   tupleDescriptor,
-																		   bool binaryCopy,
-																		   CitusTableCacheEntry
-																		   *
-																		   shardSearchInfo,
-																		   MemoryContext
-																		   perTupleContext);
+static DestReceiver * CreatePartitionedResultDestReceiver(int partitionColumnIndex,
+														  int partitionCount,
+														  CitusTableCacheEntry *
+														  shardSearchInfo,
+														  DestReceiver **
+														  partitionedDestReceivers);
 static void PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 												 TupleDesc inputTupleDescriptor);
 static bool PartitionedResultDestReceiverReceive(TupleTableSlot *slot,
@@ -202,14 +194,28 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 	/* prepare the output destination */
 	EState *estate = CreateExecutorState();
 	MemoryContext tupleContext = GetPerTupleMemoryContext(estate);
-	PartitionedResultDestReceiver *dest =
-		CreatePartitionedResultDestReceiver(resultIdPrefixString, partitionColumnIndex,
-											partitionCount, tupleDescriptor, binaryCopy,
-											shardSearchInfo, tupleContext);
+
+	/* create all dest receivers */
+	DestReceiver **dests = palloc0(partitionCount * sizeof(DestReceiver *));
+	for (int partitionIndex = 0; partitionIndex < partitionCount; partitionIndex++)
+	{
+		StringInfo resultId = makeStringInfo();
+		appendStringInfo(resultId, "%s_%d", resultIdPrefixString, partitionIndex);
+		char *filePath = QueryResultFileName(resultId->data);
+		DestReceiver *partitionDest = CreateFileDestReceiver(filePath, tupleContext,
+															 binaryCopy);
+		dests[partitionIndex] = partitionDest;
+	}
+
+	DestReceiver *dest = CreatePartitionedResultDestReceiver(
+		partitionColumnIndex,
+		partitionCount,
+		shardSearchInfo,
+		dests
+		);
 
 	/* execute the query */
-	PortalRun(portal, FETCH_ALL, false, true, (DestReceiver *) dest,
-			  (DestReceiver *) dest, NULL);
+	PortalRun(portal, FETCH_ALL, false, true, dest, dest, NULL);
 
 	/* construct the output result */
 	TupleDesc returnTupleDesc = NULL;
@@ -225,11 +231,7 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 		Datum values[3];
 		bool nulls[3];
 
-		if (dest->partitionDestReceivers[partitionIndex] != NULL)
-		{
-			FileDestReceiverStats(dest->partitionDestReceivers[partitionIndex],
-								  &recordsWritten, &bytesWritten);
-		}
+		FileDestReceiverStats(dests[partitionIndex], &recordsWritten, &bytesWritten);
 
 		memset(values, 0, sizeof(values));
 		memset(nulls, 0, sizeof(nulls));
@@ -363,12 +365,11 @@ QueryTupleShardSearchInfo(ArrayType *minValuesArray, ArrayType *maxValuesArray,
 /*
  * CreatePartitionedResultDestReceiver sets up a partitioned dest receiver.
  */
-static PartitionedResultDestReceiver *
-CreatePartitionedResultDestReceiver(char *resultIdPrefix, int partitionColumnIndex,
-									int partitionCount, TupleDesc tupleDescriptor,
-									bool binaryCopy,
+static DestReceiver *
+CreatePartitionedResultDestReceiver(int partitionColumnIndex,
+									int partitionCount,
 									CitusTableCacheEntry *shardSearchInfo,
-									MemoryContext perTupleContext)
+									DestReceiver **partitionedDestReceivers)
 {
 	PartitionedResultDestReceiver *resultDest =
 		palloc0(sizeof(PartitionedResultDestReceiver));
@@ -380,18 +381,13 @@ CreatePartitionedResultDestReceiver(char *resultIdPrefix, int partitionColumnInd
 	resultDest->pub.rDestroy = PartitionedResultDestReceiverDestroy;
 	resultDest->pub.mydest = DestCopyOut;
 
-	/* set up output parameters */
-	resultDest->resultIdPrefix = resultIdPrefix;
-	resultDest->perTupleContext = perTupleContext;
+	/* setup routing parameters */
 	resultDest->partitionColumnIndex = partitionColumnIndex;
 	resultDest->partitionCount = partitionCount;
 	resultDest->shardSearchInfo = shardSearchInfo;
-	resultDest->tupleDescriptor = tupleDescriptor;
-	resultDest->binaryCopy = binaryCopy;
-	resultDest->partitionDestReceivers =
-		(DestReceiver **) palloc0(partitionCount * sizeof(DestReceiver *));
+	resultDest->partitionDestReceivers = partitionedDestReceivers;
 
-	return resultDest;
+	return (DestReceiver *) resultDest;
 }
 
 
@@ -400,24 +396,29 @@ CreatePartitionedResultDestReceiver(char *resultIdPrefix, int partitionColumnInd
  * PartitionedResultDestReceiver.
  */
 static void
-PartitionedResultDestReceiverStartup(DestReceiver *copyDest, int operation,
+PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 									 TupleDesc inputTupleDescriptor)
 {
-	/*
-	 * We don't expect this to be called multiple times, but if it happens,
-	 * we will just overwrite previous files.
-	 */
-	PartitionedResultDestReceiver *partitionedDest =
-		(PartitionedResultDestReceiver *) copyDest;
-	int partitionCount = partitionedDest->partitionCount;
-	for (int partitionIndex = 0; partitionIndex < partitionCount; partitionIndex++)
+	PartitionedResultDestReceiver *self = (PartitionedResultDestReceiver *) dest;
+
+	/* TODO verify these are in suitable memory contexts to cache here */
+	self->startupCache.tupleDescriptor = inputTupleDescriptor;
+	self->startupCache.operation = operation;
+
+	if (self->lazyStartup)
 	{
-		DestReceiver *partitionDest =
-			partitionedDest->partitionDestReceivers[partitionIndex];
-		if (partitionDest != NULL)
-		{
-			partitionDest->rStartup(partitionDest, operation, inputTupleDescriptor);
-		}
+		/* we are initialized, rest happens when needed*/
+		return;
+	}
+
+	/* no lazy startup, lets startup our partitionedDestReceivers */
+	for (int i = 0; i < self->partitionCount; i++)
+	{
+		DestReceiver *partitionDest = self->partitionDestReceivers[i];
+		partitionDest->rStartup(partitionDest, operation, inputTupleDescriptor);
+
+		/* mark this dest receiver as started */
+		self->startupmap = bms_add_member(self->startupmap, i);
 	}
 }
 
@@ -427,25 +428,24 @@ PartitionedResultDestReceiverStartup(DestReceiver *copyDest, int operation,
  * PartitionedResultDestReceiver.
  */
 static bool
-PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *copyDest)
+PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 {
-	PartitionedResultDestReceiver *partitionedDest =
-		(PartitionedResultDestReceiver *) copyDest;
+	PartitionedResultDestReceiver *self = (PartitionedResultDestReceiver *) dest;
 
 	slot_getallattrs(slot);
 
 	Datum *columnValues = slot->tts_values;
 	bool *columnNulls = slot->tts_isnull;
 
-	if (columnNulls[partitionedDest->partitionColumnIndex])
+	if (columnNulls[self->partitionColumnIndex])
 	{
 		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
 						errmsg("the partition column value cannot be NULL")));
 	}
 
-	Datum partitionColumnValue = columnValues[partitionedDest->partitionColumnIndex];
+	Datum partitionColumnValue = columnValues[self->partitionColumnIndex];
 	ShardInterval *shardInterval = FindShardInterval(partitionColumnValue,
-													 partitionedDest->shardSearchInfo);
+													 self->shardSearchInfo);
 	if (shardInterval == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
@@ -454,20 +454,17 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *copyDes
 	}
 
 	int partitionIndex = shardInterval->shardIndex;
-	DestReceiver *partitionDest = partitionedDest->partitionDestReceivers[partitionIndex];
-	if (partitionDest == NULL)
-	{
-		StringInfo resultId = makeStringInfo();
-		appendStringInfo(resultId, "%s_%d", partitionedDest->resultIdPrefix,
-						 partitionIndex);
-		char *filePath = QueryResultFileName(resultId->data);
+	DestReceiver *partitionDest = self->partitionDestReceivers[partitionIndex];
 
-		partitionDest = CreateFileDestReceiver(filePath, partitionedDest->perTupleContext,
-											   partitionedDest->binaryCopy);
-		partitionedDest->partitionDestReceivers[partitionIndex] = partitionDest;
-		partitionDest->rStartup(partitionDest, 0, partitionedDest->tupleDescriptor);
+	if (!bms_is_member(partitionIndex, self->startupmap))
+	{
+		/* dest receiver not started yet, could be due to lazy startup */
+		partitionDest->rStartup(partitionDest,
+								self->startupCache.operation,
+								self->startupCache.tupleDescriptor);
 	}
 
+	/* forward the tuple to the appropriate dest receiver */
 	partitionDest->receiveSlot(slot, partitionDest);
 
 	return true;
