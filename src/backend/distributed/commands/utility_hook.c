@@ -900,9 +900,9 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 				SendCommandToWorkersWithMetadata(setSearchPathCommand);
 			}
 
-			if (ddlJob->commandString != NULL)
+			if (ddlJob->metadataSyncCommand != NULL)
 			{
-				SendCommandToWorkersWithMetadata((char *) ddlJob->commandString);
+				SendCommandToWorkersWithMetadata((char *) ddlJob->metadataSyncCommand);
 			}
 		}
 
@@ -962,7 +962,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 					commandList = lappend(commandList, setSearchPathCommand);
 				}
 
-				commandList = lappend(commandList, (char *) ddlJob->commandString);
+				commandList = lappend(commandList, (char *) ddlJob->metadataSyncCommand);
 
 				SendBareCommandListToMetadataWorkers(commandList);
 			}
@@ -1042,7 +1042,7 @@ CreateCustomDDLTaskList(Oid relationId, TableDDLCommand *command)
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = relationId;
-	ddlJob->commandString = GetTableDDLCommand(command);
+	ddlJob->metadataSyncCommand = GetTableDDLCommand(command);
 	ddlJob->taskList = taskList;
 
 	return ddlJob;
@@ -1292,7 +1292,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = InvalidOid;
-	ddlJob->commandString = NULL;
+	ddlJob->metadataSyncCommand = NULL;
 	ddlJob->taskList = list_make1(task);
 
 	return list_make1(ddlJob);

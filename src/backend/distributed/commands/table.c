@@ -1119,7 +1119,7 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		sqlForTaskList = DeparseTreeNode((Node *) newStmt);
 	}
 
-	ddlJob->commandString = useInitialDDLCommandString ? alterTableCommand : NULL;
+	ddlJob->metadataSyncCommand = useInitialDDLCommandString ? alterTableCommand : NULL;
 
 	if (OidIsValid(rightRelationId))
 	{
@@ -1759,8 +1759,8 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
 	ddlJob->targetRelationId = relationId;
-	ddlJob->commandString = DeparseTreeNode((Node *) stmt);
-	ddlJob->taskList = DDLTaskList(relationId, ddlJob->commandString);
+	ddlJob->metadataSyncCommand = DeparseTreeNode((Node *) stmt);
+	ddlJob->taskList = DDLTaskList(relationId, ddlJob->metadataSyncCommand);
 	return list_make1(ddlJob);
 }
 
