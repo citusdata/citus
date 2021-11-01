@@ -458,5 +458,56 @@ select count(*) from test where a = 0;
      0
 (1 row)
 
+-- Test connecting all the shards
+ALTER SYSTEM SET citus.node_conninfo = 'sslmode=doesnotexist';
+BEGIN;
+ALTER TABLE test ADD COLUMN b INT;
+select pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+select pg_sleep(0.1); -- wait for config reload to apply
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+show citus.node_conninfo;
+ citus.node_conninfo
+---------------------------------------------------------------------
+ sslmode=doesnotexist
+(1 row)
+
+-- Should work since connections to the same shards that BEGIN is sent
+-- are reused.
+ALTER TABLE test ADD COLUMN c INT;
+COMMIT;
+-- Should fail now, when transaction is finished
+ALTER TABLE test ADD COLUMN d INT;
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: invalid sslmode value: "doesnotexist"
+-- Reset it again
+ALTER SYSTEM RESET citus.node_conninfo;
+select pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+select pg_sleep(0.1); -- wait for config reload to apply
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+show citus.node_conninfo;
+ citus.node_conninfo
+---------------------------------------------------------------------
+ sslmode=require
+(1 row)
+
+-- Should work again
+ALTER TABLE test ADD COLUMN e INT;
 DROP SCHEMA node_conninfo_reload CASCADE;
 NOTICE:  drop cascades to table test
