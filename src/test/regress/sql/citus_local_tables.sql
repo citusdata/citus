@@ -471,11 +471,12 @@ FROM (SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_loc
 -- cannot create a citus local table from a catalog table
 SELECT citus_add_local_table_to_metadata('pg_class');
 
+-- testing foreign key connection between citus local tables,
+-- using the GUC use_citus_managed_tables to add tables to metadata
+SET citus.use_citus_managed_tables TO ON;
 CREATE TABLE referencing_table(a int);
-SELECT citus_add_local_table_to_metadata('referencing_table');
-
 CREATE TABLE referenced_table(a int UNIQUE);
-SELECT citus_add_local_table_to_metadata('referenced_table');
+RESET citus.use_citus_managed_tables;
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);
 

@@ -1671,6 +1671,17 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		WarnIfDeprecatedExecutorUsed, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.use_citus_managed_tables",
+		gettext_noop("Allows new local tables to be accessed on workers"),
+		gettext_noop("Adds all newly created tables to Citus metadata by default, "
+					 "when enabled. Set to false by default."),
+		&AddAllLocalTablesToMetadata,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.use_secondary_nodes",
 		gettext_noop("Sets the policy to use when choosing nodes for SELECT queries."),

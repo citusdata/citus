@@ -21,6 +21,8 @@
 #include "tcop/utility.h"
 
 
+extern bool AddAllLocalTablesToMetadata;
+
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;
 
