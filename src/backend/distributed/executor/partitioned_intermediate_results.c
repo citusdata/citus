@@ -54,9 +54,6 @@ typedef struct PartitionedResultDestReceiver
 		TupleDesc tupleDescriptor;
 	} startupCache;
 
-	/* identify which DestReceivers have already been started */
-	Bitmapset *startupmap;
-
 	/* which column of streamed tuples to use as partition column? */
 	int partitionColumnIndex;
 
@@ -68,6 +65,7 @@ typedef struct PartitionedResultDestReceiver
 
 	/* Tuples matching shardSearchInfo[i] are sent to partitionDestReceivers[i] */
 	DestReceiver **partitionDestReceivers;
+	DestReceiver **partitionDestReceiversStarted;
 } PartitionedResultDestReceiver;
 
 static Portal StartPortalForQueryExecution(const char *queryString);
@@ -85,7 +83,7 @@ static void PartitionedResultDestReceiverStartup(DestReceiver *dest, int operati
 												 TupleDesc inputTupleDescriptor);
 static bool PartitionedResultDestReceiverReceive(TupleTableSlot *slot,
 												 DestReceiver *dest);
-static void PartitionedResultDestReceiverShutdown(DestReceiver *destReceiver);
+static void PartitionedResultDestReceiverShutdown(DestReceiver *dest);
 static void PartitionedResultDestReceiverDestroy(DestReceiver *copyDest);
 
 /* exports for SQL callable functions */
@@ -386,6 +384,8 @@ CreatePartitionedResultDestReceiver(int partitionColumnIndex,
 	resultDest->partitionCount = partitionCount;
 	resultDest->shardSearchInfo = shardSearchInfo;
 	resultDest->partitionDestReceivers = partitionedDestReceivers;
+	resultDest->partitionDestReceiversStarted = palloc0(
+		partitionCount * sizeof(DestReceiver *));
 
 	return (DestReceiver *) resultDest;
 }
@@ -416,9 +416,7 @@ PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 	{
 		DestReceiver *partitionDest = self->partitionDestReceivers[i];
 		partitionDest->rStartup(partitionDest, operation, inputTupleDescriptor);
-
-		/* mark this dest receiver as started */
-		self->startupmap = bms_add_member(self->startupmap, i);
+		self->partitionDestReceiversStarted[i] = partitionDest;
 	}
 }
 
@@ -454,14 +452,16 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	}
 
 	int partitionIndex = shardInterval->shardIndex;
-	DestReceiver *partitionDest = self->partitionDestReceivers[partitionIndex];
+	DestReceiver *partitionDest = self->partitionDestReceiversStarted[partitionIndex];
 
-	if (!bms_is_member(partitionIndex, self->startupmap))
+	if (partitionDest == NULL)
 	{
 		/* dest receiver not started yet, could be due to lazy startup */
+		partitionDest = self->partitionDestReceivers[partitionIndex];
 		partitionDest->rStartup(partitionDest,
 								self->startupCache.operation,
 								self->startupCache.tupleDescriptor);
+		self->partitionDestReceiversStarted[partitionIndex] = partitionDest;
 	}
 
 	/* forward the tuple to the appropriate dest receiver */
@@ -476,15 +476,14 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
  * PartitionedResultDestReceiver.
  */
 static void
-PartitionedResultDestReceiverShutdown(DestReceiver *copyDest)
+PartitionedResultDestReceiverShutdown(DestReceiver *dest)
 {
-	PartitionedResultDestReceiver *partitionedDest =
-		(PartitionedResultDestReceiver *) copyDest;
-	int partitionCount = partitionedDest->partitionCount;
-	for (int partitionIndex = 0; partitionIndex < partitionCount; partitionIndex++)
+	PartitionedResultDestReceiver *self =
+		(PartitionedResultDestReceiver *) dest;
+	for (int partitionIndex = 0; partitionIndex < self->partitionCount; partitionIndex++)
 	{
 		DestReceiver *partitionDest =
-			partitionedDest->partitionDestReceivers[partitionIndex];
+			self->partitionDestReceivers[partitionIndex];
 		if (partitionDest != NULL)
 		{
 			partitionDest->rShutdown(partitionDest);
@@ -502,10 +501,13 @@ PartitionedResultDestReceiverDestroy(DestReceiver *dest)
 {
 	PartitionedResultDestReceiver *self = (PartitionedResultDestReceiver *) dest;
 
-	int x = -1;
-	while ((x = bms_next_member(self->startupmap, x)) >= 0)
+	for (int partitionIndex = 0; partitionIndex < self->partitionCount; partitionIndex++)
 	{
-		DestReceiver *partitionDest = self->partitionDestReceivers[x];
-		partitionDest->rDestroy(partitionDest);
+		/* TODO understand if we should also destroy non-started receivers */
+		DestReceiver *partitionDest = self->partitionDestReceivers[partitionIndex];
+		if (partitionDest != NULL)
+		{
+			partitionDest->rDestroy(partitionDest);
+		}
 	}
 }
