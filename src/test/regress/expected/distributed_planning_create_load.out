@@ -46,6 +46,13 @@ SELECT create_reference_table('ref');
 
 (1 row)
 
+CREATE TABLE ref2(a int, b int);
+SELECT create_reference_table('ref2');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE TABLE local(c int, d int);
 select citus_add_local_table_to_metadata('local');
  citus_add_local_table_to_metadata

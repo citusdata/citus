@@ -483,9 +483,12 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	bool localTableEmpty = TableEmpty(relationId);
 	Oid colocatedTableId = ColocatedTableId(colocationId);
 
+	/* setting to false since this flag is only valid for citus local tables */
+	bool autoConverted = false;
+
 	/* create an entry for distributed table in pg_dist_partition */
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
-							  colocationId, replicationModel);
+							  colocationId, replicationModel, autoConverted);
 
 	/*
 	 * Ensure that the sequences used in column defaults of the table

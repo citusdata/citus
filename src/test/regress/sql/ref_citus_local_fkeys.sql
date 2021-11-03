@@ -117,6 +117,7 @@ ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REF
 -- tables works fine with remote execution too
 SET citus.enable_local_execution TO OFF;
 ALTER TABLE reference_table DROP CONSTRAINT fkey_ref_to_local;
+SELECT undistribute_table('citus_local_table');
 ALTER TABLE reference_table ADD CONSTRAINT fkey_ref_to_local FOREIGN KEY(r1) REFERENCES citus_local_table(l1) ON DELETE NO ACTION;
 SET citus.enable_local_execution TO ON;
 

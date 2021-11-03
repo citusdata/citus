@@ -531,7 +531,7 @@ CreateRequiredDirectories(void)
 	const char *subdirs[] = {
 		"pg_foreign_file",
 		"pg_foreign_file/cached",
-		"base/" PG_JOB_CACHE_DIR
+		("base/" PG_JOB_CACHE_DIR)
 	};
 
 	for (int dirNo = 0; dirNo < lengthof(subdirs); dirNo++)

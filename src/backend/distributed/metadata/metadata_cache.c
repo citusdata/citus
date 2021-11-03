@@ -1387,6 +1387,20 @@ BuildCitusTableCacheEntry(Oid relationId)
 		cacheEntry->replicationModel = DatumGetChar(replicationModelDatum);
 	}
 
+	if (isNullArray[Anum_pg_dist_partition_autoconverted - 1])
+	{
+		/*
+		 * We don't expect this to happen, but set it to false (the default value)
+		 * to not break if anything goes wrong.
+		 */
+		cacheEntry->autoConverted = false;
+	}
+	else
+	{
+		cacheEntry->autoConverted = DatumGetBool(
+			datumArray[Anum_pg_dist_partition_autoconverted - 1]);
+	}
+
 	heap_freetuple(distPartitionTuple);
 
 	BuildCachedShardList(cacheEntry);
@@ -3653,6 +3667,7 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	cacheEntry->hasUninitializedShardInterval = false;
 	cacheEntry->hasUniformHashDistribution = false;
 	cacheEntry->hasOverlappingShardInterval = false;
+	cacheEntry->autoConverted = false;
 
 	pfree(cacheEntry);
 }
@@ -3956,23 +3971,19 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		bool isNull = false;
+		bool isNullArray[Natts_pg_dist_partition];
+		Datum datumArray[Natts_pg_dist_partition];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-		Datum partMethodDatum =
-			heap_getattr(heapTuple, Anum_pg_dist_partition_partmethod,
-						 tupleDescriptor, &isNull);
-		Datum replicationModelDatum =
-			heap_getattr(heapTuple, Anum_pg_dist_partition_repmodel,
-						 tupleDescriptor, &isNull);
+		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
+		Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
 
 		Oid partitionMethod = DatumGetChar(partMethodDatum);
 		Oid replicationModel = DatumGetChar(replicationModelDatum);
 
 		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, citusTableType))
 		{
-			Datum relationIdDatum = heap_getattr(heapTuple,
-												 Anum_pg_dist_partition_logicalrelid,
-												 tupleDescriptor, &isNull);
+			Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 
 			Oid relationId = DatumGetObjectId(relationIdDatum);
 

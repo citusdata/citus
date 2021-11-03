@@ -267,8 +267,9 @@ BEGIN;
   DROP TABLE local_table_3 CASCADE;
   DROP SCHEMA another_schema_fkeys_between_local_ref CASCADE;
 
-  -- now we shouldn't see local_table_5 since now it is not connected to any reference tables
-  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  -- now we shouldn't see local_table_5 since now it is not connected to any reference tables/citus local tables
+  -- and it's converted automatically
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel, autoconverted FROM pg_dist_partition
   WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
   ORDER BY tablename;
 ROLLBACK;

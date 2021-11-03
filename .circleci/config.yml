@@ -3,6 +3,11 @@ orbs:
   codecov: codecov/codecov@1.1.1
   azure-cli: circleci/azure-cli@1.0.0
 
+parameters:
+  image_suffix:
+    type: string
+    default: "-v2021_10_27"
+
 jobs:
 
   build:
@@ -19,7 +24,7 @@ jobs:
         description: tag to use for the docker image
         type: string
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     steps:
       - checkout
       - run:
@@ -113,7 +118,7 @@ jobs:
         type: string
         default: 12-13
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -185,7 +190,7 @@ jobs:
         type: string
         default: 12-13
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     resource_class: xlarge
     working_directory: /home/circleci/project
     steps:
@@ -265,7 +270,7 @@ jobs:
         description: 'docker image tag to use'
         type: string
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -351,7 +356,7 @@ jobs:
         description: "make target"
         type: string
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -396,6 +401,9 @@ jobs:
           path: src/test/regress/regression.diffs
           when: on_fail
       - store_artifacts:
+          name: 'Save mitmproxy output (failure test specific)'
+          path: src/test/regress/proxy.output
+      - store_artifacts:
           name: 'Save results'
           path: src/test/regress/results/
           when: on_fail
@@ -428,7 +436,7 @@ jobs:
         type: string
         default: installcheck
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -781,7 +789,7 @@ workflows:
           name: 'test-12-13_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 13
-          image_tag: '12.8-13.4'
+          image_tag: '12.8-13.4-14.0'
           requires: [build-12,build-13]
 
       - test-pg-upgrade:

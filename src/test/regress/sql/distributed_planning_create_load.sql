@@ -30,6 +30,9 @@ SELECT create_distributed_table('test_2','x');
 CREATE TABLE ref(a int, b int);
 SELECT create_reference_table('ref');
 
+CREATE TABLE ref2(a int, b int);
+SELECT create_reference_table('ref2');
+
 CREATE TABLE local(c int, d int);
 select citus_add_local_table_to_metadata('local');
 

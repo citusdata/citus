@@ -1,6 +1,7 @@
 SET search_path TO upgrade_basic, public, pg_catalog;
 BEGIN;
-SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' ORDER BY tablename;
+-- We have the tablename filter to avoid adding an alternative output for when the coordinator is in metadata vs when not
+SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' and tablename NOT LIKE 'r_%' ORDER BY tablename;
   schemaname   | tablename | indexname | tablespace |                            indexdef
 ---------------------------------------------------------------------
  upgrade_basic | r         | r_pkey    |            | CREATE UNIQUE INDEX r_pkey ON upgrade_basic.r USING btree (a)
