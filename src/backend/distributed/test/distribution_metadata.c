@@ -62,7 +62,6 @@ Datum
 load_shard_id_array(PG_FUNCTION_ARGS)
 {
 	Oid distributedTableId = PG_GETARG_OID(0);
-	int shardIdIndex = 0;
 	Oid shardIdTypeId = INT8OID;
 
 	List *shardList = LoadShardIntervalList(distributedTableId);
@@ -75,8 +74,7 @@ load_shard_id_array(PG_FUNCTION_ARGS)
 	{
 		Datum shardIdDatum = Int64GetDatum(shardInterval->shardId);
 
-		shardIdDatumArray[shardIdIndex] = shardIdDatum;
-		shardIdIndex++;
+		shardIdDatumArray[foreach_index(shardInterval)] = shardIdDatum;
 	}
 
 	ArrayType *shardIdArrayType = DatumArrayToArrayType(shardIdDatumArray, shardIdCount,
@@ -122,7 +120,6 @@ load_shard_placement_array(PG_FUNCTION_ARGS)
 	int64 shardId = PG_GETARG_INT64(0);
 	bool onlyActive = PG_GETARG_BOOL(1);
 	List *placementList = NIL;
-	int placementIndex = 0;
 	Oid placementTypeId = TEXTOID;
 	StringInfo placementInfo = makeStringInfo();
 
@@ -146,8 +143,8 @@ load_shard_placement_array(PG_FUNCTION_ARGS)
 		appendStringInfo(placementInfo, "%s:%d", placement->nodeName,
 						 placement->nodePort);
 
-		placementDatumArray[placementIndex] = CStringGetTextDatum(placementInfo->data);
-		placementIndex++;
+		placementDatumArray[foreach_index(placement)] =
+			CStringGetTextDatum(placementInfo->data);
 		resetStringInfo(placementInfo);
 	}
 

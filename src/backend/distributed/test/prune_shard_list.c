@@ -207,7 +207,6 @@ MakeTextPartitionExpression(Oid distributedTableId, text *value)
 static ArrayType *
 PrunedShardIdsForTable(Oid distributedTableId, List *whereClauseList)
 {
-	int shardIdIndex = 0;
 	Oid shardIdTypeId = INT8OID;
 	Index tableId = 1;
 
@@ -222,8 +221,7 @@ PrunedShardIdsForTable(Oid distributedTableId, List *whereClauseList)
 	{
 		Datum shardIdDatum = Int64GetDatum(shardInterval->shardId);
 
-		shardIdDatumArray[shardIdIndex] = shardIdDatum;
-		shardIdIndex++;
+		shardIdDatumArray[foreach_index(shardInterval)] = shardIdDatum;
 	}
 
 	ArrayType *shardIdArrayType = DatumArrayToArrayType(shardIdDatumArray, shardIdCount,

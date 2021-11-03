@@ -280,7 +280,6 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 {
 	NodeFillState *fillState = NULL;
 	NodeFillState *prevFillState = NULL;
-	int fillStateIndex = 0;
 	int fillStateLength = list_length(state->fillStateListAsc);
 
 	Assert(state != NULL);
@@ -300,8 +299,8 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 		}
 
 		/* Check that fillStateListDesc is the reversed version of fillStateListAsc */
-		Assert(list_nth(state->fillStateListDesc, fillStateLength - fillStateIndex - 1) ==
-			   fillState);
+		Assert(list_nth(state->fillStateListDesc,
+						fillStateLength - foreach_index(fillState) - 1) == fillState);
 
 
 		foreach_ptr(shardCost, fillState->shardCostListDesc)
@@ -333,7 +332,6 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 			   1000);
 
 		prevFillState = fillState;
-		fillStateIndex++;
 	}
 }
 

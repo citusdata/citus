@@ -44,7 +44,6 @@ master_metadata_snapshot(PG_FUNCTION_ARGS)
 	List *dropSnapshotCommands = MetadataDropCommands();
 	List *createSnapshotCommands = MetadataCreateCommands();
 	List *snapshotCommandList = NIL;
-	int snapshotCommandIndex = 0;
 	Oid ddlCommandTypeId = TEXTOID;
 
 	snapshotCommandList = list_concat(snapshotCommandList, dropSnapshotCommands);
@@ -58,8 +57,8 @@ master_metadata_snapshot(PG_FUNCTION_ARGS)
 	{
 		Datum metadataSnapshotCommandDatum = CStringGetTextDatum(metadataSnapshotCommand);
 
-		snapshotCommandDatumArray[snapshotCommandIndex] = metadataSnapshotCommandDatum;
-		snapshotCommandIndex++;
+		snapshotCommandDatumArray[foreach_index(metadataSnapshotCommand)] =
+			metadataSnapshotCommandDatum;
 	}
 
 	ArrayType *snapshotCommandArrayType = DatumArrayToArrayType(snapshotCommandDatumArray,

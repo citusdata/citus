@@ -637,7 +637,6 @@ QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 {
 	StringInfo queryString = makeStringInfo();
 	StringInfo fragmentNamesArrayString = makeStringInfo();
-	int fragmentCount = 0;
 	NodePair *nodePair = &fragmentsTransfer->nodes;
 	WorkerNode *sourceNode = LookupNodeByNodeIdOrError(nodePair->sourceNodeId);
 
@@ -648,15 +647,13 @@ QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 	{
 		const char *fragmentName = fragment->resultId;
 
-		if (fragmentCount > 0)
+		if (!foreach_first(fragment))
 		{
 			appendStringInfoString(fragmentNamesArrayString, ",");
 		}
 
 		appendStringInfoString(fragmentNamesArrayString,
 							   quote_literal_cstr(fragmentName));
-
-		fragmentCount++;
 	}
 
 	appendStringInfoString(fragmentNamesArrayString, "]::text[]");

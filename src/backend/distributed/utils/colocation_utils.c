@@ -182,7 +182,6 @@ get_colocated_shard_array(PG_FUNCTION_ARGS)
 	int colocatedShardCount = list_length(colocatedShardList);
 	Datum *colocatedShardsDatumArray = palloc0(colocatedShardCount * sizeof(Datum));
 	Oid arrayTypeId = OIDOID;
-	int colocatedShardIndex = 0;
 
 	ShardInterval *colocatedShardInterval = NULL;
 	foreach_ptr(colocatedShardInterval, colocatedShardList)
@@ -191,8 +190,8 @@ get_colocated_shard_array(PG_FUNCTION_ARGS)
 
 		Datum colocatedShardDatum = Int64GetDatum(colocatedShardId);
 
-		colocatedShardsDatumArray[colocatedShardIndex] = colocatedShardDatum;
-		colocatedShardIndex++;
+		colocatedShardsDatumArray[foreach_index(colocatedShardInterval)] =
+			colocatedShardDatum;
 	}
 
 	ArrayType *colocatedShardsArrayType = DatumArrayToArrayType(colocatedShardsDatumArray,

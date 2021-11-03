@@ -990,6 +990,11 @@ ShardListInsertCommand(List *shardIntervalList)
 			appendStringInfo(maxHashToken, "NULL");
 		}
 
+		if (!foreach_first(shardInterval))
+		{
+			appendStringInfo(insertShardCommand, ", ");
+		}
+
 		appendStringInfo(insertShardCommand,
 						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
 						 quote_literal_cstr(qualifiedRelationName),
@@ -997,11 +1002,6 @@ ShardListInsertCommand(List *shardIntervalList)
 						 shardInterval->storageType,
 						 minHashToken->data,
 						 maxHashToken->data);
-
-		if (llast(shardIntervalList) != shardInterval)
-		{
-			appendStringInfo(insertShardCommand, ", ");
-		}
 	}
 
 	appendStringInfo(insertShardCommand, ") ");

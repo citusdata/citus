@@ -671,7 +671,7 @@ WaitsForToString(List *waitsFor)
 	TransactionNode *waitingNode = NULL;
 	foreach_ptr(waitingNode, waitsFor)
 	{
-		if (transactionIdStr->len != 0)
+		if (!foreach_first(waitingNode))
 		{
 			appendStringInfoString(transactionIdStr, ",");
 		}

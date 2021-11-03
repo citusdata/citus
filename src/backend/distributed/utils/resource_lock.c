@@ -216,8 +216,6 @@ static void
 LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 {
 	StringInfo lockCommand = makeStringInfo();
-	int processedShardIntervalCount = 0;
-	int totalShardIntervalCount = list_length(shardIntervalList);
 	WorkerNode *firstWorkerNode = GetFirstPrimaryWorkerNode();
 	int connectionFlags = 0;
 	const char *superuser = CurrentUserName();
@@ -227,15 +225,13 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		int64 shardId = shardInterval->shardId;
-
-		appendStringInfo(lockCommand, "%lu", shardId);
-
-		processedShardIntervalCount++;
-		if (processedShardIntervalCount != totalShardIntervalCount)
+		if (!foreach_first(shardInterval))
 		{
 			appendStringInfo(lockCommand, ", ");
 		}
+
+		int64 shardId = shardInterval->shardId;
+		appendStringInfo(lockCommand, "%lu", shardId);
 	}
 
 	appendStringInfo(lockCommand, "])");
@@ -303,8 +299,6 @@ void
 LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 {
 	StringInfo lockCommand = makeStringInfo();
-	int processedShardIntervalCount = 0;
-	int totalShardIntervalCount = list_length(shardIntervalList);
 
 	if (list_length(shardIntervalList) == 0)
 	{
@@ -316,15 +310,13 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		int64 shardId = shardInterval->shardId;
-
-		appendStringInfo(lockCommand, "%lu", shardId);
-
-		processedShardIntervalCount++;
-		if (processedShardIntervalCount != totalShardIntervalCount)
+		if (!foreach_first(shardInterval))
 		{
 			appendStringInfo(lockCommand, ", ");
 		}
+
+		int64 shardId = shardInterval->shardId;
+		appendStringInfo(lockCommand, "%lu", shardId);
 	}
 
 	appendStringInfo(lockCommand, "])");

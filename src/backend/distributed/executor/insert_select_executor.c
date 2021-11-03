@@ -580,7 +580,6 @@ static int
 PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList)
 {
 	Var *partitionColumn = PartitionColumn(relationId, 0);
-	int partitionColumnIndex = 0;
 
 	const char *columnName = NULL;
 	foreach_ptr(columnName, columnNameList)
@@ -590,10 +589,8 @@ PartitionColumnIndexFromColumnList(Oid relationId, List *columnNameList)
 		/* check whether this is the partition column */
 		if (partitionColumn != NULL && attrNumber == partitionColumn->varattno)
 		{
-			return partitionColumnIndex;
+			return foreach_index(columnName);
 		}
-
-		partitionColumnIndex++;
 	}
 
 	return -1;
@@ -727,15 +724,12 @@ static int
 PartitionColumnIndex(List *insertTargetList, Var *partitionColumn)
 {
 	TargetEntry *insertTargetEntry = NULL;
-	int targetEntryIndex = 0;
 	foreach_ptr(insertTargetEntry, insertTargetList)
 	{
 		if (insertTargetEntry->resno == partitionColumn->varattno)
 		{
-			return targetEntryIndex;
+			return foreach_index(insertTargetEntry);
 		}
-
-		targetEntryIndex++;
 	}
 
 	return -1;
@@ -803,11 +797,10 @@ static void
 WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 {
 	StringInfo projectedColumnsString = makeStringInfo();
-	int entryIndex = 0;
 	TargetEntry *targetEntry = NULL;
 	foreach_ptr(targetEntry, projectedTargetEntries)
 	{
-		if (entryIndex != 0)
+		if (!foreach_first(targetEntry))
 		{
 			appendStringInfoChar(projectedColumnsString, ',');
 		}
@@ -815,8 +808,6 @@ WrapTaskListForProjection(List *taskList, List *projectedTargetEntries)
 		char *columnName = targetEntry->resname;
 		Assert(columnName != NULL);
 		appendStringInfoString(projectedColumnsString, quote_identifier(columnName));
-
-		entryIndex++;
 	}
 
 	Task *task = NULL;

@@ -460,8 +460,6 @@ SortTupleStore(CitusScanState *scanState)
 	Oid *collations = (Oid *) palloc(numberOfSortKeys * sizeof(Oid));
 	bool *nullsFirst = (bool *) palloc(numberOfSortKeys * sizeof(bool));
 
-	int sortKeyIndex = 0;
-
 	/*
 	 * Iterate on the returning target list and generate the necessary information
 	 * for sorting the tuples.
@@ -477,12 +475,11 @@ SortTupleStore(CitusScanState *scanState)
 								 &sortop, NULL, NULL,
 								 NULL);
 
-		sortColIdx[sortKeyIndex] = sortKeyIndex + 1;
-		sortOperators[sortKeyIndex] = sortop;
-		collations[sortKeyIndex] = exprCollation((Node *) returningEntry->expr);
-		nullsFirst[sortKeyIndex] = false;
-
-		sortKeyIndex++;
+		int index = foreach_index(returningEntry);
+		sortColIdx[index] = index + 1;
+		sortOperators[index] = sortop;
+		collations[index] = exprCollation((Node *) returningEntry->expr);
+		nullsFirst[index] = false;
 	}
 
 	Tuplesortstate *tuplesortstate =
