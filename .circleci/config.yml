@@ -291,11 +291,11 @@ jobs:
             # run make check-citus-upgrade for all citus versions
             # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
             for citus_version in ${CITUS_VERSIONS}; do \
-              export upgrade_test_old_citus_version="$citus_version"; \
               gosu circleci \
                 make -C src/test/regress \
                   check-citus-upgrade \
                   bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+                  citus-old-version=${citus_version} \
                   citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
                   citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
             done;
@@ -306,6 +306,7 @@ jobs:
               gosu circleci \
                 make -C src/test/regress \
                   check-citus-upgrade-mixed \
+                  citus-old-version=${citus_version} \
                   bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
                   citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
                   citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
