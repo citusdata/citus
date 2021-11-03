@@ -78,7 +78,8 @@ static DestReceiver * CreatePartitionedResultDestReceiver(int partitionColumnInd
 														  CitusTableCacheEntry *
 														  shardSearchInfo,
 														  DestReceiver **
-														  partitionedDestReceivers);
+														  partitionedDestReceivers,
+														  bool lazyStartup);
 static void PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 												 TupleDesc inputTupleDescriptor);
 static bool PartitionedResultDestReceiverReceive(TupleTableSlot *slot,
@@ -205,12 +206,13 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 		dests[partitionIndex] = partitionDest;
 	}
 
+	const bool lazyStartup = true;
 	DestReceiver *dest = CreatePartitionedResultDestReceiver(
 		partitionColumnIndex,
 		partitionCount,
 		shardSearchInfo,
-		dests
-		);
+		dests,
+		lazyStartup);
 
 	/* execute the query */
 	PortalRun(portal, FETCH_ALL, false, true, dest, dest, NULL);
@@ -367,7 +369,8 @@ static DestReceiver *
 CreatePartitionedResultDestReceiver(int partitionColumnIndex,
 									int partitionCount,
 									CitusTableCacheEntry *shardSearchInfo,
-									DestReceiver **partitionedDestReceivers)
+									DestReceiver **partitionedDestReceivers,
+									bool lazyStartup)
 {
 	PartitionedResultDestReceiver *resultDest =
 		palloc0(sizeof(PartitionedResultDestReceiver));
@@ -386,6 +389,7 @@ CreatePartitionedResultDestReceiver(int partitionColumnIndex,
 	resultDest->partitionDestReceivers = partitionedDestReceivers;
 	resultDest->partitionDestReceiversStarted = palloc0(
 		partitionCount * sizeof(DestReceiver *));
+	resultDest->lazyStartup = lazyStartup;
 
 	return (DestReceiver *) resultDest;
 }
