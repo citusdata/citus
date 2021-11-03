@@ -1744,7 +1744,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 void
 InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 						  Var *distributionColumn, uint32 colocationId,
-						  char replicationModel)
+						  char replicationModel, bool autoConverted)
 {
 	char *distributionColumnString = NULL;
 
@@ -1764,6 +1764,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
+	newValues[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
 
 	/* set partkey column to NULL for reference tables */
 	if (distributionMethod != DISTRIBUTE_BY_NONE)
@@ -2066,6 +2067,56 @@ UpdatePlacementGroupId(uint64 placementId, int groupId)
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPlacement, NoLock);
+}
+
+
+/*
+ * UpdatePgDistPartitionAutoConverted sets the autoConverted for the partition identified
+ * by citusTableId.
+ */
+void
+UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_partition];
+	bool isnull[Natts_pg_dist_partition];
+	bool replace[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(citusTableId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													DistPartitionLogicalRelidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for citus table with oid: %u",
+							   citusTableId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
+	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
+	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistPartition, &heapTuple->t_self, heapTuple);
+
+	CitusInvalidateRelcacheByRelid(citusTableId);
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPartition, NoLock);
 }
 
 

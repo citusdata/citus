@@ -512,8 +512,11 @@ typedef enum CascadeOperationType
 	/* execute UndistributeTable on each relation */
 	CASCADE_FKEY_UNDISTRIBUTE_TABLE = 1 << 1,
 
-	/* execute CreateCitusLocalTable on each relation */
-	CASCADE_ADD_LOCAL_TABLE_TO_METADATA = 1 << 2,
+	/* execute CreateCitusLocalTable on each relation, with autoConverted = false */
+	CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA = 1 << 2,
+
+	/* execute CreateCitusLocalTable on each relation, with autoConverted = true */
+	CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA = 1 << 3,
 } CascadeOperationType;
 
 extern void CascadeOperationForFkeyConnectedRelations(Oid relationId,
@@ -533,16 +536,16 @@ extern void ExecuteForeignKeyCreateCommandList(List *ddlCommandList,
 											   bool skip_validation);
 
 /* create_citus_local_table.c */
-extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys);
+extern void CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys,
+								  bool autoConverted);
 extern List * GetExplicitIndexOidList(Oid relationId);
 
 extern bool ShouldPropagateSetCommand(VariableSetStmt *setStmt);
 extern void PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setCommand);
 
-/* create_citus_local_table.c */
-
-extern void CreateCitusLocalTable(Oid relationId, bool cascade);
 extern void CreateCitusLocalTablePartitionOf(CreateStmt *createStatement,
 											 Oid relationId, Oid parentRelationId);
+extern void UpdateAutoConvertedForConnectedRelations(List *relationId, bool
+													 autoConverted);
 
 #endif /*CITUS_COMMANDS_H */

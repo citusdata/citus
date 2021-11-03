@@ -87,7 +87,8 @@ CascadeOperationForRelationIdList(List *relationIdList, LOCKMODE lockMode,
 {
 	LockRelationsWithLockMode(relationIdList, lockMode);
 
-	if (cascadeOperationType == CASCADE_ADD_LOCAL_TABLE_TO_METADATA)
+	if (cascadeOperationType == CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA ||
+		cascadeOperationType == CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA)
 	{
 		/*
 		 * In CreateCitusLocalTable function, this check would never error out,
@@ -474,11 +475,25 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 				break;
 			}
 
-			case CASCADE_ADD_LOCAL_TABLE_TO_METADATA:
+			case CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA:
 			{
 				if (!IsCitusTable(relationId))
 				{
-					CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+					bool autoConverted = false;
+					CreateCitusLocalTable(relationId, cascadeViaForeignKeys,
+										  autoConverted);
+				}
+
+				break;
+			}
+
+			case CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA:
+			{
+				if (!IsCitusTable(relationId))
+				{
+					bool autoConverted = true;
+					CreateCitusLocalTable(relationId, cascadeViaForeignKeys,
+										  autoConverted);
 				}
 
 				break;
