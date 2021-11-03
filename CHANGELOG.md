@@ -1,3 +1,17 @@
+### citus v9.2.7 (November 3, 2021) ###
+
+* Fixes `ALTER TABLE IF EXISTS SET SCHEMA` with non-existing table bug
+
+* Fixes `CREATE INDEX CONCURRENTLY` with no index name on a postgres table bug
+
+* Fixes a bug that could cause crashes with certain compile flags
+
+* Fixes a crash because of overflow in partition id with certain compile flags
+
+* Fixes a memory leak in subtransaction memory handling
+
+* Fixes deparsing for queries with anonymous column references
+
 ### citus v9.2.6 (Jun 22, 2020) ###
 
 * Fixes a version bump issue in 9.2.5
