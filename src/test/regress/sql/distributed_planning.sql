@@ -3,7 +3,19 @@ SET search_path TO "distributed planning";
 -- Confirm the basics work
 INSERT INTO test VALUES (1, 2), (3, 4), (5, 6), (2, 7), (4, 5);
 INSERT INTO test VALUES (6, 7);
+-- Insert two edge case values, the first value hashes to MAX_INT32 and the
+-- second hashes to MIN_INT32. This should not break anything, but these cases
+-- caused some crashes in the past.
+-- See c6c31e0f1fe5b8cc955b0da42264578dcdae16cc and
+-- 683279cc366069db9c2ccaca85dfaf8572113cda for details.
+--
+-- These specific values were found by using the following two queries:
+-- select q.i from (select generate_series(0, 10000000000000) i) q where hashint8(q.i) = 2147483647 limit 1;
+-- select q.i from (select generate_series(0, 10000000000000) i) q where hashint8(q.i) = -2147483648 limit 1;
+INSERT INTO test VALUES (2608474032, 2608474032), (963809240, 963809240);
 SELECT * FROM test WHERE x = 1 ORDER BY y, x;
+-- Confirm that hash values are as expected
+SELECT hashint8(x) FROM test ORDER BY 1;
 SELECT t1.x, t2.y FROM test t1 JOIN test t2 USING(x) WHERE t1.x = 1 AND t2.x = 1 ORDER BY t2.y, t1.x;
 SELECT * FROM test WHERE x = 1 OR x = 2 ORDER BY y, x;
 SELECT count(*) FROM test;
