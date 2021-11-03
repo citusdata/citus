@@ -33,6 +33,13 @@ typedef struct ListCellAndListWrapper
 	ListCell *listCell;
 } ListCellAndListWrapper;
 
+
+typedef struct ListCellAndIndex
+{
+	ListCell *listCell;
+	int index;
+} ListCellAndIndex;
+
 /*
  * foreach_ptr -
  *	  a convenience macro which loops through a pointer list without needing a
@@ -49,10 +56,13 @@ typedef struct ListCellAndListWrapper
  *	    var is NULL.
  */
 #define foreach_ptr(var, l) \
-	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
-		 (var ## CellDoNotUse) != NULL && \
-		 (((var) = lfirst(var ## CellDoNotUse)) || true); \
-		 var ## CellDoNotUse = lnext_compat(l, var ## CellDoNotUse))
+	for (ListCellAndIndex(var ## InternalDoNotUse) = { list_head(l), 0 }; \
+		 (var ## InternalDoNotUse).listCell != NULL && \
+		 (((var) = lfirst((var ## InternalDoNotUse).listCell)) || true); \
+		 (var ## InternalDoNotUse).listCell = lnext_compat(l, \
+														   (var ## InternalDoNotUse). \
+														   listCell), \
+		 (var ## InternalDoNotUse).index ++)
 
 
 /*
@@ -112,6 +122,22 @@ typedef struct ListCellAndListWrapper
 #else
 #define foreach_ptr_append(var, l) foreach_ptr(var, l)
 #endif
+
+
+/*
+ * foreach_index
+ *    when in _any_ kind foreach_* block, return the index of the iterator based on the
+ *    name of the variable that captures the item from the list.
+ */
+#define foreach_index(var) ((var ## InternalDoNotUse).index)
+
+
+/*
+ * foreach_first
+ *    convenience on top of foreach_index that checks if it is the first loop
+ */
+#define foreach_first(var) ((foreach_index(var)) == 0)
+
 
 /* utility functions declaration shared within this module */
 extern List * SortList(List *pointerList,
