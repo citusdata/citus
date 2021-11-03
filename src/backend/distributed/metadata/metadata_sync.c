@@ -754,7 +754,6 @@ NodeListInsertCommand(List *workerNodeList)
 {
 	StringInfo nodeListInsertCommand = makeStringInfo();
 	int workerCount = list_length(workerNodeList);
-	int processedWorkerNodeCount = 0;
 	Oid primaryRole = PrimaryNodeRoleId();
 
 	/* if there are no workers, return NULL */
@@ -790,6 +789,11 @@ NodeListInsertCommand(List *workerNodeList)
 		Datum nodeRoleStringDatum = DirectFunctionCall1(enum_out, nodeRoleOidDatum);
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
+		if (!foreach_first(workerNode))
+		{
+			appendStringInfo(nodeListInsertCommand, ",");
+		}
+
 		appendStringInfo(nodeListInsertCommand,
 						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s)",
 						 workerNode->nodeId,
@@ -803,12 +807,6 @@ NodeListInsertCommand(List *workerNodeList)
 						 nodeRoleString,
 						 quote_literal_cstr(workerNode->nodeCluster),
 						 shouldHaveShards);
-
-		processedWorkerNodeCount++;
-		if (processedWorkerNodeCount != workerCount)
-		{
-			appendStringInfo(nodeListInsertCommand, ",");
-		}
 	}
 
 	return nodeListInsertCommand->data;
