@@ -59,9 +59,8 @@ typedef struct ListCellAndIndex
 	for (ListCellAndIndex(var ## InternalDoNotUse) = { list_head(l), 0 }; \
 		 (var ## InternalDoNotUse).listCell != NULL && \
 		 (((var) = lfirst((var ## InternalDoNotUse).listCell)) || true); \
-		 (var ## InternalDoNotUse).listCell = lnext_compat(l, \
-														   (var ## InternalDoNotUse). \
-														   listCell), \
+		 (var ## InternalDoNotUse).listCell = \
+			 lnext_compat(l, (var ## InternalDoNotUse).listCell), \
 		 (var ## InternalDoNotUse).index ++)
 
 
