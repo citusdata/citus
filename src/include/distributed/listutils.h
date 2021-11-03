@@ -33,6 +33,13 @@ typedef struct ListCellAndListWrapper
 	ListCell *listCell;
 } ListCellAndListWrapper;
 
+
+typedef struct ListCellAndIndex
+{
+	ListCell *listCell;
+	int index;
+} ListCellAndIndex;
+
 /*
  * foreach_ptr -
  *	  a convenience macro which loops through a pointer list without needing a
@@ -52,8 +59,16 @@ typedef struct ListCellAndListWrapper
 	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
 		 (var ## CellDoNotUse) != NULL && \
 		 (((var) = lfirst(var ## CellDoNotUse)) || true); \
-		 var ## CellDoNotUse = lnext_compat(l, var ## CellDoNotUse))
+		 (var ## CellDoNotUse) = lnext_compat(l, var ## CellDoNotUse))
 
+
+#define foreach_ptr_with_index(var, l, index) \
+	(index) = 0; \
+	for (ListCell *(var ## CellDoNotUse) = list_head(l); \
+		 (var ## CellDoNotUse) != NULL && \
+		 (((var) = lfirst(var ## CellDoNotUse)) || true); \
+		 (var ## CellDoNotUse) = lnext_compat(l, var ## CellDoNotUse), \
+		 (index)++)
 
 /*
  * foreach_int -
@@ -112,6 +127,7 @@ typedef struct ListCellAndListWrapper
 #else
 #define foreach_ptr_append(var, l) foreach_ptr(var, l)
 #endif
+
 
 /* utility functions declaration shared within this module */
 extern List * SortList(List *pointerList,

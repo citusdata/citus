@@ -216,8 +216,6 @@ static void
 LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 {
 	StringInfo lockCommand = makeStringInfo();
-	int processedShardIntervalCount = 0;
-	int totalShardIntervalCount = list_length(shardIntervalList);
 	WorkerNode *firstWorkerNode = GetFirstPrimaryWorkerNode();
 	int connectionFlags = 0;
 	const char *superuser = CurrentUserName();
@@ -225,17 +223,16 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 	appendStringInfo(lockCommand, "SELECT lock_shard_resources(%d, ARRAY[", lockmode);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	int shardIntervalIndex = 0;
+	foreach_ptr_with_index(shardInterval, shardIntervalList, shardIntervalIndex)
 	{
-		int64 shardId = shardInterval->shardId;
-
-		appendStringInfo(lockCommand, "%lu", shardId);
-
-		processedShardIntervalCount++;
-		if (processedShardIntervalCount != totalShardIntervalCount)
+		if (shardIntervalIndex != 0)
 		{
 			appendStringInfo(lockCommand, ", ");
 		}
+
+		int64 shardId = shardInterval->shardId;
+		appendStringInfo(lockCommand, "%lu", shardId);
 	}
 
 	appendStringInfo(lockCommand, "])");
@@ -303,8 +300,6 @@ void
 LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 {
 	StringInfo lockCommand = makeStringInfo();
-	int processedShardIntervalCount = 0;
-	int totalShardIntervalCount = list_length(shardIntervalList);
 
 	if (list_length(shardIntervalList) == 0)
 	{
@@ -314,17 +309,16 @@ LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList)
 	appendStringInfo(lockCommand, "SELECT lock_shard_metadata(%d, ARRAY[", lockmode);
 
 	ShardInterval *shardInterval = NULL;
-	foreach_ptr(shardInterval, shardIntervalList)
+	int shardIntervalIndex = 0;
+	foreach_ptr_with_index(shardInterval, shardIntervalList, shardIntervalIndex)
 	{
-		int64 shardId = shardInterval->shardId;
-
-		appendStringInfo(lockCommand, "%lu", shardId);
-
-		processedShardIntervalCount++;
-		if (processedShardIntervalCount != totalShardIntervalCount)
+		if (shardIntervalIndex != 0)
 		{
 			appendStringInfo(lockCommand, ", ");
 		}
+
+		int64 shardId = shardInterval->shardId;
+		appendStringInfo(lockCommand, "%lu", shardId);
 	}
 
 	appendStringInfo(lockCommand, "])");

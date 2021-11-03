@@ -1477,7 +1477,6 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 	{
 		Relation distShardRelation = table_open(DistShardRelationId(), AccessShareLock);
 		TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
-		int arrayIndex = 0;
 
 		shardIntervalArray = MemoryContextAllocZero(MetadataCacheMemoryContext,
 													shardIntervalArrayLength *
@@ -1493,7 +1492,8 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 								   sizeof(int));
 
 		HeapTuple shardTuple = NULL;
-		foreach_ptr(shardTuple, distShardTupleList)
+		int shardTupleIndex = 0;
+		foreach_ptr_with_index(shardTuple, distShardTupleList, shardTupleIndex)
 		{
 			ShardInterval *shardInterval = TupleToShardInterval(shardTuple,
 																distShardTupleDesc,
@@ -1501,13 +1501,11 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 																intervalTypeMod);
 			MemoryContext oldContext = MemoryContextSwitchTo(MetadataCacheMemoryContext);
 
-			shardIntervalArray[arrayIndex] = CopyShardInterval(shardInterval);
+			shardIntervalArray[shardTupleIndex] = CopyShardInterval(shardInterval);
 
 			MemoryContextSwitchTo(oldContext);
 
 			heap_freetuple(shardTuple);
-
-			arrayIndex++;
 		}
 
 		table_close(distShardRelation, AccessShareLock);
@@ -1603,7 +1601,6 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 	{
 		ShardInterval *shardInterval = sortedShardIntervalArray[shardIndex];
 		int64 shardId = shardInterval->shardId;
-		int placementOffset = 0;
 
 		/*
 		 * Enable quick lookups of this shard ID by adding it to ShardIdCacheHash
@@ -1631,10 +1628,10 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 		GroupShardPlacement *placementArray = palloc0(numberOfPlacements *
 													  sizeof(GroupShardPlacement));
 		GroupShardPlacement *srcPlacement = NULL;
-		foreach_ptr(srcPlacement, placementList)
+		int srcPlacementIndex = 0;
+		foreach_ptr_with_index(srcPlacement, placementList, srcPlacementIndex)
 		{
-			placementArray[placementOffset] = *srcPlacement;
-			placementOffset++;
+			placementArray[srcPlacementIndex] = *srcPlacement;
 		}
 		MemoryContextSwitchTo(oldContext);
 

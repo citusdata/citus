@@ -41,11 +41,10 @@ SortList(List *pointerList, int (*comparisonFunction)(const void *, const void *
 	void **array = (void **) palloc0(arraySize * sizeof(void *));
 
 	void *pointer = NULL;
-	foreach_ptr(pointer, pointerList)
+	int pointerIndex = 0;
+	foreach_ptr_with_index(pointer, pointerList, pointerIndex)
 	{
-		array[arrayIndex] = pointer;
-
-		arrayIndex++;
+		array[pointerIndex] = pointer;
 	}
 
 	/* sort the array of pointers using the comparison function */
@@ -77,13 +76,12 @@ PointerArrayFromList(List *pointerList)
 {
 	int pointerCount = list_length(pointerList);
 	void **pointerArray = (void **) palloc0(pointerCount * sizeof(void *));
-	int pointerIndex = 0;
 
 	void *pointer = NULL;
-	foreach_ptr(pointer, pointerList)
+	int pointerIndex = 0;
+	foreach_ptr_with_index(pointer, pointerList, pointerIndex)
 	{
 		pointerArray[pointerIndex] = pointer;
-		pointerIndex += 1;
 	}
 
 	return pointerArray;
@@ -188,15 +186,14 @@ StringJoin(List *stringList, char delimiter)
 	StringInfo joinedString = makeStringInfo();
 
 	const char *command = NULL;
-	int curIndex = 0;
-	foreach_ptr(command, stringList)
+	int commandIndex = 0;
+	foreach_ptr_with_index(command, stringList, commandIndex)
 	{
-		if (curIndex > 0)
+		if (commandIndex != 0)
 		{
 			appendStringInfoChar(joinedString, delimiter);
 		}
 		appendStringInfoString(joinedString, command);
-		curIndex++;
 	}
 
 	return joinedString->data;
@@ -212,14 +209,12 @@ List *
 ListTake(List *pointerList, int size)
 {
 	List *result = NIL;
-	int listIndex = 0;
 
 	void *pointer = NULL;
 	foreach_ptr(pointer, pointerList)
 	{
 		result = lappend(result, pointer);
-		listIndex++;
-		if (listIndex >= size)
+		if (list_length(result) >= size)
 		{
 			break;
 		}

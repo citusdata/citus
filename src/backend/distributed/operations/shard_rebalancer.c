@@ -280,12 +280,12 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 {
 	NodeFillState *fillState = NULL;
 	NodeFillState *prevFillState = NULL;
-	int fillStateIndex = 0;
 	int fillStateLength = list_length(state->fillStateListAsc);
 
 	Assert(state != NULL);
 	Assert(list_length(state->fillStateListAsc) == list_length(state->fillStateListDesc));
-	foreach_ptr(fillState, state->fillStateListAsc)
+	int fillStateIndex = 0;
+	foreach_ptr_with_index(fillState, state->fillStateListAsc, fillStateIndex)
 	{
 		float4 totalCost = 0;
 		ShardCost *shardCost = NULL;
@@ -333,7 +333,6 @@ CheckRebalanceStateInvariants(const RebalanceState *state)
 			   1000);
 
 		prevFillState = fillState;
-		fillStateIndex++;
 	}
 }
 

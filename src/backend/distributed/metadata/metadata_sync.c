@@ -754,7 +754,6 @@ NodeListInsertCommand(List *workerNodeList)
 {
 	StringInfo nodeListInsertCommand = makeStringInfo();
 	int workerCount = list_length(workerNodeList);
-	int processedWorkerNodeCount = 0;
 	Oid primaryRole = PrimaryNodeRoleId();
 
 	/* if there are no workers, return NULL */
@@ -779,7 +778,8 @@ NodeListInsertCommand(List *workerNodeList)
 
 	/* iterate over the worker nodes, add the values */
 	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
+	int workerNodeIndex = 0;
+	foreach_ptr_with_index(workerNode, workerNodeList, workerNodeIndex)
 	{
 		char *hasMetadataString = workerNode->hasMetadata ? "TRUE" : "FALSE";
 		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
@@ -789,6 +789,11 @@ NodeListInsertCommand(List *workerNodeList)
 		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
 		Datum nodeRoleStringDatum = DirectFunctionCall1(enum_out, nodeRoleOidDatum);
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
+
+		if (workerNodeIndex != 0)
+		{
+			appendStringInfo(nodeListInsertCommand, ",");
+		}
 
 		appendStringInfo(nodeListInsertCommand,
 						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s)",
@@ -803,12 +808,6 @@ NodeListInsertCommand(List *workerNodeList)
 						 nodeRoleString,
 						 quote_literal_cstr(workerNode->nodeCluster),
 						 shouldHaveShards);
-
-		processedWorkerNodeCount++;
-		if (processedWorkerNodeCount != workerCount)
-		{
-			appendStringInfo(nodeListInsertCommand, ",");
-		}
 	}
 
 	return nodeListInsertCommand->data;
@@ -963,7 +962,8 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "WITH shard_data(relationname, shardid, storagetype, "
 					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
 
-	foreach_ptr(shardInterval, shardIntervalList)
+	int shardIntervalIndex = 0;
+	foreach_ptr_with_index(shardInterval, shardIntervalList, shardIntervalIndex)
 	{
 		uint64 shardId = shardInterval->shardId;
 		Oid distributedRelationId = shardInterval->relationId;
@@ -992,6 +992,11 @@ ShardListInsertCommand(List *shardIntervalList)
 			appendStringInfo(maxHashToken, "NULL");
 		}
 
+		if (shardIntervalIndex != 0)
+		{
+			appendStringInfo(insertShardCommand, ", ");
+		}
+
 		appendStringInfo(insertShardCommand,
 						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
 						 quote_literal_cstr(qualifiedRelationName),
@@ -999,11 +1004,6 @@ ShardListInsertCommand(List *shardIntervalList)
 						 shardInterval->storageType,
 						 minHashToken->data,
 						 maxHashToken->data);
-
-		if (llast(shardIntervalList) != shardInterval)
-		{
-			appendStringInfo(insertShardCommand, ", ");
-		}
 	}
 
 	appendStringInfo(insertShardCommand, ") ");

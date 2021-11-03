@@ -669,9 +669,10 @@ WaitsForToString(List *waitsFor)
 	StringInfo transactionIdStr = makeStringInfo();
 
 	TransactionNode *waitingNode = NULL;
-	foreach_ptr(waitingNode, waitsFor)
+	int waitingNodeIndex = 0;
+	foreach_ptr_with_index(waitingNode, waitsFor, waitingNodeIndex)
 	{
-		if (transactionIdStr->len != 0)
+		if (waitingNodeIndex != 0)
 		{
 			appendStringInfoString(transactionIdStr, ",");
 		}

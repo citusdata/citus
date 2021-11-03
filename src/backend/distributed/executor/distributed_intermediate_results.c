@@ -637,26 +637,24 @@ QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 {
 	StringInfo queryString = makeStringInfo();
 	StringInfo fragmentNamesArrayString = makeStringInfo();
-	int fragmentCount = 0;
 	NodePair *nodePair = &fragmentsTransfer->nodes;
 	WorkerNode *sourceNode = LookupNodeByNodeIdOrError(nodePair->sourceNodeId);
 
 	appendStringInfoString(fragmentNamesArrayString, "ARRAY[");
 
 	DistributedResultFragment *fragment = NULL;
-	foreach_ptr(fragment, fragmentsTransfer->fragmentList)
+	int fragmentIndex = 0;
+	foreach_ptr_with_index(fragment, fragmentsTransfer->fragmentList, fragmentIndex)
 	{
 		const char *fragmentName = fragment->resultId;
 
-		if (fragmentCount > 0)
+		if (fragmentIndex != 0)
 		{
 			appendStringInfoString(fragmentNamesArrayString, ",");
 		}
 
 		appendStringInfoString(fragmentNamesArrayString,
 							   quote_literal_cstr(fragmentName));
-
-		fragmentCount++;
 	}
 
 	appendStringInfoString(fragmentNamesArrayString, "]::text[]");

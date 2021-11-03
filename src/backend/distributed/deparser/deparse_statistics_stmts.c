@@ -220,14 +220,15 @@ AppendStatTypes(StringInfo buf, CreateStatsStmt *stmt)
 	appendStringInfoString(buf, " (");
 
 	Value *statType = NULL;
-	foreach_ptr(statType, stmt->stat_types)
+	int statTypeIndex = 0;
+	foreach_ptr_with_index(statType, stmt->stat_types, statTypeIndex)
 	{
-		appendStringInfoString(buf, strVal(statType));
-
-		if (statType != llast(stmt->stat_types))
+		if (statTypeIndex != 0)
 		{
 			appendStringInfoString(buf, ", ");
 		}
+
+		appendStringInfoString(buf, strVal(statType));
 	}
 
 	appendStringInfoString(buf, ")");
@@ -240,7 +241,8 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 {
 	StatsElem *column = NULL;
 
-	foreach_ptr(column, stmt->exprs)
+	int columnIndex = 0;
+	foreach_ptr_with_index(column, stmt->exprs, columnIndex)
 	{
 		if (!column->name)
 		{
@@ -250,14 +252,13 @@ AppendColumnNames(StringInfo buf, CreateStatsStmt *stmt)
 						 "only simple column references are allowed in CREATE STATISTICS")));
 		}
 
-		const char *columnName = quote_identifier(column->name);
-
-		appendStringInfoString(buf, columnName);
-
-		if (column != llast(stmt->exprs))
+		if (columnIndex != 0)
 		{
 			appendStringInfoString(buf, ", ");
 		}
+
+		const char *columnName = quote_identifier(column->name);
+		appendStringInfoString(buf, columnName);
 	}
 }
 
