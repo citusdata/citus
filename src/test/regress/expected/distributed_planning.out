@@ -2,11 +2,35 @@ SET search_path TO "distributed planning";
 -- Confirm the basics work
 INSERT INTO test VALUES (1, 2), (3, 4), (5, 6), (2, 7), (4, 5);
 INSERT INTO test VALUES (6, 7);
+-- Insert two edge case values, the first value hashes to MAX_INT32 and the
+-- second hashes to MIN_INT32. This should not break anything, but these cases
+-- caused some crashes in the past.
+-- See c6c31e0f1fe5b8cc955b0da42264578dcdae16cc and
+-- 683279cc366069db9c2ccaca85dfaf8572113cda for details.
+--
+-- These specific values were found by using the following two queries:
+-- select q.i from (select generate_series(0, 10000000000000) i) q where hashint8(q.i) = 2147483647 limit 1;
+-- select q.i from (select generate_series(0, 10000000000000) i) q where hashint8(q.i) = -2147483648 limit 1;
+INSERT INTO test VALUES (2608474032, 2608474032), (963809240, 963809240);
 SELECT * FROM test WHERE x = 1 ORDER BY y, x;
  x | y
 ---------------------------------------------------------------------
  1 | 2
 (1 row)
+
+-- Confirm that hash values are as expected
+SELECT hashint8(x) FROM test ORDER BY 1;
+  hashint8
+---------------------------------------------------------------------
+ -2147483648
+ -1905060026
+ -1330264708
+ -1011077333
+   -28094569
+   566031088
+  1134484726
+  2147483647
+(8 rows)
 
 SELECT t1.x, t2.y FROM test t1 JOIN test t2 USING(x) WHERE t1.x = 1 AND t2.x = 1 ORDER BY t2.y, t1.x;
  x | y
@@ -24,30 +48,34 @@ SELECT * FROM test WHERE x = 1 OR x = 2 ORDER BY y, x;
 SELECT count(*) FROM test;
  count
 ---------------------------------------------------------------------
-     6
+     8
 (1 row)
 
 SELECT * FROM test ORDER BY x;
- x | y
+     x      |     y
 ---------------------------------------------------------------------
- 1 | 2
- 2 | 7
- 3 | 4
- 4 | 5
- 5 | 6
- 6 | 7
-(6 rows)
+          1 |          2
+          2 |          7
+          3 |          4
+          4 |          5
+          5 |          6
+          6 |          7
+  963809240 |  963809240
+ 2608474032 | 2608474032
+(8 rows)
 
 WITH cte_1 AS (UPDATE test SET y = y - 1 RETURNING *) SELECT * FROM cte_1 ORDER BY 1,2;
- x | y
+     x      |     y
 ---------------------------------------------------------------------
- 1 | 1
- 2 | 6
- 3 | 3
- 4 | 4
- 5 | 5
- 6 | 6
-(6 rows)
+          1 |          1
+          2 |          6
+          3 |          3
+          4 |          4
+          5 |          5
+          6 |          6
+  963809240 |  963809239
+ 2608474032 | 2608474031
+(8 rows)
 
 -- observe that there is a conflict and the following query does nothing
 INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1) ON CONFLICT DO NOTHING RETURNING *;
@@ -117,7 +145,7 @@ BEGIN;
 	SELECT count(*) FROM cte_1, cte_2;
  count
 ---------------------------------------------------------------------
-  1007
+  1009
 (1 row)
 
 ROLLBACK;
@@ -135,7 +163,7 @@ CREATE VIEW simple_view AS
 SELECT * FROM simple_view;
  cnt
 ---------------------------------------------------------------------
-   8
+  10
 (1 row)
 
 SELECT * FROM simple_view, test WHERE test.x = simple_view.cnt;
@@ -148,11 +176,11 @@ BEGIN;
 	SELECT count(*) FROM test;
  count
 ---------------------------------------------------------------------
-    16
+    18
 (1 row)
 
 	COPY (SELECT count(DISTINCT x) FROM test) TO STDOUT;
-10
+12
 	INSERT INTO test SELECT i,i FROM generate_series(0,100)i;
 ROLLBACK;
 -- prepared statements with custom types
@@ -258,13 +286,13 @@ WITH cte_1 AS (SELECT * FROM test_2) SELECT * FROM cte_1, test_2 WHERE  test_2.x
 SELECT count(DISTINCT x) FROM test;
  count
 ---------------------------------------------------------------------
-     5
+     7
 (1 row)
 
 SELECT count(DISTINCT y) FROM test;
  count
 ---------------------------------------------------------------------
-     5
+     7
 (1 row)
 
 -- query pushdown should work
@@ -300,7 +328,7 @@ INSERT INTO test(x, y) SELECT x, y FROM test WHERE x = 1;
 SELECT count(*) from test;
  count
 ---------------------------------------------------------------------
-     7
+     9
 (1 row)
 
 ROLLBACK;
@@ -310,7 +338,7 @@ INSERT INTO test(x, y) SELECT x, y FROM test;
 SELECT count(*) from test;
  count
 ---------------------------------------------------------------------
-    12
+    16
 (1 row)
 
 ROLLBACK;
@@ -320,7 +348,7 @@ INSERT INTO test(x, y) SELECT count(x), max(y) FROM test;
 SELECT count(*) from test;
  count
 ---------------------------------------------------------------------
-     7
+     9
 (1 row)
 
 ROLLBACK;
@@ -330,7 +358,7 @@ INSERT INTO test(x, y) SELECT y, x FROM test;
 SELECT count(*) from test;
  count
 ---------------------------------------------------------------------
-    12
+    16
 (1 row)
 
 ROLLBACK;
@@ -340,7 +368,7 @@ INSERT INTO test(x, y) SELECT a, b FROM ref;
 SELECT count(*) from test;
  count
 ---------------------------------------------------------------------
-     6
+     8
 (1 row)
 
 ROLLBACK;
@@ -350,7 +378,7 @@ INSERT INTO test(x, y) SELECT c, d FROM local;
 SELECT count(*) from test;
  count
 ---------------------------------------------------------------------
-     6
+     8
 (1 row)
 
 ROLLBACK;
@@ -360,7 +388,7 @@ INSERT INTO ref(a, b) SELECT x, y FROM test;
 SELECT count(*) from ref;
  count
 ---------------------------------------------------------------------
-     6
+     8
 (1 row)
 
 ROLLBACK;
@@ -380,7 +408,7 @@ INSERT INTO local(c, d) SELECT x, y FROM test;
 SELECT count(*) from local;
  count
 ---------------------------------------------------------------------
-     6
+     8
 (1 row)
 
 ROLLBACK;
@@ -409,7 +437,7 @@ SELECT count(*) FROM test WHERE false GROUP BY GROUPING SETS (x,y);
 SELECT count(*) FROM test;
  count
 ---------------------------------------------------------------------
-     6
+     8
 (1 row)
 
 -- INSERT SELECT from distributed table to local table
@@ -418,7 +446,7 @@ INSERT INTO ref(a, b) SELECT x, y FROM test;
 SELECT count(*) from ref;
  count
 ---------------------------------------------------------------------
-     6
+     8
 (1 row)
 
 ROLLBACK;
@@ -438,7 +466,7 @@ INSERT INTO local(c, d) SELECT x, y FROM test;
 SELECT count(*) from local;
  count
 ---------------------------------------------------------------------
-     6
+     8
 (1 row)
 
 ROLLBACK;

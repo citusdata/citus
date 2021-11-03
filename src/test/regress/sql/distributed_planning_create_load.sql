@@ -20,20 +20,20 @@ SELECT create_time_partitions(table_name:='date_part_table',
 INSERT INTO date_part_table
 	SELECT '2020-01-01'::timestamp + '3 hours'::interval * i, i, i % 20 FROM generate_series(0,100)i;
 
-CREATE TABLE test(x int, y int);
+CREATE TABLE test(x bigint, y bigint);
 SELECT create_distributed_table('test','x');
 
 CREATE TYPE new_type AS (n int, m text);
-CREATE TABLE test_2(x int, y int, z new_type);
+CREATE TABLE test_2(x bigint, y bigint, z new_type);
 SELECT create_distributed_table('test_2','x');
 
-CREATE TABLE ref(a int, b int);
+CREATE TABLE ref(a bigint, b bigint);
 SELECT create_reference_table('ref');
 
-CREATE TABLE ref2(a int, b int);
+CREATE TABLE ref2(a bigint, b bigint);
 SELECT create_reference_table('ref2');
 
-CREATE TABLE local(c int, d int);
+CREATE TABLE local(c bigint, d bigint);
 select citus_add_local_table_to_metadata('local');
 
 CREATE TABLE non_binary_copy_test (key int PRIMARY KEY, value new_type);
