@@ -482,8 +482,7 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 static void
 PartitionedResultDestReceiverShutdown(DestReceiver *dest)
 {
-	PartitionedResultDestReceiver *self =
-		(PartitionedResultDestReceiver *) dest;
+	PartitionedResultDestReceiver *self = (PartitionedResultDestReceiver *) dest;
 	for (int partitionIndex = 0; partitionIndex < self->partitionCount; partitionIndex++)
 	{
 		DestReceiver *partitionDest =
