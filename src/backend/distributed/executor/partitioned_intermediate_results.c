@@ -429,10 +429,8 @@ PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 {
 	PartitionedResultDestReceiver *self = (PartitionedResultDestReceiver *) dest;
 
-	MemoryContext oldContext = MemoryContextSwitchTo(GetMemoryChunkContext(dest));
 	self->startupArguments.tupleDescriptor = CreateTupleDescCopy(inputTupleDescriptor);
 	self->startupArguments.operation = operation;
-	MemoryContextSwitchTo(oldContext);
 
 	if (self->lazyStartup)
 	{
