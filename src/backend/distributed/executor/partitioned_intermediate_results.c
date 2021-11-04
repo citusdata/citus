@@ -267,6 +267,8 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 	PortalDrop(portal, false);
 	FreeExecutorState(estate);
 
+	dest->rDestroy(dest);
+
 	PG_RETURN_INT64(1);
 }
 
