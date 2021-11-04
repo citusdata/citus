@@ -47,12 +47,12 @@ typedef struct PartitionedResultDestReceiver
 	/* on lazy startup we only startup the DestReceiver once they receive a tuple */
 	bool lazyStartup;
 
-	/* cached startup information for use in lazy startup */
+	/* startup information for use in lazy startup */
 	struct
 	{
 		int operation;
 		TupleDesc tupleDescriptor;
-	} startupCache;
+	} startupArguments;
 
 	/* which column of streamed tuples to use as partition column? */
 	int partitionColumnIndex;
@@ -63,7 +63,13 @@ typedef struct PartitionedResultDestReceiver
 	/* used for deciding which partition a shard belongs to. */
 	CitusTableCacheEntry *shardSearchInfo;
 
-	/* Tuples matching shardSearchInfo[i] are sent to partitionDestReceivers[i] */
+	/*
+	 * Tuples matching shardSearchInfo[i] are sent to partitionDestReceivers[i].
+	 * We use two DestReceiver* arrays as to leave the hotpath code mostly touch only the
+	 * array with knwon started receivers. Only when we have a miss, eg. a Receiver that
+	 * hasn't been started yet we have a look in the original array to start the receiver
+	 * and copy its reference into the started array.
+	 */
 	DestReceiver **partitionDestReceivers;
 	DestReceiver **partitionDestReceiversStarted;
 } PartitionedResultDestReceiver;
@@ -405,9 +411,10 @@ PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 {
 	PartitionedResultDestReceiver *self = (PartitionedResultDestReceiver *) dest;
 
-	/* TODO verify these are in suitable memory contexts to cache here */
-	self->startupCache.tupleDescriptor = inputTupleDescriptor;
-	self->startupCache.operation = operation;
+	MemoryContext oldContext = MemoryContextSwitchTo(GetMemoryChunkContext(dest));
+	self->startupArguments.tupleDescriptor = CreateTupleDescCopy(inputTupleDescriptor);
+	self->startupArguments.operation = operation;
+	MemoryContextSwitchTo(oldContext);
 
 	if (self->lazyStartup)
 	{
@@ -463,8 +470,8 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 		/* dest receiver not started yet, could be due to lazy startup */
 		partitionDest = self->partitionDestReceivers[partitionIndex];
 		partitionDest->rStartup(partitionDest,
-								self->startupCache.operation,
-								self->startupCache.tupleDescriptor);
+								self->startupArguments.operation,
+								self->startupArguments.tupleDescriptor);
 		self->partitionDestReceiversStarted[partitionIndex] = partitionDest;
 	}
 
