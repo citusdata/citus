@@ -298,6 +298,53 @@ ORDER BY 1;
 
 ROLLBACK;
 
+prepare p1 as INSERT INTO t1(a,c) VALUES (15, 15) ON CONFLICT (c) DO UPDATE SET a=EXCLUDED.a + 10 RETURNING *;
+execute p1(5);
+execute p1(5);
+execute p1(5);
+execute p1(5);
+execute p1(5);
+execute p1(5);
+execute p1(5);
+
+prepare p5(int) as INSERT INTO t1(a,c) VALUES (15, $1) ON CONFLICT (c) DO UPDATE SET a=EXCLUDED.a + 10 RETURNING *;
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+execute p5(5);
+
+INSERT INTO "companies" ("id","meta","name","created_at","updated_at","deleted_at") VALUES (1,'{"test":123}','Name','2016-11-07 17:34:22.101807','2021-05-20 22:16:55.424521',NULL) ON CONFLICT (id) DO UPDATE SET "meta"=EXCLUDED."meta"  RETURNING "id";
+INSERT INTO "companies" ("id","meta","name","created_at","updated_at","deleted_at") VALUES (1,'{"test":123}','Name','2016-11-07 17:34:22.101807','2021-05-20 22:16:55.424521',NULL) ON CONFLICT (id) DO UPDATE SET "meta"=EXCLUDED."meta"  RETURNING "id";
+PREPARE p6 AS INSERT INTO "companies" ("id","meta","name","created_at","updated_at","deleted_at") VALUES (1,'{"test":123}','Name','2016-11-07 17:34:22.101807','2021-05-20 22:16:55.424521',NULL) ON CONFLICT (id) DO UPDATE SET "meta"=EXCLUDED."meta"  RETURNING "id";;
+EXECUTE p6;
+EXECUTE p6;
+EXECUTE p6;
+EXECUTE p6;
+EXECUTE p6;
+EXECUTE p6;
+EXECUTE p6;
+
+prepare insert_select(int) as insert into companies SELECT * FROM companies WHERE id >= $1 ON CONFLICT(id) DO UPDATE SET "meta"=EXCLUDED."meta" RETURNING "id";;
+EXECUTE insert_select(1);
+EXECUTE insert_select(1);
+EXECUTE insert_select(1);
+EXECUTE insert_select(1);
+EXECUTE insert_select(1);
+EXECUTE insert_select(1);
+EXECUTE insert_select(1);
+
+prepare insert_select_1 as insert into companies SELECT * FROM companies WHERE id >= 1 ON CONFLICT(id) DO UPDATE SET "meta"=EXCLUDED."meta" RETURNING "id";;
+EXECUTE insert_select_1;
+EXECUTE insert_select_1;
+EXECUTE insert_select_1;
+EXECUTE insert_select_1;
+EXECUTE insert_select_1;
+EXECUTE insert_select_1;
+EXECUTE insert_select_1;
+
 -- query fails on the shards should be handled
 -- nicely
 \set VERBOSITY terse
@@ -311,3 +358,4 @@ SELECT count(*), t1.event FROM date_part_table t1 JOIN date_part_table USING (us
 SELECT count(*), event FROM date_part_table WHERE event_time > '2020-01-05' GROUP BY event ORDER BY count(*) DESC, event DESC LIMIT 5;
 SELECT count(*), event FROM date_part_table WHERE user_id = 12 AND event_time = '2020-01-12 12:00:00' GROUP BY event ORDER BY count(*) DESC, event DESC LIMIT 5;
 SELECT count(*), t1.event FROM date_part_table t1 JOIN date_part_table t2 USING (user_id) WHERE t1.user_id = 1 AND t2.event_time > '2020-01-03' GROUP BY t1.event ORDER BY count(*) DESC, t1.event DESC LIMIT 5;
+
