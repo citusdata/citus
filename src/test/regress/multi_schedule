@@ -1,6 +1,4 @@
-test: turn_mx_off
 test: multi_cluster_management
-test: turn_mx_on
 test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
 test: multi_test_catalog_views
 

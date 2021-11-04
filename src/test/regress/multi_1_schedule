@@ -19,7 +19,9 @@ test: turn_mx_off
 test: multi_extension
 test: single_node
 test: single_node_truncate
+test: turn_mx_on
 test: multi_cluster_management
+test: turn_mx_off
 
 # below tests are placed right after multi_cluster_management as we do
 # remove/add node operations and we do not want any preexisting objects

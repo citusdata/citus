@@ -709,7 +709,7 @@ SELECT * FROM get_rebalance_progress();
 SELECT * FROM public.table_placements_per_node;
 
 CALL citus_cleanup_orphaned_shards();
-select * from pg_dist_placement;
+select * from pg_dist_placement ORDER BY placementid;
 
 
 -- Move all shards to worker1 again
