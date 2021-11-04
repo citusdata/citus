@@ -15,7 +15,7 @@ step s1-commit: COMMIT;
 step s2-ddl-create-index: <... completed>
 ERROR:  duplicate key value violates unique constraint "pg_class_relname_nsp_index"
 step s2-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -41,7 +41,7 @@ step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index 
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
 ERROR:  relation "ddl_hash_index" already exists
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -68,7 +68,7 @@ step s2-ddl-add-column: ALTER TABLE ddl_hash ADD new_column_2 int DEFAULT 0; <wa
 step s1-commit: COMMIT;
 step s2-ddl-add-column: <... completed>
 step s2-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -102,7 +102,7 @@ step s2-ddl-rename-column: ALTER TABLE ddl_hash RENAME data TO new_column; <wait
 step s1-commit: COMMIT;
 step s2-ddl-rename-column: <... completed>
 step s2-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -143,7 +143,7 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -175,7 +175,7 @@ run_command_on_workers
 (localhost,57638,t,"")
 (2 rows)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -263,7 +263,7 @@ run_command_on_workers
 (localhost,57638,t,new_column)
 (2 rows)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -295,7 +295,7 @@ run_command_on_workers
 (localhost,57638,t,new_column)
 (2 rows)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -381,7 +381,7 @@ citus_total_relation_size
 
 step s1-commit: COMMIT;
 step s2-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -408,7 +408,7 @@ step s2-master-modify-multiple-shards: DELETE FROM ddl_hash; <waiting ...>
 step s1-commit: COMMIT;
 step s2-master-modify-multiple-shards: <... completed>
 step s2-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -442,7 +442,7 @@ create_distributed_table
 (1 row)
 
 step s2-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,4)
@@ -659,7 +659,7 @@ citus_total_relation_size
 step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id);
 step s1-commit: COMMIT;
 step s2-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -686,7 +686,7 @@ step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id); <waiting 
 step s1-commit: COMMIT;
 step s2-ddl-create-index: <... completed>
 step s2-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -720,7 +720,7 @@ step s2-ddl-create-index: CREATE INDEX ddl_hash_index ON ddl_hash(id); <waiting 
 step s1-commit: COMMIT;
 step s2-ddl-create-index: <... completed>
 step s2-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,4)
@@ -749,7 +749,7 @@ citus_total_relation_size
 
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id);
 step s1-commit: COMMIT;
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -774,7 +774,7 @@ step s1-master-modify-multiple-shards: DELETE FROM ddl_hash;
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -806,7 +806,7 @@ create_distributed_table
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY ddl_hash_index ON ddl_hash(id); <waiting ...>
 step s1-commit: COMMIT;
 step s2-ddl-create-index-concurrently: <... completed>
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''ddl_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,4)

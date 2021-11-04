@@ -146,7 +146,7 @@ count
     5
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,4)
@@ -180,7 +180,7 @@ count
     5
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)
@@ -211,7 +211,7 @@ count
     5
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,4)
@@ -534,7 +534,7 @@ count
     5
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,4)
@@ -568,7 +568,7 @@ count
     5
 (1 row)
 
-step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash%''');
+step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash\_%''');
 run_command_on_workers
 ---------------------------------------------------------------------
 (localhost,57637,t,2)

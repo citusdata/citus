@@ -44,7 +44,7 @@ step "s1-master-modify-multiple-shards-on-inserted" { DELETE FROM insert_of_inse
 step "s1-master-drop-all-shards-on-inserted" { SELECT citus_drop_all_shards('insert_of_insert_select_hash'::regclass, 'public', 'insert_of_insert_select_hash'); }
 step "s1-create-non-distributed-table-on-inserted" { CREATE TABLE insert_of_insert_select_hash(id integer, data text); }
 step "s1-distribute-table-on-inserted" { SELECT create_distributed_table('insert_of_insert_select_hash', 'id'); }
-step "s1-show-indexes-inserted" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash%'''); }
+step "s1-show-indexes-inserted" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''insert_of_insert_select_hash\_%'''); }
 step "s1-show-columns-inserted" { SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''insert_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1'); }
 step "s1-update-on-selected" { UPDATE select_of_insert_select_hash SET data = 'l' WHERE id = 4; }
 step "s1-delete-on-selected" { DELETE FROM select_of_insert_select_hash WHERE id = 4; }
@@ -60,7 +60,7 @@ step "s1-master-modify-multiple-shards-on-selected" { DELETE FROM select_of_inse
 step "s1-master-drop-all-shards-on-selected" { SELECT citus_drop_all_shards('select_of_insert_select_hash'::regclass, 'public', 'select_of_insert_select_hash'); }
 step "s1-create-non-distributed-table-on-selected" { CREATE TABLE select_of_insert_select_hash(id integer, data text); }
 step "s1-distribute-table-on-selected" { SELECT create_distributed_table('select_of_insert_select_hash', 'id'); }
-step "s1-show-indexes-selected" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash%'''); }
+step "s1-show-indexes-selected" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''select_of_insert_select_hash\_%'''); }
 step "s1-show-columns-selected" { SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''select_of_insert_select_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1'); }
 step "s1-select-count" { SELECT COUNT(*) FROM select_of_insert_select_hash; }
 step "s1-commit" { COMMIT; }
