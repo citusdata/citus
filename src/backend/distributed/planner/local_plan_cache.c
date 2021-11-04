@@ -174,6 +174,8 @@ DeparseLocalShardQuery(Query *jobQuery, List *relationShardList, Oid
 		 */
 		Assert(!CheckInsertSelectQuery(jobQuery));
 
+		AddInsertAliasIfNeeded(jobQuery);
+
 		/*
 		 * For INSERT queries we cannot use pg_get_query_def. Mainly because we
 		 * cannot run UpdateRelationToShardNames on an INSERT query. This is

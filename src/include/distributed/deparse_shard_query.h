@@ -29,6 +29,7 @@ extern void SetTaskQueryStringList(Task *task, List *queryStringList);
 extern char * TaskQueryString(Task *task);
 extern char * TaskQueryStringAtIndex(Task *task, int index);
 extern int GetTaskQueryType(Task *task);
+extern void AddInsertAliasIfNeeded(Query *query);
 
 
 #endif /* DEPARSE_SHARD_QUERY_H */

@@ -90,3 +90,36 @@ INSERT INTO upsert_test (part_key, other_col) VALUES (1, 1), (2, 2) RETURNING *;
         2 |         2 |
 (2 rows)
 
+create table t1(a int, b int, c int primary key, d int);
+ALTER TABLE t1 DROP COLUMN b;
+select create_distributed_table('t1','c');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE t1 DROP COLUMN d;
+CREATE TABLE companies (
+    id bigint NOT NULL,
+    name character varying NOT NULL,
+    created_at timestamp without time zone NOT NULL,
+    a int,
+    b int,
+    updated_at timestamp without time zone NOT NULL,
+    fmi boolean DEFAULT false NOT NULL,
+    meta jsonb DEFAULT '{}'::jsonb NOT NULL,
+    deleted_at timestamp without time zone,
+    c int,
+    flex boolean DEFAULT false
+);
+ALTER TABLE ONLY companies
+    ADD CONSTRAINT companies_pkey PRIMARY KEY (id);
+alter table companies drop column a;
+alter table companies drop column b;
+SELECT create_reference_table('companies');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+alter table companies drop column c;
