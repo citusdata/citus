@@ -81,15 +81,11 @@ typedef struct PartitionedResultDestReceiver
 	/* used for deciding which partition a shard belongs to. */
 	CitusTableCacheEntry *shardSearchInfo;
 
-	/*
-	 * Tuples matching shardSearchInfo[i] are sent to partitionDestReceivers[i].
-	 * We use two DestReceiver* arrays as to leave the hotpath code mostly touch only the
-	 * array with knwon started receivers. Only when we have a miss, eg. a Receiver that
-	 * hasn't been started yet we have a look in the original array to start the receiver
-	 * and copy its reference into the started array.
-	 */
+	/* Tuples matching shardSearchInfo[i] are sent to partitionDestReceivers[i]. */
 	DestReceiver **partitionDestReceivers;
-	DestReceiver **partitionDestReceiversStarted;
+
+	/* keeping track of which partitionDestReceivers have been started */
+	Bitmapset *startedDestReceivers;
 } PartitionedResultDestReceiver;
 
 static Portal StartPortalForQueryExecution(const char *queryString);
@@ -411,8 +407,7 @@ CreatePartitionedResultDestReceiver(int partitionColumnIndex,
 	resultDest->partitionCount = partitionCount;
 	resultDest->shardSearchInfo = shardSearchInfo;
 	resultDest->partitionDestReceivers = partitionedDestReceivers;
-	resultDest->partitionDestReceiversStarted = palloc0(
-		partitionCount * sizeof(DestReceiver *));
+	resultDest->startedDestReceivers = NULL;
 	resultDest->lazyStartup = lazyStartup;
 
 	return (DestReceiver *) resultDest;
@@ -443,7 +438,7 @@ PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 	{
 		DestReceiver *partitionDest = self->partitionDestReceivers[i];
 		partitionDest->rStartup(partitionDest, operation, inputTupleDescriptor);
-		self->partitionDestReceiversStarted[i] = partitionDest;
+		self->startedDestReceivers = bms_add_member(self->startedDestReceivers, i);
 	}
 }
 
@@ -479,16 +474,16 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	}
 
 	int partitionIndex = shardInterval->shardIndex;
-	DestReceiver *partitionDest = self->partitionDestReceiversStarted[partitionIndex];
+	DestReceiver *partitionDest = self->partitionDestReceivers[partitionIndex];
 
-	if (partitionDest == NULL)
+	/* check if this partitionDestReceiver has been started before, start if not */
+	if (!bms_is_member(partitionIndex, self->startedDestReceivers))
 	{
-		/* dest receiver not started yet, could be due to lazy startup */
-		partitionDest = self->partitionDestReceivers[partitionIndex];
 		partitionDest->rStartup(partitionDest,
 								self->startupArguments.operation,
 								self->startupArguments.tupleDescriptor);
-		self->partitionDestReceiversStarted[partitionIndex] = partitionDest;
+		self->startedDestReceivers = bms_add_member(self->startedDestReceivers,
+													partitionIndex);
 	}
 
 	/* forward the tuple to the appropriate dest receiver */
@@ -500,21 +495,24 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 
 /*
  * PartitionedResultDestReceiverShutdown implements the rShutdown interface of
- * PartitionedResultDestReceiver.
+ * PartitionedResultDestReceiver by calling rShutdown on all started
+ * partitionedDestReceivers.
  */
 static void
 PartitionedResultDestReceiverShutdown(DestReceiver *dest)
 {
 	PartitionedResultDestReceiver *self = (PartitionedResultDestReceiver *) dest;
-	for (int partitionIndex = 0; partitionIndex < self->partitionCount; partitionIndex++)
+
+	int i = -1;
+	while ((i = bms_next_member(self->startedDestReceivers, i)) >= 0)
 	{
-		DestReceiver *partitionDest =
-			self->partitionDestReceiversStarted[partitionIndex];
-		if (partitionDest != NULL)
-		{
-			partitionDest->rShutdown(partitionDest);
-		}
+		DestReceiver *partitionDest = self->partitionDestReceivers[i];
+		partitionDest->rShutdown(partitionDest);
 	}
+
+	/* empty the set of started receivers which allows them to be restarted again */
+	bms_free(self->startedDestReceivers);
+	self->startedDestReceivers = NULL;
 }
 
 
@@ -527,9 +525,10 @@ PartitionedResultDestReceiverDestroy(DestReceiver *dest)
 {
 	PartitionedResultDestReceiver *self = (PartitionedResultDestReceiver *) dest;
 
+	/* we destroy all dest receivers, irregardless if they have been started or not */
 	for (int partitionIndex = 0; partitionIndex < self->partitionCount; partitionIndex++)
 	{
-		DestReceiver *partitionDest = self->partitionDestReceiversStarted[partitionIndex];
+		DestReceiver *partitionDest = self->partitionDestReceivers[partitionIndex];
 		if (partitionDest != NULL)
 		{
 			partitionDest->rDestroy(partitionDest);
