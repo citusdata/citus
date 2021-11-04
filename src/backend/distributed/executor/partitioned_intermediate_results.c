@@ -493,7 +493,7 @@ PartitionedResultDestReceiverShutdown(DestReceiver *dest)
 	for (int partitionIndex = 0; partitionIndex < self->partitionCount; partitionIndex++)
 	{
 		DestReceiver *partitionDest =
-			self->partitionDestReceivers[partitionIndex];
+			self->partitionDestReceiversStarted[partitionIndex];
 		if (partitionDest != NULL)
 		{
 			partitionDest->rShutdown(partitionDest);
@@ -513,8 +513,7 @@ PartitionedResultDestReceiverDestroy(DestReceiver *dest)
 
 	for (int partitionIndex = 0; partitionIndex < self->partitionCount; partitionIndex++)
 	{
-		/* TODO understand if we should also destroy non-started receivers */
-		DestReceiver *partitionDest = self->partitionDestReceivers[partitionIndex];
+		DestReceiver *partitionDest = self->partitionDestReceiversStarted[partitionIndex];
 		if (partitionDest != NULL)
 		{
 			partitionDest->rDestroy(partitionDest);
