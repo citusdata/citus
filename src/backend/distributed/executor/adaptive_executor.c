@@ -1620,6 +1620,16 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 		 */
 		lockMode =
 			EnableDeadlockPrevention ? ShareUpdateExclusiveLock : RowExclusiveLock;
+
+		if (!IsCoordinator())
+		{
+			/*
+			 * We also skip taking a heavy-weight lock when running a multi-shard
+			 * commands from workers, since we currently do not prevent concurrency
+			 * across workers anyway.
+			 */
+			lockMode = RowExclusiveLock;
+		}
 	}
 	else if (anyAnchorTableIsReplicated)
 	{
@@ -1645,15 +1655,6 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 		 * be done commutatively. Meaning that we should allow all the commands
 		 * where this GUC is enabled to run concurrently. This is irrespective of
 		 * single-shard/multi-shard or replicated tables.
-		 */
-		lockMode = RowExclusiveLock;
-	}
-	else if (!IsCoordinator())
-	{
-		/*
-		 * We also skip taking a heavy-weight lock when running a multi-shard
-		 * commands from workers, since we currently do not prevent concurrency
-		 * across workers anyway.
 		 */
 		lockMode = RowExclusiveLock;
 	}
