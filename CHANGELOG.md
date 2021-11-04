@@ -1,3 +1,7 @@
+### citus v9.2.8 (November 4, 2021) ###
+
+* Adds a configure flag to enforce security
+
 ### citus v9.2.7 (November 3, 2021) ###
 
 * Fixes `ALTER TABLE IF EXISTS SET SCHEMA` with non-existing table bug
