@@ -52,8 +52,7 @@ static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
-static void NoticeIfAutoConvertingLocalTables(bool autoConverted);
-static void NoticeRelationIsAlreadyAddedToMetadata(Oid relationId);
+static void NoticeIfAutoConvertingLocalTables(bool autoConverted, Oid relationId);
 static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
 static uint64 ConvertLocalTableToShard(Oid relationId);
@@ -213,8 +212,6 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 		UpdateAutoConvertedForConnectedRelations(list_make1_oid(relationId),
 												 autoConverted);
 
-		NoticeRelationIsAlreadyAddedToMetadata(relationId);
-
 		return;
 	}
 
@@ -242,7 +239,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 */
 	relation_close(relation, NoLock);
 
-	NoticeIfAutoConvertingLocalTables(autoConverted);
+	NoticeIfAutoConvertingLocalTables(autoConverted, relationId);
 
 	if (TableHasExternalForeignKeys(relationId))
 	{
@@ -565,41 +562,26 @@ ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation)
  * will be undistributed automatically, if it gets disconnected from reference table(s).
  */
 static void
-NoticeIfAutoConvertingLocalTables(bool autoConverted)
+NoticeIfAutoConvertingLocalTables(bool autoConverted, Oid relationId)
 {
 	if (autoConverted && ShouldEnableLocalReferenceForeignKeys())
 	{
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
 		/*
 		 * When foreign keys between reference tables and postgres tables are
 		 * enabled, we automatically undistribute citus local tables that are
 		 * not chained with any reference tables back to postgres tables.
 		 * So give a warning to user for that.
 		 */
-		ereport(NOTICE, (errmsg("local tables that are added to metadata but not "
-								"chained with reference tables via foreign keys might "
-								"be automatically converted back to postgres tables"),
-						 errhint("Consider setting "
-								 "citus.enable_local_reference_table_foreign_keys "
-								 "to 'off' to disable this behavior")));
+		ereport(NOTICE, (errmsg("local tables that are added to metadata automatically "
+								"by citus, but not chained with reference tables via "
+								"foreign keys might be automatically converted back to "
+								"postgres tables"),
+						 errhint("Executing citus_add_local_table_to_metadata($$%s$$) "
+								 "prevents this for the given relation, and all of the "
+								 "connected relations", qualifiedRelationName)));
 	}
-}
-
-
-/*
- * NoticeRelationIsAlreadyAddedToMetadata logs a NOTICE message that informs the user
- * that the given relation is already added to metadata.
- * We set the field autoConverted for these cases to false.
- * This function tells the user that the given table will not be removed from metadata,
- * as it was a user request.
- */
-static void
-NoticeRelationIsAlreadyAddedToMetadata(Oid relationId)
-{
-	char *relname = get_rel_name(relationId);
-	ereport(NOTICE, (errmsg("relation \"%s\" is already added to metadata", relname),
-					 errdetail("This relation will not be removed from metadata even if "
-							   "it is not connected to a reference table via foreign "
-							   "key(s), since it is added to metadata by the user")));
 }
 
 
