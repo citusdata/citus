@@ -1603,13 +1603,11 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	 */
 	int lockMode = ExclusiveLock;
 
-	if (!anyAnchorTableIsReplicated && !parallelExecutionNotPossible && IsCoordinator())
+	if (!anyAnchorTableIsReplicated && !parallelExecutionNotPossible)
 	{
 		/*
-		 * When all writes are commutative then we only need to prevent multi-shard
-		 * commands from running concurrently with each other and with commands
-		 * that are explicitly non-commutative. When there is no replication then
-		 * we only need to prevent concurrent multi-shard commands.
+		 * When there is no replication then we only need to prevent
+		 * concurrent multi-shard commands.
 		 *
 		 * In either case, ShareUpdateExclusive has the desired effect, since
 		 * it conflicts with itself and ExclusiveLock (taken by non-commutative
@@ -1619,27 +1617,44 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 		 * reduce to a RowExclusiveLock when citus.enable_deadlock_prevention
 		 * is enabled, which lets multi-shard modifications run in parallel as
 		 * long as they all disable the GUC.
-		 *
-		 * We also skip taking a heavy-weight lock when running a multi-shard
-		 * commands from workers, since we currently do not prevent concurrency
-		 * across workers anyway.
 		 */
 		lockMode =
 			EnableDeadlockPrevention ? ShareUpdateExclusiveLock : RowExclusiveLock;
+	}
+	else if (anyAnchorTableIsReplicated)
+	{
+		/*
+		 * When we are executing distributed queries on replicated tables, our
+		 * default behaviour is to prevent any concurrency. This is valid
+		 * for when parallel execution is possible or not.
+		 *
+		 * The only exception to this rule is the commutative modifications, such as
+		 * INSERTs. In that case, we should allow concurrency among such backends,
+		 * hence lowering the lock level to RowExclusiveLock.
+		 */
+		if (parallelExecutionNotPossible && modLevel < ROW_MODIFY_NONCOMMUTATIVE)
+		{
+			lockMode = RowExclusiveLock;
+		}
 	}
 
 	if (AllModificationsCommutative)
 	{
 		/*
-		 * If either the user allows via a GUC or the commands are
-		 * single shard commutative commands (e.g., INSERT), we
-		 * lower the level to RowExclusiveLock to allow concurrency
-		 * among the tasks.
+		 * The user override our decision via a GUC that all modifications can
+		 * be done commutatively. Meaning that we should allow all the commands
+		 * where this GUC is enabled to run concurrently. This is irrespective of
+		 * single-shard/multi-shard or replicated tables.
 		 */
 		lockMode = RowExclusiveLock;
 	}
-	else if (parallelExecutionNotPossible && modLevel < ROW_MODIFY_NONCOMMUTATIVE)
+	else if (!IsCoordinator())
 	{
+		/*
+		 * We also skip taking a heavy-weight lock when running a multi-shard
+		 * commands from workers, since we currently do not prevent concurrency
+		 * across workers anyway.
+		 */
 		lockMode = RowExclusiveLock;
 	}
 
