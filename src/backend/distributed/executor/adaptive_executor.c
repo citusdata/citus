@@ -1578,11 +1578,11 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 		return;
 	}
 
-	bool parallelExecutionNotPossible =
-		list_length(taskList) == 1 || ShouldRunTasksSequentially(taskList);
+	bool requiresParallelExecutionLocks =
+		!(list_length(taskList) == 1 || ShouldRunTasksSequentially(taskList));
 
 	bool anyAnchorTableIsReplicated = AnyAnchorTableIsReplicated(taskList);
-	if (!anyAnchorTableIsReplicated && parallelExecutionNotPossible)
+	if (!anyAnchorTableIsReplicated && !requiresParallelExecutionLocks)
 	{
 		/*
 		 * When a distributed query on tables with replication
@@ -1603,7 +1603,7 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	 */
 	int lockMode = ExclusiveLock;
 
-	if (!anyAnchorTableIsReplicated && !parallelExecutionNotPossible)
+	if (!anyAnchorTableIsReplicated && requiresParallelExecutionLocks)
 	{
 		/*
 		 * When there is no replication then we only need to prevent
@@ -1642,7 +1642,7 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 		 * INSERTs. In that case, we should allow concurrency among such backends,
 		 * hence lowering the lock level to RowExclusiveLock.
 		 */
-		if (parallelExecutionNotPossible && modLevel < ROW_MODIFY_NONCOMMUTATIVE)
+		if (!requiresParallelExecutionLocks && modLevel < ROW_MODIFY_NONCOMMUTATIVE)
 		{
 			lockMode = RowExclusiveLock;
 		}
