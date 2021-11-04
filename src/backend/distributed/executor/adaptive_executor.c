@@ -1603,7 +1603,7 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 	 */
 	int lockMode = ExclusiveLock;
 
-	if (!anyAnchorTableIsReplicated && IsCoordinator())
+	if (!anyAnchorTableIsReplicated && !parallelExecutionNotPossible && IsCoordinator())
 	{
 		/*
 		 * When all writes are commutative then we only need to prevent multi-shard
@@ -1628,8 +1628,7 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 			EnableDeadlockPrevention ? ShareUpdateExclusiveLock : RowExclusiveLock;
 	}
 
-	if (AllModificationsCommutative ||
-		(parallelExecutionNotPossible && modLevel < ROW_MODIFY_NONCOMMUTATIVE))
+	if (AllModificationsCommutative)
 	{
 		/*
 		 * If either the user allows via a GUC or the commands are
@@ -1637,6 +1636,10 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 		 * lower the level to RowExclusiveLock to allow concurrency
 		 * among the tasks.
 		 */
+		lockMode = RowExclusiveLock;
+	}
+	else if (parallelExecutionNotPossible && modLevel < ROW_MODIFY_NONCOMMUTATIVE)
+	{
 		lockMode = RowExclusiveLock;
 	}
 
