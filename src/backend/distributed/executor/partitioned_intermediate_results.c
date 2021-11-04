@@ -47,17 +47,35 @@ typedef struct PartitionedResultDestReceiver
 	/* on lazy startup we only startup the DestReceiver once they receive a tuple */
 	bool lazyStartup;
 
-	/* startup information for use in lazy startup */
+	/*
+	 * Stores the arguments passed to the PartidionedResultDestReceiver's rStarup
+	 * function. These arguments are reused when lazyStartup has been set to true.
+	 * On the processing of a first tuple for a partitionDestReceiver since rStartup it
+	 * will pass the arguments here to the rStartup function of partitionDestReceiver to
+	 * prepare it for receiving tuples.
+	 *
+	 * Even though not used without lazyStartup we just always populate these with the
+	 * last invoked arguments for our rStartup.
+	 */
 	struct
 	{
+		/*
+		 * operation as passed to rStartup, mostly the CmdType of the command being
+		 * streamed into this DestReceiver
+		 */
 		int operation;
+
+		/*
+		 * TupleDesc describing the layout of the tuples being streamed into the
+		 * DestReceiver.
+		 */
 		TupleDesc tupleDescriptor;
 	} startupArguments;
 
-	/* which column of streamed tuples to use as partition column? */
+	/* which column of streamed tuples to use as partition column */
 	int partitionColumnIndex;
 
-	/* how many partitions do we have? */
+	/* The number of partitions being partitioned into */
 	int partitionCount;
 
 	/* used for deciding which partition a shard belongs to. */
