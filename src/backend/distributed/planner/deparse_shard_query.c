@@ -39,7 +39,6 @@
 #include "utils/syscache.h"
 
 
-static void AddInsertAliasIfNeeded(Query *query);
 static void UpdateTaskQueryString(Query *query, Task *task);
 static RelationShard * FindRelationShard(Oid inputRelationId, List *relationShardList);
 static void ConvertRteToSubqueryWithEmptyResult(RangeTblEntry *rte);
@@ -159,7 +158,7 @@ RebuildQueryStrings(Job *workerJob)
  * deparsing issues (e.g. RETURNING might reference the original table name,
  * which has been replaced by a shard name).
  */
-static void
+void
 AddInsertAliasIfNeeded(Query *query)
 {
 	Assert(query->commandType == CMD_INSERT);
