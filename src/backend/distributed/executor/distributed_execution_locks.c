@@ -19,76 +19,6 @@
 #include "distributed/transaction_management.h"
 
 
-static void AcquireExecutorShardLockForRowModify(Task *task, RowModifyLevel modLevel);
-
-
-/*
- * AcquireExecutorShardLocks acquires locks on shards for the given task if
- * necessary to avoid divergence between multiple replicas of the same shard.
- * No lock is obtained when there is only one replica.
- *
- * The function determines the appropriate lock mode based on the commutativity
- * rule of the command. In each case, it uses a lock mode that enforces the
- * commutativity rule.
- *
- * The mapping is overridden when all_modifications_commutative is set to true.
- * In that case, all modifications are treated as commutative, which can be used
- * to communicate that the application is only generating commutative
- * UPDATE/DELETE/UPSERT commands and exclusive locks are unnecessary.
- */
-void
-AcquireExecutorShardLocks(Task *task, RowModifyLevel modLevel)
-{
-	AcquireExecutorShardLockForRowModify(task, modLevel);
-	AcquireExecutorShardLocksForRelationRowLockList(task->relationRowLockList);
-
-	/*
-	 * If the task has a subselect, then we may need to lock the shards from which
-	 * the query selects as well to prevent the subselects from seeing different
-	 * results on different replicas. In particular this prevents INSERT.. SELECT
-	 * commands from having a different effect on different placements.
-	 */
-	if (RequiresConsistentSnapshot(task))
-	{
-		/*
-		 * ExclusiveLock conflicts with all lock types used by modifications
-		 * and therefore prevents other modifications from running
-		 * concurrently.
-		 */
-
-		LockRelationShardResources(task->relationShardList, ExclusiveLock);
-	}
-}
-
-
-/*
- * AcquireExecutorMultiShardLocks acquires shard locks needed for execution
- * of writes on multiple shards. In addition to honouring commutativity
- * rules, we currently only allow a single multi-shard command on a shard at
- * a time. Otherwise, concurrent multi-shard commands may take row-level
- * locks on the shard placements in a different order and create a distributed
- * deadlock. This applies even when writes are commutative and/or there is
- * no replication.
- *
- * 1. If citus.all_modifications_commutative is set to true, then all locks
- * are acquired as ShareUpdateExclusiveLock.
- *
- * 2. If citus.all_modifications_commutative is false, then only the shards
- * with 2 or more replicas are locked with ExclusiveLock. Otherwise, the
- * lock is acquired with ShareUpdateExclusiveLock.
- *
- * ShareUpdateExclusiveLock conflicts with itself such that only one
- * multi-shard modification at a time is allowed on a shard. It also conflicts
- * with ExclusiveLock, which ensures that updates/deletes/upserts are applied
- * in the same order on all placements. It does not conflict with
- * RowExclusiveLock, which is normally obtained by single-shard, commutative
- * writes.
- */
-void
-AcquireExecutorMultiShardLocks(List *taskList)
-{ }
-
-
 /*
  * RequiresConsistentSnapshot returns true if the given task need to take
  * the necessary locks to ensure that a subquery in the modify query
@@ -165,11 +95,6 @@ AcquireMetadataLocks(List *taskList)
 		LockShardDistributionMetadata(task->anchorShardId, ShareLock);
 	}
 }
-
-
-static void
-AcquireExecutorShardLockForRowModify(Task *task, RowModifyLevel modLevel)
-{ }
 
 
 void
