@@ -690,8 +690,9 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 {
 	ShardInterval *firstShardInterval = (ShardInterval *) linitial(shardIntervalList);
 	int64 firstShardId = firstShardInterval->shardId;
+	Oid relationId = firstShardInterval->relationId;
 
-	if (ReferenceTableShardId(firstShardId))
+	if (ReferenceTableShardId(firstShardId) || !SingleReplicatedTable(relationId))
 	{
 		if (ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
 		{
@@ -704,7 +705,6 @@ SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 		 */
 		LockReferencedReferenceShardResources(firstShardId, lockMode);
 	}
-
 
 	LockShardListResources(shardIntervalList, lockMode);
 }
