@@ -12,20 +12,107 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 SET client_min_messages TO ERROR;
 SET citus.enable_ddl_propagation TO OFF;
 CREATE USER regular_mx_user WITH LOGIN;
+SELECT 1 FROM run_command_on_workers($$CREATE USER regular_mx_user WITH LOGIN;$$);
 GRANT ALL ON SCHEMA "Mx Regular User" TO regular_mx_user;
+
+-- create another table owned by the super user (e.g., current user of the session)
+-- and GRANT access to the user
+CREATE SCHEMA "Mx Super User";
+SELECT 1 FROM run_command_on_workers($$CREATE SCHEMA "Mx Super User";$$);
+SET citus.next_shard_id TO 2980000;
+SET search_path TO "Mx Super User";
+CREATE TABLE super_user_owned_regular_user_granted (a int PRIMARY KEY, b int);
+SELECT create_reference_table ('"Mx Super User".super_user_owned_regular_user_granted');
+
+-- show that this table is owned by super user
+SELECT
+	rolsuper
+FROM
+	pg_roles
+		WHERE oid
+			IN
+		(SELECT relowner FROM pg_class WHERE oid = '"Mx Super User".super_user_owned_regular_user_granted'::regclass);
+
+-- make sure that granting produce the same output for both community and enterprise
+SET client_min_messages TO ERROR;
+GRANT USAGE ON SCHEMA "Mx Super User" TO regular_mx_user;
+GRANT INSERT ON TABLE super_user_owned_regular_user_granted TO regular_mx_user;
+
+SELECT 1 FROM run_command_on_workers($$GRANT USAGE ON SCHEMA "Mx Super User" TO regular_mx_user;$$);
+SELECT 1 FROM run_command_on_workers($$GRANT INSERT ON TABLE "Mx Super User".super_user_owned_regular_user_granted TO regular_mx_user;$$);
+SELECT 1 FROM run_command_on_placements('super_user_owned_regular_user_granted', $$GRANT INSERT ON TABLE %s TO regular_mx_user;$$);
+
+-- now that the GRANT is given, the regular user should be able to
+-- INSERT into the table
+\c - regular_mx_user - :master_port
+SET search_path TO "Mx Super User";
+COPY super_user_owned_regular_user_granted FROM STDIN WITH CSV;
+1,1
+2,1
+\.
+
+-- however, this specific user doesn't have UPDATE/UPSERT/DELETE/TRUNCATE
+-- permission, so  should fail
+INSERT INTO super_user_owned_regular_user_granted VALUES (1, 1), (2, 1) ON CONFLICT (a) DO NOTHING;
+TRUNCATE super_user_owned_regular_user_granted;
+DELETE FROM super_user_owned_regular_user_granted;
+UPDATE super_user_owned_regular_user_granted SET a = 1;
+
+-- AccessExclusiveLock == 8 is strictly forbidden for any user
+SELECT lock_shard_resources(8, ARRAY[2980000]);
+
+-- ExclusiveLock == 7 is forbidden for this user
+-- as only has INSERT rights
+SELECT lock_shard_resources(7, ARRAY[2980000]);
+
+-- but should be able to acquire RowExclusiveLock
+BEGIN;
+	SELECT count(*) > 0 as acquired_lock from pg_locks where pid = pg_backend_pid() AND locktype = 'advisory';
+	SELECT lock_shard_resources(3, ARRAY[2980000]);
+	SELECT count(*) > 0 as acquired_lock from pg_locks where pid = pg_backend_pid() AND locktype = 'advisory';
+COMMIT;
+
+-- acquring locks on non-existing shards is not meaningful but still we do not throw error as we might be in the middle
+-- of metadata syncing. We just do not acquire the locks
+BEGIN;
+	SELECT count(*) > 0 as acquired_lock from pg_locks where pid = pg_backend_pid() AND locktype = 'advisory';
+	SELECT lock_shard_resources(3, ARRAY[123456871]);
+	SELECT count(*) > 0 as acquired_lock from pg_locks where pid = pg_backend_pid() AND locktype = 'advisory';
+COMMIT;
+
+
+\c - postgres - :master_port;
+SET search_path TO "Mx Super User";
+SET client_min_messages TO ERROR;
+
+-- now allow users to do UPDATE on the tables
+GRANT UPDATE ON TABLE super_user_owned_regular_user_granted TO regular_mx_user;
+SELECT 1 FROM run_command_on_workers($$GRANT UPDATE ON TABLE "Mx Super User".super_user_owned_regular_user_granted TO regular_mx_user;$$);
+SELECT 1 FROM run_command_on_placements('super_user_owned_regular_user_granted', $$GRANT UPDATE ON TABLE %s TO regular_mx_user;$$);
+
+\c - regular_mx_user - :master_port
+SET search_path TO "Mx Super User";
+
+UPDATE super_user_owned_regular_user_granted SET b = 1;
+
+-- AccessExclusiveLock == 8 is strictly forbidden for any user
+-- even after UPDATE is allowed
+SELECT lock_shard_resources(8, ARRAY[2980000]);
+
+\c - postgres - :master_port;
+SET client_min_messages TO ERROR;
+DROP SCHEMA "Mx Super User" CASCADE;
 
 \c - postgres - :worker_1_port;
 SET client_min_messages TO ERROR;
 SET citus.enable_ddl_propagation TO OFF;
 CREATE SCHEMA "Mx Regular User";
-CREATE USER regular_mx_user WITH LOGIN;
 GRANT ALL ON SCHEMA "Mx Regular User" TO regular_mx_user;
 
 \c - postgres - :worker_2_port;
 SET client_min_messages TO ERROR;
 SET citus.enable_ddl_propagation TO OFF;
 CREATE SCHEMA "Mx Regular User";
-CREATE USER regular_mx_user WITH LOGIN;
 GRANT ALL ON SCHEMA "Mx Regular User" TO regular_mx_user;
 
 -- now connect with that user
