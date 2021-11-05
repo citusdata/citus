@@ -25,18 +25,95 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 SET client_min_messages TO ERROR;
 SET citus.enable_ddl_propagation TO OFF;
 CREATE USER regular_mx_user WITH LOGIN;
+SELECT 1 FROM run_command_on_workers($$CREATE USER regular_mx_user WITH LOGIN;$$);
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
 GRANT ALL ON SCHEMA "Mx Regular User" TO regular_mx_user;
+-- create another table owned by the super user (e.g., current user of the session)
+-- and GRANT access to the user
+CREATE SCHEMA "Mx Super User";
+SELECT 1 FROM run_command_on_workers($$CREATE SCHEMA "Mx Super User";$$);
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
+SET citus.next_shard_id TO 2980000;
+SET search_path TO "Mx Super User";
+CREATE TABLE super_user_owned_regular_user_granted (a int);
+SELECT create_reference_table ('"Mx Super User".super_user_owned_regular_user_granted');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show that this table is owned by super user
+SELECT
+	rolsuper
+FROM
+	pg_roles
+		WHERE oid
+			IN
+		(SELECT relowner FROM pg_class WHERE oid = '"Mx Super User".super_user_owned_regular_user_granted'::regclass);
+ rolsuper
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- make sure that granting produce the same output for both community and enterprise
+SET client_min_messages TO ERROR;
+GRANT ALL ON SCHEMA "Mx Super User" TO regular_mx_user;
+GRANT ALL ON TABLE super_user_owned_regular_user_granted TO regular_mx_user;
+SELECT 1 FROM run_command_on_workers($$GRANT ALL ON SCHEMA "Mx Super User" TO regular_mx_user;$$);
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
+SELECT 1 FROM run_command_on_workers($$GRANT ALL ON TABLE "Mx Super User".super_user_owned_regular_user_granted TO regular_mx_user;$$);
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
+SELECT 1 FROM run_command_on_placements('super_user_owned_regular_user_granted', $$GRANT ALL ON TABLE %s TO regular_mx_user;$$);
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+        1
+(3 rows)
+
+-- now that the GRANT is given, the regular user should be able to
+-- modify the table
+\c - regular_mx_user - :master_port
+SET search_path TO "Mx Super User";
+COPY super_user_owned_regular_user_granted FROM STDIN;
+SELECT count(*) FROM super_user_owned_regular_user_granted;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+\c - postgres - :master_port;
+SET client_min_messages TO ERROR;
+DROP SCHEMA "Mx Super User" CASCADE;
 \c - postgres - :worker_1_port;
 SET client_min_messages TO ERROR;
 SET citus.enable_ddl_propagation TO OFF;
 CREATE SCHEMA "Mx Regular User";
-CREATE USER regular_mx_user WITH LOGIN;
 GRANT ALL ON SCHEMA "Mx Regular User" TO regular_mx_user;
 \c - postgres - :worker_2_port;
 SET client_min_messages TO ERROR;
 SET citus.enable_ddl_propagation TO OFF;
 CREATE SCHEMA "Mx Regular User";
-CREATE USER regular_mx_user WITH LOGIN;
 GRANT ALL ON SCHEMA "Mx Regular User" TO regular_mx_user;
 -- now connect with that user
 \c - regular_mx_user - :master_port

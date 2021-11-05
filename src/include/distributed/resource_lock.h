@@ -115,6 +115,7 @@ extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
 extern void LockPlacementCleanup(void);
 extern bool TryLockPlacementCleanup(void);
 extern void EnsureShardOwner(uint64 shardId, bool missingOk);
+extern void EnsureCurrenUserCanModifyShard(uint64 shardId, bool missingOk);
 extern void LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList);
 extern void BlockWritesToShardList(List *shardList);
 

@@ -161,6 +161,33 @@ EnsureShardOwner(uint64 shardId, bool missingOk)
 
 
 /*
+ * EnsureCurrenUserCanModifyShard gets a shardId and throws error if the current
+ * user doesn't have privileges to modify the shard.
+ */
+void
+EnsureCurrenUserCanModifyShard(uint64 shardId, bool missingOk)
+{
+	Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
+
+	if (!OidIsValid(relationId) && missingOk)
+	{
+		/*
+		 * This could happen in two ways. First, a malicious user is trying
+		 * to acquire locks on non-existing shards. Second, the metadata has
+		 * not been synced (or not yet visible) to this node. In the second
+		 * case, there is no point in locking the shards because no other
+		 * transaction can be accessing the table.
+		 */
+		return;
+	}
+
+	AclMode aclMask = ACL_INSERT | ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE;
+
+	EnsureTablePermissions(relationId, aclMask);
+}
+
+
+/*
  * lock_shard_resources allows shard resources to be locked
  * remotely to serialise non-commutative writes on shards.
  *
@@ -188,15 +215,12 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
 
 		/*
-		 * We don't want random users to block writes. The callers of this
-		 * function either operates on all the colocated placements, such
-		 * as shard moves, or requires superuser such as adding node.
-		 * In other words, the coordinator initiated operations has already
-		 * ensured table owner, we are preventing any malicious attempt to
-		 * use this function.
+		 * We don't want random users to block writes. If the current user
+		 * has privileges to modify the shard, then the user can already
+		 * acquire the lock. So, we allow.
 		 */
 		bool missingOk = true;
-		EnsureShardOwner(shardId, missingOk);
+		EnsureCurrenUserCanModifyShard(shardId, missingOk);
 
 		LockShardResource(shardId, lockMode);
 	}
