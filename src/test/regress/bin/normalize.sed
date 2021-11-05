@@ -200,7 +200,7 @@ s/citus_local_table_4_[0-9]+/citus_local_table_4_xxxxxx/g
 s/ERROR:  cannot append to shardId [0-9]+/ERROR:  cannot append to shardId xxxxxx/g
 
 # hide warning/hint message that we get when executing create_citus_local_table
-/local tables that are added to metadata but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
+/local tables that are added to metadata automatically by citus, but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
 /Consider setting citus.enable_local_reference_table_foreign_keys to 'off' to disable this behavior$/d
 
 # normalize partitioned table shard constraint name errors for upgrade_partition_constraints_(before|after)
