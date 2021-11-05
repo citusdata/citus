@@ -436,11 +436,12 @@ PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 	}
 
 	/* no lazy startup, lets startup our partitionedDestReceivers */
-	for (int i = 0; i < self->partitionCount; i++)
+	for (int partitionIndex = 0; partitionIndex < self->partitionCount; partitionIndex++)
 	{
-		DestReceiver *partitionDest = self->partitionDestReceivers[i];
+		DestReceiver *partitionDest = self->partitionDestReceivers[partitionIndex];
 		partitionDest->rStartup(partitionDest, operation, inputTupleDescriptor);
-		self->startedDestReceivers = bms_add_member(self->startedDestReceivers, i);
+		self->startedDestReceivers = bms_add_member(self->startedDestReceivers,
+													partitionIndex);
 	}
 }
 
