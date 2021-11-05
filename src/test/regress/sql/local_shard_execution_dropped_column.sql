@@ -12,11 +12,13 @@ SELECT stop_metadata_sync_to_node('localhost',:worker_2_port);
 
 -- create a distributed table, drop a column and sync the metadata
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model TO streaming;
 CREATE TABLE t1 (a int, b int, c int UNIQUE);
 SELECT create_distributed_table('t1', 'c');
 ALTER TABLE t1 DROP COLUMN b;
 SELECT start_metadata_sync_to_node('localhost',:worker_1_port);
 SELECT start_metadata_sync_to_node('localhost',:worker_2_port);
+
 
 \c - - - :worker_1_port
 SET search_path TO local_shard_execution_dropped_column;
@@ -84,9 +86,8 @@ execute p4(8);
 SET search_path TO local_shard_execution_dropped_column;
 ALTER TABLE t1 DROP COLUMN a;
 
-SELECT citus_move_shard_placement(2460000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
-\c - - - :worker_2_port
+\c - - - :worker_1_port
 SET search_path TO local_shard_execution_dropped_column;
 
 -- show the dropped columns
