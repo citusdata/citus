@@ -77,8 +77,9 @@ static bool RelationIdListContainsCitusTableType(List *relationIdList,
 static bool RelationIdListContainsPostgresTable(List *relationIdList);
 static void ConvertPostgresLocalTablesToCitusLocalTables(
 	AlterTableStmt *alterTableStatement);
-static bool RangeVarListHasRelationConvertedByUser(List *relationRangeVarList,
-												   AlterTableStmt *alterTableStatement);
+static bool RangeVarListHasLocalRelationConvertedByUser(List *relationRangeVarList,
+														AlterTableStmt *
+														alterTableStatement);
 static int CompareRangeVarsByOid(const void *leftElement, const void *rightElement);
 static List * GetAlterTableAddFKeyRightRelationIdList(
 	AlterTableStmt *alterTableStatement);
@@ -1269,13 +1270,9 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 	 * table to a citus local table.
 	 */
 	relationRangeVarList = SortList(relationRangeVarList, CompareRangeVarsByOid);
-
-	bool autoConverted = true;
-
-	if (RangeVarListHasRelationConvertedByUser(relationRangeVarList, alterTableStatement))
-	{
-		autoConverted = false;
-	}
+	bool containsAnyUserConvertedLocalRelation =
+		RangeVarListHasLocalRelationConvertedByUser(relationRangeVarList,
+													alterTableStatement);
 
 	/*
 	 * Here we should operate on RangeVar objects since relations oid's would
@@ -1299,20 +1296,22 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 		else if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 		{
 			CitusTableCacheEntry *entry = GetCitusTableCacheEntry(relationId);
-			if (!entry->autoConverted || autoConverted)
+			if (!entry->autoConverted)
 			{
 				/*
-				 * relationRangeVarList has also reference and citus local tables
-				 * involved in this ADD FOREIGN KEY command. Moreover, even if
-				 * relationId was belonging to a postgres  local table initially,
-				 * we might had already converted it to a citus local table by cascading.
-				 * Note that we cannot skip here, if the relation is marked as
-				 * auto-converted, but we are marking the relations in the command
-				 * auto-converted = false. Because in that case, it means that this
-				 * relation is marked as auto-converted because of a connection
-				 * with a reference table, but now it is connected to a Citus
-				 * Local Table. In that case, we need to mark this relation as
-				 * auto-converted = false, so cannot do a "continue" here.
+				 * This citus local table is already added to the metadata
+				 * by the user, so no further operation needed.
+				 */
+				continue;
+			}
+			else if (!containsAnyUserConvertedLocalRelation)
+			{
+				/*
+				 * We are safe to skip this relation because none of the citus local
+				 * tables involved are manually added to the metadata by the user.
+				 * This implies that all the Citus local tables involved are marked
+				 * as autoConverted = true and there is no chance to update
+				 * autoConverted = false.
 				 */
 				continue;
 			}
@@ -1353,6 +1352,24 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 			}
 			else
 			{
+				/*
+				 * There might be two scenarios:
+				 *
+				 *   a) A user created foreign key from a reference table
+				 *      to Postgres local table(s) or Citus local table(s)
+				 *      where all of the citus local tables involved are auto
+				 *      converted. In that case, we mark the new table as auto
+				 *      converted as well.
+				 *
+				 *   b) A user created foreign key from a reference table
+				 *      to Postgres local table(s) or Citus local table(s)
+				 *      where at least one of the citus local tables
+				 *      involved is not auto converted. In that case, we mark
+				 *      this new Citus local table as autoConverted = false
+				 *      as well. Because our logic is to keep all the connected
+				 *      Citus local tables to have the same autoConverted value.
+				 */
+				bool autoConverted = containsAnyUserConvertedLocalRelation ? false : true;
 				CreateCitusLocalTable(relationId, cascade, autoConverted);
 			}
 		}
@@ -1380,14 +1397,14 @@ ConvertPostgresLocalTablesToCitusLocalTables(AlterTableStmt *alterTableStatement
 
 
 /*
- * RangeVarListHasRelationConvertedByUser takes a list of relations and returns true
+ * RangeVarListHasLocalRelationConvertedByUser takes a list of relations and returns true
  * if any of these relations is marked as auto-converted = false. Returns true otherwise.
  * This function also takes the current alterTableStatement command, to obtain the
  * necessary locks.
  */
 static bool
-RangeVarListHasRelationConvertedByUser(List *relationRangeVarList,
-									   AlterTableStmt *alterTableStatement)
+RangeVarListHasLocalRelationConvertedByUser(List *relationRangeVarList,
+											AlterTableStmt *alterTableStatement)
 {
 	RangeVar *relationRangeVar;
 	foreach_ptr(relationRangeVar, relationRangeVarList)
