@@ -99,6 +99,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.pg_srcdir = arguments["--pgxsdir"]
         self.temp_dir = CITUS_ARBITRARY_TEST_DIR
         self.worker_amount = 2
+        self.create_user = None
         self.user = REGULAR_USER_NAME
         self.dbname = DATABASE_NAME
         self.is_mx = True
@@ -129,6 +130,8 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         self.output_file = os.path.join(self.datadir, "run.out")
         if self.worker_amount > 0:
             self.chosen_random_worker_port = self.random_worker_port()
+        if self.create_user is None:
+            self.create_user = self.user
         self.settings.update(self.new_settings)
 
     def coordinator_port(self):
@@ -176,6 +179,17 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
             "arbitrary_configs_alter_table_add_constraint_without_name_create",
             "arbitrary_configs_alter_table_add_constraint_without_name",
         ]
+
+class CitusGrantedPermissionsClusterConfig(CitusDefaultClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.create_user = SUPER_USER_NAME
+
+
+class CitusMXBaseClusterConfig(CitusDefaultClusterConfig):
+    def __init__(self, arguments):
+        super().__init__(arguments)
+        self.is_mx = True
 
 
 class CitusUpgradeConfig(CitusBaseClusterConfig):

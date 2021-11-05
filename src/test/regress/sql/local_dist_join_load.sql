@@ -1,5 +1,6 @@
 CREATE SCHEMA local_dist_join_mixed;
 SET search_path TO local_dist_join_mixed;
+GRANT ALL ON SCHEMA local_dist_join_mixed TO regularuser;
 
 
 
