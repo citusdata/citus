@@ -4538,6 +4538,12 @@ GenerateSyntheticShardIntervalArray(int partitionCount)
 		int32 shardMinHashToken = PG_INT32_MIN + (shardIndex * hashTokenIncrement);
 		int32 shardMaxHashToken = shardMinHashToken + (hashTokenIncrement - 1);
 
+		/* extend the last range to cover the full range of integers */
+		if (shardIndex == (partitionCount - 1))
+		{
+			shardMaxHashToken = PG_INT32_MAX;
+		}
+
 		shardInterval->relationId = InvalidOid;
 		shardInterval->minValueExists = true;
 		shardInterval->minValue = Int32GetDatum(shardMinHashToken);
