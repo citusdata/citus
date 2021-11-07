@@ -2,12 +2,17 @@
 // How we organize this isolation test spec, is explained at README.md file in this directory.
 //
 
-// create append distributed table to test behavior of COPY in concurrent operations
+// create range distributed table to test behavior of COPY in concurrent operations
 setup
 {
 	SET citus.shard_replication_factor TO 1;
+	SET citus.next_shard_id TO 3004005;
 	CREATE TABLE range_copy(id integer, data text, int_data int);
-	SELECT create_distributed_table('range_copy', 'id', 'append');
+	SELECT create_distributed_table('range_copy', 'id', 'range');
+	SELECT master_create_empty_shard('range_copy');
+	SELECT master_create_empty_shard('range_copy');
+	UPDATE pg_dist_shard SET shardminvalue = '0', shardmaxvalue = '4' WHERE shardid = 3004005;
+	UPDATE pg_dist_shard SET shardminvalue = '5', shardmaxvalue = '9' WHERE shardid = 3004006;
 }
 
 // drop distributed table
@@ -76,7 +81,13 @@ step "s2-ddl-rename-column" { ALTER TABLE range_copy RENAME data TO new_column; 
 step "s2-table-size" { SELECT citus_total_relation_size('range_copy'); }
 step "s2-master-modify-multiple-shards" { DELETE FROM range_copy; }
 step "s2-master-drop-all-shards" { SELECT citus_drop_all_shards('range_copy'::regclass, 'public', 'range_copy'); }
-step "s2-distribute-table" { SELECT create_distributed_table('range_copy', 'id', 'range'); }
+step "s2-distribute-table" {
+  SET citus.shard_replication_factor TO 1;
+  SET citus.next_shard_id TO 3004005;
+  SELECT create_distributed_table('range_copy', 'id', 'range');
+  UPDATE pg_dist_shard SET shardminvalue = '0', shardmaxvalue = '4' WHERE shardid = 3004005;
+  UPDATE pg_dist_shard SET shardminvalue = '5', shardmaxvalue = '9' WHERE shardid = 3004006;
+ }
 
 // permutations - COPY vs COPY
 permutation "s1-initialize" "s1-begin" "s1-copy" "s2-copy" "s1-commit" "s1-select-count"

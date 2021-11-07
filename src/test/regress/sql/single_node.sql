@@ -365,6 +365,13 @@ BEGIN;
 	INSERT INTO test SELECT i,i FROM generate_series(0,100)i;
 ROLLBACK;
 
+-- master_create_empty_shard on coordinator
+BEGIN;
+CREATE TABLE append_table (a INT, b INT);
+SELECT create_distributed_table('append_table','a','append');
+SELECT master_create_empty_shard('append_table');
+END;
+
 -- alter table inside a tx block
 BEGIN;
 	ALTER TABLE test ADD COLUMN z single_node.new_type;

@@ -76,6 +76,7 @@ SELECT create_distributed_table('products_append', 'product_no', 'append');
 
 (1 row)
 
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 -- Can only add primary key constraint on distribution column (or group
 -- of columns including distribution column)
 -- Command below should error out since 'name' is not a distribution column
@@ -90,7 +91,7 @@ WARNING:  table "products_append" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
 --- Error out since first and third rows have the same product_no
-\COPY products_append FROM STDIN DELIMITER AS ',';
+COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
 ERROR:  duplicate key value violates unique constraint "p_key_1450033"
 DETAIL:  Key (product_no)=(1) already exists.
 DROP TABLE products_append;
@@ -163,6 +164,7 @@ SELECT create_distributed_table('unique_test_table_append', 'id', 'append');
 
 (1 row)
 
+SELECT master_create_empty_shard('unique_test_table_append') AS shardid \gset
 -- Can only add unique constraint on distribution column (or group
 -- of columns including distribution column)
 -- Command below should error out since 'name' is not a distribution column
@@ -177,7 +179,7 @@ WARNING:  table "unique_test_table_append" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
 -- Error out. Table can not have two rows with the same id.
-\COPY unique_test_table_append FROM STDIN DELIMITER AS ',';
+COPY unique_test_table_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
 ERROR:  duplicate key value violates unique constraint "unn_id_1450067"
 DETAIL:  Key (id)=(X) already exists.
 DROP TABLE unique_test_table_append;
@@ -250,12 +252,13 @@ SELECT create_distributed_table('products_append', 'product_no', 'append');
 
 (1 row)
 
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 -- Can add column and table check constraints
 ALTER TABLE products_append ADD CONSTRAINT p_check CHECK(price > 0);
 ALTER TABLE products_append ADD CONSTRAINT p_multi_check CHECK(price > discounted_price);
 -- Error out,since the third row conflicting with the p_multi_check
-\COPY products_append FROM STDIN DELIMITER AS ',';
-ERROR:  new row for relation "products_append_1450101" violates check constraint "p_multi_check"
+COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
+ERROR:  new row for relation "products_append_1450101" violates check constraint "p_multi_check_1450101"
 DETAIL:  Failing row contains (1,  Product_3, 8, 10).
 DROP TABLE products_append;
 -- Check "EXCLUSION CONSTRAINT"
@@ -323,6 +326,7 @@ SELECT create_distributed_table('products_append', 'product_no','append');
 
 (1 row)
 
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 -- Can only add exclusion constraint on distribution column (or group of column
 -- including distribution column)
 -- Command below should error out since 'name' is not a distribution column
@@ -337,7 +341,7 @@ WARNING:  table "products_append" has a UNIQUE or EXCLUDE constraint
 DETAIL:  UNIQUE constraints, EXCLUDE constraints, and PRIMARY KEYs on append-partitioned tables cannot be enforced.
 HINT:  Consider using hash partitioning.
 -- Error out since first and third can not pass the exclusion check.
-\COPY products_append FROM STDIN DELIMITER AS ',';
+COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
 ERROR:  conflicting key value violates exclusion constraint "exc_pno_name_1450135"
 DETAIL:  Key (product_no, name)=(1,  Product_1) conflicts with existing key (product_no, name)=(1,  Product_1).
 DROP TABLE products_append;
@@ -394,9 +398,10 @@ SELECT create_distributed_table('products_append', 'product_no', 'append');
 
 (1 row)
 
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 ALTER TABLE products_append ALTER COLUMN name SET NOT NULL;
 -- Error out since name and product_no columns can not handle NULL value.
-\COPY products_append FROM STDIN DELIMITER AS ',';
+COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
 DROP TABLE products_append;
 -- Tests for ADD CONSTRAINT is not only subcommand
 CREATE TABLE products (

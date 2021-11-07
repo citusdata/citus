@@ -29,7 +29,8 @@ CREATE TABLE lineitem_alter (
 	)
   WITH ( fillfactor = 80 );
 SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
-\copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+SELECT master_create_empty_shard('lineitem_alter') AS shardid \gset
+copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
 
 -- verify that the storage options made it to the table definitions
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
@@ -65,7 +66,8 @@ ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
 
 -- \copy to verify that default values take effect
-\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
 
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
 SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
@@ -80,7 +82,10 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
 
 -- \copy should fail because it will try to insert NULLs for a NOT NULL column
 -- Note, this operation will create a table on the workers but it won't be in the metadata
-\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+BEGIN;
+SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
+END;
 
 -- Verify that DROP NOT NULL works
 
@@ -88,7 +93,8 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
 
 -- \copy should succeed now
-\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
 SELECT count(*) from lineitem_alter;
 
 -- Verify that SET DATA TYPE works

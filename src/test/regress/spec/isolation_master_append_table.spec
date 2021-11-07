@@ -1,12 +1,15 @@
 setup
 {
+	SET citus.next_shard_id TO 4080102;
+
   	CREATE TABLE table_to_append(id int);
   	CREATE TABLE table_to_be_appended(id int);
 
   	SELECT create_distributed_table('table_to_append', 'id', 'append');
+  	SELECT master_create_empty_shard('table_to_append');
   	INSERT INTO table_to_be_appended SELECT generate_series(1,1000);
 
-  	COPY table_to_append FROM PROGRAM 'echo 0 && echo 7 && echo 8 && echo 9 && echo 10000';
+  	COPY table_to_append FROM PROGRAM 'echo 0 && echo 7 && echo 8 && echo 9 && echo 10000' WITH (append_to_shard 4080102);
 }
 
 teardown

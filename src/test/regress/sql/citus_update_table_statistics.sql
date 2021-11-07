@@ -63,10 +63,12 @@ ORDER BY 2, 3;
 -- here we update shardlength, shardminvalue and shardmaxvalue
 CREATE TABLE test_table_statistics_append (id int);
 SELECT create_distributed_table('test_table_statistics_append', 'id', 'append');
-COPY test_table_statistics_append FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3' WITH CSV;
-COPY test_table_statistics_append FROM PROGRAM 'echo 4 && echo 5 && echo 6 && echo 7' WITH CSV;
+SELECT master_create_empty_shard('test_table_statistics_append') AS shardid1 \gset
+SELECT master_create_empty_shard('test_table_statistics_append') AS shardid2 \gset
+COPY test_table_statistics_append FROM PROGRAM 'echo 0 && echo 1 && echo 2 && echo 3' WITH (format 'csv', append_to_shard :shardid1);
+COPY test_table_statistics_append FROM PROGRAM 'echo 4 && echo 5 && echo 6 && echo 7' WITH (format 'csv', append_to_shard :shardid2);
 
--- originally shardminvalue and shardmaxvalue will be 0,3 and 4, 7
+-- shardminvalue and shardmaxvalue are NULL
 SELECT
 	ds.logicalrelid::regclass::text AS tablename,
 	ds.shardid AS shardid,

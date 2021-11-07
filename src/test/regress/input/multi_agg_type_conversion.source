@@ -2,7 +2,6 @@
 -- MULTI_AGG_TYPE_CONVERSION
 --
 
-
 -- Test aggregate type conversions using sums of integers and division operator
 SELECT sum(l_suppkey) FROM lineitem;
 SELECT sum(l_suppkey) / 2 FROM lineitem;
@@ -19,8 +18,9 @@ CREATE TABLE aggregate_type (
        double_value float(40) not null,
        interval_value interval not null);
 SELECT create_distributed_table('aggregate_type', 'float_value', 'append');
+SELECT master_create_empty_shard('aggregate_type') AS shardid \gset
 
-\copy aggregate_type FROM '@abs_srcdir@/data/agg_type.data'
+copy aggregate_type FROM '@abs_srcdir@/data/agg_type.data' with (append_to_shard :shardid);
 
 -- Test conversions using aggregates on floats and division
 

@@ -50,16 +50,20 @@ CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name tex
     RETURNS void
     AS 'citus', $$master_create_worker_shards$$
     LANGUAGE C STRICT;
-CREATE TABLE t_append(id int, value_1 int);
-SELECT master_create_distributed_table('t_append', 'id', 'append');
+CREATE TABLE t_range(id int, value_1 int);
+SELECT create_distributed_table('t_range', 'id', 'range');
+SELECT master_create_empty_shard('t_range') as shardid1 \gset
+SELECT master_create_empty_shard('t_range') as shardid2 \gset
+UPDATE pg_dist_shard SET shardminvalue = '1', shardmaxvalue = '3' WHERE shardid = :shardid1;
+UPDATE pg_dist_shard SET shardminvalue = '5', shardmaxvalue = '7' WHERE shardid = :shardid2;
 
-\copy t_append FROM STDIN DELIMITER ','
+\copy t_range FROM STDIN with (DELIMITER ',')
 1,2
 2,3
 3,4
 \.
 
-\copy t_append FROM STDIN DELIMITER ','
+\copy t_range FROM STDIN with (DELIMITER ',')
 5,2
 6,3
 7,4
