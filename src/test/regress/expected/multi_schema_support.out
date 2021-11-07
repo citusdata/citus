@@ -4,7 +4,7 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
 -- create schema to test schema support
 CREATE SCHEMA test_schema_support;
--- test master_append_table_to_shard with schema
+-- test COPY with schema
 -- create local table to append
 CREATE TABLE public.nation_local(
     n_nationkey integer not null,
@@ -25,19 +25,9 @@ SELECT master_create_distributed_table('test_schema_support.nation_append', 'n_n
 
 (1 row)
 
-SELECT master_create_empty_shard('test_schema_support.nation_append');
- master_create_empty_shard
----------------------------------------------------------------------
-                   1190000
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support.nation_append') as simple_shardid \gset
 -- append table to shard
-SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+copy test_schema_support.nation_append FROM STDIN with (append_to_shard :simple_shardid, delimiter '|');
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM test_schema_support.nation_append;
  count
@@ -57,18 +47,8 @@ SELECT master_create_distributed_table('test_schema_support."nation._''append"',
 
 (1 row)
 
-SELECT master_create_empty_shard('test_schema_support."nation._''append"');
- master_create_empty_shard
----------------------------------------------------------------------
-                   1190001
-(1 row)
-
-SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support."nation._''append"') as special_shardid \gset
+copy test_schema_support."nation._'append" FROM STDIN with (append_to_shard :special_shardid, delimiter '|');
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM test_schema_support."nation._'append";
  count
@@ -76,14 +56,9 @@ SELECT COUNT(*) FROM test_schema_support."nation._'append";
      6
 (1 row)
 
--- test master_append_table_to_shard with schema with search_path is set
+-- test COPY with schema with search_path is set
 SET search_path TO test_schema_support;
-SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+copy nation_append FROM STDIN with (append_to_shard :simple_shardid, delimiter '|');
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM nation_append;
  count
@@ -92,12 +67,7 @@ SELECT COUNT(*) FROM nation_append;
 (1 row)
 
 -- test with search_path is set and shard name contains special characters
-SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+copy "nation._'append" FROM STDIN with (append_to_shard :special_shardid, delimiter '|');
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM "nation._'append";
  count

@@ -452,15 +452,10 @@ DELETE FROM pg_dist_shard_placement WHERE placementid in (
                                     ORDER BY nodename, nodeport limit 1)
 );
 -- Upload the test data to the shards
-SELECT count(master_append_table_to_shard(shardid, 'shard_rebalancer_test_data',
-                                          host(inet_server_addr()), inet_server_port()))
-    FROM pg_dist_shard
-    WHERE logicalrelid = 'replication_test_table'::regclass;
- count
----------------------------------------------------------------------
-     4
-(1 row)
-
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
 -- Verify that there is one node with all placements
 SELECT * FROM replication_test_table_placements_per_node;
  count
@@ -581,15 +576,12 @@ $$;
 CALL create_unbalanced_shards('rebalance_test_table');
 SET citus.shard_replication_factor TO 2;
 -- Upload the test data to the shards
-SELECT count(master_append_table_to_shard(shardid, 'shard_rebalancer_test_data',
-        host(inet_server_addr()), inet_server_port()))
-FROM pg_dist_shard
-WHERE logicalrelid = 'rebalance_test_table'::regclass;
- count
----------------------------------------------------------------------
-     6
-(1 row)
-
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
 -- Verify that there is one node with all placements
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
@@ -874,44 +866,14 @@ SELECT master_create_distributed_table('test_schema_support.imbalanced_table', '
 (1 row)
 
 SET citus.shard_replication_factor TO 1;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
- master_create_empty_shard
----------------------------------------------------------------------
-                    123018
-(1 row)
-
-SELECT master_append_table_to_shard(123018, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
 SET citus.shard_replication_factor TO 2;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
- master_create_empty_shard
----------------------------------------------------------------------
-                    123019
-(1 row)
-
-SELECT master_append_table_to_shard(123019, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
 SET citus.shard_replication_factor TO 1;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
- master_create_empty_shard
----------------------------------------------------------------------
-                    123020
-(1 row)
-
-SELECT master_append_table_to_shard(123020, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
 -- imbalanced_table is now imbalanced
 -- Shard counts in each node before rebalance
 SELECT * FROM public.table_placements_per_node;

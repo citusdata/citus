@@ -5,7 +5,6 @@
 /multi_agg_distinct.out
 /multi_agg_type_conversion.out
 /multi_alter_table_statements.out
-/multi_append_table_to_shard.out
 /multi_behavioral_analytics_create_table.out
 /multi_behavioral_analytics_create_table_superuser.out
 /multi_complex_count_distinct.out

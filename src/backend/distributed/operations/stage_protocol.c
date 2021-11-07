@@ -229,118 +229,13 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 
 
 /*
- * master_append_table_to_shard appends the given table's contents to the given
- * shard, and updates shard metadata on the master node. If the function fails
- * to append table data to all shard placements, it doesn't update any metadata
- * and errors out. Else if the function fails to append table data to some of
- * the shard placements, it marks those placements as invalid. These invalid
- * placements will get cleaned up during shard rebalancing.
+ * master_append_table_to_shard is a deprecated function for appending data
+ * to a shard in an append-distributed table.
  */
 Datum
 master_append_table_to_shard(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
-
-	uint64 shardId = PG_GETARG_INT64(0);
-	text *sourceTableNameText = PG_GETARG_TEXT_P(1);
-	text *sourceNodeNameText = PG_GETARG_TEXT_P(2);
-	uint32 sourceNodePort = PG_GETARG_UINT32(3);
-
-	char *sourceTableName = text_to_cstring(sourceTableNameText);
-	char *sourceNodeName = text_to_cstring(sourceNodeNameText);
-
-	float4 shardFillLevel = 0.0;
-
-	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	Oid relationId = shardInterval->relationId;
-
-	/* don't allow the table to be dropped */
-	LockRelationOid(relationId, AccessShareLock);
-
-	bool cstoreTable = CStoreTable(relationId);
-	char storageType = shardInterval->storageType;
-
-	EnsureTablePermissions(relationId, ACL_INSERT);
-
-	if (storageType != SHARD_STORAGE_TABLE && !cstoreTable)
-	{
-		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
-						errdetail("The underlying shard is not a regular table")));
-	}
-
-	if (IsCitusTableType(relationId, HASH_DISTRIBUTED) || IsCitusTableType(relationId,
-																		   CITUS_TABLE_WITH_NO_DIST_KEY))
-	{
-		ereport(ERROR, (errmsg("cannot append to shardId " UINT64_FORMAT, shardId),
-						errdetail("We currently don't support appending to shards "
-								  "in hash-partitioned, reference and local tables")));
-	}
-
-	/* ensure that the shard placement metadata does not change during the append */
-	LockShardDistributionMetadata(shardId, ShareLock);
-
-	/* serialize appends to the same shard */
-	LockShardResource(shardId, ExclusiveLock);
-
-	/* get schame name of the target shard */
-	Oid shardSchemaOid = get_rel_namespace(relationId);
-	char *shardSchemaName = get_namespace_name(shardSchemaOid);
-
-	/* Build shard table name. */
-	char *shardTableName = get_rel_name(relationId);
-	AppendShardIdToName(&shardTableName, shardId);
-
-	char *shardQualifiedName = quote_qualified_identifier(shardSchemaName,
-														  shardTableName);
-
-	List *shardPlacementList = ActiveShardPlacementList(shardId);
-	if (shardPlacementList == NIL)
-	{
-		ereport(ERROR, (errmsg("could not find any shard placements for shardId "
-							   UINT64_FORMAT, shardId),
-						errhint("Try running master_create_empty_shard() first")));
-	}
-
-	UseCoordinatedTransaction();
-	Use2PCForCoordinatedTransaction();
-
-	/* issue command to append table to each shard placement */
-	ShardPlacement *shardPlacement = NULL;
-	foreach_ptr(shardPlacement, shardPlacementList)
-	{
-		int connectionFlags = FOR_DML;
-		MultiConnection *connection =
-			GetPlacementConnection(connectionFlags, shardPlacement, NULL);
-
-		/*
-		 * This code-path doesn't support optional connections, so we don't expect
-		 * NULL connections.
-		 */
-		Assert(connection != NULL);
-
-		PGresult *queryResult = NULL;
-
-		StringInfo workerAppendQuery = makeStringInfo();
-		appendStringInfo(workerAppendQuery, WORKER_APPEND_TABLE_TO_SHARD,
-						 quote_literal_cstr(shardQualifiedName),
-						 quote_literal_cstr(sourceTableName),
-						 quote_literal_cstr(sourceNodeName), sourceNodePort);
-
-		RemoteTransactionBeginIfNecessary(connection);
-
-		ExecuteCriticalRemoteCommand(connection, workerAppendQuery->data);
-		PQclear(queryResult);
-		ForgetResults(connection);
-	}
-
-	/* update shard statistics and get new shard size */
-	uint64 newShardSize = UpdateShardStatistics(shardId);
-
-	/* calculate ratio of current shard size compared to shard max size */
-	uint64 shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
-	shardFillLevel = ((float4) newShardSize / (float4) shardMaxSizeInBytes);
-
-	PG_RETURN_FLOAT4(shardFillLevel);
+	ereport(ERROR, (errmsg("master_append_table_to_shard has been deprecated")));
 }
 
 

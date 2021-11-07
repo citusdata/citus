@@ -141,10 +141,18 @@ INSERT INTO append_stage_table_2 VALUES(10,4);
 
 CREATE TABLE test_append_table(id int, col_2 int);
 SELECT create_distributed_table('test_append_table','id','append');
-SELECT master_create_empty_shard('test_append_table');
-SELECT * FROM master_append_table_to_shard(1440010, 'append_stage_table', 'localhost', :master_port);
-SELECT master_create_empty_shard('test_append_table') AS new_shard_id;
-SELECT * FROM master_append_table_to_shard(1440011, 'append_stage_table_2', 'localhost', :master_port);
+SELECT master_create_empty_shard('test_append_table') AS shardid \gset
+COPY test_append_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
+1,3
+3,2
+5,4
+\.
+SELECT master_create_empty_shard('test_append_table') AS shardid \gset
+COPY test_append_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
+8,3
+9,2
+10,4
+\.
 UPDATE test_append_table SET col_2 = 5;
 SELECT * FROM test_append_table ORDER BY 1 DESC, 2 DESC;
 
