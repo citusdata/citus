@@ -18,6 +18,7 @@ SELECT stop_metadata_sync_to_node('localhost',:worker_2_port);
 
 -- create a distributed table, drop a column and sync the metadata
 SET citus.shard_replication_factor TO 1;
+SET citus.replication_model to 'streaming';
 CREATE TABLE t1 (a int, b int, c int UNIQUE);
 SELECT create_distributed_table('t1', 'c');
  create_distributed_table
