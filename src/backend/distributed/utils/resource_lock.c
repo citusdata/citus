@@ -183,20 +183,49 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 	int shardIdCount = ArrayObjectCount(shardIdArrayObject);
 	Datum *shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
 
+	/*
+	 * The executor calls this UDF for modification queries. So, any user
+	 * who has the the rights to modify this table are actually able
+	 * to call the UDF.
+	 *
+	 * So, at this point, we make sure that any malicious user who doesn't
+	 * have modification privileges to call this UDF.
+	 *
+	 * Update/Delete/Truncate commands already acquires ExclusiveLock
+	 * on the executor. However, for INSERTs, the user might have only
+	 * INSERTs granted, so add a special case for it.
+	 */
+	AclMode aclMask = ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE;
+	if (lockMode == RowExclusiveLock)
+	{
+		aclMask |= ACL_INSERT;
+	}
+
 	for (int shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
 	{
 		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
 
 		/*
-		 * We don't want random users to block writes. The callers of this
-		 * function either operates on all the colocated placements, such
-		 * as shard moves, or requires superuser such as adding node.
-		 * In other words, the coordinator initiated operations has already
-		 * ensured table owner, we are preventing any malicious attempt to
-		 * use this function.
+		 * We don't want random users to block writes. If the current user
+		 * has privileges to modify the shard, then the user can already
+		 * acquire the lock. So, we allow.
 		 */
 		bool missingOk = true;
-		EnsureShardOwner(shardId, missingOk);
+		Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
+
+		if (!OidIsValid(relationId) && missingOk)
+		{
+			/*
+			 * This could happen in two ways. First, a malicious user is trying
+			 * to acquire locks on non-existing shards. Second, the metadata has
+			 * not been synced (or not yet visible) to this node. In the second
+			 * case, there is no point in locking the shards because no other
+			 * transaction can be accessing the table.
+			 */
+			continue;
+		}
+
+		EnsureTablePermissions(relationId, aclMask);
 
 		LockShardResource(shardId, lockMode);
 	}
