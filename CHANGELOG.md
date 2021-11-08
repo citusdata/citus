@@ -1,3 +1,19 @@
+### citus v9.5.9 (November 8, 2021) ###
+
+* Fixes a bug preventing `INSERT SELECT .. ON CONFLICT` with a constraint name
+  on local shards
+
+* Fixes a bug with local cached plans on tables with dropped columns
+
+* Fixes a crash in queries with a modifying `CTE` and a `SELECT`
+  without `FROM`
+
+* Fixes a missing `FROM` clause entry error
+
+* Fixes a missing intermediate result when coordinator is in metadata
+
+* Reinstates optimisation for uniform shard interval ranges
+
 ### citus v9.5.8 (September 15, 2021) ###
 
 * Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
