@@ -10,7 +10,6 @@ SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
 -- create a role and give access one each node separately
 -- and increase the error level to prevent enterprise to diverge
 SET client_min_messages TO ERROR;
-SET citus.enable_ddl_propagation TO OFF;
 CREATE USER regular_mx_user WITH LOGIN;
 SELECT 1 FROM run_command_on_workers($$CREATE USER regular_mx_user WITH LOGIN;$$);
 GRANT ALL ON SCHEMA "Mx Regular User" TO regular_mx_user;
