@@ -1,3 +1,7 @@
+### citus v9.5.10 (November 8, 2021) ###
+
+* Fixes a release problem in 9.5.9
+
 ### citus v9.5.9 (November 8, 2021) ###
 
 * Fixes a bug preventing `INSERT SELECT .. ON CONFLICT` with a constraint name
