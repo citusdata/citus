@@ -37,36 +37,30 @@ CREATE TABLE p PARTITION OF dist_partitioned_table FOR VALUES FROM ('2019-01-01'
 -- create an index on parent table
 -- we will see that it doesn't matter whether we name the index on parent or not
 -- indexes auto-generated on partitions will not use this name
+-- SELECT fix_partition_shard_index_names('dist_partitioned_table') will be executed
+-- automatically at the end of the CREATE INDEX command
 CREATE INDEX short ON dist_partitioned_table USING btree (another_col, partition_col);
 
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 
 \c - - - :worker_1_port
--- Note that, the shell table from above partition_table_with_very_long_name
--- and its shard partition_table_with_very_long_name_910008
--- have the same index name: partition_table_with_very_long_na_another_col_partition_col_idx
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
-
-\c - - - :master_port
--- this should fail because of the name clash explained above
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-
--- let's fix the problematic table
-SET search_path TO fix_idx_names, public;
-SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
-
-\c - - - :worker_1_port
+-- the names are generated correctly
 -- shard id has been appended to all index names which didn't end in shard id
 -- this goes in line with Citus's way of naming indexes of shards: always append shardid to the end
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 
 \c - - - :master_port
-SET search_path TO fix_idx_names, public;
-
--- this should now work
+-- this should work properly
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
--- if we run this command again, the names will not change anymore since shardid is appended to them
+\c - - - :worker_1_port
+-- we have no clashes
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+\c - - - :master_port
+SET search_path TO fix_idx_names, public;
+
+-- if we run this command again, the names will not change since shardid is appended to them
 SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
 SELECT fix_all_partition_shard_index_names();
 
@@ -113,24 +107,20 @@ DROP INDEX short;
 DROP TABLE yet_another_partition_table, another_partition_table_with_very_long_name;
 -- this will create constraint1 index on parent
 SET citus.max_adaptive_executor_pool_size TO 1;
+-- SELECT fix_partition_shard_index_names('dist_partitioned_table') will be executed
+-- automatically at the end of the ADD CONSTRAINT command
 ALTER TABLE dist_partitioned_table ADD CONSTRAINT constraint1 UNIQUE (dist_col, partition_col);
 RESET citus.max_adaptive_executor_pool_size;
 CREATE TABLE fk_table (id int, fk_column timestamp, FOREIGN KEY (id, fk_column) REFERENCES dist_partitioned_table (dist_col, partition_col));
 
 -- try creating index to foreign key
+-- SELECT fix_partition_shard_index_names('dist_partitioned_table') will be executed
+-- automatically at the end of the CREATE INDEX command
 CREATE INDEX ON dist_partitioned_table USING btree (dist_col, partition_col);
 
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 \c - - - :worker_1_port
--- index names don't end in shardid for partitions
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
-
-\c - - - :master_port
-SET search_path TO fix_idx_names, public;
-SELECT fix_all_partition_shard_index_names();
-
-\c - - - :worker_1_port
--- now index names end in shardid
+-- index names end in shardid for partitions
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 
 \c - - - :master_port
@@ -147,6 +137,8 @@ CREATE INDEX short_parent ON ONLY dist_partitioned_table USING hash (dist_col);
 -- only another_partition will have the index on dist_col inherited from short_parent
 -- hence short_parent will still be invalid
 CREATE TABLE another_partition (dist_col int, another_col int, partition_col timestamp);
+-- SELECT fix_partition_shard_index_names('another_partition') will be executed
+-- automatically at the end of the ATTACH PARTITION command
 ALTER TABLE dist_partitioned_table ATTACH PARTITION another_partition FOR VALUES FROM ('2017-01-01') TO ('2018-01-01');
 
 SELECT c.relname AS indexname
@@ -158,17 +150,7 @@ CREATE INDEX short_child ON ONLY p USING hash (dist_col);
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 
 \c - - - :worker_1_port
--- index names are already correct except for inherited index for another_partition
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
-
-\c - - - :master_port
-SET search_path TO fix_idx_names, public;
--- this will fix inherited index for another_partition
-SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
--- this will error out becuase p is not partitioned, it is rather a partition
-SELECT fix_partition_shard_index_names('p'::regclass);
-
-\c - - - :worker_1_port
+-- index names are already correct, including inherited index for another_partition
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 
 \c - - - :master_port
@@ -178,9 +160,13 @@ DROP INDEX short_parent;
 DROP INDEX short_child;
 DROP TABLE another_partition;
 
--- expression indexes have the same problem with naming
+-- try with expression indexes
+-- SELECT fix_partition_shard_index_names('dist_partitioned_table') will be executed
+-- automatically at the end of the CREATE INDEX command
 CREATE INDEX expression_index ON dist_partitioned_table ((dist_col || ' ' || another_col));
 -- try with statistics on index
+-- SELECT fix_partition_shard_index_names('dist_partitioned_table') will be executed
+-- automatically at the end of the CREATE INDEX command
 CREATE INDEX statistics_on_index on dist_partitioned_table ((dist_col+another_col), (dist_col-another_col));
 ALTER INDEX statistics_on_index ALTER COLUMN 1 SET STATISTICS 3737;
 ALTER INDEX statistics_on_index ALTER COLUMN 2 SET STATISTICS 3737;
@@ -188,13 +174,7 @@ ALTER INDEX statistics_on_index ALTER COLUMN 2 SET STATISTICS 3737;
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 
 \c - - - :worker_1_port
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
-
-\c - - - :master_port
-SET search_path TO fix_idx_names, public;
-SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
-
-\c - - - :worker_1_port
+-- we have correct names
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 
 \c - - - :master_port
@@ -230,19 +210,14 @@ SELECT create_distributed_table('dist_partitioned_table', 'dist_col');
 CREATE TABLE partition_table_with_very_long_name PARTITION OF dist_partitioned_table FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
 
 -- create an index on parent table
+-- SELECT fix_partition_shard_index_names('dist_partitioned_table') will be executed
+-- automatically at the end of the CREATE INDEX command
 CREATE INDEX index_rep_factor_2 ON dist_partitioned_table USING btree (another_col, partition_col);
 
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
 
 \c - - - :worker_2_port
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
-
-\c - - - :master_port
--- let's fix the problematic table
-SET search_path TO fix_idx_names, public;
-SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
-
-\c - - - :worker_2_port
+-- index names are correct
 -- shard id has been appended to all index names which didn't end in shard id
 -- this goes in line with Citus's way of naming indexes of shards: always append shardid to the end
 SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
@@ -264,11 +239,10 @@ RESET ROLE;
 SET search_path TO fix_idx_names, public;
 DROP TABLE dist_partitioned_table;
 
--- also, we cannot do any further operations (e.g. rename) on the indexes of partitions because
--- the index names on shards of partitions have been generated by Postgres, not Citus
--- it doesn't matter here whether the partition name is long or short
-
+-- We can do any further operations (e.g. rename) on the indexes of partitions because
+-- the index names on shards of partitions have Citus naming, hence are reachable
 -- replicate scenario from above but this time with one shard so that this test isn't flaky
+
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 910030;
@@ -277,38 +251,15 @@ CREATE TABLE dist_partitioned_table (dist_col int, another_col int, partition_co
 SELECT create_distributed_table('dist_partitioned_table', 'dist_col');
 CREATE TABLE partition_table_with_very_long_name PARTITION OF dist_partitioned_table FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
 CREATE TABLE p PARTITION OF dist_partitioned_table FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
+-- SELECT fix_partition_shard_index_names('dist_partitioned_table') will be executed
+-- automatically at the end of the CREATE INDEX command
 CREATE INDEX short ON dist_partitioned_table USING btree (another_col, partition_col);
 
--- rename shouldn't work
+-- rename works!
 ALTER INDEX partition_table_with_very_long_na_another_col_partition_col_idx RENAME TO partition_table_with_very_long_name_idx;
 
--- we currently can't drop index on detached partition
+-- we can drop index on detached partition
 -- https://github.com/citusdata/citus/issues/5138
-ALTER TABLE dist_partitioned_table DETACH PARTITION p;
-DROP INDEX p_another_col_partition_col_idx;
-
--- let's reattach and retry after fixing index names
-ALTER TABLE dist_partitioned_table ATTACH PARTITION p FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
-
-\c - - - :worker_1_port
--- check the current broken index names
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
-
-\c - - - :master_port
-SET search_path TO fix_idx_names, public;
--- fix index names
-SELECT fix_all_partition_shard_index_names();
-
-\c - - - :worker_1_port
--- check the fixed index names
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
-
-\c - - - :master_port
-SET search_path TO fix_idx_names, public;
--- should now work
-ALTER INDEX partition_table_with_very_long_na_another_col_partition_col_idx RENAME TO partition_table_with_very_long_name_idx;
-
--- now we can drop index on detached partition
 ALTER TABLE dist_partitioned_table DETACH PARTITION p;
 DROP INDEX p_another_col_partition_col_idx;
 
@@ -319,6 +270,74 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 
 \c - - - :master_port
 SET search_path TO fix_idx_names, public;
+DROP TABLE dist_partitioned_table;
+
+-- test with citus local table
+SET client_min_messages TO WARNING;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid=>0);
+RESET client_min_messages;
+
+CREATE TABLE date_partitioned_citus_local_table(
+ measureid integer,
+ eventdate date,
+ measure_data jsonb) PARTITION BY RANGE(eventdate);
+SELECT citus_add_local_table_to_metadata('date_partitioned_citus_local_table');
+
+CREATE TABLE partition_local_table PARTITION OF date_partitioned_citus_local_table FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
+
+-- SELECT fix_partition_shard_index_names('date_partitioned_citus_local_table') will be executed
+-- automatically at the end of the CREATE INDEX command
+CREATE INDEX ON date_partitioned_citus_local_table USING btree(measureid);
+
+-- check that index names are correct
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+
+
+-- creating a single object should only need to trigger fixing the single object
+-- for example, if a partitioned table has already many indexes and we create a new
+-- index, only the new index should be fixed
+
+-- create only one shard & one partition so that the output easier to check
+SET citus.next_shard_id TO 915000;
+
+SET citus.shard_count TO 1;
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE parent_table (dist_col int, another_col int, partition_col timestamp, name text) PARTITION BY RANGE (partition_col);
+SELECT create_distributed_table('parent_table', 'dist_col');
+CREATE TABLE p1 PARTITION OF parent_table FOR VALUES FROM ('2018-01-01') TO ('2019-01-01');
+
+CREATE INDEX i1 ON parent_table(dist_col);
+CREATE INDEX i2 ON parent_table(dist_col);
+CREATE INDEX i3 ON parent_table(dist_col);
+
+SET citus.log_remote_commands TO ON;
+
+-- only fix i4
+CREATE INDEX i4 ON parent_table(dist_col);
+
+-- only fix the index backing the pkey
+ALTER TABLE parent_table ADD CONSTRAINT pkey_cst PRIMARY KEY (dist_col, partition_col);
+ALTER TABLE parent_table ADD CONSTRAINT unique_cst UNIQUE (dist_col, partition_col);
+
+RESET citus.log_remote_commands;
+
+-- we should also be able to alter/drop these indexes
+ALTER INDEX i4 RENAME TO i4_renamed;
+ALTER INDEX p1_dist_col_idx3 RENAME TO p1_dist_col_idx3_renamed;
+ALTER INDEX p1_pkey RENAME TO p1_pkey_renamed;
+ALTER INDEX p1_dist_col_partition_col_key RENAME TO p1_dist_col_partition_col_key_renamed;
+ALTER INDEX p1_dist_col_idx RENAME TO p1_dist_col_idx_renamed;
+
+-- should be able to create a new partition that is columnar
+SET citus.log_remote_commands TO ON;
+CREATE TABLE p2(dist_col int NOT NULL, another_col int, partition_col timestamp NOT NULL, name text) USING columnar;
+ALTER TABLE parent_table ATTACH PARTITION p2 FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
+RESET citus.log_remote_commands;
+
+DROP INDEX i4_renamed CASCADE;
+ALTER TABLE parent_table DROP CONSTRAINT pkey_cst CASCADE;
+ALTER TABLE parent_table DROP CONSTRAINT unique_cst CASCADE;
 
 DROP SCHEMA fix_idx_names CASCADE;
+SELECT citus_remove_node('localhost', :master_port);
 SELECT run_command_on_workers($$ DROP SCHEMA IF EXISTS fix_idx_names CASCADE $$);

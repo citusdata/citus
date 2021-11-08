@@ -1626,6 +1626,18 @@ AlterTableCommandTypeIsTrigger(AlterTableType alterTableType)
 
 
 /*
+ * ConstrTypeUsesIndex returns true if the given constraint type uses an index
+ */
+bool
+ConstrTypeUsesIndex(ConstrType constrType)
+{
+	return constrType == CONSTR_PRIMARY ||
+		   constrType == CONSTR_UNIQUE ||
+		   constrType == CONSTR_EXCLUSION;
+}
+
+
+/*
  * AlterTableDropsForeignKey returns true if the given AlterTableStmt drops
  * a foreign key. False otherwise.
  */
@@ -2121,6 +2133,73 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		SendCommandToWorkersWithMetadata(alterTableDefaultNextvalCmd);
 
 		SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+	}
+}
+
+
+/*
+ * FixAlterTableStmtIndexNames runs after the ALTER TABLE command
+ * has already run on the coordinator, and also after the distributed DDL
+ * Jobs have been executed on the workers.
+ *
+ * We might have wrong index names generated on indexes of shards of partitions,
+ * see https://github.com/citusdata/citus/pull/5397 for the details. So we
+ * perform the relevant checks and index renaming here.
+ */
+void
+FixAlterTableStmtIndexNames(AlterTableStmt *alterTableStatement)
+{
+	LOCKMODE lockmode = AlterTableGetLockLevel(alterTableStatement->cmds);
+	Oid relationId = AlterTableLookupRelation(alterTableStatement, lockmode);
+	if (!(OidIsValid(relationId) && IsCitusTable(relationId) &&
+		  PartitionedTable(relationId)))
+	{
+		/* we are only interested in partitioned Citus tables */
+		return;
+	}
+
+	List *commandList = alterTableStatement->cmds;
+	AlterTableCmd *command = NULL;
+	foreach_ptr(command, commandList)
+	{
+		AlterTableType alterTableType = command->subtype;
+
+		/*
+		 * If this a partitioned table, and the constraint type uses an index
+		 * UNIQUE, PRIMARY KEY, EXCLUDE constraint,
+		 * we have wrong index names generated on indexes of shards of
+		 * partitions of this table, so we should fix them
+		 */
+		Constraint *constraint = (Constraint *) command->def;
+		if (alterTableType == AT_AddConstraint &&
+			ConstrTypeUsesIndex(constraint->contype))
+		{
+			bool missingOk = false;
+			const char *constraintName = constraint->conname;
+			Oid constraintId =
+				get_relation_constraint_oid(relationId, constraintName, missingOk);
+
+			/* fix only the relevant index */
+			Oid parentIndexOid = get_constraint_index(constraintId);
+
+			FixPartitionShardIndexNames(relationId, parentIndexOid);
+		}
+		/*
+		 * If this is an ALTER TABLE .. ATTACH PARTITION command
+		 * we have wrong index names generated on indexes of shards of
+		 * the current partition being attached, so we should fix them
+		 */
+		else if (alterTableType == AT_AttachPartition)
+		{
+			PartitionCmd *partitionCommand = (PartitionCmd *) command->def;
+			bool partitionMissingOk = false;
+			Oid partitionRelationId =
+				RangeVarGetRelid(partitionCommand->name, lockmode,
+								 partitionMissingOk);
+			Oid parentIndexOid = InvalidOid;     /* fix all the indexes */
+
+			FixPartitionShardIndexNames(partitionRelationId, parentIndexOid);
+		}
 	}
 }
 

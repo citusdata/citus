@@ -649,6 +649,17 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			ExecuteDistributedDDLJob(ddlJob);
 		}
 
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			/*
+			 * This postprocess needs to be done after the distributed ddl jobs have
+			 * been executed in the workers, hence is separate from PostprocessAlterTableStmt.
+			 * We might have wrong index names generated on indexes of shards of partitions,
+			 * so we perform the relevant checks and index renaming here.
+			 */
+			FixAlterTableStmtIndexNames(castNode(AlterTableStmt, parsetree));
+		}
+
 		/*
 		 * For CREATE/DROP/REINDEX CONCURRENTLY we mark the index as valid
 		 * after successfully completing the distributed DDL job.
@@ -661,6 +672,27 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			{
 				/* no failures during CONCURRENTLY, mark the index as valid */
 				MarkIndexValid(indexStmt);
+			}
+
+			/*
+			 * We make sure schema name is not null in the PreprocessIndexStmt.
+			 */
+			Oid schemaId = get_namespace_oid(indexStmt->relation->schemaname, true);
+			Oid relationId = get_relname_relid(indexStmt->relation->relname, schemaId);
+
+			/*
+			 * If this a partitioned table, and CREATE INDEX was not run with ONLY,
+			 * we have wrong index names generated on indexes of shards of
+			 * partitions of this table, so we should fix them.
+			 */
+			if (IsCitusTable(relationId) && PartitionedTable(relationId) &&
+				indexStmt->relation->inh)
+			{
+				/* only fix this specific index */
+				Oid indexRelationId =
+					get_relname_relid(indexStmt->idxname, schemaId);
+
+				FixPartitionShardIndexNames(relationId, indexRelationId);
 			}
 		}
 	}
