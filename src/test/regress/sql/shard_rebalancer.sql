@@ -331,10 +331,10 @@ DELETE FROM pg_dist_shard_placement WHERE placementid in (
 
 -- Upload the test data to the shards
 
-SELECT count(master_append_table_to_shard(shardid, 'shard_rebalancer_test_data',
-                                          host(inet_server_addr()), inet_server_port()))
-    FROM pg_dist_shard
-    WHERE logicalrelid = 'replication_test_table'::regclass;
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123000)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123001)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123002)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123003)
 
 -- Verify that there is one node with all placements
 
@@ -422,10 +422,12 @@ SET citus.shard_replication_factor TO 2;
 
 -- Upload the test data to the shards
 
-SELECT count(master_append_table_to_shard(shardid, 'shard_rebalancer_test_data',
-        host(inet_server_addr()), inet_server_port()))
-FROM pg_dist_shard
-WHERE logicalrelid = 'rebalance_test_table'::regclass;
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123004)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123005)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123006)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123007)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123008)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123009)
 
 -- Verify that there is one node with all placements
 
@@ -598,16 +600,31 @@ CREATE TABLE test_schema_support.imbalanced_table (
 SELECT master_create_distributed_table('test_schema_support.imbalanced_table', 'id', 'append');
 
 SET citus.shard_replication_factor TO 1;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
-SELECT master_append_table_to_shard(123018, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
+1
+2
+3
+4
+\.
 
 SET citus.shard_replication_factor TO 2;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
-SELECT master_append_table_to_shard(123019, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
+1
+2
+3
+4
+\.
 
 SET citus.shard_replication_factor TO 1;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
-SELECT master_append_table_to_shard(123020, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
+1
+2
+3
+4
+\.
 
 -- imbalanced_table is now imbalanced
 

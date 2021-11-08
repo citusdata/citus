@@ -892,14 +892,15 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Snapshot of state at 11.0-1
 ALTER EXTENSION citus UPDATE TO '11.0-1';
 SELECT * FROM multi_extension.print_extension_changes();
-                  previous_object                   |                              current_object
+                           previous_object                            |                              current_object
 ---------------------------------------------------------------------
- function master_apply_delete_command(text) integer |
- function master_get_table_metadata(text) record    |
-                                                    | function fix_all_partition_shard_index_names() SETOF regclass
-                                                    | function fix_partition_shard_index_names(regclass) void
-                                                    | function worker_fix_partition_shard_index_names(regclass,text,text) void
-(5 rows)
+ function master_append_table_to_shard(bigint,text,text,integer) real |
+ function master_apply_delete_command(text) integer                   |
+ function master_get_table_metadata(text) record                      |
+                                                                      | function fix_all_partition_shard_index_names() SETOF regclass
+                                                                      | function fix_partition_shard_index_names(regclass) void
+                                                                      | function worker_fix_partition_shard_index_names(regclass,text,text) void
+(6 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

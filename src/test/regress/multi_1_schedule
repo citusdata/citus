@@ -148,12 +148,6 @@ test: multi_utility_warnings data_types
 test: sequential_modifications
 
 # ---------
-# multi_append_table_to_shard loads data to create shards in a way that forces
-# shard caching.
-# ---------
-test: multi_append_table_to_shard
-
-# ---------
 # multi_outer_join loads data to create shards to test outer join mappings
 # ---------
 test: multi_outer_join

@@ -8,6 +8,7 @@
 
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);
+DROP FUNCTION pg_catalog.master_append_table_to_shard(bigint, text, text, integer);
 
 -- all existing citus local tables are auto converted
 -- none of the other tables can have auto-converted as true

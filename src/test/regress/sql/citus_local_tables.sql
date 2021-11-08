@@ -458,10 +458,6 @@ SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with 
 
 SELECT master_create_empty_shard('citus_local_table_4');
 
-CREATE TABLE postgres_local_table (a int);
-SELECT master_append_table_to_shard(shardId, 'postgres_local_table', 'localhost', :master_port)
-FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_4'::regclass) as shardid;
-
 -- return true
 SELECT citus_table_is_visible('citus_local_table_4'::regclass::oid);
 

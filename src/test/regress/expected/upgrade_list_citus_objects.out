@@ -146,7 +146,6 @@ ORDER BY 1;
  function master_add_inactive_node(text,integer,integer,noderole,name)
  function master_add_node(text,integer,integer,noderole,name)
  function master_add_secondary_node(text,integer,text,integer,name)
- function master_append_table_to_shard(bigint,text,text,integer)
  function master_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
  function master_create_empty_shard(text)
  function master_disable_node(text,integer)
@@ -259,5 +258,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(243 rows)
+(242 rows)
 
