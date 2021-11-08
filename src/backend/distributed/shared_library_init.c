@@ -1579,21 +1579,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomIntVariable(
-		"citus.shard_max_size",
-		gettext_noop("Sets the maximum size a shard will grow before it gets split."),
-		gettext_noop("Shards store table and file data. When the source "
-					 "file's size for one shard exceeds this configuration "
-					 "value, the database ensures that either a new shard "
-					 "gets created, or the current one gets split. Note that "
-					 "shards read this configuration value at sharded table "
-					 "creation time, and later reuse the initially read value."),
-		&ShardMaxSize,
-		1048576, 256, INT_MAX, /* max allowed size not set to MAX_KILOBYTES on purpose */
-		PGC_USERSET,
-		GUC_UNIT_KB | GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomEnumVariable(
 		"citus.shard_placement_policy",
 		gettext_noop("Sets the policy to use when choosing nodes for shard placement."),

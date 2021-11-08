@@ -902,9 +902,6 @@ SELECT master_create_empty_shard('reference_schema.reference_table_ddl');
 SELECT shardid AS a_shard_id  FROM pg_dist_shard WHERE logicalrelid = 'reference_schema.reference_table_ddl'::regclass \gset
 SELECT master_update_shard_statistics(:a_shard_id);
 
-CREATE TABLE append_reference_tmp_table (id INT);
-SELECT  master_append_table_to_shard(:a_shard_id, 'append_reference_tmp_table', 'localhost', :master_port);
-
 SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
 
 -- in reality, we wouldn't need to repair any reference table shard placements
@@ -1014,7 +1011,7 @@ SET client_min_messages TO ERROR;
 DROP SEQUENCE example_ref_value_seq;
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third,
 		   reference_table_test_fourth, reference_schema.reference_table_ddl, reference_table_composite,
-		   colocated_table_test, colocated_table_test_2, append_reference_tmp_table;
+		   colocated_table_test, colocated_table_test_2;
 DROP TYPE reference_comp_key;
 DROP SCHEMA reference_schema CASCADE;
 RESET client_min_messages;
