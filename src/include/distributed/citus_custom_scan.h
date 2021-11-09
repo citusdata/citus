@@ -27,6 +27,10 @@ typedef struct CitusScanState
 	MultiExecutorType executorType;   /* distributed executor type */
 	bool finishedRemoteScan;          /* flag to check if remote scan is finished */
 	Tuplestorestate *tuplestorestate; /* tuple store to store distributed results */
+
+	int numParameters;  /* number of parameters passed into node per rescan */
+	Datum *paramValues; /* array of last passed parameter values */
+	bool *paramNulls;   /* array of last passed parameter null flags*/
 } CitusScanState;
 
 

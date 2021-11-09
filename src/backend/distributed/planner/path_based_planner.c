@@ -22,6 +22,7 @@
 #include "nodes/pathnodes.h"
 #include "nodes/pg_list.h"
 #include "nodes/plannodes.h"
+#include "optimizer/paramassign.h"
 #include "optimizer/pathnode.h"
 #include "optimizer/restrictinfo.h"
 #include "optimizer/tlist.h"
@@ -147,6 +148,55 @@ WrapTableAccessWithDistributedUnion(Path *originalPath, uint32 colocationId,
 }
 
 
+static Node *
+TransformVarToParamExternMutator(Node *node, PlannerInfo *root)
+{
+	if (node == NULL)
+	{
+		return NULL;
+	}
+
+	if (IsA(node, Var))
+	{
+		Var *var = castNode(Var, node);
+
+		/* If not to be replaced, we can just return the Var unmodified */
+		if (!bms_is_member(var->varno, root->curOuterRels))
+		{
+			return (Node *) var;
+		}
+
+		Param *paramExec = replace_nestloop_param_var(root, var);
+
+		/* TODO: figure out which Var's to replace by which parameters*/
+		/* TODO: hack - insert param 1 for now */
+		Param *paramExtern = makeNode(Param);
+		paramExtern->paramkind = PARAM_EXTERN;
+
+		/* Exec is 0-index, Extern is 1-indexed */
+		paramExtern->paramid = paramExec->paramid + 1;
+
+		paramExtern->paramtype = paramExec->paramtype;
+		paramExtern->paramtypmod = paramExec->paramtypmod;
+		paramExtern->paramcollid = paramExec->paramcollid;
+		paramExtern->location = paramExec->location;
+
+		return (Node *) paramExtern;
+	}
+	else if (IsA(node, Query))
+	{
+
+		return (Node *) query_tree_mutator((Query *) node,
+									 TransformVarToParamExternMutator,
+									 (void *) root,
+									 0);
+	}
+
+	return expression_tree_mutator(node, TransformVarToParamExternMutator,
+								   (void *) root);
+}
+
+
 static Plan *
 CreateDistributedUnionPlan(PlannerInfo *root,
 						   RelOptInfo *rel,
@@ -182,6 +232,9 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 
 		Query *qc = copyObject(q);
 		UpdateRelationToShardNames((Node *) qc, relationShardList);
+
+		/* transform Var's for other varno's to parameters */
+		qc = castNode(Query, TransformVarToParamExternMutator((Node *) qc, root));
 
 		StringInfoData buf;
 		initStringInfo(&buf);
