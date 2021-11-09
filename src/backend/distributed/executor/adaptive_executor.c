@@ -209,6 +209,8 @@ typedef struct DistributedExecution
 
 	/* Parameters for parameterized plans. Can be NULL. */
 	ParamListInfo paramListInfo;
+	ParamExecData *paramExecData;
+	List *paramExecTypes;
 
 	/* list of workers involved in the execution */
 	List *workerList;
@@ -611,6 +613,8 @@ typedef struct TaskPlacementExecution
 static DistributedExecution * CreateDistributedExecution(RowModifyLevel modLevel,
 														 List *taskList,
 														 ParamListInfo paramListInfo,
+														 ParamExecData *paramExecData,
+														 List *paramExecTypes,
 														 int targetPoolSize,
 														 TupleDestination *
 														 defaultTupleDest,
@@ -821,6 +825,8 @@ AdaptiveExecutor(CitusScanState *scanState)
 		distributedPlan->modLevel,
 		taskList,
 		paramListInfo,
+		executorState->es_param_exec_vals,
+		executorState->es_plannedstmt->paramExecTypes,
 		targetPoolSize,
 		defaultTupleDest,
 		&xactProperties,
@@ -1016,7 +1022,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	DistributedExecution *execution =
 		CreateDistributedExecution(
 			executionParams->modLevel, executionParams->taskList,
-			paramListInfo, executionParams->targetPoolSize,
+			paramListInfo, NULL, NIL, executionParams->targetPoolSize,
 			defaultTupleDest, &executionParams->xactProperties,
 			executionParams->jobIdList, executionParams->localExecutionSupported);
 
@@ -1085,6 +1091,8 @@ CreateBasicExecutionParams(RowModifyLevel modLevel,
 static DistributedExecution *
 CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 						   ParamListInfo paramListInfo,
+						   ParamExecData *paramExecData,
+						   List *paramExecTypes,
 						   int targetPoolSize, TupleDestination *defaultTupleDest,
 						   TransactionProperties *xactProperties,
 						   List *jobIdList, bool localExecutionSupported)
@@ -1101,6 +1109,8 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 	execution->remoteTaskList = NIL;
 
 	execution->paramListInfo = paramListInfo;
+	execution->paramExecData = paramExecData;
+	execution->paramExecTypes = paramExecTypes;
 	execution->workerList = NIL;
 	execution->sessionList = NIL;
 	execution->targetPoolSize = targetPoolSize;
@@ -4291,23 +4301,101 @@ SendNextQuery(TaskPlacementExecution *placementExecution,
 	bool binaryResults = shardCommandExecution->binaryResults;
 	Task *task = shardCommandExecution->task;
 	ParamListInfo paramListInfo = execution->paramListInfo;
+	ParamExecData *paramExecData = execution->paramExecData;
+	List *paramExecTypes = execution->paramExecTypes;
 	int querySent = 0;
 	uint32 queryIndex = placementExecution->queryIndex;
 
 	Assert(queryIndex < task->queryCount);
 	char *queryString = TaskQueryStringAtIndex(task, queryIndex);
 
-	if (paramListInfo != NULL && !task->parametersInQueryStringResolved)
+	bool hasParameters = (paramListInfo != NULL)
+						 || (paramExecData != NULL && list_length(paramExecTypes) > 0);
+	if (hasParameters && !task->parametersInQueryStringResolved)
 	{
-		int parameterCount = paramListInfo->numParams;
-		Oid *parameterTypes = NULL;
-		const char **parameterValues = NULL;
+		int parameterCount = 0;
+		if (paramListInfo != NULL)
+		{
+			parameterCount += paramListInfo->numParams;
+		}
+		parameterCount += list_length(paramExecTypes);
 
-		/* force evaluation of bound params */
-		paramListInfo = copyParamList(paramListInfo);
 
-		ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
-											&parameterValues);
+		Oid *parameterTypes = palloc0(parameterCount * sizeof(Oid));
+		const char **parameterValues = palloc0(parameterCount * sizeof(char *));
+
+		Index parameterIndex = 0;
+		if (paramListInfo)
+		{
+			/* force evaluation of bound params */
+			paramListInfo = copyParamList(paramListInfo);
+
+			ExtractParametersForRemoteExecution(paramListInfo, &parameterTypes,
+												&parameterValues);
+			parameterIndex += paramListInfo->numParams;
+		}
+
+		Oid execParamType = 0;
+		const bool useOriginalCustomTypeOids = false;
+		Index execParamIndex = 0;
+		foreach_oid(execParamType, paramExecTypes)
+		{
+
+			/*
+		 * Use 0 for data types where the oid values can be different on
+		 * the coordinator and worker nodes. Therefore, the worker nodes can
+		 * infer the correct oid.
+		 */
+			if (execParamType >= FirstNormalObjectId && !useOriginalCustomTypeOids)
+			{
+				parameterTypes[parameterIndex] = 0;
+			}
+			else
+			{
+				parameterTypes[parameterIndex] = execParamType;
+			}
+
+			/*
+			 * If the parameter is not referenced / used (ptype == 0) and
+			 * would otherwise have errored out inside standard_planner()),
+			 * don't pass a value to the remote side, and pass text oid to prevent
+			 * undetermined data type errors on workers.
+			 */
+			if (execParamType == 0)
+			{
+				parameterValues[parameterIndex] = NULL;
+				parameterTypes[parameterIndex] = TEXTOID;
+
+				execParamIndex++;
+				parameterIndex++;
+				continue;
+			}
+
+			/*
+			 * If the parameter is NULL then we preserve its type, but
+			 * don't need to evaluate its value.
+			 */
+			if (paramExecData[execParamIndex].isnull)
+			{
+				parameterValues[parameterIndex] = NULL;
+
+				execParamIndex++;
+				parameterIndex++;
+				continue;
+			}
+
+			Oid typeOutputFunctionId = 0;
+			bool variableLengthType = 0;
+			getTypeOutputInfo(execParamType, &typeOutputFunctionId,
+							  &variableLengthType);
+
+			parameterValues[parameterIndex] = OidOutputFunctionCall(typeOutputFunctionId,
+																	paramExecData[execParamIndex].value);
+
+			execParamIndex++;
+			parameterIndex++;
+		}
+
 		querySent = SendRemoteCommandParams(connection, queryString, parameterCount,
 											parameterTypes, parameterValues,
 											binaryResults);
@@ -5474,8 +5562,15 @@ ExtractParametersFromParamList(ParamListInfo paramListInfo,
 {
 	int parameterCount = paramListInfo->numParams;
 
-	*parameterTypes = (Oid *) palloc0(parameterCount * sizeof(Oid));
-	*parameterValues = (const char **) palloc0(parameterCount * sizeof(char *));
+	if (*parameterTypes == NULL)
+	{
+		*parameterTypes = (Oid *) palloc0(parameterCount * sizeof(Oid));
+	}
+
+	if (*parameterValues == NULL)
+	{
+		*parameterValues = (const char **) palloc0(parameterCount * sizeof(char *));
+	}
 
 	/* get parameter types and values */
 	for (int parameterIndex = 0; parameterIndex < parameterCount; parameterIndex++)
