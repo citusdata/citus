@@ -5,6 +5,7 @@ CREATE SCHEMA drop_fkey_cascade;
 SET search_path TO drop_fkey_cascade;
 SET client_min_messages TO WARNING;
 SET citus.next_shard_id TO 1810000;
+SET citus.next_placement_id TO 3070000;
 
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
 

@@ -9,6 +9,8 @@ SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA fix_idx_names;
 SET search_path TO fix_idx_names, public;
 
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+
 -- NULL input should automatically return NULL since
 -- fix_partition_shard_index_names is strict
 -- same for worker_fix_partition_shard_index_names
@@ -107,7 +109,6 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 
 \c - - - :master_port
 SET search_path TO fix_idx_names, public;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
 DROP INDEX short;
 DROP TABLE yet_another_partition_table, another_partition_table_with_very_long_name;

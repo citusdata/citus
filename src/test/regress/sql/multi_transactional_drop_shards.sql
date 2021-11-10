@@ -5,6 +5,7 @@
 
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1410000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 4230000;
 
 SET citus.shard_count TO 4;
 SET client_min_messages TO WARNING;

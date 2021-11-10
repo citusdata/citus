@@ -1,5 +1,6 @@
 \set VERBOSITY terse
 SET citus.next_shard_id TO 1800000;
+SET citus.next_placement_id TO 8500000;
 SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA create_ref_dist_from_citus_local;
 SET search_path TO create_ref_dist_from_citus_local;
