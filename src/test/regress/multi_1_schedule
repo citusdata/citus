@@ -330,10 +330,7 @@ test: multi_transactional_drop_shards
 # ----------
 # multi_multiuser tests simple combinations of permission access and queries
 # ----------
-test: check_mx
-test: turn_mx_off
 test: multi_multiuser
-test: turn_mx_on
 
 # ---------
 # multi_cache_invalidation tests for an obscure crash citus used to exhibit when shardids
