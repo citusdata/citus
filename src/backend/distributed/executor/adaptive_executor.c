@@ -1055,14 +1055,6 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 			defaultTupleDest, &executionParams->xactProperties,
 			executionParams->jobIdList, executionParams->localExecutionSupported);
 
-	/*
-	 * If current transaction accessed local placements and task list includes
-	 * tasks that should be executed locally (accessing any of the local placements),
-	 * then we should error out as it would cause inconsistencies across the
-	 * remote connection and local execution.
-	 */
-	EnsureCompatibleLocalExecutionState(execution->remoteTaskList);
-
 	/* run the remote execution */
 	StartDistributedExecution(execution);
 	RunDistributedExecution(execution);
