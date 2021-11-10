@@ -359,17 +359,31 @@ BEGIN;
 SET citus.log_remote_commands TO on;
 DROP TABLE parent;
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+NOTICE:  issuing ALTER TABLE IF EXISTS drop_partitioned_table.parent DETACH PARTITION drop_partitioned_table.child1;
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.parent')
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 NOTICE:  issuing DROP TABLE IF EXISTS drop_partitioned_table.parent_xxxxx CASCADE
+NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
 ROLLBACK;
+NOTICE:  issuing ROLLBACK
 NOTICE:  issuing ROLLBACK
 -- Case 2 - we shouldn't skip
 BEGIN;
 SET citus.log_remote_commands TO on;
 DROP TABLE parent, child1;
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+NOTICE:  issuing ALTER TABLE IF EXISTS drop_partitioned_table.parent DETACH PARTITION drop_partitioned_table.child1;
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'on'
+NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.parent')
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 NOTICE:  issuing DROP TABLE IF EXISTS drop_partitioned_table.parent_xxxxx CASCADE
+NOTICE:  issuing SELECT worker_drop_distributed_table('drop_partitioned_table.child1')
 NOTICE:  issuing DROP TABLE IF EXISTS drop_partitioned_table.child1_xxxxx CASCADE
 ROLLBACK;
+NOTICE:  issuing ROLLBACK
 NOTICE:  issuing ROLLBACK
 DROP SCHEMA drop_partitioned_table CASCADE;
 NOTICE:  drop cascades to 3 other objects
