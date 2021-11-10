@@ -608,9 +608,6 @@ SELECT shardid, shardstate, nodename, nodeport
 
 -- try to insert into a reference table copy should fail
 COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
-3,1
-4,2
-\.
 
 -- verify shards for reference table are still valid
 SELECT shardid, shardstate, nodename, nodeport
