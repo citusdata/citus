@@ -57,33 +57,11 @@ List *
 ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 {
 	List *allTasks = CreateTaskListForJobTree(topLevelTasks);
-
-	EnsureCompatibleLocalExecutionState(allTasks);
-
 	List *jobIds = ExtractJobsInJobTree(topLevelJob);
 
 	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks, jobIds);
 
 	return jobIds;
-}
-
-
-/*
- * EnsureCompatibleLocalExecutionState makes sure that the tasks won't have
- * any visibility problems because of local execution.
- */
-void
-EnsureCompatibleLocalExecutionState(List *taskList)
-{
-	/*
-	 * We have LOCAL_EXECUTION_REQUIRED check here to avoid unnecessarily
-	 * iterating the task list in AnyTaskAccessesLocalNode.
-	 */
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED &&
-		AnyTaskAccessesLocalNode(taskList))
-	{
-		ErrorIfTransactionAccessedPlacementsLocally();
-	}
 }
 
 
