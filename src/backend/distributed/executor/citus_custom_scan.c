@@ -608,11 +608,6 @@ AdaptiveExecutorCreateScan(CustomScan *scan)
 	scanState->finishedPreScan = false;
 	scanState->finishedRemoteScan = false;
 
-	int numParams = NumberOfParameters((Node *) scan->custom_exprs);
-	scanState->numParameters = numParams;
-	scanState->paramValues = palloc0(scanState->numParameters * sizeof(Datum));
-	scanState->paramNulls = palloc0(scanState->numParameters * sizeof(bool));
-
 	return (Node *) scanState;
 }
 
@@ -720,21 +715,6 @@ CitusReScan(CustomScanState *node)
 	Job *workerJob = scanState->distributedPlan->workerJob;
 	EState *executorState = ScanStateGetExecutorState(scanState);
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
-
-	/* for all the changed parameters, store them locally so we can use them during query dispatch */
-	int x = -1;
-	while ((x = bms_next_member(node->ss.ps.chgParam, x)) >= 0)
-	{
-		/* make sure the parameter that changed is within bounds */
-		Assert(scanState->numParameters > x);
-
-		/* copy the parameter information into local state*/
-		ParamExecData paramExecData = executorState->es_param_exec_vals[x];
-		scanState->paramValues[x] = paramExecData.value;
-		scanState->paramNulls[x] = paramExecData.isnull;
-		
-		ereport(NOTICE, (errmsg("changed parameter: %d", x)));
-	}
 
 	if (paramListInfo != NULL && !workerJob->parametersInJobQueryResolved)
 	{
