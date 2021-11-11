@@ -186,6 +186,7 @@ static void DropIndexesNotSupportedByColumnar(Oid relationId,
 static char * GetIndexAccessMethodName(Oid indexId);
 static void DropConstraintRestrict(Oid relationId, Oid constraintId);
 static void DropIndexRestrict(Oid indexId);
+static bool IsForeignTable(Oid relationId);
 static void EnsureTableNotReferencing(Oid relationId, char conversionType);
 static void EnsureTableNotReferenced(Oid relationId, char conversionType);
 static void EnsureTableNotForeign(Oid relationId);
@@ -368,7 +369,7 @@ UndistributeTable(TableConversionParameters *params)
 		EnsureTableNotReferencing(params->relationId, UNDISTRIBUTE_TABLE);
 		EnsureTableNotReferenced(params->relationId, UNDISTRIBUTE_TABLE);
 	}
-	EnsureTableNotForeign(params->relationId);
+
 	EnsureTableNotPartition(params->relationId);
 
 	if (PartitionedTable(params->relationId))
@@ -988,14 +989,24 @@ EnsureTableNotReferenced(Oid relationId, char conversionType)
 
 
 /*
+ * IsForeignTable takes a relation id and returns true if it's a foreign table.
+ * Returns false otherwise.
+ */
+static bool
+IsForeignTable(Oid relationId)
+{
+	return get_rel_relkind(relationId) == RELKIND_FOREIGN_TABLE;
+}
+
+
+/*
  * EnsureTableNotForeign checks if the table is a foreign table and errors
  * if it is.
  */
 void
 EnsureTableNotForeign(Oid relationId)
 {
-	char relationKind = get_rel_relkind(relationId);
-	if (relationKind == RELKIND_FOREIGN_TABLE)
+	if (IsForeignTable(relationId))
 	{
 		ereport(ERROR, (errmsg("cannot complete operation "
 							   "because it is a foreign table")));
@@ -1063,7 +1074,7 @@ CreateTableConversion(TableConversionParameters *params)
 		BuildDistributionKeyFromColumnName(relation, con->distributionColumn);
 
 	con->originalAccessMethod = NULL;
-	if (!PartitionedTable(con->relationId))
+	if (!PartitionedTable(con->relationId) && !IsForeignTable(con->relationId))
 	{
 		HeapTuple amTuple = SearchSysCache1(AMOID, ObjectIdGetDatum(
 												relation->rd_rel->relam));
@@ -1305,7 +1316,7 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 
 	StringInfo query = makeStringInfo();
 
-	if (!PartitionedTable(sourceId))
+	if (!PartitionedTable(sourceId) && !IsForeignTable(sourceId))
 	{
 		if (!suppressNoticeMessages)
 		{
@@ -1402,7 +1413,8 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	}
 
 	resetStringInfo(query);
-	appendStringInfo(query, "DROP TABLE %s CASCADE",
+	appendStringInfo(query, "DROP%s TABLE %s CASCADE",
+					 IsForeignTable(sourceId) ? " FOREIGN": "",
 					 quote_qualified_identifier(schemaName, sourceName));
 	ExecuteQueryViaSPI(query->data, SPI_OK_UTILITY);
 
