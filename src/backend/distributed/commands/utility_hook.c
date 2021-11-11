@@ -891,13 +891,23 @@ ShouldCheckUndistributeCitusLocalTables(void)
 static bool
 ShouldAddNewTableToMetadata(Node *parsetree)
 {
-	if (!IsA(parsetree, CreateStmt))
+	CreateStmt *createTableStmt;
+
+	if (IsA(parsetree, CreateStmt))
 	{
-		/* if the command is not CREATE TABLE, we can early return false */
+		createTableStmt = (CreateStmt *) parsetree;
+	}
+	else if (IsA(parsetree, CreateForeignTableStmt))
+	{
+		CreateForeignTableStmt *createForeignTableStmt =
+			(CreateForeignTableStmt *) parsetree;
+		createTableStmt = (CreateStmt *) &(createForeignTableStmt->base);
+	}
+	else
+	{
+		/* if the command is not CREATE (FOREIGN) TABLE, we can early return false */
 		return false;
 	}
-
-	CreateStmt *createTableStmt = (CreateStmt *) parsetree;
 
 	if (createTableStmt->relation->relpersistence == RELPERSISTENCE_TEMP ||
 		createTableStmt->partbound != NULL)

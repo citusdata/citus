@@ -587,6 +587,30 @@ select inhrelid::regclass from pg_inherits where (select inhparent::regclass::te
 -- check the shell partition
 select inhrelid::regclass from pg_inherits where inhparent='parent_1'::regclass order by 1;
 
+-- test adding foreign table to metadata with the guc
+SET citus.use_citus_managed_tables TO ON;
+CREATE EXTENSION postgres_fdw;
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host '192.83.123.89', port '5432', dbname 'foreign_db');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'some_schema', table_name 'some_table');
+
+--verify
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
+
+-- test undistributing
+SELECT undistribute_table('foreign_table');
+
+--verify
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
+
+RESET citus.use_citus_managed_tables;
+
 -- cleanup at exit
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;
