@@ -46,6 +46,13 @@
 #include "utils/syscache.h"
 
 
+/*
+ * Global variable for the GUC citus.use_citus_managed_tables.
+ * This is used after every CREATE TABLE statement in utility_hook.c
+ * If this variable is set to true, we add all created tables to metadata.
+ */
+bool AddAllLocalTablesToMetadata = true;
+
 static void citus_add_local_table_to_metadata_internal(Oid relationId,
 													   bool cascadeViaForeignKeys);
 static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);

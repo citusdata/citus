@@ -2936,6 +2936,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 
 			case AT_SetNotNull:
 			case AT_ReplicaIdentity:
+			case AT_ChangeOwner:
 			case AT_ValidateConstraint:
 			case AT_DropConstraint: /* we do the check for invalidation in AlterTableDropsForeignKey */
 #if PG_VERSION_NUM >= PG_VERSION_14
