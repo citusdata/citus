@@ -117,3 +117,17 @@ BEGIN;
 	-- since we run "after schedule" twice, rollback the transaction
 	-- to avoid getting "table already exists" errors
 ROLLBACK;
+
+BEGIN;
+  -- Show that we can still drop the extension after upgrading
+  SET client_min_messages TO WARNING;
+
+  -- Drop extension migth cascade to columnar.options before dropping a
+  -- columnar table. In that case, we were getting below error when opening
+  -- columnar.options to delete records for the columnar table that we are
+  -- about to drop.: "ERROR:  could not open relation with OID 0".
+  --
+  -- I somehow reproduced this bug easily when upgrading pg, that is why
+  -- adding the test to this file.
+  DROP EXTENSION citus CASCADE;
+ROLLBACK;
