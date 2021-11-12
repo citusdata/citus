@@ -450,22 +450,13 @@ SELECT logicalrelid, partmethod, repmodel FROM pg_dist_partition WHERE logicalre
 
 -- verify that citus local tables converted by the user will not be auto-undistributed
 DROP TABLE IF EXISTS citus_local_table_1, citus_local_table_2, citus_local_table_3;
+-- this GUC will add the next three tables to metadata automatically
+SET citus.use_citus_managed_tables TO ON;
 CREATE TABLE citus_local_table_1(a INT UNIQUE);
 CREATE TABLE citus_local_table_2(a INT UNIQUE);
 CREATE TABLE citus_local_table_3(a INT UNIQUE);
+RESET citus.use_citus_managed_tables;
 ALTER TABLE citus_local_table_1 ADD CONSTRAINT fkey_cas_test FOREIGN KEY (a) REFERENCES citus_local_table_2 (a);
-SELECT citus_add_local_table_to_metadata('citus_local_table_1', cascade_via_foreign_keys=>true);
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT citus_add_local_table_to_metadata('citus_local_table_3');
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
 ALTER TABLE citus_local_table_3 ADD CONSTRAINT fkey_cas_test_2 FOREIGN KEY (a) REFERENCES citus_local_table_2 (a);
 ALTER TABLE citus_local_table_3 DROP CONSTRAINT fkey_cas_test_2;
 SELECT logicalrelid, autoconverted FROM pg_dist_partition

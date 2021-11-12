@@ -366,9 +366,19 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '10.2-3';
 SELECT * FROM multi_extension.print_extension_changes();
 
--- Test downgrade to 10.2-3 from 11.0-1
-ALTER EXTENSION citus UPDATE TO '11.0-1';
+-- Test downgrade to 10.2-3 from 10.2-4
+ALTER EXTENSION citus UPDATE TO '10.2-4';
 ALTER EXTENSION citus UPDATE TO '10.2-3';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 10.2-4
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 10.2-4 from 11.0-1
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+ALTER EXTENSION citus UPDATE TO '10.2-4';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
