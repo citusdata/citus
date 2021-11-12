@@ -119,8 +119,7 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
-  -- Show that we drop columnar tables and columnar table access method
-  -- objects properly.
+  -- Show that we can still drop the extension after upgrading
   SET client_min_messages TO WARNING;
 
   -- Drop extension migth cascade to columnar.options before dropping a
