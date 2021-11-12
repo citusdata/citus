@@ -724,5 +724,56 @@ $$);
  (localhost,57638,t,0)
 (2 rows)
 
+-- test adding foreign table to metadata with the guc
+SET citus.use_citus_managed_tables TO ON;
+CREATE TABLE foreign_table_test (a INT);
+INSERT INTO foreign_table_test VALUES (1);
+CREATE EXTENSION postgres_fdw;
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'citus_local_tables_mx', table_name 'foreign_table_test');
+--verify
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
+ partmethod | repmodel
+---------------------------------------------------------------------
+ n          | s
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO citus_local_tables_mx;
+SELECT * FROM foreign_table;
+ERROR:  user mapping not found for "postgres"
+SELECT * FROM foreign_table_test;
+ a
+---------------------------------------------------------------------
+ 1
+(1 row)
+
+\c - - - :master_port
+SET search_path TO citus_local_tables_mx;
+-- test undistributing
+SELECT undistribute_table('foreign_table');
+NOTICE:  creating a new table for citus_local_tables_mx.foreign_table
+NOTICE:  extension "postgres_fdw" already exists, skipping
+NOTICE:  dropping the old citus_local_tables_mx.foreign_table
+NOTICE:  renaming the new table to citus_local_tables_mx.foreign_table
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+--verify
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
+ partmethod | repmodel
+---------------------------------------------------------------------
+(0 rows)
+
 -- cleanup at exit
+set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;

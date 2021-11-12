@@ -381,5 +381,37 @@ SELECT run_command_on_workers(
 $$
 SELECT count(*) FROM pg_catalog.pg_tables WHERE tablename='citus_local_table_4'
 $$);
+
+-- test adding foreign table to metadata with the guc
+SET citus.use_citus_managed_tables TO ON;
+CREATE TABLE foreign_table_test (a INT);
+INSERT INTO foreign_table_test VALUES (1);
+CREATE EXTENSION postgres_fdw;
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'citus_local_tables_mx', table_name 'foreign_table_test');
+
+--verify
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
+
+\c - - - :worker_1_port
+SET search_path TO citus_local_tables_mx;
+SELECT * FROM foreign_table;
+SELECT * FROM foreign_table_test;
+\c - - - :master_port
+SET search_path TO citus_local_tables_mx;
+-- test undistributing
+SELECT undistribute_table('foreign_table');
+
+--verify
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
+
 -- cleanup at exit
+set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;

@@ -958,45 +958,6 @@ select inhrelid::regclass from pg_inherits where inhparent='parent_1'::regclass 
  parent_1_child_1
 (1 row)
 
--- test adding foreign table to metadata with the guc
-SET citus.use_citus_managed_tables TO ON;
-CREATE EXTENSION postgres_fdw;
-CREATE SERVER foreign_server
-        FOREIGN DATA WRAPPER postgres_fdw
-        OPTIONS (host '192.83.123.89', port '5432', dbname 'foreign_db');
-CREATE FOREIGN TABLE foreign_table (
-        id integer NOT NULL,
-        data text
-)
-        SERVER foreign_server
-        OPTIONS (schema_name 'some_schema', table_name 'some_table');
-NOTICE:  extension "postgres_fdw" already exists, skipping
-NOTICE:  server "foreign_server" already exists, skipping
---verify
-SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
- partmethod | repmodel
----------------------------------------------------------------------
- n          | s
-(1 row)
-
--- test undistributing
-SELECT undistribute_table('foreign_table');
-NOTICE:  creating a new table for citus_local_tables_test_schema.foreign_table
-NOTICE:  extension "postgres_fdw" already exists, skipping
-NOTICE:  dropping the old citus_local_tables_test_schema.foreign_table
-NOTICE:  renaming the new table to citus_local_tables_test_schema.foreign_table
- undistribute_table
----------------------------------------------------------------------
-
-(1 row)
-
---verify
-SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
- partmethod | repmodel
----------------------------------------------------------------------
-(0 rows)
-
-RESET citus.use_citus_managed_tables;
 -- cleanup at exit
 SET client_min_messages TO ERROR;
 DROP SCHEMA citus_local_tables_test_schema, "CiTUS!LocalTables", "test_\'index_schema" CASCADE;
