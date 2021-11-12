@@ -384,12 +384,14 @@ $$);
 
 -- test adding foreign table to metadata with the guc
 SET citus.use_citus_managed_tables TO ON;
-CREATE TABLE foreign_table_test (a INT);
-INSERT INTO foreign_table_test VALUES (1);
+CREATE TABLE foreign_table_test (id integer NOT NULL, data text);
+INSERT INTO foreign_table_test VALUES (1, 'text_test');
 CREATE EXTENSION postgres_fdw;
 CREATE SERVER foreign_server
         FOREIGN DATA WRAPPER postgres_fdw
         OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server;
 CREATE FOREIGN TABLE foreign_table (
         id integer NOT NULL,
         data text
