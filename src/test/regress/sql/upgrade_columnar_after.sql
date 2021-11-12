@@ -39,3 +39,16 @@ SELECT * FROM columnar.options WHERE regclass = 'test_options_2'::regclass;
 VACUUM VERBOSE test_options_2;
 SELECT count(*), sum(a), sum(b) FROM test_options_2;
 
+BEGIN;
+  -- Show that we can still drop the extension after upgrading
+  SET client_min_messages TO WARNING;
+
+  -- Drop extension migth cascade to columnar.options before dropping a
+  -- columnar table. In that case, we were getting below error when opening
+  -- columnar.options to delete records for the columnar table that we are
+  -- about to drop.: "ERROR:  could not open relation with OID 0".
+  --
+  -- I somehow reproduced this bug easily when upgrading pg, that is why
+  -- adding the test to this file.
+  DROP EXTENSION citus CASCADE;
+ROLLBACK;
