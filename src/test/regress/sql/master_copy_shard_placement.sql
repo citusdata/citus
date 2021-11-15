@@ -89,15 +89,10 @@ WHERE shardid = get_shard_id_for_distribution_column('history', 'key-1') AND nod
 SELECT count(*) FROM data;
 SELECT count(*) FROM history;
 
--- test we can not replicate MX tables
+-- test we can replicate MX tables
 SET citus.shard_replication_factor TO 1;
 
--- metadata sync will fail as we have a statement replicated table
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-
--- use streaming replication to enable metadata syncing
-UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid IN
-	('history'::regclass);
+-- metadata sync will succeed even if we have rep > 1 tables
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 CREATE TABLE mx_table(a int);

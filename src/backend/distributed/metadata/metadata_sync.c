@@ -367,9 +367,8 @@ ClusterHasKnownMetadataWorkers()
 
 /*
  * ShouldSyncTableMetadata checks if the metadata of a distributed table should be
- * propagated to metadata workers, i.e. the table is an MX table or reference table.
- * Tables with streaming replication model (which means RF=1) and hash distribution are
- * considered as MX tables while tables with none distribution are reference tables.
+ * propagated to metadata workers, i.e. the table is a hash distributed table or
+ * reference/citus local table.
  */
 bool
 ShouldSyncTableMetadata(Oid relationId)
@@ -381,12 +380,8 @@ ShouldSyncTableMetadata(Oid relationId)
 
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	bool streamingReplicated =
-		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
-
-	bool mxTable = (streamingReplicated && IsCitusTableTypeCacheEntry(tableEntry,
-																	  HASH_DISTRIBUTED));
-	if (mxTable || IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
+	if (IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED) ||
+		IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
 		return true;
 	}
@@ -2180,15 +2175,6 @@ EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod, int coloc
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Metadata syncing is only allowed for "
 							   "known replication models.")));
-	}
-
-	if (distributionMethod == DISTRIBUTE_BY_HASH &&
-		replicationModel != REPLICATION_MODEL_STREAMING)
-	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Hash distributed tables can only have '%c' "
-							   "as the replication model.",
-							   REPLICATION_MODEL_STREAMING)));
 	}
 
 	if (distributionMethod == DISTRIBUTE_BY_NONE &&

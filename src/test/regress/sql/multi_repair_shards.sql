@@ -103,3 +103,6 @@ UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :remotenewshardid AN
 
 -- oops! we don't support repairing shards backed by foreign tables
 SELECT master_copy_shard_placement(:remotenewshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+
+-- clean-up
+DROP FOREIGN TABLE remote_engagements CASCADE;
