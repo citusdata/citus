@@ -391,7 +391,8 @@ CREATE SERVER foreign_server
         FOREIGN DATA WRAPPER postgres_fdw
         OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
 CREATE USER MAPPING FOR CURRENT_USER
-        SERVER foreign_server;
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
 CREATE FOREIGN TABLE foreign_table (
         id integer NOT NULL,
         data text
@@ -406,8 +407,11 @@ SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign
 SET search_path TO citus_local_tables_mx;
 SELECT * FROM foreign_table;
 SELECT * FROM foreign_table_test;
+ALTER TABLE foreign_table DROP COLUMN id;
 \c - - - :master_port
 SET search_path TO citus_local_tables_mx;
+ALTER TABLE foreign_table DROP COLUMN id;
+SELECT * FROM foreign_table;
 -- test undistributing
 SELECT undistribute_table('foreign_table');
 

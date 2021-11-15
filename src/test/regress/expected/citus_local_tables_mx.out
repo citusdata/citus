@@ -733,7 +733,8 @@ CREATE SERVER foreign_server
         FOREIGN DATA WRAPPER postgres_fdw
         OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
 CREATE USER MAPPING FOR CURRENT_USER
-        SERVER foreign_server;
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
 CREATE FOREIGN TABLE foreign_table (
         id integer NOT NULL,
         data text
@@ -750,15 +751,28 @@ SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
 SELECT * FROM foreign_table;
-ERROR:  could not connect to server "foreign_server"
+ id |   data
+---------------------------------------------------------------------
+  1 | text_test
+(1 row)
+
 SELECT * FROM foreign_table_test;
  id |   data
 ---------------------------------------------------------------------
   1 | text_test
 (1 row)
 
+ALTER TABLE foreign_table DROP COLUMN id;
+ERROR:  operation is not allowed on this node
 \c - - - :master_port
 SET search_path TO citus_local_tables_mx;
+ALTER TABLE foreign_table DROP COLUMN id;
+SELECT * FROM foreign_table;
+   data
+-----------
+ text_test
+(1 row)
+
 -- test undistributing
 SELECT undistribute_table('foreign_table');
 NOTICE:  creating a new table for citus_local_tables_mx.foreign_table
