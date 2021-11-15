@@ -899,6 +899,14 @@ SELECT * FROM multi_extension.print_extension_changes();
                  | function worker_fix_partition_shard_index_names(regclass,text,text) void
 (3 rows)
 
+-- Use a synthetic pg_dist_shard record to show that upgrade fails
+-- when there are cstore_fdw tables
+INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage) VALUES ('pg_dist_shard', 1, 'c');
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+ERROR:  cstore_fdw tables are deprecated as of Citus 11.0
+HINT:  Install Citus 10.2 and convert your cstore_fdw tables to the columnar access method before upgrading further
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
+DELETE FROM pg_dist_shard WHERE shardid = 1;
 -- Test downgrade to 10.2-4 from 11.0-1
 ALTER EXTENSION citus UPDATE TO '11.0-1';
 ALTER EXTENSION citus UPDATE TO '10.2-4';

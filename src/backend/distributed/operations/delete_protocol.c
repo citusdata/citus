@@ -462,8 +462,7 @@ CreateDropShardPlacementCommand(const char *schemaName, const char *shardRelatio
 		appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND,
 						 quotedShardName);
 	}
-	else if (storageType == SHARD_STORAGE_COLUMNAR ||
-			 storageType == SHARD_STORAGE_FOREIGN)
+	else if (storageType == SHARD_STORAGE_FOREIGN)
 	{
 		appendStringInfo(workerDropQuery, DROP_FOREIGN_TABLE_COMMAND,
 						 quotedShardName);

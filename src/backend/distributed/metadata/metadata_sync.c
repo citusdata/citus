@@ -2282,8 +2282,7 @@ EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 	}
 
 	if (!(storageType == SHARD_STORAGE_TABLE ||
-		  storageType == SHARD_STORAGE_FOREIGN ||
-		  storageType == SHARD_STORAGE_COLUMNAR))
+		  storageType == SHARD_STORAGE_FOREIGN))
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Invalid shard storage type: %c", storageType)));

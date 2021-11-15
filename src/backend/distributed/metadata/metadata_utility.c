@@ -276,12 +276,6 @@ citus_total_relation_size(PG_FUNCTION_ARGS)
 	bool failOnError = PG_GETARG_BOOL(1);
 
 	SizeQueryType sizeQueryType = TOTAL_RELATION_SIZE;
-
-	if (CStoreTable(relationId))
-	{
-		sizeQueryType = CSTORE_TABLE_SIZE;
-	}
-
 	uint64 tableSize = 0;
 
 	if (!DistributedTableSize(relationId, sizeQueryType, failOnError, &tableSize))
@@ -306,12 +300,6 @@ citus_table_size(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
 	SizeQueryType sizeQueryType = TABLE_SIZE;
-
-	if (CStoreTable(relationId))
-	{
-		sizeQueryType = CSTORE_TABLE_SIZE;
-	}
-
 	uint64 tableSize = 0;
 
 	if (!DistributedTableSize(relationId, sizeQueryType, failOnError, &tableSize))
@@ -336,12 +324,6 @@ citus_relation_size(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
 	SizeQueryType sizeQueryType = RELATION_SIZE;
-
-	if (CStoreTable(relationId))
-	{
-		sizeQueryType = CSTORE_TABLE_SIZE;
-	}
-
 	uint64 relationSize = 0;
 
 	if (!DistributedTableSize(relationId, sizeQueryType, failOnError, &relationSize))
@@ -859,11 +841,6 @@ GetSizeQueryBySizeQueryType(SizeQueryType sizeQueryType)
 		case TOTAL_RELATION_SIZE:
 		{
 			return PG_TOTAL_RELATION_SIZE_FUNCTION;
-		}
-
-		case CSTORE_TABLE_SIZE:
-		{
-			return CSTORE_TABLE_SIZE_FUNCTION;
 		}
 
 		case TABLE_SIZE:

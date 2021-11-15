@@ -376,6 +376,12 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '10.2-4';
 SELECT * FROM multi_extension.print_extension_changes();
 
+-- Use a synthetic pg_dist_shard record to show that upgrade fails
+-- when there are cstore_fdw tables
+INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage) VALUES ('pg_dist_shard', 1, 'c');
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+DELETE FROM pg_dist_shard WHERE shardid = 1;
+
 -- Test downgrade to 10.2-4 from 11.0-1
 ALTER EXTENSION citus UPDATE TO '11.0-1';
 ALTER EXTENSION citus UPDATE TO '10.2-4';

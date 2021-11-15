@@ -129,24 +129,10 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	/* don't allow concurrent node list changes that require an exclusive lock */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
-	/*
-	 * We check whether the table is a foreign table or not. If it is, we set
-	 * storage type as foreign also. Only exception is if foreign table is a
-	 * foreign cstore table, in this case we set storage type as columnar.
-	 *
-	 * i.e. While setting storage type, columnar has priority over foreign.
-	 */
+	/* set the storage type of foreign tables to 'f' */
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
-		bool cstoreTable = CStoreTable(relationId);
-		if (cstoreTable)
-		{
-			storageType = SHARD_STORAGE_COLUMNAR;
-		}
-		else
-		{
-			storageType = SHARD_STORAGE_FOREIGN;
-		}
+		storageType = SHARD_STORAGE_FOREIGN;
 	}
 
 	if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
@@ -969,16 +955,7 @@ WorkerShardStats(ShardPlacement *placement, Oid relationId, const char *shardNam
 	*shardMaxValue = NULL;
 
 	char *quotedShardName = quote_literal_cstr(shardName);
-
-	bool cstoreTable = CStoreTable(relationId);
-	if (cstoreTable)
-	{
-		appendStringInfo(tableSizeQuery, SHARD_CSTORE_TABLE_SIZE_QUERY, quotedShardName);
-	}
-	else
-	{
-		appendStringInfo(tableSizeQuery, SHARD_TABLE_SIZE_QUERY, quotedShardName);
-	}
+	appendStringInfo(tableSizeQuery, SHARD_TABLE_SIZE_QUERY, quotedShardName);
 
 	int executeCommand = ExecuteOptionalRemoteCommand(connection, tableSizeQuery->data,
 													  &queryResult);
