@@ -769,7 +769,7 @@ SET search_path TO citus_local_tables_mx;
 ALTER TABLE foreign_table DROP COLUMN id;
 SELECT * FROM foreign_table;
    data
------------
+---------------------------------------------------------------------
  text_test
 (1 row)
 
