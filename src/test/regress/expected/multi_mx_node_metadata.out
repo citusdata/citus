@@ -682,9 +682,13 @@ SELECT wait_until_metadata_sync(30000);
 
 -- set metadatasynced so we try porpagating metadata changes
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
--- should error out
+-- should not error out, master_disable_node is tolerant for node failures
 SELECT 1 FROM master_disable_node('localhost', 1);
-ERROR:  Disabling localhost:xxxxx failed
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 -- try again after stopping metadata sync
 SELECT stop_metadata_sync_to_node('localhost', 1);
 NOTICE:  dropping metadata on the node (localhost,1)

@@ -301,7 +301,7 @@ SELECT wait_until_metadata_sync(30000);
 -- set metadatasynced so we try porpagating metadata changes
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
 
--- should error out
+-- should not error out, master_disable_node is tolerant for node failures
 SELECT 1 FROM master_disable_node('localhost', 1);
 
 -- try again after stopping metadata sync
@@ -315,7 +315,6 @@ SELECT wait_until_metadata_sync(30000);
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 SELECT verify_metadata('localhost', :worker_1_port);
-
 
 ------------------------------------------------------------------------------------
 -- Test master_disable_node() when the other node is down

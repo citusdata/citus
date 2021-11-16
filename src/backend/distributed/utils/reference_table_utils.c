@@ -434,24 +434,11 @@ void
 DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
 {
 	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
-	List *referenceShardIntervalList = NIL;
 
 	/* if there are no reference tables, we do not need to do anything */
 	if (list_length(referenceTableList) == 0)
 	{
 		return;
-	}
-
-	/*
-	 * We sort the reference table list to prevent deadlocks in concurrent
-	 * DeleteAllReferenceTablePlacementsFromNodeGroup calls.
-	 */
-	referenceTableList = SortList(referenceTableList, CompareOids);
-	if (ClusterHasKnownMetadataWorkers())
-	{
-		referenceShardIntervalList = GetSortedReferenceShardIntervals(referenceTableList);
-
-		BlockWritesToShardList(referenceShardIntervalList);
 	}
 
 	StringInfo deletePlacementCommand = makeStringInfo();
