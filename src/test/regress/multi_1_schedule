@@ -26,6 +26,7 @@ test: multi_cluster_management
 # below tests are placed right after multi_cluster_management as we do
 # remove/add node operations and we do not want any preexisting objects
 test: non_super_user_object_metadata
+test: propagate_foreign_servers
 test: alter_role_propagation
 test: propagate_extension_commands
 test: escape_extension_name
