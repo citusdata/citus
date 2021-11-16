@@ -105,32 +105,6 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 
 
 /*
- * CStoreTable returns true if the given relationId belongs to a foreign cstore
- * table, otherwise it returns false.
- */
-bool
-CStoreTable(Oid relationId)
-{
-	bool cstoreTable = false;
-
-	char relationKind = get_rel_relkind(relationId);
-	if (relationKind == RELKIND_FOREIGN_TABLE)
-	{
-		ForeignTable *foreignTable = GetForeignTable(relationId);
-		ForeignServer *server = GetForeignServer(foreignTable->serverid);
-		ForeignDataWrapper *foreignDataWrapper = GetForeignDataWrapper(server->fdwid);
-
-		if (strncmp(foreignDataWrapper->fdwname, CSTORE_FDW_NAME, NAMEDATALEN) == 0)
-		{
-			cstoreTable = true;
-		}
-	}
-
-	return cstoreTable;
-}
-
-
-/*
  * master_get_table_ddl_events takes in a relation name, and returns the set of
  * DDL commands needed to reconstruct the relation. The returned DDL commands
  * are similar in flavor to schema definitions that pgdump returns. The function
@@ -845,15 +819,7 @@ ShardStorageType(Oid relationId)
 	}
 	else if (relationType == RELKIND_FOREIGN_TABLE)
 	{
-		bool cstoreTable = CStoreTable(relationId);
-		if (cstoreTable)
-		{
-			shardStorageType = SHARD_STORAGE_COLUMNAR;
-		}
-		else
-		{
-			shardStorageType = SHARD_STORAGE_FOREIGN;
-		}
+		shardStorageType = SHARD_STORAGE_FOREIGN;
 	}
 	else
 	{

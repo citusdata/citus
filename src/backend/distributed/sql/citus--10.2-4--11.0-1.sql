@@ -13,3 +13,13 @@ UPDATE pg_catalog.pg_dist_partition SET autoconverted = TRUE WHERE partmethod = 
 
 REVOKE ALL ON FUNCTION start_metadata_sync_to_node(text, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION stop_metadata_sync_to_node(text, integer,bool) FROM PUBLIC;
+
+DO LANGUAGE plpgsql
+$$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_dist_shard where shardstorage = 'c') THEN
+	    RAISE EXCEPTION 'cstore_fdw tables are deprecated as of Citus 11.0'
+        USING HINT = 'Install Citus 10.2 and convert your cstore_fdw tables to the columnar access method before upgrading further';
+	END IF;
+END;
+$$;

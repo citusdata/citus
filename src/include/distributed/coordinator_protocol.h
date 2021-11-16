@@ -51,9 +51,6 @@
 #define TRANSFER_MODE_FORCE_LOGICAL 'l'
 #define TRANSFER_MODE_BLOCK_WRITES 'b'
 
-/* Name of columnar foreign data wrapper */
-#define CSTORE_FDW_NAME "cstore_fdw"
-
 #define SHARDID_SEQUENCE_NAME "pg_dist_shardid_seq"
 #define PLACEMENTID_SEQUENCE_NAME "pg_dist_placement_placementid_seq"
 
@@ -207,7 +204,6 @@ extern int NextPlacementId;
 extern bool IsCoordinator(void);
 
 /* Function declarations local to the distributed module */
-extern bool CStoreTable(Oid relationId);
 extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
