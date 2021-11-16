@@ -906,8 +906,20 @@ WaitForAllConnections(List *connectionList, bool raiseInterrupts)
 					else if (sendStatus == 0)
 					{
 						/* done writing, only wait for read events */
-						ModifyWaitEvent(waitEventSet, event->pos, WL_SOCKET_READABLE,
-										NULL);
+						bool success =
+							CitusModifyWaitEvent(waitEventSet, event->pos,
+												 WL_SOCKET_READABLE, NULL);
+						if (!success)
+						{
+							ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+											errmsg("connection establishment for "
+												   "node %s:%d failed",
+												   connection->hostname,
+												   connection->port),
+											errhint("Check both the local and remote "
+													"server logs for the connection "
+													"establishment errors.")));
+						}
 					}
 				}
 
@@ -1052,8 +1064,17 @@ BuildWaitEventSet(MultiConnection **allConnections, int totalConnectionCount,
 		 * and writeability (server is ready to receive bytes).
 		 */
 		int eventMask = WL_SOCKET_READABLE | WL_SOCKET_WRITEABLE;
-
-		AddWaitEventToSet(waitEventSet, eventMask, sock, NULL, (void *) connection);
+		int waitEventSetIndex =
+			CitusAddWaitEventSetToSet(waitEventSet, eventMask, sock,
+									  NULL, (void *) connection);
+		if (waitEventSetIndex == WAIT_EVENT_SET_INDEX_FAILED)
+		{
+			ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+							errmsg("connection establishment for node %s:%d failed",
+								   connection->hostname, connection->port),
+							errhint("Check both the local and remote server logs for the "
+									"connection establishment errors.")));
+		}
 	}
 
 	/*

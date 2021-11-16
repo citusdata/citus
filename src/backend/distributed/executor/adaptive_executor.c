@@ -5434,7 +5434,7 @@ RebuildWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
 		if (!success)
 		{
 			ereport(DEBUG1, (errcode(ERRCODE_CONNECTION_FAILURE),
-							 errmsg("Modifying wait event for node %s:%d failed. "
+							 errmsg("modifying wait event for node %s:%d failed. "
 									"The wait event index was: %d",
 									connection->hostname, connection->port,
 									waitEventSetIndex)));

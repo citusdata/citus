@@ -870,7 +870,19 @@ WaitEventSetFromMultiConnectionStates(List *connections, int *waitCount)
 
 		int eventMask = MultiConnectionStateEventMask(connectionState);
 
-		AddWaitEventToSet(waitEventSet, eventMask, sock, NULL, connectionState);
+		int waitEventSetIndex =
+			CitusAddWaitEventSetToSet(waitEventSet, eventMask, sock,
+									  NULL, (void *) connectionState);
+		if (waitEventSetIndex == WAIT_EVENT_SET_INDEX_FAILED)
+		{
+			ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+							errmsg("connection establishment for node %s:%d failed",
+								   connectionState->connection->hostname,
+								   connectionState->connection->port),
+							errhint("Check both the local and remote server logs for the "
+									"connection establishment errors.")));
+		}
+
 		numEventsAdded++;
 
 		if (waitCount)
@@ -1020,7 +1032,19 @@ FinishConnectionListEstablishment(List *multiConnectionList)
 				{
 					/* connection state changed, reset the event mask */
 					uint32 eventMask = MultiConnectionStateEventMask(connectionState);
-					ModifyWaitEvent(waitEventSet, event->pos, eventMask, NULL);
+					bool success =
+						CitusModifyWaitEvent(waitEventSet, event->pos,
+											 eventMask, NULL);
+					if (!success)
+					{
+						ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
+										errmsg("connection establishment for node %s:%d "
+											   "failed", connection->hostname,
+											   connection->port),
+										errhint("Check both the local and remote server "
+												"logs for the connection establishment "
+												"errors.")));
+					}
 				}
 
 				/*
