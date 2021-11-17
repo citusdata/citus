@@ -4263,19 +4263,6 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 	{
 		case DISTRIBUTE_BY_APPEND:
 		case DISTRIBUTE_BY_RANGE:
-		{
-			Node *partitionNode = stringToNode(partitionKeyString);
-			Var *partitionColumn = (Var *) partitionNode;
-			Assert(IsA(partitionNode, Var));
-
-			GetIntervalTypeInfo(partitionMethod, partitionColumn,
-								intervalTypeId, intervalTypeMod);
-
-			*columnTypeId = partitionColumn->vartype;
-			*columnTypeMod = partitionColumn->vartypmod;
-			break;
-		}
-
 		case DISTRIBUTE_BY_HASH:
 		{
 			Node *partitionNode = stringToNode(partitionKeyString);
