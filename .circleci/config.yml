@@ -70,6 +70,12 @@ jobs:
           name: 'Check if changed'
           command: git diff --exit-code
       - run:
+          name: 'Check for comments that start with # character in spec files'
+          command: ci/disallow_hash_comments_in_spec_files.sh
+      - run:
+          name: 'Check if changed'
+          command: git diff --exit-code
+      - run:
           name: 'Check for gitignore entries .for source files'
           command: ci/fix_gitignore.sh
       - run:

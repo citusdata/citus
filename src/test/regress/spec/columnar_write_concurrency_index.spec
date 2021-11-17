@@ -144,7 +144,7 @@ step "s3-index-select-all-b"
     SELECT b FROM write_concurrency_index ORDER BY 1;
 }
 
-# unique (btree) on int column
+// unique (btree) on int column
 permutation "s1-begin" "s1-insert-1" "s2-copy-1" "s1-commit" "s1-select-all"
 permutation "s1-begin" "s1-copy-1" "s2-insert-1" "s1-rollback" "s1-select-all"
 permutation "s1-begin" "s1-copy-1" "s2-insert-2" "s3-insert-1" "s1-commit" "s1-select-all"
@@ -153,22 +153,22 @@ permutation "s1-begin" "s2-begin" "s1-insert-1" "s2-insert-3" "s3-insert-2" "s1-
 permutation "s1-begin" "s2-begin" "s1-copy-1" "s2-copy-2" "s3-insert-2" "s1-rollback" "s2-commit" "s1-select-all"
 permutation "s1-begin" "s2-begin" "s1-insert-1" "s2-copy-2" "s3-insert-2" "s1-rollback" "s2-rollback" "s1-select-all"
 
-# exclusion (hash) on text column that checks against duplicate values
+// exclusion (hash) on text column that checks against duplicate values
 permutation "s1-begin" "s1-insert-2" "s2-insert-4" "s1-rollback" "s1-select-all"
 permutation "s1-begin" "s1-insert-2" "s2-insert-5" "s3-insert-3" "s1-commit" "s1-select-all"
 permutation "s1-begin" "s2-begin" "s1-insert-2" "s2-insert-6" "s3-insert-4" "s1-commit" "s2-rollback" "s1-select-all"
 permutation "s1-begin" "s2-begin" "s1-insert-2" "s2-insert-6" "s3-insert-4" "s1-rollback" "s2-rollback" "s1-select-all"
 
-# make sure that pending writes are not visible to other backends
+// make sure that pending writes are not visible to other backends
 permutation "s1-begin" "s1-insert-1" "s2-index-select-all-b" "s1-rollback"
 permutation "s1-begin" "s2-begin" "s1-insert-1" "s2-copy-2" "s2-index-select-all-b" "s3-index-select-all-b" "s1-commit" "s2-index-select-all-b" "s2-rollback"
 
-# force flushing write state of s1 before inserting some more data via other sessions
+// force flushing write state of s1 before inserting some more data via other sessions
 permutation "s1-begin" "s2-begin" "s1-insert-1" "s1-select-all" "s2-insert-1" "s1-commit" "s2-rollback"
 permutation "s1-begin" "s2-begin" "s1-insert-1" "s1-select-all" "s2-insert-1" "s1-rollback" "s2-rollback"
 permutation "s1-begin" "s1-copy-1" "s1-select-all" "s2-insert-2" "s3-insert-1" "s1-rollback" "s1-select-all"
 permutation "s1-begin" "s1-insert-2" "s1-select-all" "s2-insert-5" "s3-insert-3" "s1-commit" "s1-select-all"
 permutation "s1-begin" "s2-begin" "s1-insert-2" "s1-select-all" "s2-insert-6" "s3-insert-4" "s1-rollback" "s2-rollback" "s1-select-all"
 
-# test with repeatable read isolation mode
+// test with repeatable read isolation mode
 permutation "s1-begin" "s2-begin-repeatable" "s1-insert-1" "s2-insert-1" "s1-commit" "s2-rollback"
