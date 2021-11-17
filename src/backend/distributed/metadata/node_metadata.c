@@ -91,8 +91,10 @@ typedef struct NodeMetadata
 
 /* local function forward declarations */
 static int ActivateNode(char *nodeName, int nodePort);
-static bool CanRemoveReferenceTablePlacements(void);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
+static void ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode);
+static bool PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement
+													  *sourcePlacement);
 static int AddNodeMetadata(char *nodeName, int32 nodePort, NodeMetadata
 						   *nodeMetadata, bool *nodeAlreadyExists);
 static WorkerNode * SetNodeState(char *nodeName, int32 nodePort, bool isActive);
@@ -1295,35 +1297,18 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	WorkerNode *workerNode = ModifiableWorkerNode(nodeName, nodePort);
 	if (NodeIsPrimary(workerNode))
 	{
-		if (CanRemoveReferenceTablePlacements())
-		{
-			/*
-			 * Delete reference table placements so they are not taken into account
-			 * for the check if there are placements after this.
-			 */
-			DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
-		}
-		if (NodeGroupHasLivePlacements(workerNode->groupId))
-		{
-			if (ActivePrimaryNodeCount() == 1 && ClusterHasReferenceTable())
-			{
-				ereport(ERROR, (errmsg(
-									"cannot remove the last worker node because there are reference "
-									"tables and it would cause data loss on reference tables"),
-								errhint(
-									"To proceed, either drop the reference tables or use "
-									"undistribute_table() function to convert them to local tables")));
-			}
-			ereport(ERROR, (errmsg("cannot remove the primary node of a node group "
-								   "which has shard placements"),
-							errhint(
-								"To proceed, either drop the distributed tables or use "
-								"undistribute_table() function to convert them to local tables")));
-		}
+		ErrorIfNodeContainsNonRemovablePlacements(workerNode);
+
+		/*
+		 * Delete reference table placements so they are not taken into account
+		 * for the check if there are placements after this.
+		 */
+		DeleteAllReferenceTablePlacementsFromNodeGroup(workerNode->groupId);
 
 		/*
 		 * Secondary nodes are read-only, never 2PC is used.
-		 * Hence, no items can be inserted to pg_dist_transaction for secondary nodes.
+		 * Hence, no items can be inserted to pg_dist_transaction
+		 * for secondary nodes.
 		 */
 		DeleteWorkerTransactions(workerNode);
 	}
@@ -1338,6 +1323,65 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 	CloseNodeConnectionsAfterTransaction(workerNode->workerName, nodePort);
 
 	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
+}
+
+
+/*
+ * ErrorIfNodeContainsNonRemovablePlacements throws an error if the input node
+ * contains at least one placement on the node that is the last active
+ * placement.
+ */
+static void
+ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode)
+{
+	int32 groupId = workerNode->groupId;
+	List *shardPlacements = AllShardPlacementsOnNodeGroup(groupId);
+	GroupShardPlacement *placement = NULL;
+	foreach_ptr(placement, shardPlacements)
+	{
+		if (!PlacementHasActivePlacementOnAnotherGroup(placement))
+		{
+			Oid relationId = RelationIdForShard(placement->shardId);
+			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+			ereport(ERROR, (errmsg("cannot remove or disable the node "
+								   "%s:%d because because it contains "
+								   "the only shard placement for "
+								   "shard " UINT64_FORMAT, workerNode->workerName,
+								   workerNode->workerPort, placement->shardId),
+							errdetail("One of the table(s) that prevents the operation "
+									  "complete successfully is %s",
+									  qualifiedRelationName),
+							errhint("To proceed, either drop the tables or use "
+									"undistribute_table() function to convert "
+									"them to local tables")));
+		}
+	}
+}
+
+
+/*
+ * PlacementHasActivePlacementOnAnotherGroup returns true if there is at least
+ * one more healthy placement of the input sourcePlacement on another group.
+ */
+static bool
+PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement *sourcePlacement)
+{
+	uint64 shardId = sourcePlacement->shardId;
+	List *activePlacementList = ActiveShardPlacementList(shardId);
+
+	bool foundHealtyPlacementOnAnotherGroup = false;
+	ShardPlacement *activePlacement = NULL;
+	foreach_ptr(activePlacement, activePlacementList)
+	{
+		if (activePlacement->groupId != sourcePlacement->groupId)
+		{
+			foundHealtyPlacementOnAnotherGroup = true;
+			break;
+		}
+	}
+
+	return foundHealtyPlacementOnAnotherGroup;
 }
 
 
@@ -1361,18 +1405,6 @@ RemoveOldShardPlacementForNodeGroup(int groupId)
 			DeleteShardPlacementRow(placement->placementId);
 		}
 	}
-}
-
-
-/*
- * CanRemoveReferenceTablePlacements returns true if active primary
- * node count is more than 1, which means that even if we remove a node
- * we will still have some other node that has reference table placement.
- */
-static bool
-CanRemoveReferenceTablePlacements(void)
-{
-	return ActivePrimaryNodeCount() > 1;
 }
 
 
