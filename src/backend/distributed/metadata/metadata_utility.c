@@ -1353,7 +1353,17 @@ ActiveShardPlacementList(uint64 shardId)
 	ShardPlacement *shardPlacement = NULL;
 	foreach_ptr(shardPlacement, shardPlacementList)
 	{
-		if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
+		WorkerNode *workerNode =
+			FindWorkerNode(shardPlacement->nodeName, shardPlacement->nodePort);
+
+		/*
+		 * We have already resolved the placement to node, so would have
+		 * errored out earlier.
+		 */
+		Assert(workerNode != NULL);
+
+		if (shardPlacement->shardState == SHARD_STATE_ACTIVE &&
+			workerNode->isActive)
 		{
 			activePlacementList = lappend(activePlacementList, shardPlacement);
 		}

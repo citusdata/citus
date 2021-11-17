@@ -954,7 +954,7 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "shardlength, groupid, placementid)  AS (VALUES ");
 
 	ShardInterval *shardInterval = NULL;
-	bool isFirstValue = true;
+	bool firstPlacementProcessed = false;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
@@ -963,7 +963,7 @@ ShardListInsertCommand(List *shardIntervalList)
 		ShardPlacement *placement = NULL;
 		foreach_ptr(placement, shardPlacementList)
 		{
-			if (!isFirstValue)
+			if (firstPlacementProcessed)
 			{
 				/*
 				 * As long as this is not the first placement of the first shard,
@@ -971,7 +971,7 @@ ShardListInsertCommand(List *shardIntervalList)
 				 */
 				appendStringInfo(insertPlacementCommand, ", ");
 			}
-			isFirstValue = false;
+			firstPlacementProcessed = true;
 
 			appendStringInfo(insertPlacementCommand,
 							 "(%ld, %d, %ld, %d, %ld)",
@@ -1046,9 +1046,25 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "storagetype, shardminvalue, shardmaxvalue) "
 					 "FROM shard_data;");
 
-	/* first insert shards, than the placements */
-	commandList = lappend(commandList, insertShardCommand->data);
-	commandList = lappend(commandList, insertPlacementCommand->data);
+	/*
+	 * There are no active placements for the table, so do not create the
+	 * command as it'd lead to syntax error.
+	 *
+	 * This is normally not an expected situation, however the current
+	 * implementation of citus_disable_node allows to disable nodes with
+	 * the only active placements. So, for example a single shard/placement
+	 * distributed table on a disabled node might trigger zero placement
+	 * case.
+	 *
+	 * TODO: remove this check once citus_disable_node errors out for
+	 * the above scenario.
+	 */
+	if (firstPlacementProcessed)
+	{
+		/* first insert shards, than the placements */
+		commandList = lappend(commandList, insertShardCommand->data);
+		commandList = lappend(commandList, insertPlacementCommand->data);
+	}
 
 	return commandList;
 }
