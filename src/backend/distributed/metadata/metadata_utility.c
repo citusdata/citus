@@ -1144,6 +1144,44 @@ LoadShardIntervalList(Oid relationId)
 
 
 /*
+ * LoadUnsortedShardIntervalListViaCatalog returns a list of shard intervals related for a
+ * given distributed table. The function returns an empty list if no shards can be found
+ * for the given relation.
+ *
+ * This function does not use CitusTableCache and instead reads from catalog tables
+ * directly.
+ */
+List *
+LoadUnsortedShardIntervalListViaCatalog(Oid relationId)
+{
+	List *shardIntervalList = NIL;
+	List *distShardTuples = LookupDistShardTuples(relationId);
+	Relation distShardRelation = table_open(DistShardRelationId(), AccessShareLock);
+	TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
+	Oid intervalTypeId = InvalidOid;
+	int32 intervalTypeMod = -1;
+
+	char partitionMethod = PartitionMethodViaCatalog(relationId);
+	Var *partitionColumn = PartitionColumnViaCatalog(relationId);
+	GetIntervalTypeInfo(partitionMethod, partitionColumn, &intervalTypeId,
+						&intervalTypeMod);
+
+	HeapTuple distShardTuple = NULL;
+	foreach_ptr(distShardTuple, distShardTuples)
+	{
+		ShardInterval *interval = TupleToShardInterval(distShardTuple,
+													   distShardTupleDesc,
+													   intervalTypeId,
+													   intervalTypeMod);
+		shardIntervalList = lappend(shardIntervalList, interval);
+	}
+	table_close(distShardRelation, AccessShareLock);
+
+	return shardIntervalList;
+}
+
+
+/*
  * LoadShardIntervalWithLongestShardName is a utility function that returns
  * the shard interaval with the largest shardId for the given relationId. Note
  * that largest shardId implies longest shard name.
