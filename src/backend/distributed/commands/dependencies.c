@@ -89,6 +89,17 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
 
 	/*
+	 * Lock dependent objects explicitly to make sure same DDL command won't be sent
+	 * multiple times from parallel sessions. Having IF EXISTS may not handle locking
+	 * issues if sent from parallel sessions.
+	 */
+	foreach_ptr(dependency, dependenciesWithCommands)
+	{
+		LockDatabaseObject(dependency->classId, dependency->objectId,
+						   dependency->objectSubId, RowExclusiveLock);
+	}
+
+	/*
 	 * right after we acquired the lock we mark our objects as distributed, these changes
 	 * will not become visible before we have successfully created all the objects on our
 	 * workers.
