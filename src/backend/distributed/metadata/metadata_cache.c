@@ -207,7 +207,6 @@ static ScanKeyData DistObjectScanKey[3];
 
 
 /* local function forward declarations */
-static bool IsCitusTableViaCatalog(Oid relationId);
 static HeapTuple PgDistPartitionTupleViaCatalog(Oid relationId);
 static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
 static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
@@ -484,7 +483,7 @@ IsCitusTable(Oid relationId)
  * offset and the corresponding index.  If we ever come close to changing
  * that, we'll have to work a bit harder.
  */
-static bool
+bool
 IsCitusTableViaCatalog(Oid relationId)
 {
 	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
@@ -535,6 +534,51 @@ PartitionMethodViaCatalog(Oid relationId)
 	table_close(pgDistPartition, NoLock);
 
 	return partitionMethodChar;
+}
+
+
+/*
+ * PartitionColumnViaCatalog gets a relationId and returns the partition
+ * key column from pg_dist_partition via reading from catalog.
+ */
+Var *
+PartitionColumnViaCatalog(Oid relationId)
+{
+	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+	if (!HeapTupleIsValid(partitionTuple))
+	{
+		return NULL;
+	}
+
+	Datum datumArray[Natts_pg_dist_partition];
+	bool isNullArray[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
+
+	if (isNullArray[Anum_pg_dist_partition_partkey - 1])
+	{
+		/* partition key cannot be NULL, still let's make sure */
+		heap_freetuple(partitionTuple);
+		table_close(pgDistPartition, NoLock);
+		return NULL;
+	}
+
+	Datum partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
+	char *partitionKeyString = TextDatumGetCString(partitionKeyDatum);
+
+	/* convert the string to a Node and ensure it is a Var */
+	Node *partitionNode = stringToNode(partitionKeyString);
+	Assert(IsA(partitionNode, Var));
+
+	Var *partitionColumn = (Var *) partitionNode;
+
+	heap_freetuple(partitionTuple);
+	table_close(pgDistPartition, NoLock);
+
+	return partitionColumn;
 }
 
 

@@ -88,6 +88,8 @@ static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
+static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
+											bool citusTableWithNoDistKey);
 static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
@@ -380,15 +382,51 @@ ShouldSyncTableMetadata(Oid relationId)
 
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	if (IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED) ||
-		IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
-	{
-		return true;
-	}
-	else
+	bool hashDistributed = IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED);
+	bool citusTableWithNoDistKey =
+		IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY);
+
+	return ShouldSyncTableMetadataInternal(hashDistributed, citusTableWithNoDistKey);
+}
+
+
+/*
+ * ShouldSyncTableMetadataViaCatalog checks if the metadata of a distributed table should
+ * be propagated to metadata workers, i.e. the table is an MX table or reference table.
+ * Tables with streaming replication model (which means RF=1) and hash distribution are
+ * considered as MX tables while tables with none distribution are reference tables.
+ *
+ * ShouldSyncTableMetadataViaCatalog does not use the CitusTableCache and instead reads
+ * from catalog tables directly.
+ */
+bool
+ShouldSyncTableMetadataViaCatalog(Oid relationId)
+{
+	if (!OidIsValid(relationId) || !IsCitusTableViaCatalog(relationId))
 	{
 		return false;
 	}
+
+	char partitionMethod = PartitionMethodViaCatalog(relationId);
+	bool hashDistributed = partitionMethod == DISTRIBUTE_BY_HASH;
+	bool citusTableWithNoDistKey = partitionMethod == DISTRIBUTE_BY_NONE;
+
+	return ShouldSyncTableMetadataInternal(hashDistributed, citusTableWithNoDistKey);
+}
+
+
+/*
+ * ShouldSyncTableMetadataInternal decides whether we should sync the metadata for a table
+ * based on whether it is a hash distributed table, or a citus table with no distribution
+ * key.
+ *
+ * This function is here to make sure that ShouldSyncTableMetadata and
+ * ShouldSyncTableMetadataViaCatalog behaves the same way.
+ */
+static bool
+ShouldSyncTableMetadataInternal(bool hashDistributed, bool citusTableWithNoDistKey)
+{
+	return hashDistributed || citusTableWithNoDistKey;
 }
 
 

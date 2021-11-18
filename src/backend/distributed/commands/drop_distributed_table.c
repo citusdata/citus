@@ -74,7 +74,7 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 	 * user-friendly, but this function is really only meant to be called
 	 * from the trigger.
 	 */
-	if (!IsCitusTable(relationId) || !EnableDDLPropagation)
+	if (!IsCitusTableViaCatalog(relationId) || !EnableDDLPropagation)
 	{
 		PG_RETURN_VOID();
 	}
@@ -134,14 +134,14 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 	 * user-friendly, but this function is really only meant to be called
 	 * from the trigger.
 	 */
-	if (!IsCitusTable(relationId) || !EnableDDLPropagation)
+	if (!IsCitusTableViaCatalog(relationId) || !EnableDDLPropagation)
 	{
 		return;
 	}
 
 	EnsureCoordinator();
 
-	if (!ShouldSyncTableMetadata(relationId))
+	if (!ShouldSyncTableMetadataViaCatalog(relationId))
 	{
 		return;
 	}
