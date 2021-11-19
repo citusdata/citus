@@ -95,7 +95,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	foreach_ptr(dependency, dependenciesWithCommands)
 	{
 		LockDatabaseObject(dependency->classId, dependency->objectId,
-						   dependency->objectSubId, RowExclusiveLock);
+						   dependency->objectSubId, ExclusiveLock);
 	}
 
 	/*
