@@ -90,8 +90,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 	/*
 	 * Lock dependent objects explicitly to make sure same DDL command won't be sent
-	 * multiple times from parallel sessions. Having IF EXISTS may not handle locking
-	 * issues if sent from parallel sessions.
+	 * multiple times from parallel sessions.
 	 */
 	foreach_ptr(dependency, dependenciesWithCommands)
 	{
