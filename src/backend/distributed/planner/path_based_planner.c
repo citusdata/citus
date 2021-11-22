@@ -1,4 +1,5 @@
 /* */
+
 /* Created by Nils Dijk on 17/01/2020. */
 /* */
 #include "postgres.h"
@@ -113,6 +114,7 @@ bool EnableBroadcastJoin = true;
 static optimizeFn joinOptimizations[] = {
 	OptimizeJoinPath,
 	OptimizeRepartitionInnerJoinPath,
+
 /*	BroadcastOuterJoinPath, */
 /*	BroadcastInnerJoinPath, */
 /*	GeoOverlapJoin, */
@@ -171,7 +173,8 @@ typedef struct TransformVarToParamExternMutatorContext
 
 
 static Node *
-TransformVarToParamExternMutator(Node *node, TransformVarToParamExternMutatorContext *context)
+TransformVarToParamExternMutator(Node *node,
+								 TransformVarToParamExternMutatorContext *context)
 {
 	if (node == NULL)
 	{
@@ -189,6 +192,7 @@ TransformVarToParamExternMutator(Node *node, TransformVarToParamExternMutatorCon
 			originalVarNo = var->varno;
 		}
 		Assert(originalVarNo > 0);
+
 		/* If not to be replaced, we can just return the Var unmodified */
 		if (!bms_is_member(originalVarNo, context->root->curOuterRels))
 		{
@@ -214,11 +218,10 @@ TransformVarToParamExternMutator(Node *node, TransformVarToParamExternMutatorCon
 	}
 	else if (IsA(node, Query))
 	{
-
 		return (Node *) query_tree_mutator((Query *) node,
-									 TransformVarToParamExternMutator,
-									 (void *) context,
-									 0);
+										   TransformVarToParamExternMutator,
+										   (void *) context,
+										   0);
 	}
 
 	return expression_tree_mutator(node, TransformVarToParamExternMutator,
@@ -230,8 +233,8 @@ static Query *
 TransformVarToParamExtern(Query *query, PlannerInfo *root, Index *varnoMapping)
 {
 	TransformVarToParamExternMutatorContext context = {
-			root,
-			varnoMapping
+		root,
+		varnoMapping
 	};
 
 	return castNode(Query, TransformVarToParamExternMutator((Node *) query, &context));
@@ -254,7 +257,8 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 	ShardInterval *shardInterval = NULL;
 
 	Index *varnoMapping = NULL; /* store mapping back for outerrel checks */
-	Query *q = GetQueryFromPath(root, distUnion->worker_path, tlist, clauses, &varnoMapping);
+	Query *q = GetQueryFromPath(root, distUnion->worker_path, tlist, clauses,
+								&varnoMapping);
 
 	/*
 	 * Assume shards are colocated, any shard should suffice for now to find the initial
@@ -336,8 +340,8 @@ CreateDistributedUnionPlan(PlannerInfo *root,
 	/* Reduce RestrictInfo list to bare expressions; ignore pseudoconstants */
 	clauses = extract_actual_clauses(clauses, false);
 
-//	plan->scan.plan.qual = clauses;
-//	plan->custom_exprs = clauses;
+/*	plan->scan.plan.qual = clauses; */
+/*	plan->custom_exprs = clauses; */
 
 	return (Plan *) plan;
 }
@@ -806,11 +810,11 @@ typedef struct GeoJoinPathMatch
 {
 	Const *stdwithinDistanceConst;
 
-//	AggPath *innerGrouping;
+/*	AggPath *innerGrouping; */
 	DistributedUnionPath *innerDistUnion;
 	GeoScanPath *innerPath;
 
-//	AggPath *outerGrouping;
+/*	AggPath *outerGrouping; */
 	DistributedUnionPath *outerDistUnion;
 	GeoScanPath *outerPath;
 } GeoJoinPathMatch;
@@ -835,6 +839,7 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 			MatchJoin(
 				NoCapture,
 				JOIN_INNER,
+
 				/* match on join restriction info */
 				MatchJoinRestrictions(
 					NoCapture,
@@ -849,6 +854,7 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 							MatchConst(
 								&match.stdwithinDistanceConst,
 								MatchFields(consttype == FLOAT8OID))))),
+
 				/* match inner path in join */
 				SkipReadThrough(
 					NoCapture,
@@ -858,14 +864,15 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 							&match.innerDistUnion,
 							MatchGeoScan(
 								&match.innerPath)))),
+
 				/* match outer path in join */
 				SkipReadThrough(
 					NoCapture,
 					MatchGrouping(
 						NoCapture, /*&match.outerGrouping,*/
 						MatchDistributedUnion(&match.outerDistUnion,
-							MatchGeoScan(
-								&match.outerPath))))))
+											  MatchGeoScan(
+												  &match.outerPath))))))
 		{
 			didMatch = true;
 		}
@@ -877,6 +884,7 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 			MatchJoin(
 				NoCapture,
 				JOIN_INNER,
+
 				/* match on join restriction info */
 				MatchJoinRestrictions(
 					NoCapture,
@@ -891,6 +899,7 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 							MatchConst(
 								&match.stdwithinDistanceConst,
 								MatchFields(consttype == FLOAT8OID))))),
+
 				/* match inner path in join */
 				SkipReadThrough(
 					NoCapture,
@@ -898,6 +907,7 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 						&match.innerDistUnion,
 						MatchGeoScan(
 							&match.innerPath))),
+
 				/* match outer path in join */
 				SkipReadThrough(
 					NoCapture,
@@ -922,17 +932,17 @@ GeoOverlapJoin(PlannerInfo *root, Path *originalPath)
 
 		jpath->innerjoinpath = (Path *) match.innerPath;
 		jpath->outerjoinpath = (Path *) match.outerPath;
-//			(Path *) create_append_path(
-//			root,
-//			match.outerPath->custom_path.path.parent,
-//			list_make1(match.outerPath), /* TODO add the result of the shuffled job */
-//			NIL,
-//			NIL,
-//			NULL,
-//			0,
-//			false,
-//			NIL,
-//			match.outerPath->custom_path.path.rows + 0);
+/*			(Path *) create_append_path( */
+/*			root, */
+/*			match.outerPath->custom_path.path.parent, */
+/*			list_make1(match.outerPath), / * TODO add the result of the shuffled job * / */
+/*			NIL, */
+/*			NIL, */
+/*			NULL, */
+/*			0, */
+/*			false, */
+/*			NIL, */
+/*			match.outerPath->custom_path.path.rows + 0); */
 
 		jpath->path.startup_cost -= 2000; /* remove the double dist union cost */
 		jpath->path.total_cost -= 2000; /* remove the double dist union cost */
@@ -965,14 +975,17 @@ OptimizeJoinPath(PlannerInfo *root, Path *originalPath)
 		MatchJoin(
 			&jpath,
 			JOIN_INNER,
+
 			/* match on join restriction info */
 			MatchAny,
+
 			/* match inner path in join */
 			SkipReadThrough(
 				NoCapture,
 				MatchDistributedUnion(
 					&innerDU,
 					MatchAny)),
+
 			/* match outer path in join */
 			SkipReadThrough(
 				NoCapture,
@@ -1036,22 +1049,25 @@ OptimizeRepartitionInnerJoinPath(PlannerInfo *root, Path *originalPath)
 	 *  +---------------------+ +---------------------+
 	 *  | Collect             | | Collect             |
 	 *  | - ColocationID: $1  | | - ColocationID: !$1 |
-     *  +---------------------+ +---------------------+
-     *
+	 *  +---------------------+ +---------------------+
+	 *
 	 */
 	IfPathMatch(
 		originalPath,
 		MatchJoin(
 			&joinPath,
 			JOIN_INNER,
+
 			/* match on join restriction info */
 			MatchAny,
+
 			/* match inner path in join */
 			SkipReadThrough(
 				NoCapture,
 				MatchDistributedUnion(
 					&innerDU,
 					MatchAny)),
+
 			/* match outer path in join */
 			SkipReadThrough(
 				NoCapture,
@@ -1125,11 +1141,11 @@ OptimizeRepartitionInnerJoinPath(PlannerInfo *root, Path *originalPath)
 		/* create Collect on top of new join, base Collect on matched outer Collect */
 		const DistributedUnionPath *baseDistUnion = outerDU;
 		Path *newPath = (Path *) WrapTableAccessWithDistributedUnion(
-				(Path *) newJoinPath,
-				baseDistUnion->colocationId,
-				baseDistUnion->partitionValue,
-				baseDistUnion->sampleRelid,
-				baseDistUnion->custom_path.custom_paths);
+			(Path *) newJoinPath,
+			baseDistUnion->colocationId,
+			baseDistUnion->partitionValue,
+			baseDistUnion->sampleRelid,
+			baseDistUnion->custom_path.custom_paths);
 
 		return list_make1(newPath);
 	}
@@ -1142,7 +1158,7 @@ static Path *
 CreateRepartitionNode(uint32 colocationId, Path *worker_path)
 {
 	RepartitionPath *repartition = (RepartitionPath *)
-			newNode(sizeof(RepartitionPath), T_CustomPath);
+								   newNode(sizeof(RepartitionPath), T_CustomPath);
 
 	repartition->custom_path.path.pathtype = T_CustomScan;
 	repartition->custom_path.path.parent = worker_path->parent;
