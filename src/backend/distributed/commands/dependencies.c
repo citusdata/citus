@@ -28,6 +28,7 @@
 
 typedef bool (*AddressPredicate)(const ObjectAddress *);
 
+static int ObjectAddressComparator(const void *a, const void *b);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
@@ -91,8 +92,13 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	/*
 	 * Lock dependent objects explicitly to make sure same DDL command won't be sent
 	 * multiple times from parallel sessions.
+	 *
+	 * Sort dependencies that will be created on workers to not to have any deadlock
+	 * issue if different sessions are creating different objects.
 	 */
-	foreach_ptr(dependency, dependenciesWithCommands)
+	List *addressSortedDependencies = SortList(dependenciesWithCommands,
+											   ObjectAddressComparator);
+	foreach_ptr(dependency, addressSortedDependencies)
 	{
 		LockDatabaseObject(dependency->classId, dependency->objectId,
 						   dependency->objectSubId, ExclusiveLock);
@@ -133,6 +139,55 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 												  CitusExtensionOwnerName(),
 												  ddlCommands);
 	}
+}
+
+
+/*
+ * Copied from PG object_address_comparator function to compare ObjectAddresses.
+ */
+static int
+ObjectAddressComparator(const void *a, const void *b)
+{
+	const ObjectAddress *obja = (const ObjectAddress *) a;
+	const ObjectAddress *objb = (const ObjectAddress *) b;
+
+	/*
+	 * Primary sort key is OID descending.
+	 */
+	if (obja->objectId > objb->objectId)
+	{
+		return -1;
+	}
+	if (obja->objectId < objb->objectId)
+	{
+		return 1;
+	}
+
+	/*
+	 * Next sort on catalog ID, in case identical OIDs appear in different
+	 * catalogs. Sort direction is pretty arbitrary here.
+	 */
+	if (obja->classId < objb->classId)
+	{
+		return -1;
+	}
+	if (obja->classId > objb->classId)
+	{
+		return 1;
+	}
+
+	/*
+	 * Last, sort on object subId.
+	 */
+	if ((unsigned int) obja->objectSubId < (unsigned int) objb->objectSubId)
+	{
+		return -1;
+	}
+	if ((unsigned int) obja->objectSubId > (unsigned int) objb->objectSubId)
+	{
+		return 1;
+	}
+	return 0;
 }
 
 
