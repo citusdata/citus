@@ -46,7 +46,7 @@ SELECT master_add_node('localhost', :worker_1_port) As nodeid_1 \gset
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
  nodeid | nodename  | nodeport | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
-      2 | localhost |    57637 | f           | f
+      2 | localhost |    57637 | t           | t
 (1 row)
 
 -- create couple of tables
@@ -83,7 +83,7 @@ SELECT 1 FROM master_update_node((SELECT nodeid FROM pg_dist_node),
 SELECT nodeid, nodename, nodeport, hasmetadata, metadatasynced FROM pg_dist_node;
  nodeid | nodename  | nodeport | hasmetadata | metadatasynced
 ---------------------------------------------------------------------
-      2 | localhost |    57638 | f           | f
+      2 | localhost |    57638 | t           | f
 (1 row)
 
 -- start syncing metadata to the node
@@ -641,10 +641,11 @@ SELECT verify_metadata('localhost', :worker_1_port),
 ---------------------------------------------------------------------
 -- Don't drop the reference table so it has shards on the nodes being disabled
 DROP TABLE dist_table_1, dist_table_2;
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
- ?column?
+SELECT pg_catalog.citus_disable_node_and_wait('localhost', :worker_2_port);
+NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 57638) to activate this node back.
+ citus_disable_node_and_wait
 ---------------------------------------------------------------------
-        1
+
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port);
@@ -666,7 +667,7 @@ SELECT verify_metadata('localhost', :worker_1_port);
 (1 row)
 
 ---------------------------------------------------------------------
--- Test master_disable_node() when the node that is being disabled is actually down
+-- Test citus_disable_node_and_wait() when the node that is being disabled is actually down
 ---------------------------------------------------------------------
 SELECT master_update_node(:nodeid_2, 'localhost', 1);
  master_update_node
@@ -682,22 +683,9 @@ SELECT wait_until_metadata_sync(30000);
 
 -- set metadatasynced so we try porpagating metadata changes
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
--- should not error out, master_disable_node is tolerant for node failures
-SELECT 1 FROM master_disable_node('localhost', 1);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
--- try again after stopping metadata sync
-SELECT stop_metadata_sync_to_node('localhost', 1);
-NOTICE:  dropping metadata on the node (localhost,1)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT 1 FROM master_disable_node('localhost', 1);
+-- should not error out, citus_disable_node is tolerant for node failures
+-- but we should not wait metadata syncing to finish as this node is down
+SELECT 1 FROM citus_disable_node('localhost', 1, true);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -734,7 +722,7 @@ SELECT verify_metadata('localhost', :worker_1_port);
 (1 row)
 
 ---------------------------------------------------------------------
--- Test master_disable_node() when the other node is down
+-- Test citus_disable_node_and_wait() when the other node is down
 ---------------------------------------------------------------------
 -- node 1 is down.
 SELECT master_update_node(:nodeid_1, 'localhost', 1);
@@ -751,9 +739,14 @@ SELECT wait_until_metadata_sync(30000);
 
 -- set metadatasynced so we try porpagating metadata changes
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
--- should error out
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
-ERROR:  Disabling localhost:xxxxx failed
+-- should not error out, citus_disable_node is tolerant for node failures
+-- but we should not wait metadata syncing to finish as this node is down
+SELECT 1 FROM citus_disable_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
 -- try again after stopping metadata sync
 SELECT stop_metadata_sync_to_node('localhost', 1);
 NOTICE:  dropping metadata on the node (localhost,1)
@@ -762,7 +755,7 @@ NOTICE:  dropping metadata on the node (localhost,1)
 
 (1 row)
 
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_disable_node_and_wait('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1

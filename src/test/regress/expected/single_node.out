@@ -17,9 +17,8 @@ SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 (1 row)
 
 -- coordinator cannot be disabled
-SELECT 1 FROM master_disable_node('localhost', :master_port);
-ERROR:  Disabling localhost:xxxxx failed
-DETAIL:  cannot change "isactive" field of the coordinator node
+SELECT 1 FROM citus_disable_node('localhost', :master_port);
+ERROR:  cannot change "isactive" field of the coordinator node
 RESET client_min_messages;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column?

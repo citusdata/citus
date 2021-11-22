@@ -98,7 +98,6 @@ SELECT r.a FROM ref r JOIN local_table lt on r.a = lt.a;
 
 \c - - - :master_port
 SET search_path TO mx_add_coordinator,public;
-
 SELECT stop_metadata_sync_to_node('localhost', :master_port);
 
 SELECT * FROM ref ORDER BY a;
@@ -117,7 +116,6 @@ SELECT create_reference_table('referece_table');
 
 CREATE TABLE distributed_table(id int PRIMARY KEY, value_1 int);
 SELECT create_distributed_table('distributed_table', 'id');
-
 INSERT INTO local_fkey_table SELECT i FROM generate_Series(0,100)i;
 INSERT INTO referece_table SELECT i FROM generate_Series(0,100)i;
 INSERT INTO distributed_table SELECT i, i FROM generate_Series(0,100)i;
@@ -154,8 +152,8 @@ alter table local_fkey_table ALTER COLUMN id TYPE int;
 SET citus.force_max_query_parallelization TO ON;
 alter table distributed_table ALTER COLUMN value_1 TYPE bigint;
 alter table distributed_table ALTER COLUMN value_1 TYPE int;
-SET client_min_messages TO error;
 
+SET client_min_messages TO ERROR;
 DROP TABLE distributed_table, referece_table, local_fkey_table;
 SELECT master_remove_node('localhost', :master_port);
 

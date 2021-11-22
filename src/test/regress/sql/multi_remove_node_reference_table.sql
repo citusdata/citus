@@ -48,7 +48,8 @@ SELECT create_reference_table('remove_node_reference_table');
 SELECT 1 FROM master_add_node('localhost', 9001, groupid=>:worker_2_group, noderole=>'secondary');
 SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
 -- make sure when we disable a secondary we don't remove any placements
-SELECT master_disable_node('localhost', 9001);
+SELECT citus_disable_node('localhost', 9001);
+SELECT public.wait_until_metadata_sync();
 SELECT isactive FROM pg_dist_node WHERE nodeport = 9001;
 SELECT count(*) FROM pg_dist_placement WHERE groupid = :worker_2_group;
 -- make sure when we activate a secondary we don't add any placements
@@ -130,7 +131,8 @@ SELECT master_remove_node('localhost', :worker_2_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 -- try to disable the node before removing it (this used to crash)
-SELECT master_disable_node('localhost', :worker_2_port);
+SELECT citus_disable_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync();
 SELECT master_remove_node('localhost', :worker_2_port);
 
 -- re-add the node for the next test
@@ -544,9 +546,9 @@ SET citus.replicate_reference_tables_on_activate TO off;
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 
--- test with master_disable_node
+-- test with citus_disable_node_and_wait
 
--- status before master_disable_node
+-- status before citus_disable_node_and_wait
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
 SELECT
@@ -579,9 +581,10 @@ ORDER BY shardid ASC;
 
 \c - - - :master_port
 
-SELECT master_disable_node('localhost', :worker_2_port);
+SELECT citus_disable_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync();
 
--- status after master_disable_node
+-- status after citus_disable_node_and_wait
 SELECT COUNT(*) FROM pg_dist_node WHERE nodeport = :worker_2_port;
 
 SELECT

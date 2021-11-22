@@ -1,6 +1,7 @@
 -- citus--10.2-4--11.0-1
 
 -- bump version to 11.0-1
+#include "udfs/citus_disable_node/11.0-1.sql"
 
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);

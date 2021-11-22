@@ -1,7 +1,7 @@
 --
 -- failure_add_disable_node tests master_add_node, master_remove_node
 -- master_activate_node for failures.
--- master_disable_node and master_add_inactive_node can not be
+-- citus_disable_node_and_wait and master_add_inactive_node can not be
 -- tested as they don't create network activity
 --
 SELECT citus.mitmproxy('conn.allow()');
@@ -53,9 +53,15 @@ ORDER BY placementid;
   200000 |          1
 (2 rows)
 
-SELECT master_disable_node('localhost', :worker_2_proxy_port);
+SELECT citus_disable_node('localhost', :worker_2_proxy_port, true);
 NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 9060) to activate this node back.
- master_disable_node
+ citus_disable_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_until_metadata_sync();
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
 
 (1 row)

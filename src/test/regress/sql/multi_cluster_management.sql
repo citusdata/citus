@@ -24,9 +24,11 @@ SELECT master_remove_node('localhost', :worker_2_port);
 -- verify that the node has been deleted
 SELECT master_get_active_worker_nodes();
 
--- try to disable a node with no placements see that node is removed
+-- try to disable a node with no placements see that node is s=removed
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-SELECT master_disable_node('localhost', :worker_2_port);
+
+SELECT citus_disable_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync();
 SELECT master_get_active_worker_nodes();
 
 -- add some shard placements to the cluster
@@ -48,6 +50,7 @@ TRUNCATE pg_dist_colocation;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 
 SELECT * FROM citus_activate_node('localhost', :worker_2_port);
+
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
 
@@ -58,7 +61,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 SELECT master_remove_node('localhost', :worker_2_port);
 SELECT master_get_active_worker_nodes();
 
--- insert a row so that master_disable_node() exercises closing connections
+-- insert a row so that citus_disable_node() exercises closing connections
 CREATE TABLE test_reference_table (y int primary key, name text);
 SELECT create_reference_table('test_reference_table');
 INSERT INTO test_reference_table VALUES (1, '1');
@@ -66,16 +69,19 @@ INSERT INTO test_reference_table VALUES (1, '1');
 -- try to remove a node with active placements and reference tables
 SELECT citus_remove_node('localhost', :worker_2_port);
 
--- try to disable a node with active placements see that node is removed
--- observe that a notification is displayed
-SELECT master_disable_node('localhost', :worker_2_port);
+-- try to disable a node with active placements
+-- which should fail because there are some placements
+-- which are the only placements for a given shard
+SELECT citus_disable_node('localhost', :worker_2_port);
+
 SELECT master_get_active_worker_nodes();
 
 -- try to disable a node which does not exist and see that an error is thrown
-SELECT master_disable_node('localhost.noexist', 2345);
+SELECT citus_disable_node('localhost.noexist', 2345);
 
 -- drop the table without leaving a shard placement behind (messes up other tests)
 SELECT master_activate_node('localhost', :worker_2_port);
+
 DROP TABLE test_reference_table, cluster_management_test;
 
 -- create users like this so results of community and enterprise are same
@@ -90,7 +96,8 @@ GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION citus_disable_node(text,int,bool) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION citus_disable_node_and_wait(text,int,bool) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_metadata_user;
 
@@ -107,7 +114,7 @@ DELETE FROM citus.pg_dist_object WHERE objid = 'public'::regnamespace::oid;
 SET ROLE non_super_user;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM citus_disable_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
 SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_2_port);
@@ -119,7 +126,6 @@ SET citus.enable_object_propagation TO off; -- prevent master activate node to a
 BEGIN;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_2_port);
@@ -316,7 +322,8 @@ SELECT 1 FROM master_add_inactive_node('localhost', 9996, groupid => :worker_2_g
 -- check that you can add a seconary to a non-default cluster, and activate it, and remove it
 SELECT master_add_inactive_node('localhost', 9999, groupid => :worker_2_group, nodecluster => 'olap', noderole => 'secondary');
 SELECT master_activate_node('localhost', 9999);
-SELECT master_disable_node('localhost', 9999);
+SELECT citus_disable_node('localhost', 9999);
+SELECT public.wait_until_metadata_sync();
 SELECT master_remove_node('localhost', 9999);
 
 -- check that you can't manually add two primaries to a group

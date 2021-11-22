@@ -17,12 +17,8 @@ CREATE TABLE customer_copy_hash (
         c_mktsegment char(10),
         c_comment varchar(117),
 		primary key (c_custkey));
-SELECT master_create_distributed_table('customer_copy_hash', 'c_custkey', 'hash');
-
--- Test COPY into empty hash-partitioned table
-COPY customer_copy_hash FROM '@abs_srcdir@/data/customer.1.data' WITH (DELIMITER '|');
-
-SELECT master_create_worker_shards('customer_copy_hash', 64, 1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('customer_copy_hash', 'c_custkey', shard_count:=64);
 
 -- Test empty copy
 COPY customer_copy_hash FROM STDIN;
@@ -123,10 +119,8 @@ CREATE TABLE customer_with_default(
         c_custkey integer,
         c_name varchar(25) not null,
         c_time timestamp default now());
-
-SELECT master_create_distributed_table('customer_with_default', 'c_custkey', 'hash');
-
-SELECT master_create_worker_shards('customer_with_default', 64, 1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('customer_with_default', 'c_custkey', shard_count:=64);
 
 -- Test with default values for now() function
 COPY customer_with_default (c_custkey, c_name) FROM STDIN
@@ -221,6 +215,7 @@ CREATE TABLE customer_copy_append (
         c_mktsegment char(10),
         c_comment varchar(117));
 SELECT create_distributed_table('customer_copy_append', 'c_custkey', 'append');
+SET citus.shard_replication_factor TO 2;
 
 -- Test syntax error
 BEGIN;
@@ -444,6 +439,7 @@ COPY composite_partition_column_table FROM STDIN WITH (FORMAT 'csv', append_to_s
 
 
 -- Test copy on append distributed tables do not create shards on removed workers
+SET citus.shard_replication_factor TO 2;
 CREATE TABLE numbers_append (a int, b int);
 SELECT create_distributed_table('numbers_append', 'a', 'append');
 
@@ -470,7 +466,14 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- disable the first node
+SET client_min_messages TO ERROR;
+\set VERBOSITY terse
 SELECT master_disable_node('localhost', :worker_1_port);
+SELECT public.wait_until_metadata_sync(30000);
+
+RESET client_min_messages;
+\set VERBOSITY default
+
 -- set replication factor to 1 so that copy will
 -- succeed without replication count error
 SET citus.shard_replication_factor TO 1;
@@ -525,7 +528,7 @@ SELECT * FROM run_command_on_workers('CREATE USER test_user');
 \c - test_user
 SET citus.shard_count to 4;
 CREATE TABLE numbers_hash (a int, b int);
-SELECT create_distributed_table('numbers_hash', 'a');
+SELECT create_distributed_table('numbers_hash', 'a', colocate_with:='none');
 
 COPY numbers_hash FROM STDIN WITH (FORMAT 'csv');
 1,1
@@ -553,7 +556,7 @@ COPY numbers_reference FROM STDIN WITH (FORMAT 'csv');
 
 -- create another hash distributed table
 CREATE TABLE numbers_hash_other(a int, b int);
-SELECT create_distributed_table('numbers_hash_other', 'a');
+SELECT create_distributed_table('numbers_hash_other', 'a', colocate_with:='numbers_hash');
 SELECT shardid, shardstate, nodename, nodeport
 	FROM pg_dist_shard_placement join pg_dist_shard using(shardid)
 	WHERE logicalrelid = 'numbers_hash_other'::regclass order by shardid, nodeport;
@@ -631,8 +634,9 @@ DROP TABLE numbers_reference;
 -- test copy failure inside the node
 -- it will be done by changing definition of a shard table
 SET citus.shard_count to 4;
+SET citus.next_shard_id TO 560170;
 CREATE TABLE numbers_hash(a int, b int);
-SELECT create_distributed_table('numbers_hash', 'a');
+SELECT create_distributed_table('numbers_hash', 'a', colocate_with:='none');
 
 \c - - - :worker_1_port
 ALTER TABLE numbers_hash_560170 DROP COLUMN b;

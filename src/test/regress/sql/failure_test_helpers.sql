@@ -6,6 +6,11 @@ ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 ALTER SYSTEM set citus.enable_statistics_collection TO false;
 SELECT pg_reload_conf();
 
+CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+
 -- Add some helper functions for sending commands to mitmproxy
 
 CREATE FUNCTION citus.mitmproxy(text) RETURNS TABLE(result text) AS $$

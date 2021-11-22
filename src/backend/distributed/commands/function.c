@@ -1093,7 +1093,7 @@ EnsureSequentialModeForFunctionDDL(void)
  * and triggers the metadata syncs if the node has not the metadata. Later,
  * maintenance daemon will sync the metadata to nodes.
  */
-static void
+void
 TriggerSyncMetadataToPrimaryNodes(void)
 {
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(ShareLock);

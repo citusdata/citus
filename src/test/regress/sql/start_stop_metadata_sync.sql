@@ -181,21 +181,6 @@ SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nod
 SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
 
 \c - - - :master_port
--- verify that mx workers are updated when disabling/activating nodes
-SELECT citus_disable_node('localhost', :worker_1_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
-
-\c - - - :worker_2_port
-SELECT nodeport, isactive FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
-
-\c - - - :master_port
-SET client_min_messages TO ERROR;
-SELECT citus_activate_node('localhost', :worker_1_port);
-
-\c - - - :worker_2_port
-SELECT nodeport, isactive FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
-
-\c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 SET search_path TO "start_stop_metadata_sync";

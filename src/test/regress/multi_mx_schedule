@@ -16,8 +16,8 @@
 test: turn_mx_off
 test: multi_extension
 test: multi_test_helpers multi_test_helpers_superuser
-test: multi_mx_node_metadata
 test: turn_mx_on
+test: multi_mx_node_metadata
 test: multi_cluster_management
 test: multi_mx_function_table_reference
 test: multi_test_catalog_views
