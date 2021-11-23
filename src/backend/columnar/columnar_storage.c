@@ -104,6 +104,10 @@ typedef struct PhysicalAddr
 								  "version or run \"ALTER EXTENSION citus UPDATE\"."
 
 
+/* only for testing purposes */
+PG_FUNCTION_INFO_V1(test_columnar_storage_write_new_page);
+
+
 /*
  * Map logical offsets to a physical page and offset where the data is kept.
  */
@@ -819,4 +823,37 @@ ColumnarMetapageCheckVersion(Relation rel, ColumnarMetapage *metapage)
 							metapage->versionMajor, metapage->versionMinor),
 						errhint(OLD_METAPAGE_VERSION_HINT)));
 	}
+}
+
+
+/*
+ * test_columnar_storage_write_new_page is a UDF only used for testing
+ * purposes. It could make more sense to define this in columnar_debug.c,
+ * but the storage layer doesn't expose ColumnarMetapage to any other files,
+ * so we define it here.
+ */
+Datum
+test_columnar_storage_write_new_page(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+
+	Relation relation = relation_open(relationId, AccessShareLock);
+
+	/*
+	 * Allocate a new page, write some data to there, and set reserved offset
+	 * to the start of that page. That way, for a subsequent write operation,
+	 * storage layer would try to overwrite the page that we allocated here.
+	 */
+	uint64 newPageOffset = ColumnarStorageGetReservedOffset(relation, false);
+
+	ColumnarStorageReserveData(relation, 100);
+	ColumnarStorageWrite(relation, newPageOffset, "foo_bar", 8);
+
+	ColumnarMetapage metapage = ColumnarMetapageRead(relation, false);
+	metapage.reservedOffset = newPageOffset;
+	ColumnarOverwriteMetapage(relation, metapage);
+
+	relation_close(relation, AccessShareLock);
+
+	PG_RETURN_VOID();
 }

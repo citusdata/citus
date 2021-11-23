@@ -199,6 +199,14 @@ BEGIN;
   SELECT a FROM flush_create_index WHERE a=5;
 ROLLBACK;
 
+CREATE OR REPLACE FUNCTION test_columnar_storage_write_new_page(relation regclass) RETURNS void
+STRICT LANGUAGE c AS 'citus', 'test_columnar_storage_write_new_page';
+
+CREATE TABLE aborted_write (a int, b int) USING columnar;
+
+SELECT test_columnar_storage_write_new_page('aborted_write');
+INSERT INTO aborted_write VALUES (5);
+
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_insert CASCADE;
