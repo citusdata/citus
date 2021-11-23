@@ -708,11 +708,30 @@ WriteToBlock(Relation rel, BlockNumber blockno, uint32 offset, char *buf,
 		PageInit(page, BLCKSZ, 0);
 	}
 
-	if (phdr->pd_lower != offset || phdr->pd_upper - offset < len)
+	if (phdr->pd_lower < offset || phdr->pd_upper - offset < len)
 	{
 		elog(ERROR,
 			 "attempt to write columnar data of length %d to offset %d of block %d of relation %d",
 			 len, offset, blockno, rel->rd_id);
+	}
+
+	/*
+	 * After a transaction has been rolled-back, we might be
+	 * over-writing the rolledback write, so phdr->pd_lower can be
+	 * different from addr.offset.
+	 *
+	 * We reset pd_lower to reset the rolledback write.
+	 *
+	 * Given that we always align page reservation to the next page as of
+	 * 10.2, having such a disk page is only possible if write operaion
+	 * failed in an older version of columnar, but now user attempts writing
+	 * to that table in version >= 10.2.
+	 */
+	if (phdr->pd_lower > offset)
+	{
+		ereport(DEBUG4, (errmsg("overwriting page %u", blockno),
+						 errdetail("This can happen after a roll-back.")));
+		phdr->pd_lower = offset;
 	}
 
 	START_CRIT_SECTION();

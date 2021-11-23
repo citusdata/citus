@@ -300,8 +300,11 @@ SELECT test_columnar_storage_write_new_page('aborted_write');
 
 (1 row)
 
+SET client_min_messages TO DEBUG4;
 INSERT INTO aborted_write VALUES (5);
-ERROR:  attempt to write columnar data of length 1 to offset 24 of block 2 of relation 17566
+DEBUG:  Flushing Stripe of size 1
+DEBUG:  overwriting page 2
+DETAIL:  This can happen after a roll-back.
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_insert CASCADE;

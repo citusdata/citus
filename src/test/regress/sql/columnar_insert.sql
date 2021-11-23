@@ -205,6 +205,8 @@ STRICT LANGUAGE c AS 'citus', 'test_columnar_storage_write_new_page';
 CREATE TABLE aborted_write (a int, b int) USING columnar;
 
 SELECT test_columnar_storage_write_new_page('aborted_write');
+
+SET client_min_messages TO DEBUG4;
 INSERT INTO aborted_write VALUES (5);
 
 RESET search_path;
