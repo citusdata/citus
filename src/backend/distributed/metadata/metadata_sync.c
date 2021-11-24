@@ -465,16 +465,16 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	 */
 	if (raiseOnError)
 	{
-		SendCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
-														workerNode->workerPort,
-														currentUser,
-														recreateMetadataSnapshotCommandList);
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+																workerNode->workerPort,
+																currentUser,
+																recreateMetadataSnapshotCommandList);
 		return true;
 	}
 	else
 	{
 		bool success =
-			SendOptionalCommandListToWorkerInCoordinatedTransaction(
+			SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
 				workerNode->workerName, workerNode->workerPort,
 				currentUser, recreateMetadataSnapshotCommandList);
 
@@ -500,10 +500,11 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  LocalGroupIdUpdateCommand(0));
 
-	SendOptionalCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
-															workerNode->workerPort,
-															userName,
-															dropMetadataCommandList);
+	SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
+		workerNode->workerName,
+		workerNode->workerPort,
+		userName,
+		dropMetadataCommandList);
 }
 
 
