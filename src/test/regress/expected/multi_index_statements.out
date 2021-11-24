@@ -155,25 +155,25 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
 (19 rows)
 
 \c - - - :worker_1_port
-SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
+SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_%' ORDER BY relname LIMIT 1);
  count
 ---------------------------------------------------------------------
      9
 (1 row)
 
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash_%';
  count
 ---------------------------------------------------------------------
     56
 (1 row)
 
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range_%';
  count
 ---------------------------------------------------------------------
      6
 (1 row)
 
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append_%';
  count
 ---------------------------------------------------------------------
      0
@@ -522,7 +522,7 @@ SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text = 'child_index' 
 \c - - - :worker_1_port
 SET search_path TO multi_index_statements;
 -- show that child indices of partition shards also inherit from parent indices of parent shards
-SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index%' AND inhparent::regclass::text LIKE 'parent_index%';
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index\_%' AND inhparent::regclass::text LIKE 'parent_index\_%';
  count
 ---------------------------------------------------------------------
     16

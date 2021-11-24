@@ -1074,7 +1074,7 @@ SELECT create_distributed_table('logged_test', 'id');
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
       relname       | logged_info 
 --------------------+-------------
  logged_test_220022 | unlogged
@@ -1093,7 +1093,7 @@ SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logg
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
       relname       | logged_info 
 --------------------+-------------
  logged_test_220022 | logged
@@ -1111,7 +1111,7 @@ SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logg
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
       relname       | logged_info 
 --------------------+-------------
  logged_test_220022 | unlogged
@@ -1138,7 +1138,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist_%' ORDER BY relname;
      relname      |   reloptions    
 ------------------+-----------------
  hash_dist_220026 | {fillfactor=40}
@@ -1157,7 +1157,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
         relname        |   reloptions    
 -----------------------+-----------------
  hash_dist_pkey_220026 | {fillfactor=40}
@@ -1175,7 +1175,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
         relname        | reloptions 
 -----------------------+------------
  hash_dist_pkey_220026 | 
@@ -1199,7 +1199,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index_%' ORDER BY relname;
        relname        |   reloptions    
 ----------------------+-----------------
  another_index_220026 | {fillfactor=50}

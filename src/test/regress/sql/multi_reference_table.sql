@@ -888,6 +888,7 @@ DROP INDEX reference_schema.reference_index_2;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl_1250019'::regclass;
 \di reference_schema.reference_index_2*
 \c - - - :master_port
+SET citus.next_shard_id TO 1255000;
 
 -- now test the renaming of the table, and back to the expected name
 ALTER TABLE reference_schema.reference_table_ddl RENAME TO reference_table_ddl_test;

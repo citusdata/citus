@@ -69,7 +69,7 @@ ORDER BY 1, 2;
 
 \c - - - :master_port
 SET search_path = drop_partitioned_table;
-SET citus.next_shard_id TO 720000;
+SET citus.next_shard_id TO 721000;
 
 -- CASE 1
 -- Dropping the parent table
@@ -91,7 +91,7 @@ SELECT * FROM drop_partitioned_table.tables_info;
 
 \c - - - :master_port
 SET search_path = drop_partitioned_table;
-SET citus.next_shard_id TO 720000;
+SET citus.next_shard_id TO 722000;
 
 -- CASE 2
 -- Dropping the parent table, but including children in the DROP command
@@ -113,7 +113,7 @@ SELECT * FROM drop_partitioned_table.tables_info;
 
 \c - - - :master_port
 SET search_path = drop_partitioned_table;
-SET citus.next_shard_id TO 720000;
+SET citus.next_shard_id TO 723000;
 
 -- CASE 3
 -- DROP OWNED BY role1; Only parent is owned by role1, children are owned by another owner
@@ -144,7 +144,7 @@ SELECT * FROM drop_partitioned_table.tables_info;
 
 \c - - - :master_port
 SET search_path = drop_partitioned_table;
-SET citus.next_shard_id TO 720000;
+SET citus.next_shard_id TO 724000;
 
 -- CASE 4
 -- DROP OWNED BY role1; Parent and children are owned by role1
@@ -169,7 +169,7 @@ SELECT * FROM drop_partitioned_table.tables_info;
 
 \c - - - :master_port
 SET search_path = drop_partitioned_table;
-SET citus.next_shard_id TO 720000;
+SET citus.next_shard_id TO 725000;
 REVOKE ALL ON SCHEMA drop_partitioned_table FROM role1;
 DROP ROLE role1;
 SELECT run_command_on_workers('DROP ROLE IF EXISTS role1');
@@ -195,7 +195,7 @@ SET search_path = drop_partitioned_table, schema1;
 SELECT * FROM drop_partitioned_table.tables_info;
 
 \c - - - :master_port
-SET citus.next_shard_id TO 720000;
+SET citus.next_shard_id TO 726000;
 -- CASE 6
 -- DROP SCHEMA schema1 CASCADE; Parent and children are in schema1
 CREATE SCHEMA schema1;
@@ -222,7 +222,7 @@ SET search_path = drop_partitioned_table;
 -- Check that we actually skip sending remote commands to skip shards
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 1;
-SET citus.next_shard_id TO 720000;
+SET citus.next_shard_id TO 727000;
 DROP EVENT TRIGGER new_trigger_for_drops;
 
 -- Case 1 - we should skip

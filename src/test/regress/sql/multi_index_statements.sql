@@ -107,10 +107,10 @@ DROP TABLE local_table;
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
-SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
+SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_%' ORDER BY relname LIMIT 1);
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash_%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range_%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append_%';
 \c - - - :master_port
 SET search_path TO multi_index_statements, public;
 
@@ -335,7 +335,7 @@ SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text = 'child_index' 
 SET search_path TO multi_index_statements;
 
 -- show that child indices of partition shards also inherit from parent indices of parent shards
-SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index%' AND inhparent::regclass::text LIKE 'parent_index%';
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index\_%' AND inhparent::regclass::text LIKE 'parent_index\_%';
 
 \c - - - :master_port
 SET search_path TO multi_index_statements;

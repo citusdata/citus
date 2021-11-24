@@ -1,6 +1,7 @@
 \set VERBOSITY terse
 
 SET citus.next_shard_id TO 1518000;
+SET citus.next_placement_id TO 4090000;
 SET citus.shard_replication_factor TO 1;
 
 CREATE SCHEMA fkeys_between_local_ref;

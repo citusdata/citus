@@ -130,8 +130,11 @@ CREATE TABLE test_schema_support.nation_hash(
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT master_create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 2);
+
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', shard_count:=4);
+
+RESET citus.shard_replication_factor;
 
 
 -- test cursors
@@ -787,6 +790,7 @@ SELECT * FROM new_schema.table_set_schema;
 
 DROP SCHEMA new_schema CASCADE;
 
+SET citus.next_shard_id TO 1195000;
 
 -- test ALTER TABLE SET SCHEMA when a search path is set
 CREATE SCHEMA old_schema;
@@ -821,6 +825,8 @@ SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
     GROUP BY table_schema;
 \c - - - :master_port
 SELECT * FROM new_schema.table_set_schema;
+
+SET citus.next_shard_id TO 1196000;
 
 SET search_path to public;
 DROP SCHEMA old_schema CASCADE;
@@ -891,6 +897,8 @@ SELECT create_reference_table('schema_with_user.test_table');
 \dn schema_with_user
 
 \c - - - :master_port
+
+SET citus.next_shard_id TO 1197000;
 
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
@@ -1017,9 +1025,11 @@ BEGIN;
 ROLLBACK;
 
 -- Clean up the created schema
+SET client_min_messages TO WARNING;
 DROP SCHEMA run_test_schema CASCADE;
 DROP SCHEMA test_schema_support_join_1 CASCADE;
 DROP SCHEMA test_schema_support_join_2 CASCADE;
 DROP SCHEMA "Citus'Teen123" CASCADE;
 DROP SCHEMA "CiTUS.TEEN2" CASCADE;
 DROP SCHEMA bar CASCADE;
+DROP SCHEMA test_schema_support CASCADE;

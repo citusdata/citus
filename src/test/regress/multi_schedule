@@ -30,7 +30,7 @@ test: ensure_no_intermediate_data_leak
 # ----------
 # Tests for partitioning support
 # ----------
-test: multi_partitioning_utils replicated_partitioned_table
+test: multi_partitioning_utils multi_partitioning replicated_partitioned_table
 
 
 # ----------
@@ -60,7 +60,6 @@ test: tableam drop_column_partitioned_table
 # mx-less tests
 test: check_mx
 test: turn_mx_off
-test: multi_partitioning
 test: undistribute_table
 test: turn_mx_on
 

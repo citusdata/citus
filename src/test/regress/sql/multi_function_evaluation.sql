@@ -14,9 +14,10 @@ SET citus.enable_fast_path_router_planner TO false;
 -- nextval() works (no good way to test DEFAULT, or, by extension, SERIAL)
 
 CREATE TABLE example (key INT, value INT);
-SELECT master_create_distributed_table('example', 'key', 'hash');
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('example', 'key', shard_count:=1);
+RESET citus.shard_replication_factor;
 CREATE SEQUENCE example_value_seq;
-SELECT master_create_worker_shards('example', 1, 2);
 INSERT INTO example VALUES (1, nextval('example_value_seq'));
 SELECT * FROM example;
 

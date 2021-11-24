@@ -1969,6 +1969,7 @@ CALL drop_old_time_partitions('non_partitioned_table', now());
 DROP TABLE non_partitioned_table;
 
 -- https://github.com/citusdata/citus/issues/4962
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 361168;
 CREATE TABLE part_table_with_very_long_name (
@@ -1999,7 +2000,6 @@ SELECT tablename, indexname FROM pg_indexes
 WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
 
 \c - - - :master_port
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SCHEMA partitioning_schema CASCADE;
 RESET search_path;
 DROP TABLE IF EXISTS

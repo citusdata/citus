@@ -559,19 +559,19 @@ CREATE TABLE logged_test(id int);
 ALTER TABLE logged_test SET UNLOGGED;
 SELECT create_distributed_table('logged_test', 'id');
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
 \c - - - :master_port
 
 -- verify SET LOGGED/UNLOGGED works after distributing the table
 ALTER TABLE logged_test SET LOGGED;
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
 \c - - - :master_port
 ALTER TABLE logged_test SET UNLOGGED;
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
 \c - - - :master_port
 DROP TABLE logged_test;
 
@@ -583,7 +583,7 @@ SELECT create_distributed_table('hash_dist','id');
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist_%' ORDER BY relname;
 \c - - - :master_port
 
 -- verify that we can set and reset index storage parameters
@@ -591,14 +591,14 @@ ALTER INDEX hash_dist_pkey SET(fillfactor=40);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
 \c - - - :master_port
 
 ALTER INDEX hash_dist_pkey RESET(fillfactor);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
 \c - - - :master_port
 
 -- verify error message on ALTER INDEX, SET TABLESPACE is unsupported
@@ -611,7 +611,7 @@ CREATE UNIQUE INDEX another_index ON hash_dist(id) WITH (fillfactor=50);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index_%' ORDER BY relname;
 \c - - - :master_port
 
 -- get rid of the index
