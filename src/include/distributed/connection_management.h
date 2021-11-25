@@ -63,7 +63,7 @@ enum MultiConnectionMode
 	 *
 	 * With this flag, we guarantee that there is a single metadata connection.
 	 * But note that this connection can be used for any other operation.
-	 * In other words, this connection is not only reserved for metadata
+	 * In other words, this connection is not exclusively reserved for metadata
 	 * operations.
 	 */
 	REQUIRE_METADATA_CONNECTION = 1 << 5,

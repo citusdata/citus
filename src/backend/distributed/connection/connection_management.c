@@ -57,7 +57,7 @@ static void StartConnectionEstablishment(MultiConnection *connectionn,
 										 ConnectionHashKey *key);
 static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
 #ifdef USE_ASSERT_CHECKING
-static void EnsureSingleMultipleMetadataConnectionExists(dlist_head *connections);
+static void EnsureSingleMetadataConnectionExists(dlist_head *connections);
 #endif
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
@@ -483,7 +483,7 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			 * checks.
 			 */
 			#ifdef USE_ASSERT_CHECKING
-			EnsureSingleMultipleMetadataConnectionExists(connections);
+			EnsureSingleMetadataConnectionExists(connections);
 			#endif
 
 			/*
@@ -516,7 +516,7 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 		metadataConnection->useForMetadataOperations = true;
 
 		#ifdef USE_ASSERT_CHECKING
-		EnsureSingleMultipleMetadataConnectionExists(connections);
+		EnsureSingleMetadataConnectionExists(connections);
 		#endif
 
 		return metadataConnection;
@@ -529,11 +529,11 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 #ifdef USE_ASSERT_CHECKING
 
 /*
- * EnsureSingleMultipleMetadataConnectionExists throws an error if the
+ * EnsureSingleMetadataConnectionExists throws an error if the
  * input connection dlist contains more than one metadata connections.
  */
 static void
-EnsureSingleMultipleMetadataConnectionExists(dlist_head *connections)
+EnsureSingleMetadataConnectionExists(dlist_head *connections)
 {
 	bool foundMetadataConnection = false;
 	dlist_iter iter;
