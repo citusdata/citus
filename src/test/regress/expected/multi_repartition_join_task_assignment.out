@@ -18,11 +18,11 @@ FROM
 WHERE
 	o_custkey = c_custkey;
 DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  no sharding pruning constraints on orders found
+DEBUG:  no shard pruning constraints on orders found
 DEBUG:  shard count after pruning for orders: 2
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  no sharding pruning constraints on customer_append found
+DEBUG:  no shard pruning constraints on customer_append found
 DEBUG:  shard count after pruning for customer_append: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -76,12 +76,12 @@ WHERE
 	o_custkey = c_custkey AND
 	o_orderkey = l_orderkey;
 DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  no sharding pruning constraints on customer_append found
+DEBUG:  no shard pruning constraints on customer_append found
 DEBUG:  shard count after pruning for customer_append: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  no sharding pruning constraints on lineitem found
+DEBUG:  no shard pruning constraints on lineitem found
 DEBUG:  shard count after pruning for lineitem: 2
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
@@ -131,11 +131,11 @@ FROM
 WHERE
 	l_partkey = c_nationkey;
 DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  no sharding pruning constraints on lineitem found
+DEBUG:  no shard pruning constraints on lineitem found
 DEBUG:  shard count after pruning for lineitem: 2
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
-DEBUG:  no sharding pruning constraints on customer_append found
+DEBUG:  no shard pruning constraints on customer_append found
 DEBUG:  shard count after pruning for customer_append: 3
 DEBUG:  assigned task to node localhost:xxxxx
 DEBUG:  assigned task to node localhost:xxxxx
