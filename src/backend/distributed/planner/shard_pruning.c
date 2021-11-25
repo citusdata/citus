@@ -492,7 +492,7 @@ PruneShards(Oid relationId, Index rangeTableId, List *whereClauseList,
 		}
 		else
 		{
-			ereport(DEBUG3, (errmsg("no sharding pruning constraints on %s found",
+			ereport(DEBUG3, (errmsg("no shard pruning constraints on %s found",
 									relationName)));
 		}
 
