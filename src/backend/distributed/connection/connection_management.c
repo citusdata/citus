@@ -347,7 +347,7 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 	MultiConnection *connection = MemoryContextAllocZero(ConnectionContext,
 														 sizeof(MultiConnection));
 	connection->initilizationState = POOL_STATE_NOT_INITIALIZED;
-	dlist_push_tail(entry->connections, &connection->connectionNode);
+	dlist_push_head(entry->connections, &connection->connectionNode);
 
 	/* these two flags are by nature cannot happen at the same time */
 	Assert(!((flags & WAIT_FOR_CONNECTION) && (flags & OPTIONAL_CONNECTION)));
