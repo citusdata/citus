@@ -1940,19 +1940,27 @@ DROP TABLE partitioning_test_2008, partitioning_test_2009, partitioning_test_201
 -- verify this doesn't crash and gives a debug message for dropped table
 SET client_min_messages TO DEBUG1;
 DROP TABLE partitioning_test, reference_table;
+DEBUG:  drop cascades to constraint partitioning_reference_fkey on table partitioning_test
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+DEBUG:  drop cascades to constraint partitioning_reference_fkey on table partitioning_test
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DEBUG:  switching to sequential query execution mode
 DETAIL:  Table "<dropped>" is modified, which might lead to data inconsistencies or distributed deadlocks via parallel accesses to hash distributed tables due to foreign keys. Any parallel modification to those hash distributed tables in the same transaction can only be executed in sequential query execution mode
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DEBUG:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660302 on table partitioning_schema.partitioning_test_1660302
-drop cascades to constraint partitioning_reference_fkey_1660304 on table partitioning_schema.partitioning_test_1660304
+DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660302 on table partitioning_test_1660302
+drop cascades to constraint partitioning_reference_fkey_1660304 on table partitioning_test_1660304
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
 DEBUG:  drop cascades to 2 other objects
-DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660303 on table partitioning_schema.partitioning_test_1660303
-drop cascades to constraint partitioning_reference_fkey_1660305 on table partitioning_schema.partitioning_test_1660305
+DETAIL:  drop cascades to constraint partitioning_reference_fkey_1660303 on table partitioning_test_1660303
+drop cascades to constraint partitioning_reference_fkey_1660305 on table partitioning_test_1660305
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
 PL/pgSQL function citus_drop_trigger() line XX at PERFORM
@@ -3773,6 +3781,7 @@ NOTICE:  Replicating reference table "supplier" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "users_ref_test_table" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "events_reference_table" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "users_reference_table" to the node localhost:xxxxx
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1
@@ -4257,6 +4266,13 @@ ERROR:  non_partitioned_table is not partitioned
 CONTEXT:  PL/pgSQL function drop_old_time_partitions(regclass,timestamp with time zone) line XX at RAISE
 DROP TABLE non_partitioned_table;
 -- https://github.com/citusdata/citus/issues/4962
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 361168;
 CREATE TABLE part_table_with_very_long_name (
@@ -4306,13 +4322,6 @@ WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%
 (6 rows)
 
 \c - - - :master_port
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-NOTICE:  dropping metadata on the node (localhost,57637)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 DROP SCHEMA partitioning_schema CASCADE;
 NOTICE:  drop cascades to 4 other objects
 DETAIL:  drop cascades to table partitioning_schema."schema-test"

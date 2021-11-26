@@ -272,13 +272,13 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
       5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t
 (4 rows)
 
-SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
           logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s        | f
 (1 row)
 
-SELECT * FROM pg_dist_shard ORDER BY shardid;
+SELECT * FROM pg_dist_shard  WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
           logicalrelid           | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | 1310000 | t            | -2147483648   | -1610612737
@@ -291,7 +291,7 @@ SELECT * FROM pg_dist_shard ORDER BY shardid;
  mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
 (8 rows)
 
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
  1310000 |          1 |           0 | localhost |    57637 |      100000
@@ -409,13 +409,13 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
       5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t
 (4 rows)
 
-SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
           logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s        | f
 (1 row)
 
-SELECT * FROM pg_dist_shard ORDER BY shardid;
+SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
           logicalrelid           | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | 1310000 | t            | -2147483648   | -1610612737
@@ -428,7 +428,7 @@ SELECT * FROM pg_dist_shard ORDER BY shardid;
  mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
 (8 rows)
 
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
  1310000 |          1 |           0 | localhost |    57637 |      100000
@@ -730,12 +730,12 @@ ORDER BY
 \c - - - :worker_2_port
 \d mx_test_schema_1.mx_table_1
 \d mx_test_schema_2.mx_table_2
-SELECT * FROM pg_dist_partition;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_test_schema%';
  logicalrelid | partmethod | partkey | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT * FROM pg_dist_shard;
+SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_test_schema%';
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
 (0 rows)

@@ -16,11 +16,13 @@ CREATE TABLE labs (
 	name text NOT NULL
 );
 
-SELECT master_create_distributed_table('researchers', 'lab_id', 'hash');
-SELECT master_create_worker_shards('researchers', 2, 2);
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('researchers', 'lab_id', shard_count:=2);
 
-SELECT master_create_distributed_table('labs', 'id', 'hash');
-SELECT master_create_worker_shards('labs', 1, 1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('labs', 'id', shard_count:=1);
+
+RESET citus.shard_replication_factor;
 
 -- might be confusing to have two people in the same lab with the same name
 CREATE UNIQUE INDEX avoid_name_confusion_idx ON researchers (lab_id, name);
@@ -920,6 +922,7 @@ SELECT create_distributed_table('numbers_hash_failure_test', 'key');
 
 -- ensure that the shard is created for this user
 \c - test_user - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt reference_failure_test_1200015
 
 -- now connect with the default user,
@@ -939,8 +942,6 @@ COMMIT;
 
 BEGIN;
 COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
-2,2
-\.
 COMMIT;
 
 -- show that no data go through the table and shard states are good
@@ -961,9 +962,6 @@ ORDER BY s.logicalrelid, sp.shardstate;
 -- any failure rollbacks the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-1,1
-2,2
-\.
 ABORT;
 
 -- none of placements are invalid after abort
@@ -984,9 +982,6 @@ ORDER BY shardid, nodeport;
 -- all failures roll back the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-1,1
-2,2
-\.
 COMMIT;
 
 -- expect none of the placements to be market invalid after commit

@@ -8,6 +8,14 @@ SET citus.next_shard_id TO 910000;
 SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA fix_idx_names;
 SET search_path TO fix_idx_names, public;
+-- stop metadata sync for one of the worker nodes so we test both cases
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- NULL input should automatically return NULL since
 -- fix_partition_shard_index_names is strict
 -- same for worker_fix_partition_shard_index_names
@@ -68,7 +76,7 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 -- the names are generated correctly
 -- shard id has been appended to all index names which didn't end in shard id
 -- this goes in line with Citus's way of naming indexes of shards: always append shardid to the end
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' AND tablename SIMILAR TO '%\_\d*' ORDER BY 1, 2;
                  tablename                  |                            indexname
 ---------------------------------------------------------------------
  dist_partitioned_table_910004              | short_910004
@@ -223,13 +231,6 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 
 \c - - - :master_port
 SET search_path TO fix_idx_names, public;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-NOTICE:  dropping metadata on the node (localhost,57637)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 DROP INDEX short;
 DROP TABLE yet_another_partition_table, another_partition_table_with_very_long_name;
 -- this will create constraint1 index on parent
@@ -256,7 +257,7 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 
 \c - - - :worker_1_port
 -- index names end in shardid for partitions
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' AND tablename SIMILAR TO '%\_\d*' ORDER BY 1, 2;
                  tablename                  |                            indexname
 ---------------------------------------------------------------------
  dist_partitioned_table_910004              | constraint1_910004
@@ -309,7 +310,7 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 
 \c - - - :worker_1_port
 -- index names are already correct, including inherited index for another_partition
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' AND tablename SIMILAR TO '%\_\d*' ORDER BY 1, 2;
            tablename           |               indexname
 ---------------------------------------------------------------------
  another_partition_361176      | another_partition_dist_col_idx_361176
@@ -348,7 +349,7 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 
 \c - - - :worker_1_port
 -- we have correct names
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' AND tablename SIMILAR TO '%\_\d*' ORDER BY 1, 2;
                  tablename                  |                         indexname
 ---------------------------------------------------------------------
  dist_partitioned_table_910004              | expression_index_910004
@@ -388,7 +389,7 @@ SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
 (1 row)
 
 \c - - - :worker_1_port
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' AND tablename SIMILAR TO '%\_\d*' ORDER BY 1, 2;
            tablename           |         indexname
 ---------------------------------------------------------------------
  dist_partitioned_table_910004 | expression_index_910004
@@ -427,7 +428,7 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' O
 -- index names are correct
 -- shard id has been appended to all index names which didn't end in shard id
 -- this goes in line with Citus's way of naming indexes of shards: always append shardid to the end
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' AND tablename SIMILAR TO '%\_\d*' ORDER BY 1, 2;
                  tablename                  |                            indexname
 ---------------------------------------------------------------------
  dist_partitioned_table_910050              | index_rep_factor_2_910050
@@ -481,7 +482,7 @@ DROP INDEX p_another_col_partition_col_idx;
 \c - - - :worker_1_port
 -- check that indexes have been renamed
 -- and that index on p has been dropped (it won't appear)
-SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' ORDER BY 1, 2;
+SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' AND tablename SIMILAR TO '%\_\d*' ORDER BY 1, 2;
                  tablename                  |                   indexname
 ---------------------------------------------------------------------
  dist_partitioned_table_910030              | short_910030
@@ -547,11 +548,29 @@ SET citus.log_remote_commands TO ON;
 CREATE INDEX i4 ON parent_table(dist_col);
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO fix_idx_names,public;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO fix_idx_names,public;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE INDEX i4 ON parent_table(dist_col);
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE INDEX i4 ON parent_table(dist_col);
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing CREATE  INDEX   i4_915000 ON  fix_idx_names.parent_table_915000 USING btree (dist_col )
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.i4_915000'::regclass, 'fix_idx_names.p1_915001', 'p1_dist_col_idx3_915001')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -559,22 +578,58 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 ALTER TABLE parent_table ADD CONSTRAINT pkey_cst PRIMARY KEY (dist_col, partition_col);
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO fix_idx_names,public;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO fix_idx_names,public;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE parent_table ADD CONSTRAINT pkey_cst PRIMARY KEY (dist_col, partition_col);
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE parent_table ADD CONSTRAINT pkey_cst PRIMARY KEY (dist_col, partition_col);
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (915000, 'fix_idx_names', 'ALTER TABLE parent_table ADD CONSTRAINT pkey_cst PRIMARY KEY (dist_col, partition_col);')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.pkey_cst_915000'::regclass, 'fix_idx_names.p1_915001', 'p1_pkey_915001')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 ALTER TABLE parent_table ADD CONSTRAINT unique_cst UNIQUE (dist_col, partition_col);
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO fix_idx_names,public;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO fix_idx_names,public;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE parent_table ADD CONSTRAINT unique_cst UNIQUE (dist_col, partition_col);
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE parent_table ADD CONSTRAINT unique_cst UNIQUE (dist_col, partition_col);
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (915000, 'fix_idx_names', 'ALTER TABLE parent_table ADD CONSTRAINT unique_cst UNIQUE (dist_col, partition_col);')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.unique_cst_915000'::regclass, 'fix_idx_names.p1_915001', 'p1_dist_col_partition_col_key_915001')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -597,6 +652,52 @@ NOTICE:  issuing SELECT worker_apply_shard_ddl_command (915002, 'fix_idx_names',
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE TABLE fix_idx_names.p2 (dist_col integer NOT NULL, another_col integer, partition_col timestamp without time zone NOT NULL, name text) USING columnar
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE TABLE fix_idx_names.p2 (dist_col integer NOT NULL, another_col integer, partition_col timestamp without time zone NOT NULL, name text) USING columnar
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT alter_columnar_table_set('fix_idx_names.p2', chunk_group_row_limit => 10000, stripe_row_limit => 150000, compression_level => 3, compression => 'zstd');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT alter_columnar_table_set('fix_idx_names.p2', chunk_group_row_limit => 10000, stripe_row_limit => 150000, compression_level => 3, compression => 'zstd');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE fix_idx_names.p2 OWNER TO postgres
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE fix_idx_names.p2 OWNER TO postgres
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370000, 's')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('fix_idx_names.p2'::regclass, 'h', 'dist_col', 1370000, 's')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_create_truncate_trigger('fix_idx_names.p2')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_create_truncate_trigger('fix_idx_names.p2')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('fix_idx_names.p2'::regclass, 915002, 't'::"char", '-2147483648', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (915002, 1, 0, 1, 3380)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (915002, 1, 0, 1, 3380)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO fix_idx_names,public;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO fix_idx_names,public;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE parent_table ATTACH PARTITION p2 FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE parent_table ATTACH PARTITION p2 FOR VALUES FROM ('2019-01-01') TO ('2020-01-01');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_inter_shard_ddl_command (915000, 'fix_idx_names', 915002, 'fix_idx_names', 'ALTER TABLE parent_table ATTACH PARTITION p2 FOR VALUES FROM (''2019-01-01'') TO (''2020-01-01'');')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.i1_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_idx_915002')
@@ -612,6 +713,10 @@ DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.unique_cst_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_partition_col_key_915002')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

@@ -4,6 +4,7 @@ SET search_path TO node_conninfo_reload;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.force_max_query_parallelization TO ON;
+SET citus.next_shard_id TO 278000;
 
 create table test(a int);
 select create_distributed_table('test', 'a');

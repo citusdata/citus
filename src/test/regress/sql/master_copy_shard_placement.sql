@@ -105,7 +105,5 @@ SELECT master_copy_shard_placement(
            do_repair := false,
            transfer_mode := 'block_writes');
 
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-
 SET client_min_messages TO ERROR;
 DROP SCHEMA mcsp CASCADE;
