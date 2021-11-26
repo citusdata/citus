@@ -1639,7 +1639,7 @@ SetWorkerColumnOptional(WorkerNode *workerNode, int columnIndex, Datum value)
 	WorkerNode *worker = NULL;
 	foreach_ptr(worker, workerNodeList)
 	{
-		bool success = SendOptionalCommandListToWorkerInCoordinatedTransaction(
+		bool success = SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
 			worker->workerName, worker->workerPort,
 			CurrentUserName(),
 			list_make1(metadataSyncCommand));

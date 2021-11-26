@@ -367,7 +367,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-		int32 connectionFlags = 0;
+		int32 connectionFlags = REQUIRE_METADATA_CONNECTION;
 
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
 																	  nodeName, nodePort,
@@ -470,10 +470,12 @@ SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
  * coordinated transaction. Any failures aborts the coordinated transaction.
  */
 void
-SendCommandListToWorkerInCoordinatedTransaction(const char *nodeName, int32 nodePort,
-												const char *nodeUser, List *commandList)
+SendMetadataCommandListToWorkerInCoordinatedTransaction(const char *nodeName,
+														int32 nodePort,
+														const char *nodeUser,
+														List *commandList)
 {
-	int connectionFlags = 0;
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
 
 	UseCoordinatedTransaction();
 
@@ -542,17 +544,17 @@ SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 no
 
 
 /*
- * SendOptionalCommandListToWorkerInCoordinatedTransaction sends the given
+ * SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction sends the given
  * command list to the given worker as part of the coordinated transaction.
  * If any of the commands fail, the function returns false.
  */
 bool
-SendOptionalCommandListToWorkerInCoordinatedTransaction(const char *nodeName, int32
-														nodePort,
-														const char *nodeUser,
-														List *commandList)
+SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(const char *nodeName,
+																int32 nodePort,
+																const char *nodeUser,
+																List *commandList)
 {
-	int connectionFlags = 0;
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
 	bool failed = false;
 
 	UseCoordinatedTransaction();
