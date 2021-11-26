@@ -63,8 +63,13 @@ FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
 WHERE s.logicalrelid = 'user_table'::regclass
 ORDER BY placementid;
 
--- master_remove_node fails when there are shards on that worker
-SELECT master_remove_node('localhost', :worker_2_proxy_port);
+BEGIN;
+	-- master_remove_node succeeds because there are the
+	-- healthy placements of the shards that exists on
+	-- worker_2_proxy_port on the other worker (worker_1_port)
+	-- as well
+	SELECT master_remove_node('localhost', :worker_2_proxy_port);
+ROLLBACK;
 
 -- drop event table and re-run remove
 DROP TABLE event_table;

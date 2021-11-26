@@ -1256,26 +1256,6 @@ ShardLength(uint64 shardId)
 
 
 /*
- * NodeGroupHasLivePlacements returns true if there is any placement
- * on the given node group which is not a SHARD_STATE_TO_DELETE placement.
- */
-bool
-NodeGroupHasLivePlacements(int32 groupId)
-{
-	List *shardPlacements = AllShardPlacementsOnNodeGroup(groupId);
-	GroupShardPlacement *placement = NULL;
-	foreach_ptr(placement, shardPlacements)
-	{
-		if (placement->shardState != SHARD_STATE_TO_DELETE)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-
-/*
  * NodeGroupHasShardPlacements returns whether any active shards are placed on the group
  */
 bool

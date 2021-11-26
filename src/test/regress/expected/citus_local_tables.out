@@ -27,7 +27,7 @@ SELECT citus_add_local_table_to_metadata('citus_local_table_1');
 
 -- try to remove coordinator and observe failure as there exist a citus local table
 SELECT 1 FROM master_remove_node('localhost', :master_port);
-ERROR:  cannot remove the primary node of a node group which has shard placements
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
 DROP TABLE citus_local_table_1;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
 -- this should work now as the citus local table is dropped

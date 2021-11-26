@@ -273,7 +273,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 (4 rows)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
-          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel | autoconverted
+          logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s        | f
 (1 row)
@@ -410,7 +410,7 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 (4 rows)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
-          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel | autoconverted
+          logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s        | f
 (1 row)
@@ -1128,9 +1128,9 @@ INSERT INTO mx_table_with_sequence VALUES (2), (4);
 \c - - - :master_port
 -- check our small sequence values
 SELECT a, b, c FROM mx_table_with_small_sequence ORDER BY a,b,c;
- a |     b     |  c
+ a | b | c
 ---------------------------------------------------------------------
- 0 |         1 |    1
+ 0 | 1 | 1
 (1 row)
 
 --check our bigint sequence values
@@ -1594,11 +1594,13 @@ ERROR:  Disabling localhost:xxxxx failed
 DETAIL:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
 SELECT master_remove_node('localhost', :worker_1_port);
-ERROR:  localhost:xxxxx is a metadata node, but is out of sync
-HINT:  If the node is up, wait until metadata gets synced to it and try again.
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is mx_testing_schema.mx_test_table
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  localhost:xxxxx is a metadata node, but is out of sync
-HINT:  If the node is up, wait until metadata gets synced to it and try again.
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is mx_testing_schema.mx_test_table
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 -- master_update_node should succeed
 SELECT nodeid AS worker_2_nodeid FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 SELECT master_update_node(:worker_2_nodeid, 'localhost', 4444);

@@ -122,10 +122,18 @@ ORDER BY placementid;
   200000 |          1
 (1 row)
 
--- master_remove_node fails when there are shards on that worker
-SELECT master_remove_node('localhost', :worker_2_proxy_port);
-ERROR:  cannot remove the last worker node because there are reference tables and it would cause data loss on reference tables
-HINT:  To proceed, either drop the reference tables or use undistribute_table() function to convert them to local tables
+BEGIN;
+	-- master_remove_node succeeds because there are the
+	-- healthy placements of the shards that exists on
+	-- worker_2_proxy_port on the other worker (worker_1_port)
+	-- as well
+	SELECT master_remove_node('localhost', :worker_2_proxy_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
+ROLLBACK;
 -- drop event table and re-run remove
 DROP TABLE event_table;
 SELECT master_remove_node('localhost', :worker_2_proxy_port);
