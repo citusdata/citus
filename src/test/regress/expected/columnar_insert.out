@@ -291,6 +291,20 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
+CREATE OR REPLACE FUNCTION test_columnar_storage_write_new_page(relation regclass) RETURNS void
+STRICT LANGUAGE c AS 'citus', 'test_columnar_storage_write_new_page';
+CREATE TABLE aborted_write (a int, b int) USING columnar;
+SELECT test_columnar_storage_write_new_page('aborted_write');
+ test_columnar_storage_write_new_page
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO DEBUG4;
+INSERT INTO aborted_write VALUES (5);
+DEBUG:  Flushing Stripe of size 1
+DEBUG:  overwriting page 2
+DETAIL:  This can happen after a roll-back.
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_insert CASCADE;
