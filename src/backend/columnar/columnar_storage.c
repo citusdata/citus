@@ -104,6 +104,10 @@ typedef struct PhysicalAddr
 								  "version or run \"ALTER EXTENSION citus UPDATE\"."
 
 
+/* only for testing purposes */
+PG_FUNCTION_INFO_V1(test_columnar_storage_write_new_page);
+
+
 /*
  * Map logical offsets to a physical page and offset where the data is kept.
  */
@@ -704,11 +708,30 @@ WriteToBlock(Relation rel, BlockNumber blockno, uint32 offset, char *buf,
 		PageInit(page, BLCKSZ, 0);
 	}
 
-	if (phdr->pd_lower != offset || phdr->pd_upper - offset < len)
+	if (phdr->pd_lower < offset || phdr->pd_upper - offset < len)
 	{
 		elog(ERROR,
 			 "attempt to write columnar data of length %d to offset %d of block %d of relation %d",
 			 len, offset, blockno, rel->rd_id);
+	}
+
+	/*
+	 * After a transaction has been rolled-back, we might be
+	 * over-writing the rolledback write, so phdr->pd_lower can be
+	 * different from addr.offset.
+	 *
+	 * We reset pd_lower to reset the rolledback write.
+	 *
+	 * Given that we always align page reservation to the next page as of
+	 * 10.2, having such a disk page is only possible if write operaion
+	 * failed in an older version of columnar, but now user attempts writing
+	 * to that table in version >= 10.2.
+	 */
+	if (phdr->pd_lower > offset)
+	{
+		ereport(DEBUG4, (errmsg("overwriting page %u", blockno),
+						 errdetail("This can happen after a roll-back.")));
+		phdr->pd_lower = offset;
 	}
 
 	START_CRIT_SECTION();
@@ -819,4 +842,37 @@ ColumnarMetapageCheckVersion(Relation rel, ColumnarMetapage *metapage)
 							metapage->versionMajor, metapage->versionMinor),
 						errhint(OLD_METAPAGE_VERSION_HINT)));
 	}
+}
+
+
+/*
+ * test_columnar_storage_write_new_page is a UDF only used for testing
+ * purposes. It could make more sense to define this in columnar_debug.c,
+ * but the storage layer doesn't expose ColumnarMetapage to any other files,
+ * so we define it here.
+ */
+Datum
+test_columnar_storage_write_new_page(PG_FUNCTION_ARGS)
+{
+	Oid relationId = PG_GETARG_OID(0);
+
+	Relation relation = relation_open(relationId, AccessShareLock);
+
+	/*
+	 * Allocate a new page, write some data to there, and set reserved offset
+	 * to the start of that page. That way, for a subsequent write operation,
+	 * storage layer would try to overwrite the page that we allocated here.
+	 */
+	uint64 newPageOffset = ColumnarStorageGetReservedOffset(relation, false);
+
+	ColumnarStorageReserveData(relation, 100);
+	ColumnarStorageWrite(relation, newPageOffset, "foo_bar", 8);
+
+	ColumnarMetapage metapage = ColumnarMetapageRead(relation, false);
+	metapage.reservedOffset = newPageOffset;
+	ColumnarOverwriteMetapage(relation, metapage);
+
+	relation_close(relation, AccessShareLock);
+
+	PG_RETURN_VOID();
 }
