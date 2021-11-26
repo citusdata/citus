@@ -163,6 +163,14 @@ jobs:
                 cp core.* /tmp/core_dumps
             fi
           when: on_fail
+      - run:
+          name: 'Copy pg_upgrade logs for newData dir'
+          command: |
+            mkdir -p /tmp/pg_upgrade_newData_logs
+            if ls src/test/regress/tmp_upgrade/newData/*.log 1> /dev/null 2>&1; then
+                cp src/test/regress/tmp_upgrade/newData/*.log /tmp/pg_upgrade_newData_logs
+            fi
+          when: on_fail
       - store_artifacts:
           name: 'Save regressions'
           path: src/test/regress/regression.diffs
@@ -171,6 +179,9 @@ jobs:
           name: 'Save core dumps'
           path: /tmp/core_dumps
           when: on_fail
+      - store_artifacts:
+          name: 'Save pg_upgrade logs for newData dir'
+          path: /tmp/pg_upgrade_newData_logs
       - codecov/upload:
           flags: 'test_<< parameters.old_pg_major >>_<< parameters.new_pg_major >>,upgrade'
 

@@ -369,12 +369,50 @@ SELECT * FROM multi_extension.print_extension_changes();
 -- Test downgrade to 10.2-3 from 10.2-4
 ALTER EXTENSION citus UPDATE TO '10.2-4';
 ALTER EXTENSION citus UPDATE TO '10.2-3';
+
+-- Make sure that we don't delete pg_depend entries added in
+-- columnar--10.2-3--10.2-4.sql when downgrading to 10.2-3.
+SELECT COUNT(*)=10
+FROM pg_depend
+WHERE classid = 'pg_am'::regclass::oid AND
+      objid = (select oid from pg_am where amname = 'columnar') AND
+      objsubid = 0 AND
+      refclassid = 'pg_class'::regclass::oid AND
+      refobjsubid = 0 AND
+      deptype = 'n';
+
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 10.2-4
 ALTER EXTENSION citus UPDATE TO '10.2-4';
 SELECT * FROM multi_extension.print_extension_changes();
+
+-- Make sure that we defined dependencies from all rel objects (tables,
+-- indexes, sequences ..) to columnar table access method ...
+SELECT pg_class.oid INTO columnar_schema_members
+FROM pg_class, pg_namespace
+WHERE pg_namespace.oid=pg_class.relnamespace AND
+      pg_namespace.nspname='columnar';
+SELECT refobjid INTO columnar_schema_members_pg_depend
+FROM pg_depend
+WHERE classid = 'pg_am'::regclass::oid AND
+      objid = (select oid from pg_am where amname = 'columnar') AND
+      objsubid = 0 AND
+      refclassid = 'pg_class'::regclass::oid AND
+      refobjsubid = 0 AND
+      deptype = 'n';
+
+-- ... , so this should be empty,
+(TABLE columnar_schema_members EXCEPT TABLE columnar_schema_members_pg_depend)
+UNION
+(TABLE columnar_schema_members_pg_depend EXCEPT TABLE columnar_schema_members);
+
+-- ... , and both columnar_schema_members_pg_depend & columnar_schema_members
+-- should have 10 entries.
+SELECT COUNT(*)=10 FROM columnar_schema_members_pg_depend;
+
+DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
 
 -- Use a synthetic pg_dist_shard record to show that upgrade fails
 -- when there are cstore_fdw tables
