@@ -5398,6 +5398,16 @@ ActiveShardPlacementLists(List *taskList)
 		/* sort shard placements by their creation time */
 		activeShardPlacementList = SortList(activeShardPlacementList,
 											CompareShardPlacements);
+
+		/*
+		 * The executor currently does not know how to handle map task failover,
+		 * so we generate at most 1 placement.
+		 */
+		if (task->taskType == MAP_TASK)
+		{
+			activeShardPlacementList = list_make1(linitial(activeShardPlacementList));
+		}
+
 		shardPlacementLists = lappend(shardPlacementLists, activeShardPlacementList);
 	}
 
