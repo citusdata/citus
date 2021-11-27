@@ -4362,6 +4362,13 @@ MapTaskList(MapMergeJob *mapMergeJob, List *filterTaskList)
 		SetTaskQueryString(mapTask, mapQueryString->data);
 		mapTask->taskType = MAP_TASK;
 
+		/*
+		 * We do not support fail-over in case of map tasks, since we would also
+		 * have to fail over the corresponding merge tasks. We therefore truncate
+		 * the list down to the first element.
+		 */
+		mapTask->taskPlacementList = list_truncate(mapTask->taskPlacementList, 1);
+
 		mapTaskList = lappend(mapTaskList, mapTask);
 	}
 
@@ -5398,6 +5405,7 @@ ActiveShardPlacementLists(List *taskList)
 		/* sort shard placements by their creation time */
 		activeShardPlacementList = SortList(activeShardPlacementList,
 											CompareShardPlacements);
+
 		shardPlacementLists = lappend(shardPlacementLists, activeShardPlacementList);
 	}
 
