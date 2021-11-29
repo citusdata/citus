@@ -91,6 +91,7 @@
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
 #include "utils/varlena.h"
+#include "optimizer/cost.h"
 
 #include "columnar/mod.h"
 
@@ -1198,6 +1199,66 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
+
+	DefineCustomRealVariable(
+		"citus.path_based_planner_cost_collect_startup",
+		gettext_noop("Static cost used to start a Collect operation"),
+		NULL,
+		&CollectStartupCost,
+		1000, 0, disable_cost,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL,NULL,NULL);
+
+	DefineCustomRealVariable(
+		"citus.path_based_planner_cost_collect_row",
+		gettext_noop("Cost per row for Collect operation"),
+		NULL,
+		&CollectPerRowCost,
+		.01, 0, disable_cost,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL,NULL,NULL);
+
+	DefineCustomRealVariable(
+		"citus.path_based_planner_cost_collect_mb",
+		gettext_noop("Cost per megabyte for Collect operation"),
+		NULL,
+		&CollectPerMBCost,
+		.1, 0, disable_cost,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL,NULL,NULL);
+
+	DefineCustomRealVariable(
+		"citus.path_based_planner_cost_repartition_startup",
+		gettext_noop("Static cost used to start a Repartition operation"),
+		NULL,
+		&RepartitionStartupCost,
+		1000, 0, disable_cost,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL,NULL,NULL);
+
+	DefineCustomRealVariable(
+		"citus.path_based_planner_cost_repartition_row",
+		gettext_noop("Cost per row for Repartition operation"),
+		NULL,
+		&RepartitionPerRowCost,
+		.000, 0, disable_cost,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL,NULL,NULL);
+
+	DefineCustomRealVariable(
+		"citus.path_based_planner_cost_repartition_mb",
+		gettext_noop("Cost per megabyte for Repartition operation"),
+		NULL,
+		&RepartitionPerMBCost,
+		.01, 0, disable_cost,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL,NULL,NULL);
 
 	DefineCustomIntVariable(
 		"citus.local_shared_pool_size",

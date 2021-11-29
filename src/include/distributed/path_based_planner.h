@@ -10,6 +10,14 @@
 
 extern bool EnableBroadcastJoin;
 
+extern Cost CollectStartupCost;
+extern Cost CollectPerRowCost;
+extern Cost CollectPerMBCost;
+
+extern Cost RepartitionStartupCost;
+extern Cost RepartitionPerRowCost;
+extern Cost RepartitionPerMBCost;
+
 extern void PathBasedPlannerRelationHook(PlannerInfo *root,
 										 RelOptInfo *relOptInfo,
 										 Index restrictionIndex,
