@@ -6,7 +6,7 @@
 * Fixes a bug that could break `DROP SCHEMA/EXTENSION` commands when there is
   a columnar table
 
-* Fixes a bug that could break pg upgrades due to missing pg_depend records
+* Fixes a bug that could break pg upgrades due to missing `pg_depend` records
   for columnar table access method
 
 * Fixes a missing `FROM` clause entry error
