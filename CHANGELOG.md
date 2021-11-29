@@ -1,3 +1,25 @@
+### citus v10.2.3 (November 29, 2021) ###
+
+* Adds `fix_partition_shard_index_names` udf to fix currently broken
+  partition index names
+
+* Fixes a bug that could break `DROP SCHEMA/EXTENSION` commands when there is
+  a columnar table
+
+* Fixes a bug that could break pg upgrades due to missing `pg_depend` records
+  for columnar table access method
+
+* Fixes a missing `FROM` clause entry error
+
+* Fixes an unexpected error that occurs when writing to a columnar table
+  created in older versions
+
+* Fixes issue when compiling Citus from source with some compilers
+
+* Reinstates optimisation for uniform shard interval ranges
+
+* Relaxes table ownership check to privileges check while acquiring lock
+
 ### citus v10.2.2 (October 14, 2021) ###
 
 * Fixes a bug that causes reading columnar metapage as all-zeros when
