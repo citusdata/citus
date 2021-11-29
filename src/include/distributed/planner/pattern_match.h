@@ -94,6 +94,39 @@
 	DoCapture(capture, Path *, pathToMatch); \
 }
 
+#define MatchAgg(capture, matcher) \
+{ \
+    bool m = false; \
+    switch (pathToMatch->type) \
+    { \
+        case T_AggPath: \
+        { \
+            m = true; \
+            break; \
+        } \
+\
+    	default: \
+    	{ \
+    		m = false; \
+    		break; \
+    	} \
+	} \
+\
+	if (!m) \
+	{ \
+    	MatchFailed; \
+	} \
+\
+	PushStack(pathToMatch); \
+\
+	pathToMatch = castNode(AggPath, pathToMatch)->subpath; \
+	matcher; \
+\
+	PopStack(pathToMatch); \
+\
+	DoCapture(capture, AggPath *, pathToMatch); \
+}
+
 #define MatchJoin(capture, joinType, conditionMatcher, innerMatcher, outerMatcher) \
 { \
     { \
