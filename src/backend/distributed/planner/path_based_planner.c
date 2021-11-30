@@ -145,6 +145,11 @@ static optimizeFn joinOptimizations[] = {
 /*	GeoOverlapJoin, */
 };
 
+static optimizeFn groupOptimizations[] = {
+		PushDownAggPath,
+		RepartitionAggPath,
+};
+
 const CustomPathMethods geoScanMethods = {
 	.CustomName = "GeoScan",
 };
@@ -1590,10 +1595,9 @@ PathBasedPlannerJoinHook(PlannerInfo *root,
 	 */
 	List *newPaths = NIL;
 
-	ListCell *pathCell = NULL;
-	foreach(pathCell, joinrel->pathlist)
+	Path *originalPath = NULL;
+	foreach_ptr(originalPath, joinrel->pathlist)
 	{
-		Path *originalPath = lfirst(pathCell);
 		for (int i = 0; i < sizeof(joinOptimizations) / sizeof(joinOptimizations[1]); i++)
 		{
 			List *alternativePaths = joinOptimizations[i](root, originalPath);
@@ -1991,10 +1995,15 @@ PathBasedPlannerGroupAgg(PlannerInfo *root,
 	Path *originalPath = NULL;
 	foreach_ptr(originalPath, output_rel->pathlist)
 	{
-		newPaths = list_concat(newPaths, PushDownAggPath(root, originalPath));
-		newPaths = list_concat(newPaths, RepartitionAggPath(root, originalPath));
+		/* apply all optimizations on every available path */
+		for (int i = 0; i < sizeof(groupOptimizations) / sizeof(groupOptimizations[1]); i++)
+		{
+			List *alternativePaths = groupOptimizations[i](root, originalPath);
+			newPaths = list_concat(newPaths, alternativePaths);
+		}
 	}
 
+	/* offer new paths to output_rel */
 	Path *newPath = NULL;
 	foreach_ptr(newPath, newPaths)
 	{
