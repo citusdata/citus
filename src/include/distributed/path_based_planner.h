@@ -8,6 +8,15 @@
 #include "nodes/parsenodes.h"
 #include "nodes/pathnodes.h"
 
+typedef List *(*optimizeFn)(PlannerInfo *root, Path *originalPath);
+
+typedef struct OptimizationEntry
+{
+	const char *name;
+	bool enabled;
+	optimizeFn fn;
+} OptimizationEntry;
+
 extern bool EnableBroadcastJoin;
 
 extern Cost CollectStartupCost;
@@ -17,6 +26,9 @@ extern Cost CollectPerMBCost;
 extern Cost RepartitionStartupCost;
 extern Cost RepartitionPerRowCost;
 extern Cost RepartitionPerMBCost;
+
+extern OptimizationEntry joinOptimizations[];
+extern OptimizationEntry groupOptimizations[];
 
 extern void PathBasedPlannerRelationHook(PlannerInfo *root,
 										 RelOptInfo *relOptInfo,

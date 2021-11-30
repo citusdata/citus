@@ -31,8 +31,6 @@
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 
-typedef List *(*optimizeFn)(PlannerInfo *root, Path *originalPath);
-
 typedef struct DistributedUnionPath
 {
 	CustomPath custom_path;
@@ -136,20 +134,22 @@ Cost RepartitionStartupCost = 1000;
 Cost RepartitionPerRowCost = .000;
 Cost RepartitionPerMBCost = .01;
 
-/* list of functions that will be called to optimized in the joinhook*/
-static optimizeFn joinOptimizations[] = {
-	OptimizeJoinPath,
-	OptimizeRepartitionInnerJoinPath,
+/* list of functions that will be called to optimized in the join hook */
+OptimizationEntry joinOptimizations[] = {
+	{.name = "pushdown", .fn = OptimizeJoinPath, .enabled = true},
+	{.name = "repartition", .fn = OptimizeRepartitionInnerJoinPath, .enabled = true},
 
-/*	BroadcastOuterJoinPath, */
-/*	BroadcastInnerJoinPath, */
-/*	GeoOverlapJoin, */
+	{.name = "broadcast_outer", .fn = BroadcastOuterJoinPath, .enabled = false},
+	{.name = "broadcast_inner", .fn = BroadcastInnerJoinPath, .enabled = false},
+	{.name = "geooverlap", .fn = GeoOverlapJoin, .enabled = false},
+	{},
 };
 
-static optimizeFn groupOptimizations[] = {
-		PushDownAggPath,
-		PartialPushDownAggPath,
-		RepartitionAggPath,
+OptimizationEntry groupOptimizations[] = {
+	{.name = "pushdown", .fn = PushDownAggPath, .enabled = true},
+	{.name = "partial_pushdown", .fn = PartialPushDownAggPath, .enabled = true},
+	{.name = "repartition", .fn = RepartitionAggPath, .enabled = true},
+	{},
 };
 
 const CustomPathMethods geoScanMethods = {
@@ -1600,9 +1600,15 @@ PathBasedPlannerJoinHook(PlannerInfo *root,
 	Path *originalPath = NULL;
 	foreach_ptr(originalPath, joinrel->pathlist)
 	{
-		for (int i = 0; i < sizeof(joinOptimizations) / sizeof(joinOptimizations[1]); i++)
+		for (int i = 0; joinOptimizations[i].fn != NULL; i++)
 		{
-			List *alternativePaths = joinOptimizations[i](root, originalPath);
+			if (!joinOptimizations[i].enabled)
+			{
+				/* skip disabled optimizations */
+				continue;
+			}
+
+			List *alternativePaths = joinOptimizations[i].fn(root, originalPath);
 			newPaths = list_concat(newPaths, alternativePaths);
 		}
 	}
@@ -1998,9 +2004,15 @@ PathBasedPlannerGroupAgg(PlannerInfo *root,
 	foreach_ptr(originalPath, output_rel->pathlist)
 	{
 		/* apply all optimizations on every available path */
-		for (int i = 0; i < sizeof(groupOptimizations) / sizeof(groupOptimizations[1]); i++)
+		for (int i = 0; groupOptimizations[i].fn != NULL; i++)
 		{
-			List *alternativePaths = groupOptimizations[i](root, originalPath);
+			if (!groupOptimizations[i].enabled)
+			{
+				/* skip optimizations when they are disabled */
+				continue;
+			}
+
+			List *alternativePaths = groupOptimizations[i].fn(root, originalPath);
 			newPaths = list_concat(newPaths, alternativePaths);
 		}
 	}

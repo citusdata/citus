@@ -1260,6 +1260,40 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL,NULL,NULL);
 
+	/* pathbased planner optimization rules */
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	for (int i = 0; joinOptimizations[i].fn != NULL; i++)
+	{
+		resetStringInfo(&buf);
+		appendStringInfo(&buf, "citus.path_based_planner_join_%s", joinOptimizations[i].name);
+		DefineCustomBoolVariable(
+				pstrdup(buf.data),
+				gettext_noop("Path based planner join optimization"),
+				NULL,
+				&joinOptimizations[i].enabled,
+				joinOptimizations[i].enabled,
+				PGC_USERSET,
+				GUC_STANDARD,
+				NULL, NULL, NULL);
+	}
+
+	for (int i = 0; groupOptimizations[i].fn != NULL; i++)
+	{
+		resetStringInfo(&buf);
+		appendStringInfo(&buf, "citus.path_based_planner_group_%s", groupOptimizations[i].name);
+		DefineCustomBoolVariable(
+				pstrdup(buf.data),
+				gettext_noop("Path based planner join optimization"),
+				NULL,
+				&groupOptimizations[i].enabled,
+				groupOptimizations[i].enabled,
+				PGC_USERSET,
+				GUC_STANDARD,
+				NULL, NULL, NULL);
+	}
+
 	DefineCustomIntVariable(
 		"citus.local_shared_pool_size",
 		gettext_noop(
