@@ -73,12 +73,7 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 	"groupid, placementid) " \
 	"VALUES (" UINT64_FORMAT ", %d, " UINT64_FORMAT \
 	", %d, " UINT64_FORMAT \
-	") " \
-	"ON CONFLICT (placementid) DO UPDATE SET " \
-	"shardid = EXCLUDED.shardid, " \
-	"shardstate = EXCLUDED.shardstate, " \
-	"shardlength = EXCLUDED.shardlength, " \
-	"groupid = EXCLUDED.groupid"
+	"); "
 #define METADATA_SYNC_CHANNEL "metadata_sync"
 
 
