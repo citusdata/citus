@@ -117,12 +117,10 @@ SET citus.next_shard_id TO 723000;
 
 -- CASE 3
 -- DROP OWNED BY role1; Only parent is owned by role1, children are owned by another owner
-SET client_min_messages TO warning;
-SET citus.enable_ddl_propagation TO off;
+SET client_min_messages TO ERROR;
 CREATE ROLE role1;
+SELECT 1 FROM run_command_on_workers('CREATE ROLE role1');
 RESET client_min_messages;
-RESET citus.enable_ddl_propagation;
-SELECT run_command_on_workers('CREATE ROLE role1');
 GRANT ALL ON SCHEMA drop_partitioned_table TO role1;
 SET ROLE role1;
 CREATE TABLE drop_partitioned_table.parent (x text, t timestamptz DEFAULT now()) PARTITION BY RANGE (t);
