@@ -117,6 +117,8 @@ static RangeTblEntry * makeRangeTableEntryForRelation(Relation rel,
 													  bool inFromCl);
 
 static bool VarInList(List *varList, Var *var);
+static PathTarget * AggSplitMutator(PathTarget *target, AggSplit aggsplit);
+static List * AggSplitTListMutator(List *tlist, AggSplit aggsplit);
 
 /*
  * TODO some optimizations are useless if others are already provided. This might cause
@@ -1909,6 +1911,7 @@ GetQueryFromPath(PlannerInfo *root, Path *path, List *tlist, List *clauses,
 
 	/* copy the target list with mapped varno values to reflect the tables we are selecting */
 	List *newTargetList = (List *) VarNoMutator((Node *) tlist, info.varno_mapping);
+	newTargetList = AggSplitTListMutator(newTargetList, AGGSPLIT_SIMPLE);
 
 	q->targetList = newTargetList;
 
@@ -2200,6 +2203,54 @@ PushDownAggPath(PlannerInfo *root, Path *originalPath)
 	return NIL;
 }
 
+static Node *
+AggSplitExprMutator(Node *expr, AggSplit *context)
+{
+	if (expr == NULL)
+	{
+		return NULL;
+	}
+
+	switch (expr->type)
+	{
+		case T_Aggref:
+		{
+			Aggref *newNode =
+					castNode(Aggref,
+							 expression_tree_mutator(expr, AggSplitExprMutator, context));
+			if (context != NULL)
+
+			{
+				newNode->aggsplit = *context;
+			}
+
+			return (Node *) newNode;
+		}
+
+		default:
+		{
+			break;
+		}
+	}
+
+	return expression_tree_mutator(expr, AggSplitExprMutator, context);
+}
+
+static List *
+AggSplitTListMutator(List *tlist, AggSplit aggsplit)
+{
+	return castNode(List, AggSplitExprMutator((Node *) tlist, &aggsplit));
+}
+
+static PathTarget *
+AggSplitMutator(PathTarget *target, AggSplit aggsplit)
+{
+	PathTarget *copy = makeNode(PathTarget);
+	*copy = *target;
+	copy->exprs = AggSplitTListMutator(copy->exprs, aggsplit);
+	return copy;
+}
+
 
 static List *
 PartialPushDownAggPath(PlannerInfo *root, Path *originalPath)
@@ -2290,6 +2341,17 @@ PartialPushDownAggPath(PlannerInfo *root, Path *originalPath)
 
 		newTopAggPath->path.startup_cost = newCollectPath->total_cost + aggOverheadStartup * rowFraction;
 		newTopAggPath->path.total_cost = newCollectPath->total_cost + aggOverheadTotal * rowFraction;
+
+		/*
+		 * TODO, hack, only works with count like aggregates where the internal state is a
+		 * primitive without a serialize and deserialize function specific for the
+		 * aggregate.
+		 *
+		 * During the query generation process we map the aggsplit back to AGGSPLIT_SIMPLE
+		 * as to prevent PARTIAL agg(x) to be deserialized into the query.
+		 */
+		newTopAggPath->aggsplit = AGGSPLIT_FINAL_DESERIAL;
+		newCollectPath->pathtarget = AggSplitMutator(newCollectPath->pathtarget, AGGSPLIT_INITIAL_SERIAL);
 
 		return list_make1(newTopAggPath);
 	}
