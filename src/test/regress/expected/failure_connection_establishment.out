@@ -319,6 +319,121 @@ SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
  f
 (1 row)
 
+-- tests for citus_check_cluster_node_health
+-- kill all connectivity checks that originate from this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_check_connection_to_node").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |          9060 | localhost   |        9060 |
+ localhost     |          9060 | localhost   |       57637 |
+ localhost     |         57637 | localhost   |        9060 | t
+ localhost     |         57637 | localhost   |       57637 | t
+(4 rows)
+
+-- suggested summary queries for connectivity checks
+SELECT bool_and(coalesce(result, false)) FROM citus_check_cluster_node_health();
+ bool_and
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT result, count(*) FROM citus_check_cluster_node_health() GROUP BY result ORDER BY 1;
+ result | count
+---------------------------------------------------------------------
+ t      |     2
+        |     2
+(2 rows)
+
+-- cancel all connectivity checks that originate from this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_check_connection_to_node").cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ERROR:  canceling statement due to user request
+-- kill all but first connectivity checks that originate from this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_check_connection_to_node").after(1).kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |          9060 | localhost   |        9060 | t
+ localhost     |          9060 | localhost   |       57637 |
+ localhost     |         57637 | localhost   |        9060 | t
+ localhost     |         57637 | localhost   |       57637 | t
+(4 rows)
+
+-- cancel all but first connectivity checks that originate from this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_check_connection_to_node").after(1).cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ERROR:  canceling statement due to user request
+-- kill all connections to this node
+SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |          9060 | localhost   |        9060 |
+ localhost     |          9060 | localhost   |       57637 |
+ localhost     |         57637 | localhost   |        9060 | f
+ localhost     |         57637 | localhost   |       57637 | t
+(4 rows)
+
+-- cancel all connections to this node
+SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ERROR:  canceling statement due to user request
+-- kill connection checks to this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT 1$").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |          9060 | localhost   |        9060 | f
+ localhost     |          9060 | localhost   |       57637 | t
+ localhost     |         57637 | localhost   |        9060 | f
+ localhost     |         57637 | localhost   |       57637 | t
+(4 rows)
+
+-- cancel connection checks to this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT 1$").cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ERROR:  canceling statement due to user request
 RESET client_min_messages;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy

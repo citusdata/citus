@@ -159,6 +159,16 @@ SELECT * FROM the_table;
  1 | 2
 (2 rows)
 
+-- Check for connectivity in the cluster
+SELECT * FROM citus_check_cluster_node_health();
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |          9071 | localhost   |        9071 | t
+ localhost     |          9071 | localhost   |        9072 | t
+ localhost     |          9072 | localhost   |        9071 | t
+ localhost     |          9072 | localhost   |        9072 | t
+(4 rows)
+
 -- clean up after ourselves
 \c -reuse-previous=off regression - - :master_port
 DROP TABLE the_table;

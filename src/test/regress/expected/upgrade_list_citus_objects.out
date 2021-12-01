@@ -38,6 +38,7 @@ ORDER BY 1;
  function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real,real)
  function citus_add_secondary_node(text,integer,text,integer,name)
  function citus_blocking_pids(integer)
+ function citus_check_cluster_node_health()
  function citus_check_connection_to_node(text,integer)
  function citus_cleanup_orphaned_shards()
  function citus_conninfo_cache_invalidate()
@@ -261,5 +262,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(245 rows)
+(246 rows)
 
