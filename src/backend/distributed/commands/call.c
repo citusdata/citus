@@ -62,7 +62,12 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 	DistObjectCacheEntry *procedure = LookupDistObjectCacheEntry(ProcedureRelationId,
 																 functionId, 0);
 
-	if (procedure == NULL || !procedure->isDistributed)
+	/*
+	 * If procedure is not distributed or already delegated from another
+	 * node, do not call the procedure remotely.
+	 */
+	if (procedure == NULL || !procedure->isDistributed ||
+		IsCitusInitiatedRemoteBackend())
 	{
 		return false;
 	}
