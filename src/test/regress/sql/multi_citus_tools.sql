@@ -319,6 +319,20 @@ SELECT citus_check_connection_to_node('localhost', :worker_2_port);
 
 \c - - - :master_port
 
+SELECT * FROM citus_check_cluster_node_health() ORDER BY 1,2,3,4;
+
+-- test cluster connectivity when we have broken nodes
+SET client_min_messages TO ERROR;
+SET citus.node_connection_timeout TO 10;
+
+BEGIN;
+INSERT INTO pg_dist_node VALUES
+    (123456789, 123456789, 'localhost', 123456789),
+    (1234567890, 1234567890, 'www.citusdata.com', 5432);
+SELECT * FROM citus_check_cluster_node_health() ORDER BY 5,1,2,3,4;
+ROLLBACK;
+
+RESET citus.node_connection_timeout;
 RESET client_min_messages;
 DROP SCHEMA tools CASCADE;
 RESET SEARCH_PATH;

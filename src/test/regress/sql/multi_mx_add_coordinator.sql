@@ -1,9 +1,5 @@
 CREATE SCHEMA mx_add_coordinator;
 SET search_path TO mx_add_coordinator,public;
-SET citus.shard_replication_factor TO 1;
-SET citus.shard_count TO 8;
-SET citus.next_shard_id TO 7000000;
-SET citus.next_placement_id TO 7000000;
 SET client_min_messages TO WARNING;
 
 CREATE USER reprefuser WITH LOGIN;
@@ -12,7 +8,28 @@ SET citus.enable_alter_role_propagation TO ON;
 -- alter role for other than the extension owner works in enterprise, output differs accordingly
 ALTER ROLE reprefuser WITH CREATEDB;
 
+-- check connectivity in the cluster
+-- verify that we test for 4 node pairs before we add coordinator to metadata
+SELECT bool_and(coalesce(result, false)), count(*) FROM citus_check_cluster_node_health();
+
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId => 0);
+
+-- verify that we test for 9 node pairs after we add coordinator to metadata
+SELECT bool_and(coalesce(result, false)), count(*) FROM citus_check_cluster_node_health();
+
+-- test that we can test for connectivity when connected to worker nodes as well
+\c - - - :worker_1_port
+SELECT bool_and(coalesce(result, false)), count(*) FROM citus_check_cluster_node_health();
+
+\c - - - :master_port
+
+-- set the configs after reconnecting to coordinator
+SET search_path TO mx_add_coordinator,public;
+SET citus.shard_replication_factor TO 1;
+SET citus.shard_count TO 8;
+SET citus.next_shard_id TO 7000000;
+SET citus.next_placement_id TO 7000000;
+SET client_min_messages TO WARNING;
 
 -- test that coordinator pg_dist_node entry is synced to the workers
 SELECT wait_until_metadata_sync(30000);
