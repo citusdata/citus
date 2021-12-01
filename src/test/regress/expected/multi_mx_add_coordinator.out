@@ -300,7 +300,7 @@ alter table local_fkey_table ALTER COLUMN id TYPE int;
 SET citus.force_max_query_parallelization TO ON;
 alter table distributed_table ALTER COLUMN value_1 TYPE bigint;
 alter table distributed_table ALTER COLUMN value_1 TYPE int;
-SET client_min_messages TO error;
+SET client_min_messages TO ERROR;
 DROP TABLE distributed_table, referece_table, local_fkey_table;
 SELECT master_remove_node('localhost', :master_port);
  master_remove_node

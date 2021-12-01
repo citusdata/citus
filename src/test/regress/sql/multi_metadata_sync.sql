@@ -745,8 +745,8 @@ SELECT create_reference_table('dist_table_2');
 ALTER TABLE dist_table_1 ADD COLUMN b int;
 
 SELECT master_add_node('localhost', :master_port, groupid => 0);
-SELECT master_disable_node('localhost', :worker_1_port);
-SELECT master_disable_node('localhost', :worker_2_port);
+SELECT citus_disable_node_and_wait('localhost', :worker_1_port);
+SELECT citus_disable_node_and_wait('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', :worker_1_port);
 SELECT master_remove_node('localhost', :worker_2_port);
 

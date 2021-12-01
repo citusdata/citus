@@ -1,7 +1,7 @@
 --
 -- failure_add_disable_node tests master_add_node, master_remove_node
 -- master_activate_node for failures.
--- master_disable_node and master_add_inactive_node can not be
+-- citus_disable_node_and_wait and master_add_inactive_node can not be
 -- tested as they don't create network activity
 --
 
@@ -30,7 +30,8 @@ FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
 WHERE s.logicalrelid = 'user_table'::regclass
 ORDER BY placementid;
 
-SELECT master_disable_node('localhost', :worker_2_proxy_port);
+SELECT citus_disable_node('localhost', :worker_2_proxy_port, true);
+SELECT public.wait_until_metadata_sync();
 
 SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;

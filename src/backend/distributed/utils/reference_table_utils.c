@@ -48,6 +48,7 @@ static StringInfo CopyShardPlacementToWorkerNodeQuery(
 static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
 								 int nodePort);
 static bool AnyRelationsModifiedInTransaction(List *relationIdList);
+static List * ReplicatedMetadataSyncedDistributedTableList(void);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
@@ -426,46 +427,84 @@ CreateReferenceTableColocationId()
 
 
 /*
- * DeleteAllReferenceTablePlacementsFromNodeGroup function iterates over list of reference
- * tables and deletes all reference table placements from pg_dist_placement table
- * for given group.
+ * DeleteAllReplicatedTablePlacementsFromNodeGroup function iterates over
+ * list of reference and replicated hash distributed tables and deletes
+ * all placements from pg_dist_placement table for given group.
  */
 void
-DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
+DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool forceRemoteDelete)
 {
 	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
+	List *replicatedMetadataSyncedDistributedTableList =
+		ReplicatedMetadataSyncedDistributedTableList();
+
+	List *replicatedTableList =
+		list_concat(referenceTableList, replicatedMetadataSyncedDistributedTableList);
 
 	/* if there are no reference tables, we do not need to do anything */
-	if (list_length(referenceTableList) == 0)
+	if (list_length(replicatedTableList) == 0)
 	{
 		return;
 	}
 
 	StringInfo deletePlacementCommand = makeStringInfo();
-	Oid referenceTableId = InvalidOid;
-	foreach_oid(referenceTableId, referenceTableList)
+	Oid replicatedTableId = InvalidOid;
+	foreach_oid(replicatedTableId, replicatedTableList)
 	{
-		List *placements = GroupShardPlacementsForTableOnGroup(referenceTableId,
-															   groupId);
+		List *placements =
+			GroupShardPlacementsForTableOnGroup(replicatedTableId, groupId);
 		if (list_length(placements) == 0)
 		{
-			/* this happens if the node was previously disabled */
+			/*
+			 * This happens either the node was previously disabled or the table
+			 * doesn't have placement on this node.
+			 */
 			continue;
 		}
 
-		GroupShardPlacement *placement = (GroupShardPlacement *) linitial(placements);
+		GroupShardPlacement *placement = NULL;
+		foreach_ptr(placement, placements)
+		{
+			LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
 
-		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
+			DeleteShardPlacementRow(placement->placementId);
 
-		DeleteShardPlacementRow(placement->placementId);
+			if (forceRemoteDelete)
+			{
+				resetStringInfo(deletePlacementCommand);
+				appendStringInfo(deletePlacementCommand,
+								 "DELETE FROM pg_catalog.pg_dist_placement "
+								 "WHERE placementid = " UINT64_FORMAT,
+								 placement->placementId);
 
-		resetStringInfo(deletePlacementCommand);
-		appendStringInfo(deletePlacementCommand,
-						 "DELETE FROM pg_dist_placement WHERE placementid = "
-						 UINT64_FORMAT,
-						 placement->placementId);
-		SendCommandToWorkersWithMetadata(deletePlacementCommand->data);
+				SendCommandToWorkersWithMetadata(deletePlacementCommand->data);
+			}
+		}
 	}
+}
+
+
+/*
+ * ReplicatedMetadataSyncedDistributedTableList is a helper function which returns the
+ * list of replicated hash distributed tables.
+ */
+static List *
+ReplicatedMetadataSyncedDistributedTableList(void)
+{
+	List *distributedRelationList = CitusTableTypeIdList(DISTRIBUTED_TABLE);
+	List *replicatedHashDistributedTableList = NIL;
+
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, distributedRelationList)
+	{
+		if (ShouldSyncTableMetadata(relationId) && !SingleReplicatedTable(relationId))
+		{
+			replicatedHashDistributedTableList =
+				lappend_oid(replicatedHashDistributedTableList, relationId);
+		}
+	}
+
+	return replicatedHashDistributedTableList;
 }
 
 

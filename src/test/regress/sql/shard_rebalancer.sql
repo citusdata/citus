@@ -82,7 +82,7 @@ SELECT create_distributed_table('dist_table_test_2', 'a');
 
 -- Mark tables as coordinator replicated in order to be able to test replicate_table_shards
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
-	('dist_table_test_2'::regclass);
+  ('dist_table_test_2'::regclass);
 
 -- replicate_table_shards should fail when the hostname GUC is set to a non-reachable node
 ALTER SYSTEM SET citus.local_hostname TO 'foobar';
@@ -550,8 +550,9 @@ CREATE TABLE test_schema_support.nation_hash (
     n_comment varchar(152)
 );
 
-SELECT master_create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 1);
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
 
 CREATE TABLE test_schema_support.nation_hash2 (
     n_nationkey integer not null,
@@ -560,21 +561,24 @@ CREATE TABLE test_schema_support.nation_hash2 (
     n_comment varchar(152)
 );
 
-SELECT master_create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash2', 4, 1);
+SELECT create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', 'hash');
+
+-- Mark tables as coordinator replicated in order to be able to test replicate_table_shards
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+  ('test_schema_support.nation_hash2'::regclass, 'test_schema_support.nation_hash'::regclass);
 
 -- Shard count before replication
 SELECT COUNT(*) FROM pg_dist_shard_placement;
 
 SET search_path TO public;
-SELECT replicate_table_shards('test_schema_support.nation_hash', shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('test_schema_support.nation_hash', shard_replication_factor:=2, max_shard_copies:=1, shard_transfer_mode:='block_writes');
 
--- Confirm replication
+-- Confirm replication, both tables replicated due to colocation
 SELECT COUNT(*) FROM pg_dist_shard_placement;
 
 -- Test with search_path is set
 SET search_path TO test_schema_support;
-SELECT replicate_table_shards('nation_hash2', shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('nation_hash2', shard_replication_factor:=2, shard_transfer_mode:='block_writes');
 
 -- Confirm replication
 SELECT COUNT(*) FROM pg_dist_shard_placement;
@@ -1229,7 +1233,7 @@ DROP TABLE tab;
 
 -- we don't need the coordinator on pg_dist_node anymore
 SELECT 1 FROM master_remove_node('localhost', :master_port);
-
+SELECT public.wait_until_metadata_sync(30000);
 
 --
 -- Make sure that rebalance_table_shards() and replicate_table_shards() replicate
@@ -1258,13 +1262,14 @@ SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shar
 
 -- Mark table as coordinator replicated in order to be able to test replicate_table_shards
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
-	('dist_table_test_3'::regclass);
+  ('dist_table_test_3'::regclass);
 
 SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
 SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT public.wait_until_metadata_sync(30000);
 
 CREATE TABLE rebalance_test_table(int_column int);
 SELECT master_create_distributed_table('rebalance_test_table', 'int_column', 'append');
@@ -1283,6 +1288,8 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 DROP TABLE dist_table_test_3, rebalance_test_table, ref_table;
 
 SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT public.wait_until_metadata_sync(30000);
+
 
 -- reference table 2 will not have a replica identity, causing the rebalancer to not work
 -- when ran in the default mode. Instead we need to change the shard transfer mode to make
@@ -1297,6 +1304,7 @@ CREATE TABLE r2 (a int, b int);
 -- node without the reference tables
 
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync(30000);
 
 SELECT create_distributed_table('t1','a');
 SELECT create_reference_table('r1');
@@ -1321,6 +1329,7 @@ SELECT count(*) FROM pg_dist_partition;
 -- executing the rebalancer
 
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync(30000);
 
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
 SELECT create_reference_table('r1');
@@ -1353,6 +1362,7 @@ DROP TABLE r1;
 -- fail.
 
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync(30000);
 
 CREATE TABLE t1 (a int PRIMARY KEY, b int);
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
@@ -1372,7 +1382,7 @@ SELECT replicate_table_shards('t1',  shard_replication_factor := 2);
 
 -- Mark table as coordinator replicated in order to be able to test replicate_table_shards
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
-	('t1'::regclass);
+  ('t1'::regclass);
 SELECT replicate_table_shards('t1',  shard_replication_factor := 2);
 
 -- verify the reference table is on all nodes after replicate_table_shards
@@ -1382,3 +1392,4 @@ JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'r1'::regclass;
 
 DROP TABLE t1, r1;
+

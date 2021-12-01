@@ -470,31 +470,16 @@ SingleReplicatedTable(Oid relationId)
 		return false;
 	}
 
-	/* for hash distributed tables, it is sufficient to only check one shard */
-	if (IsCitusTableType(relationId, HASH_DISTRIBUTED))
+	List *shardIntervalList = LoadShardList(relationId);
+	uint64 *shardIdPointer = NULL;
+	foreach_ptr(shardIdPointer, shardIntervalList)
 	{
-		/* checking only for the first shard id should suffice */
-		uint64 shardId = *(uint64 *) linitial(shardList);
-
+		uint64 shardId = *shardIdPointer;
 		shardPlacementList = ShardPlacementListWithoutOrphanedPlacements(shardId);
+
 		if (list_length(shardPlacementList) != 1)
 		{
 			return false;
-		}
-	}
-	else
-	{
-		List *shardIntervalList = LoadShardList(relationId);
-		uint64 *shardIdPointer = NULL;
-		foreach_ptr(shardIdPointer, shardIntervalList)
-		{
-			uint64 shardId = *shardIdPointer;
-			shardPlacementList = ShardPlacementListWithoutOrphanedPlacements(shardId);
-
-			if (list_length(shardPlacementList) != 1)
-			{
-				return false;
-			}
 		}
 	}
 

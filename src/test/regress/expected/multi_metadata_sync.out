@@ -1418,6 +1418,9 @@ CREATE TABLE tmp_placement AS
 DELETE FROM pg_dist_placement
   WHERE groupid = :old_worker_2_group;
 SELECT master_remove_node('localhost', :worker_2_port);
+WARNING:  could not find any shard placements for shardId 1310001
+WARNING:  could not find any shard placements for shardId 1310021
+WARNING:  could not find any shard placements for shardId 1310026
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -1585,14 +1588,17 @@ HINT:  If the node is up, wait until metadata gets synced to it and try again.
 SELECT master_add_node('localhost', :master_port, groupid => 0);
 ERROR:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If the node is up, wait until metadata gets synced to it and try again.
-SELECT master_disable_node('localhost', :worker_1_port);
-ERROR:  Disabling localhost:xxxxx failed
-DETAIL:  localhost:xxxxx is a metadata node, but is out of sync
-HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
-SELECT master_disable_node('localhost', :worker_2_port);
-ERROR:  Disabling localhost:xxxxx failed
-DETAIL:  localhost:xxxxx is a metadata node, but is out of sync
-HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
+SELECT citus_disable_node_and_wait('localhost', :worker_1_port);
+ERROR:  disabling the first worker node in the metadata is not allowed
+HINT:  You can force disabling node, but this operation might cause replicated shards to diverge: SELECT citus_disable_node('localhost', 57637, force:=true);
+CONTEXT:  SQL statement "SELECT pg_catalog.citus_disable_node(nodename, nodeport, force)"
+PL/pgSQL function citus_disable_node_and_wait(text,integer,boolean) line XX at PERFORM
+SELECT citus_disable_node_and_wait('localhost', :worker_2_port);
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is mx_testing_schema.mx_test_table
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
+CONTEXT:  SQL statement "SELECT pg_catalog.citus_disable_node(nodename, nodeport, force)"
+PL/pgSQL function citus_disable_node_and_wait(text,integer,boolean) line XX at PERFORM
 SELECT master_remove_node('localhost', :worker_1_port);
 ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
 DETAIL:  One of the table(s) that prevents the operation complete successfully is mx_testing_schema.mx_test_table

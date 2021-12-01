@@ -406,45 +406,6 @@ SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nod
 (0 rows)
 
 \c - - - :master_port
--- verify that mx workers are updated when disabling/activating nodes
-SELECT citus_disable_node('localhost', :worker_1_port);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT citus_activate_node('localhost', 57637) to activate this node back.
- citus_disable_node
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-\c - - - :worker_2_port
-SELECT nodeport, isactive FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
- nodeport | isactive
----------------------------------------------------------------------
-    57637 | f
-    57638 | t
-(2 rows)
-
-\c - - - :master_port
-SET client_min_messages TO ERROR;
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
----------------------------------------------------------------------
-                  16
-(1 row)
-
-\c - - - :worker_2_port
-SELECT nodeport, isactive FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
- nodeport | isactive
----------------------------------------------------------------------
-    57637 | t
-    57638 | t
-(2 rows)
-
-\c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 NOTICE:  dropping metadata on the node (localhost,57638)
  stop_metadata_sync_to_node

@@ -20,6 +20,7 @@ test: multi_extension
 test: single_node
 test: single_node_truncate
 test: turn_mx_on
+test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 
 # below tests are placed right after multi_cluster_management as we do
@@ -30,7 +31,6 @@ test: escape_extension_name
 test: ref_citus_local_fkeys
 test: alter_database_owner
 
-test: multi_test_helpers multi_test_helpers_superuser
 test: multi_test_catalog_views
 test: check_mx
 test: turn_mx_off

@@ -15,7 +15,7 @@ SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 
 -- coordinator cannot be disabled
-SELECT 1 FROM master_disable_node('localhost', :master_port);
+SELECT 1 FROM citus_disable_node('localhost', :master_port);
 
 RESET client_min_messages;
 
