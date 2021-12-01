@@ -604,6 +604,13 @@ MetadataCreateCommands(void)
 			ObjectAddress sequenceAddress = { 0 };
 			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
 			EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+
+			/*
+			 * Sequences are not marked as distributed while creating table
+			 * if no metadata worker node exists. We are marking all sequences
+			 * distributed while syncing metadata in such case.
+			 */
+			MarkObjectDistributed(&sequenceAddress);
 		}
 
 		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
