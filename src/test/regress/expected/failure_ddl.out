@@ -9,7 +9,7 @@ SET search_path TO 'ddl_failure';
 -- do not cache any connections
 SET citus.max_cached_conns_per_worker TO 0;
 -- we don't want to see the prepared transaction numbers in the warnings
-SET client_min_messages TO ERROR;
+SET client_min_messages TO WARNING;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -69,9 +69,12 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
 ---------------------------------------------------------------------
@@ -153,6 +156,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").cancel(' ||  pg_backend_pi
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
+WARNING:
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  failed to commit transaction on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -365,9 +371,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg
 ---------------------------------------------------------------------
@@ -735,9 +739,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
 ---------------------------------------------------------------------
@@ -1030,9 +1032,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
 ---------------------------------------------------------------------

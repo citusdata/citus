@@ -25,10 +25,6 @@ CREATE VIEW unhealthy_shard_count AS
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.kill()');
 \copy test_table FROM STDIN DELIMITER ','
-1,2
-2,3
-3,4
-\.
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
@@ -36,10 +32,6 @@ SELECT count(*) FROM test_table;
 -- kill as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").kill()');
 \copy test_table FROM STDIN DELIMITER ','
-1,2
-2,3
-3,4
-\.
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
@@ -47,10 +39,6 @@ SELECT count(*) FROM test_table;
 -- cancel as soon as the coordinator sends begin
 SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED").cancel(' ||  pg_backend_pid() || ')');
 \copy test_table FROM STDIN DELIMITER ','
-1,2
-2,3
-3,4
-\.
 SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;

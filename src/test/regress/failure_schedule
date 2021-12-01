@@ -1,5 +1,4 @@
 # import this file (from psql you can use \i) to use mitmproxy manually
-test: turn_mx_off
 test: failure_test_helpers
 
 # this should only be run by pg_regress_multi, you don't need it
@@ -17,22 +16,25 @@ test: failure_add_disable_node
 test: failure_copy_to_reference
 test: failure_copy_on_hash
 test: failure_create_reference_table
+test: check_mx
+test: turn_mx_off
 test: failure_create_distributed_table_non_empty
 test: failure_create_table
+test: failure_single_select
+test: failure_connection_establishment
+test: turn_mx_on
 
 test: failure_multi_shard_update_delete
 test: failure_cte_subquery
 test: failure_insert_select_via_coordinator
 test: failure_multi_dml
 test: failure_vacuum
-test: failure_single_select
 test: failure_ref_tables
 test: failure_insert_select_pushdown
 test: failure_single_mod
 test: failure_savepoints
 test: failure_multi_row_insert
 test: failure_mx_metadata_sync
-test: failure_connection_establishment
 
 # this test syncs metadata to the workers
 test: failure_failover_to_local_execution
@@ -45,3 +47,4 @@ test: ensure_no_intermediate_data_leak
 # in the shared memory
 # --------
 test: ensure_no_shared_connection_leak
+test: check_mx
