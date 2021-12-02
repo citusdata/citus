@@ -16,6 +16,7 @@
 test: turn_mx_off
 test: multi_extension
 test: multi_test_helpers multi_test_helpers_superuser
+test: turn_mx_on
 test: multi_mx_node_metadata
 test: multi_cluster_management
 test: multi_mx_function_table_reference
@@ -44,7 +45,7 @@ test: coordinator_evaluation_modify
 test: coordinator_evaluation_select
 test: multi_mx_call
 test: multi_mx_function_call_delegation
-test: multi_mx_modifications local_shard_execution
+test: multi_mx_modifications local_shard_execution local_shard_execution_replicated
 test: multi_mx_repartition_udt_w1 multi_mx_repartition_udt_w2
 test: local_shard_copy
 test: undistribute_table_cascade_mx

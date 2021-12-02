@@ -75,7 +75,7 @@ step s1-update-ref-table:
     update ref_table set a = a + 1;
 
 step s2-sleep:
- SELECT pg_sleep(0.5);
+	SELECT pg_sleep(0.5);
 
 pg_sleep
 ---------------------------------------------------------------------
@@ -83,7 +83,7 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query                                |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
@@ -96,7 +96,7 @@ query                                |query_hostname  |query_hostport|distribute
 (2 rows)
 
 step s2-view-worker:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name,
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name,
            distributed_query_host_port, state, wait_event_type, wait_event, usename, datname
     FROM citus_worker_stat_activity
     WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
@@ -106,10 +106,10 @@ step s2-view-worker:
 
 query                                                                         |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1400163 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
 (4 rows)
 
 step s2-end:
@@ -140,9 +140,9 @@ step s1-update-ref-table:
     update ref_table set a = a + 1;
 
 step s2-active-transactions:
- -- Admin should be able to see all transactions
- SELECT count(*) FROM get_all_active_transactions();
- SELECT count(*) FROM get_global_active_transactions();
+	-- Admin should be able to see all transactions
+	SELECT count(*) FROM get_all_active_transactions();
+	SELECT count(*) FROM get_global_active_transactions();
 
 count
 ---------------------------------------------------------------------

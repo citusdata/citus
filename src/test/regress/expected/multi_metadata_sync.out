@@ -19,7 +19,7 @@ COMMENT ON FUNCTION master_metadata_snapshot()
     IS 'commands to create the metadata snapshot';
 -- Show that none of the existing tables are qualified to be MX tables
 SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -272,13 +272,13 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
       5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t
 (4 rows)
 
-SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
-          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
+          logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
- mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s        | f
 (1 row)
 
-SELECT * FROM pg_dist_shard ORDER BY shardid;
+SELECT * FROM pg_dist_shard  WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
           logicalrelid           | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | 1310000 | t            | -2147483648   | -1610612737
@@ -291,7 +291,7 @@ SELECT * FROM pg_dist_shard ORDER BY shardid;
  mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
 (8 rows)
 
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
  1310000 |          1 |           0 | localhost |    57637 |      100000
@@ -409,13 +409,13 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
       5 |       1 | localhost |     8889 | default  | f           | t        | secondary | second-cluster | f              | t
 (4 rows)
 
-SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
-          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
+          logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
- mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s        | f
 (1 row)
 
-SELECT * FROM pg_dist_shard ORDER BY shardid;
+SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
           logicalrelid           | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
  mx_testing_schema.mx_test_table | 1310000 | t            | -2147483648   | -1610612737
@@ -428,7 +428,7 @@ SELECT * FROM pg_dist_shard ORDER BY shardid;
  mx_testing_schema.mx_test_table | 1310007 | t            | 1610612736    | 2147483647
 (8 rows)
 
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
  shardid | shardstate | shardlength | nodename  | nodeport | placementid
 ---------------------------------------------------------------------
  1310000 |          1 |           0 | localhost |    57637 |      100000
@@ -730,12 +730,12 @@ ORDER BY
 \c - - - :worker_2_port
 \d mx_test_schema_1.mx_table_1
 \d mx_test_schema_2.mx_table_2
-SELECT * FROM pg_dist_partition;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_test_schema%';
+ logicalrelid | partmethod | partkey | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT * FROM pg_dist_shard;
+SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_test_schema%';
  logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue
 ---------------------------------------------------------------------
 (0 rows)
@@ -1128,9 +1128,9 @@ INSERT INTO mx_table_with_sequence VALUES (2), (4);
 \c - - - :master_port
 -- check our small sequence values
 SELECT a, b, c FROM mx_table_with_small_sequence ORDER BY a,b,c;
- a |     b     |  c
+ a | b | c
 ---------------------------------------------------------------------
- 0 |         1 |    1
+ 0 | 1 | 1
 (1 row)
 
 --check our bigint sequence values
@@ -1418,6 +1418,9 @@ CREATE TABLE tmp_placement AS
 DELETE FROM pg_dist_placement
   WHERE groupid = :old_worker_2_group;
 SELECT master_remove_node('localhost', :worker_2_port);
+WARNING:  could not find any shard placements for shardId 1310001
+WARNING:  could not find any shard placements for shardId 1310021
+WARNING:  could not find any shard placements for shardId 1310026
  master_remove_node
 ---------------------------------------------------------------------
 
@@ -1585,20 +1588,25 @@ HINT:  If the node is up, wait until metadata gets synced to it and try again.
 SELECT master_add_node('localhost', :master_port, groupid => 0);
 ERROR:  localhost:xxxxx is a metadata node, but is out of sync
 HINT:  If the node is up, wait until metadata gets synced to it and try again.
-SELECT master_disable_node('localhost', :worker_1_port);
-ERROR:  Disabling localhost:xxxxx failed
-DETAIL:  localhost:xxxxx is a metadata node, but is out of sync
-HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
-SELECT master_disable_node('localhost', :worker_2_port);
-ERROR:  Disabling localhost:xxxxx failed
-DETAIL:  localhost:xxxxx is a metadata node, but is out of sync
-HINT:  If you are using MX, try stop_metadata_sync_to_node(hostname, port) for nodes that are down before disabling them.
+SELECT citus_disable_node_and_wait('localhost', :worker_1_port);
+ERROR:  disabling the first worker node in the metadata is not allowed
+HINT:  You can force disabling node, but this operation might cause replicated shards to diverge: SELECT citus_disable_node('localhost', 57637, force:=true);
+CONTEXT:  SQL statement "SELECT pg_catalog.citus_disable_node(nodename, nodeport, force)"
+PL/pgSQL function citus_disable_node_and_wait(text,integer,boolean) line XX at PERFORM
+SELECT citus_disable_node_and_wait('localhost', :worker_2_port);
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is mx_testing_schema.mx_test_table
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
+CONTEXT:  SQL statement "SELECT pg_catalog.citus_disable_node(nodename, nodeport, force)"
+PL/pgSQL function citus_disable_node_and_wait(text,integer,boolean) line XX at PERFORM
 SELECT master_remove_node('localhost', :worker_1_port);
-ERROR:  localhost:xxxxx is a metadata node, but is out of sync
-HINT:  If the node is up, wait until metadata gets synced to it and try again.
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is mx_testing_schema.mx_test_table
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  localhost:xxxxx is a metadata node, but is out of sync
-HINT:  If the node is up, wait until metadata gets synced to it and try again.
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is mx_testing_schema.mx_test_table
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 -- master_update_node should succeed
 SELECT nodeid AS worker_2_nodeid FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 SELECT master_update_node(:worker_2_nodeid, 'localhost', 4444);
@@ -1782,6 +1790,51 @@ DROP TABLE mx_test_schema_1.mx_table_1 CASCADE;
 DROP TABLE mx_testing_schema.mx_test_table;
 DROP TABLE mx_ref;
 DROP TABLE dist_table_1, dist_table_2;
+SET client_min_messages TO ERROR;
+SET citus.enable_ddl_propagation TO off; -- for enterprise
+CREATE USER non_super_metadata_user;
+SET citus.enable_ddl_propagation TO on;
+RESET client_min_messages;
+SELECT run_command_on_workers('CREATE USER non_super_metadata_user');
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
+GRANT EXECUTE ON FUNCTION start_metadata_sync_to_node(text,int) TO non_super_metadata_user;
+GRANT EXECUTE ON FUNCTION stop_metadata_sync_to_node(text,int,bool) TO non_super_metadata_user;
+GRANT ALL ON pg_dist_node TO non_super_metadata_user;
+GRANT ALL ON pg_dist_local_group TO non_super_metadata_user;
+SELECT run_command_on_workers('GRANT ALL ON pg_dist_node TO non_super_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT ALL ON pg_dist_local_group TO non_super_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SET ROLE non_super_metadata_user;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+RESET ROLE;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;

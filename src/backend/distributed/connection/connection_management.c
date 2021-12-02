@@ -56,6 +56,9 @@ static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static void StartConnectionEstablishment(MultiConnection *connectionn,
 										 ConnectionHashKey *key);
 static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
+#ifdef USE_ASSERT_CHECKING
+static void AssertSingleMetadataConnectionExists(dlist_head *connections);
+#endif
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static bool ShouldShutdownConnection(MultiConnection *connection, const int
@@ -329,6 +332,12 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 			return connection;
 		}
 	}
+	else if (flags & REQUIRE_METADATA_CONNECTION)
+	{
+		/* FORCE_NEW_CONNECTION and REQUIRE_METADATA_CONNECTION are incompatible */
+		ereport(ERROR, (errmsg("metadata connections cannot be forced to open "
+							   "a new connection")));
+	}
 
 
 	/*
@@ -389,6 +398,12 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 
 	ResetShardPlacementAssociation(connection);
 
+
+	if ((flags & REQUIRE_METADATA_CONNECTION))
+	{
+		connection->useForMetadataOperations = true;
+	}
+
 	/* fully initialized the connection, record it */
 	connection->initilizationState = POOL_STATE_INITIALIZED;
 
@@ -406,7 +421,6 @@ static MultiConnection *
 FindAvailableConnection(dlist_head *connections, uint32 flags)
 {
 	dlist_iter iter;
-
 	dlist_foreach(iter, connections)
 	{
 		MultiConnection *connection =
@@ -429,12 +443,18 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			continue;
 		}
 
-		if (connection->forceCloseAtTransactionEnd)
+		if (connection->forceCloseAtTransactionEnd &&
+			!connection->remoteTransaction.beginSent)
 		{
 			/*
-			 * This is a connection that should be closed, probabably because
-			 * of old connection options. So we ignore it. It will
-			 * automatically be closed at the end of the transaction.
+			 * This is a connection that should be closed, probably because
+			 * of old connection options or removing a node. This will
+			 * automatically be closed at the end of the transaction. But, if we are still
+			 * inside a transaction, we should keep using this connection as long as a remote
+			 * transaction is in progress over the connection. The main use for this case
+			 * is having some commands inside a transaction block after removing nodes. And, we
+			 * currently allow very limited operations after removing a node inside a
+			 * transaction block (e.g., no placement access can happen).
 			 */
 			continue;
 		}
@@ -448,11 +468,95 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 			continue;
 		}
 
+		if ((flags & REQUIRE_METADATA_CONNECTION) &&
+			!connection->useForMetadataOperations)
+		{
+			/*
+			 * The caller requested a metadata connection, and this is not the
+			 * metadata connection.
+			 */
+			continue;
+		}
+		else
+		{
+			/*
+			 * Now that we found metadata connection. We do some sanity
+			 * checks.
+			 */
+			#ifdef USE_ASSERT_CHECKING
+			AssertSingleMetadataConnectionExists(connections);
+			#endif
+
+			/*
+			 * Connection is in use for an ongoing operation. Metadata
+			 * connection cannot be claimed exclusively.
+			 */
+			if (connection->claimedExclusively)
+			{
+				ereport(ERROR, (errmsg("metadata connections cannot be "
+									   "claimed exclusively")));
+			}
+		}
+
 		return connection;
+	}
+
+	if ((flags & REQUIRE_METADATA_CONNECTION) && !dlist_is_empty(connections))
+	{
+		/*
+		 * Caller asked a metadata connection, and we couldn't find in the
+		 * above list. So, we pick the first connection as the metadata
+		 * connection.
+		 */
+		MultiConnection *metadataConnection =
+			dlist_container(MultiConnection, connectionNode,
+							dlist_head_node(connections));
+
+
+		/* remember that we use this connection for metadata operations */
+		metadataConnection->useForMetadataOperations = true;
+
+		#ifdef USE_ASSERT_CHECKING
+		AssertSingleMetadataConnectionExists(connections);
+		#endif
+
+		return metadataConnection;
 	}
 
 	return NULL;
 }
+
+
+#ifdef USE_ASSERT_CHECKING
+
+/*
+ * AssertSingleMetadataConnectionExists throws an error if the
+ * input connection dlist contains more than one metadata connections.
+ */
+static void
+AssertSingleMetadataConnectionExists(dlist_head *connections)
+{
+	bool foundMetadataConnection = false;
+	dlist_iter iter;
+	dlist_foreach(iter, connections)
+	{
+		MultiConnection *connection =
+			dlist_container(MultiConnection, connectionNode, iter.cur);
+
+		if (connection->useForMetadataOperations)
+		{
+			if (foundMetadataConnection)
+			{
+				ereport(ERROR, (errmsg("cannot have multiple metadata connections")));
+			}
+
+			foundMetadataConnection = true;
+		}
+	}
+}
+
+
+#endif /* USE_ASSERT_CHECKING */
 
 
 /*

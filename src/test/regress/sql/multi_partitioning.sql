@@ -1932,7 +1932,11 @@ CALL drop_old_time_partitions('date_partitioned_table_to_exp', '2021-01-01');
 SELECT partition FROM time_partitions WHERE parent_table = 'date_partitioned_table_to_exp'::regclass ORDER BY partition::text;
 
 \set VERBOSITY default
+set client_min_messages to error;
 DROP TABLE date_partitioned_table_to_exp;
+DROP TABLE date_partitioned_citus_local_table CASCADE;
+DROP TABLE date_partitioned_citus_local_table_2;
+set client_min_messages to notice;
 
 SELECT citus_remove_node('localhost', :master_port);
 
@@ -1965,6 +1969,7 @@ CALL drop_old_time_partitions('non_partitioned_table', now());
 DROP TABLE non_partitioned_table;
 
 -- https://github.com/citusdata/citus/issues/4962
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 361168;
 CREATE TABLE part_table_with_very_long_name (
@@ -1982,28 +1987,19 @@ SELECT create_distributed_table('part_table_with_very_long_name', 'dist_col');
 CREATE INDEX ON part_table_with_very_long_name
 USING btree (long_named_integer_col, long_named_part_col);
 
--- shouldn't work
+-- index is created
+SELECT tablename, indexname FROM pg_indexes
+WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
+
+-- should work properly - no names clashes
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
+-- check that indexes are named properly
 SELECT tablename, indexname FROM pg_indexes
 WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
 
 \c - - - :master_port
-SET citus.shard_replication_factor TO 1;
-SET search_path = partitioning_schema;
--- fix problematic table
-SELECT fix_partition_shard_index_names('part_table_with_very_long_name'::regclass);
--- should work
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-
-\c - - - :worker_1_port
--- check that indexes are renamed
-SELECT tablename, indexname FROM pg_indexes
-WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%' ORDER BY 1, 2;
-
-\c - - - :master_port
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SCHEMA partitioning_schema CASCADE;
 RESET search_path;
 DROP TABLE IF EXISTS

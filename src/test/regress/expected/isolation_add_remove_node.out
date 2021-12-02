@@ -1,16 +1,11 @@
 Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-add-node-1 s2-remove-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -18,10 +13,10 @@ step s1-add-node-1:
 (1 row)
 
 step s2-remove-node-1:
- SELECT * FROM master_remove_node('localhost', 57637);
+	SELECT * FROM master_remove_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-remove-node-1: <... completed>
 master_remove_node
@@ -30,7 +25,7 @@ master_remove_node
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename|nodeport|isactive
 ---------------------------------------------------------------------
@@ -42,16 +37,11 @@ master_remove_node
 
 
 starting permutation: s1-begin s1-add-node-1 s2-add-node-2 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -59,10 +49,10 @@ step s1-add-node-1:
 (1 row)
 
 step s2-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-add-node-2: <... completed>
 ?column?
@@ -71,7 +61,7 @@ step s2-add-node-2: <... completed>
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -87,16 +77,11 @@ master_remove_node
 
 
 starting permutation: s1-begin s1-add-node-1 s2-add-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -104,10 +89,10 @@ step s1-add-node-1:
 (1 row)
 
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-add-node-1: <... completed>
 ?column?
@@ -116,7 +101,7 @@ step s2-add-node-1: <... completed>
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -130,16 +115,11 @@ master_remove_node
 
 
 starting permutation: s1-begin s1-add-node-1 s2-add-node-2 s1-abort s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -147,10 +127,10 @@ step s1-add-node-1:
 (1 row)
 
 step s2-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
  <waiting ...>
 step s1-abort: 
- ABORT;
+	ABORT;
 
 step s2-add-node-2: <... completed>
 ?column?
@@ -159,7 +139,7 @@ step s2-add-node-2: <... completed>
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -173,16 +153,11 @@ master_remove_node
 
 
 starting permutation: s1-begin s1-add-node-1 s2-add-node-1 s1-abort s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -190,10 +165,10 @@ step s1-add-node-1:
 (1 row)
 
 step s2-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
  <waiting ...>
 step s1-abort: 
- ABORT;
+	ABORT;
 
 step s2-add-node-1: <... completed>
 ?column?
@@ -202,7 +177,7 @@ step s2-add-node-1: <... completed>
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -216,13 +191,8 @@ master_remove_node
 
 
 starting permutation: s1-add-node-1 s1-add-node-2 s1-begin s1-remove-node-1 s2-remove-node-2 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -230,7 +200,7 @@ step s1-add-node-1:
 (1 row)
 
 step s1-add-node-2:
- SELECT 1 FROM master_add_node('localhost', 57638);
+	SELECT 1 FROM master_add_node('localhost', 57638);
 
 ?column?
 ---------------------------------------------------------------------
@@ -238,10 +208,10 @@ step s1-add-node-2:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-remove-node-1:
- SELECT * FROM master_remove_node('localhost', 57637);
+	SELECT * FROM master_remove_node('localhost', 57637);
 
 master_remove_node
 ---------------------------------------------------------------------
@@ -249,10 +219,10 @@ master_remove_node
 (1 row)
 
 step s2-remove-node-2:
- SELECT * FROM master_remove_node('localhost', 57638);
+	SELECT * FROM master_remove_node('localhost', 57638);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-remove-node-2: <... completed>
 master_remove_node
@@ -261,7 +231,7 @@ master_remove_node
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename|nodeport|isactive
 ---------------------------------------------------------------------
@@ -273,13 +243,8 @@ master_remove_node
 
 
 starting permutation: s1-add-node-1 s1-begin s1-remove-node-1 s2-remove-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -287,10 +252,10 @@ step s1-add-node-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-remove-node-1:
- SELECT * FROM master_remove_node('localhost', 57637);
+	SELECT * FROM master_remove_node('localhost', 57637);
 
 master_remove_node
 ---------------------------------------------------------------------
@@ -298,15 +263,15 @@ master_remove_node
 (1 row)
 
 step s2-remove-node-1:
- SELECT * FROM master_remove_node('localhost', 57637);
+	SELECT * FROM master_remove_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-remove-node-1: <... completed>
 ERROR:  node at "localhost:xxxxx" does not exist
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename|nodeport|isactive
 ---------------------------------------------------------------------
@@ -318,13 +283,8 @@ master_remove_node
 
 
 starting permutation: s1-add-node-1 s1-begin s1-activate-node-1 s2-activate-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -332,10 +292,10 @@ step s1-add-node-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-activate-node-1:
- SELECT 1 FROM master_activate_node('localhost', 57637);
+	SELECT 1 FROM master_activate_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -343,10 +303,10 @@ step s1-activate-node-1:
 (1 row)
 
 step s2-activate-node-1:
- SELECT 1 FROM master_activate_node('localhost', 57637);
+	SELECT 1 FROM master_activate_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-activate-node-1: <... completed>
 ?column?
@@ -355,7 +315,7 @@ step s2-activate-node-1: <... completed>
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -369,13 +329,8 @@ master_remove_node
 
 
 starting permutation: s1-add-node-1 s1-begin s1-disable-node-1 s2-disable-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -383,21 +338,28 @@ step s1-add-node-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
 
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
 
+wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 step s2-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-disable-node-1: <... completed>
 ?column?
@@ -405,8 +367,13 @@ step s2-disable-node-1: <... completed>
        1
 (1 row)
 
+wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -420,13 +387,8 @@ master_remove_node
 
 
 starting permutation: s1-add-inactive-1 s1-begin s1-activate-node-1 s2-activate-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-inactive-1:
- SELECT 1 FROM master_add_inactive_node('localhost', 57637);
+	SELECT 1 FROM master_add_inactive_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -434,10 +396,10 @@ step s1-add-inactive-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-activate-node-1:
- SELECT 1 FROM master_activate_node('localhost', 57637);
+	SELECT 1 FROM master_activate_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -445,10 +407,10 @@ step s1-activate-node-1:
 (1 row)
 
 step s2-activate-node-1:
- SELECT 1 FROM master_activate_node('localhost', 57637);
+	SELECT 1 FROM master_activate_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-activate-node-1: <... completed>
 ?column?
@@ -457,7 +419,7 @@ step s2-activate-node-1: <... completed>
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -471,13 +433,8 @@ master_remove_node
 
 
 starting permutation: s1-add-inactive-1 s1-begin s1-disable-node-1 s2-disable-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-inactive-1:
- SELECT 1 FROM master_add_inactive_node('localhost', 57637);
+	SELECT 1 FROM master_add_inactive_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -485,21 +442,28 @@ step s1-add-inactive-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
 
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
 
+wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 step s2-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-disable-node-1: <... completed>
 ?column?
@@ -507,8 +471,13 @@ step s2-disable-node-1: <... completed>
        1
 (1 row)
 
+wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -522,13 +491,8 @@ master_remove_node
 
 
 starting permutation: s1-add-node-1 s1-begin s1-disable-node-1 s2-activate-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -536,21 +500,27 @@ step s1-add-node-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
 
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
 
+wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 step s2-activate-node-1:
- SELECT 1 FROM master_activate_node('localhost', 57637);
+	SELECT 1 FROM master_activate_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-activate-node-1: <... completed>
 ?column?
@@ -559,7 +529,7 @@ step s2-activate-node-1: <... completed>
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -573,13 +543,8 @@ master_remove_node
 
 
 starting permutation: s1-add-node-1 s1-begin s1-activate-node-1 s2-disable-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -587,10 +552,10 @@ step s1-add-node-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-activate-node-1:
- SELECT 1 FROM master_activate_node('localhost', 57637);
+	SELECT 1 FROM master_activate_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -598,10 +563,11 @@ step s1-activate-node-1:
 (1 row)
 
 step s2-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-disable-node-1: <... completed>
 ?column?
@@ -609,8 +575,13 @@ step s2-disable-node-1: <... completed>
        1
 (1 row)
 
+wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -624,13 +595,8 @@ master_remove_node
 
 
 starting permutation: s1-add-inactive-1 s1-begin s1-disable-node-1 s2-activate-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-inactive-1:
- SELECT 1 FROM master_add_inactive_node('localhost', 57637);
+	SELECT 1 FROM master_add_inactive_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -638,21 +604,27 @@ step s1-add-inactive-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
 
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
 
+wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 step s2-activate-node-1:
- SELECT 1 FROM master_activate_node('localhost', 57637);
+	SELECT 1 FROM master_activate_node('localhost', 57637);
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-activate-node-1: <... completed>
 ?column?
@@ -661,7 +633,7 @@ step s2-activate-node-1: <... completed>
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -675,13 +647,8 @@ master_remove_node
 
 
 starting permutation: s1-add-inactive-1 s1-begin s1-activate-node-1 s2-disable-node-1 s1-commit s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-inactive-1:
- SELECT 1 FROM master_add_inactive_node('localhost', 57637);
+	SELECT 1 FROM master_add_inactive_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -689,10 +656,10 @@ step s1-add-inactive-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-activate-node-1:
- SELECT 1 FROM master_activate_node('localhost', 57637);
+	SELECT 1 FROM master_activate_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -700,10 +667,11 @@ step s1-activate-node-1:
 (1 row)
 
 step s2-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
  <waiting ...>
 step s1-commit: 
- COMMIT;
+	COMMIT;
 
 step s2-disable-node-1: <... completed>
 ?column?
@@ -711,59 +679,13 @@ step s2-disable-node-1: <... completed>
        1
 (1 row)
 
-step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
-
-nodename |nodeport|isactive
----------------------------------------------------------------------
-localhost|   57637|f
-(1 row)
-
-master_remove_node
+wait_until_metadata_sync
 ---------------------------------------------------------------------
 
-(1 row)
-
-
-starting permutation: s1-add-inactive-1 s1-begin s1-activate-node-1 s2-disable-node-1 s1-abort s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s1-add-inactive-1:
- SELECT 1 FROM master_add_inactive_node('localhost', 57637);
-
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s1-begin:
- BEGIN;
-
-step s1-activate-node-1:
- SELECT 1 FROM master_activate_node('localhost', 57637);
-
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
-step s2-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
- <waiting ...>
-step s1-abort: 
- ABORT;
-
-step s2-disable-node-1: <... completed>
-?column?
----------------------------------------------------------------------
-       1
 (1 row)
 
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------
@@ -777,13 +699,8 @@ master_remove_node
 
 
 starting permutation: s1-add-node-1 s1-begin s1-disable-node-1 s2-disable-node-1 s1-abort s1-show-nodes
-?column?
----------------------------------------------------------------------
-       1
-(1 row)
-
 step s1-add-node-1:
- SELECT 1 FROM master_add_node('localhost', 57637);
+	SELECT 1 FROM master_add_node('localhost', 57637);
 
 ?column?
 ---------------------------------------------------------------------
@@ -791,21 +708,28 @@ step s1-add-node-1:
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
 
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
 
+wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 step s2-disable-node-1:
- SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT 1 FROM master_disable_node('localhost', 57637);
+	SELECT public.wait_until_metadata_sync();
  <waiting ...>
 step s1-abort: 
- ABORT;
+	ABORT;
 
 step s2-disable-node-1: <... completed>
 ?column?
@@ -813,8 +737,13 @@ step s2-disable-node-1: <... completed>
        1
 (1 row)
 
+wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 step s1-show-nodes:
- SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
+	SELECT nodename, nodeport, isactive FROM pg_dist_node ORDER BY nodename, nodeport;
 
 nodename |nodeport|isactive
 ---------------------------------------------------------------------

@@ -3,6 +3,11 @@ orbs:
   codecov: codecov/codecov@1.1.1
   azure-cli: circleci/azure-cli@1.0.0
 
+parameters:
+  image_suffix:
+    type: string
+    default: "-v2021_10_27"
+
 jobs:
 
   build:
@@ -19,7 +24,7 @@ jobs:
         description: tag to use for the docker image
         type: string
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     steps:
       - checkout
       - run:
@@ -61,6 +66,12 @@ jobs:
       - run:
           name: 'Check for C-style comments in migration files'
           command: ci/disallow_c_comments_in_migrations.sh
+      - run:
+          name: 'Check if changed'
+          command: git diff --exit-code
+      - run:
+          name: 'Check for comments that start with # character in spec files'
+          command: ci/disallow_hash_comments_in_spec_files.sh
       - run:
           name: 'Check if changed'
           command: git diff --exit-code
@@ -113,7 +124,7 @@ jobs:
         type: string
         default: 12-13
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -158,6 +169,14 @@ jobs:
                 cp core.* /tmp/core_dumps
             fi
           when: on_fail
+      - run:
+          name: 'Copy pg_upgrade logs for newData dir'
+          command: |
+            mkdir -p /tmp/pg_upgrade_newData_logs
+            if ls src/test/regress/tmp_upgrade/newData/*.log 1> /dev/null 2>&1; then
+                cp src/test/regress/tmp_upgrade/newData/*.log /tmp/pg_upgrade_newData_logs
+            fi
+          when: on_fail
       - store_artifacts:
           name: 'Save regressions'
           path: src/test/regress/regression.diffs
@@ -166,6 +185,9 @@ jobs:
           name: 'Save core dumps'
           path: /tmp/core_dumps
           when: on_fail
+      - store_artifacts:
+          name: 'Save pg_upgrade logs for newData dir'
+          path: /tmp/pg_upgrade_newData_logs
       - codecov/upload:
           flags: 'test_<< parameters.old_pg_major >>_<< parameters.new_pg_major >>,upgrade'
 
@@ -185,7 +207,7 @@ jobs:
         type: string
         default: 12-13
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     resource_class: xlarge
     working_directory: /home/circleci/project
     steps:
@@ -265,7 +287,7 @@ jobs:
         description: 'docker image tag to use'
         type: string
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -286,11 +308,11 @@ jobs:
             # run make check-citus-upgrade for all citus versions
             # the image has ${CITUS_VERSIONS} set with all verions it contains the binaries of
             for citus_version in ${CITUS_VERSIONS}; do \
-              export upgrade_test_old_citus_version="$citus_version"; \
               gosu circleci \
                 make -C src/test/regress \
                   check-citus-upgrade \
                   bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
+                  citus-old-version=${citus_version} \
                   citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
                   citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
             done;
@@ -301,6 +323,7 @@ jobs:
               gosu circleci \
                 make -C src/test/regress \
                   check-citus-upgrade-mixed \
+                  citus-old-version=${citus_version} \
                   bindir=/usr/lib/postgresql/${PG_MAJOR}/bin \
                   citus-pre-tar=/install-pg${PG_MAJOR}-citus${citus_version}.tar \
                   citus-post-tar=/home/circleci/project/install-$PG_MAJOR.tar; \
@@ -350,7 +373,7 @@ jobs:
         description: "make target"
         type: string
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -395,6 +418,9 @@ jobs:
           path: src/test/regress/regression.diffs
           when: on_fail
       - store_artifacts:
+          name: 'Save mitmproxy output (failure test specific)'
+          path: src/test/regress/proxy.output
+      - store_artifacts:
           name: 'Save results'
           path: src/test/regress/results/
           when: on_fail
@@ -427,7 +453,7 @@ jobs:
         type: string
         default: installcheck
     docker:
-      - image: '<< parameters.image >>:<< parameters.image_tag >>'
+      - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -780,7 +806,7 @@ workflows:
           name: 'test-12-13_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 13
-          image_tag: '12.8-13.4'
+          image_tag: '12.8-13.4-14.0'
           requires: [build-12,build-13]
 
       - test-pg-upgrade:

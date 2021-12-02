@@ -85,7 +85,8 @@ FROM
 WHERE
 	logicalrelid IN ('sensors'::regclass, 'sensors_2000'::regclass,
 					 'sensors_2001'::regclass, 'sensors_2002'::regclass,
-					 'sensors_2003'::regclass, 'sensors_2004'::regclass);
+					 'sensors_2003'::regclass, 'sensors_2004'::regclass)
+ORDER BY 1,2;
 
 -- show that all the tables prune to the same shard for the same distribution key
 WITH
@@ -98,7 +99,7 @@ WITH
 	all_shardids AS (SELECT * FROM sensors_shardid UNION SELECT * FROM sensors_2000_shardid UNION
 					 SELECT * FROM sensors_2001_shardid UNION SELECT * FROM sensors_2002_shardid
 					 UNION SELECT * FROM sensors_2003_shardid UNION SELECT * FROM sensors_2004_shardid)
-SELECT logicalrelid, shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid IN (SELECT * FROM all_shardids);
+SELECT logicalrelid, shardid, shardminvalue, shardmaxvalue FROM pg_dist_shard WHERE shardid IN (SELECT * FROM all_shardids) ORDER BY 1,2,3,4;
 
 VACUUM ANALYZE sensors, sensors_2000, sensors_2001, sensors_2002, sensors_2003;
 
@@ -190,7 +191,8 @@ FROM
 WHERE
 	logicalrelid IN ('sensors'::regclass, 'sensors_2000'::regclass,
 					 'sensors_2001'::regclass, 'sensors_2002'::regclass,
-					 'sensors_2003'::regclass, 'sensors_2004'::regclass);
+					 'sensors_2003'::regclass, 'sensors_2004'::regclass)
+ORDER BY 1,2;
 
 \c - - - :worker_1_port
 SET search_path TO drop_column_partitioned_table;
@@ -201,7 +203,8 @@ FROM
 WHERE
 	logicalrelid IN ('sensors'::regclass, 'sensors_2000'::regclass,
 					 'sensors_2001'::regclass, 'sensors_2002'::regclass,
-					 'sensors_2003'::regclass, 'sensors_2004'::regclass);
+					 'sensors_2003'::regclass, 'sensors_2004'::regclass)
+ORDER BY 1,2;
 
 \c - - - :master_port
 SET client_min_messages TO WARNING;

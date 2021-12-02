@@ -28,7 +28,7 @@ pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsd
 MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) --launcher="$(citus_abs_srcdir)/log_test_times"
 
 pg_upgrade_check = $(citus_abs_srcdir)/citus_tests/upgrade/pg_upgrade_test.py
-citus_upgrade_check = $(citus_abs_srcdir)/citus_tests/upgrade/citus_upgrade_test.py
+citus_upgrade_check =CITUS_OLD_VERSION=$(citus-old-version) $(citus_abs_srcdir)/citus_tests/upgrade/citus_upgrade_test.py
 arbitrary_config_check = $(citus_abs_srcdir)/citus_tests/arbitrary_configs/citus_arbitrary_configs.py
 
 template_isolation_files = $(shell find $(citus_abs_srcdir)/spec/ -name '*.spec')
@@ -43,7 +43,7 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 # intermediate, for muscle memory backward compatibility.
 check: check-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-worker check-operations check-follower-cluster check-failure
+check-full: check-multi check-multi-mx check-multi-1 check-worker check-operations check-follower-cluster check-isolation check-failure
 
 
 ISOLATION_DEPDIR=.deps/isolation

@@ -68,7 +68,7 @@ step "s2-create-table-1"
 step "s2-create-table-2"
 {
 	SET citus.shard_count TO 4;
-	SET citus.shard_replication_factor TO 2;
+	SET citus.shard_replication_factor TO 1;
 	CREATE TABLE dist_table (x int, y int);
 	SELECT create_distributed_table('dist_table', 'x');
 }
@@ -101,7 +101,7 @@ permutation "s1-add-node-2" "s1-begin" "s1-remove-node-2" "s2-create-table-1" "s
 permutation "s1-add-node-2" "s1-begin" "s1-remove-node-2" "s2-create-table-1" "s1-abort" "s1-show-placements" "s2-select"
 permutation "s1-add-node-2" "s2-begin" "s2-create-table-1" "s1-remove-node-2" "s2-commit" "s1-show-placements" "s2-select"
 
-// session 1 removes a node, session 2 creates a distributed table with replication factor 2, should throw a sane error
+// session 1 removes a node, session 2 creates a distributed table with replication factor 1, should throw a sane error
 permutation "s1-add-node-2" "s1-begin" "s1-remove-node-2" "s2-create-table-2" "s1-commit" "s2-select"
 permutation "s1-add-node-2" "s2-begin" "s2-create-table-2" "s1-remove-node-2" "s2-commit" "s2-select"
 

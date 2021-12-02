@@ -117,3 +117,90 @@ BEGIN;
 	-- since we run "after schedule" twice, rollback the transaction
 	-- to avoid getting "table already exists" errors
 ROLLBACK;
+
+BEGIN;
+  -- Show that we can still drop the extension after upgrading
+  SET client_min_messages TO WARNING;
+
+  -- Drop extension migth cascade to columnar.options before dropping a
+  -- columnar table. In that case, we were getting below error when opening
+  -- columnar.options to delete records for the columnar table that we are
+  -- about to drop.: "ERROR:  could not open relation with OID 0".
+  --
+  -- I somehow reproduced this bug easily when upgrading pg, that is why
+  -- adding the test to this file.
+  --
+  -- TODO: Need to uncomment following line after fixing
+  --       https://github.com/citusdata/citus/issues/5483.
+    -- DROP EXTENSION citus CASCADE;
+ROLLBACK;
+
+-- Make sure that we define dependencies from all rel objects (tables,
+-- indexes, sequences ..) to columnar table access method.
+--
+-- Given that this test file is run both before and after pg upgrade, the
+-- first run will test that for columnar--10.2-3--10.2-4.sql script, and the
+-- second run will test the same for citus_finish_pg_upgrade(), for the post
+-- pg-upgrade scenario.
+SELECT pg_class.oid INTO columnar_schema_members
+FROM pg_class, pg_namespace
+WHERE pg_namespace.oid=pg_class.relnamespace AND
+      pg_namespace.nspname='columnar';
+SELECT refobjid INTO columnar_schema_members_pg_depend
+FROM pg_depend
+WHERE classid = 'pg_am'::regclass::oid AND
+      objid = (select oid from pg_am where amname = 'columnar') AND
+      objsubid = 0 AND
+      refclassid = 'pg_class'::regclass::oid AND
+      refobjsubid = 0 AND
+      deptype = 'n';
+
+-- ... , so this should be empty,
+(TABLE columnar_schema_members EXCEPT TABLE columnar_schema_members_pg_depend)
+UNION
+(TABLE columnar_schema_members_pg_depend EXCEPT TABLE columnar_schema_members);
+
+-- ... , and both columnar_schema_members_pg_depend & columnar_schema_members
+-- should have 10 entries.
+SELECT COUNT(*)=10 FROM columnar_schema_members_pg_depend;
+
+DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
+
+-- Check the same for workers too.
+
+SELECT run_command_on_workers(
+$$
+SELECT pg_class.oid INTO columnar_schema_members
+FROM pg_class, pg_namespace
+WHERE pg_namespace.oid=pg_class.relnamespace AND
+	  pg_namespace.nspname='columnar';
+SELECT refobjid INTO columnar_schema_members_pg_depend
+FROM pg_depend
+WHERE classid = 'pg_am'::regclass::oid AND
+	  objid = (select oid from pg_am where amname = 'columnar') AND
+	  objsubid = 0 AND
+	  refclassid = 'pg_class'::regclass::oid AND
+	  refobjsubid = 0 AND
+	  deptype = 'n';
+$$
+);
+
+SELECT run_command_on_workers(
+$$
+(TABLE columnar_schema_members EXCEPT TABLE columnar_schema_members_pg_depend)
+UNION
+(TABLE columnar_schema_members_pg_depend EXCEPT TABLE columnar_schema_members);
+$$
+);
+
+SELECT run_command_on_workers(
+$$
+SELECT COUNT(*)=10 FROM columnar_schema_members_pg_depend;
+$$
+);
+
+SELECT run_command_on_workers(
+$$
+DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
+$$
+);

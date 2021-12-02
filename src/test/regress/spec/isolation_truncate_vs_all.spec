@@ -9,8 +9,10 @@ setup
 	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
 	SET citus.shard_replication_factor TO 1;
+	SET citus.next_shard_id TO 5990340;
 	CREATE TABLE truncate_append(id integer, data text);
 	SELECT create_distributed_table('truncate_append', 'id', 'append');
+	SELECT master_create_empty_shard('truncate_append');
 }
 
 // drop distributed table
@@ -23,7 +25,7 @@ teardown
 
 // session 1
 session "s1"
-step "s1-initialize" { COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
+step "s1-initialize" { COPY truncate_append FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH (format 'csv', append_to_shard 5990340); }
 step "s1-begin" { BEGIN; }
 step "s1-truncate" { TRUNCATE truncate_append; }
 step "s1-drop" { DROP TABLE truncate_append; }

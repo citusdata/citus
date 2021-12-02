@@ -337,7 +337,7 @@ alter table citus_local_parent_1_child_1 add foreign key(a) references ref(a);
 -- this should work
 alter table citus_local_parent_1 add constraint fkey_to_drop_test foreign key(a) references ref(a);
 -- this should undistribute the table, and the entries should be gone from pg_dist_partition
-select logicalrelid from pg_dist_partition where logicalrelid::text like 'citus_local_parent%';
+select logicalrelid from pg_dist_partition where logicalrelid::text like 'citus_local_parent%' order by logicalrelid;
 set client_min_messages to error;
 alter table citus_local_parent_1 drop constraint fkey_to_drop_test;
 select logicalrelid from pg_dist_partition where logicalrelid::text like 'citus_local_parent%';

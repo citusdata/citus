@@ -7,6 +7,7 @@
 \set VERBOSITY terse
 
 SET citus.next_shard_id TO 1500000;
+SET citus.next_placement_id TO 8300000;
 SET citus.shard_replication_factor TO 1;
 SET citus.enable_local_execution TO ON;
 SET citus.shard_COUNT TO 32;

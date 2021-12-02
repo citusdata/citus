@@ -1,5 +1,5 @@
 -- run this test only when old citus version is 9.0
-\set upgrade_test_old_citus_version `echo "$upgrade_test_old_citus_version"`
+\set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
 SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int = 9 AND
        substring(:'upgrade_test_old_citus_version', 'v\d+\.(\d+)\.\d+')::int = 0
 AS upgrade_test_old_citus_version_e_9_0;

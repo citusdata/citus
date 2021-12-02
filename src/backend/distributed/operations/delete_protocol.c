@@ -123,7 +123,7 @@ citus_drop_all_shards(PG_FUNCTION_ARGS)
 	 * The SQL_DROP trigger calls this function even for tables that are
 	 * not distributed. In that case, silently ignore and return -1.
 	 */
-	if (!IsCitusTable(relationId) || !EnableDDLPropagation)
+	if (!IsCitusTableViaCatalog(relationId) || !EnableDDLPropagation)
 	{
 		PG_RETURN_INT32(-1);
 	}
@@ -139,7 +139,7 @@ citus_drop_all_shards(PG_FUNCTION_ARGS)
 	 */
 	LockRelationOid(relationId, AccessExclusiveLock);
 
-	List *shardIntervalList = LoadShardIntervalList(relationId);
+	List *shardIntervalList = LoadUnsortedShardIntervalListViaCatalog(relationId);
 	int droppedShardCount = DropShards(relationId, schemaName, relationName,
 									   shardIntervalList, dropShardsMetadataOnly);
 
@@ -462,8 +462,7 @@ CreateDropShardPlacementCommand(const char *schemaName, const char *shardRelatio
 		appendStringInfo(workerDropQuery, DROP_REGULAR_TABLE_COMMAND,
 						 quotedShardName);
 	}
-	else if (storageType == SHARD_STORAGE_COLUMNAR ||
-			 storageType == SHARD_STORAGE_FOREIGN)
+	else if (storageType == SHARD_STORAGE_FOREIGN)
 	{
 		appendStringInfo(workerDropQuery, DROP_FOREIGN_TABLE_COMMAND,
 						 quotedShardName);

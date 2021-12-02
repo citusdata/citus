@@ -40,7 +40,7 @@ step "s1-master-modify-multiple-shards" { DELETE FROM update_hash; }
 step "s1-create-non-distributed-table" { CREATE TABLE update_hash(id integer, data text); COPY update_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
 step "s1-distribute-table" { SELECT create_distributed_table('update_hash', 'id'); }
 step "s1-select-count" { SELECT COUNT(*) FROM update_hash; }
-step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''update_hash%'''); }
+step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''update_hash\_%'''); }
 step "s1-show-columns" { SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''update_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1'); }
 step "s1-commit" { COMMIT; }
 

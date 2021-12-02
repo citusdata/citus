@@ -52,14 +52,14 @@ FROM
 	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
-	c_custkey < 0;
+	c_custkey < 0 AND c_custkey > 0;
 SELECT
 	count(*)
 FROM
 	orders, customer_append
 WHERE
 	o_custkey = c_custkey AND
-	c_custkey < 0;
+	c_custkey < 0 AND c_custkey > 0;
 
 -- Dual hash-repartition join test case. Note that this query doesn't produce
 -- meaningful results and is only to test hash-partitioning of two large tables

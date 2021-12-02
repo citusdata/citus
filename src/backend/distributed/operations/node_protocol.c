@@ -69,7 +69,6 @@
 /* Shard related configuration */
 int ShardCount = 32;
 int ShardReplicationFactor = 1; /* desired replication factor for shards */
-int ShardMaxSize = 1048576;     /* maximum size in KB one shard can grow to */
 int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
 int NextShardId = 0;
 int NextPlacementId = 0;
@@ -102,32 +101,6 @@ master_get_table_metadata(PG_FUNCTION_ARGS)
 {
 	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					errmsg("master_get_table_metadata is deprecated")));
-}
-
-
-/*
- * CStoreTable returns true if the given relationId belongs to a foreign cstore
- * table, otherwise it returns false.
- */
-bool
-CStoreTable(Oid relationId)
-{
-	bool cstoreTable = false;
-
-	char relationKind = get_rel_relkind(relationId);
-	if (relationKind == RELKIND_FOREIGN_TABLE)
-	{
-		ForeignTable *foreignTable = GetForeignTable(relationId);
-		ForeignServer *server = GetForeignServer(foreignTable->serverid);
-		ForeignDataWrapper *foreignDataWrapper = GetForeignDataWrapper(server->fdwid);
-
-		if (strncmp(foreignDataWrapper->fdwname, CSTORE_FDW_NAME, NAMEDATALEN) == 0)
-		{
-			cstoreTable = true;
-		}
-	}
-
-	return cstoreTable;
 }
 
 
@@ -846,15 +819,7 @@ ShardStorageType(Oid relationId)
 	}
 	else if (relationType == RELKIND_FOREIGN_TABLE)
 	{
-		bool cstoreTable = CStoreTable(relationId);
-		if (cstoreTable)
-		{
-			shardStorageType = SHARD_STORAGE_COLUMNAR;
-		}
-		else
-		{
-			shardStorageType = SHARD_STORAGE_FOREIGN;
-		}
+		shardStorageType = SHARD_STORAGE_FOREIGN;
 	}
 	else
 	{

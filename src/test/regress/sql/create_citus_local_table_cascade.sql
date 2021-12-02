@@ -1,6 +1,7 @@
 \set VERBOSITY terse
 
 SET citus.next_shard_id TO 1516000;
+SET citus.next_placement_id TO 1516000;
 SET citus.shard_replication_factor TO 1;
 
 CREATE SCHEMA citus_add_local_table_to_metadata_cascade;

@@ -56,6 +56,7 @@
  */
 int MultiShardConnectionType = PARALLEL_CONNECTION;
 bool WritableStandbyCoordinator = false;
+bool AllowModificationsFromWorkersToReplicatedTables = true;
 
 /*
  * Pointer to bound parameters of the current ongoing call to ExecutorRun.

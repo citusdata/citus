@@ -93,7 +93,7 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -198,7 +198,7 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 
 		ddlJob->targetRelationId = relationId;
 		ddlJob->startNewTransaction = false;
-		ddlJob->commandString = ddlCommand;
+		ddlJob->metadataSyncCommand = ddlCommand;
 		ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 		ddlJobs = lappend(ddlJobs, ddlJob);
@@ -237,7 +237,7 @@ PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -275,7 +275,7 @@ PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -348,7 +348,18 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 {
 	AlterStatsStmt *stmt = castNode(AlterStatsStmt, node);
 
-	Oid statsOid = get_statistics_object_oid(stmt->defnames, false);
+	Oid statsOid = get_statistics_object_oid(stmt->defnames, stmt->missing_ok);
+
+	if (!OidIsValid(statsOid))
+	{
+		/*
+		 * If statsOid is invalid, here we can assume that the query includes
+		 * IF EXISTS clause, since get_statistics_object_oid would error out otherwise.
+		 * So here we can safely return NIL here without checking stmt->missing_ok.
+		 */
+		return NIL;
+	}
+
 	Oid relationId = GetRelIdByStatsOid(statsOid);
 
 	if (!IsCitusTable(relationId) || !ShouldPropagate())
@@ -366,7 +377,7 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -406,7 +417,7 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 
 	ddlJob->targetRelationId = relationId;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);

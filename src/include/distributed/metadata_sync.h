@@ -31,6 +31,7 @@ typedef enum
 extern void StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern bool ShouldSyncTableMetadata(Oid relationId);
+extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
 extern List * MetadataCreateCommands(void);
 extern List * MetadataDropCommands(void);
 extern char * DistributionCreateCommand(CitusTableCacheEntry *cacheEntry);
@@ -73,11 +74,10 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 	"VALUES (" UINT64_FORMAT ", %d, " UINT64_FORMAT \
 	", %d, " UINT64_FORMAT \
 	") " \
-	"ON CONFLICT (placementid) DO UPDATE SET " \
-	"shardid = EXCLUDED.shardid, " \
+	"ON CONFLICT (shardid, groupid) DO UPDATE SET " \
 	"shardstate = EXCLUDED.shardstate, " \
 	"shardlength = EXCLUDED.shardlength, " \
-	"groupid = EXCLUDED.groupid"
+	"placementid = EXCLUDED.placementid"
 #define METADATA_SYNC_CHANNEL "metadata_sync"
 
 

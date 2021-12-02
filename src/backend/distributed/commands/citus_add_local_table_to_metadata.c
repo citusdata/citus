@@ -46,12 +46,21 @@
 #include "utils/syscache.h"
 
 
+/*
+ * Global variable for the GUC citus.use_citus_managed_tables.
+ * This is used after every CREATE TABLE statement in utility_hook.c
+ * If this variable is set to true, we add all created tables to metadata.
+ */
+bool AddAllLocalTablesToMetadata = true;
+
 static void citus_add_local_table_to_metadata_internal(Oid relationId,
 													   bool cascadeViaForeignKeys);
 static void ErrorIfAddingPartitionTableToMetadata(Oid relationId);
 static void ErrorIfUnsupportedCreateCitusLocalTable(Relation relation);
 static void ErrorIfUnsupportedCitusLocalTableKind(Oid relationId);
 static void ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation);
+static void NoticeIfAutoConvertingLocalTables(bool autoConverted, Oid relationId);
+static CascadeOperationType GetCascadeTypeForCitusLocalTables(bool autoConverted);
 static List * GetShellTableDDLEventsForCitusLocalTable(Oid relationId);
 static uint64 ConvertLocalTableToShard(Oid relationId);
 static void RenameRelationToShardRelation(Oid shellRelationId, uint64 shardId);
@@ -79,7 +88,8 @@ static void DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(Oid sourceRelat
 static void DropDefaultColumnDefinition(Oid relationId, char *columnName);
 static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
-static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId);
+static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
+											 bool autoConverted);
 static void FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList);
 
 
@@ -114,23 +124,8 @@ citus_add_local_table_to_metadata_internal(Oid relationId, bool cascadeViaForeig
 {
 	CheckCitusVersion(ERROR);
 
-	if (ShouldEnableLocalReferenceForeignKeys())
-	{
-		/*
-		 * When foreign keys between reference tables and postgres tables are
-		 * enabled, we automatically undistribute citus local tables that are
-		 * not chained with any reference tables back to postgres tables.
-		 * So give a warning to user for that.
-		 */
-		ereport(WARNING, (errmsg("local tables that are added to metadata but not "
-								 "chained with reference tables via foreign keys might "
-								 "be automatically converted back to postgres tables"),
-						  errhint("Consider setting "
-								  "citus.enable_local_reference_table_foreign_keys "
-								  "to 'off' to disable this behavior")));
-	}
-
-	CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+	bool autoConverted = false;
+	CreateCitusLocalTable(relationId, cascadeViaForeignKeys, autoConverted);
 }
 
 
@@ -190,7 +185,7 @@ remove_local_tables_from_metadata(PG_FUNCTION_ARGS)
  * single placement is only allowed to be on the coordinator.
  */
 void
-CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
+CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConverted)
 {
 	/*
 	 * These checks should be done before acquiring any locks on relation.
@@ -211,6 +206,21 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	 * cannot relax this check.
 	 */
 	SetLocalExecutionStatus(LOCAL_EXECUTION_REQUIRED);
+
+	if (!autoConverted && IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		/*
+		 * We allow users to mark local tables already added to metadata
+		 * as "autoConverted = false".
+		 * If the user called citus_add_local_table_to_metadata for a table that is
+		 * already added to metadata, we should mark this one and connected relations
+		 * as auto-converted = false.
+		 */
+		UpdateAutoConvertedForConnectedRelations(list_make1_oid(relationId),
+												 autoConverted);
+
+		return;
+	}
 
 	/*
 	 * Lock target relation with an AccessExclusiveLock as we don't want
@@ -236,6 +246,8 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	 */
 	relation_close(relation, NoLock);
 
+	NoticeIfAutoConvertingLocalTables(autoConverted, relationId);
+
 	if (TableHasExternalForeignKeys(relationId))
 	{
 		if (!cascadeViaForeignKeys)
@@ -259,12 +271,14 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 									qualifiedRelationName, qualifiedRelationName)));
 		}
 
+		CascadeOperationType cascadeType =
+			GetCascadeTypeForCitusLocalTables(autoConverted);
+
 		/*
 		 * By acquiring AccessExclusiveLock, make sure that no modifications happen
 		 * on the relations.
 		 */
-		CascadeOperationForFkeyConnectedRelations(relationId, lockMode,
-												  CASCADE_ADD_LOCAL_TABLE_TO_METADATA);
+		CascadeOperationForFkeyConnectedRelations(relationId, lockMode, cascadeType);
 
 		/*
 		 * We converted every foreign key connected table in our subgraph
@@ -280,8 +294,11 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 		{
 			relationList = lappend_oid(relationList, relationId);
 
+			CascadeOperationType cascadeType =
+				GetCascadeTypeForCitusLocalTables(autoConverted);
+
 			CascadeOperationForRelationIdList(relationList, AccessExclusiveLock,
-											  CASCADE_ADD_LOCAL_TABLE_TO_METADATA);
+											  cascadeType);
 			return;
 		}
 	}
@@ -335,7 +352,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys)
 	DropDefaultExpressionsAndMoveOwnedSequenceOwnerships(shardRelationId,
 														 shellRelationId);
 
-	InsertMetadataForCitusLocalTable(shellRelationId, shardId);
+	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
 
 	/*
 	 * Ensure that the sequences used in column defaults of the table
@@ -403,7 +420,13 @@ CreateCitusLocalTablePartitionOf(CreateStmt *createStatement, Oid relationId,
 	 * again with the attach command
 	 */
 	DropRelationForeignKeys(relationId, fKeyFlags);
-	CreateCitusLocalTable(relationId, false);
+
+	/* get the autoconverted field from the parent */
+	CitusTableCacheEntry *entry = GetCitusTableCacheEntry(parentRelationId);
+
+	bool cascade = false;
+	bool autoConverted = entry->autoConverted;
+	CreateCitusLocalTable(relationId, cascade, autoConverted);
 	ExecuteAndLogUtilityCommand(attachCommand);
 }
 
@@ -536,6 +559,80 @@ ErrorIfUnsupportedCitusLocalColumnDefinition(Relation relation)
 							   "has identity column",
 							   generate_qualified_relation_name(relationId)),
 						errhint("Drop the identity columns and re-try the command")));
+	}
+}
+
+
+/*
+ * NoticeIfAutoConvertingLocalTables logs a NOTICE message to inform the user that we are
+ * automatically adding local tables to metadata. The user should know that this table
+ * will be undistributed automatically, if it gets disconnected from reference table(s).
+ */
+static void
+NoticeIfAutoConvertingLocalTables(bool autoConverted, Oid relationId)
+{
+	if (autoConverted && ShouldEnableLocalReferenceForeignKeys())
+	{
+		char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+
+		/*
+		 * When foreign keys between reference tables and postgres tables are
+		 * enabled, we automatically undistribute citus local tables that are
+		 * not chained with any reference tables back to postgres tables.
+		 * So give a warning to user for that.
+		 */
+		ereport(NOTICE, (errmsg("local tables that are added to metadata automatically "
+								"by citus, but not chained with reference tables via "
+								"foreign keys might be automatically converted back to "
+								"postgres tables"),
+						 errhint("Executing citus_add_local_table_to_metadata($$%s$$) "
+								 "prevents this for the given relation, and all of the "
+								 "connected relations", qualifiedRelationName)));
+	}
+}
+
+
+/*
+ * GetCascadeTypeForCitusLocalTables returns CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA
+ * if autoConverted is true. Returns CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA otherwise.
+ */
+static CascadeOperationType
+GetCascadeTypeForCitusLocalTables(bool autoConverted)
+{
+	if (autoConverted)
+	{
+		return CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA;
+	}
+
+	return CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA;
+}
+
+
+/*
+ * UpdateAutoConvertedForConnectedRelations updates the autoConverted field on
+ * pg_dist_partition for the foreign key connected relations of the given relations.
+ * Sets it to given autoConverted value for all of the connected relations.
+ * We don't need to update partition relations separately, since the foreign key
+ * graph already includes them, as they have the same (inherited) fkeys as their parents.
+ */
+void
+UpdateAutoConvertedForConnectedRelations(List *relationIds, bool autoConverted)
+{
+	InvalidateForeignKeyGraph();
+
+	List *relationIdList = NIL;
+	Oid relid = InvalidOid;
+	foreach_oid(relid, relationIds)
+	{
+		List *connectedRelations = GetForeignKeyConnectedRelationIdList(relid);
+		relationIdList = list_concat_unique_oid(relationIdList, connectedRelations);
+	}
+
+	relationIdList = SortList(relationIdList, CompareOids);
+
+	foreach_oid(relid, relationIdList)
+	{
+		UpdatePgDistPartitionAutoConverted(relid, false);
 	}
 }
 
@@ -1090,7 +1187,8 @@ TransferSequenceOwnership(Oid sequenceId, Oid targetRelationId, char *targetColu
  * pg_dist_partition, pg_dist_shard & pg_dist_placement.
  */
 static void
-InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId)
+InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
+								 bool autoConverted)
 {
 	Assert(OidIsValid(citusLocalTableId));
 	Assert(shardId != INVALID_SHARD_ID);
@@ -1102,7 +1200,7 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId)
 	Var *distributionColumn = NULL;
 	InsertIntoPgDistPartition(citusLocalTableId, distributionMethod,
 							  distributionColumn, colocationId,
-							  replicationModel);
+							  replicationModel, autoConverted);
 
 	/* set shard storage type according to relation type */
 	char shardStorageType = ShardStorageType(citusLocalTableId);

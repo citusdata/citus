@@ -162,7 +162,7 @@ SELECT create_distributed_table('dist_table_test_2', 'a');
 
 -- Mark tables as coordinator replicated in order to be able to test replicate_table_shards
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
-	('dist_table_test_2'::regclass);
+  ('dist_table_test_2'::regclass);
 -- replicate_table_shards should fail when the hostname GUC is set to a non-reachable node
 ALTER SYSTEM SET citus.local_hostname TO 'foobar';
 SELECT pg_reload_conf();
@@ -452,15 +452,10 @@ DELETE FROM pg_dist_shard_placement WHERE placementid in (
                                     ORDER BY nodename, nodeport limit 1)
 );
 -- Upload the test data to the shards
-SELECT count(master_append_table_to_shard(shardid, 'shard_rebalancer_test_data',
-                                          host(inet_server_addr()), inet_server_port()))
-    FROM pg_dist_shard
-    WHERE logicalrelid = 'replication_test_table'::regclass;
- count
----------------------------------------------------------------------
-     4
-(1 row)
-
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
 -- Verify that there is one node with all placements
 SELECT * FROM replication_test_table_placements_per_node;
  count
@@ -581,15 +576,12 @@ $$;
 CALL create_unbalanced_shards('rebalance_test_table');
 SET citus.shard_replication_factor TO 2;
 -- Upload the test data to the shards
-SELECT count(master_append_table_to_shard(shardid, 'shard_rebalancer_test_data',
-        host(inet_server_addr()), inet_server_port()))
-FROM pg_dist_shard
-WHERE logicalrelid = 'rebalance_test_table'::regclass;
- count
----------------------------------------------------------------------
-     6
-(1 row)
-
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard xxxxx)
 -- Verify that there is one node with all placements
 SELECT * FROM table_placements_per_node;
  nodeport |     logicalrelid     | count
@@ -787,14 +779,10 @@ CREATE TABLE test_schema_support.nation_hash (
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT master_create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 1);
- master_create_worker_shards
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
@@ -805,18 +793,15 @@ CREATE TABLE test_schema_support.nation_hash2 (
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT master_create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', 'hash');
- master_create_distributed_table
+SELECT create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', 'hash');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT master_create_worker_shards('test_schema_support.nation_hash2', 4, 1);
- master_create_worker_shards
----------------------------------------------------------------------
-
-(1 row)
-
+-- Mark tables as coordinator replicated in order to be able to test replicate_table_shards
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+  ('test_schema_support.nation_hash2'::regclass, 'test_schema_support.nation_hash'::regclass);
 -- Shard count before replication
 SELECT COUNT(*) FROM pg_dist_shard_placement;
  count
@@ -825,22 +810,22 @@ SELECT COUNT(*) FROM pg_dist_shard_placement;
 (1 row)
 
 SET search_path TO public;
-SELECT replicate_table_shards('test_schema_support.nation_hash', shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('test_schema_support.nation_hash', shard_replication_factor:=2, max_shard_copies:=1, shard_transfer_mode:='block_writes');
  replicate_table_shards
 ---------------------------------------------------------------------
 
 (1 row)
 
--- Confirm replication
+-- Confirm replication, both tables replicated due to colocation
 SELECT COUNT(*) FROM pg_dist_shard_placement;
  count
 ---------------------------------------------------------------------
-    12
+    10
 (1 row)
 
 -- Test with search_path is set
 SET search_path TO test_schema_support;
-SELECT replicate_table_shards('nation_hash2', shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('nation_hash2', shard_replication_factor:=2, shard_transfer_mode:='block_writes');
  replicate_table_shards
 ---------------------------------------------------------------------
 
@@ -874,44 +859,14 @@ SELECT master_create_distributed_table('test_schema_support.imbalanced_table', '
 (1 row)
 
 SET citus.shard_replication_factor TO 1;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
- master_create_empty_shard
----------------------------------------------------------------------
-                    123018
-(1 row)
-
-SELECT master_append_table_to_shard(123018, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
 SET citus.shard_replication_factor TO 2;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
- master_create_empty_shard
----------------------------------------------------------------------
-                    123019
-(1 row)
-
-SELECT master_append_table_to_shard(123019, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
 SET citus.shard_replication_factor TO 1;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
- master_create_empty_shard
----------------------------------------------------------------------
-                    123020
-(1 row)
-
-SELECT master_append_table_to_shard(123020, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
 -- imbalanced_table is now imbalanced
 -- Shard counts in each node before rebalance
 SELECT * FROM public.table_placements_per_node;
@@ -1108,17 +1063,17 @@ SELECT * FROM public.table_placements_per_node;
 (4 rows)
 
 CALL citus_cleanup_orphaned_shards();
-select * from pg_dist_placement;
+select * from pg_dist_placement ORDER BY placementid;
  placementid | shardid | shardstate | shardlength | groupid
 ---------------------------------------------------------------------
-         135 |  123023 |          1 |           0 |      14
-         138 |  123024 |          1 |           0 |      14
-         141 |  123027 |          1 |           0 |      14
-         142 |  123028 |          1 |           0 |      14
-         143 |  123021 |          1 |           0 |      16
-         144 |  123025 |          1 |           0 |      16
-         145 |  123022 |          1 |           0 |      16
-         146 |  123026 |          1 |           0 |      16
+         150 |  123023 |          1 |           0 |      14
+         153 |  123024 |          1 |           0 |      14
+         156 |  123027 |          1 |           0 |      14
+         157 |  123028 |          1 |           0 |      14
+         158 |  123021 |          1 |           0 |      16
+         159 |  123025 |          1 |           0 |      16
+         160 |  123022 |          1 |           0 |      16
+         161 |  123026 |          1 |           0 |      16
 (8 rows)
 
 -- Move all shards to worker1 again
@@ -2080,6 +2035,12 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
         1
 (1 row)
 
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 --
 -- Make sure that rebalance_table_shards() and replicate_table_shards() replicate
 -- reference tables to the coordinator when replicate_reference_tables_on_activate
@@ -2120,7 +2081,7 @@ SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shar
 ERROR:  Table 'dist_table_test_3' is streaming replicated. Shards of streaming replicated tables cannot be copied
 -- Mark table as coordinator replicated in order to be able to test replicate_table_shards
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
-	('dist_table_test_3'::regclass);
+  ('dist_table_test_3'::regclass);
 SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
  replicate_table_shards
 ---------------------------------------------------------------------
@@ -2137,6 +2098,12 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column?
 ---------------------------------------------------------------------
         1
+(1 row)
+
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE rebalance_test_table(int_column int);
@@ -2179,6 +2146,12 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
         1
 (1 row)
 
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 -- reference table 2 will not have a replica identity, causing the rebalancer to not work
 -- when ran in the default mode. Instead we need to change the shard transfer mode to make
 -- it work. This verifies the shard transfer mode used in the rebalancer is used for the
@@ -2192,6 +2165,12 @@ SELECT 1 from master_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
+(1 row)
+
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
 (1 row)
 
 SELECT create_distributed_table('t1','a');
@@ -2243,6 +2222,12 @@ SELECT 1 from master_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
+(1 row)
+
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
 (1 row)
 
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
@@ -2298,6 +2283,12 @@ SELECT 1 from master_remove_node('localhost', :worker_2_port);
         1
 (1 row)
 
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE TABLE t1 (a int PRIMARY KEY, b int);
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
 SELECT create_distributed_table('t1', 'a');
@@ -2333,7 +2324,7 @@ SELECT replicate_table_shards('t1',  shard_replication_factor := 2);
 ERROR:  Table 't1' is streaming replicated. Shards of streaming replicated tables cannot be copied
 -- Mark table as coordinator replicated in order to be able to test replicate_table_shards
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
-	('t1'::regclass);
+  ('t1'::regclass);
 SELECT replicate_table_shards('t1',  shard_replication_factor := 2);
  replicate_table_shards
 ---------------------------------------------------------------------

@@ -17,9 +17,8 @@ SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 (1 row)
 
 -- coordinator cannot be disabled
-SELECT 1 FROM master_disable_node('localhost', :master_port);
-ERROR:  Disabling localhost:xxxxx failed
-DETAIL:  cannot change "isactive" field of the coordinator node
+SELECT 1 FROM citus_disable_node('localhost', :master_port);
+ERROR:  cannot change "isactive" field of the coordinator node
 RESET client_min_messages;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column?
@@ -625,6 +624,19 @@ BEGIN;
 32
 	INSERT INTO test SELECT i,i FROM generate_series(0,100)i;
 ROLLBACK;
+-- master_create_empty_shard on coordinator
+BEGIN;
+CREATE TABLE append_table (a INT, b INT);
+SELECT create_distributed_table('append_table','a','append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+NOTICE:  Creating placements for the append partitioned tables on the coordinator is not supported, skipping coordinator ...
+ERROR:  could only create 0 of 1 of required shard replicas
+END;
 -- alter table inside a tx block
 BEGIN;
 	ALTER TABLE test ADD COLUMN z single_node.new_type;
@@ -1248,7 +1260,7 @@ NOTICE:  renaming the new table to single_node.test_2
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid = 'test_2'::regclass;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -2105,8 +2117,9 @@ SELECT pg_reload_conf();
 SET client_min_messages TO error;
 -- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
 SELECT 1 FROM master_remove_node('localhost', :master_port);
-ERROR:  cannot remove the last worker node because there are reference tables and it would cause data loss on reference tables
-HINT:  To proceed, either drop the reference tables or use undistribute_table() function to convert them to local tables
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is single_node.ref
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 -- Cleanup
 DROP SCHEMA single_node CASCADE;
 -- Remove the coordinator again

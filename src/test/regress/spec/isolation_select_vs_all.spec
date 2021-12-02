@@ -9,8 +9,10 @@ setup
 	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
 	SET citus.shard_replication_factor TO 1;
+	SET citus.next_shard_id TO 6780300;
 	CREATE TABLE select_append(id integer, data text, int_data int);
 	SELECT create_distributed_table('select_append', 'id', 'append');
+	SELECT master_create_empty_shard('select_append');
 }
 
 // drop distributed table
@@ -22,7 +24,7 @@ teardown
 
 // session 1
 session "s1"
-step "s1-initialize" { COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV; }
+step "s1-initialize" { COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH (format 'csv', append_to_shard 6780300); }
 step "s1-begin" { BEGIN; }
 
 step "s1-disable-binary-protocol" {

@@ -2,10 +2,10 @@
 // add single one of the nodes for the purpose of the test
 setup
 {
-    CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER)
+    CREATE OR REPLACE FUNCTION public.wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
     RETURNS void
-    LANGUAGE C STRICT VOLATILE
-    AS 'citus', $$wait_until_metadata_sync$$;
+    LANGUAGE C STRICT
+    AS 'citus';
 
     SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
     SELECT 1 FROM master_add_node('localhost', 57637);
@@ -16,12 +16,6 @@ teardown
 {
     SELECT 1 FROM master_add_node('localhost', 57637);
     SELECT 1 FROM master_add_node('localhost', 57638);
-
-    -- schema drops are not cascaded
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    DROP SCHEMA IF EXISTS myschema CASCADE;
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-    DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
     RESET search_path;
     DROP TABLE IF EXISTS t1 CASCADE;
@@ -182,34 +176,52 @@ step "s3-commit"
 	COMMIT;
 }
 
+step "s3-drop-coordinator-schemas"
+{
+    -- schema drops are not cascaded
+    -- and cannot be dropped in a single
+    -- transaction in teardown
+    -- because it'd self-deadlock
+    -- instead we drop the schemas
+    -- at the end of the permutations
+    DROP SCHEMA IF EXISTS myschema CASCADE;
+    DROP SCHEMA IF EXISTS myschema2 CASCADE;
+}
+
+step "s3-drop-worker-schemas"
+{
+    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
+    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
+}
+
 
 // schema only tests
-permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-public-schema" "s2-create-table" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-create-schema" "s2-create-table" "s1-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s1-add-worker" "s2-create-schema" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s2-create-table" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-public-schema" "s2-create-table" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-create-schema" "s2-create-table" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s1-add-worker" "s2-create-schema" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s2-create-table" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
 
 // concurrency tests with multi schema distribution
-permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-table" "s3-use-schema" "s3-create-table" "s1-commit" "s2-commit" "s3-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-add-worker" "s2-create-schema" "s2-begin" "s3-begin" "s3-use-schema" "s2-create-table" "s3-create-table" "s2-commit" "s3-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-schema" "s3-create-schema2" "s2-create-table" "s3-create-table" "s1-commit" "s3-commit" "s2-commit" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s1-add-worker" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas" "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-add-worker" "s2-create-schema" "s2-begin" "s3-begin" "s3-use-schema" "s2-create-table" "s3-create-table" "s2-commit" "s3-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-schema" "s3-create-schema2" "s2-create-table" "s3-create-table" "s1-commit" "s3-commit" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
 
 // type and schema tests
-permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-type" "s1-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-create-type" "s1-add-worker" "s1-commit" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s2-create-type" "s2-create-table-with-type" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-type" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-create-type" "s1-add-worker" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s2-create-type" "s2-create-table-with-type" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
 
 // distributed function tests
 // isolation tests are not very simple psql, so trigger NOTIFY reliably for
 // s3-wait-for-metadata-sync step, we do "s2-begin" followed directly by
 // "s2-commit", because "COMMIT"  syncs the messages
 
-permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-distribute-function" "s1-commit" "s2-begin" "s2-commit"  "s3-wait-for-metadata-sync" "s2-print-distributed-objects"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-distribute-function" "s2-begin" "s2-commit" "s3-wait-for-metadata-sync" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-distribute-function" "s1-commit" "s2-begin" "s2-commit"  "s3-wait-for-metadata-sync" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-public-schema" "s2-distribute-function" "s2-begin" "s2-commit" "s3-wait-for-metadata-sync" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"
 
 // we cannot run the following operations concurrently
 // the problem is that NOTIFY event doesn't (reliably) happen before COMMIT
 // so we have to commit s2 before s1 starts
-permutation "s1-print-distributed-objects" "s2-begin" "s2-create-schema" "s2-distribute-function" "s2-commit" "s3-wait-for-metadata-sync" "s1-begin" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects"
+permutation "s1-print-distributed-objects" "s2-begin" "s2-create-schema" "s2-distribute-function" "s2-commit" "s3-wait-for-metadata-sync" "s1-begin" "s1-add-worker" "s1-commit" "s3-wait-for-metadata-sync" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"  "s3-drop-worker-schemas"

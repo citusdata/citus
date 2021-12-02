@@ -19,6 +19,8 @@ test: turn_mx_off
 test: multi_extension
 test: single_node
 test: single_node_truncate
+test: turn_mx_on
+test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 
 # below tests are placed right after multi_cluster_management as we do
@@ -29,16 +31,33 @@ test: escape_extension_name
 test: ref_citus_local_fkeys
 test: alter_database_owner
 
-test: multi_test_helpers multi_test_helpers_superuser
 test: multi_test_catalog_views
+test: check_mx
+test: turn_mx_off
 test: multi_table_ddl
 test: multi_sequence_default
 test: multi_name_lengths
+test: turn_mx_on
 test: multi_name_resolution
 test: multi_metadata_access
 test: multi_metadata_attributes
 
 test: multi_read_from_secondaries
+
+# ----------
+# multi_citus_tools tests utility functions written for citus tools
+# ----------
+test: check_mx
+test: turn_mx_off
+test: multi_citus_tools
+
+# ----------
+# multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes
+# multi_remove_node_reference_table tests metadata changes after master_remove_node
+# ----------
+test: multi_replicate_reference_table
+test: turn_mx_on
+test: multi_remove_node_reference_table
 
 # ----------
 # The following distributed tests depend on creating a partitioned table and
@@ -56,6 +75,7 @@ test: multi_row_insert insert_select_into_local_table multi_create_table_new_fea
 # following should not run in parallel because it relies on connection counts to workers
 test: insert_select_connection_leak
 
+test: check_mx
 # ---------
 # at the end of the regression tests regarding recursively planned modifications
 # ensure that we don't leak any intermediate results
@@ -66,7 +86,8 @@ test: ensure_no_intermediate_data_leak
 # ----------
 # Tests for partitioning support
 # ----------
-test: multi_partitioning_utils multi_partitioning partitioning_issue_3970 replicated_partitioned_table
+test: multi_partitioning_utils replicated_partitioned_table
+test: multi_partitioning partitioning_issue_3970
 test: drop_partitioned_table
 test: multi_fix_partition_shard_index_names
 test: partition_wise_join
@@ -81,8 +102,11 @@ test: multi_create_fdw
 # ----------
 # Tests for statistics propagation
 # ----------
+test: check_mx
+test: turn_mx_off
 test: propagate_statistics
 test: pg13_propagate_statistics
+test: turn_mx_on
 
 # ----------
 # Test for updating table statistics
@@ -125,24 +149,11 @@ test: with_modifying cte_prepared_modify cte_nested_modification
 test: ensure_no_intermediate_data_leak
 test: with_executors with_join with_partitioning with_transactions with_dml
 
-
-# ----------
-# Tests to check our large record loading and shard deletion behavior
-# ----------
-test: multi_load_large_records
-
 # ----------
 # Tests around DDL statements run on distributed tables
 # ----------
-test: multi_index_statements
 test: multi_alter_table_statements
 test: multi_alter_table_add_constraints
-
-# ----------
-# multi_create_schema tests creation, loading, and querying of a table in a new
-# schema (namespace).
-# ----------
-test: multi_create_schema
 
 # ----------
 # Tests to check if we inform the user about potential caveats of creating new
@@ -156,12 +167,6 @@ test: multi_utility_warnings data_types
 # Should not be executed in parallel with other tests
 # ----------
 test: sequential_modifications
-
-# ---------
-# multi_append_table_to_shard loads data to create shards in a way that forces
-# shard caching.
-# ---------
-test: multi_append_table_to_shard
 
 # ---------
 # multi_outer_join loads data to create shards to test outer join mappings
@@ -178,16 +183,24 @@ test: multi_outer_join
 test: multi_complex_count_distinct multi_select_distinct
 test: multi_modifications
 test: multi_distribution_metadata
-test: multi_generate_ddl_commands multi_create_shards multi_prune_shard_list multi_repair_shards
+test: multi_prune_shard_list
 test: multi_upsert multi_simple_queries multi_data_types
 test: master_copy_shard_placement
 # multi_utilities cannot be run in parallel with other tests because it checks
 # global locks
 test: multi_utilities
 test: foreign_key_to_reference_table validate_constraint
-test: multi_modifying_xacts
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
+
+test: multi_modifying_xacts
+test: check_mx
+test: turn_mx_off
+test: multi_index_statements
+test: multi_generate_ddl_commands multi_repair_shards
+test: multi_create_shards
 test: multi_transaction_recovery
+test: multi_copy
+test: turn_mx_on
 
 test: local_dist_join_modifications
 test: local_table_join
@@ -198,7 +211,7 @@ test: citus_local_dist_joins
 # multi_copy creates hash and range-partitioned tables and performs COPY
 # multi_router_planner creates hash partitioned tables.
 # ---------
-test: multi_copy fast_path_router_modify pg_dump
+test: fast_path_router_modify pg_dump
 test: multi_router_planner
 # These 2 tests have prepared statements which sometimes get invalidated by concurrent tests,
 # changing the debug output. We should not run them in parallel with others
@@ -210,6 +223,8 @@ test: multi_router_planner_fast_path
 # ----------
 test: multi_large_shardid
 
+test: check_mx
+test: turn_mx_off
 # ----------
 #  multi_size_queries tests various size commands on distributed tables
 # ----------
@@ -226,6 +241,7 @@ test: multi_drop_extension
 # ----------
 test: multi_metadata_sync
 test: multi_unsupported_worker_operations
+test: turn_mx_on
 
 # ----------
 # grant_on_schema_propagation tests if the GRANT ... ON SCHEMA queries are propagated correctly
@@ -237,6 +253,8 @@ test: multi_schema_support
 # ----------
 # multi_function_evaluation tests edge-cases in master-side function pre-evaluation
 # ----------
+test: check_mx
+test: turn_mx_off
 test: multi_function_evaluation
 
 # ----------
@@ -249,12 +267,8 @@ test: multi_truncate
 # multi_colocated_shard_transfer tests master_copy_shard_placement with colocated tables.
 # ----------
 test: multi_colocation_utils
+test: turn_mx_on
 test: multi_colocated_shard_transfer
-
-# ----------
-# multi_citus_tools tests utility functions written for citus tools
-# ----------
-test: multi_citus_tools
 
 # ----------
 # node_conninfo_reload tests that node_conninfo changes take effect
@@ -267,32 +281,32 @@ test: node_conninfo_reload
 test: multi_foreign_key
 test: multi_foreign_key_relation_graph
 
-# ----------
-# multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes
-# multi_remove_node_reference_table tests metadata changes after master_remove_node
-# ----------
-test: multi_replicate_reference_table
-test: multi_remove_node_reference_table
-
 # --------
 # Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
 # and rerun some of the tests.
 # --------
+test: check_mx
+test: turn_mx_off
 test: add_coordinator
-test: multi_reference_table citus_local_tables_queries
 test: foreign_key_to_reference_table
-test: citus_local_table_triggers
 test: replicate_reference_tables_to_coordinator
+test: citus_local_tables
+test: multi_row_router_insert mixed_relkind_tests
+test: turn_mx_on
+test: multi_reference_table citus_local_tables_queries
+test: citus_local_table_triggers
 test: coordinator_shouldhaveshards
 test: local_shard_utility_command_execution
-test: citus_local_tables
-test: multi_row_router_insert mixed_relkind_tests create_ref_dist_from_citus_local
+test: create_ref_dist_from_citus_local
 test: undistribute_table_cascade
 test: create_citus_local_table_cascade
 test: fkeys_between_local_ref
 test: auto_undist_citus_local
+test: check_mx
+test: turn_mx_off
 test: mx_regular_user
 test: remove_coordinator
+test: turn_mx_on
 
 # ----------
 # multi_transactional_drop_shards tests for dropping shards using connection API
@@ -324,9 +338,12 @@ test: ssl_by_default
 # object distribution tests
 # ---------
 test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
+test: check_mx
+test: turn_mx_off
 test: distributed_functions distributed_functions_conflict
 test: distributed_collations distributed_collations_conflict
 test: distributed_procedure
+test: turn_mx_on
 
 # ---------
 # deparsing logic tests
@@ -355,3 +372,4 @@ test: ensure_no_intermediate_data_leak
 # --------
 test: ensure_no_shared_connection_leak
 
+test: check_mx

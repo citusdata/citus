@@ -88,6 +88,8 @@ static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
+static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
+											bool citusTableWithNoDistKey);
 static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
@@ -170,7 +172,6 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
-	EnsureSuperUser();
 	EnsureModificationsCanRun();
 
 	EnsureSequentialModeMetadataOperations();
@@ -289,7 +290,6 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
-	EnsureSuperUser();
 
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
@@ -369,9 +369,8 @@ ClusterHasKnownMetadataWorkers()
 
 /*
  * ShouldSyncTableMetadata checks if the metadata of a distributed table should be
- * propagated to metadata workers, i.e. the table is an MX table or reference table.
- * Tables with streaming replication model (which means RF=1) and hash distribution are
- * considered as MX tables while tables with none distribution are reference tables.
+ * propagated to metadata workers, i.e. the table is a hash distributed table or
+ * reference/citus local table.
  */
 bool
 ShouldSyncTableMetadata(Oid relationId)
@@ -383,19 +382,51 @@ ShouldSyncTableMetadata(Oid relationId)
 
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	bool streamingReplicated =
-		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
+	bool hashDistributed = IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED);
+	bool citusTableWithNoDistKey =
+		IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY);
 
-	bool mxTable = (streamingReplicated && IsCitusTableTypeCacheEntry(tableEntry,
-																	  HASH_DISTRIBUTED));
-	if (mxTable || IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
-	{
-		return true;
-	}
-	else
+	return ShouldSyncTableMetadataInternal(hashDistributed, citusTableWithNoDistKey);
+}
+
+
+/*
+ * ShouldSyncTableMetadataViaCatalog checks if the metadata of a distributed table should
+ * be propagated to metadata workers, i.e. the table is an MX table or reference table.
+ * Tables with streaming replication model (which means RF=1) and hash distribution are
+ * considered as MX tables while tables with none distribution are reference tables.
+ *
+ * ShouldSyncTableMetadataViaCatalog does not use the CitusTableCache and instead reads
+ * from catalog tables directly.
+ */
+bool
+ShouldSyncTableMetadataViaCatalog(Oid relationId)
+{
+	if (!OidIsValid(relationId) || !IsCitusTableViaCatalog(relationId))
 	{
 		return false;
 	}
+
+	char partitionMethod = PartitionMethodViaCatalog(relationId);
+	bool hashDistributed = partitionMethod == DISTRIBUTE_BY_HASH;
+	bool citusTableWithNoDistKey = partitionMethod == DISTRIBUTE_BY_NONE;
+
+	return ShouldSyncTableMetadataInternal(hashDistributed, citusTableWithNoDistKey);
+}
+
+
+/*
+ * ShouldSyncTableMetadataInternal decides whether we should sync the metadata for a table
+ * based on whether it is a hash distributed table, or a citus table with no distribution
+ * key.
+ *
+ * This function is here to make sure that ShouldSyncTableMetadata and
+ * ShouldSyncTableMetadataViaCatalog behaves the same way.
+ */
+static bool
+ShouldSyncTableMetadataInternal(bool hashDistributed, bool citusTableWithNoDistKey)
+{
+	return hashDistributed || citusTableWithNoDistKey;
 }
 
 
@@ -434,16 +465,16 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	 */
 	if (raiseOnError)
 	{
-		SendCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
-														workerNode->workerPort,
-														currentUser,
-														recreateMetadataSnapshotCommandList);
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+																workerNode->workerPort,
+																currentUser,
+																recreateMetadataSnapshotCommandList);
 		return true;
 	}
 	else
 	{
 		bool success =
-			SendOptionalCommandListToWorkerInCoordinatedTransaction(
+			SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
 				workerNode->workerName, workerNode->workerPort,
 				currentUser, recreateMetadataSnapshotCommandList);
 
@@ -469,10 +500,11 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  LocalGroupIdUpdateCommand(0));
 
-	SendOptionalCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
-															workerNode->workerPort,
-															userName,
-															dropMetadataCommandList);
+	SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
+		workerNode->workerName,
+		workerNode->workerPort,
+		userName,
+		dropMetadataCommandList);
 }
 
 
@@ -923,7 +955,7 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "shardlength, groupid, placementid)  AS (VALUES ");
 
 	ShardInterval *shardInterval = NULL;
-	bool isFirstValue = true;
+	bool firstPlacementProcessed = false;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
@@ -932,7 +964,7 @@ ShardListInsertCommand(List *shardIntervalList)
 		ShardPlacement *placement = NULL;
 		foreach_ptr(placement, shardPlacementList)
 		{
-			if (!isFirstValue)
+			if (firstPlacementProcessed)
 			{
 				/*
 				 * As long as this is not the first placement of the first shard,
@@ -940,7 +972,7 @@ ShardListInsertCommand(List *shardIntervalList)
 				 */
 				appendStringInfo(insertPlacementCommand, ", ");
 			}
-			isFirstValue = false;
+			firstPlacementProcessed = true;
 
 			appendStringInfo(insertPlacementCommand,
 							 "(%ld, %d, %ld, %d, %ld)",
@@ -1015,9 +1047,25 @@ ShardListInsertCommand(List *shardIntervalList)
 					 "storagetype, shardminvalue, shardmaxvalue) "
 					 "FROM shard_data;");
 
-	/* first insert shards, than the placements */
-	commandList = lappend(commandList, insertShardCommand->data);
-	commandList = lappend(commandList, insertPlacementCommand->data);
+	/*
+	 * There are no active placements for the table, so do not create the
+	 * command as it'd lead to syntax error.
+	 *
+	 * This is normally not an expected situation, however the current
+	 * implementation of citus_disable_node allows to disable nodes with
+	 * the only active placements. So, for example a single shard/placement
+	 * distributed table on a disabled node might trigger zero placement
+	 * case.
+	 *
+	 * TODO: remove this check once citus_disable_node errors out for
+	 * the above scenario.
+	 */
+	if (firstPlacementProcessed)
+	{
+		/* first insert shards, than the placements */
+		commandList = lappend(commandList, insertShardCommand->data);
+		commandList = lappend(commandList, insertPlacementCommand->data);
+	}
 
 	return commandList;
 }
@@ -2075,6 +2123,9 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 	char *distributionColumnString = NULL;
 	Var *distributionColumnVar = NULL;
 
+	/* this flag is only valid for citus local tables, so set it to false */
+	bool autoConverted = false;
+
 	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
 	EnsureTableOwner(relationId);
 
@@ -2123,7 +2174,7 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 	}
 
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumnVar,
-							  colocationId, replicationModel);
+							  colocationId, replicationModel, autoConverted);
 
 	PG_RETURN_VOID();
 }
@@ -2179,15 +2230,6 @@ EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod, int coloc
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Metadata syncing is only allowed for "
 							   "known replication models.")));
-	}
-
-	if (distributionMethod == DISTRIBUTE_BY_HASH &&
-		replicationModel != REPLICATION_MODEL_STREAMING)
-	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("Hash distributed tables can only have '%c' "
-							   "as the replication model.",
-							   REPLICATION_MODEL_STREAMING)));
 	}
 
 	if (distributionMethod == DISTRIBUTE_BY_NONE &&
@@ -2295,8 +2337,7 @@ EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
 	}
 
 	if (!(storageType == SHARD_STORAGE_TABLE ||
-		  storageType == SHARD_STORAGE_FOREIGN ||
-		  storageType == SHARD_STORAGE_COLUMNAR))
+		  storageType == SHARD_STORAGE_FOREIGN))
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("Invalid shard storage type: %c", storageType)));

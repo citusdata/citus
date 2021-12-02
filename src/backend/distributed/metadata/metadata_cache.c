@@ -34,6 +34,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/multi_executor.h"
 #include "distributed/function_utils.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
@@ -206,7 +207,6 @@ static ScanKeyData DistObjectScanKey[3];
 
 
 /* local function forward declarations */
-static bool IsCitusTableViaCatalog(Oid relationId);
 static HeapTuple PgDistPartitionTupleViaCatalog(Oid relationId);
 static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
 static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
@@ -309,6 +309,32 @@ EnsureModificationsCanRunOnRelation(Oid relationId)
 {
 	EnsureModificationsCanRun();
 
+	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
+	{
+		/* we are not interested in PG tables */
+		return;
+	}
+
+	bool modifiedTableReplicated =
+		IsCitusTableType(relationId, REFERENCE_TABLE) ||
+		!SingleReplicatedTable(relationId);
+
+	if (!IsCoordinator() && !AllowModificationsFromWorkersToReplicatedTables &&
+		modifiedTableReplicated)
+	{
+		ereport(ERROR, (errmsg("modifications via the worker nodes are not "
+							   "allowed for replicated tables such as reference "
+							   "tables or hash distributed tables with replication "
+							   "factor greater than 1."),
+						errhint("All modifications to replicated tables should "
+								"happen via the coordinator unless "
+								"citus.allow_modifications_from_workers_to_replicated_tables "
+								" = true."),
+						errdetail("Allowing modifications from the worker nodes "
+								  "requires extra locking which might decrease "
+								  "the throughput.")));
+	}
+
 	/*
 	 * Even if user allows writes from standby, we should not allow for
 	 * replicated tables as they require 2PC. And, 2PC needs to write a log
@@ -319,21 +345,15 @@ EnsureModificationsCanRunOnRelation(Oid relationId)
 		return;
 	}
 
-	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
-	{
-		/* we are not interested in PG tables */
-		return;
-	}
-
-	if (IsCitusTableType(relationId, REFERENCE_TABLE) ||
-		!SingleReplicatedTable(relationId))
+	if (modifiedTableReplicated)
 	{
 		ereport(ERROR, (errmsg("writing to worker nodes is not currently "
 							   "allowed for replicated tables such as reference "
 							   "tables or hash distributed tables with replication "
 							   "factor greater than 1."),
-						errhint("All modifications to replicated tables happen via 2PC, "
-								"and 2PC requires the database to be in a writable state."),
+						errhint("All modifications to replicated tables "
+								"happen via 2PC, and 2PC requires the "
+								"database to be in a writable state."),
 						errdetail("the database is read-only")));
 	}
 }
@@ -463,7 +483,7 @@ IsCitusTable(Oid relationId)
  * offset and the corresponding index.  If we ever come close to changing
  * that, we'll have to work a bit harder.
  */
-static bool
+bool
 IsCitusTableViaCatalog(Oid relationId)
 {
 	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
@@ -514,6 +534,51 @@ PartitionMethodViaCatalog(Oid relationId)
 	table_close(pgDistPartition, NoLock);
 
 	return partitionMethodChar;
+}
+
+
+/*
+ * PartitionColumnViaCatalog gets a relationId and returns the partition
+ * key column from pg_dist_partition via reading from catalog.
+ */
+Var *
+PartitionColumnViaCatalog(Oid relationId)
+{
+	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+	if (!HeapTupleIsValid(partitionTuple))
+	{
+		return NULL;
+	}
+
+	Datum datumArray[Natts_pg_dist_partition];
+	bool isNullArray[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
+
+	if (isNullArray[Anum_pg_dist_partition_partkey - 1])
+	{
+		/* partition key cannot be NULL, still let's make sure */
+		heap_freetuple(partitionTuple);
+		table_close(pgDistPartition, NoLock);
+		return NULL;
+	}
+
+	Datum partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
+	char *partitionKeyString = TextDatumGetCString(partitionKeyDatum);
+
+	/* convert the string to a Node and ensure it is a Var */
+	Node *partitionNode = stringToNode(partitionKeyString);
+	Assert(IsA(partitionNode, Var));
+
+	Var *partitionColumn = (Var *) partitionNode;
+
+	heap_freetuple(partitionTuple);
+	table_close(pgDistPartition, NoLock);
+
+	return partitionColumn;
 }
 
 
@@ -1385,6 +1450,20 @@ BuildCitusTableCacheEntry(Oid relationId)
 	else
 	{
 		cacheEntry->replicationModel = DatumGetChar(replicationModelDatum);
+	}
+
+	if (isNullArray[Anum_pg_dist_partition_autoconverted - 1])
+	{
+		/*
+		 * We don't expect this to happen, but set it to false (the default value)
+		 * to not break if anything goes wrong.
+		 */
+		cacheEntry->autoConverted = false;
+	}
+	else
+	{
+		cacheEntry->autoConverted = DatumGetBool(
+			datumArray[Anum_pg_dist_partition_autoconverted - 1]);
 	}
 
 	heap_freetuple(distPartitionTuple);
@@ -3653,6 +3732,7 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	cacheEntry->hasUninitializedShardInterval = false;
 	cacheEntry->hasUniformHashDistribution = false;
 	cacheEntry->hasOverlappingShardInterval = false;
+	cacheEntry->autoConverted = false;
 
 	pfree(cacheEntry);
 }
@@ -3956,23 +4036,19 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		bool isNull = false;
+		bool isNullArray[Natts_pg_dist_partition];
+		Datum datumArray[Natts_pg_dist_partition];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-		Datum partMethodDatum =
-			heap_getattr(heapTuple, Anum_pg_dist_partition_partmethod,
-						 tupleDescriptor, &isNull);
-		Datum replicationModelDatum =
-			heap_getattr(heapTuple, Anum_pg_dist_partition_repmodel,
-						 tupleDescriptor, &isNull);
+		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
+		Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
 
 		Oid partitionMethod = DatumGetChar(partMethodDatum);
 		Oid replicationModel = DatumGetChar(replicationModelDatum);
 
 		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, citusTableType))
 		{
-			Datum relationIdDatum = heap_getattr(heapTuple,
-												 Anum_pg_dist_partition_logicalrelid,
-												 tupleDescriptor, &isNull);
+			Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 
 			Oid relationId = DatumGetObjectId(relationIdDatum);
 
@@ -4231,19 +4307,6 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 	{
 		case DISTRIBUTE_BY_APPEND:
 		case DISTRIBUTE_BY_RANGE:
-		{
-			Node *partitionNode = stringToNode(partitionKeyString);
-			Var *partitionColumn = (Var *) partitionNode;
-			Assert(IsA(partitionNode, Var));
-
-			GetIntervalTypeInfo(partitionMethod, partitionColumn,
-								intervalTypeId, intervalTypeMod);
-
-			*columnTypeId = partitionColumn->vartype;
-			*columnTypeMod = partitionColumn->vartypmod;
-			break;
-		}
-
 		case DISTRIBUTE_BY_HASH:
 		{
 			Node *partitionNode = stringToNode(partitionKeyString);

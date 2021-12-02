@@ -1,3 +1,78 @@
+### citus v10.2.3 (November 29, 2021) ###
+
+* Adds `fix_partition_shard_index_names` udf to fix currently broken
+  partition index names
+
+* Fixes a bug that could break `DROP SCHEMA/EXTENSION` commands when there is
+  a columnar table
+
+* Fixes a bug that could break pg upgrades due to missing `pg_depend` records
+  for columnar table access method
+
+* Fixes a missing `FROM` clause entry error
+
+* Fixes an unexpected error that occurs when writing to a columnar table
+  created in older versions
+
+* Fixes issue when compiling Citus from source with some compilers
+
+* Reinstates optimisation for uniform shard interval ranges
+
+* Relaxes table ownership check to privileges check while acquiring lock
+
+### citus v10.0.6 (November 12, 2021) ###
+
+* Adds missing version checks for columnar tables
+
+* Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
+
+* Fixes a bug with local cached plans on tables with dropped columns
+
+* Fixes a missing `FROM` clause entry error
+
+* Fixes a use after free issue that could happen when altering a distributed
+  table
+
+* Reinstates optimisation for uniform shard interval ranges
+
+### citus v9.5.10 (November 8, 2021) ###
+
+* Fixes a release problem in 9.5.9
+
+### citus v9.5.9 (November 8, 2021) ###
+
+* Fixes a bug preventing `INSERT SELECT .. ON CONFLICT` with a constraint name
+  on local shards
+
+* Fixes a bug with local cached plans on tables with dropped columns
+
+* Fixes a crash in queries with a modifying `CTE` and a `SELECT`
+  without `FROM`
+
+* Fixes a missing `FROM` clause entry error
+
+* Fixes a missing intermediate result when coordinator is in metadata
+
+* Reinstates optimisation for uniform shard interval ranges
+
+### citus v9.2.8 (November 4, 2021) ###
+
+* Adds a configure flag to enforce security
+
+### citus v9.2.7 (November 3, 2021) ###
+
+* Fixes `ALTER TABLE IF EXISTS SET SCHEMA` with non-existing table bug
+
+* Fixes `CREATE INDEX CONCURRENTLY` with no index name on a postgres table bug
+
+* Fixes a bug that could cause crashes with certain compile flags
+
+* Fixes a crash because of overflow in partition id with certain compile flags
+
+* Fixes a memory leak in subtransaction memory handling
+
+* Fixes deparsing for queries with anonymous column references
+
 ### citus v10.2.2 (October 14, 2021) ###
 
 * Fixes a bug that causes reading columnar metapage as all-zeros when

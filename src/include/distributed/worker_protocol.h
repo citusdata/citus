@@ -42,7 +42,6 @@
 #define MIN_TASK_FILENAME_WIDTH 6
 #define MIN_PARTITION_FILENAME_WIDTH 5
 #define FOREIGN_FILENAME_OPTION "filename"
-#define CSTORE_TABLE_SIZE_FUNCTION_NAME "cstore_table_size"
 
 /* Defines used for fetching files and tables */
 /* the tablename in the overloaded COPY statement is the to-be-transferred file */

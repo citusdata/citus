@@ -342,11 +342,6 @@ SELECT create_distributed_function('usage_access_func_third(int,int[])', '$1', c
 SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third';
 SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third'$$);
 
--- we don't want other tests to have metadata synced
--- that might change the test outputs, so we're just trying to be careful
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-
 RESET ROLE;
 -- now we distribute the table as super user
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');

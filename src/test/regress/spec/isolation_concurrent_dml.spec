@@ -1,5 +1,7 @@
 setup
 {
+    SELECT citus_internal.replace_isolation_tester_func();
+    SELECT citus_internal.refresh_isolation_tester_prepared_statement();
     CREATE TABLE test_concurrent_dml (test_id integer NOT NULL, data text);
     SELECT master_create_distributed_table('test_concurrent_dml', 'test_id', 'hash');
     SELECT master_create_worker_shards('test_concurrent_dml', 4, 2);
@@ -8,6 +10,7 @@ setup
 teardown
 {
     DROP TABLE IF EXISTS test_concurrent_dml CASCADE;
+    SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"

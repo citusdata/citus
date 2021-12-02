@@ -4,7 +4,7 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
 -- create schema to test schema support
 CREATE SCHEMA test_schema_support;
--- test master_append_table_to_shard with schema
+-- test COPY with schema
 -- create local table to append
 CREATE TABLE public.nation_local(
     n_nationkey integer not null,
@@ -25,19 +25,9 @@ SELECT master_create_distributed_table('test_schema_support.nation_append', 'n_n
 
 (1 row)
 
-SELECT master_create_empty_shard('test_schema_support.nation_append');
- master_create_empty_shard
----------------------------------------------------------------------
-                   1190000
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support.nation_append') as simple_shardid \gset
 -- append table to shard
-SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+copy test_schema_support.nation_append FROM STDIN with (append_to_shard :simple_shardid, delimiter '|');
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM test_schema_support.nation_append;
  count
@@ -57,18 +47,8 @@ SELECT master_create_distributed_table('test_schema_support."nation._''append"',
 
 (1 row)
 
-SELECT master_create_empty_shard('test_schema_support."nation._''append"');
- master_create_empty_shard
----------------------------------------------------------------------
-                   1190001
-(1 row)
-
-SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+SELECT master_create_empty_shard('test_schema_support."nation._''append"') as special_shardid \gset
+copy test_schema_support."nation._'append" FROM STDIN with (append_to_shard :special_shardid, delimiter '|');
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM test_schema_support."nation._'append";
  count
@@ -76,14 +56,9 @@ SELECT COUNT(*) FROM test_schema_support."nation._'append";
      6
 (1 row)
 
--- test master_append_table_to_shard with schema with search_path is set
+-- test COPY with schema with search_path is set
 SET search_path TO test_schema_support;
-SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+copy nation_append FROM STDIN with (append_to_shard :simple_shardid, delimiter '|');
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM nation_append;
  count
@@ -92,12 +67,7 @@ SELECT COUNT(*) FROM nation_append;
 (1 row)
 
 -- test with search_path is set and shard name contains special characters
-SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
- master_append_table_to_shard
----------------------------------------------------------------------
-                   0.00533333
-(1 row)
-
+copy "nation._'append" FROM STDIN with (append_to_shard :special_shardid, delimiter '|');
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM "nation._'append";
  count
@@ -115,13 +85,14 @@ CREATE TABLE nation_append_search_path(
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT master_create_distributed_table('nation_append_search_path', 'n_nationkey', 'append');
- master_create_distributed_table
+SELECT create_distributed_table('nation_append_search_path', 'n_nationkey', 'append');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-\copy nation_append_search_path FROM STDIN with delimiter '|';
+SELECT master_create_empty_shard('nation_append_search_path') AS shardid \gset
+copy nation_append_search_path FROM STDIN with (delimiter '|', append_to_shard :shardid);
 -- create shard with master_create_worker_shards
 CREATE TABLE test_schema_support.nation_hash(
     n_nationkey integer not null,
@@ -129,18 +100,14 @@ CREATE TABLE test_schema_support.nation_hash(
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT master_create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
- master_create_distributed_table
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', shard_count:=4);
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 2);
- master_create_worker_shards
----------------------------------------------------------------------
-
-(1 row)
-
+RESET citus.shard_replication_factor;
 -- test cursors
 SET search_path TO public;
 BEGIN;
@@ -1074,6 +1041,7 @@ SELECT * FROM new_schema.table_set_schema;
 
 DROP SCHEMA new_schema CASCADE;
 NOTICE:  drop cascades to table new_schema.table_set_schema
+SET citus.next_shard_id TO 1195000;
 -- test ALTER TABLE SET SCHEMA when a search path is set
 CREATE SCHEMA old_schema;
 CREATE TABLE old_schema.table_set_schema(id int);
@@ -1141,6 +1109,7 @@ SELECT * FROM new_schema.table_set_schema;
 ---------------------------------------------------------------------
 (0 rows)
 
+SET citus.next_shard_id TO 1196000;
 SET search_path to public;
 DROP SCHEMA old_schema CASCADE;
 DROP SCHEMA new_schema CASCADE;
@@ -1256,6 +1225,7 @@ SELECT create_reference_table('schema_with_user.test_table');
 (1 row)
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1197000;
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
 NOTICE:  drop cascades to table schema_with_user.test_table
@@ -1470,17 +1440,11 @@ BEGIN;
     ALTER SCHEMA bar RENAME TO foo;
 ROLLBACK;
 -- Clean up the created schema
+SET client_min_messages TO WARNING;
 DROP SCHEMA run_test_schema CASCADE;
-NOTICE:  drop cascades to table run_test_schema.test_table
 DROP SCHEMA test_schema_support_join_1 CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to table test_schema_support_join_1.nation_hash
-drop cascades to table test_schema_support_join_1.nation_hash_2
 DROP SCHEMA test_schema_support_join_2 CASCADE;
-NOTICE:  drop cascades to table test_schema_support_join_2.nation_hash
 DROP SCHEMA "Citus'Teen123" CASCADE;
-NOTICE:  drop cascades to table "Citus'Teen123"."TeeNTabLE.1!?!"
 DROP SCHEMA "CiTUS.TEEN2" CASCADE;
-NOTICE:  drop cascades to table "CiTUS.TEEN2"."CAPITAL_TABLE"
 DROP SCHEMA bar CASCADE;
-NOTICE:  drop cascades to table bar.test
+DROP SCHEMA test_schema_support CASCADE;

@@ -316,7 +316,7 @@ class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
         common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
 
 
-class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
+class CitusShardReplicationFactorClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_replication_factor": 2}
@@ -343,3 +343,4 @@ class PGUpgradeConfig(CitusBaseClusterConfig):
         self.old_datadir = self.temp_dir + "/oldData"
         self.new_datadir = self.temp_dir + "/newData"
         self.user = SUPER_USER_NAME
+        self.add_coordinator_to_metadata = True

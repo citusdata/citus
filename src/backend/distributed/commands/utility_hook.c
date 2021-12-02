@@ -95,7 +95,8 @@ static void IncrementUtilityHookCountersIfNecessary(Node *parsetree);
 static void PostStandardProcessUtility(Node *parsetree);
 static void DecrementUtilityHookCountersIfNecessary(Node *parsetree);
 static bool IsDropSchemaOrDB(Node *parsetree);
-static bool ShouldUndistributeCitusLocalTables(void);
+static bool ShouldCheckUndistributeCitusLocalTables(void);
+static bool ShouldAddNewTableToMetadata(Node *parsetree);
 
 
 /*
@@ -271,11 +272,33 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 			 * can happen due to various kinds of drop commands, we immediately
 			 * undistribute them at the end of the command.
 			 */
-			if (ShouldUndistributeCitusLocalTables())
+			if (ShouldCheckUndistributeCitusLocalTables())
 			{
 				UndistributeDisconnectedCitusLocalTables();
 			}
 			ResetConstraintDropped();
+
+			if (context == PROCESS_UTILITY_TOPLEVEL &&
+				ShouldAddNewTableToMetadata(parsetree))
+			{
+				/*
+				 * Here we need to increment command counter so that next command
+				 * can see the new table.
+				 */
+				CommandCounterIncrement();
+				CreateStmt *createTableStmt = (CreateStmt *) parsetree;
+				Oid relationId = RangeVarGetRelid(createTableStmt->relation,
+												  NoLock, false);
+
+				/*
+				 * Here we set autoConverted to false, since the user explicitly
+				 * wants these tables to be added to metadata, by setting the
+				 * GUC use_citus_managed_tables to true.
+				 */
+				bool autoConverted = false;
+				bool cascade = true;
+				CreateCitusLocalTable(relationId, cascade, autoConverted);
+			}
 		}
 
 		UtilityHookLevel--;
@@ -649,6 +672,17 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			ExecuteDistributedDDLJob(ddlJob);
 		}
 
+		if (IsA(parsetree, AlterTableStmt))
+		{
+			/*
+			 * This postprocess needs to be done after the distributed ddl jobs have
+			 * been executed in the workers, hence is separate from PostprocessAlterTableStmt.
+			 * We might have wrong index names generated on indexes of shards of partitions,
+			 * so we perform the relevant checks and index renaming here.
+			 */
+			FixAlterTableStmtIndexNames(castNode(AlterTableStmt, parsetree));
+		}
+
 		/*
 		 * For CREATE/DROP/REINDEX CONCURRENTLY we mark the index as valid
 		 * after successfully completing the distributed DDL job.
@@ -661,6 +695,27 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 			{
 				/* no failures during CONCURRENTLY, mark the index as valid */
 				MarkIndexValid(indexStmt);
+			}
+
+			/*
+			 * We make sure schema name is not null in the PreprocessIndexStmt.
+			 */
+			Oid schemaId = get_namespace_oid(indexStmt->relation->schemaname, true);
+			Oid relationId = get_relname_relid(indexStmt->relation->relname, schemaId);
+
+			/*
+			 * If this a partitioned table, and CREATE INDEX was not run with ONLY,
+			 * we have wrong index names generated on indexes of shards of
+			 * partitions of this table, so we should fix them.
+			 */
+			if (IsCitusTable(relationId) && PartitionedTable(relationId) &&
+				indexStmt->relation->inh)
+			{
+				/* only fix this specific index */
+				Oid indexRelationId =
+					get_relname_relid(indexStmt->idxname, schemaId);
+
+				FixPartitionShardIndexNames(relationId, indexRelationId);
 			}
 		}
 	}
@@ -687,7 +742,8 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 /*
  * UndistributeDisconnectedCitusLocalTables undistributes citus local tables that
  * are not connected to any reference tables via their individual foreign key
- * subgraphs.
+ * subgraphs. Note that this function undistributes only the auto-converted tables,
+ * i.e the ones that are converted by Citus by cascading through foreign keys.
  */
 void
 UndistributeDisconnectedCitusLocalTables(void)
@@ -717,10 +773,11 @@ UndistributeDisconnectedCitusLocalTables(void)
 		if (PartitionTable(citusLocalTableId))
 		{
 			/* we skip here, we'll undistribute from the parent if necessary */
+			UnlockRelationOid(citusLocalTableId, lockMode);
 			continue;
 		}
 
-		if (ConnectedToReferenceTableViaFKey(citusLocalTableId))
+		if (!ShouldUndistributeCitusLocalTable(citusLocalTableId))
 		{
 			/* still connected to a reference table, skip it */
 			UnlockRelationOid(citusLocalTableId, lockMode);
@@ -751,11 +808,11 @@ UndistributeDisconnectedCitusLocalTables(void)
 
 
 /*
- * ShouldUndistributeCitusLocalTables returns true if we might need to check
- * citus local tables for their connectivity to reference tables.
+ * ShouldCheckUndistributeCitusLocalTables returns true if we might need to check
+ * citus local tables for undistributing automatically.
  */
 static bool
-ShouldUndistributeCitusLocalTables(void)
+ShouldCheckUndistributeCitusLocalTables(void)
 {
 	if (!ConstraintDropped)
 	{
@@ -806,6 +863,50 @@ ShouldUndistributeCitusLocalTables(void)
 	}
 
 	return true;
+}
+
+
+/*
+ * ShouldAddNewTableToMetadata takes a Node* and returns true if we need to add a
+ * newly created table to metadata, false otherwise.
+ * This function checks whether the given Node* is a CREATE TABLE statement.
+ * For partitions and temporary tables, ShouldAddNewTableToMetadata returns false.
+ * For other tables created, returns true, if we are on a coordinator that is added
+ * as worker, and ofcourse, if the GUC use_citus_managed_tables is set to on.
+ */
+static bool
+ShouldAddNewTableToMetadata(Node *parsetree)
+{
+	if (!IsA(parsetree, CreateStmt))
+	{
+		/* if the command is not CREATE TABLE, we can early return false */
+		return false;
+	}
+
+	CreateStmt *createTableStmt = (CreateStmt *) parsetree;
+
+	if (createTableStmt->relation->relpersistence == RELPERSISTENCE_TEMP ||
+		createTableStmt->partbound != NULL)
+	{
+		/*
+		 * Shouldn't add table to metadata if it's a temp table, or a partition.
+		 * Creating partitions of a table that is added to metadata is already handled.
+		 */
+		return false;
+	}
+
+	if (AddAllLocalTablesToMetadata && !IsBinaryUpgrade &&
+		IsCoordinator() && CoordinatorAddedAsWorkerNode())
+	{
+		/*
+		 * We have verified that the GUC is set to true, and we are not upgrading,
+		 * and we are on the coordinator that is added as worker node.
+		 * So return true here, to add this newly created table to metadata.
+		 */
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -898,9 +999,9 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 				SendCommandToWorkersWithMetadata(setSearchPathCommand);
 			}
 
-			if (ddlJob->commandString != NULL)
+			if (ddlJob->metadataSyncCommand != NULL)
 			{
-				SendCommandToWorkersWithMetadata((char *) ddlJob->commandString);
+				SendCommandToWorkersWithMetadata((char *) ddlJob->metadataSyncCommand);
 			}
 		}
 
@@ -960,7 +1061,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 					commandList = lappend(commandList, setSearchPathCommand);
 				}
 
-				commandList = lappend(commandList, (char *) ddlJob->commandString);
+				commandList = lappend(commandList, (char *) ddlJob->metadataSyncCommand);
 
 				SendBareCommandListToMetadataWorkers(commandList);
 			}
@@ -1040,7 +1141,7 @@ CreateCustomDDLTaskList(Oid relationId, TableDDLCommand *command)
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = relationId;
-	ddlJob->commandString = GetTableDDLCommand(command);
+	ddlJob->metadataSyncCommand = GetTableDDLCommand(command);
 	ddlJob->taskList = taskList;
 
 	return ddlJob;
@@ -1290,7 +1391,7 @@ NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = InvalidOid;
-	ddlJob->commandString = NULL;
+	ddlJob->metadataSyncCommand = NULL;
 	ddlJob->taskList = list_make1(task);
 
 	return list_make1(ddlJob);

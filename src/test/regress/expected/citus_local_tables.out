@@ -27,7 +27,7 @@ SELECT citus_add_local_table_to_metadata('citus_local_table_1');
 
 -- try to remove coordinator and observe failure as there exist a citus local table
 SELECT 1 FROM master_remove_node('localhost', :master_port);
-ERROR:  cannot remove the primary node of a node group which has shard placements
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
 DROP TABLE citus_local_table_1;
 NOTICE:  executing the command locally: DROP TABLE IF EXISTS citus_local_tables_test_schema.citus_local_table_1_xxxxx CASCADE
 -- this should work now as the citus local table is dropped
@@ -401,7 +401,7 @@ SELECT citus_add_local_table_to_metadata('"LocalTabLE.1!?!9012345678901234567890
 -- create some objects after citus_add_local_table_to_metadata
 CREATE INDEX "my!Index2" ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id) WITH ( fillfactor = 90 ) WHERE id < 20;
 NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
-NOTICE:  executing the command locally: CREATE  INDEX   "my!Index2_1504022" ON  "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504022" USING btree (id )  WITH (fillfactor = '90' )WHERE (id < 20)
+NOTICE:  executing the command locally: CREATE  INDEX   "my!Index2_1504022" ON  "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504022" USING btree (id ) WITH (fillfactor = '90' ) WHERE (id < 20)
 CREATE UNIQUE INDEX uniqueIndex2 ON "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789"(id);
 NOTICE:  identifier "LocalTabLE.1!?!9012345678901234567890123456789012345678901234567890123456789" will be truncated to "LocalTabLE.1!?!901234567890123456789012345678901234567890123456"
 NOTICE:  executing the command locally: CREATE UNIQUE INDEX   uniqueindex2_1504022 ON  "CiTUS!LocalTables"."LocalTabLE.1!?!9012345678901234567890123456789_7e923997_1504022" USING btree (id )
@@ -424,15 +424,19 @@ BEGIN;
 
 (1 row)
 
-  -- should not see any citus local tables
+  -- should see only citus local tables that are not converted automatically
   SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
         schemaname='citus_local_tables_test_schema' AND
         partmethod = 'n' AND repmodel = 's'
   ORDER BY 1;
- logicalrelid
+    logicalrelid
 ---------------------------------------------------------------------
-(0 rows)
+ citus_local_table_1
+ citus_local_table_2
+ local_table_3
+ unlogged_table
+(4 rows)
 
 ROLLBACK;
 -- define foreign keys between dummy_reference_table and citus local tables
@@ -695,10 +699,6 @@ SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with 
 ERROR:  relation citus_local_table_4 should be a hash distributed table
 SELECT master_create_empty_shard('citus_local_table_4');
 ERROR:  relation "citus_local_table_4" is a local table
-CREATE TABLE postgres_local_table (a int);
-SELECT master_append_table_to_shard(shardId, 'postgres_local_table', 'localhost', :master_port)
-FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_4'::regclass) as shardid;
-ERROR:  cannot append to shardId xxxxxx
 -- return true
 SELECT citus_table_is_visible('citus_local_table_4'::regclass::oid);
  citus_table_is_visible
@@ -724,20 +724,12 @@ FROM (SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_loc
 -- cannot create a citus local table from a catalog table
 SELECT citus_add_local_table_to_metadata('pg_class');
 ERROR:  cannot create a citus table from a catalog table
+-- testing foreign key connection between citus local tables,
+-- using the GUC use_citus_managed_tables to add tables to metadata
+SET citus.use_citus_managed_tables TO ON;
 CREATE TABLE referencing_table(a int);
-SELECT citus_add_local_table_to_metadata('referencing_table');
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
 CREATE TABLE referenced_table(a int UNIQUE);
-SELECT citus_add_local_table_to_metadata('referenced_table');
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
+RESET citus.use_citus_managed_tables;
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);
 NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (xxxxx, 'citus_local_tables_test_schema', xxxxx, 'citus_local_tables_test_schema', 'ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);')
 -- verify creating citus local table with extended statistics
@@ -956,7 +948,7 @@ select count(*) from pg_constraint where conname = 'fkey_test_drop';
 select inhrelid::regclass from pg_inherits where (select inhparent::regclass::text) ~ '^parent_1_\d{7}$' order by 1;
          inhrelid
 ---------------------------------------------------------------------
- parent_1_child_1_1190084
+ parent_1_child_1_1190046
 (1 row)
 
 -- check the shell partition

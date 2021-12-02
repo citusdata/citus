@@ -10,19 +10,15 @@ SET citus.next_shard_id TO 1200000;
 SET citus.enable_fast_path_router_planner TO false;
 -- nextval() works (no good way to test DEFAULT, or, by extension, SERIAL)
 CREATE TABLE example (key INT, value INT);
-SELECT master_create_distributed_table('example', 'key', 'hash');
- master_create_distributed_table
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('example', 'key', shard_count:=1);
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET citus.shard_replication_factor;
 CREATE SEQUENCE example_value_seq;
-SELECT master_create_worker_shards('example', 1, 2);
- master_create_worker_shards
----------------------------------------------------------------------
-
-(1 row)
-
 INSERT INTO example VALUES (1, nextval('example_value_seq'));
 SELECT * FROM example;
  key | value

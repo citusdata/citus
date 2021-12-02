@@ -162,7 +162,7 @@ citus_add_local_table_to_metadata
 step s2-remove-coordinator: SELECT master_remove_node('localhost', 57636); <waiting ...>
 step s1-commit: COMMIT;
 step s2-remove-coordinator: <... completed>
-ERROR:  cannot remove the primary node of a node group which has shard placements
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
 step s2-commit: COMMIT;
 master_remove_node
 ---------------------------------------------------------------------

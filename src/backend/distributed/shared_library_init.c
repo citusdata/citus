@@ -531,7 +531,7 @@ CreateRequiredDirectories(void)
 	const char *subdirs[] = {
 		"pg_foreign_file",
 		"pg_foreign_file/cached",
-		"base/" PG_JOB_CACHE_DIR
+		("base/" PG_JOB_CACHE_DIR)
 	};
 
 	for (int dirNo = 0; dirNo < lengthof(subdirs); dirNo++)
@@ -560,6 +560,23 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.allow_modifications_from_workers_to_replicated_tables",
+		gettext_noop("Enables modifications from workers to replicated "
+					 "tables such as reference tables or hash "
+					 "distributed tables with replication factor "
+					 "greater than 1."),
+		gettext_noop("Allowing modifications from the worker nodes "
+					 "requires extra locking which might decrease "
+					 "the throughput. Disabling this GUC skips the "
+					 "extra locking and prevents modifications from "
+					 "worker nodes."),
+		&AllowModificationsFromWorkersToReplicatedTables,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1579,21 +1596,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomIntVariable(
-		"citus.shard_max_size",
-		gettext_noop("Sets the maximum size a shard will grow before it gets split."),
-		gettext_noop("Shards store table and file data. When the source "
-					 "file's size for one shard exceeds this configuration "
-					 "value, the database ensures that either a new shard "
-					 "gets created, or the current one gets split. Note that "
-					 "shards read this configuration value at sharded table "
-					 "creation time, and later reuse the initially read value."),
-		&ShardMaxSize,
-		1048576, 256, INT_MAX, /* max allowed size not set to MAX_KILOBYTES on purpose */
-		PGC_USERSET,
-		GUC_UNIT_KB | GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomEnumVariable(
 		"citus.shard_placement_policy",
 		gettext_noop("Sets the policy to use when choosing nodes for shard placement."),
@@ -1685,6 +1687,17 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		WarnIfDeprecatedExecutorUsed, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.use_citus_managed_tables",
+		gettext_noop("Allows new local tables to be accessed on workers"),
+		gettext_noop("Adds all newly created tables to Citus metadata by default, "
+					 "when enabled. Set to false by default."),
+		&AddAllLocalTablesToMetadata,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
 		"citus.use_secondary_nodes",

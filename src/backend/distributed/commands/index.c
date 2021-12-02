@@ -464,7 +464,7 @@ GenerateCreateIndexDDLJob(IndexStmt *createIndexStatement, const char *createInd
 
 	ddlJob->targetRelationId = CreateIndexStmtGetRelationId(createIndexStatement);
 	ddlJob->startNewTransaction = createIndexStatement->concurrent;
-	ddlJob->commandString = createIndexCommand;
+	ddlJob->metadataSyncCommand = createIndexCommand;
 	ddlJob->taskList = CreateIndexTaskList(createIndexStatement);
 
 	return ddlJob;
@@ -599,7 +599,7 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 			ddlJob->targetRelationId = relationId;
 			ddlJob->startNewTransaction = IsReindexWithParam_compat(reindexStatement,
 																	"concurrently");
-			ddlJob->commandString = reindexCommand;
+			ddlJob->metadataSyncCommand = reindexCommand;
 			ddlJob->taskList = CreateReindexTaskList(relationId, reindexStatement);
 
 			ddlJobs = list_make1(ddlJob);
@@ -711,7 +711,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		 * to be able to repeat the DROP INDEX later.
 		 */
 		ddlJob->startNewTransaction = false;
-		ddlJob->commandString = dropIndexCommand;
+		ddlJob->metadataSyncCommand = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
 

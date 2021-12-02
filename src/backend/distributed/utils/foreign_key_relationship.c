@@ -139,12 +139,23 @@ GetForeignKeyConnectedRelationIdList(Oid relationId)
 
 
 /*
- * ConnectedToReferenceTableViaFKey returns true if given relationId is
- * connected to a reference table via its foreign key subgraph.
+ * ShouldUndistributeCitusLocalTable returns true if given relationId needs
+ * to be undistributed. Here we do not undistribute table if it's converted by the user,
+ * or connected to a table converted by the user, or a reference table, via foreign keys.
  */
 bool
-ConnectedToReferenceTableViaFKey(Oid relationId)
+ShouldUndistributeCitusLocalTable(Oid relationId)
 {
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	if (!cacheEntry->autoConverted)
+	{
+		/*
+		 * The relation is not added to metadata automatically,
+		 * we shouldn't undistribute it.
+		 */
+		return false;
+	}
+
 	/*
 	 * As we will operate on foreign key connected relations, here we
 	 * invalidate foreign key graph so that we act on fresh graph.
@@ -152,7 +163,8 @@ ConnectedToReferenceTableViaFKey(Oid relationId)
 	InvalidateForeignKeyGraph();
 
 	List *fkeyConnectedRelations = GetForeignKeyConnectedRelationIdList(relationId);
-	return RelationIdListHasReferenceTable(fkeyConnectedRelations);
+
+	return !RelationIdListHasReferenceTable(fkeyConnectedRelations);
 }
 
 

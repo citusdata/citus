@@ -3,6 +3,7 @@
 CREATE SCHEMA coordinator_shouldhaveshards;
 SET search_path TO coordinator_shouldhaveshards;
 SET citus.next_shard_id TO 1503000;
+SET citus.next_placement_id TO 1503000;
 
 -- idempotently add node to allow this test to run without add_coordinator
 SET client_min_messages TO WARNING;

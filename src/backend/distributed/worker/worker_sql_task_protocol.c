@@ -262,15 +262,20 @@ TaskFileDestReceiverDestroy(DestReceiver *destReceiver)
 	if (taskFileDest->copyOutState)
 	{
 		pfree(taskFileDest->copyOutState);
+		taskFileDest->copyOutState = NULL;
 	}
 
 	if (taskFileDest->columnOutputFunctions)
 	{
 		pfree(taskFileDest->columnOutputFunctions);
+		taskFileDest->columnOutputFunctions = NULL;
 	}
 
-	pfree(taskFileDest->filePath);
-	pfree(taskFileDest);
+	if (taskFileDest->filePath)
+	{
+		pfree(taskFileDest->filePath);
+		taskFileDest->filePath = NULL;
+	}
 }
 
 

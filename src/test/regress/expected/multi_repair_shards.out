@@ -104,6 +104,7 @@ SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('remote_engagements', 'id', 'hash');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -118,3 +119,5 @@ UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :remotenewshardid AN
 SELECT master_copy_shard_placement(:remotenewshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 ERROR:  cannot repair shard
 DETAIL:  Table remote_engagements is a foreign table. Repairing shards backed by foreign tables is not supported.
+-- clean-up
+DROP FOREIGN TABLE remote_engagements CASCADE;
