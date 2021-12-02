@@ -11,27 +11,30 @@
  */
 
 #include "postgres.h"
-#include "funcapi.h"
-#include "libpq-fe.h"
-#include "miscadmin.h"
-
 
 #include "access/htup_details.h"
 #include "catalog/pg_type.h"
+#include "distributed/argutils.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/remote_commands.h"
-#include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
+#include "funcapi.h"
 #include "lib/stringinfo.h"
+#include "libpq-fe.h"
+#include "miscadmin.h"
 #include "utils/builtins.h"
 
-#include "distributed/multi_client_executor.h"
+/* simple query to run on workers to check connectivity */
+#define CONNECTIVITY_CHECK_QUERY "SELECT 1"
 
-
+PG_FUNCTION_INFO_V1(citus_check_connection_to_node);
 PG_FUNCTION_INFO_V1(master_run_on_worker);
 
+static bool CheckConnectionToNode(char *nodeName, uint32 nodePort);
 static int ParseCommandParameters(FunctionCallInfo fcinfo, StringInfo **nodeNameArray,
 								  int **nodePortsArray, StringInfo **commandStringArray,
 								  bool *parallel);
@@ -58,6 +61,36 @@ static Tuplestorestate * CreateTupleStore(TupleDesc tupleDescriptor,
 										  StringInfo *nodeNameArray, int *nodePortArray,
 										  bool *statusArray,
 										  StringInfo *resultArray, int commandCount);
+
+
+/*
+ * citus_check_connection_to_node sends a simple query from a worker node to another
+ * node, and returns success status.
+ */
+Datum
+citus_check_connection_to_node(PG_FUNCTION_ARGS)
+{
+	char *nodeName = PG_GETARG_TEXT_TO_CSTRING(0);
+	uint32 nodePort = PG_GETARG_UINT32(1);
+
+	bool success = CheckConnectionToNode(nodeName, nodePort);
+	PG_RETURN_BOOL(success);
+}
+
+
+/*
+ * CheckConnectionToNode sends a simple query to a node and returns success status
+ */
+static bool
+CheckConnectionToNode(char *nodeName, uint32 nodePort)
+{
+	int connectionFlags = 0;
+	MultiConnection *connection = GetNodeConnection(connectionFlags, nodeName, nodePort);
+	int responseStatus = ExecuteOptionalRemoteCommand(connection,
+													  CONNECTIVITY_CHECK_QUERY, NULL);
+
+	return responseStatus == RESPONSE_OKAY;
+}
 
 
 /*

@@ -4,15 +4,12 @@
 -- tests UDFs created for citus tools
 --
 
+CREATE SCHEMA tools;
+SET SEARCH_PATH TO 'tools';
 SET citus.next_shard_id TO 1240000;
 
 -- test with invalid port, prevent OS dependent warning from being displayed
 SET client_min_messages to ERROR;
--- PG 9.5 does not show context for plpgsql raise
--- message whereas PG 9.6 shows. disabling it
--- for this test only to have consistent behavior
--- b/w PG 9.6+ and PG 9.5.
-\set SHOW_CONTEXT never
 
 SELECT * FROM master_run_on_worker(ARRAY['localhost']::text[], ARRAY['666']::int[],
 								   ARRAY['select count(*) from pg_dist_shard']::text[],
@@ -257,5 +254,73 @@ UPDATE pg_dist_shard_placement SET shardstate = 3 WHERE shardid % 2 = 0;
 SELECT * FROM run_command_on_shards('check_shards', 'select 1');
 DROP TABLE check_shards CASCADE;
 
+-- test the connections to worker nodes
+SELECT bool_and(success) AS all_nodes_are_successful FROM (
+    SELECT citus_check_connection_to_node(nodename, nodeport) AS success
+    FROM pg_dist_node
+    WHERE isactive = 't' AND noderole='primary'
+) subquery;
+
+-- verify that the coordinator can connect to itself
+SELECT citus_check_connection_to_node('localhost', :master_port);
+
+-- verify that the connections are not successful for wrong port
+-- test with invalid port, prevent OS dependent warning from being displayed
+SET client_min_messages TO ERROR;
+SELECT citus_check_connection_to_node('localhost', nodeport:=1234);
+
+-- verify that the connections are not successful due to timeouts
+SET citus.node_connection_timeout TO 10;
+SELECT citus_check_connection_to_node('www.citusdata.com');
+RESET citus.node_connection_timeout;
+
+SET client_min_messages TO DEBUG;
+
+-- check the connections in a transaction block
+BEGIN;
+SELECT citus_check_connection_to_node(nodename, nodeport)
+FROM pg_dist_node
+WHERE isactive = 't' AND noderole='primary';
+
+CREATE TABLE distributed(id int, data text);
+SELECT create_distributed_table('distributed', 'id');
+SELECT count(*) FROM distributed;
+
+ROLLBACK;
+
+-- create some roles for testing purposes
+SET client_min_messages TO ERROR;
+
+CREATE ROLE role_without_login WITH NOLOGIN;
+SELECT 1 FROM run_command_on_workers($$CREATE ROLE role_without_login WITH NOLOGIN$$);
+
+CREATE ROLE role_with_login WITH LOGIN;
+SELECT 1 FROM run_command_on_workers($$CREATE ROLE role_with_login WITH LOGIN$$);
+
+SET client_min_messages TO DEBUG;
+
+-- verify that we can create connections only with users with login privileges.
+SET ROLE role_without_login;
+SELECT citus_check_connection_to_node('localhost', :worker_1_port);
+
+SET ROLE role_with_login;
+SELECT citus_check_connection_to_node('localhost', :worker_1_port);
+
+RESET role;
+
+DROP ROLE role_with_login, role_without_login;
+SELECT 1 FROM run_command_on_workers($$DROP ROLE role_with_login, role_without_login$$);
+
+-- check connections from a worker node
+\c - - - :worker_1_port
+SELECT citus_check_connection_to_node('localhost', :master_port);
+SELECT citus_check_connection_to_node('localhost', :worker_1_port);
+SELECT citus_check_connection_to_node('localhost', :worker_2_port);
+
+\c - - - :master_port
+
+RESET client_min_messages;
+DROP SCHEMA tools CASCADE;
+RESET SEARCH_PATH;
 -- set SHOW_CONTEXT back to default
 \set SHOW_CONTEXT errors
