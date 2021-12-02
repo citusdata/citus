@@ -16,6 +16,7 @@
 #include "catalog/objectaddress.h"
 
 #define INVALID_DISTRIBUTION_ARGUMENT_INDEX -1
+#define NO_FORCE_PUSHDOWN 0
 
 extern bool ObjectExists(const ObjectAddress *address);
 extern bool CitusExtensionObject(const ObjectAddress *objectAddress);

@@ -232,6 +232,15 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			 * transactions.
 			 */
 			CitusTableCacheFlushInvalidatedEntries();
+
+			/*
+			 * When a function is delegated to a remote node within a 2PC, we pin
+			 * the distribution argument as the shard key for all the SQL in the
+			 * function's block. The restriction is imposed to not to access other
+			 * nodes from the current node, and violate the transactiona integrity
+			 * of the 2PC. Now that the query is ending, reset the shard key to NULL.
+			 */
+			ResetAllowedShardKeyValue();
 		}
 	}
 	PG_CATCH();
@@ -243,6 +252,10 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		executorBoundParams = savedBoundParams;
 		ExecutorLevel--;
+		if (ExecutorLevel == 0 && PlannerLevel == 0)
+		{
+			ResetAllowedShardKeyValue();
+		}
 
 		PG_RE_THROW();
 	}

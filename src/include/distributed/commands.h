@@ -25,6 +25,8 @@ extern bool AddAllLocalTablesToMetadata;
 
 /* controlled via GUC, should be accessed via EnableLocalReferenceForeignKeys() */
 extern bool EnableLocalReferenceForeignKeys;
+extern bool EnableUnsafeTriggers;
+
 
 extern void SwitchToSequentialAndLocalExecutionIfRelationNameTooLong(Oid relationId,
 																	 char *
@@ -478,7 +480,8 @@ extern char * GenerateBackupNameForProcCollision(const ObjectAddress *address);
 extern ObjectWithArgs * ObjectWithArgsFromOid(Oid funcOid);
 extern void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 										   int *distribution_argument_index,
-										   int *colocationId);
+										   int *colocationId,
+										   bool *forcePushdown);
 
 /* vacuum.c - forward declarations */
 extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
@@ -498,13 +501,13 @@ extern List * PostprocessAlterTriggerDependsStmt(Node *node, const char *querySt
 extern void AlterTriggerDependsEventExtendNames(
 	AlterObjectDependsStmt *alterTriggerDependsStmt,
 	char *schemaName, uint64 shardId);
+extern void ErrorOutForTriggerIfNotCitusLocalTable(Oid relationId);
 extern List * PreprocessDropTriggerStmt(Node *node, const char *queryString,
 										ProcessUtilityContext processUtilityContext);
-extern void ErrorOutForTriggerIfNotCitusLocalTable(Oid relationId);
 extern void DropTriggerEventExtendNames(DropStmt *dropTriggerStmt, char *schemaName,
 										uint64 shardId);
-extern List * CitusLocalTableTriggerCommandDDLJob(Oid relationId, char *triggerName,
-												  const char *queryString);
+extern List * CitusCreateTriggerCommandDDLJob(Oid relationId, char *triggerName,
+											  const char *queryString);
 extern Oid GetTriggerFunctionId(Oid triggerId);
 
 /* cascade_table_operation_for_connected_relations.c */

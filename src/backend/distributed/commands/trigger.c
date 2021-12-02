@@ -51,6 +51,10 @@ static void ErrorIfDropStmtDropsMultipleTriggers(DropStmt *dropTriggerStmt);
 static int16 GetTriggerTypeById(Oid triggerId);
 
 
+/* GUC that overrides trigger checks */
+bool EnableUnsafeTriggers = false;
+
+
 /*
  * GetExplicitTriggerCommandList returns the list of DDL commands to create
  * triggers that are explicitly created for the table with relationId. See
@@ -199,20 +203,14 @@ PostprocessCreateTriggerStmt(Node *node, const char *queryString)
 	}
 
 	EnsureCoordinator();
-
 	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-	{
-		ObjectAddress objectAddress = GetObjectAddressFromParseTree(node, missingOk);
-		EnsureDependenciesExistOnAllNodes(&objectAddress);
+	ObjectAddress objectAddress = GetObjectAddressFromParseTree(node, missingOk);
+	EnsureDependenciesExistOnAllNodes(&objectAddress);
 
-		char *triggerName = createTriggerStmt->trigname;
-		return CitusLocalTableTriggerCommandDDLJob(relationId, triggerName,
-												   queryString);
-	}
-
-	return NIL;
+	char *triggerName = createTriggerStmt->trigname;
+	return CitusCreateTriggerCommandDDLJob(relationId, triggerName,
+										   queryString);
 }
 
 
@@ -314,15 +312,10 @@ PostprocessAlterTriggerRenameStmt(Node *node, const char *queryString)
 	EnsureCoordinator();
 	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-	{
-		/* use newname as standard process utility already renamed it */
-		char *triggerName = renameTriggerStmt->newname;
-		return CitusLocalTableTriggerCommandDDLJob(relationId, triggerName,
-												   queryString);
-	}
-
-	return NIL;
+	/* use newname as standard process utility already renamed it */
+	char *triggerName = renameTriggerStmt->newname;
+	return CitusCreateTriggerCommandDDLJob(relationId, triggerName,
+										   queryString);
 }
 
 
@@ -378,15 +371,10 @@ PostprocessAlterTriggerDependsStmt(Node *node, const char *queryString)
 	EnsureCoordinator();
 	ErrorOutForTriggerIfNotCitusLocalTable(relationId);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-	{
-		Value *triggerNameValue =
-			GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
-		return CitusLocalTableTriggerCommandDDLJob(relationId, strVal(triggerNameValue),
-												   queryString);
-	}
-
-	return NIL;
+	Value *triggerNameValue =
+		GetAlterTriggerDependsTriggerNameValue(alterTriggerDependsStmt);
+	return CitusCreateTriggerCommandDDLJob(relationId, strVal(triggerNameValue),
+										   queryString);
 }
 
 
@@ -443,7 +431,7 @@ GetAlterTriggerDependsTriggerNameValue(AlterObjectDependsStmt *alterTriggerDepen
  * unsupported commands or creates ddl job for supported DROP TRIGGER commands.
  * The reason we process drop trigger commands before standard process utility
  * (unlike the other type of trigger commands) is that we act according to trigger
- * type in CitusLocalTableTriggerCommandDDLJob but trigger wouldn't exist after
+ * type in CitusCreateTriggerCommandDDLJob but trigger wouldn't exist after
  * standard process utility.
  */
 List *
@@ -471,15 +459,10 @@ PreprocessDropTriggerStmt(Node *node, const char *queryString,
 
 	ErrorIfUnsupportedDropTriggerCommand(dropTriggerStmt);
 
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
-	{
-		char *triggerName = NULL;
-		ExtractDropStmtTriggerAndRelationName(dropTriggerStmt, &triggerName, NULL);
-		return CitusLocalTableTriggerCommandDDLJob(relationId, triggerName,
-												   queryString);
-	}
-
-	return NIL;
+	char *triggerName = NULL;
+	ExtractDropStmtTriggerAndRelationName(dropTriggerStmt, &triggerName, NULL);
+	return CitusCreateTriggerCommandDDLJob(relationId, triggerName,
+										   queryString);
 }
 
 
@@ -512,13 +495,19 @@ ErrorIfUnsupportedDropTriggerCommand(DropStmt *dropTriggerStmt)
 void
 ErrorOutForTriggerIfNotCitusLocalTable(Oid relationId)
 {
-	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	if (EnableUnsafeTriggers)
 	{
+		/* user really wants triggers */
 		return;
 	}
-
-	ereport(ERROR, (errmsg("triggers are only supported for local tables added "
-						   "to metadata")));
+	else if (IsCitusTableType(relationId, REFERENCE_TABLE))
+	{
+		ereport(ERROR, (errmsg("triggers are not supported on reference tables")));
+	}
+	else if (IsCitusTableType(relationId, DISTRIBUTED_TABLE))
+	{
+		ereport(ERROR, (errmsg("triggers are not supported on distributed tables")));
+	}
 }
 
 
@@ -627,13 +616,13 @@ ErrorIfDropStmtDropsMultipleTriggers(DropStmt *dropTriggerStmt)
 
 
 /*
- * CitusLocalTableTriggerCommandDDLJob creates a ddl job to execute given
+ * CitusCreateTriggerCommandDDLJob creates a ddl job to execute given
  * queryString trigger command on shell relation(s) in mx worker(s) and to
  * execute necessary ddl task on citus local table shard (if needed).
  */
 List *
-CitusLocalTableTriggerCommandDDLJob(Oid relationId, char *triggerName,
-									const char *queryString)
+CitusCreateTriggerCommandDDLJob(Oid relationId, char *triggerName,
+								const char *queryString)
 {
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = relationId;

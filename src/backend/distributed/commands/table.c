@@ -1085,15 +1085,9 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		}
 		else if (AlterTableCommandTypeIsTrigger(alterTableType))
 		{
-			/*
-			 * We already error'ed out for ENABLE/DISABLE trigger commands for
-			 * other citus table types in ErrorIfUnsupportedAlterTableStmt.
-			 */
-			Assert(IsCitusTableType(leftRelationId, CITUS_LOCAL_TABLE));
-
 			char *triggerName = command->name;
-			return CitusLocalTableTriggerCommandDDLJob(leftRelationId, triggerName,
-													   alterTableCommand);
+			return CitusCreateTriggerCommandDDLJob(leftRelationId, triggerName,
+												   alterTableCommand);
 		}
 
 		/*

@@ -1,0 +1,1233 @@
+DROP SCHEMA IF EXISTS distributed_transaction_function CASCADE;
+NOTICE:  schema "distributed_transaction_function" does not exist, skipping
+CREATE SCHEMA distributed_transaction_function;
+SET search_path TO 'distributed_transaction_function';
+SET citus.shard_replication_factor = 1;
+SET citus.shard_count = 32;
+SET citus.next_shard_id TO 900000;
+CREATE TABLE test_txn_dist(intcol int PRIMARY KEY);
+SELECT create_distributed_table('test_txn_dist', 'intcol', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION insert_data(a integer, b integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	INSERT INTO distributed_transaction_function.test_txn_dist VALUES (a);
+	INSERT INTO distributed_transaction_function.test_txn_dist VALUES (b);
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_data(int, int)', 'a',
+  colocate_with := 'test_txn_dist',
+  force_pushdown := true
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+-- make sure that metadata is synced, it may take few seconds
+CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
+    RETURNS void
+    LANGUAGE C STRICT
+    AS 'citus';
+SELECT wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT bool_and(hasmetadata) FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port);
+ bool_and
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET client_min_messages TO DEBUG1;
+SET citus.log_remote_commands TO on;
+SELECT 'Transaction with no errors' Testing;
+          testing
+---------------------------------------------------------------------
+ Transaction with no errors
+(1 row)
+
+BEGIN;
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (1);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900001 (intcol) VALUES (1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- This call will insert both the rows locally on the remote worker
+SELECT insert_data(2, 4);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT distributed_transaction_function.insert_data(2, 4) AS insert_data
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ insert_data
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (3);
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900015 (intcol) VALUES (3)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+COMMIT;
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ROLLBACK PREPARED 'citus_0_30105_75_4'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  cannot use 2PC in transactions involving multiple servers
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT 'Transaction with duplicate error in the remote function' Testing;
+                         testing
+---------------------------------------------------------------------
+ Transaction with duplicate error in the remote function
+(1 row)
+
+BEGIN;
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (10);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900004 (intcol) VALUES (10)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- This call will fail with duplicate error on the remote worker
+SELECT insert_data(11, 11);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+NOTICE:  issuing SELECT distributed_transaction_function.insert_data(11, 11) AS insert_data
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  duplicate key value violates unique constraint "test_txn_dist_pkey_900030"
+DETAIL:  Key (intcol)=(11) already exists.
+CONTEXT:  SQL statement "INSERT INTO distributed_transaction_function.test_txn_dist VALUES (b)"
+PL/pgSQL function distributed_transaction_function.insert_data(integer,integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (12);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+SELECT 'Transaction with duplicate error in the local statement' Testing;
+                         testing
+---------------------------------------------------------------------
+ Transaction with duplicate error in the local statement
+(1 row)
+
+BEGIN;
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (20);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900000 (intcol) VALUES (20)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- This call will insert both the rows locally on the remote worker
+SELECT insert_data(21, 22);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT distributed_transaction_function.insert_data(21, 22) AS insert_data
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ insert_data
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (23);
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900028 (intcol) VALUES (23)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- This will fail
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (23);
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900028 (intcol) VALUES (23)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ROLLBACK
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  duplicate key value violates unique constraint "test_txn_dist_pkey_900028"
+DETAIL:  Key (intcol)=(23) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+COMMIT;
+SELECT 'Transaction with function doing remote connection' Testing;
+                      testing
+---------------------------------------------------------------------
+ Transaction with function doing remote connection
+(1 row)
+
+BEGIN;
+-- This statement will pass
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (30);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900028 (intcol) VALUES (30)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- This call will insert both one rows locally and another on a different node
+SELECT insert_data(31, 33);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+NOTICE:  issuing SELECT distributed_transaction_function.insert_data(31, 33) AS insert_data
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ insert_data
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (34);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900021 (intcol) VALUES (34)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+COMMIT;
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ROLLBACK PREPARED 'citus_0_30105_78_7'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  cannot use 2PC in transactions involving multiple servers
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT 'Transaction with no errors but with a rollback' Testing;
+                    testing
+---------------------------------------------------------------------
+ Transaction with no errors but with a rollback
+(1 row)
+
+BEGIN;
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (40);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900014 (intcol) VALUES (40)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- This call will insert both the rows locally on the remote worker
+SELECT insert_data(41, 42);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT distributed_transaction_function.insert_data(41, 42) AS insert_data
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ insert_data
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO distributed_transaction_function.test_txn_dist VALUES (43);
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_txn_dist_900023 (intcol) VALUES (43)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ROLLBACK;
+NOTICE:  issuing ROLLBACK
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ROLLBACK
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+--
+-- Add function with pushdown=true in the targetList of a query
+--
+BEGIN;
+SELECT insert_data(intcol+50, 55 ) from test_txn_dist where intcol = 1;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT distributed_transaction_function.insert_data((intcol OPERATOR(pg_catalog.+) 50), 55) AS insert_data FROM distributed_transaction_function.test_txn_dist_900001 test_txn_dist WHERE (intcol OPERATOR(pg_catalog.=) 1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ insert_data
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT insert_data(52, 53);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT distributed_transaction_function.insert_data(52, 53) AS insert_data
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ insert_data
+---------------------------------------------------------------------
+
+(1 row)
+
+COMMIT;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- This should have only the first 4 rows as all other transactions were rolled back.
+SELECT * FROM distributed_transaction_function.test_txn_dist ORDER BY 1;
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900000 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900001 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900003 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900005 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900007 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900009 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900011 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900013 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900015 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900017 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900019 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900002 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900021 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900023 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900025 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900027 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900004 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900029 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900006 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900031 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900008 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900010 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900012 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900014 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900016 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900018 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900020 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900022 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900024 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900026 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900028 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT intcol FROM distributed_transaction_function.test_txn_dist_900030 test_txn_dist WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ intcol
+---------------------------------------------------------------------
+     52
+     53
+(2 rows)
+
+--
+-- Nested call, function with pushdown=false calling function with pushdown=true
+--
+CREATE TABLE test_nested (id int, name text);
+SELECT create_distributed_table('test_nested','id');
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900032, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900033, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900032, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900033, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900034, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900035, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900035, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900037, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900037, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900034, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900036, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900036, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900039, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900039, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900038, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900038, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900041, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900041, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900040, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900043, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900043, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900040, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900042, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900042, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900045, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900045, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900044, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900044, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900047, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900047, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900046, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900046, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900049, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900048, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900049, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900048, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900051, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900051, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900050, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900050, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900053, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900053, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900052, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900055, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900055, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900052, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900054, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900054, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900057, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900056, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900056, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900057, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900059, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900058, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900058, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900059, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900061, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900061, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900063, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900060, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900060, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900063, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900062, 'distributed_transaction_function', 'CREATE TABLE distributed_transaction_function.test_nested (id integer, name text) ')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_apply_shard_ddl_command (900062, 'distributed_transaction_function', 'ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE TABLE distributed_transaction_function.test_nested (id integer, name text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE TABLE distributed_transaction_function.test_nested (id integer, name text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing ALTER TABLE distributed_transaction_function.test_nested OWNER TO postgres
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('distributed_transaction_function.test_nested'::regclass, 'h', 'id', 1390007, 's')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT citus_internal_add_partition_metadata ('distributed_transaction_function.test_nested'::regclass, 'h', 'id', 1390007, 's')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_create_truncate_trigger('distributed_transaction_function.test_nested')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT worker_create_truncate_trigger('distributed_transaction_function.test_nested')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('distributed_transaction_function.test_nested'::regclass, 900032, 't'::"char", '-2147483648', '-2013265921'), ('distributed_transaction_function.test_nested'::regclass, 900033, 't'::"char", '-2013265920', '-1879048193'), ('distributed_transaction_function.test_nested'::regclass, 900034, 't'::"char", '-1879048192', '-1744830465'), ('distributed_transaction_function.test_nested'::regclass, 900035, 't'::"char", '-1744830464', '-1610612737'), ('distributed_transaction_function.test_nested'::regclass, 900036, 't'::"char", '-1610612736', '-1476395009'), ('distributed_transaction_function.test_nested'::regclass, 900037, 't'::"char", '-1476395008', '-1342177281'), ('distributed_transaction_function.test_nested'::regclass, 900038, 't'::"char", '-1342177280', '-1207959553'), ('distributed_transaction_function.test_nested'::regclass, 900039, 't'::"char", '-1207959552', '-1073741825'), ('distributed_transaction_function.test_nested'::regclass, 900040, 't'::"char", '-1073741824', '-939524097'), ('distributed_transaction_function.test_nested'::regclass, 900041, 't'::"char", '-939524096', '-805306369'), ('distributed_transaction_function.test_nested'::regclass, 900042, 't'::"char", '-805306368', '-671088641'), ('distributed_transaction_function.test_nested'::regclass, 900043, 't'::"char", '-671088640', '-536870913'), ('distributed_transaction_function.test_nested'::regclass, 900044, 't'::"char", '-536870912', '-402653185'), ('distributed_transaction_function.test_nested'::regclass, 900045, 't'::"char", '-402653184', '-268435457'), ('distributed_transaction_function.test_nested'::regclass, 900046, 't'::"char", '-268435456', '-134217729'), ('distributed_transaction_function.test_nested'::regclass, 900047, 't'::"char", '-134217728', '-1'), ('distributed_transaction_function.test_nested'::regclass, 900048, 't'::"char", '0', '134217727'), ('distributed_transaction_function.test_nested'::regclass, 900049, 't'::"char", '134217728', '268435455'), ('distributed_transaction_function.test_nested'::regclass, 900050, 't'::"char", '268435456', '402653183'), ('distributed_transaction_function.test_nested'::regclass, 900051, 't'::"char", '402653184', '536870911'), ('distributed_transaction_function.test_nested'::regclass, 900052, 't'::"char", '536870912', '671088639'), ('distributed_transaction_function.test_nested'::regclass, 900053, 't'::"char", '671088640', '805306367'), ('distributed_transaction_function.test_nested'::regclass, 900054, 't'::"char", '805306368', '939524095'), ('distributed_transaction_function.test_nested'::regclass, 900055, 't'::"char", '939524096', '1073741823'), ('distributed_transaction_function.test_nested'::regclass, 900056, 't'::"char", '1073741824', '1207959551'), ('distributed_transaction_function.test_nested'::regclass, 900057, 't'::"char", '1207959552', '1342177279'), ('distributed_transaction_function.test_nested'::regclass, 900058, 't'::"char", '1342177280', '1476395007'), ('distributed_transaction_function.test_nested'::regclass, 900059, 't'::"char", '1476395008', '1610612735'), ('distributed_transaction_function.test_nested'::regclass, 900060, 't'::"char", '1610612736', '1744830463'), ('distributed_transaction_function.test_nested'::regclass, 900061, 't'::"char", '1744830464', '1879048191'), ('distributed_transaction_function.test_nested'::regclass, 900062, 't'::"char", '1879048192', '2013265919'), ('distributed_transaction_function.test_nested'::regclass, 900063, 't'::"char", '2013265920', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('distributed_transaction_function.test_nested'::regclass, 900032, 't'::"char", '-2147483648', '-2013265921'), ('distributed_transaction_function.test_nested'::regclass, 900033, 't'::"char", '-2013265920', '-1879048193'), ('distributed_transaction_function.test_nested'::regclass, 900034, 't'::"char", '-1879048192', '-1744830465'), ('distributed_transaction_function.test_nested'::regclass, 900035, 't'::"char", '-1744830464', '-1610612737'), ('distributed_transaction_function.test_nested'::regclass, 900036, 't'::"char", '-1610612736', '-1476395009'), ('distributed_transaction_function.test_nested'::regclass, 900037, 't'::"char", '-1476395008', '-1342177281'), ('distributed_transaction_function.test_nested'::regclass, 900038, 't'::"char", '-1342177280', '-1207959553'), ('distributed_transaction_function.test_nested'::regclass, 900039, 't'::"char", '-1207959552', '-1073741825'), ('distributed_transaction_function.test_nested'::regclass, 900040, 't'::"char", '-1073741824', '-939524097'), ('distributed_transaction_function.test_nested'::regclass, 900041, 't'::"char", '-939524096', '-805306369'), ('distributed_transaction_function.test_nested'::regclass, 900042, 't'::"char", '-805306368', '-671088641'), ('distributed_transaction_function.test_nested'::regclass, 900043, 't'::"char", '-671088640', '-536870913'), ('distributed_transaction_function.test_nested'::regclass, 900044, 't'::"char", '-536870912', '-402653185'), ('distributed_transaction_function.test_nested'::regclass, 900045, 't'::"char", '-402653184', '-268435457'), ('distributed_transaction_function.test_nested'::regclass, 900046, 't'::"char", '-268435456', '-134217729'), ('distributed_transaction_function.test_nested'::regclass, 900047, 't'::"char", '-134217728', '-1'), ('distributed_transaction_function.test_nested'::regclass, 900048, 't'::"char", '0', '134217727'), ('distributed_transaction_function.test_nested'::regclass, 900049, 't'::"char", '134217728', '268435455'), ('distributed_transaction_function.test_nested'::regclass, 900050, 't'::"char", '268435456', '402653183'), ('distributed_transaction_function.test_nested'::regclass, 900051, 't'::"char", '402653184', '536870911'), ('distributed_transaction_function.test_nested'::regclass, 900052, 't'::"char", '536870912', '671088639'), ('distributed_transaction_function.test_nested'::regclass, 900053, 't'::"char", '671088640', '805306367'), ('distributed_transaction_function.test_nested'::regclass, 900054, 't'::"char", '805306368', '939524095'), ('distributed_transaction_function.test_nested'::regclass, 900055, 't'::"char", '939524096', '1073741823'), ('distributed_transaction_function.test_nested'::regclass, 900056, 't'::"char", '1073741824', '1207959551'), ('distributed_transaction_function.test_nested'::regclass, 900057, 't'::"char", '1207959552', '1342177279'), ('distributed_transaction_function.test_nested'::regclass, 900058, 't'::"char", '1342177280', '1476395007'), ('distributed_transaction_function.test_nested'::regclass, 900059, 't'::"char", '1476395008', '1610612735'), ('distributed_transaction_function.test_nested'::regclass, 900060, 't'::"char", '1610612736', '1744830463'), ('distributed_transaction_function.test_nested'::regclass, 900061, 't'::"char", '1744830464', '1879048191'), ('distributed_transaction_function.test_nested'::regclass, 900062, 't'::"char", '1879048192', '2013265919'), ('distributed_transaction_function.test_nested'::regclass, 900063, 't'::"char", '2013265920', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (900032, 1, 0, 14, 116), (900033, 1, 0, 16, 117), (900034, 1, 0, 14, 118), (900035, 1, 0, 16, 119), (900036, 1, 0, 14, 120), (900037, 1, 0, 16, 121), (900038, 1, 0, 14, 122), (900039, 1, 0, 16, 123), (900040, 1, 0, 14, 124), (900041, 1, 0, 16, 125), (900042, 1, 0, 14, 126), (900043, 1, 0, 16, 127), (900044, 1, 0, 14, 128), (900045, 1, 0, 16, 129), (900046, 1, 0, 14, 130), (900047, 1, 0, 16, 131), (900048, 1, 0, 14, 132), (900049, 1, 0, 16, 133), (900050, 1, 0, 14, 134), (900051, 1, 0, 16, 135), (900052, 1, 0, 14, 136), (900053, 1, 0, 16, 137), (900054, 1, 0, 14, 138), (900055, 1, 0, 16, 139), (900056, 1, 0, 14, 140), (900057, 1, 0, 16, 141), (900058, 1, 0, 14, 142), (900059, 1, 0, 16, 143), (900060, 1, 0, 14, 144), (900061, 1, 0, 16, 145), (900062, 1, 0, 14, 146), (900063, 1, 0, 16, 147)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (900032, 1, 0, 14, 116), (900033, 1, 0, 16, 117), (900034, 1, 0, 14, 118), (900035, 1, 0, 16, 119), (900036, 1, 0, 14, 120), (900037, 1, 0, 16, 121), (900038, 1, 0, 14, 122), (900039, 1, 0, 16, 123), (900040, 1, 0, 14, 124), (900041, 1, 0, 16, 125), (900042, 1, 0, 14, 126), (900043, 1, 0, 16, 127), (900044, 1, 0, 14, 128), (900045, 1, 0, 16, 129), (900046, 1, 0, 14, 130), (900047, 1, 0, 16, 131), (900048, 1, 0, 14, 132), (900049, 1, 0, 16, 133), (900050, 1, 0, 14, 134), (900051, 1, 0, 16, 135), (900052, 1, 0, 14, 136), (900053, 1, 0, 16, 137), (900054, 1, 0, 14, 138), (900055, 1, 0, 16, 139), (900056, 1, 0, 14, 140), (900057, 1, 0, 16, 141), (900058, 1, 0, 14, 142), (900059, 1, 0, 16, 143), (900060, 1, 0, 14, 144), (900061, 1, 0, 16, 145), (900062, 1, 0, 14, 146), (900063, 1, 0, 16, 147)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_nested VALUES (100,'hundred');
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_nested_900048 (id, name) VALUES (100, 'hundred'::text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+INSERT INTO test_nested VALUES (200,'twohundred');
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_nested_900039 (id, name) VALUES (200, 'twohundred'::text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+INSERT INTO test_nested VALUES (300,'threehundred');
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_nested_900057 (id, name) VALUES (300, 'threehundred'::text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+INSERT INTO test_nested VALUES (400,'fourhundred');
+NOTICE:  issuing INSERT INTO distributed_transaction_function.test_nested_900042 (id, name) VALUES (400, 'fourhundred'::text)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CREATE OR REPLACE FUNCTION inner_function(int)
+RETURNS NUMERIC AS $$
+DECLARE ret_val NUMERIC;
+BEGIN
+        SELECT max(id)::numeric+1 INTO ret_val  FROM distributed_transaction_function.test_nested WHERE id = $1;
+	RAISE NOTICE 'inner_function():%', ret_val;
+        RETURN ret_val;
+END;
+$$  LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION func_calls_dist_func()
+RETURNS NUMERIC AS $$
+DECLARE incremented_val NUMERIC;
+BEGIN
+	-- Constant distribution argument
+	SELECT inner_function INTO incremented_val FROM inner_function(100);
+	RETURN incremented_val;
+END;
+$$  LANGUAGE plpgsql;
+SELECT create_distributed_function('func_calls_dist_func()');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE OR REPLACE FUNCTION distributed_transaction_function.func_calls_dist_func()
+ RETURNS numeric
+ LANGUAGE plpgsql
+AS $function$
+DECLARE incremented_val NUMERIC;
+BEGIN
+	-- Constant distribution argument
+	SELECT inner_function INTO incremented_val FROM inner_function(100);
+	RETURN incremented_val;
+END;
+$function$
+;ALTER ROUTINE distributed_transaction_function.func_calls_dist_func() OWNER TO postgres;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE OR REPLACE FUNCTION distributed_transaction_function.func_calls_dist_func()
+ RETURNS numeric
+ LANGUAGE plpgsql
+AS $function$
+DECLARE incremented_val NUMERIC;
+BEGIN
+	-- Constant distribution argument
+	SELECT inner_function INTO incremented_val FROM inner_function(100);
+	RETURN incremented_val;
+END;
+$function$
+;ALTER ROUTINE distributed_transaction_function.func_calls_dist_func() OWNER TO postgres;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function('inner_function(int)', '$1', colocate_with := 'test_nested', force_pushdown := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE OR REPLACE FUNCTION distributed_transaction_function.inner_function(integer)
+ RETURNS numeric
+ LANGUAGE plpgsql
+AS $function$
+DECLARE ret_val NUMERIC;
+BEGIN
+        SELECT max(id)::numeric+1 INTO ret_val  FROM distributed_transaction_function.test_nested WHERE id = $1;
+	RAISE NOTICE 'inner_function():%', ret_val;
+        RETURN ret_val;
+END;
+$function$
+;ALTER ROUTINE distributed_transaction_function.inner_function(integer) OWNER TO postgres;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE OR REPLACE FUNCTION distributed_transaction_function.inner_function(integer)
+ RETURNS numeric
+ LANGUAGE plpgsql
+AS $function$
+DECLARE ret_val NUMERIC;
+BEGIN
+        SELECT max(id)::numeric+1 INTO ret_val  FROM distributed_transaction_function.test_nested WHERE id = $1;
+	RAISE NOTICE 'inner_function():%', ret_val;
+        RETURN ret_val;
+END;
+$function$
+;ALTER ROUTINE distributed_transaction_function.inner_function(integer) OWNER TO postgres;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT func_calls_dist_func();
+DEBUG:  not pushing down function calls in a multi-statement transaction
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(100)"
+PL/pgSQL function func_calls_dist_func() line XX at SQL statement
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(100)"
+PL/pgSQL function func_calls_dist_func() line XX at SQL statement
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(100)"
+PL/pgSQL function func_calls_dist_func() line XX at SQL statement
+NOTICE:  issuing SELECT inner_function FROM distributed_transaction_function.inner_function(100) inner_function(inner_function)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(100)"
+PL/pgSQL function func_calls_dist_func() line XX at SQL statement
+NOTICE:  inner_function():101
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(100)"
+PL/pgSQL function func_calls_dist_func() line XX at SQL statement
+ func_calls_dist_func
+---------------------------------------------------------------------
+                  101
+(1 row)
+
+COMMIT;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+SELECT func_calls_dist_func();
+DEBUG:  function does not have co-located tables
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(100)"
+PL/pgSQL function func_calls_dist_func() line XX at SQL statement
+NOTICE:  issuing SELECT inner_function FROM distributed_transaction_function.inner_function(100) inner_function(inner_function)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(100)"
+PL/pgSQL function func_calls_dist_func() line XX at SQL statement
+NOTICE:  inner_function():101
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(100)"
+PL/pgSQL function func_calls_dist_func() line XX at SQL statement
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ func_calls_dist_func
+---------------------------------------------------------------------
+                  101
+(1 row)
+
+CREATE OR REPLACE FUNCTION get_val()
+RETURNS INT AS $$
+BEGIN
+        RETURN 100::INT;
+END;
+$$  LANGUAGE plpgsql;
+--
+-- UDF calling another UDF using FROM clause
+-- fn()
+-- {
+--   select res into var from fn();
+-- }
+--
+CREATE OR REPLACE FUNCTION func_calls_dist_func_nonconst1()
+RETURNS NUMERIC AS $$
+DECLARE incremented_val NUMERIC;
+DECLARE add_val INT;
+BEGIN
+	add_val := get_val();
+	SELECT inner_function INTO incremented_val FROM inner_function(add_val + 100);
+	RETURN incremented_val;
+END;
+$$  LANGUAGE plpgsql;
+RESET client_min_messages;
+SELECT func_calls_dist_func_nonconst1();
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(add_val + 100)"
+PL/pgSQL function func_calls_dist_func_nonconst1() line XX at SQL statement
+NOTICE:  issuing SELECT inner_function FROM distributed_transaction_function.inner_function(200) inner_function(inner_function)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(add_val + 100)"
+PL/pgSQL function func_calls_dist_func_nonconst1() line XX at SQL statement
+NOTICE:  inner_function():201
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(add_val + 100)"
+PL/pgSQL function func_calls_dist_func_nonconst1() line XX at SQL statement
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ func_calls_dist_func_nonconst1
+---------------------------------------------------------------------
+                            201
+(1 row)
+
+BEGIN;
+SELECT func_calls_dist_func_nonconst1();
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(add_val + 100)"
+PL/pgSQL function func_calls_dist_func_nonconst1() line XX at SQL statement
+NOTICE:  issuing SELECT inner_function FROM distributed_transaction_function.inner_function(200) inner_function(inner_function)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(add_val + 100)"
+PL/pgSQL function func_calls_dist_func_nonconst1() line XX at SQL statement
+NOTICE:  inner_function():201
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_function                      FROM inner_function(add_val + 100)"
+PL/pgSQL function func_calls_dist_func_nonconst1() line XX at SQL statement
+ func_calls_dist_func_nonconst1
+---------------------------------------------------------------------
+                            201
+(1 row)
+
+COMMIT;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+--
+-- UDF calling another UDF in the SELECT targetList
+-- fn()
+-- {
+--   select fn() into var;
+-- }
+--
+CREATE OR REPLACE FUNCTION func_calls_dist_func_nonconst2()
+RETURNS NUMERIC AS $$
+DECLARE incremented_val NUMERIC;
+DECLARE add_val INT;
+BEGIN
+	add_val := get_val();
+	--
+	-- Note: Adding OFFSET 0 to make it non-simple expression to avoid
+	-- the ERROR:  unexpected plan node type: 35 (Custom Scan node)
+	--
+	SELECT inner_function(100 + 100) INTO incremented_val OFFSET 0;
+	RETURN incremented_val;
+END;
+$$  LANGUAGE plpgsql;
+RESET client_min_messages;
+SELECT func_calls_dist_func_nonconst2();
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_dist_func_nonconst2() line XX at SQL statement
+NOTICE:  issuing SELECT distributed_transaction_function.inner_function(200) AS inner_function OFFSET '0'::bigint
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_dist_func_nonconst2() line XX at SQL statement
+NOTICE:  inner_function():201
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_dist_func_nonconst2() line XX at SQL statement
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ func_calls_dist_func_nonconst2
+---------------------------------------------------------------------
+                            201
+(1 row)
+
+BEGIN;
+SELECT func_calls_dist_func_nonconst2();
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_dist_func_nonconst2() line XX at SQL statement
+NOTICE:  issuing SELECT distributed_transaction_function.inner_function(200) AS inner_function OFFSET '0'::bigint
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT inner_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_dist_func_nonconst2() line XX at SQL statement
+NOTICE:  inner_function():201
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_dist_func_nonconst2() line XX at SQL statement
+ func_calls_dist_func_nonconst2
+---------------------------------------------------------------------
+                            201
+(1 row)
+
+COMMIT;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+--
+-- Recursive function call with pushdown=true
+--
+CREATE OR REPLACE FUNCTION test_recursive(inp integer)
+RETURNS INT AS $$
+DECLARE var INT;
+BEGIN
+	RAISE NOTICE 'input:%', inp;
+	if (inp > 1) then
+		var := distributed_transaction_function.test_recursive(inp-1);
+		RETURN var;
+	else
+		RETURN inp;
+	END if;
+END;
+$$  LANGUAGE plpgsql;
+SELECT create_distributed_function('test_recursive(int)', '$1', colocate_with := 'test_nested', force_pushdown := true);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE OR REPLACE FUNCTION distributed_transaction_function.test_recursive(inp integer)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+DECLARE var INT;
+BEGIN
+	RAISE NOTICE 'input:%', inp;
+	if (inp > 1) then
+		var := distributed_transaction_function.test_recursive(inp-1);
+		RETURN var;
+	else
+		RETURN inp;
+	END if;
+END;
+$function$
+;ALTER ROUTINE distributed_transaction_function.test_recursive(integer) OWNER TO postgres;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing CREATE OR REPLACE FUNCTION distributed_transaction_function.test_recursive(inp integer)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+DECLARE var INT;
+BEGIN
+	RAISE NOTICE 'input:%', inp;
+	if (inp > 1) then
+		var := distributed_transaction_function.test_recursive(inp-1);
+		RETURN var;
+	else
+		RETURN inp;
+	END if;
+END;
+$function$
+;ALTER ROUTINE distributed_transaction_function.test_recursive(integer) OWNER TO postgres;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT test_recursive(5);
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT distributed_transaction_function.test_recursive(5) AS test_recursive
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  input:5
+DETAIL:  from localhost:xxxxx
+NOTICE:  input:4
+DETAIL:  from localhost:xxxxx
+NOTICE:  input:3
+DETAIL:  from localhost:xxxxx
+NOTICE:  input:2
+DETAIL:  from localhost:xxxxx
+NOTICE:  input:1
+DETAIL:  from localhost:xxxxx
+ test_recursive
+---------------------------------------------------------------------
+              1
+(1 row)
+
+END;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+--
+-- Non constant distribution arguments
+--
+-- Var node e.g. select fn(col) from table where col=150;
+BEGIN;
+SELECT inner_function(id) FROM test_nested WHERE id = 300;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT distributed_transaction_function.inner_function(id) AS inner_function FROM distributed_transaction_function.test_nested_900057 test_nested WHERE (id OPERATOR(pg_catalog.=) 300)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  inner_function():301
+DETAIL:  from localhost:xxxxx
+ inner_function
+---------------------------------------------------------------------
+            301
+(1 row)
+
+END;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+-- Param(PARAM_EXEC) node e.g. SELECT fn((SELECT col from test_nested where col=val))
+BEGIN;
+SELECT inner_function((SELECT id FROM test_nested WHERE id=400));
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT distributed_transaction_function.inner_function((SELECT test_nested.id FROM distributed_transaction_function.test_nested_900042 test_nested WHERE (test_nested.id OPERATOR(pg_catalog.=) 400))) AS inner_function
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  inner_function():401
+DETAIL:  from localhost:xxxxx
+ inner_function
+---------------------------------------------------------------------
+            401
+(1 row)
+
+END;
+NOTICE:  issuing COMMIT
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+DROP SCHEMA distributed_transaction_function CASCADE;
+NOTICE:  drop cascades to 10 other objects
+DETAIL:  drop cascades to table test_txn_dist
+drop cascades to function insert_data(integer,integer)
+drop cascades to function wait_until_metadata_sync(integer)
+drop cascades to table test_nested
+drop cascades to function inner_function(integer)
+drop cascades to function func_calls_dist_func()
+drop cascades to function get_val()
+drop cascades to function func_calls_dist_func_nonconst1()
+drop cascades to function func_calls_dist_func_nonconst2()
+drop cascades to function test_recursive(integer)
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing SELECT worker_drop_distributed_table('distributed_transaction_function.test_txn_dist')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing SELECT worker_drop_distributed_table('distributed_transaction_function.test_txn_dist')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_txn_dist_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing SELECT worker_drop_distributed_table('distributed_transaction_function.test_nested')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing SELECT worker_drop_distributed_table('distributed_transaction_function.test_nested')
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT master_remove_distributed_table_metadata_from_workers(v_obj.objid, v_obj.schema_name, v_obj.object_name)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing DROP TABLE IF EXISTS distributed_transaction_function.test_nested_xxxxx CASCADE
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+CONTEXT:  SQL statement "SELECT citus_drop_all_shards(v_obj.objid, v_obj.schema_name, v_obj.object_name, drop_shards_metadata_only := false)"
+PL/pgSQL function citus_drop_trigger() line XX at PERFORM
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

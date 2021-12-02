@@ -12,6 +12,12 @@
 #include "lib/ilist.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
+#include "lib/stringinfo.h"
+#include "nodes/primnodes.h"
+
+/* forward declare, to avoid recursive includes */
+struct DistObjectCacheEntry;
+
 
 /* describes what kind of modifications have occurred in the current transaction */
 typedef enum
@@ -94,12 +100,20 @@ extern bool TransactionModifiedNodeMetadata;
 /*
  * Coordinated transaction management.
  */
+void a_special(char const *caller_name);
+
 extern void UseCoordinatedTransaction(void);
 extern bool InCoordinatedTransaction(void);
 extern void Use2PCForCoordinatedTransaction(void);
 extern bool GetCoordinatedTransactionShouldUse2PC(void);
 extern bool IsMultiStatementTransaction(void);
 extern void EnsureDistributedTransactionId(void);
+extern void EnableInForceDelegatedFuncExecution(Const *distArgument);
+extern bool GetInForceDelegatedFuncExecution(void);
+extern bool IsShardKeyValueAllowed(Const *shardKey);
+extern void ResetAllowedShardKeyValue(void);
+extern bool MaybeExecutingUDF(void);
+
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);
