@@ -259,7 +259,7 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table2_
 
 -- make sure that we've created the foreign keys
 SELECT  "Constraint", "Definition" FROM table_fkeys
-  WHERE "Constraint" LIKE 'table2_group%' OR "Constraint" LIKE 'table1_group%';
+  WHERE "Constraint" SIMILAR TO 'table2_group%\d' OR "Constraint" SIMILAR TO 'table1_group%\d';
 
 \c - - - :master_port
 

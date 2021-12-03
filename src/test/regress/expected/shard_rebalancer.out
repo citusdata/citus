@@ -21,6 +21,7 @@ CREATE TABLE postgres_table_test(a int primary key);
 -- reference tables are replicated to the coordinator
 SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
 NOTICE:  Replicating reference table "ref_table_test" to the node localhost:xxxxx
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1
@@ -766,6 +767,12 @@ SELECT count(*) FROM rebalance_test_table;
 
 DROP TABLE rebalance_test_table;
 -- Test schema support
+SELECT citus_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
 CREATE SCHEMA test_schema_support;
 SELECT COUNT(*) FROM pg_dist_shard_placement;
  count
@@ -779,9 +786,7 @@ CREATE TABLE test_schema_support.nation_hash (
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SET citus.shard_count TO 4;
-SET citus.shard_replication_factor TO 1;
-SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
+SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', shard_count:=4);
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -793,7 +798,7 @@ CREATE TABLE test_schema_support.nation_hash2 (
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', 'hash');
+SELECT create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', colocate_with:='None', shard_count:=4);
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -806,11 +811,11 @@ UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
 SELECT COUNT(*) FROM pg_dist_shard_placement;
  count
 ---------------------------------------------------------------------
-     8
+    16
 (1 row)
 
 SET search_path TO public;
-SELECT replicate_table_shards('test_schema_support.nation_hash', shard_replication_factor:=2, max_shard_copies:=1, shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('test_schema_support.nation_hash', shard_replication_factor:=3, shard_transfer_mode:='block_writes');
  replicate_table_shards
 ---------------------------------------------------------------------
 
@@ -820,12 +825,12 @@ SELECT replicate_table_shards('test_schema_support.nation_hash', shard_replicati
 SELECT COUNT(*) FROM pg_dist_shard_placement;
  count
 ---------------------------------------------------------------------
-    10
+    20
 (1 row)
 
 -- Test with search_path is set
 SET search_path TO test_schema_support;
-SELECT replicate_table_shards('nation_hash2', shard_replication_factor:=2, shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('nation_hash2', shard_replication_factor:=3, shard_transfer_mode:='block_writes');
  replicate_table_shards
 ---------------------------------------------------------------------
 
@@ -835,11 +840,17 @@ SELECT replicate_table_shards('nation_hash2', shard_replication_factor:=2, shard
 SELECT COUNT(*) FROM pg_dist_shard_placement;
  count
 ---------------------------------------------------------------------
-    16
+    24
 (1 row)
 
 DROP TABLE test_schema_support.nation_hash;
 DROP TABLE test_schema_support.nation_hash2;
+SELECT citus_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
+ citus_set_node_property
+---------------------------------------------------------------------
+
+(1 row)
+
 -- Test rebalancer with schema
 -- Next few operations is to create imbalanced distributed table
 CREATE TABLE test_schema_support.imbalanced_table_local (
@@ -1066,14 +1077,14 @@ CALL citus_cleanup_orphaned_shards();
 select * from pg_dist_placement ORDER BY placementid;
  placementid | shardid | shardstate | shardlength | groupid
 ---------------------------------------------------------------------
-         150 |  123023 |          1 |           0 |      14
-         153 |  123024 |          1 |           0 |      14
-         156 |  123027 |          1 |           0 |      14
-         157 |  123028 |          1 |           0 |      14
-         158 |  123021 |          1 |           0 |      16
-         159 |  123025 |          1 |           0 |      16
-         160 |  123022 |          1 |           0 |      16
-         161 |  123026 |          1 |           0 |      16
+         158 |  123023 |          1 |           0 |      14
+         161 |  123024 |          1 |           0 |      14
+         164 |  123027 |          1 |           0 |      14
+         165 |  123028 |          1 |           0 |      14
+         166 |  123021 |          1 |           0 |      16
+         167 |  123025 |          1 |           0 |      16
+         168 |  123022 |          1 |           0 |      16
+         169 |  123026 |          1 |           0 |      16
 (8 rows)
 
 -- Move all shards to worker1 again
@@ -1439,7 +1450,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
  table_schema | table_name | row_estimate | total_bytes
 ---------------------------------------------------------------------
@@ -1460,7 +1471,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
  table_schema | table_name | row_estimate | total_bytes
 ---------------------------------------------------------------------
@@ -1563,7 +1574,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
@@ -1584,7 +1595,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
@@ -1658,7 +1669,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------
@@ -1683,7 +1694,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
  table_schema | table_name  | row_estimate | total_bytes
 ---------------------------------------------------------------------

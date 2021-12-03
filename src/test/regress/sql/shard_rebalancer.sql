@@ -538,6 +538,7 @@ DROP TABLE rebalance_test_table;
 
 -- Test schema support
 
+SELECT citus_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
 
 CREATE SCHEMA test_schema_support;
 
@@ -550,9 +551,7 @@ CREATE TABLE test_schema_support.nation_hash (
     n_comment varchar(152)
 );
 
-SET citus.shard_count TO 4;
-SET citus.shard_replication_factor TO 1;
-SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
+SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', shard_count:=4);
 
 CREATE TABLE test_schema_support.nation_hash2 (
     n_nationkey integer not null,
@@ -561,7 +560,7 @@ CREATE TABLE test_schema_support.nation_hash2 (
     n_comment varchar(152)
 );
 
-SELECT create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', 'hash');
+SELECT create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', colocate_with:='None', shard_count:=4);
 
 -- Mark tables as coordinator replicated in order to be able to test replicate_table_shards
 UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
@@ -571,20 +570,22 @@ UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
 SELECT COUNT(*) FROM pg_dist_shard_placement;
 
 SET search_path TO public;
-SELECT replicate_table_shards('test_schema_support.nation_hash', shard_replication_factor:=2, max_shard_copies:=1, shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('test_schema_support.nation_hash', shard_replication_factor:=3, shard_transfer_mode:='block_writes');
 
 -- Confirm replication, both tables replicated due to colocation
 SELECT COUNT(*) FROM pg_dist_shard_placement;
 
 -- Test with search_path is set
 SET search_path TO test_schema_support;
-SELECT replicate_table_shards('nation_hash2', shard_replication_factor:=2, shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('nation_hash2', shard_replication_factor:=3, shard_transfer_mode:='block_writes');
 
 -- Confirm replication
 SELECT COUNT(*) FROM pg_dist_shard_placement;
 
 DROP TABLE test_schema_support.nation_hash;
 DROP TABLE test_schema_support.nation_hash2;
+
+SELECT citus_set_node_property('localhost', :master_port, 'shouldhaveshards', false);
 
 -- Test rebalancer with schema
 -- Next few operations is to create imbalanced distributed table
@@ -861,7 +862,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
 \c - - - :worker_2_port
 SELECT table_schema, table_name, row_estimate, total_bytes
@@ -876,7 +877,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
 
 \c - - - :master_port
@@ -922,7 +923,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
 \c - - - :worker_2_port
 SELECT table_schema, table_name, row_estimate, total_bytes
@@ -937,7 +938,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
 
 \c - - - :master_port
@@ -963,7 +964,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
 \c - - - :worker_2_port
 SELECT table_schema, table_name, row_estimate, total_bytes
@@ -978,7 +979,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
   ) a
-WHERE table_schema = 'public'
+WHERE table_schema = 'public' AND table_name SIMILAR TO '%\d{2,}'
 ) a ORDER BY table_name;
 \c - - - :master_port
 
