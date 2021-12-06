@@ -875,7 +875,7 @@ ExtractPartitionValue(List *restrictionList, Var *partitionKey)
 
 		if (IsA(right, Var))
 		{
-			Var *rightVar = castNode(Var, left);
+			Var *rightVar = castNode(Var, right);
 			if (rightVar->varno == partitionKey->varno &&
 				rightVar->varattno == partitionKey->varattno)
 			{
@@ -1351,7 +1351,7 @@ OptimizeRepartitionInnerJoinPath(PlannerInfo *root, Path *originalPath)
 		/* now with the inner and outer swapped
 		 *      +------------------------------------+
 		 *      | Collect                            |
-		 *      | - ColocationID: outer.ColocationID |
+		 *      | - ColocationID: inner.ColocationID |
 		 *      +------------------------------------+
 		 *                                    |
 		 *                               +---------+
