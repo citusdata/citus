@@ -41,11 +41,10 @@ bool EnableDependencyCreation = true;
  * workers via a separate session that will be committed directly so that the objects are
  * visible to potentially multiple sessions creating the shards.
  *
- * Note; only the actual objects are created via a separate session, the local records to
+ * Note; only the actual objects are created via a separate session, the records to
  * pg_dist_object are created in this session. As a side effect the objects could be
- * created on the workers without a catalog entry on the coordinator. Updates to the
- * objects on the coordinator are not propagated to the workers until the record is
- * visible on the coordinator.
+ * created on the workers without a catalog entry. Updates to the objects on the coordinator
+ * are not propagated to the workers until the record is visible on the coordinator.
  *
  * This is solved by creating the dependencies in an idempotent manner, either via
  * postgres native CREATE IF NOT EXISTS, or citus helper functions.
@@ -104,31 +103,6 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 						   dependency->objectSubId, ExclusiveLock);
 	}
 
-	/*
-	 * right after we acquired the lock we mark our objects as distributed, these changes
-	 * will not become visible before we have successfully created all the objects on our
-	 * workers.
-	 *
-	 * It is possible to create distributed tables which depend on other dependencies
-	 * before any node is in the cluster. If we would wait till we actually had connected
-	 * to the nodes before marking the objects as distributed these objects would never be
-	 * created on the workers when they get added, causing shards to fail to create.
-	 */
-	foreach_ptr(dependency, dependenciesWithCommands)
-	{
-		MarkObjectDistributed(dependency);
-	}
-
-	/*
-	 * collect and connect to all applicable nodes
-	 */
-	if (list_length(workerNodeList) <= 0)
-	{
-		/* no nodes to execute on */
-		return;
-	}
-
-
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
@@ -138,6 +112,16 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
 												  CitusExtensionOwnerName(),
 												  ddlCommands);
+	}
+
+	/*
+	 * We do this after creating the objects on the workers, we make sure
+	 * that objects have been created on worker nodes before marking them
+	 * distributed, so MarkObjectDistributed wouldn't fail.
+	 */
+	foreach_ptr(dependency, dependenciesWithCommands)
+	{
+		MarkObjectDistributed(dependency);
 	}
 }
 

@@ -25,6 +25,7 @@ test: multi_cluster_management
 
 # below tests are placed right after multi_cluster_management as we do
 # remove/add node operations and we do not want any preexisting objects
+test: non_super_user_object_metadata
 test: alter_role_propagation
 test: propagate_extension_commands
 test: escape_extension_name
@@ -339,7 +340,6 @@ test: ssl_by_default
 # ---------
 test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
 test: check_mx
-test: turn_mx_off
 test: distributed_functions distributed_functions_conflict
 test: distributed_collations distributed_collations_conflict
 test: distributed_procedure

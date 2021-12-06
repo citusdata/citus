@@ -67,7 +67,12 @@ CREATE FUNCTION add(integer, integer) RETURNS integer
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
+-- Since deparse logic on workers can not work for if function
+-- is distributed on workers, we are disabling object propagation
+-- first. Same trick has been applied multiple times in this test.
+SET citus.enable_object_propagation TO OFF;
 SELECT create_distributed_function('add(int,int)');
+RESET citus.enable_object_propagation;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION  add CALLED ON NULL INPUT
@@ -271,8 +276,10 @@ CREATE FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"(text) RETURNS TEXT
     AS $$ SELECT 'Overloaded function called with param: ' || $1 $$
     LANGUAGE SQL;
 
+SET citus.enable_object_propagation TO OFF;
 SELECT create_distributed_function('"CiTuS.TeeN"."TeeNFunCT10N.1!?!"()');
 SELECT create_distributed_function('"CiTuS.TeeN"."TeeNFunCT10N.1!?!"(text)');
+RESET citus.enable_object_propagation;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"() SET SCHEMA "CiTUS.TEEN2"
@@ -287,7 +294,9 @@ $cmd$);
 CREATE FUNCTION func_default_param(param INT DEFAULT 0) RETURNS TEXT
     AS $$ SELECT 'supplied param is : ' || param; $$
     LANGUAGE SQL;
+SET citus.enable_object_propagation TO OFF;
 SELECT create_distributed_function('func_default_param(INT)');
+RESET citus.enable_object_propagation;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_default_param RENAME TO func_with_default_param;
@@ -297,7 +306,9 @@ $cmd$);
 CREATE FUNCTION func_out_param(IN param INT, OUT result TEXT)
     AS $$ SELECT 'supplied param is : ' || param; $$
     LANGUAGE SQL;
+SET citus.enable_object_propagation TO OFF;
 SELECT create_distributed_function('func_out_param(INT)');
+RESET citus.enable_object_propagation;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_out_param RENAME TO func_in_and_out_param;
@@ -310,7 +321,9 @@ BEGIN
    a := a * a;
 END; $$
 LANGUAGE plpgsql;
+SET citus.enable_object_propagation TO OFF;
 SELECT create_distributed_function('square(NUMERIC)');
+RESET citus.enable_object_propagation;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION square SET search_path TO DEFAULT;
@@ -330,18 +343,24 @@ BEGIN
    FROM generate_subscripts(list, 1) g(i);
 END; $$
 LANGUAGE plpgsql;
+SET citus.enable_object_propagation TO OFF;
 SELECT create_distributed_function('sum_avg(NUMERIC[])');
+RESET citus.enable_object_propagation;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION sum_avg COST 10000;
 $cmd$);
 
 -- a function with a custom type IN parameter
+SET citus.enable_ddl_propagation TO on;
 CREATE TYPE intpair AS (x int, y int);
+RESET citus.enable_ddl_propagation;
 CREATE FUNCTION func_custom_param(IN param intpair, OUT total INT)
     AS $$ SELECT param.x + param.y $$
     LANGUAGE SQL;
+SET citus.enable_object_propagation TO OFF;
 SELECT create_distributed_function('func_custom_param(intpair)');
+RESET citus.enable_object_propagation;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_custom_param RENAME TO func_with_custom_param;
@@ -353,7 +372,9 @@ CREATE FUNCTION func_returns_table(IN count INT)
     RETURNS TABLE (x INT, y INT)
     AS $$ SELECT i,i FROM generate_series(1,count) i $$
     LANGUAGE SQL;
+SET citus.enable_object_propagation TO OFF;
 SELECT create_distributed_function('func_returns_table(INT)');
+RESET citus.enable_object_propagation;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_returns_table ROWS 100;

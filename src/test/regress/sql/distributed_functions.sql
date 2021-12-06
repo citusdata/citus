@@ -17,6 +17,15 @@ CREATE TABLE notices (
 SELECT create_distributed_table('notices', 'id');
 INSERT INTO notices VALUES (1, 'hello world');
 
+-- Create the necessary test utility function
+CREATE OR REPLACE FUNCTION master_metadata_snapshot()
+    RETURNS text[]
+    LANGUAGE C STRICT
+    AS 'citus';
+
+COMMENT ON FUNCTION master_metadata_snapshot()
+    IS 'commands to create the metadata snapshot';
+
 CREATE FUNCTION notice(text)
 RETURNS void
 LANGUAGE plpgsql AS $$
@@ -175,10 +184,6 @@ CREATE TABLE streaming_table(id macaddr);
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('streaming_table','id');
 
--- make sure that none of the active and primary nodes hasmetadata
--- at the start of the test
-select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
-
 -- if not paremeters are supplied, we'd see that function doesn't have
 -- distribution_argument_index and colocationid
 SELECT create_distributed_function('"eq_mi''xed_param_names"(macaddr, macaddr)');
@@ -187,10 +192,6 @@ WHERE objid = 'eq_mi''xed_param_names(macaddr, macaddr)'::regprocedure;
 
 -- also show that we can use the function
 SELECT * FROM run_command_on_workers($$SELECT function_tests."eq_mi'xed_param_names"('0123456789ab','ba9876543210');$$) ORDER BY 1,2;
-
--- make sure that none of the active and primary nodes hasmetadata
--- since the function doesn't have a parameter
-select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
 
 -- try to co-locate with a table that uses statement-based replication
 SELECT create_distributed_function('increment(int2)', '$1');
@@ -203,6 +204,8 @@ END;
 -- try to co-locate with a table that uses streaming replication
 SELECT create_distributed_function('dup(macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.dup('0123456789ab');$$) ORDER BY 1,2;
+
+SELECT public.wait_until_metadata_sync(30000);
 
 SELECT create_distributed_function('eq(macaddr,macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('012345689ab','0123456789ab');$$) ORDER BY 1,2;
@@ -346,9 +349,6 @@ ROLLBACK;
 -- make sure that none of the nodes have the function because we've rollbacked
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_with_param_names';$$);
 
--- make sure that none of the active and primary nodes hasmetadata
-select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
-
 -- valid distribution with distribution_arg_name
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='val1');
 
@@ -360,6 +360,9 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_w
 
 -- valid distribution with distribution_arg_name -- case insensitive
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='VaL1');
+
+-- show that we are able to propagate objects with multiple item on address arrays
+SELECT * FROM (SELECT unnest(master_metadata_snapshot()) as metadata_command  order by 1) as innerResult WHERE metadata_command like '%distributed_object_data%';
 
 -- valid distribution with distribution_arg_index
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)','$1');

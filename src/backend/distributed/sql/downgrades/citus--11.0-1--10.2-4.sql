@@ -41,3 +41,4 @@ COMMENT ON FUNCTION pg_catalog.citus_disable_node(nodename text, nodeport intege
         IS 'removes node from the cluster temporarily';
 
 DROP FUNCTION pg_catalog.citus_check_connection_to_node (text, integer);
+DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer);

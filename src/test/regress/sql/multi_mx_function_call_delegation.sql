@@ -272,6 +272,10 @@ SET search_path TO multi_mx_function_call_delegation, public;
 -- create_distributed_function is disallowed from worker nodes
 select create_distributed_function('mx_call_func(int,int)');
 
+-- show that functions can be delegated from worker nodes
+SET client_min_messages TO DEBUG1;
+SELECT mx_call_func(2, 0);
+
 \c - - - :master_port
 SET search_path TO multi_mx_function_call_delegation, public;
 
