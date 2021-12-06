@@ -89,7 +89,6 @@ static List * GetDistributedTableDDLEvents(Oid relationId);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
-static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
@@ -106,7 +105,7 @@ static GrantStmt * GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 													  Oid schemaOid,
 													  char *permission,
 													  bool withGrantOption);
-static void SetLocalEnableDependencyCreation(bool state);
+
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
@@ -523,8 +522,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
  * following queries:
  *
  * (i)   Query that populates pg_dist_node table
- * (ii)  Queries that create the clustered tables (including foreign keys,
- *        partitioning hierarchy etc.)
+ * (ii)  Queries that create the foreign keys and partitioning hierarchy
  * (iii) Queries that populate pg_dist_partition table referenced by (ii)
  * (iv)  Queries that populate pg_dist_shard table referenced by (iii)
  * (v)   Queries that populate pg_dist_placement table referenced by (iv)
@@ -538,7 +536,6 @@ MetadataCreateCommands(void)
 	List *propagatedTableList = NIL;
 	bool includeNodesFromOtherClusters = true;
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
-	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
 	/* make sure we have deterministic output for our tests */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
@@ -558,125 +555,7 @@ MetadataCreateCommands(void)
 		}
 	}
 
-	/* create the tables, but not the metadata */
-	foreach_ptr(cacheEntry, propagatedTableList)
-	{
-		Oid relationId = cacheEntry->relationId;
-		ObjectAddress tableAddress = { 0 };
-
-		if (IsTableOwnedByExtension(relationId))
-		{
-			/* skip table creation when the Citus table is owned by an extension */
-			continue;
-		}
-
-		List *ddlCommandList = GetFullTableCreationCommands(relationId,
-															includeSequenceDefaults);
-		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
-
-		/*
-		 * Tables might have dependencies on different objects, since we create shards for
-		 * table via multiple sessions these objects will be created via their own connection
-		 * and committed immediately so they become visible to all sessions creating shards.
-		 */
-		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-
-		/*
-		 * Set object propagation to off as we will mark objects distributed
-		 * at the end of this function.
-		 */
-		bool prevDependencyCreationValue = EnableDependencyCreation;
-		SetLocalEnableDependencyCreation(false);
-
-		EnsureDependenciesExistOnAllNodes(&tableAddress);
-
-		/*
-		 * Ensure sequence dependencies and mark them as distributed
-		 */
-		List *attnumList = NIL;
-		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(relationId, &attnumList,
-										  &dependentSequenceList, 0);
-
-		Oid sequenceOid = InvalidOid;
-		foreach_oid(sequenceOid, dependentSequenceList)
-		{
-			ObjectAddress sequenceAddress = { 0 };
-			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-			EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-
-			/*
-			 * Sequences are not marked as distributed while creating table
-			 * if no metadata worker node exists. We are marking all sequences
-			 * distributed while syncing metadata in such case.
-			 */
-			MarkObjectDistributed(&sequenceAddress);
-		}
-
-		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
-
-		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  workerSequenceDDLCommands);
-
-		/* ddlCommandList contains TableDDLCommand information, need to materialize */
-		TableDDLCommand *tableDDLCommand = NULL;
-		foreach_ptr(tableDDLCommand, ddlCommandList)
-		{
-			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-												  GetTableDDLCommand(tableDDLCommand));
-		}
-
-		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-											  tableOwnerResetCommand);
-
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(
-			relationId);
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  sequenceDependencyCommandList);
-	}
-
-	/* construct the foreign key constraints after all tables are created */
-	foreach_ptr(cacheEntry, propagatedTableList)
-	{
-		Oid relationId = cacheEntry->relationId;
-
-		if (IsTableOwnedByExtension(relationId))
-		{
-			/* skip foreign key creation when the Citus table is owned by an extension */
-			continue;
-		}
-
-		List *foreignConstraintCommands =
-			GetReferencingForeignConstaintCommands(relationId);
-
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  foreignConstraintCommands);
-	}
-
-	/* construct partitioning hierarchy after all tables are created */
-	foreach_ptr(cacheEntry, propagatedTableList)
-	{
-		Oid relationId = cacheEntry->relationId;
-
-		if (IsTableOwnedByExtension(relationId))
-		{
-			/* skip partition creation when the Citus table is owned by an extension */
-			continue;
-		}
-
-		if (PartitionTable(relationId))
-		{
-			char *alterTableAttachPartitionCommands =
-				GenerateAlterTableAttachPartitionCommand(relationId);
-
-			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-												  alterTableAttachPartitionCommands);
-		}
-	}
-
-	/* after all tables are created, create the metadata */
+	/* create the metadata */
 	foreach_ptr(cacheEntry, propagatedTableList)
 	{
 		Oid clusteredTableId = cacheEntry->relationId;
@@ -814,25 +693,11 @@ GetDistributedTableDDLEvents(Oid relationId)
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	List *commandList = NIL;
-	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
 	/* if the table is owned by an extension we only propagate pg_dist_* records */
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
 	if (!tableOwnedByExtension)
 	{
-		/*
-		 * Commands to create the table, these commands are TableDDLCommands so lets
-		 * materialize to the non-sharded version
-		 */
-		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-															  includeSequenceDefaults);
-		TableDDLCommand *tableDDLCommand = NULL;
-		foreach_ptr(tableDDLCommand, tableDDLCommands)
-		{
-			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
-		}
-
 		/* command to associate sequences with table */
 		List *sequenceDependencyCommandList = SequenceDependencyCommandList(
 			relationId);
@@ -1737,7 +1602,7 @@ GetSequencesFromAttrDef(Oid attrdefOid)
  * necessary to ensure that the sequence is dropped when the table is
  * dropped.
  */
-static List *
+List *
 SequenceDependencyCommandList(Oid relationId)
 {
 	List *sequenceCommandList = NIL;
@@ -1975,7 +1840,7 @@ GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 /*
  * SetLocalEnableDependencyCreation sets the enable_object_propagation locally
  */
-static void
+void
 SetLocalEnableDependencyCreation(bool state)
 {
 	set_config_option("citus.enable_object_propagation", state == true ? "on" : "off",
@@ -2058,6 +1923,43 @@ HasMetadataWorkers(void)
 	}
 
 	return false;
+}
+
+
+/*
+ * CreateShellTableOnWorkers creates shell table on workers.
+ */
+void
+CreateShellTableOnWorkers(Oid relationId)
+{
+	/* if the table is owned by an extension we don't create */
+	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
+
+	if (!tableOwnedByExtension)
+	{
+		List *commandList = NIL;
+		IncludeSequenceDefaults includeSequenceDefaults =
+			WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
+
+		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+															  includeSequenceDefaults);
+		TableDDLCommand *tableDDLCommand = NULL;
+		foreach_ptr(tableDDLCommand, tableDDLCommands)
+		{
+			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+		}
+
+		/* prevent recursive propagation */
+		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+		/* send the commands one by one */
+		const char *command = NULL;
+		foreach_ptr(command, commandList)
+		{
+			SendCommandToWorkersWithMetadata(command);
+		}
+	}
 }
 
 

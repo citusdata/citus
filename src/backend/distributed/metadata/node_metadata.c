@@ -40,6 +40,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/string_utils.h"
 #include "distributed/transaction_recovery.h"
@@ -105,7 +106,9 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
+static void SetUpSequences(WorkerNode *workerNode);
+static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
+static void SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static void PropagateNodeWideObjects(WorkerNode *newWorkerNode);
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
@@ -576,10 +579,159 @@ master_set_node_property(PG_FUNCTION_ARGS)
 }
 
 
+static void
+SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode)
+{
+	List *distributedTableList = CitusTableList();
+	List *propagatedTableList = NIL;
+	List *multipleTableIntegrationCommandList = NIL;
+
+	CitusTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
+	{
+		if (ShouldSyncTableMetadata(cacheEntry->relationId))
+		{
+			propagatedTableList = lappend(propagatedTableList, cacheEntry);
+		}
+	}
+
+	/* construct the foreign key constraints after all tables are created */
+	foreach_ptr(cacheEntry, propagatedTableList)
+	{
+		Oid relationId = cacheEntry->relationId;
+
+		if (IsTableOwnedByExtension(relationId))
+		{
+			/* skip foreign key creation when the Citus table is owned by an extension */
+			continue;
+		}
+
+		List *foreignConstraintCommands =
+			GetReferencingForeignConstaintCommands(relationId);
+
+		multipleTableIntegrationCommandList = list_concat(
+			multipleTableIntegrationCommandList,
+			foreignConstraintCommands);
+	}
+
+	/* construct partitioning hierarchy after all tables are created */
+	foreach_ptr(cacheEntry, propagatedTableList)
+	{
+		Oid relationId = cacheEntry->relationId;
+
+		if (IsTableOwnedByExtension(relationId))
+		{
+			/* skip partition creation when the Citus table is owned by an extension */
+			continue;
+		}
+
+		if (PartitionTable(relationId))
+		{
+			char *alterTableAttachPartitionCommands =
+				GenerateAlterTableAttachPartitionCommand(relationId);
+
+			multipleTableIntegrationCommandList = lappend(
+				multipleTableIntegrationCommandList,
+				alterTableAttachPartitionCommands);
+		}
+	}
+
+	/* prevent recursive propagation */
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+	/* send the commands one by one */
+	const char *command = NULL;
+	foreach_ptr(command, multipleTableIntegrationCommandList)
+	{
+		SendCommandToWorkersWithMetadata(command);
+	}
+}
+
+
+static void
+SetUpSequences(WorkerNode *workerNode)
+{
+	List *distributedTableList = CitusTableList();
+	List *propagatedTableList = NIL;
+	List *sequenceCommandList = NIL;
+
+	CitusTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
+	{
+		if (ShouldSyncTableMetadata(cacheEntry->relationId))
+		{
+			propagatedTableList = lappend(propagatedTableList, cacheEntry);
+		}
+	}
+
+	/* create the metadata */
+	foreach_ptr(cacheEntry, propagatedTableList)
+	{
+		Oid relationId = cacheEntry->relationId;
+
+		if (IsTableOwnedByExtension(relationId))
+		{
+			/* skip table metadata creation when the Citus table is owned by an extension */
+			continue;
+		}
+
+		/*
+		 * Set object propagation to off as objects will be distributed while syncing
+		 * the metadata.
+		 */
+		bool prevDependencyCreationValue = EnableDependencyCreation;
+		SetLocalEnableDependencyCreation(false);
+
+		/*
+		 * Ensure sequence dependencies and mark them as distributed
+		 */
+		List *attnumList = NIL;
+		List *dependentSequenceList = NIL;
+		GetDependentSequencesWithRelation(relationId, &attnumList,
+										  &dependentSequenceList, 0);
+
+		Oid sequenceOid = InvalidOid;
+		foreach_oid(sequenceOid, dependentSequenceList)
+		{
+			ObjectAddress sequenceAddress = { 0 };
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+			EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+
+			/*
+			 * Sequences are not marked as distributed while creating table
+			 * if no metadata worker node exists. We are marking all sequences
+			 * distributed while syncing metadata in such case.
+			 */
+			MarkObjectDistributed(&sequenceAddress);
+		}
+
+		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
+
+		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+		sequenceCommandList = list_concat(sequenceCommandList, workerSequenceDDLCommands);
+
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
+		sequenceCommandList = list_concat(sequenceCommandList,
+										  sequenceDependencyCommandList);
+
+		/* prevent recursive propagation */
+		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+		/* send the commands one by one */
+		const char *command = NULL;
+		foreach_ptr(command, sequenceCommandList)
+		{
+			SendCommandToWorkersWithMetadata(command);
+		}
+	}
+}
+
+
 /*
- * SetUpDistributedTableDependencies sets up up the following on a node if it's
+ * SetUpDistributedTableWithDependencies sets up up the following on a node if it's
  * a primary node that currently stores data:
  * - All dependencies (e.g., types, schemas)
+ * - All shell distributed table
  * - Reference tables, because they are needed to handle queries efficiently.
  * - Distributed functions
  *
@@ -587,7 +739,7 @@ master_set_node_property(PG_FUNCTION_ARGS)
  * since all the dependencies should be present in the coordinator already.
  */
 static void
-SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
+SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 {
 	if (NodeIsPrimary(newWorkerNode))
 	{
@@ -896,7 +1048,9 @@ ActivateNode(char *nodeName, int nodePort)
 						BoolGetDatum(isActive));
 	}
 
-	SetUpDistributedTableDependencies(workerNode);
+	SetUpSequences(workerNode);
+	SetUpDistributedTableWithDependencies(workerNode);
+	SetUpMultipleDistributedTableIntegrations(workerNode);
 
 	if (syncMetadata)
 	{

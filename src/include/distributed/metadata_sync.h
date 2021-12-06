@@ -51,11 +51,14 @@ extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
+extern void CreateShellTableOnWorkers(Oid relationId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
 extern BackgroundWorkerHandle * SpawnSyncMetadataToNodes(Oid database, Oid owner);
 extern void SyncMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
+extern void SetLocalEnableDependencyCreation(bool state);
+extern List * SequenceDependencyCommandList(Oid relationId);
 
 extern List * DDLCommandsForSequence(Oid sequenceOid, char *ownerName);
 extern List * SequenceDDLCommandsForTable(Oid relationId);

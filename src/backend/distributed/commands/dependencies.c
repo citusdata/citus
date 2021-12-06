@@ -232,8 +232,18 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				return NIL;
 			}
 
-			/* if this relation is not supported, break to the error at the end */
-			break;
+			List *commandList = NIL;
+			List *tableDDLCommands = GetFullTableCreationCommands(dependency->objectId,
+																  WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
+
+			TableDDLCommand *tableDDLCommand = NULL;
+			foreach_ptr(tableDDLCommand, tableDDLCommands)
+			{
+				Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+				commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+			}
+
+			return commandList;
 		}
 
 		case OCLASS_COLLATION:

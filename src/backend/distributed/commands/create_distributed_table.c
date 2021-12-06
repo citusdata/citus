@@ -440,10 +440,18 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
+	/*
+	 * For now assume that we can create table after ensuring that dependencies exist.
+	 * Obviously it doesn't support sequences we don't care for it now.
+	 *
+	 * TODO: Consider partitioned tables
+	 */
+	CreateShellTableOnWorkers(relationId);
+	MarkObjectDistributed(&tableAddress);
+
 	char replicationModel = DecideReplicationModel(distributionMethod,
 												   colocateWithTableName,
 												   viaDeprecatedAPI);
-
 
 	/*
 	 * Due to dropping columns, the parent's distribution key may not match the
