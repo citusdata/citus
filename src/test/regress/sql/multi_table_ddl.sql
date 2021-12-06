@@ -68,7 +68,7 @@ SET citus.shard_count TO 2;
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('testserialtable', 'group_id', 'hash');
 
--- can add additional serial columns
+-- cannot add additional serial columns when metadata is synced
 ALTER TABLE testserialtable ADD COLUMN other_id serial;
 
 -- and we shouldn't be able to change a distributed sequence's owner
@@ -85,7 +85,7 @@ CREATE SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
 CREATE SEQUENCE standalone_sequence;
 ALTER SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
 
--- an edge case, but it's OK to change an owner to the same distributed table
+-- cannot even change owner to the same distributed table if the sequence is distributed
 ALTER SEQUENCE testserialtable_id_seq OWNED BY testserialtable.id;
 
 -- drop distributed table
@@ -113,12 +113,13 @@ ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('test_sequence_1');
 ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
 ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('test_sequence_1');
 
-ALTER TABLE test_table ADD COLUMN id3 bigserial;
-
 -- shouldn't work since the above operations should be the only subcommands
 ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('test_sequence_1') CHECK (id4 > 0);
 ALTER TABLE test_table ADD COLUMN id4 int, ADD COLUMN id5 int DEFAULT nextval('test_sequence_1');
 ALTER TABLE test_table ALTER COLUMN id3 SET DEFAULT nextval('test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
+
+-- shouldn't work because of metadata syncing
+ALTER TABLE test_table ADD COLUMN id3 bigserial;
 ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
 
 DROP TABLE test_table CASCADE;
