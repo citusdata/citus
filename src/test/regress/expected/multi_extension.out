@@ -493,6 +493,7 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 BEGIN;
   SELECT master_add_node('localhost', :master_port, groupId=>0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  master_add_node
 ---------------------------------------------------------------------
                1
@@ -974,7 +975,8 @@ SELECT * FROM multi_extension.print_extension_changes();
  function master_get_table_metadata(text) record                      |
                                                                       | function citus_check_connection_to_node(text,integer) boolean
                                                                       | function citus_disable_node(text,integer,boolean) void
-(6 rows)
+                                                                      | function citus_internal_add_object_metadata(text,text[],text[],integer,integer) void
+(7 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
@@ -1221,6 +1223,9 @@ HINT:  You can manually create a database and its extensions on workers.
 \c - - - :master_port
 \c another
 CREATE EXTENSION citus;
+\c - - - :worker_1_port
+CREATE EXTENSION citus;
+\c - - - :master_port
 SET citus.enable_object_propagation TO off; -- prevent distributed transactions during add node
 SELECT FROM master_add_node('localhost', :worker_1_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
@@ -1229,7 +1234,6 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
 (1 row)
 
 \c - - - :worker_1_port
-CREATE EXTENSION citus;
 ALTER FUNCTION assign_distributed_transaction_id(initiator_node_identifier integer, transaction_number bigint, transaction_stamp timestamp with time zone)
 RENAME TO dummy_assign_function;
 \c - - - :master_port

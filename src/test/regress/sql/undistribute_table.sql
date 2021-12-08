@@ -54,6 +54,8 @@ DROP TABLE referenced_table, referencing_table;
 
 -- test distributed foreign tables
 -- we expect errors
+-- and we need metadata sync off for foreign tables
+SELECT stop_metadata_sync_to_node(nodename, nodeport) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
 CREATE FOREIGN TABLE foreign_table (
   id bigint not null,
   full_name text not null default ''
@@ -62,6 +64,7 @@ SELECT create_distributed_table('foreign_table', 'id');
 SELECT undistribute_table('foreign_table');
 
 DROP FOREIGN TABLE foreign_table;
+SELECT start_metadata_sync_to_node(nodename, nodeport) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
 
 -- test partitioned tables
 CREATE TABLE partitioned_table (id INT, a INT) PARTITION BY RANGE (id);
@@ -71,7 +74,7 @@ SELECT create_distributed_table('partitioned_table', 'id');
 INSERT INTO partitioned_table VALUES (2, 12), (7, 2);
 
 SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'partitioned\_table%' ORDER BY 1;
-SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname SIMILAR TO 'partitioned\_table%\d{3,}'$$);
 SELECT inhrelid::regclass FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
 SELECT * FROM partitioned_table ORDER BY 1, 2;
 SELECT * FROM partitioned_table_1_5 ORDER BY 1, 2;
@@ -83,7 +86,7 @@ SELECT undistribute_table('partitioned_table_1_5');
 SELECT undistribute_table('partitioned_table');
 
 SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LIKE 'partitioned\_table%'  ORDER BY 1;
-SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname SIMILAR TO 'partitioned\_table%\d{3,}'$$);
 SELECT inhrelid::regclass FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
 SELECT * FROM partitioned_table ORDER BY 1, 2;
 SELECT * FROM partitioned_table_1_5 ORDER BY 1, 2;

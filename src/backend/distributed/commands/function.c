@@ -76,9 +76,6 @@ static int GetFunctionColocationId(Oid functionOid, char *colocateWithName, Oid
 static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 												  distributionColumnType, Oid
 												  sourceRelationId);
-static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
-										   int *distribution_argument_index,
-										   int *colocationId);
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
@@ -188,7 +185,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
 	const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
 	initStringInfo(&ddlCommand);
-	appendStringInfo(&ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
+	appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_OBJECT_PROPAGATION,
+					 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_OBJECT_PROPAGATION);
 	SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(), ddlCommand.data);
 
 	MarkObjectDistributed(&functionAddress);
@@ -564,8 +562,9 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 /*
  * UpdateFunctionDistributionInfo gets object address of a function and
  * updates its distribution_argument_index and colocationId in pg_dist_object.
+ * Then update pg_dist_object on nodes with metadata if object propagation is on.
  */
-static void
+void
 UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 							   int *distribution_argument_index,
 							   int *colocationId)
@@ -638,6 +637,37 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 	systable_endscan(scanDescriptor);
 
 	table_close(pgDistObjectRel, NoLock);
+
+	if (EnableDependencyCreation)
+	{
+		List *objectAddressList = list_make1((ObjectAddress *) distAddress);
+		List *distArgumentIndexList = NIL;
+		List *colocationIdList = NIL;
+
+		if (distribution_argument_index == NULL)
+		{
+			distArgumentIndexList = list_make1_int(INVALID_DISTRIBUTION_ARGUMENT_INDEX);
+		}
+		else
+		{
+			distArgumentIndexList = list_make1_int(*distribution_argument_index);
+		}
+
+		if (colocationId == NULL)
+		{
+			colocationIdList = list_make1_int(INVALID_COLOCATION_ID);
+		}
+		else
+		{
+			colocationIdList = list_make1_int(*colocationId);
+		}
+
+		char *workerPgDistObjectUpdateCommand =
+			MarkObjectsDistributedCreateCommand(objectAddressList,
+												distArgumentIndexList,
+												colocationIdList);
+		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
+	}
 }
 
 

@@ -58,12 +58,6 @@ test: pg13 pg12
 test: pg14
 test: tableam drop_column_partitioned_table
 
-# mx-less tests
-test: check_mx
-test: turn_mx_off
-test: undistribute_table
-test: turn_mx_on
-
 # ----------
 # Miscellaneous tests to check our query planning behavior
 # ----------
@@ -97,6 +91,7 @@ test: alter_table_set_access_method
 test: alter_distributed_table
 test: issue_5248 issue_5099
 test: object_propagation_debug
+test: undistribute_table
 
 
 # ---------

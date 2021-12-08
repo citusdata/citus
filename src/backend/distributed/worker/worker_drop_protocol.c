@@ -81,6 +81,21 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	distributedTableObject.objectId = relationId;
 	distributedTableObject.objectSubId = 0;
 
+	/* Drop dependent sequences from pg_dist_object */
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	List *ownedSequences = getOwnedSequences(relationId);
+	#else
+	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
+	#endif
+
+	Oid ownedSequenceOid = InvalidOid;
+	foreach_oid(ownedSequenceOid, ownedSequences)
+	{
+		ObjectAddress ownedSequenceAddress = { 0 };
+		ObjectAddressSet(ownedSequenceAddress, RelationRelationId, ownedSequenceOid);
+		UnmarkObjectDistributed(&ownedSequenceAddress);
+	}
+
 	/* drop the server for the foreign relations */
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{

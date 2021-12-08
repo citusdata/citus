@@ -8,7 +8,7 @@ ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
 ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
 SELECT pg_reload_conf();
 
--- Verifies pg_dist_node and pg_dist_palcement in the given worker matches the ones in coordinator
+-- Verifies pg_dist_node and pg_dist_placement in the given worker matches the ones in coordinator
 CREATE OR REPLACE FUNCTION verify_metadata(hostname TEXT, port INTEGER, master_port INTEGER DEFAULT 57636)
     RETURNS BOOLEAN
     LANGUAGE sql

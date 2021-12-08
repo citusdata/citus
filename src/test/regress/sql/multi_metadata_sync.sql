@@ -532,8 +532,10 @@ DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 -- owner
 CREATE TABLE pg_dist_placement_temp AS SELECT * FROM pg_dist_placement;
 CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
+CREATE TABLE pg_dist_object_temp AS SELECT * FROM citus.pg_dist_object;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_partition;
+DELETE FROM citus.pg_dist_object;
 SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_remove_node('localhost', :worker_2_port);
 
@@ -573,8 +575,10 @@ DROP TABLE mx_table;
 \c - postgres - :master_port
 INSERT INTO pg_dist_placement SELECT * FROM pg_dist_placement_temp;
 INSERT INTO pg_dist_partition SELECT * FROM pg_dist_partition_temp;
+INSERT INTO citus.pg_dist_object SELECT * FROM pg_dist_object_temp ON CONFLICT ON CONSTRAINT pg_dist_object_pkey DO NOTHING;
 DROP TABLE pg_dist_placement_temp;
 DROP TABLE pg_dist_partition_temp;
+DROP TABLE pg_dist_object_temp;
 UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
@@ -825,8 +829,21 @@ GRANT EXECUTE ON FUNCTION start_metadata_sync_to_node(text,int) TO non_super_met
 GRANT EXECUTE ON FUNCTION stop_metadata_sync_to_node(text,int,bool) TO non_super_metadata_user;
 GRANT ALL ON pg_dist_node TO non_super_metadata_user;
 GRANT ALL ON pg_dist_local_group TO non_super_metadata_user;
+GRANT ALL ON SCHEMA citus TO non_super_metadata_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA citus TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_testing_schema TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_testing_schema_2 TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_test_schema_1 TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_test_schema_2 TO non_super_metadata_user;
 SELECT run_command_on_workers('GRANT ALL ON pg_dist_node TO non_super_metadata_user');
 SELECT run_command_on_workers('GRANT ALL ON pg_dist_local_group TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT ALL ON SCHEMA citus TO non_super_metadata_user');
+SELECT run_command_on_workers('ALTER SEQUENCE user_defined_seq OWNER TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA citus TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_testing_schema TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_testing_schema_2 TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_test_schema_1 TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_test_schema_2 TO non_super_metadata_user');
 
 SET ROLE non_super_metadata_user;
 

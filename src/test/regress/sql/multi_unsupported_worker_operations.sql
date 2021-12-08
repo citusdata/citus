@@ -212,15 +212,8 @@ DROP TABLE some_table_with_sequence;
 CREATE SEQUENCE some_sequence;
 DROP SEQUENCE some_sequence;
 
--- Show that dropping the sequence of an MX table with cascade harms the table and shards
-BEGIN;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
--- suppress notice message caused by DROP ... CASCADE to prevent pg version difference
-SET client_min_messages TO 'WARNING';
+-- Show that dropping the sequence of an MX table is not supported on worker nodes
 DROP SEQUENCE mx_table_col_3_seq CASCADE;
-RESET client_min_messages;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
-ROLLBACK;
 
 -- Cleanup
 \c - - - :master_port

@@ -113,6 +113,8 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
+static void EnsureSequenceExistOnMetadataWorkersForRelation(Oid relationId,
+															Oid sequenceOid);
 static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
@@ -536,10 +538,11 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		if (ClusterHasKnownMetadataWorkers())
 		{
 			/*
-			 * Ensure sequence dependencies and mark them as distributed
+			 * Ensure both sequence and its' dependencies and mark them as distributed
 			 * before creating table metadata on workers
 			 */
-			MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
+			MarkSequenceListDistributedAndPropagateWithDependencies(relationId,
+																	dependentSequenceList);
 		}
 
 		CreateTableMetadataOnWorkers(relationId);
@@ -665,39 +668,65 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 		SetDefElemArg(alterSequenceStatement, "as", asTypeNode);
 		ParseState *pstate = make_parsestate(NULL);
 		AlterSequence(pstate, alterSequenceStatement);
+		CommandCounterIncrement();
 	}
 }
 
 
 /*
- * MarkSequenceListDistributedAndPropagateDependencies ensures dependencies
- * for the given sequence list exist on all nodes and marks the sequences
- * as distributed.
+ * MarkSequenceListDistributedAndPropagateWithDependencies ensures sequences and their
+ * dependencies for the given sequence list exist on all nodes and marks them as distributed.
  */
 void
-MarkSequenceListDistributedAndPropagateDependencies(List *sequenceList)
+MarkSequenceListDistributedAndPropagateWithDependencies(Oid relationId,
+														List *sequenceList)
 {
 	Oid sequenceOid = InvalidOid;
 	foreach_oid(sequenceOid, sequenceList)
 	{
-		MarkSequenceDistributedAndPropagateDependencies(sequenceOid);
+		MarkSequenceDistributedAndPropagateWithDependencies(relationId, sequenceOid);
 	}
 }
 
 
 /*
- * MarkSequenceDistributedAndPropagateDependencies ensures dependencies
- * for the given sequence exist on all nodes and marks the sequence
- * as distributed.
+ * MarkSequenceDistributedAndPropagateWithDependencies ensures sequence and its'
+ * dependencies for the given sequence exist on all nodes and marks them as distributed.
  */
 void
-MarkSequenceDistributedAndPropagateDependencies(Oid sequenceOid)
+MarkSequenceDistributedAndPropagateWithDependencies(Oid relationId, Oid sequenceOid)
 {
 	/* get sequence address */
 	ObjectAddress sequenceAddress = { 0 };
 	ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
 	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+	EnsureSequenceExistOnMetadataWorkersForRelation(relationId, sequenceOid);
 	MarkObjectDistributed(&sequenceAddress);
+}
+
+
+/*
+ * EnsureSequenceExistOnMetadataWorkersForRelation ensures sequence for the given relation
+ * exist on each worker node with metadata.
+ */
+static void
+EnsureSequenceExistOnMetadataWorkersForRelation(Oid relationId, Oid sequenceOid)
+{
+	Assert(ShouldSyncTableMetadata(relationId));
+
+	char *ownerName = TableOwner(relationId);
+	List *sequenceDDLList = DDLCommandsForSequence(sequenceOid, ownerName);
+
+	/* prevent recursive propagation */
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+	const char *sequenceCommand = NULL;
+	foreach_ptr(sequenceCommand, sequenceDDLList)
+	{
+		SendCommandToWorkersWithMetadata(sequenceCommand);
+	}
+
+	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 

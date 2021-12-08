@@ -26,12 +26,14 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 -- Show that, with no MX tables, metadata snapshot contains only the delete commands,
 -- pg_dist_node entries and reference tables
 SELECT unnest(master_metadata_snapshot()) order by 1;
-                                                                                                                                                                             unnest
+                                                                                                                                                                                                                          unnest
 ---------------------------------------------------------------------
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE citus.pg_dist_object
  TRUNCATE pg_dist_node CASCADE
-(3 rows)
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)  AS (VALUES ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int) FROM distributed_object_data;
+(5 rows)
 
 -- this function is dropped in Citus10, added here for tests
 CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
@@ -85,10 +87,12 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE citus.pg_dist_object
  TRUNCATE pg_dist_node CASCADE
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0), ('sequence', ARRAY['public', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('public.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('public.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('public.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('public.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('public.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('public.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('public.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(16 rows)
+(18 rows)
 
 -- Show that CREATE INDEX commands are included in the metadata snapshot
 CREATE INDEX mx_index ON mx_test_table(col_2);
@@ -109,10 +113,12 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE citus.pg_dist_object
  TRUNCATE pg_dist_node CASCADE
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0), ('sequence', ARRAY['public', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('public.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('public.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('public.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('public.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('public.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('public.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('public.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(17 rows)
+(19 rows)
 
 -- Show that schema changes are included in the metadata snapshot
 CREATE SCHEMA mx_testing_schema;
@@ -134,10 +140,12 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE citus.pg_dist_object
  TRUNCATE pg_dist_node CASCADE
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('mx_testing_schema.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('mx_testing_schema.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('mx_testing_schema.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('mx_testing_schema.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('mx_testing_schema.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('mx_testing_schema.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('mx_testing_schema.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(17 rows)
+(19 rows)
 
 -- Show that append distributed tables are not included in the metadata snapshot
 CREATE TABLE non_mx_test_table (col_1 int, col_2 text);
@@ -165,10 +173,12 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE citus.pg_dist_object
  TRUNCATE pg_dist_node CASCADE
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('mx_testing_schema.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('mx_testing_schema.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('mx_testing_schema.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('mx_testing_schema.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('mx_testing_schema.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('mx_testing_schema.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('mx_testing_schema.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(17 rows)
+(19 rows)
 
 -- Show that range distributed tables are not included in the metadata snapshot
 UPDATE pg_dist_partition SET partmethod='r' WHERE logicalrelid='non_mx_test_table'::regclass;
@@ -189,10 +199,12 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE citus.pg_dist_object
  TRUNCATE pg_dist_node CASCADE
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('mx_testing_schema.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('mx_testing_schema.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('mx_testing_schema.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('mx_testing_schema.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('mx_testing_schema.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('mx_testing_schema.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('mx_testing_schema.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(17 rows)
+(19 rows)
 
 -- Test start_metadata_sync_to_node UDF
 -- Ensure that hasmetadata=false for all nodes
@@ -1195,8 +1207,10 @@ DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 -- owner
 CREATE TABLE pg_dist_placement_temp AS SELECT * FROM pg_dist_placement;
 CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
+CREATE TABLE pg_dist_object_temp AS SELECT * FROM citus.pg_dist_object;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_partition;
+DELETE FROM citus.pg_dist_object;
 SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node
@@ -1279,8 +1293,10 @@ DROP TABLE mx_table;
 \c - postgres - :master_port
 INSERT INTO pg_dist_placement SELECT * FROM pg_dist_placement_temp;
 INSERT INTO pg_dist_partition SELECT * FROM pg_dist_partition_temp;
+INSERT INTO citus.pg_dist_object SELECT * FROM pg_dist_object_temp ON CONFLICT ON CONSTRAINT pg_dist_object_pkey DO NOTHING;
 DROP TABLE pg_dist_placement_temp;
 DROP TABLE pg_dist_partition_temp;
+DROP TABLE pg_dist_object_temp;
 UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
@@ -1660,7 +1676,7 @@ ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('mx_test_sequence_1');
 ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
 ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('mx_test_sequence_1');
 SELECT unnest(master_metadata_snapshot()) order by 1;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       unnest
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  unnest
 ---------------------------------------------------------------------
  ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
  ALTER SEQUENCE public.mx_test_sequence_0 OWNER TO postgres
@@ -1711,7 +1727,9 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  SELECT worker_create_truncate_trigger('public.mx_ref')
  SELECT worker_create_truncate_trigger('public.test_table')
  SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ TRUNCATE citus.pg_dist_object
  TRUNCATE pg_dist_node CASCADE
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0), ('sequence', ARRAY['public', 'mx_test_sequence_0']::text[], ARRAY[]::text[], -1, 0), ('sequence', ARRAY['public', 'mx_test_sequence_1']::text[], ARRAY[]::text[], -1, 0), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_testing_schema_2']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_test_schema_1']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_test_schema_2']::text[], ARRAY[]::text[], -1, 0)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 5, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 5, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 5, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 5, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310020, 1, 0, 1, 100020), (1310021, 1, 0, 5, 100021), (1310022, 1, 0, 1, 100022), (1310023, 1, 0, 5, 100023), (1310024, 1, 0, 1, 100024)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310025, 1, 0, 1, 100025), (1310026, 1, 0, 5, 100026), (1310027, 1, 0, 1, 100027), (1310028, 1, 0, 5, 100028), (1310029, 1, 0, 1, 100029)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
@@ -1724,7 +1742,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.dist_table_1'::regclass, 1310074, 't'::"char", '-2147483648', '-1073741825'), ('public.dist_table_1'::regclass, 1310075, 't'::"char", '-1073741824', '-1'), ('public.dist_table_1'::regclass, 1310076, 't'::"char", '0', '1073741823'), ('public.dist_table_1'::regclass, 1310077, 't'::"char", '1073741824', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.mx_ref'::regclass, 1310073, 't'::"char", NULL, NULL)) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.test_table'::regclass, 1310083, 't'::"char", '-2147483648', '-1073741825'), ('public.test_table'::regclass, 1310084, 't'::"char", '-1073741824', '-1'), ('public.test_table'::regclass, 1310085, 't'::"char", '0', '1073741823'), ('public.test_table'::regclass, 1310086, 't'::"char", '1073741824', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(62 rows)
+(64 rows)
 
 -- shouldn't work since test_table is MX
 ALTER TABLE test_table ADD COLUMN id3 bigserial;
@@ -1806,6 +1824,12 @@ GRANT EXECUTE ON FUNCTION start_metadata_sync_to_node(text,int) TO non_super_met
 GRANT EXECUTE ON FUNCTION stop_metadata_sync_to_node(text,int,bool) TO non_super_metadata_user;
 GRANT ALL ON pg_dist_node TO non_super_metadata_user;
 GRANT ALL ON pg_dist_local_group TO non_super_metadata_user;
+GRANT ALL ON SCHEMA citus TO non_super_metadata_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA citus TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_testing_schema TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_testing_schema_2 TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_test_schema_1 TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_test_schema_2 TO non_super_metadata_user;
 SELECT run_command_on_workers('GRANT ALL ON pg_dist_node TO non_super_metadata_user');
   run_command_on_workers
 ---------------------------------------------------------------------
@@ -1814,6 +1838,55 @@ SELECT run_command_on_workers('GRANT ALL ON pg_dist_node TO non_super_metadata_u
 (2 rows)
 
 SELECT run_command_on_workers('GRANT ALL ON pg_dist_local_group TO non_super_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT ALL ON SCHEMA citus TO non_super_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('ALTER SEQUENCE user_defined_seq OWNER TO non_super_metadata_user');
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"ALTER SEQUENCE")
+ (localhost,57638,t,"ALTER SEQUENCE")
+(2 rows)
+
+SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA citus TO non_super_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_testing_schema TO non_super_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_testing_schema_2 TO non_super_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_test_schema_1 TO non_super_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_test_schema_2 TO non_super_metadata_user');
   run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,GRANT)
