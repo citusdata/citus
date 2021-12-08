@@ -112,9 +112,18 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	}
 
 	int32 localGroupId = GetLocalGroupId();
-	if (localGroupId != COORDINATOR_GROUP_ID || localGroupId == GROUP_ID_UPGRADING)
+	if (localGroupId != COORDINATOR_GROUP_ID && IsCitusInitiatedRemoteBackend())
 	{
-		/* do not delegate from workers, or while upgrading */
+		/*
+		 * Do not delegate from workers if it is initiated by Citus already.
+		 * It means that this function has already been delegated to this node.
+		 */
+		return NULL;
+	}
+
+	if (localGroupId == GROUP_ID_UPGRADING)
+	{
+		/* do not delegate while upgrading */
 		return NULL;
 	}
 

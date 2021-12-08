@@ -184,6 +184,16 @@ select create_distributed_function('mx_call_proc_tx(int)', '$1', 'mx_call_dist_t
 CALL multi_mx_call.mx_call_proc_tx(20);
 SELECT id, val FROM mx_call_dist_table_1 ORDER BY id, val;
 
+-- Show that function delegation works from worker nodes as well
+\c - - - :worker_1_port
+SET search_path to multi_mx_call, public;
+SET client_min_messages TO DEBUG1;
+CALL multi_mx_call.mx_call_proc_tx(9);
+
+\c - - - :master_port
+SET search_path to multi_mx_call, public;
+SET client_min_messages TO DEBUG1;
+
 -- Test that we properly propagate errors raised from procedures.
 CREATE PROCEDURE mx_call_proc_raise(x int) LANGUAGE plpgsql AS $$
 BEGIN

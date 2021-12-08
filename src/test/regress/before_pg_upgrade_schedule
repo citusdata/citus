@@ -1,5 +1,4 @@
 # The basic tests runs analyze which depends on shard numbers
-test: turn_mx_off
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_test_catalog_views
 test: upgrade_basic_before

@@ -272,16 +272,6 @@ class CitusUnusualExecutorConfig(CitusMXBaseClusterConfig):
         }
 
 
-class CitusCacheManyConnectionsConfig(CitusMXBaseClusterConfig):
-    def __init__(self, arguments):
-        super().__init__(arguments)
-        self.new_settings = {
-            "citus.copy_switchover_threshold": "1B",
-            "citus.local_copy_flush_threshold": "1B",
-            "citus.remote_copy_flush_threshold": "1B",
-        }
-
-
 class CitusSmallCopyBuffersConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)

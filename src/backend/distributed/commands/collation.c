@@ -320,6 +320,8 @@ PreprocessRenameCollationStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+
 	/* fully qualify */
 	QualifyTreeNode((Node *) stmt);
 
@@ -588,9 +590,12 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 	ObjectAddress collationAddress =
 		DefineCollationStmtObjectAddress(node, false);
 
-	EnsureDependenciesExistOnAllNodes(&collationAddress);
+	if (IsObjectDistributed(&collationAddress))
+	{
+		EnsureCoordinator();
+	}
 
-	MarkObjectDistributed(&collationAddress);
+	EnsureDependenciesExistOnAllNodes(&collationAddress);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, CreateCollationDDLsIdempotent(
 							   collationAddress.objectId));

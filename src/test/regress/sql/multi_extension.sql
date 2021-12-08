@@ -634,11 +634,14 @@ CREATE DATABASE another;
 
 \c another
 CREATE EXTENSION citus;
+\c - - - :worker_1_port
+CREATE EXTENSION citus;
+\c - - - :master_port
+
 SET citus.enable_object_propagation TO off; -- prevent distributed transactions during add node
 SELECT FROM master_add_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
-CREATE EXTENSION citus;
 ALTER FUNCTION assign_distributed_transaction_id(initiator_node_identifier integer, transaction_number bigint, transaction_stamp timestamp with time zone)
 RENAME TO dummy_assign_function;
 

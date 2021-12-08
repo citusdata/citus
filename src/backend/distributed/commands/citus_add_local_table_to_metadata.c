@@ -1246,7 +1246,8 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 			 * Ensure sequence dependencies and mark them as distributed
 			 * before creating table metadata on workers
 			 */
-			MarkSequenceListDistributedAndPropagateDependencies(dependentSequenceList);
+			MarkSequenceListDistributedAndPropagateWithDependencies(relationId,
+																	dependentSequenceList);
 		}
 		CreateTableMetadataOnWorkers(relationId);
 	}
