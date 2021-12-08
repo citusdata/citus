@@ -16,6 +16,7 @@ SELECT create_distributed_table('the_table', 'a');
 (1 row)
 
 SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1
@@ -281,11 +282,14 @@ DELETE FROM the_table;
 ERROR:  cannot assign TransactionIds during recovery
 -- DDL is not possible
 TRUNCATE the_table;
-ERROR:  cannot execute TRUNCATE TABLE in a read-only transaction
+ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
+HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
 TRUNCATE reference_table;
-ERROR:  cannot execute TRUNCATE TABLE in a read-only transaction
+ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
+HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
 TRUNCATE citus_local_table;
-ERROR:  cannot execute TRUNCATE TABLE in a read-only transaction
+ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
+HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
 ALTER TABLE the_table ADD COLUMN c int;
 ERROR:  cannot acquire lock mode AccessExclusiveLock on database objects while recovery is in progress
 HINT:  Only RowExclusiveLock or less can be acquired on database objects during recovery.
