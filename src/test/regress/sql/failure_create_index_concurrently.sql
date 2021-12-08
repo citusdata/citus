@@ -20,7 +20,7 @@ CREATE INDEX CONCURRENTLY idx_index_test ON index_test(id, value_1);
 
 SELECT citus.mitmproxy('conn.allow()');
 -- verify index is not created
-SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
+SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test_%' $$)
 WHERE nodeport = :worker_2_proxy_port;
 
 
@@ -78,7 +78,7 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_index_test;
 SELECT citus.mitmproxy('conn.allow()');
 
 -- verify index is not dropped at worker 2
-SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
+SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test_%' $$)
 WHERE nodeport = :worker_2_proxy_port;
 
 -- test unique concurrent index creation failure when there are duplicates
@@ -97,5 +97,5 @@ RESET SEARCH_PATH;
 DROP SCHEMA index_schema CASCADE;
 
 -- verify index is not at worker 2 upon cleanup
-SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
+SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test_%' $$)
 WHERE nodeport = :worker_2_proxy_port;

@@ -142,14 +142,6 @@ SELECT create_distributed_table('test_table_2','id');
 SELECT citus.mitmproxy('conn.kill()');
 
 \COPY test_table_2 FROM stdin delimiter ',';
-1,2
-3,4
-6,7
-8,9
-9,10
-11,12
-13,14
-\.
 
 SELECT citus.mitmproxy('conn.allow()');
 SELECT pds.logicalrelid, pdsd.shardid, pdsd.shardstate
