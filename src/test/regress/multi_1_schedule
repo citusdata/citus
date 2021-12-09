@@ -103,11 +103,8 @@ test: multi_create_fdw
 # ----------
 # Tests for statistics propagation
 # ----------
-test: check_mx
-test: turn_mx_off
 test: propagate_statistics
 test: pg13_propagate_statistics
-test: turn_mx_on
 
 # ----------
 # Test for updating table statistics
