@@ -190,7 +190,7 @@ jobs:
           path: /tmp/pg_upgrade_newData_logs
       - codecov/upload:
           flags: 'test_<< parameters.old_pg_major >>_<< parameters.new_pg_major >>,upgrade'
-          file: "*.gcno"
+          file: ./*.gcno
 
   test-arbitrary-configs:
     description: Runs tests on arbitrary configs
@@ -272,7 +272,7 @@ jobs:
           path: src/test/regress/tmp_citus_test/logfiles
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
-          file: "*.gcno"
+          file: ./*.gcno
 
 
   test-citus-upgrade:
@@ -357,7 +357,7 @@ jobs:
           when: on_fail
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
-          file: "*.gcno"
+          file: ./*.gcno
 
   test-citus:
     description: Runs the common tests of citus
@@ -434,7 +434,7 @@ jobs:
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,<< parameters.make >>'
           when: always
-          file: "*.gcno"
+          file: ./*.gcno
 
   tap-test-citus:
     description: Runs tap tests for citus
@@ -500,7 +500,7 @@ jobs:
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,tap_<< parameters.suite >>_<< parameters.make >>'
           when: always
-          file: "*.gcno"
+          file: ./*.gcno
 
   check-merge-to-enterprise:
     docker:
