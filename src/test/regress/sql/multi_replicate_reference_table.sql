@@ -451,7 +451,7 @@ WHERE
 ORDER BY shardid, nodeport;
 
 -- verify constraints have been created on the new node
-SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname like ''ref_table%'';');
+SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname similar to ''ref_table%\d'';');
 
 DROP TABLE ref_table_1, ref_table_2, ref_table_3;
 

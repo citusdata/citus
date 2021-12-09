@@ -669,7 +669,7 @@ ORDER BY shardid, nodeport;
 (0 rows)
 
 -- verify constraints have been created on the new node
-SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname like ''ref_table%'';');
+SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname similar to ''ref_table%\d'';');
  run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,2)
