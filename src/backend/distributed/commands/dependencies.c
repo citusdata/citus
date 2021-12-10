@@ -25,6 +25,7 @@
 #include "distributed/worker_transaction.h"
 #include "storage/lmgr.h"
 #include "utils/lsyscache.h"
+#include "miscadmin.h"
 
 typedef bool (*AddressPredicate)(const ObjectAddress *);
 
@@ -223,27 +224,40 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 	{
 		case OCLASS_CLASS:
 		{
+			char relKind = get_rel_relkind(dependency->objectId);
+
 			/*
 			 * types have an intermediate dependency on a relation (aka class), so we do
 			 * support classes when the relkind is composite
 			 */
-			if (get_rel_relkind(dependency->objectId) == RELKIND_COMPOSITE_TYPE)
+			if (relKind == RELKIND_COMPOSITE_TYPE)
 			{
 				return NIL;
 			}
 
-			List *commandList = NIL;
-			List *tableDDLCommands = GetFullTableCreationCommands(dependency->objectId,
-																  WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
-
-			TableDDLCommand *tableDDLCommand = NULL;
-			foreach_ptr(tableDDLCommand, tableDDLCommands)
+			if (relKind == RELKIND_RELATION)
 			{
-				Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-				commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+				List *commandList = NIL;
+				List *tableDDLCommands = GetFullTableCreationCommands(
+					dependency->objectId,
+					WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
+
+				TableDDLCommand *tableDDLCommand = NULL;
+				foreach_ptr(tableDDLCommand, tableDDLCommands)
+				{
+					Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+					commandList = lappend(commandList, GetTableDDLCommand(
+											  tableDDLCommand));
+				}
+
+				return commandList;
 			}
 
-			return commandList;
+			if (relKind == RELKIND_SEQUENCE)
+			{
+				char *userName = GetUserNameFromId(GetUserId(), false);
+				return DDLCommandsForSequence(dependency->objectId, userName);
+			}
 		}
 
 		case OCLASS_COLLATION:

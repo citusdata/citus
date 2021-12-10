@@ -106,7 +106,7 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void SetUpSequences(WorkerNode *workerNode);
+static void SetUpSequenceDependencies(WorkerNode *workerNode);
 static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
 static void SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -649,7 +649,7 @@ SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode)
 
 
 static void
-SetUpSequences(WorkerNode *workerNode)
+SetUpSequenceDependencies(WorkerNode *workerNode)
 {
 	List *distributedTableList = CitusTableList();
 	List *propagatedTableList = NIL;
@@ -674,41 +674,6 @@ SetUpSequences(WorkerNode *workerNode)
 			/* skip table metadata creation when the Citus table is owned by an extension */
 			continue;
 		}
-
-		/*
-		 * Set object propagation to off as objects will be distributed while syncing
-		 * the metadata.
-		 */
-		bool prevDependencyCreationValue = EnableDependencyCreation;
-		SetLocalEnableDependencyCreation(false);
-
-		/*
-		 * Ensure sequence dependencies and mark them as distributed
-		 */
-		List *attnumList = NIL;
-		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(relationId, &attnumList,
-										  &dependentSequenceList, 0);
-
-		Oid sequenceOid = InvalidOid;
-		foreach_oid(sequenceOid, dependentSequenceList)
-		{
-			ObjectAddress sequenceAddress = { 0 };
-			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-			EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-
-			/*
-			 * Sequences are not marked as distributed while creating table
-			 * if no metadata worker node exists. We are marking all sequences
-			 * distributed while syncing metadata in such case.
-			 */
-			MarkObjectDistributed(&sequenceAddress);
-		}
-
-		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
-
-		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-		sequenceCommandList = list_concat(sequenceCommandList, workerSequenceDDLCommands);
 
 		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
 		sequenceCommandList = list_concat(sequenceCommandList,
@@ -1048,8 +1013,8 @@ ActivateNode(char *nodeName, int nodePort)
 						BoolGetDatum(isActive));
 	}
 
-	SetUpSequences(workerNode);
 	SetUpDistributedTableWithDependencies(workerNode);
+	SetUpSequenceDependencies(workerNode);
 	SetUpMultipleDistributedTableIntegrations(workerNode);
 
 	if (syncMetadata)

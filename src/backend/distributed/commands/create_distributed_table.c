@@ -431,6 +431,16 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	}
 
 	/*
+	 * Ensure that the sequences used in column defaults of the table
+	 * have proper types
+	 */
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
+	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
+										  attnumList);
+
+	/*
 	 * distributed tables might have dependencies on different objects, since we create
 	 * shards for a distributed table via multiple sessions these objects will be created
 	 * via their own connection and committed immediately so they become visible to all
@@ -439,13 +449,9 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	ObjectAddress tableAddress = { 0 };
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
+	/* TODO: Update owner of the sequence(?) */
 
-	/*
-	 * For now assume that we can create table after ensuring that dependencies exist.
-	 * Obviously it doesn't support sequences we don't care for it now.
-	 *
-	 * TODO: Consider partitioned tables
-	 */
+	/* TODO: Consider partitioned tables */
 	CreateShellTableOnWorkers(relationId);
 	MarkObjectDistributed(&tableAddress);
 
@@ -500,16 +506,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
 							  colocationId, replicationModel, autoConverted);
 
-	/*
-	 * Ensure that the sequences used in column defaults of the table
-	 * have proper types
-	 */
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
-										  attnumList);
-
 	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
 	{
@@ -543,16 +539,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
-		if (ClusterHasKnownMetadataWorkers())
-		{
-			/*
-			 * Ensure both sequence and its' dependencies and mark them as distributed
-			 * before creating table metadata on workers
-			 */
-			MarkSequenceListDistributedAndPropagateWithDependencies(relationId,
-																	dependentSequenceList);
-		}
-
 		CreateTableMetadataOnWorkers(relationId);
 	}
 

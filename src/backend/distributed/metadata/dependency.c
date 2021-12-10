@@ -37,6 +37,7 @@
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/version_compat.h"
 #include "miscadmin.h"
 #include "utils/fmgroids.h"
@@ -675,7 +676,8 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			 * for tables.
 			 */
 			if (relKind == RELKIND_COMPOSITE_TYPE ||
-				relKind == RELKIND_RELATION)
+				relKind == RELKIND_RELATION ||
+				relKind == RELKIND_SEQUENCE)
 			{
 				return true;
 			}
@@ -983,6 +985,27 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			List *statisticsSchemaDependencyList =
 				GetRelationStatsSchemaDependencyList(relationId);
 			result = list_concat(result, statisticsSchemaDependencyList);
+
+			/*
+			 * Add the dependent sequences for the relations
+			 */
+			List *attnumList = NIL;
+			List *dependentSequenceList = NIL;
+			List *sequenceDependencyList = NIL;
+
+			GetDependentSequencesWithRelation(relationId, &attnumList,
+											  &dependentSequenceList, 0);
+
+			ListCell *dependentSequenceCell = NULL;
+			foreach(dependentSequenceCell, dependentSequenceList)
+			{
+				Oid sequenceOid = lfirst_oid(dependentSequenceCell);
+				DependencyDefinition *dependency = CreateObjectAddressDependencyDef(
+					RelationRelationId, sequenceOid);
+				sequenceDependencyList = lappend(sequenceDependencyList, dependency);
+			}
+
+			result = list_concat(result, sequenceDependencyList);
 		}
 
 		default:

@@ -763,9 +763,6 @@ MetadataDropCommands(void)
 	dropSnapshotCommandList = list_concat(dropSnapshotCommandList,
 										  detachPartitionCommandList);
 
-	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
-									  REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
-
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList, DELETE_ALL_NODES);
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
 									  DELETE_ALL_DISTRIBUTED_OBJECTS);
