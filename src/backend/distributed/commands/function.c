@@ -1328,6 +1328,12 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 	FunctionParameter *funcParam = NULL;
 	foreach_ptr(funcParam, stmt->parameters)
 	{
+		if (funcParam->mode == FUNC_PARAM_TABLE)
+		{
+			/* RETURN TABLE parameters should not be included in the args list */
+			continue;
+		}
+
 		objectWithArgs->objargs = lappend(objectWithArgs->objargs, funcParam->argType);
 	}
 
