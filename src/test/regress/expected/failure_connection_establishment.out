@@ -44,7 +44,8 @@ SELECT citus.mitmproxy('conn.delay(500)');
 (1 row)
 
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
+WARNING:  could not establish connection after 400 ms
+ERROR:  connection to the remote node localhost:xxxxx failed
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -190,7 +191,7 @@ FROM
 	pg_dist_shard_placement
 WHERE
 	shardstate = 3 AND
-	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
+	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'single_replicatated'::regclass);
  invalid_placement_count
 ---------------------------------------------------------------------
                        0
@@ -202,7 +203,7 @@ SELECT citus.mitmproxy('conn.delay(500)');
 
 (1 row)
 
-INSERT INTO products VALUES (100, '100', 100);
+INSERT INTO single_replicatated VALUES (100);
 ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 COMMIT;
 SELECT
@@ -211,14 +212,20 @@ FROM
 	pg_dist_shard_placement
 WHERE
 	shardstate = 3 AND
-	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
+	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'single_replicatated'::regclass);
  invalid_placement_count
 ---------------------------------------------------------------------
                        0
 (1 row)
 
 -- show that INSERT failed
-SELECT count(*) FROM products WHERE product_no = 100;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) FROM single_replicatated WHERE key = 100;
  count
 ---------------------------------------------------------------------
      0
@@ -227,8 +234,6 @@ SELECT count(*) FROM products WHERE product_no = 100;
 RESET client_min_messages;
 -- verify get_global_active_transactions works when a timeout happens on a connection
 SELECT get_global_active_transactions();
-WARNING:  could not establish connection after 400 ms
-WARNING:  connection to the remote node localhost:xxxxx failed
  get_global_active_transactions
 ---------------------------------------------------------------------
 (0 rows)
