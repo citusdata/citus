@@ -6,7 +6,7 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: '-dev-714e57a'
+    default: '-dev-c00c653'
 
 jobs:
   build:
