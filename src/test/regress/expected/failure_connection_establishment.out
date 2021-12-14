@@ -142,7 +142,7 @@ SELECT count(*) FROM products;
 (1 row)
 
 -- use a filter on connection id so that concurrent operations does not change output
-SELECT * FROM citus.dump_network_traffic() WHERE conn=1;
+SELECT * FROM citus.dump_network_traffic() ORDER BY 1 LIMIT 1 OFFSET 1;
  conn |   source    |      message
 ---------------------------------------------------------------------
     1 | coordinator | [initial message]

@@ -81,7 +81,7 @@ SELECT count(*) FROM products;
 SELECT count(*) FROM products;
 
 -- use a filter on connection id so that concurrent operations does not change output
-SELECT * FROM citus.dump_network_traffic() WHERE conn=1;
+SELECT * FROM citus.dump_network_traffic() ORDER BY 1 LIMIT 1 OFFSET 1;
 
 SELECT citus.mitmproxy('conn.allow()');
 SET citus.shard_replication_factor TO 1;
