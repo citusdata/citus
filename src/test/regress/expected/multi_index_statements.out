@@ -296,14 +296,15 @@ SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 (5 rows)
 
 \c - - - :worker_1_port
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
+SET citus.override_table_visibility TO FALSE;
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname SIMILAR TO 'lineitem%\d' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
     indrelid     |           indexrelid
 ---------------------------------------------------------------------
  lineitem_360000 | lineitem_l_orderkey_idx_360000
  lineitem_360000 | lineitem_l_shipdate_idx_360000
 (2 rows)
 
-SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
+SELECT * FROM pg_indexes WHERE tablename SIMILAR TO 'index_test_%\d' ORDER BY indexname;
        schemaname       |       tablename        |             indexname              | tablespace |                                                                        indexdef
 ---------------------------------------------------------------------
  multi_index_statements | index_test_hash_102082 | index_test_hash_a_idx_102082       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102082 ON multi_index_statements.index_test_hash_102082 USING btree (a)
@@ -408,6 +409,10 @@ CREATE INDEX ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creat
     ON test_index_creation1 USING btree
     (tenant_id, timeperiod);
 NOTICE:  identifier "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1" will be truncated to "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_c"
+DEBUG:  identifier "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1" will be truncated to "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_c"
+DETAIL:  from localhost:xxxxx
+DEBUG:  identifier "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1" will be truncated to "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_c"
+DETAIL:  from localhost:xxxxx
 RESET client_min_messages;
 CREATE TABLE test_index_creation1_p2020_09_26 PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-26 00:00:00') TO ('2020-09-27 00:00:00');
 CREATE TABLE test_index_creation1_p2020_09_27 PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-27 00:00:00') TO ('2020-09-28 00:00:00');
