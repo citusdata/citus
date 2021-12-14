@@ -245,9 +245,6 @@ citus_shard_sizes(PG_FUNCTION_ARGS)
 
 	ReceiveShardNameAndSizeResults(connectionList, tupleStore, tupleDescriptor);
 
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_VOID();
 }
 

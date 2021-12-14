@@ -114,8 +114,6 @@ show_progress(PG_FUNCTION_ARGS)
 		}
 	}
 
-	tuplestore_donestoring(tupstore);
-
 	DetachFromDSMSegments(attachedDSMSegments);
 
 	return (Datum) 0;

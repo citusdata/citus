@@ -1058,8 +1058,6 @@ get_rebalance_table_shards_plan(PG_FUNCTION_ARGS)
 		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 	}
 
-	tuplestore_donestoring(tupstore);
-
 	return (Datum) 0;
 }
 
@@ -1131,8 +1129,6 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 		}
 	}
-
-	tuplestore_donestoring(tupstore);
 
 	DetachFromDSMSegments(segmentList);
 
