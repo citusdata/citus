@@ -861,8 +861,6 @@ ReadIntermediateResultsIntoFuncOutput(FunctionCallInfo fcinfo, char *copyFormat,
 								   tupleStore);
 		}
 	}
-
-	tuplestore_donestoring(tupleStore);
 }
 
 

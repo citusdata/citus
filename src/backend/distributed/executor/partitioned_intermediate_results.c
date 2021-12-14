@@ -262,8 +262,6 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 
 		tuplestore_putvalues(tupleStore, returnTupleDesc, values, nulls);
 	}
-
-	tuplestore_donestoring(tupleStore);
 	PortalDrop(portal, false);
 	FreeExecutorState(estate);
 

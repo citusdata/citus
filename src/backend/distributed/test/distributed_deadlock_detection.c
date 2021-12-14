@@ -67,8 +67,5 @@ get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 	}
 
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_VOID();
 }

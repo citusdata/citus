@@ -215,8 +215,5 @@ get_foreign_key_connected_relations(PG_FUNCTION_ARGS)
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);
 	}
-
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_VOID();
 }
