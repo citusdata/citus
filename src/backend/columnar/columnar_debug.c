@@ -70,8 +70,6 @@ columnar_store_memory_stats(PG_FUNCTION_ARGS)
 
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 	tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_DATUM(0);
 }
 

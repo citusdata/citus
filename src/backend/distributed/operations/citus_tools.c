@@ -592,8 +592,5 @@ CreateTupleStore(TupleDesc tupleDescriptor,
 		pfree(nodeNameText);
 		pfree(resultText);
 	}
-
-	tuplestore_donestoring(tupleStore);
-
 	return tupleStore;
 }

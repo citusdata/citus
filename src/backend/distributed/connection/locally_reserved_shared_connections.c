@@ -118,9 +118,6 @@ citus_reserved_connection_stats(PG_FUNCTION_ARGS)
 
 	StoreAllReservedConnections(tupleStore, tupleDescriptor);
 
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_VOID();
 }
 
