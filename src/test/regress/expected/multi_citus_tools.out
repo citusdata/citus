@@ -629,6 +629,45 @@ SELECT citus_check_connection_to_node('localhost', :worker_2_port);
 (1 row)
 
 \c - - - :master_port
+SELECT * FROM citus_check_cluster_node_health() ORDER BY 1,2,3,4;
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |         57637 | localhost   |       57637 | t
+ localhost     |         57637 | localhost   |       57638 | t
+ localhost     |         57638 | localhost   |       57637 | t
+ localhost     |         57638 | localhost   |       57638 | t
+(4 rows)
+
+-- test cluster connectivity when we have broken nodes
+SET client_min_messages TO ERROR;
+SET citus.node_connection_timeout TO 10;
+BEGIN;
+INSERT INTO pg_dist_node VALUES
+    (123456789, 123456789, 'localhost', 123456789),
+    (1234567890, 1234567890, 'www.citusdata.com', 5432);
+SELECT * FROM citus_check_cluster_node_health() ORDER BY 5,1,2,3,4;
+   from_nodename   | from_nodeport |    to_nodename    | to_nodeport | result
+---------------------------------------------------------------------
+ localhost         |         57637 | localhost         |   123456789 | f
+ localhost         |         57637 | www.citusdata.com |        5432 | f
+ localhost         |         57638 | localhost         |   123456789 | f
+ localhost         |         57638 | www.citusdata.com |        5432 | f
+ localhost         |         57637 | localhost         |       57637 | t
+ localhost         |         57637 | localhost         |       57638 | t
+ localhost         |         57638 | localhost         |       57637 | t
+ localhost         |         57638 | localhost         |       57638 | t
+ localhost         |     123456789 | localhost         |       57637 |
+ localhost         |     123456789 | localhost         |       57638 |
+ localhost         |     123456789 | localhost         |   123456789 |
+ localhost         |     123456789 | www.citusdata.com |        5432 |
+ www.citusdata.com |          5432 | localhost         |       57637 |
+ www.citusdata.com |          5432 | localhost         |       57638 |
+ www.citusdata.com |          5432 | localhost         |   123456789 |
+ www.citusdata.com |          5432 | www.citusdata.com |        5432 |
+(16 rows)
+
+ROLLBACK;
+RESET citus.node_connection_timeout;
 RESET client_min_messages;
 DROP SCHEMA tools CASCADE;
 RESET SEARCH_PATH;
