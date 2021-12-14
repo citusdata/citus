@@ -80,9 +80,6 @@ SELECT citus.mitmproxy('conn.delay(500)');
 SELECT count(*) FROM products;
 SELECT count(*) FROM products;
 
--- use a filter on connection id so that concurrent operations does not change output
-SELECT * FROM citus.dump_network_traffic() ORDER BY 1 LIMIT 1 OFFSET 1;
-
 SELECT citus.mitmproxy('conn.allow()');
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE single_replicatated(key int);
