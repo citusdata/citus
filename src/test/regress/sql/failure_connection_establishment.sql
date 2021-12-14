@@ -108,9 +108,9 @@ FROM
 	pg_dist_shard_placement
 WHERE
 	shardstate = 3 AND
-	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
+	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'single_replicatated'::regclass);
 SELECT citus.mitmproxy('conn.delay(500)');
-INSERT INTO products VALUES (100, '100', 100);
+INSERT INTO single_replicatated VALUES (100);
 COMMIT;
 SELECT
 	count(*) as invalid_placement_count
@@ -118,10 +118,11 @@ FROM
 	pg_dist_shard_placement
 WHERE
 	shardstate = 3 AND
-	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
+	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'single_replicatated'::regclass);
 
 -- show that INSERT failed
-SELECT count(*) FROM products WHERE product_no = 100;
+SELECT citus.mitmproxy('conn.allow()');
+SELECT count(*) FROM single_replicatated WHERE key = 100;
 
 
 RESET client_min_messages;
