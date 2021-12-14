@@ -150,6 +150,7 @@ test: with_executors with_join with_partitioning with_transactions with_dml
 # ----------
 # Tests around DDL statements run on distributed tables
 # ----------
+test: multi_index_statements
 test: multi_alter_table_statements
 test: multi_alter_table_add_constraints
 
@@ -193,7 +194,6 @@ test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactio
 test: multi_modifying_xacts
 test: check_mx
 test: turn_mx_off
-test: multi_index_statements
 test: multi_generate_ddl_commands multi_repair_shards
 test: multi_create_shards
 test: multi_transaction_recovery
