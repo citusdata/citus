@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
- * healthcheck.c
- *	  UDFs to run healthcheck operations
+ * health_check.c
+ *	  UDFs to run health check operations
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -38,6 +38,8 @@ static char * GetConnectivityCheckCommand(const char *nodeName, const uint32 nod
 Datum
 citus_check_connection_to_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	char *nodeName = PG_GETARG_TEXT_TO_CSTRING(0);
 	uint32 nodePort = PG_GETARG_UINT32(1);
 
