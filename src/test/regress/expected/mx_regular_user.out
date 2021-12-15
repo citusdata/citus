@@ -7,19 +7,6 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
         1
 (1 row)
 
--- sync the metadata to both nodes
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 -- create a role and give access one each node separately
 -- and increase the error level to prevent enterprise to diverge
 SET client_min_messages TO ERROR;
@@ -684,6 +671,19 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 NOTICE:  dropping metadata on the node (localhost,57638)
  stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- finally sync metadata again so it doesn't break later tests
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+ start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
