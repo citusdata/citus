@@ -1,7 +1,10 @@
 /*-------------------------------------------------------------------------
  *
  * health_check.c
- *	  UDFs to run health check operations
+ *
+ * UDFs to run health check operations by coordinating simple queries to test connectivity
+ * between connection pairs in the cluster.
+ *
  *
  * Copyright (c) Citus Data, Inc.
  *
