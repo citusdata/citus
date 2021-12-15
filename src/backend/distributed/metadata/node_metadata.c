@@ -43,6 +43,7 @@
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/string_utils.h"
+#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
@@ -91,6 +92,7 @@ typedef struct NodeMetadata
 } NodeMetadata;
 
 /* local function forward declarations */
+static List * DistributedObjectMetadataSyncCommandList(void);
 static List * DetachPartitionCommandList(void);
 static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
@@ -107,9 +109,8 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void SetUpSequenceDependencies(WorkerNode *workerNode);
 static void SetUpObjectMetadata(WorkerNode *workerNode);
-static void ClearDistributedTablesOnNode(WorkerNode *workerNode);
+static void ClearDistributedObjectsWithMetadataFromNode(WorkerNode *workerNode);
 static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
 static void SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -582,6 +583,15 @@ master_set_node_property(PG_FUNCTION_ARGS)
 }
 
 
+/*
+ * SetUpMultipleDistributedTableIntegrations set up the multiple integrations
+ * including
+ * 
+ * (i) Foreign keys
+ * (ii) Partionining hierarchy
+ * 
+ * on the given worker node.
+ */
 static void
 SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode)
 {
@@ -639,61 +649,19 @@ SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode)
 		}
 	}
 
-	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
-
-	/* send the commands one by one */
-	const char *command = NULL;
-	foreach_ptr(command, multipleTableIntegrationCommandList)
-	{
-		SendCommandToWorkersWithMetadata(command);
-	}
-}
-
-
-static void
-SetUpSequenceDependencies(WorkerNode *workerNode)
-{
-	List *distributedTableList = CitusTableList();
-	List *propagatedTableList = NIL;
-	List *sequenceCommandList = NIL;
-
-	CitusTableCacheEntry *cacheEntry = NULL;
-	foreach_ptr(cacheEntry, distributedTableList)
-	{
-		if (ShouldSyncTableMetadata(cacheEntry->relationId))
-		{
-			propagatedTableList = lappend(propagatedTableList, cacheEntry);
-		}
-	}
-
-	/* create the metadata */
-	foreach_ptr(cacheEntry, propagatedTableList)
-	{
-		Oid relationId = cacheEntry->relationId;
-
-		if (IsTableOwnedByExtension(relationId))
-		{
-			/* skip table metadata creation when the Citus table is owned by an extension */
-			continue;
-		}
-
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
-		sequenceCommandList = list_concat(sequenceCommandList,
-										  sequenceDependencyCommandList);
-	}
-
-	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
-
 	char *currentUser = CurrentUserName();
+	List *commandList = list_make3(DISABLE_DDL_PROPAGATION, multipleTableIntegrationCommandList, ENABLE_DDL_PROPAGATION);
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
 															currentUser,
-															sequenceCommandList);
+															commandList);
 }
 
 
+/*
+ * SetUpObjectMetadata sets up the metadata depending on the distributed object
+ * on the given node.
+ */
 static void
 SetUpObjectMetadata(WorkerNode *workerNode)
 {
@@ -744,7 +712,7 @@ SetUpObjectMetadata(WorkerNode *workerNode)
 												  distributedObjectSyncCommandList);
 	}
 
-	List *metadataSnapshotCommands = list_make2(DISABLE_DDL_PROPAGATION, metadataSnapshotCommandList);
+	List *metadataSnapshotCommands = list_make3(DISABLE_DDL_PROPAGATION, metadataSnapshotCommandList, ENABLE_DDL_PROPAGATION);
 
 	char *currentUser = CurrentUserName();
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
@@ -753,8 +721,102 @@ SetUpObjectMetadata(WorkerNode *workerNode)
 															metadataSnapshotCommands);
 }
 
+
+/*
+ * DistributedObjectMetadataSyncCommandList returns the necessary commands to create
+ * pg_dist_object entries on the new node.
+ */
+static List *
+DistributedObjectMetadataSyncCommandList(void)
+{
+	HeapTuple pgDistObjectTup = NULL;
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
+	Relation pgDistObjectIndexRel = index_open(DistObjectPrimaryKeyIndexId(),
+											   AccessShareLock);
+	TupleDesc pgDistObjectDesc = RelationGetDescr(pgDistObjectRel);
+
+	List *objectAddressList = NIL;
+	List *distArgumentIndexList = NIL;
+	List *colocationIdList = NIL;
+
+	/* It is not strictly necessary to read the tuples in order.
+	 * However, it is useful to get consistent behavior, both for regression
+	 * tests and also in production systems.
+	 */
+	SysScanDesc pgDistObjectScan = systable_beginscan_ordered(pgDistObjectRel,
+															  pgDistObjectIndexRel, NULL,
+															  0, NULL);
+	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext_ordered(pgDistObjectScan,
+																	   ForwardScanDirection)))
+	{
+		Form_pg_dist_object pg_dist_object = (Form_pg_dist_object) GETSTRUCT(
+			pgDistObjectTup);
+
+		ObjectAddress *address = palloc(sizeof(ObjectAddress));
+
+		ObjectAddressSubSet(*address, pg_dist_object->classid, pg_dist_object->objid,
+							pg_dist_object->objsubid);
+
+		bool distributionArgumentIndexIsNull = false;
+		Datum distributionArgumentIndexDatum =
+			heap_getattr(pgDistObjectTup,
+						 Anum_pg_dist_object_distribution_argument_index,
+						 pgDistObjectDesc,
+						 &distributionArgumentIndexIsNull);
+		int32 distributionArgumentIndex = DatumGetInt32(distributionArgumentIndexDatum);
+
+		bool colocationIdIsNull = false;
+		Datum colocationIdDatum =
+			heap_getattr(pgDistObjectTup,
+						 Anum_pg_dist_object_colocationid,
+						 pgDistObjectDesc,
+						 &colocationIdIsNull);
+		int32 colocationId = DatumGetInt32(colocationIdDatum);
+
+		objectAddressList = lappend(objectAddressList, address);
+
+		if (distributionArgumentIndexIsNull)
+		{
+			distArgumentIndexList = lappend_int(distArgumentIndexList,
+												INVALID_DISTRIBUTION_ARGUMENT_INDEX);
+		}
+		else
+		{
+			distArgumentIndexList = lappend_int(distArgumentIndexList,
+												distributionArgumentIndex);
+		}
+
+		if (colocationIdIsNull)
+		{
+			colocationIdList = lappend_int(colocationIdList,
+										   INVALID_COLOCATION_ID);
+		}
+		else
+		{
+			colocationIdList = lappend_int(colocationIdList, colocationId);
+		}
+	}
+
+	systable_endscan_ordered(pgDistObjectScan);
+	index_close(pgDistObjectIndexRel, AccessShareLock);
+	relation_close(pgDistObjectRel, NoLock);
+
+	char *workerMetadataUpdateCommand =
+		MarkObjectsDistributedCreateCommand(objectAddressList,
+											distArgumentIndexList,
+											colocationIdList);
+	List *commandList = list_make1(workerMetadataUpdateCommand);
+
+	return commandList;
+}
+
+
+/*
+ * ClearDistributedObjectsWithMetadataFromNode clears all the distributed objects and related
+ * metadata from the given worker node.
+ */
 static void
-ClearDistributedTablesOnNode(WorkerNode *workerNode)
+ClearDistributedObjectsWithMetadataFromNode(WorkerNode *workerNode)
 {
 	List *clearDistTableInfoCommandList = NIL;
 	List *detachPartitionCommandList = DetachPartitionCommandList();
@@ -767,8 +829,9 @@ ClearDistributedTablesOnNode(WorkerNode *workerNode)
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList, DELETE_ALL_DISTRIBUTED_OBJECTS);
 
-	List *clearDistTableCommands = list_make2(DISABLE_DDL_PROPAGATION,
-									  		  clearDistTableInfoCommandList);
+	List *clearDistTableCommands = list_make3(DISABLE_DDL_PROPAGATION,
+									  		  clearDistTableInfoCommandList,
+											  ENABLE_DDL_PROPAGATION);
 
 	char *currentUser = CurrentUserName();
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
@@ -781,7 +844,7 @@ ClearDistributedTablesOnNode(WorkerNode *workerNode)
 /*
  * SetUpDistributedTableWithDependencies sets up up the following on a node if it's
  * a primary node that currently stores data:
- * - All dependencies (e.g., types, schemas)
+ * - All dependencies (e.g., types, schemas, sequences)
  * - All shell distributed table
  * - Reference tables, because they are needed to handle queries efficiently.
  * - Distributed functions
@@ -857,14 +920,13 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 	if (list_length(ddlCommands) > 0)
 	{
 		/* if there are command wrap them in enable_ddl_propagation off */
-		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
-		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
+		ddlCommands = list_make3(DISABLE_DDL_PROPAGATION, ddlCommands, ENABLE_DDL_PROPAGATION);
 
 		/* send commands to new workers*/
-		SendCommandListToWorkerOutsideTransaction(newWorkerNode->workerName,
-												  newWorkerNode->workerPort,
-												  CitusExtensionOwnerName(),
-												  ddlCommands);
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(newWorkerNode->workerName,
+												  				newWorkerNode->workerPort,
+												  				CitusExtensionOwnerName(),
+												  				ddlCommands);
 	}
 }
 
@@ -1070,6 +1132,12 @@ ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
 
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureModificationsCanRun();
+
+	EnsureSequentialModeMetadataOperations();
+
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
@@ -1099,9 +1167,10 @@ ActivateNode(char *nodeName, int nodePort)
 						BoolGetDatum(isActive));
 	}
 
-	ClearDistributedTablesOnNode(workerNode);
+	UseCoordinatedTransaction();
+
+	ClearDistributedObjectsWithMetadataFromNode(workerNode);
 	SetUpDistributedTableWithDependencies(workerNode);
-	SetUpSequenceDependencies(workerNode);
 	SetUpMultipleDistributedTableIntegrations(workerNode);
 	SetUpObjectMetadata(workerNode);
 
@@ -1116,8 +1185,6 @@ ActivateNode(char *nodeName, int nodePort)
 
 	return newWorkerNode->nodeId;
 }
-
-
 
 
 /*

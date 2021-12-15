@@ -83,13 +83,10 @@
 char *EnableManualMetadataChangesForUser = "";
 
 
-static void EnsureSequentialModeMetadataOperations(void);
-static List * DistributedObjectMetadataSyncCommandList(void);
 static List * GetDistributedTableDDLEvents(Oid relationId);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
-static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
@@ -254,7 +251,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
  * visible on all connections used by the transaction, meaning we can only use 1
  * connection per node.
  */
-static void
+void
 EnsureSequentialModeMetadataOperations(void)
 {
 	if (!IsTransactionBlock())
@@ -538,95 +535,6 @@ MetadataCreateCommands(void)
 										  nodeListInsertCommand);
 
 	return metadataSnapshotCommandList;
-}
-
-
-/*
- * DistributedObjectMetadataSyncCommandList returns the necessary commands to create
- * pg_dist_object entries on the new node.
- */
-static List *
-DistributedObjectMetadataSyncCommandList(void)
-{
-	HeapTuple pgDistObjectTup = NULL;
-	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
-	Relation pgDistObjectIndexRel = index_open(DistObjectPrimaryKeyIndexId(),
-											   AccessShareLock);
-	TupleDesc pgDistObjectDesc = RelationGetDescr(pgDistObjectRel);
-
-	List *objectAddressList = NIL;
-	List *distArgumentIndexList = NIL;
-	List *colocationIdList = NIL;
-
-	/* It is not strictly necessary to read the tuples in order.
-	 * However, it is useful to get consistent behavior, both for regression
-	 * tests and also in production systems.
-	 */
-	SysScanDesc pgDistObjectScan = systable_beginscan_ordered(pgDistObjectRel,
-															  pgDistObjectIndexRel, NULL,
-															  0, NULL);
-	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext_ordered(pgDistObjectScan,
-																	   ForwardScanDirection)))
-	{
-		Form_pg_dist_object pg_dist_object = (Form_pg_dist_object) GETSTRUCT(
-			pgDistObjectTup);
-
-		ObjectAddress *address = palloc(sizeof(ObjectAddress));
-
-		ObjectAddressSubSet(*address, pg_dist_object->classid, pg_dist_object->objid,
-							pg_dist_object->objsubid);
-
-		bool distributionArgumentIndexIsNull = false;
-		Datum distributionArgumentIndexDatum =
-			heap_getattr(pgDistObjectTup,
-						 Anum_pg_dist_object_distribution_argument_index,
-						 pgDistObjectDesc,
-						 &distributionArgumentIndexIsNull);
-		int32 distributionArgumentIndex = DatumGetInt32(distributionArgumentIndexDatum);
-
-		bool colocationIdIsNull = false;
-		Datum colocationIdDatum =
-			heap_getattr(pgDistObjectTup,
-						 Anum_pg_dist_object_colocationid,
-						 pgDistObjectDesc,
-						 &colocationIdIsNull);
-		int32 colocationId = DatumGetInt32(colocationIdDatum);
-
-		objectAddressList = lappend(objectAddressList, address);
-
-		if (distributionArgumentIndexIsNull)
-		{
-			distArgumentIndexList = lappend_int(distArgumentIndexList,
-												INVALID_DISTRIBUTION_ARGUMENT_INDEX);
-		}
-		else
-		{
-			distArgumentIndexList = lappend_int(distArgumentIndexList,
-												distributionArgumentIndex);
-		}
-
-		if (colocationIdIsNull)
-		{
-			colocationIdList = lappend_int(colocationIdList,
-										   INVALID_COLOCATION_ID);
-		}
-		else
-		{
-			colocationIdList = lappend_int(colocationIdList, colocationId);
-		}
-	}
-
-	systable_endscan_ordered(pgDistObjectScan);
-	index_close(pgDistObjectIndexRel, AccessShareLock);
-	relation_close(pgDistObjectRel, NoLock);
-
-	char *workerMetadataUpdateCommand =
-		MarkObjectsDistributedCreateCommand(objectAddressList,
-											distArgumentIndexList,
-											colocationIdList);
-	List *commandList = list_make1(workerMetadataUpdateCommand);
-
-	return commandList;
 }
 
 
@@ -1793,7 +1701,7 @@ GenerateSetRoleQuery(Oid roleOid)
  * TruncateTriggerCreateCommand creates a SQL query calling worker_create_truncate_trigger
  * function, which creates the truncate trigger on the worker.
  */
-static char *
+char *
 TruncateTriggerCreateCommand(Oid relationId)
 {
 	StringInfo triggerCreateCommand = makeStringInfo();

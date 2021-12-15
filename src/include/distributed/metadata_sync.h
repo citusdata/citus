@@ -29,6 +29,7 @@ typedef enum
 
 /* Functions declarations for metadata syncing */
 extern void StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort);
+extern void EnsureSequentialModeMetadataOperations(void);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
@@ -51,6 +52,7 @@ extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
+extern char * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateShellTableOnWorkers(Oid relationId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
 extern BackgroundWorkerHandle * SpawnSyncMetadataToNodes(Oid database, Oid owner);

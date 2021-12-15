@@ -239,20 +239,25 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			if (relKind == RELKIND_RELATION)
 			{
 				Oid relationId = dependency->objectId;
-				List *commandList = NIL;
-				List *tableDDLCommands = GetFullTableCreationCommands(relationId, WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
-
-				TableDDLCommand *tableDDLCommand = NULL;
-				foreach_ptr(tableDDLCommand, tableDDLCommands)
+				if (IsCitusTable(relationId) && !IsTableOwnedByExtension(relationId))
 				{
-					Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-					commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+					/* skip table metadata creation when the Citus table is owned by an extension */
+					List *commandList = NIL;
+					List *tableDDLCommands = GetFullTableCreationCommands(relationId, WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
+
+					TableDDLCommand *tableDDLCommand = NULL;
+					foreach_ptr(tableDDLCommand, tableDDLCommands)
+					{
+						Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+						commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+					}
+
+					// TODO: May need to move sequence dependencies to ActiveNode directly
+					List *sequenceDependencyCommandList = SequenceDependencyCommandList(dependency->objectId);
+					commandList = list_concat(commandList, sequenceDependencyCommandList);
+
+					return commandList;
 				}
-
-				List *sequenceDependencyCommandList = SequenceDependencyCommandList(dependency->objectId);
-				commandList = list_concat(commandList, sequenceDependencyCommandList);
-
-				return commandList;
 			}
 
 			if (relKind == RELKIND_SEQUENCE)
@@ -387,10 +392,9 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	}
 
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
-	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
+	ddlCommands = list_make3(DISABLE_DDL_PROPAGATION, ddlCommands, ENABLE_DDL_PROPAGATION);
 
-	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
-											  CitusExtensionOwnerName(), ddlCommands);
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort, CitusExtensionOwnerName(), ddlCommands);
 }
 
 
