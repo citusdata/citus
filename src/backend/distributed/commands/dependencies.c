@@ -64,6 +64,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
 
+		// TODO: Might add check for tables
 		/* create a new list with dependencies that actually created commands */
 		if (list_length(dependencyCommands) > 0)
 		{
@@ -237,18 +238,19 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 			if (relKind == RELKIND_RELATION)
 			{
+				Oid relationId = dependency->objectId;
 				List *commandList = NIL;
-				List *tableDDLCommands = GetFullTableCreationCommands(
-					dependency->objectId,
-					WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
+				List *tableDDLCommands = GetFullTableCreationCommands(relationId, WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
 
 				TableDDLCommand *tableDDLCommand = NULL;
 				foreach_ptr(tableDDLCommand, tableDDLCommands)
 				{
 					Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-					commandList = lappend(commandList, GetTableDDLCommand(
-											  tableDDLCommand));
+					commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
 				}
+
+				List *sequenceDependencyCommandList = SequenceDependencyCommandList(dependency->objectId);
+				commandList = list_concat(commandList, sequenceDependencyCommandList);
 
 				return commandList;
 			}

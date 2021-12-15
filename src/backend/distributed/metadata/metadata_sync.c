@@ -92,7 +92,6 @@ static char * LocalGroupIdUpdateCommand(int32 groupId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
-static List * DetachPartitionCommandList(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
@@ -522,18 +521,11 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
  * following queries:
  *
  * (i)   Query that populates pg_dist_node table
- * (ii)  Queries that create the foreign keys and partitioning hierarchy
- * (iii) Queries that populate pg_dist_partition table referenced by (ii)
- * (iv)  Queries that populate pg_dist_shard table referenced by (iii)
- * (v)   Queries that populate pg_dist_placement table referenced by (iv)
- * (vi)  Queries that populate pg_dist_object table
  */
 List *
 MetadataCreateCommands(void)
 {
 	List *metadataSnapshotCommandList = NIL;
-	List *distributedTableList = CitusTableList();
-	List *propagatedTableList = NIL;
 	bool includeNodesFromOtherClusters = true;
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
 
@@ -544,49 +536,6 @@ MetadataCreateCommands(void)
 	char *nodeListInsertCommand = NodeListInsertCommand(workerNodeList);
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 										  nodeListInsertCommand);
-
-	/* create the list of tables whose metadata will be created */
-	CitusTableCacheEntry *cacheEntry = NULL;
-	foreach_ptr(cacheEntry, distributedTableList)
-	{
-		if (ShouldSyncTableMetadata(cacheEntry->relationId))
-		{
-			propagatedTableList = lappend(propagatedTableList, cacheEntry);
-		}
-	}
-
-	/* create the metadata */
-	foreach_ptr(cacheEntry, propagatedTableList)
-	{
-		Oid clusteredTableId = cacheEntry->relationId;
-
-		/* add the table metadata command first*/
-		char *metadataCommand = DistributionCreateCommand(cacheEntry);
-		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-											  metadataCommand);
-
-		/* add the truncate trigger command after the table became distributed */
-		char *truncateTriggerCreateCommand =
-			TruncateTriggerCreateCommand(cacheEntry->relationId);
-		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-											  truncateTriggerCreateCommand);
-
-		/* add the pg_dist_shard{,placement} entries */
-		List *shardIntervalList = LoadShardIntervalList(clusteredTableId);
-		List *shardCreateCommandList = ShardListInsertCommand(shardIntervalList);
-
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  shardCreateCommandList);
-	}
-
-	/* As the last step, propagate the pg_dist_object entities */
-	if (ShouldPropagate())
-	{
-		List *distributedObjectSyncCommandList =
-			DistributedObjectMetadataSyncCommandList();
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  distributedObjectSyncCommandList);
-	}
 
 	return metadataSnapshotCommandList;
 }
@@ -739,33 +688,17 @@ GetDistributedTableDDLEvents(Oid relationId)
 
 /*
  * MetadataDropCommands returns list of queries that are required to
- * drop all the metadata of the node that are related to clustered tables.
+ * drop all the metadata of the node that are not related to clustered tables.
  * The drop metadata snapshot commands includes the following queries:
  *
- * (i)   Query to disable DDL propagation (necessary for (ii)
- * (ii)  Queries that DETACH all partitions of distributed tables
- * (iii) Queries that delete all the rows from pg_dist_node table
- * (iv)  Queries that drop the clustered tables and remove its references from
- *        the pg_dist_partition. Note that distributed relation ids are gathered
- *        from the worker itself to prevent dropping any non-distributed tables
- *        with the same name.
- * (v)   Queries that delete all the rows from pg_dist_shard table referenced by (iv)
- * (vi)  Queries that delete all the rows from pg_dist_placement table
- *        referenced by (v)
- * (vii) Queries that delete all the rows from pg_dist_object table
+ * (i) Queries that delete all the rows from pg_dist_node table
  */
 List *
 MetadataDropCommands(void)
 {
 	List *dropSnapshotCommandList = NIL;
-	List *detachPartitionCommandList = DetachPartitionCommandList();
-
-	dropSnapshotCommandList = list_concat(dropSnapshotCommandList,
-										  detachPartitionCommandList);
 
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList, DELETE_ALL_NODES);
-	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
-									  DELETE_ALL_DISTRIBUTED_OBJECTS);
 
 	return dropSnapshotCommandList;
 }
@@ -1983,55 +1916,6 @@ CreateTableMetadataOnWorkers(Oid relationId)
 	}
 }
 
-
-/*
- * DetachPartitionCommandList returns list of DETACH commands to detach partitions
- * of all distributed tables. This function is used for detaching partitions in MX
- * workers before DROPping distributed partitioned tables in them. Thus, we are
- * disabling DDL propagation to the beginning of the commands (we are also enabling
- * DDL propagation at the end of command list to swtich back to original state). As
- * an extra step, if there are no partitions to DETACH, this function simply returns
- * empty list to not disable/enable DDL propagation for nothing.
- */
-static List *
-DetachPartitionCommandList(void)
-{
-	List *detachPartitionCommandList = NIL;
-	List *distributedTableList = CitusTableList();
-
-	/* we iterate over all distributed partitioned tables and DETACH their partitions */
-	CitusTableCacheEntry *cacheEntry = NULL;
-	foreach_ptr(cacheEntry, distributedTableList)
-	{
-		if (!PartitionedTable(cacheEntry->relationId))
-		{
-			continue;
-		}
-
-		List *partitionList = PartitionList(cacheEntry->relationId);
-		List *detachCommands =
-			GenerateDetachPartitionCommandRelationIdList(partitionList);
-		detachPartitionCommandList = list_concat(detachPartitionCommandList,
-												 detachCommands);
-	}
-
-	if (list_length(detachPartitionCommandList) == 0)
-	{
-		return NIL;
-	}
-
-	detachPartitionCommandList =
-		lcons(DISABLE_DDL_PROPAGATION, detachPartitionCommandList);
-
-	/*
-	 * We probably do not need this but as an extra precaution, we are enabling
-	 * DDL propagation to switch back to original state.
-	 */
-	detachPartitionCommandList = lappend(detachPartitionCommandList,
-										 ENABLE_DDL_PROPAGATION);
-
-	return detachPartitionCommandList;
-}
 
 
 /*

@@ -91,6 +91,7 @@ typedef struct NodeMetadata
 } NodeMetadata;
 
 /* local function forward declarations */
+static List * DetachPartitionCommandList(void);
 static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static void ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode);
@@ -107,6 +108,8 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpSequenceDependencies(WorkerNode *workerNode);
+static void SetUpObjectMetadata(WorkerNode *workerNode);
+static void ClearDistributedTablesOnNode(WorkerNode *workerNode);
 static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
 static void SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -678,17 +681,100 @@ SetUpSequenceDependencies(WorkerNode *workerNode)
 		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
 		sequenceCommandList = list_concat(sequenceCommandList,
 										  sequenceDependencyCommandList);
+	}
 
-		/* prevent recursive propagation */
-		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	/* prevent recursive propagation */
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
-		/* send the commands one by one */
-		const char *command = NULL;
-		foreach_ptr(command, sequenceCommandList)
+	char *currentUser = CurrentUserName();
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+															workerNode->workerPort,
+															currentUser,
+															sequenceCommandList);
+}
+
+
+static void
+SetUpObjectMetadata(WorkerNode *workerNode)
+{
+	List *distributedTableList = CitusTableList();
+	List *propagatedTableList = NIL;
+	List *metadataSnapshotCommandList = NIL;
+
+	/* create the list of tables whose metadata will be created */
+	CitusTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
+	{
+		if (ShouldSyncTableMetadata(cacheEntry->relationId))
 		{
-			SendCommandToWorkersWithMetadata(command);
+			propagatedTableList = lappend(propagatedTableList, cacheEntry);
 		}
 	}
+
+	/* after all tables are created, create the metadata */
+	foreach_ptr(cacheEntry, propagatedTableList)
+	{
+		Oid clusteredTableId = cacheEntry->relationId;
+
+		/* add the table metadata command first*/
+		char *metadataCommand = DistributionCreateCommand(cacheEntry);
+		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+											  metadataCommand);
+
+		/* add the truncate trigger command after the table became distributed */
+		char *truncateTriggerCreateCommand =
+			TruncateTriggerCreateCommand(cacheEntry->relationId);
+		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+											  truncateTriggerCreateCommand);
+
+		/* add the pg_dist_shard{,placement} entries */
+		List *shardIntervalList = LoadShardIntervalList(clusteredTableId);
+		List *shardCreateCommandList = ShardListInsertCommand(shardIntervalList);
+
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  shardCreateCommandList);
+	}
+
+	/* As the last step, propagate the pg_dist_object entities */
+	if (ShouldPropagate())
+	{
+		List *distributedObjectSyncCommandList =
+			DistributedObjectMetadataSyncCommandList();
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  distributedObjectSyncCommandList);
+	}
+
+	List *metadataSnapshotCommands = list_make2(DISABLE_DDL_PROPAGATION, metadataSnapshotCommandList);
+
+	char *currentUser = CurrentUserName();
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+															workerNode->workerPort,
+															currentUser,
+															metadataSnapshotCommands);
+}
+
+static void
+ClearDistributedTablesOnNode(WorkerNode *workerNode)
+{
+	List *clearDistTableInfoCommandList = NIL;
+	List *detachPartitionCommandList = DetachPartitionCommandList();
+
+	clearDistTableInfoCommandList = list_concat(clearDistTableInfoCommandList,
+										  detachPartitionCommandList);
+
+	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
+									REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
+
+	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList, DELETE_ALL_DISTRIBUTED_OBJECTS);
+
+	List *clearDistTableCommands = list_make2(DISABLE_DDL_PROPAGATION,
+									  		  clearDistTableInfoCommandList);
+
+	char *currentUser = CurrentUserName();
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+															workerNode->workerPort,
+															currentUser,
+															clearDistTableCommands);
 }
 
 
@@ -1013,9 +1099,11 @@ ActivateNode(char *nodeName, int nodePort)
 						BoolGetDatum(isActive));
 	}
 
+	ClearDistributedTablesOnNode(workerNode);
 	SetUpDistributedTableWithDependencies(workerNode);
 	SetUpSequenceDependencies(workerNode);
 	SetUpMultipleDistributedTableIntegrations(workerNode);
+	SetUpObjectMetadata(workerNode);
 
 	if (syncMetadata)
 	{
@@ -1027,6 +1115,58 @@ ActivateNode(char *nodeName, int nodePort)
 	Assert(newWorkerNode->nodeId == workerNode->nodeId);
 
 	return newWorkerNode->nodeId;
+}
+
+
+
+
+/*
+ * DetachPartitionCommandList returns list of DETACH commands to detach partitions
+ * of all distributed tables. This function is used for detaching partitions in MX
+ * workers before DROPping distributed partitioned tables in them. Thus, we are
+ * disabling DDL propagation to the beginning of the commands (we are also enabling
+ * DDL propagation at the end of command list to swtich back to original state). As
+ * an extra step, if there are no partitions to DETACH, this function simply returns
+ * empty list to not disable/enable DDL propagation for nothing.
+ */
+static List *
+DetachPartitionCommandList(void)
+{
+	List *detachPartitionCommandList = NIL;
+	List *distributedTableList = CitusTableList();
+
+	/* we iterate over all distributed partitioned tables and DETACH their partitions */
+	CitusTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
+	{
+		if (!PartitionedTable(cacheEntry->relationId))
+		{
+			continue;
+		}
+
+		List *partitionList = PartitionList(cacheEntry->relationId);
+		List *detachCommands =
+			GenerateDetachPartitionCommandRelationIdList(partitionList);
+		detachPartitionCommandList = list_concat(detachPartitionCommandList,
+												 detachCommands);
+	}
+
+	if (list_length(detachPartitionCommandList) == 0)
+	{
+		return NIL;
+	}
+
+	detachPartitionCommandList =
+		lcons(DISABLE_DDL_PROPAGATION, detachPartitionCommandList);
+
+	/*
+	 * We probably do not need this but as an extra precaution, we are enabling
+	 * DDL propagation to switch back to original state.
+	 */
+	detachPartitionCommandList = lappend(detachPartitionCommandList,
+										 ENABLE_DDL_PROPAGATION);
+
+	return detachPartitionCommandList;
 }
 
 
