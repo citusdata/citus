@@ -2453,3 +2453,121 @@ RepartitionAggPath(PlannerInfo *root, Path *originalPath)
 	return NIL;
 }
 
+
+static bool
+PathTreeWalker(Node *node, bool (*walker)(), void *context)
+{
+	switch(nodeTag(node))
+	{
+		case T_List:
+		{
+			Path *path = NULL;
+			foreach_ptr(path, castNode(List, node))
+			{
+				if (walker((Node *) path, context))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		case T_CustomPath:
+		{
+			CustomPath *path = castNode(CustomPath, node);
+			if (walker((Node *)path->custom_paths, context))
+			{
+				return true;
+			}
+			return false;
+		}
+
+		case T_NestPath:
+		case T_MergePath:
+		case T_HashPath:
+		{
+			JoinPath *path = (JoinPath *) node;
+			if (walker((Node *) path->outerjoinpath, context))
+				return true;
+			if (walker((Node *) path->innerjoinpath, context))
+				return true;
+			return false;
+		}
+
+		case T_AggPath:
+		{
+			AggPath *path = (AggPath *) node;
+			if (walker(path->subpath, context))
+				return true;
+			return false;
+		}
+
+		/* paths not having nesting */
+		case T_Path:
+		case T_IndexPath:
+		case T_BitmapHeapPath:
+		{
+			return false;
+		}
+
+		default:
+		{
+			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(node));
+			return false;
+		}
+	}
+}
+
+typedef struct ColocationGroups
+{
+	Bitmapset *colocationIds;
+} ColocationGroups;
+
+static bool ColocationGroupsForPathWalker(Node *node, ColocationGroups *context);
+static bool
+ColocationGroupsForPathWalker(Node *node, ColocationGroups *context)
+{
+	if (node == NULL)
+		return false;
+
+	DistributedUnionPath *collect = NULL;
+	if (IsDistributedUnion((Path *) node, false, &collect))
+	{
+		context->colocationIds = bms_add_member(context->colocationIds,
+												(int) collect->colocationId);
+		return false;
+	}
+
+	return PathTreeWalker(node, ColocationGroupsForPathWalker, context);
+}
+
+
+static Bitmapset *
+ColocationGroupsForPath(Path *node)
+{
+	ColocationGroups context = { 0 };
+	ColocationGroupsForPathWalker((Node *)node, &context);
+	return context.colocationIds;
+}
+
+PathComparison
+PathBasedPlannerComparePath(Path *new_path, Path *old_path)
+{
+	if (!UseCustomPath)
+	{
+		return PATH_EQUAL;
+	}
+
+	Bitmapset *newColocationIds = ColocationGroupsForPath(new_path);
+	Bitmapset *oldColocationIds = ColocationGroupsForPath(old_path);
+
+	BMS_Comparison cmp = bms_subset_compare(newColocationIds, oldColocationIds);
+
+	bms_free(newColocationIds);
+	bms_free(oldColocationIds);
+
+	if (cmp == BMS_EQUAL)
+		return PATH_EQUAL;
+
+	return PATH_DIFFERENT;
+}

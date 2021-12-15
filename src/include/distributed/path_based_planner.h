@@ -46,4 +46,6 @@ extern void PathBasedPlannedUpperPathHook(PlannerInfo *root,
 										  RelOptInfo *output_rel,
 										  void *extra);
 
+extern PathComparison PathBasedPlannerComparePath(Path *new_path, Path *old_path);
+
 #endif //CITUS_PATH_BASED_PLANNER_H

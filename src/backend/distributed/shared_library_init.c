@@ -299,6 +299,7 @@ _PG_init(void)
 	set_rel_pathlist_hook = multi_relation_restriction_hook;
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	create_upper_paths_hook = PathBasedPlannedUpperPathHook;
+	compare_path_hook = PathBasedPlannerComparePath;
 
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;
