@@ -299,11 +299,8 @@ test: undistribute_table_cascade
 test: create_citus_local_table_cascade
 test: fkeys_between_local_ref
 test: auto_undist_citus_local
-test: check_mx
-test: turn_mx_off
 test: mx_regular_user
 test: remove_coordinator
-test: turn_mx_on
 
 # ----------
 # multi_transactional_drop_shards tests for dropping shards using connection API
