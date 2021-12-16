@@ -65,6 +65,9 @@ s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[
 # ignore WAL warnings
 /DEBUG: .+creating and filling new WAL file/d
 
+# normalize debug connection failure
+s/DEBUG:  connection to the remote node/WARNING:  connection to the remote node/g
+
 # normalize file names for partitioned files
 s/(task_[0-9]+\.)[0-9]+/\1xxxx/g
 s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
