@@ -158,6 +158,10 @@ static List * ExtractInsertValuesList(Query *query, Var *partitionColumn);
 static DeferredErrorMessage * DeferErrorIfUnsupportedRouterPlannableSelectQuery(
 	Query *query);
 static DeferredErrorMessage * ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree);
+#if PG_VERSION_NUM >= PG_VERSION_14
+static DeferredErrorMessage * ErrorIfQueryHasCTEWithSearchClause(Query *queryTree);
+static bool ContainsSearchClauseWalker(Node *node);
+#endif
 static bool SelectsFromDistributedTable(List *rangeTableList, Query *query);
 static ShardPlacement * CreateDummyPlacement(bool hasLocalRelation);
 static ShardPlacement * CreateLocalDummyPlacement();
@@ -174,7 +178,7 @@ static void ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 														List *placementList);
 static bool ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList);
 static DeferredErrorMessage * DeferErrorIfUnsupportedLocalTableJoin(List *rangeTableList);
-static bool IsTableLocallyAccessible(Oid relationId);
+static bool IsLocallyAccessibleCitusLocalTable(Oid relationId);
 
 
 /*
@@ -260,7 +264,7 @@ CreateModifyPlan(Query *originalQuery, Query *query,
 
 
 /*
- * CreateSingleTaskRouterPlan creates a physical plan for given SELECT query.
+ * CreateSingleTaskRouterSelectPlan creates a physical plan for given SELECT query.
  * The returned plan is a router task that returns query results from a single worker.
  * If not router plannable, the returned plan's planningError describes the problem.
  */
@@ -358,7 +362,8 @@ AddPartitionKeyNotNullFilterToSelect(Query *subqery)
 	{
 		TargetEntry *targetEntry = lfirst(targetEntryCell);
 
-		if (IsPartitionColumn(targetEntry->expr, subqery) &&
+		bool skipOuterVars = true;
+		if (IsPartitionColumn(targetEntry->expr, subqery, skipOuterVars) &&
 			IsA(targetEntry->expr, Var))
 		{
 			targetPartitionColumnVar = (Var *) targetEntry->expr;
@@ -633,23 +638,41 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 		foreach(targetEntryCell, queryTree->targetList)
 		{
 			TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
-			bool targetEntryPartitionColumn = false;
-
-			/* reference tables do not have partition column */
-			if (partitionColumn == NULL)
-			{
-				targetEntryPartitionColumn = false;
-			}
-			else if (targetEntry->resno == partitionColumn->varattno)
-			{
-				targetEntryPartitionColumn = true;
-			}
 
 			/* skip resjunk entries: UPDATE adds some for ctid, etc. */
 			if (targetEntry->resjunk)
 			{
 				continue;
 			}
+
+			bool targetEntryPartitionColumn = false;
+			AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
+
+			/* reference tables do not have partition column */
+			if (partitionColumn == NULL)
+			{
+				targetEntryPartitionColumn = false;
+			}
+			else
+			{
+				if (commandType == CMD_UPDATE)
+				{
+					/*
+					 * Note that it is not possible to give an alias to
+					 * UPDATE table SET ...
+					 */
+					if (targetEntry->resname)
+					{
+						targetColumnAttrNumber = get_attnum(resultRelationId,
+															targetEntry->resname);
+						if (targetColumnAttrNumber == partitionColumn->varattno)
+						{
+							targetEntryPartitionColumn = true;
+						}
+					}
+				}
+			}
+
 
 			if (commandType == CMD_UPDATE &&
 				FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
@@ -794,7 +817,7 @@ ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
 		}
 		if (IsCitusTableType(rangeTableEntry->relid, CITUS_LOCAL_TABLE))
 		{
-			if (!IsTableLocallyAccessible(rangeTableEntry->relid))
+			if (!IsLocallyAccessibleCitusLocalTable(rangeTableEntry->relid))
 			{
 				containsRemoteCitusLocalTable = true;
 			}
@@ -809,19 +832,23 @@ ModifiesLocalTableWithRemoteCitusLocalTable(List *rangeTableList)
 
 
 /*
- * IsTableLocallyAccessible returns true if the given table
- * can be accessed in local.
+ * IsLocallyAccessibleCitusLocalTable returns true if the given table
+ * is a citus local table that can be accessed using local execution.
  */
 static bool
-IsTableLocallyAccessible(Oid relationId)
+IsLocallyAccessibleCitusLocalTable(Oid relationId)
 {
-	if (!IsCitusTable(relationId))
+	if (!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
-		/* local tables are locally accessible */
-		return true;
+		return false;
 	}
 
 	List *shardIntervalList = LoadShardIntervalList(relationId);
+
+	/*
+	 * Citus local tables should always have exactly one shard, but we have
+	 * this check for safety.
+	 */
 	if (list_length(shardIntervalList) != 1)
 	{
 		return false;
@@ -830,13 +857,8 @@ IsTableLocallyAccessible(Oid relationId)
 	ShardInterval *shardInterval = linitial(shardIntervalList);
 	uint64 shardId = shardInterval->shardId;
 	ShardPlacement *localShardPlacement =
-		ShardPlacementOnGroup(shardId, GetLocalGroupId());
-	if (localShardPlacement != NULL)
-	{
-		/* the table has a placement on this node */
-		return true;
-	}
-	return false;
+		ActiveShardPlacementOnGroup(GetLocalGroupId(), shardId);
+	return localShardPlacement != NULL;
 }
 
 
@@ -1052,6 +1074,15 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 		}
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+	DeferredErrorMessage *CTEWithSearchClauseError =
+		ErrorIfQueryHasCTEWithSearchClause(originalQuery);
+	if (CTEWithSearchClauseError != NULL)
+	{
+		return CTEWithSearchClauseError;
+	}
+#endif
+
 	return NULL;
 }
 
@@ -1134,11 +1165,21 @@ ErrorIfOnConflictNotSupported(Query *queryTree)
 		{
 			setTargetEntryPartitionColumn = false;
 		}
-		else if (setTargetEntry->resno == partitionColumn->varattno)
+		else
 		{
-			setTargetEntryPartitionColumn = true;
-		}
+			Oid resultRelationId = ModifyQueryResultRelationId(queryTree);
 
+			AttrNumber targetColumnAttrNumber = InvalidAttrNumber;
+			if (setTargetEntry->resname)
+			{
+				targetColumnAttrNumber = get_attnum(resultRelationId,
+													setTargetEntry->resname);
+				if (targetColumnAttrNumber == partitionColumn->varattno)
+				{
+					setTargetEntryPartitionColumn = true;
+				}
+			}
+		}
 		if (setTargetEntryPartitionColumn)
 		{
 			Expr *setExpr = setTargetEntry->expr;
@@ -1522,12 +1563,7 @@ TargetEntryChangesValue(TargetEntry *targetEntry, Var *column, FromExpr *joinTre
 	bool isColumnValueChanged = true;
 	Expr *setExpr = targetEntry->expr;
 
-	if (targetEntry->resno != column->varattno)
-	{
-		/* target entry of the form SET some_other_col = <x> */
-		isColumnValueChanged = false;
-	}
-	else if (IsA(setExpr, Var))
+	if (IsA(setExpr, Var))
 	{
 		Var *newValue = (Var *) setExpr;
 		if (newValue->varattno == column->varattno)
@@ -1667,7 +1703,8 @@ RouterInsertTaskList(Query *query, bool parametersInQueryResolved,
 		relationShard->relationId = distributedTableId;
 
 		modifyTask->relationShardList = list_make1(relationShard);
-		modifyTask->taskPlacementList = ShardPlacementList(modifyRoute->shardId);
+		modifyTask->taskPlacementList = ActiveShardPlacementList(
+			modifyRoute->shardId);
 		modifyTask->parametersInQueryStringResolved = parametersInQueryResolved;
 
 		insertTaskList = lappend(insertTaskList, modifyTask);
@@ -1841,7 +1878,7 @@ RouterJob(Query *originalQuery, PlannerRestrictionContext *plannerRestrictionCon
 
 
 /*
- * SingleShardRouterTaskList is a wrapper around other corresponding task
+ * GenerateSingleShardRouterTaskList is a wrapper around other corresponding task
  * list generation functions specific to single shard selects and modifications.
  *
  * The function updates the input job's taskList in-place.
@@ -1920,7 +1957,7 @@ ReorderTaskPlacementsByTaskAssignmentPolicy(Job *job,
 		 * because the user is trying to distributed the load across nodes via
 		 * round-robin policy. Otherwise, the local execution would prioritize
 		 * executing the local tasks and especially for reference tables on the
-		 * coordinator this would prevent load balancing accross nodes.
+		 * coordinator this would prevent load balancing across nodes.
 		 *
 		 * For other worker nodes in Citus MX, we let the local execution to kick-in
 		 * even for round-robin policy, that's because we expect the clients to evenly
@@ -3599,6 +3636,15 @@ DeferErrorIfUnsupportedRouterPlannableSelectQuery(Query *query)
 							 NULL, NULL);
 	}
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+	DeferredErrorMessage *CTEWithSearchClauseError =
+		ErrorIfQueryHasCTEWithSearchClause(query);
+	if (CTEWithSearchClauseError != NULL)
+	{
+		return CTEWithSearchClauseError;
+	}
+#endif
+
 	return ErrorIfQueryHasUnroutableModifyingCTE(query);
 }
 
@@ -3730,6 +3776,57 @@ ErrorIfQueryHasUnroutableModifyingCTE(Query *queryTree)
 	/* everything OK */
 	return NULL;
 }
+
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+
+/*
+ * ErrorIfQueryHasCTEWithSearchClause checks if the query contains any common table
+ * expressions with search clause and errors out if it does.
+ */
+static DeferredErrorMessage *
+ErrorIfQueryHasCTEWithSearchClause(Query *queryTree)
+{
+	if (ContainsSearchClauseWalker((Node *) queryTree))
+	{
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 "CTEs with search clauses are not supported",
+							 NULL, NULL);
+	}
+	return NULL;
+}
+
+
+/*
+ * ContainsSearchClauseWalker walks over the node and finds if there are any
+ * CommonTableExprs with search clause
+ */
+static bool
+ContainsSearchClauseWalker(Node *node)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, CommonTableExpr))
+	{
+		if (((CommonTableExpr *) node)->search_clause != NULL)
+		{
+			return true;
+		}
+	}
+
+	if (IsA(node, Query))
+	{
+		return query_tree_walker((Query *) node, ContainsSearchClauseWalker, NULL, 0);
+	}
+
+	return expression_tree_walker(node, ContainsSearchClauseWalker, NULL);
+}
+
+
+#endif
 
 
 /*

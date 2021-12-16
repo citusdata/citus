@@ -21,16 +21,22 @@
 #include "access/genam.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
+#include "access/nbtree.h"
 #include "access/sysattr.h"
 #include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_am.h"
+#include "catalog/pg_attrdef.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
+#include "distributed/argutils.h"
+#include "distributed/backend_data.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/colocation_utils.h"
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/distribution_column.h"
@@ -41,19 +47,29 @@
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata/pg_dist_object.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
+#include "distributed/multi_physical_planner.h"
 #include "distributed/pg_dist_node.h"
+#include "distributed/pg_dist_shard.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
+#include "distributed/resource_lock.h"
 #include "distributed/worker_manager.h"
+#include "distributed/worker_protocol.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
+#include "distributed/commands/utility_hook.h"
+#include "executor/spi.h"
 #include "foreign/foreign.h"
 #include "miscadmin.h"
 #include "nodes/pg_list.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/postmaster.h"
+#include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -63,17 +79,25 @@
 #include "utils/syscache.h"
 
 
+/* managed via a GUC */
+char *EnableManualMetadataChangesForUser = "";
+
+
+static void EnsureSequentialModeMetadataOperations(void);
+static List * DistributedObjectMetadataSyncCommandList(void);
 static List * GetDistributedTableDDLEvents(Oid relationId);
+static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
+									   int colocationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
-static void UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort,
-								   int attrNum, bool value);
-static List * SequenceDDLCommandsForTable(Oid relationId);
 static List * SequenceDependencyCommandList(Oid relationId);
 static char * TruncateTriggerCreateCommand(Oid relationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static List * DetachPartitionCommandList(void);
+static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
+											bool citusTableWithNoDistKey);
 static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
+static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
@@ -82,13 +106,42 @@ static GrantStmt * GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 													  Oid schemaOid,
 													  char *permission,
 													  bool withGrantOption);
+static void SetLocalEnableDependencyCreation(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
 
+
+static bool ShouldSkipMetadataChecks(void);
+static void EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod,
+										  int colocationId, char replicationModel,
+										  Var *distributionKey);
+static void EnsureCoordinatorInitiatedOperation(void);
+static void EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
+									  text *shardMinValue,
+									  text *shardMaxValue);
+static void EnsureShardPlacementMetadataIsSane(Oid relationId, int64 shardId,
+											   int64 placementId, int32 shardState,
+											   int64 shardLength, int32 groupId);
+
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(worker_record_sequence_dependency);
+
+
+/*
+ * Functions to modify metadata. Normally modifying metadata requires
+ * superuser. However, these functions can be called with superusers
+ * or regular users as long as the regular user owns the input object.
+ */
+PG_FUNCTION_INFO_V1(citus_internal_add_partition_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_add_shard_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_add_placement_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
+PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
+
 
 static bool got_SIGTERM = false;
 static bool got_SIGALRM = false;
@@ -103,6 +156,8 @@ static bool got_SIGALRM = false;
 Datum
 start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 
@@ -123,15 +178,11 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 {
 	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
-	/* fail if metadata synchronization doesn't succeed */
-	bool raiseInterrupts = true;
-
-	EnsureCoordinator();
-	EnsureSuperUser();
-	EnsureModificationsCanRun();
 	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	EnsureModificationsCanRun();
 
-	PreventInTransactionBlock(true, "start_metadata_sync_to_node");
+	EnsureSequentialModeMetadataOperations();
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
@@ -140,7 +191,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("you cannot sync metadata to a non-existent node"),
-						errhint("First, add the node with SELECT master_add_node"
+						errhint("First, add the node with SELECT citus_add_node"
 								"(%s,%d)", escapedNodeName, nodePort)));
 	}
 
@@ -149,7 +200,7 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("you cannot sync metadata to an inactive node"),
 						errhint("First, activate the node with "
-								"SELECT master_activate_node(%s,%d)",
+								"SELECT citus_activate_node(%s,%d)",
 								escapedNodeName, nodePort)));
 	}
 
@@ -161,7 +212,22 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		return;
 	}
 
-	MarkNodeHasMetadata(nodeNameString, nodePort, true);
+	UseCoordinatedTransaction();
+
+	/*
+	 * One would normally expect to set hasmetadata first, and then metadata sync.
+	 * However, at this point we do the order reverse.
+	 * We first set metadatasynced, and then hasmetadata; since setting columns for
+	 * nodes with metadatasynced==false could cause errors.
+	 * (See ErrorIfAnyMetadataNodeOutOfSync)
+	 * We can safely do that because we are in a coordinated transaction and the changes
+	 * are only visible to our own transaction.
+	 * If anything goes wrong, we are going to rollback all the changes.
+	 */
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
+								 BoolGetDatum(true));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
+									 true));
 
 	if (!NodeIsPrimary(workerNode))
 	{
@@ -172,8 +238,53 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		return;
 	}
 
+	/* fail if metadata synchronization doesn't succeed */
+	bool raiseInterrupts = true;
 	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
-	MarkNodeMetadataSynced(workerNode->workerName, workerNode->workerPort, true);
+}
+
+
+/*
+ * EnsureSequentialModeMetadataOperations makes sure that the current transaction is
+ * already in sequential mode, or can still safely be put in sequential mode,
+ * it errors if that is not possible. The error contains information for the user to
+ * retry the transaction with sequential mode set from the beginning.
+ *
+ * Metadata objects (e.g., distributed table on the workers) exists only 1 instance of
+ * the type used by potentially multiple other shards/connections. To make sure all
+ * shards/connections in the transaction can interact with the metadata needs to be
+ * visible on all connections used by the transaction, meaning we can only use 1
+ * connection per node.
+ */
+static void
+EnsureSequentialModeMetadataOperations(void)
+{
+	if (!IsTransactionBlock())
+	{
+		/* we do not need to switch to sequential mode if we are not in a transaction */
+		return;
+	}
+
+	if (ParallelQueryExecutedInTransaction())
+	{
+		ereport(ERROR, (errmsg(
+							"cannot execute metadata syncing operation because there was a "
+							"parallel operation on a distributed table in the "
+							"transaction"),
+						errdetail("When modifying metadata, Citus needs to "
+								  "perform all operations over a single connection per "
+								  "node to ensure consistency."),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
+	}
+
+	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
+					 errdetail("Metadata synced or stopped syncing. To make "
+							   "sure subsequent commands see the metadata correctly "
+							   "we need to make sure to use only one connection for "
+							   "all future commands")));
+	SetLocalMultiShardModifyModeToSequential();
 }
 
 
@@ -185,25 +296,55 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 Datum
 stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	text *nodeName = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
+	bool clearMetadata = PG_GETARG_BOOL(2);
 	char *nodeNameString = text_to_cstring(nodeName);
-
-	EnsureCoordinator();
-	EnsureSuperUser();
-	CheckCitusVersion(ERROR);
 
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
-	WorkerNode *workerNode = FindWorkerNode(nodeNameString, nodePort);
+	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeNameString, nodePort);
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
 						errmsg("node (%s,%d) does not exist", nodeNameString, nodePort)));
 	}
 
-	MarkNodeHasMetadata(nodeNameString, nodePort, false);
-	MarkNodeMetadataSynced(nodeNameString, nodePort, false);
+	if (NodeIsCoordinator(workerNode))
+	{
+		ereport(NOTICE, (errmsg("node (%s,%d) is the coordinator and should have "
+								"metadata, skipping stopping the metadata sync",
+								nodeNameString, nodePort)));
+		PG_RETURN_VOID();
+	}
+
+	if (clearMetadata)
+	{
+		if (NodeIsPrimary(workerNode))
+		{
+			ereport(NOTICE, (errmsg("dropping metadata on the node (%s,%d)",
+									nodeNameString, nodePort)));
+			DropMetadataSnapshotOnNode(workerNode);
+		}
+		else
+		{
+			/*
+			 * If this is a secondary node we can't actually clear metadata from it,
+			 * we assume the primary node is cleared.
+			 */
+			ereport(NOTICE, (errmsg("(%s,%d) is a secondary node: to clear the metadata,"
+									" you should clear metadata from the primary node",
+									nodeNameString, nodePort)));
+		}
+	}
+
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_hasmetadata, BoolGetDatum(
+									 false));
+	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
+								 BoolGetDatum(false));
 
 	PG_RETURN_VOID();
 }
@@ -236,9 +377,8 @@ ClusterHasKnownMetadataWorkers()
 
 /*
  * ShouldSyncTableMetadata checks if the metadata of a distributed table should be
- * propagated to metadata workers, i.e. the table is an MX table or reference table.
- * Tables with streaming replication model (which means RF=1) and hash distribution are
- * considered as MX tables while tables with none distribution are reference tables.
+ * propagated to metadata workers, i.e. the table is a hash distributed table or
+ * reference/citus local table.
  */
 bool
 ShouldSyncTableMetadata(Oid relationId)
@@ -250,19 +390,51 @@ ShouldSyncTableMetadata(Oid relationId)
 
 	CitusTableCacheEntry *tableEntry = GetCitusTableCacheEntry(relationId);
 
-	bool streamingReplicated =
-		(tableEntry->replicationModel == REPLICATION_MODEL_STREAMING);
+	bool hashDistributed = IsCitusTableTypeCacheEntry(tableEntry, HASH_DISTRIBUTED);
+	bool citusTableWithNoDistKey =
+		IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY);
 
-	bool mxTable = (streamingReplicated && IsCitusTableTypeCacheEntry(tableEntry,
-																	  HASH_DISTRIBUTED));
-	if (mxTable || IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
-	{
-		return true;
-	}
-	else
+	return ShouldSyncTableMetadataInternal(hashDistributed, citusTableWithNoDistKey);
+}
+
+
+/*
+ * ShouldSyncTableMetadataViaCatalog checks if the metadata of a distributed table should
+ * be propagated to metadata workers, i.e. the table is an MX table or reference table.
+ * Tables with streaming replication model (which means RF=1) and hash distribution are
+ * considered as MX tables while tables with none distribution are reference tables.
+ *
+ * ShouldSyncTableMetadataViaCatalog does not use the CitusTableCache and instead reads
+ * from catalog tables directly.
+ */
+bool
+ShouldSyncTableMetadataViaCatalog(Oid relationId)
+{
+	if (!OidIsValid(relationId) || !IsCitusTableViaCatalog(relationId))
 	{
 		return false;
 	}
+
+	char partitionMethod = PartitionMethodViaCatalog(relationId);
+	bool hashDistributed = partitionMethod == DISTRIBUTE_BY_HASH;
+	bool citusTableWithNoDistKey = partitionMethod == DISTRIBUTE_BY_NONE;
+
+	return ShouldSyncTableMetadataInternal(hashDistributed, citusTableWithNoDistKey);
+}
+
+
+/*
+ * ShouldSyncTableMetadataInternal decides whether we should sync the metadata for a table
+ * based on whether it is a hash distributed table, or a citus table with no distribution
+ * key.
+ *
+ * This function is here to make sure that ShouldSyncTableMetadata and
+ * ShouldSyncTableMetadataViaCatalog behaves the same way.
+ */
+static bool
+ShouldSyncTableMetadataInternal(bool hashDistributed, bool citusTableWithNoDistKey)
+{
+	return hashDistributed || citusTableWithNoDistKey;
 }
 
 
@@ -276,7 +448,7 @@ ShouldSyncTableMetadata(Oid relationId)
 static bool
 SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 {
-	char *extensionOwner = CitusExtensionOwnerName();
+	char *currentUser = CurrentUserName();
 
 	/* generate and add the local group id's update query */
 	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
@@ -301,21 +473,46 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 	 */
 	if (raiseOnError)
 	{
-		SendCommandListToWorkerInSingleTransaction(workerNode->workerName,
-												   workerNode->workerPort,
-												   extensionOwner,
-												   recreateMetadataSnapshotCommandList);
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+																workerNode->workerPort,
+																currentUser,
+																recreateMetadataSnapshotCommandList);
 		return true;
 	}
 	else
 	{
 		bool success =
-			SendOptionalCommandListToWorkerInTransaction(workerNode->workerName,
-														 workerNode->workerPort,
-														 extensionOwner,
-														 recreateMetadataSnapshotCommandList);
+			SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
+				workerNode->workerName, workerNode->workerPort,
+				currentUser, recreateMetadataSnapshotCommandList);
+
 		return success;
 	}
+}
+
+
+/*
+ * DropMetadataSnapshotOnNode creates the queries which drop the metadata and sends them
+ * to the worker given as parameter.
+ */
+static void
+DropMetadataSnapshotOnNode(WorkerNode *workerNode)
+{
+	EnsureSequentialModeMetadataOperations();
+
+	char *userName = CurrentUserName();
+
+	/* generate the queries which drop the metadata */
+	List *dropMetadataCommandList = MetadataDropCommands();
+
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  LocalGroupIdUpdateCommand(0));
+
+	SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
+		workerNode->workerName,
+		workerNode->workerPort,
+		userName,
+		dropMetadataCommandList);
 }
 
 
@@ -331,6 +528,7 @@ SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
  * (iii) Queries that populate pg_dist_partition table referenced by (ii)
  * (iv)  Queries that populate pg_dist_shard table referenced by (iii)
  * (v)   Queries that populate pg_dist_placement table referenced by (iv)
+ * (vi)  Queries that populate pg_dist_object table
  */
 List *
 MetadataCreateCommands(void)
@@ -340,7 +538,7 @@ MetadataCreateCommands(void)
 	List *propagatedTableList = NIL;
 	bool includeNodesFromOtherClusters = true;
 	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
-	bool includeSequenceDefaults = true;
+	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
 	/* make sure we have deterministic output for our tests */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
@@ -372,11 +570,9 @@ MetadataCreateCommands(void)
 			continue;
 		}
 
-		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		List *ddlCommandList = GetFullTableCreationCommands(relationId,
 															includeSequenceDefaults);
 		char *tableOwnerResetCommand = TableOwnerResetCommand(relationId);
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
 
 		/*
 		 * Tables might have dependencies on different objects, since we create shards for
@@ -384,8 +580,42 @@ MetadataCreateCommands(void)
 		 * and committed immediately so they become visible to all sessions creating shards.
 		 */
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+
+		/*
+		 * Set object propagation to off as we will mark objects distributed
+		 * at the end of this function.
+		 */
+		bool prevDependencyCreationValue = EnableDependencyCreation;
+		SetLocalEnableDependencyCreation(false);
+
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 
+		/*
+		 * Ensure sequence dependencies and mark them as distributed
+		 */
+		List *attnumList = NIL;
+		List *dependentSequenceList = NIL;
+		GetDependentSequencesWithRelation(relationId, &attnumList,
+										  &dependentSequenceList, 0);
+
+		Oid sequenceOid = InvalidOid;
+		foreach_oid(sequenceOid, dependentSequenceList)
+		{
+			ObjectAddress sequenceAddress = { 0 };
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+			EnsureDependenciesExistOnAllNodes(&sequenceAddress);
+
+			/*
+			 * Sequences are not marked as distributed while creating table
+			 * if no metadata worker node exists. We are marking all sequences
+			 * distributed while syncing metadata in such case.
+			 */
+			MarkObjectDistributed(&sequenceAddress);
+		}
+
+		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
+
+		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  workerSequenceDDLCommands);
 
@@ -400,6 +630,9 @@ MetadataCreateCommands(void)
 
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  tableOwnerResetCommand);
+
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(
+			relationId);
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  sequenceDependencyCommandList);
 	}
@@ -467,7 +700,105 @@ MetadataCreateCommands(void)
 												  shardCreateCommandList);
 	}
 
+	/* As the last step, propagate the pg_dist_object entities */
+	if (ShouldPropagate())
+	{
+		List *distributedObjectSyncCommandList =
+			DistributedObjectMetadataSyncCommandList();
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  distributedObjectSyncCommandList);
+	}
+
 	return metadataSnapshotCommandList;
+}
+
+
+/*
+ * DistributedObjectMetadataSyncCommandList returns the necessary commands to create
+ * pg_dist_object entries on the new node.
+ */
+static List *
+DistributedObjectMetadataSyncCommandList(void)
+{
+	HeapTuple pgDistObjectTup = NULL;
+	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
+	Relation pgDistObjectIndexRel = index_open(DistObjectPrimaryKeyIndexId(),
+											   AccessShareLock);
+	TupleDesc pgDistObjectDesc = RelationGetDescr(pgDistObjectRel);
+
+	List *objectAddressList = NIL;
+	List *distArgumentIndexList = NIL;
+	List *colocationIdList = NIL;
+
+	/* It is not strictly necessary to read the tuples in order.
+	 * However, it is useful to get consistent behavior, both for regression
+	 * tests and also in production systems.
+	 */
+	SysScanDesc pgDistObjectScan = systable_beginscan_ordered(pgDistObjectRel,
+															  pgDistObjectIndexRel, NULL,
+															  0, NULL);
+	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext_ordered(pgDistObjectScan,
+																	   ForwardScanDirection)))
+	{
+		Form_pg_dist_object pg_dist_object = (Form_pg_dist_object) GETSTRUCT(
+			pgDistObjectTup);
+
+		ObjectAddress *address = palloc(sizeof(ObjectAddress));
+
+		ObjectAddressSubSet(*address, pg_dist_object->classid, pg_dist_object->objid,
+							pg_dist_object->objsubid);
+
+		bool distributionArgumentIndexIsNull = false;
+		Datum distributionArgumentIndexDatum =
+			heap_getattr(pgDistObjectTup,
+						 Anum_pg_dist_object_distribution_argument_index,
+						 pgDistObjectDesc,
+						 &distributionArgumentIndexIsNull);
+		int32 distributionArgumentIndex = DatumGetInt32(distributionArgumentIndexDatum);
+
+		bool colocationIdIsNull = false;
+		Datum colocationIdDatum =
+			heap_getattr(pgDistObjectTup,
+						 Anum_pg_dist_object_colocationid,
+						 pgDistObjectDesc,
+						 &colocationIdIsNull);
+		int32 colocationId = DatumGetInt32(colocationIdDatum);
+
+		objectAddressList = lappend(objectAddressList, address);
+
+		if (distributionArgumentIndexIsNull)
+		{
+			distArgumentIndexList = lappend_int(distArgumentIndexList,
+												INVALID_DISTRIBUTION_ARGUMENT_INDEX);
+		}
+		else
+		{
+			distArgumentIndexList = lappend_int(distArgumentIndexList,
+												distributionArgumentIndex);
+		}
+
+		if (colocationIdIsNull)
+		{
+			colocationIdList = lappend_int(colocationIdList,
+										   INVALID_COLOCATION_ID);
+		}
+		else
+		{
+			colocationIdList = lappend_int(colocationIdList, colocationId);
+		}
+	}
+
+	systable_endscan_ordered(pgDistObjectScan);
+	index_close(pgDistObjectIndexRel, AccessShareLock);
+	relation_close(pgDistObjectRel, NoLock);
+
+	char *workerMetadataUpdateCommand =
+		MarkObjectsDistributedCreateCommand(objectAddressList,
+											distArgumentIndexList,
+											colocationIdList);
+	List *commandList = list_make1(workerMetadataUpdateCommand);
+
+	return commandList;
 }
 
 
@@ -483,16 +814,12 @@ GetDistributedTableDDLEvents(Oid relationId)
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
 	List *commandList = NIL;
-	bool includeSequenceDefaults = true;
+	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
 	/* if the table is owned by an extension we only propagate pg_dist_* records */
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
 	if (!tableOwnedByExtension)
 	{
-		/* commands to create sequences */
-		List *sequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-		commandList = list_concat(commandList, sequenceDDLCommands);
-
 		/*
 		 * Commands to create the table, these commands are TableDDLCommands so lets
 		 * materialize to the non-sharded version
@@ -507,7 +834,8 @@ GetDistributedTableDDLEvents(Oid relationId)
 		}
 
 		/* command to associate sequences with table */
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(
+			relationId);
 		commandList = list_concat(commandList, sequenceDependencyCommandList);
 	}
 
@@ -559,6 +887,7 @@ GetDistributedTableDDLEvents(Oid relationId)
  * (v)   Queries that delete all the rows from pg_dist_shard table referenced by (iv)
  * (vi)  Queries that delete all the rows from pg_dist_placement table
  *        referenced by (v)
+ * (vii) Queries that delete all the rows from pg_dist_object table
  */
 List *
 MetadataDropCommands(void)
@@ -573,6 +902,8 @@ MetadataDropCommands(void)
 									  REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
 
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList, DELETE_ALL_NODES);
+	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
+									  DELETE_ALL_DISTRIBUTED_OBJECTS);
 
 	return dropSnapshotCommandList;
 }
@@ -607,7 +938,8 @@ NodeListInsertCommand(List *workerNodeList)
 	/* generate the query without any values yet */
 	appendStringInfo(nodeListInsertCommand,
 					 "INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, "
-					 "noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster) VALUES ");
+					 "noderack, hasmetadata, metadatasynced, isactive, noderole, "
+					 "nodecluster, shouldhaveshards) VALUES ");
 
 	/* iterate over the worker nodes, add the values */
 	WorkerNode *workerNode = NULL;
@@ -616,13 +948,14 @@ NodeListInsertCommand(List *workerNodeList)
 		char *hasMetadataString = workerNode->hasMetadata ? "TRUE" : "FALSE";
 		char *metadataSyncedString = workerNode->metadataSynced ? "TRUE" : "FALSE";
 		char *isActiveString = workerNode->isActive ? "TRUE" : "FALSE";
+		char *shouldHaveShards = workerNode->shouldHaveShards ? "TRUE" : "FALSE";
 
 		Datum nodeRoleOidDatum = ObjectIdGetDatum(workerNode->nodeRole);
 		Datum nodeRoleStringDatum = DirectFunctionCall1(enum_out, nodeRoleOidDatum);
 		char *nodeRoleString = DatumGetCString(nodeRoleStringDatum);
 
 		appendStringInfo(nodeListInsertCommand,
-						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s)",
+						 "(%d, %d, %s, %d, %s, %s, %s, %s, '%s'::noderole, %s, %s)",
 						 workerNode->nodeId,
 						 workerNode->groupId,
 						 quote_literal_cstr(workerNode->workerName),
@@ -632,7 +965,8 @@ NodeListInsertCommand(List *workerNodeList)
 						 metadataSyncedString,
 						 isActiveString,
 						 nodeRoleString,
-						 quote_literal_cstr(workerNode->nodeCluster));
+						 quote_literal_cstr(workerNode->nodeCluster),
+						 shouldHaveShards);
 
 		processedWorkerNodeCount++;
 		if (processedWorkerNodeCount != workerCount)
@@ -642,6 +976,194 @@ NodeListInsertCommand(List *workerNodeList)
 	}
 
 	return nodeListInsertCommand->data;
+}
+
+
+/*
+ * MarkObjectsDistributedCreateCommand generates a command that can be executed to
+ * insert or update the provided objects into pg_dist_object on a worker node.
+ */
+char *
+MarkObjectsDistributedCreateCommand(List *addresses,
+									List *distributionArgumentIndexes,
+									List *colocationIds)
+{
+	StringInfo insertDistributedObjectsCommand = makeStringInfo();
+
+	Assert(list_length(addresses) == list_length(distributionArgumentIndexes));
+	Assert(list_length(distributionArgumentIndexes) == list_length(colocationIds));
+
+	appendStringInfo(insertDistributedObjectsCommand,
+					 "WITH distributed_object_data(typetext, objnames, "
+					 "objargs, distargumentindex, colocationid)  AS (VALUES ");
+
+	bool isFirstObject = true;
+	for (int currentObjectCounter = 0; currentObjectCounter < list_length(addresses);
+		 currentObjectCounter++)
+	{
+		ObjectAddress *address = list_nth(addresses, currentObjectCounter);
+		int distributionArgumentIndex = list_nth_int(distributionArgumentIndexes,
+													 currentObjectCounter);
+		int colocationId = list_nth_int(colocationIds, currentObjectCounter);
+		List *names = NIL;
+		List *args = NIL;
+		char *objectType = NULL;
+
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		objectType = getObjectTypeDescription(address, false);
+		getObjectIdentityParts(address, &names, &args, false);
+		#else
+		objectType = getObjectTypeDescription(address);
+		getObjectIdentityParts(address, &names, &args);
+		#endif
+
+		if (!isFirstObject)
+		{
+			appendStringInfo(insertDistributedObjectsCommand, ", ");
+		}
+		isFirstObject = false;
+
+		appendStringInfo(insertDistributedObjectsCommand,
+						 "(%s, ARRAY[",
+						 quote_literal_cstr(objectType));
+
+		char *name = NULL;
+		bool firstInNameLoop = true;
+		foreach_ptr(name, names)
+		{
+			if (!firstInNameLoop)
+			{
+				appendStringInfo(insertDistributedObjectsCommand, ", ");
+			}
+			firstInNameLoop = false;
+			appendStringInfoString(insertDistributedObjectsCommand,
+								   quote_literal_cstr(name));
+		}
+
+		appendStringInfo(insertDistributedObjectsCommand, "]::text[], ARRAY[");
+
+		char *arg;
+		bool firstInArgLoop = true;
+		foreach_ptr(arg, args)
+		{
+			if (!firstInArgLoop)
+			{
+				appendStringInfo(insertDistributedObjectsCommand, ", ");
+			}
+			firstInArgLoop = false;
+			appendStringInfoString(insertDistributedObjectsCommand,
+								   quote_literal_cstr(arg));
+		}
+
+		appendStringInfo(insertDistributedObjectsCommand, "]::text[], ");
+
+		appendStringInfo(insertDistributedObjectsCommand, "%d, ",
+						 distributionArgumentIndex);
+
+		appendStringInfo(insertDistributedObjectsCommand, "%d)",
+						 colocationId);
+	}
+
+	appendStringInfo(insertDistributedObjectsCommand, ") ");
+
+	appendStringInfo(insertDistributedObjectsCommand,
+					 "SELECT citus_internal_add_object_metadata("
+					 "typetext, objnames, objargs, distargumentindex::int, colocationid::int) "
+					 "FROM distributed_object_data;");
+
+	return insertDistributedObjectsCommand->data;
+}
+
+
+/*
+ * citus_internal_add_object_metadata is an internal UDF to
+ * add a row to pg_dist_object.
+ */
+Datum
+citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
+{
+	char *textType = TextDatumGetCString(PG_GETARG_DATUM(0));
+	ArrayType *nameArray = PG_GETARG_ARRAYTYPE_P(1);
+	ArrayType *argsArray = PG_GETARG_ARRAYTYPE_P(2);
+	int distributionArgumentIndex = PG_GETARG_INT32(3);
+	int colocationId = PG_GETARG_INT32(4);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		/*
+		 * Ensure given distributionArgumentIndex and colocationId values are
+		 * sane. Since we check sanity of object related parameters within
+		 * PgGetObjectAddress below, we are not checking them here.
+		 */
+		EnsureObjectMetadataIsSane(distributionArgumentIndex, colocationId);
+	}
+
+	/*
+	 * We check the acl/ownership while getting the object address. That
+	 * funtion also checks the sanity of given textType, nameArray and
+	 * argsArray parameters
+	 */
+	ObjectAddress objectAddress = PgGetObjectAddress(textType, nameArray,
+													 argsArray);
+
+	/* First, disable propagation off to not to cause infinite propagation */
+	bool prevDependencyCreationValue = EnableDependencyCreation;
+	SetLocalEnableDependencyCreation(false);
+
+	MarkObjectDistributed(&objectAddress);
+
+	if (distributionArgumentIndex != INVALID_DISTRIBUTION_ARGUMENT_INDEX ||
+		colocationId != INVALID_COLOCATION_ID)
+	{
+		int *distributionArgumentIndexAddress =
+			distributionArgumentIndex == INVALID_DISTRIBUTION_ARGUMENT_INDEX ?
+			NULL :
+			&distributionArgumentIndex;
+
+		int *colocationIdAddress =
+			colocationId == INVALID_COLOCATION_ID ?
+			NULL :
+			&colocationId;
+
+		UpdateFunctionDistributionInfo(&objectAddress,
+									   distributionArgumentIndexAddress,
+									   colocationIdAddress);
+	}
+
+	SetLocalEnableDependencyCreation(prevDependencyCreationValue);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsureObjectMetadataIsSane checks whether the distribution argument index and
+ * colocation id metadata params for distributed object is sane. You can look
+ * PgGetObjectAddress to find checks related to object sanity.
+ */
+static void
+EnsureObjectMetadataIsSane(int distributionArgumentIndex, int colocationId)
+{
+	if (distributionArgumentIndex != INVALID_DISTRIBUTION_ARGUMENT_INDEX)
+	{
+		if (distributionArgumentIndex < 0 ||
+			distributionArgumentIndex > FUNC_MAX_ARGS)
+		{
+			ereport(ERROR, errmsg("distribution_argument_index must be between"
+								  " 0 and %d", FUNC_MAX_ARGS));
+		}
+	}
+
+	if (colocationId != INVALID_COLOCATION_ID)
+	{
+		if (colocationId < 0)
+		{
+			ereport(ERROR, errmsg("colocationId must be a positive number"));
+		}
+	}
 }
 
 
@@ -660,28 +1182,26 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 		generate_qualified_relation_name(relationId);
 	uint32 colocationId = cacheEntry->colocationId;
 	char replicationModel = cacheEntry->replicationModel;
-	StringInfo tablePartitionKeyString = makeStringInfo();
+	StringInfo tablePartitionKeyNameString = makeStringInfo();
 
 	if (IsCitusTableTypeCacheEntry(cacheEntry, CITUS_TABLE_WITH_NO_DIST_KEY))
 	{
-		appendStringInfo(tablePartitionKeyString, "NULL");
+		appendStringInfo(tablePartitionKeyNameString, "NULL");
 	}
 	else
 	{
-		char *partitionKeyColumnName = ColumnToColumnName(relationId, partitionKeyString);
-		appendStringInfo(tablePartitionKeyString, "column_name_to_column(%s,%s)",
-						 quote_literal_cstr(qualifiedRelationName),
+		char *partitionKeyColumnName =
+			ColumnToColumnName(relationId, partitionKeyString);
+		appendStringInfo(tablePartitionKeyNameString, "%s",
 						 quote_literal_cstr(partitionKeyColumnName));
 	}
 
 	appendStringInfo(insertDistributionCommand,
-					 "INSERT INTO pg_dist_partition "
-					 "(logicalrelid, partmethod, partkey, colocationid, repmodel) "
-					 "VALUES "
+					 "SELECT citus_internal_add_partition_metadata "
 					 "(%s::regclass, '%c', %s, %d, '%c')",
 					 quote_literal_cstr(qualifiedRelationName),
 					 distributionMethod,
-					 tablePartitionKeyString->data,
+					 tablePartitionKeyNameString->data,
 					 colocationId,
 					 replicationModel);
 
@@ -738,10 +1258,7 @@ List *
 ShardListInsertCommand(List *shardIntervalList)
 {
 	List *commandList = NIL;
-	StringInfo insertPlacementCommand = makeStringInfo();
-	StringInfo insertShardCommand = makeStringInfo();
 	int shardCount = list_length(shardIntervalList);
-	int processedShardCount = 0;
 
 	/* if there are no shards, return empty list */
 	if (shardCount == 0)
@@ -750,7 +1267,13 @@ ShardListInsertCommand(List *shardIntervalList)
 	}
 
 	/* add placements to insertPlacementCommand */
+	StringInfo insertPlacementCommand = makeStringInfo();
+	appendStringInfo(insertPlacementCommand,
+					 "WITH placement_data(shardid, shardstate, "
+					 "shardlength, groupid, placementid)  AS (VALUES ");
+
 	ShardInterval *shardInterval = NULL;
+	bool firstPlacementProcessed = false;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
@@ -759,41 +1282,39 @@ ShardListInsertCommand(List *shardIntervalList)
 		ShardPlacement *placement = NULL;
 		foreach_ptr(placement, shardPlacementList)
 		{
-			if (insertPlacementCommand->len == 0)
+			if (firstPlacementProcessed)
 			{
-				/* generate the shard placement query without any values yet */
-				appendStringInfo(insertPlacementCommand,
-								 "INSERT INTO pg_dist_placement "
-								 "(shardid, shardstate, shardlength,"
-								 " groupid, placementid) "
-								 "VALUES ");
+				/*
+				 * As long as this is not the first placement of the first shard,
+				 * append the comma.
+				 */
+				appendStringInfo(insertPlacementCommand, ", ");
 			}
-			else
-			{
-				appendStringInfo(insertPlacementCommand, ",");
-			}
+			firstPlacementProcessed = true;
 
 			appendStringInfo(insertPlacementCommand,
-							 "(" UINT64_FORMAT ", 1, " UINT64_FORMAT ", %d, "
-							 UINT64_FORMAT ")",
+							 "(%ld, %d, %ld, %d, %ld)",
 							 shardId,
+							 placement->shardState,
 							 placement->shardLength,
 							 placement->groupId,
 							 placement->placementId);
 		}
 	}
 
-	/* add the command to the list that we'll return */
-	commandList = lappend(commandList, insertPlacementCommand->data);
+	appendStringInfo(insertPlacementCommand, ") ");
 
-	/* now, generate the shard query without any values yet */
-	appendStringInfo(insertShardCommand,
-					 "INSERT INTO pg_dist_shard "
-					 "(logicalrelid, shardid, shardstorage,"
-					 " shardminvalue, shardmaxvalue) "
-					 "VALUES ");
+	appendStringInfo(insertPlacementCommand,
+					 "SELECT citus_internal_add_placement_metadata("
+					 "shardid, shardstate, shardlength, groupid, placementid) "
+					 "FROM placement_data;");
 
 	/* now add shards to insertShardCommand */
+	StringInfo insertShardCommand = makeStringInfo();
+	appendStringInfo(insertShardCommand,
+					 "WITH shard_data(relationname, shardid, storagetype, "
+					 "shardminvalue, shardmaxvalue)  AS (VALUES ");
+
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
 		uint64 shardId = shardInterval->shardId;
@@ -824,22 +1345,45 @@ ShardListInsertCommand(List *shardIntervalList)
 		}
 
 		appendStringInfo(insertShardCommand,
-						 "(%s::regclass, " UINT64_FORMAT ", '%c', %s, %s)",
+						 "(%s::regclass, %ld, '%c'::\"char\", %s, %s)",
 						 quote_literal_cstr(qualifiedRelationName),
 						 shardId,
 						 shardInterval->storageType,
 						 minHashToken->data,
 						 maxHashToken->data);
 
-		processedShardCount++;
-		if (processedShardCount != shardCount)
+		if (llast(shardIntervalList) != shardInterval)
 		{
-			appendStringInfo(insertShardCommand, ",");
+			appendStringInfo(insertShardCommand, ", ");
 		}
 	}
 
-	/* finally add the command to the list that we'll return */
-	commandList = lappend(commandList, insertShardCommand->data);
+	appendStringInfo(insertShardCommand, ") ");
+
+	appendStringInfo(insertShardCommand,
+					 "SELECT citus_internal_add_shard_metadata(relationname, shardid, "
+					 "storagetype, shardminvalue, shardmaxvalue) "
+					 "FROM shard_data;");
+
+	/*
+	 * There are no active placements for the table, so do not create the
+	 * command as it'd lead to syntax error.
+	 *
+	 * This is normally not an expected situation, however the current
+	 * implementation of citus_disable_node allows to disable nodes with
+	 * the only active placements. So, for example a single shard/placement
+	 * distributed table on a disabled node might trigger zero placement
+	 * case.
+	 *
+	 * TODO: remove this check once citus_disable_node errors out for
+	 * the above scenario.
+	 */
+	if (firstPlacementProcessed)
+	{
+		/* first insert shards, than the placements */
+		commandList = lappend(commandList, insertShardCommand->data);
+		commandList = lappend(commandList, insertPlacementCommand->data);
+	}
 
 	return commandList;
 }
@@ -908,10 +1452,9 @@ ColocationIdUpdateCommand(Oid relationId, uint32 colocationId)
 {
 	StringInfo command = makeStringInfo();
 	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
-	appendStringInfo(command, "UPDATE pg_dist_partition "
-							  "SET colocationid = %d "
-							  "WHERE logicalrelid = %s::regclass",
-					 colocationId, quote_literal_cstr(qualifiedRelationName));
+	appendStringInfo(command,
+					 "SELECT citus_internal_update_relation_colocation(%s::regclass, %d)",
+					 quote_literal_cstr(qualifiedRelationName), colocationId);
 
 	return command->data;
 }
@@ -952,83 +1495,6 @@ LocalGroupIdUpdateCommand(int32 groupId)
 
 
 /*
- * MarkNodeHasMetadata function sets the hasmetadata column of the specified worker in
- * pg_dist_node to hasMetadata.
- */
-void
-MarkNodeHasMetadata(const char *nodeName, int32 nodePort, bool hasMetadata)
-{
-	UpdateDistNodeBoolAttr(nodeName, nodePort,
-						   Anum_pg_dist_node_hasmetadata,
-						   hasMetadata);
-}
-
-
-/*
- * MarkNodeMetadataSynced function sets the metadatasynced column of the
- * specified worker in pg_dist_node to the given value.
- */
-void
-MarkNodeMetadataSynced(const char *nodeName, int32 nodePort, bool synced)
-{
-	UpdateDistNodeBoolAttr(nodeName, nodePort,
-						   Anum_pg_dist_node_metadatasynced,
-						   synced);
-}
-
-
-/*
- * UpdateDistNodeBoolAttr updates a boolean attribute of the specified worker
- * to the given value.
- */
-static void
-UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort, int attrNum, bool value)
-{
-	const bool indexOK = false;
-
-	ScanKeyData scanKey[2];
-	Datum values[Natts_pg_dist_node];
-	bool isnull[Natts_pg_dist_node];
-	bool replace[Natts_pg_dist_node];
-
-	Relation pgDistNode = table_open(DistNodeRelationId(), RowExclusiveLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistNode);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_dist_node_nodename,
-				BTEqualStrategyNumber, F_TEXTEQ, CStringGetTextDatum(nodeName));
-	ScanKeyInit(&scanKey[1], Anum_pg_dist_node_nodeport,
-				BTEqualStrategyNumber, F_INT4EQ, Int32GetDatum(nodePort));
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgDistNode, InvalidOid, indexOK,
-													NULL, 2, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	if (!HeapTupleIsValid(heapTuple))
-	{
-		ereport(ERROR, (errmsg("could not find valid entry for node \"%s:%d\"",
-							   nodeName, nodePort)));
-	}
-
-	memset(replace, 0, sizeof(replace));
-
-	values[attrNum - 1] = BoolGetDatum(value);
-	isnull[attrNum - 1] = false;
-	replace[attrNum - 1] = true;
-
-	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
-
-	CatalogTupleUpdate(pgDistNode, &heapTuple->t_self, heapTuple);
-
-	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
-
-	CommandCounterIncrement();
-
-	systable_endscan(scanDescriptor);
-	table_close(pgDistNode, NoLock);
-}
-
-
-/*
  * SequenceDDLCommandsForTable returns a list of commands which create sequences (and
  * their schemas) to run on workers before creating the relation. The sequence creation
  * commands are wrapped with a `worker_apply_sequence_command` call, which sets the
@@ -1039,37 +1505,228 @@ UpdateDistNodeBoolAttr(const char *nodeName, int32 nodePort, int attrNum, bool v
 List *
 SequenceDDLCommandsForTable(Oid relationId)
 {
-	List *sequenceDDLList = NIL;
-	List *ownedSequences = GetSequencesOwnedByRelation(relationId);
+	List *allSequencesDDLList = NIL;
+
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
+	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+
 	char *ownerName = TableOwner(relationId);
 
 	Oid sequenceOid = InvalidOid;
-	foreach_oid(sequenceOid, ownedSequences)
+	foreach_oid(sequenceOid, dependentSequenceList)
 	{
-		char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
-		char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
-		StringInfo wrappedSequenceDef = makeStringInfo();
-		StringInfo sequenceGrantStmt = makeStringInfo();
-		char *sequenceName = generate_qualified_relation_name(sequenceOid);
-		Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceOid);
-		Oid sequenceTypeOid = sequenceData->seqtypid;
-		char *typeName = format_type_be(sequenceTypeOid);
-
-		/* create schema if needed */
-		appendStringInfo(wrappedSequenceDef,
-						 WORKER_APPLY_SEQUENCE_COMMAND,
-						 escapedSequenceDef,
-						 quote_literal_cstr(typeName));
-
-		appendStringInfo(sequenceGrantStmt,
-						 "ALTER SEQUENCE %s OWNER TO %s", sequenceName,
-						 quote_identifier(ownerName));
-
-		sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
-		sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
+		List *sequenceDDLCommands = DDLCommandsForSequence(sequenceOid, ownerName);
+		allSequencesDDLList = list_concat(allSequencesDDLList, sequenceDDLCommands);
 	}
 
+	return allSequencesDDLList;
+}
+
+
+/*
+ * DDLCommandsForSequence returns the DDL commands needs to be run to create the
+ * sequence and alter the owner to the given owner name.
+ */
+List *
+DDLCommandsForSequence(Oid sequenceOid, char *ownerName)
+{
+	List *sequenceDDLList = NIL;
+	char *sequenceDef = pg_get_sequencedef_string(sequenceOid);
+	char *escapedSequenceDef = quote_literal_cstr(sequenceDef);
+	StringInfo wrappedSequenceDef = makeStringInfo();
+	StringInfo sequenceGrantStmt = makeStringInfo();
+	char *sequenceName = generate_qualified_relation_name(sequenceOid);
+	Form_pg_sequence sequenceData = pg_get_sequencedef(sequenceOid);
+	Oid sequenceTypeOid = sequenceData->seqtypid;
+	char *typeName = format_type_be(sequenceTypeOid);
+
+	/* create schema if needed */
+	appendStringInfo(wrappedSequenceDef,
+					 WORKER_APPLY_SEQUENCE_COMMAND,
+					 escapedSequenceDef,
+					 quote_literal_cstr(typeName));
+
+	appendStringInfo(sequenceGrantStmt,
+					 "ALTER SEQUENCE %s OWNER TO %s", sequenceName,
+					 quote_identifier(ownerName));
+
+	sequenceDDLList = lappend(sequenceDDLList, wrappedSequenceDef->data);
+	sequenceDDLList = lappend(sequenceDDLList, sequenceGrantStmt->data);
+
 	return sequenceDDLList;
+}
+
+
+/*
+ * GetAttributeTypeOid returns the OID of the type of the attribute of
+ * provided relationId that has the provided attnum
+ */
+Oid
+GetAttributeTypeOid(Oid relationId, AttrNumber attnum)
+{
+	Oid resultOid = InvalidOid;
+
+	ScanKeyData key[2];
+
+	/* Grab an appropriate lock on the pg_attribute relation */
+	Relation attrel = table_open(AttributeRelationId, AccessShareLock);
+
+	/* Use the index to scan only system attributes of the target relation */
+	ScanKeyInit(&key[0],
+				Anum_pg_attribute_attrelid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_attribute_attnum,
+				BTLessEqualStrategyNumber, F_INT2LE,
+				Int16GetDatum(attnum));
+
+	SysScanDesc scan = systable_beginscan(attrel, AttributeRelidNumIndexId, true, NULL, 2,
+										  key);
+
+	HeapTuple attributeTuple;
+	while (HeapTupleIsValid(attributeTuple = systable_getnext(scan)))
+	{
+		Form_pg_attribute att = (Form_pg_attribute) GETSTRUCT(attributeTuple);
+		resultOid = att->atttypid;
+	}
+
+	systable_endscan(scan);
+	table_close(attrel, AccessShareLock);
+
+	return resultOid;
+}
+
+
+/*
+ * GetDependentSequencesWithRelation appends the attnum and id of sequences that
+ * have direct (owned sequences) or indirect dependency with the given relationId,
+ * to the lists passed as NIL initially.
+ * For both cases, we use the intermediate AttrDefault object from pg_depend.
+ * If attnum is specified, we only return the sequences related to that
+ * attribute of the relationId.
+ */
+void
+GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
+								  List **dependentSequenceList, AttrNumber attnum)
+{
+	Assert(*attnumList == NIL && *dependentSequenceList == NIL);
+
+	List *attrdefResult = NIL;
+	List *attrdefAttnumResult = NIL;
+	ScanKeyData key[3];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relationId));
+	if (attnum)
+	{
+		ScanKeyInit(&key[2],
+					Anum_pg_depend_refobjsubid,
+					BTEqualStrategyNumber, F_INT4EQ,
+					Int32GetDatum(attnum));
+	}
+
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, attnum ? 3 : 2, key);
+
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->classid == AttrDefaultRelationId &&
+			deprec->objsubid == 0 &&
+			deprec->refobjsubid != 0 &&
+			deprec->deptype == DEPENDENCY_AUTO)
+		{
+			attrdefResult = lappend_oid(attrdefResult, deprec->objid);
+			attrdefAttnumResult = lappend_int(attrdefAttnumResult, deprec->refobjsubid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	ListCell *attrdefOidCell = NULL;
+	ListCell *attrdefAttnumCell = NULL;
+	forboth(attrdefOidCell, attrdefResult, attrdefAttnumCell, attrdefAttnumResult)
+	{
+		Oid attrdefOid = lfirst_oid(attrdefOidCell);
+		AttrNumber attrdefAttnum = lfirst_int(attrdefAttnumCell);
+
+		List *sequencesFromAttrDef = GetSequencesFromAttrDef(attrdefOid);
+
+		/* to simplify and eliminate cases like "DEFAULT nextval('..') - nextval('..')" */
+		if (list_length(sequencesFromAttrDef) > 1)
+		{
+			ereport(ERROR, (errmsg(
+								"More than one sequence in a column default"
+								" is not supported for distribution "
+								"or for adding local tables to metadata")));
+		}
+
+		if (list_length(sequencesFromAttrDef) == 1)
+		{
+			*dependentSequenceList = list_concat(*dependentSequenceList,
+												 sequencesFromAttrDef);
+			*attnumList = lappend_int(*attnumList, attrdefAttnum);
+		}
+	}
+}
+
+
+/*
+ * GetSequencesFromAttrDef returns a list of sequence OIDs that have
+ * dependency with the given attrdefOid in pg_depend
+ */
+List *
+GetSequencesFromAttrDef(Oid attrdefOid)
+{
+	List *sequencesResult = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_classid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(AttrDefaultRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_objid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(attrdefOid));
+
+	SysScanDesc scan = systable_beginscan(depRel, DependDependerIndexId, true,
+										  NULL, 2, key);
+
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->refclassid == RelationRelationId &&
+			deprec->deptype == DEPENDENCY_NORMAL &&
+			get_rel_relkind(deprec->refobjid) == RELKIND_SEQUENCE)
+		{
+			sequencesResult = lappend_oid(sequencesResult, deprec->refobjid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	return sequencesResult;
 }
 
 
@@ -1180,6 +1837,10 @@ worker_record_sequence_dependency(PG_FUNCTION_ARGS)
 		.objectId = relationOid,
 		.objectSubId = columnForm->attnum
 	};
+
+
+	EnsureTableOwner(sequenceOid);
+	EnsureTableOwner(relationOid);
 
 	/* dependency from sequence to table */
 	recordDependencyOn(&sequenceAddr, &relationAddr, DEPENDENCY_AUTO);
@@ -1311,6 +1972,18 @@ GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 }
 
 
+/*
+ * SetLocalEnableDependencyCreation sets the enable_object_propagation locally
+ */
+static void
+SetLocalEnableDependencyCreation(bool state)
+{
+	set_config_option("citus.enable_object_propagation", state == true ? "on" : "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
+
 static char *
 GenerateSetRoleQuery(Oid roleOid)
 {
@@ -1437,15 +2110,10 @@ DetachPartitionCommandList(void)
 		}
 
 		List *partitionList = PartitionList(cacheEntry->relationId);
-		Oid partitionRelationId = InvalidOid;
-		foreach_oid(partitionRelationId, partitionList)
-		{
-			char *detachPartitionCommand =
-				GenerateDetachPartitionCommand(partitionRelationId);
-
-			detachPartitionCommandList = lappend(detachPartitionCommandList,
-												 detachPartitionCommand);
-		}
+		List *detachCommands =
+			GenerateDetachPartitionCommandRelationIdList(partitionList);
+		detachPartitionCommandList = list_concat(detachPartitionCommandList,
+												 detachCommands);
 	}
 
 	if (list_length(detachPartitionCommandList) == 0)
@@ -1471,12 +2139,15 @@ DetachPartitionCommandList(void)
  * SyncMetadataToNodes tries recreating the metadata snapshot in the
  * metadata workers that are out of sync. Returns the result of
  * synchronization.
+ *
+ * This function must be called within coordinated transaction
+ * since updates on the pg_dist_node metadata must be rollbacked if anything
+ * goes wrong.
  */
 static MetadataSyncResult
 SyncMetadataToNodes(void)
 {
 	MetadataSyncResult result = METADATA_SYNC_SUCCESS;
-
 	if (!IsCoordinator())
 	{
 		return METADATA_SYNC_SUCCESS;
@@ -1492,6 +2163,7 @@ SyncMetadataToNodes(void)
 		return METADATA_SYNC_FAILED_LOCK;
 	}
 
+	List *syncedWorkerList = NIL;
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(NoLock);
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerList)
@@ -1499,7 +2171,6 @@ SyncMetadataToNodes(void)
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
 			bool raiseInterrupts = false;
-
 			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
 			{
 				ereport(WARNING, (errmsg("failed to sync metadata to %s:%d",
@@ -1509,9 +2180,24 @@ SyncMetadataToNodes(void)
 			}
 			else
 			{
-				MarkNodeMetadataSynced(workerNode->workerName,
-									   workerNode->workerPort, true);
+				/* we add successfully synced nodes to set metadatasynced column later */
+				syncedWorkerList = lappend(syncedWorkerList, workerNode);
 			}
+		}
+	}
+
+	foreach_ptr(workerNode, syncedWorkerList)
+	{
+		SetWorkerColumnOptional(workerNode, Anum_pg_dist_node_metadatasynced,
+								BoolGetDatum(true));
+
+		/* we fetch the same node again to check if it's synced or not */
+		WorkerNode *nodeUpdated = FindWorkerNode(workerNode->workerName,
+												 workerNode->workerPort);
+		if (!nodeUpdated->metadataSynced)
+		{
+			/* set the result to FAILED to trigger the sync again */
+			result = METADATA_SYNC_FAILED_SYNC;
 		}
 	}
 
@@ -1564,8 +2250,8 @@ SyncMetadataToNodesMain(Datum main_arg)
 		else if (CheckCitusVersion(DEBUG1) && CitusHasBeenLoaded())
 		{
 			UseCoordinatedTransaction();
-			MetadataSyncResult result = SyncMetadataToNodes();
 
+			MetadataSyncResult result = SyncMetadataToNodes();
 			syncedAllNodes = (result == METADATA_SYNC_SUCCESS);
 
 			/* we use LISTEN/NOTIFY to wait for metadata syncing in tests */
@@ -1757,4 +2443,648 @@ ShouldInitiateMetadataSync(bool *lockFailure)
 
 	*lockFailure = false;
 	return shouldSyncMetadata;
+}
+
+
+/*
+ * citus_internal_add_partition_metadata is an internal UDF to
+ * add a row to pg_dist_partition.
+ */
+Datum
+citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "relation");
+	Oid relationId = PG_GETARG_OID(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "distribution method");
+	char distributionMethod = PG_GETARG_CHAR(1);
+
+	PG_ENSURE_ARGNOTNULL(3, "Colocation ID");
+	int colocationId = PG_GETARG_INT32(3);
+
+	PG_ENSURE_ARGNOTNULL(4, "replication model");
+	char replicationModel = PG_GETARG_CHAR(4);
+
+	text *distributionColumnText = NULL;
+	char *distributionColumnString = NULL;
+	Var *distributionColumnVar = NULL;
+
+	/* this flag is only valid for citus local tables, so set it to false */
+	bool autoConverted = false;
+
+	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
+	EnsureTableOwner(relationId);
+
+	/* we want to serialize all the metadata changes to this table */
+	LockRelationOid(relationId, ShareUpdateExclusiveLock);
+
+	if (!PG_ARGISNULL(2))
+	{
+		distributionColumnText = PG_GETARG_TEXT_P(2);
+		distributionColumnString = text_to_cstring(distributionColumnText);
+
+		Relation relation = relation_open(relationId, AccessShareLock);
+		distributionColumnVar =
+			BuildDistributionKeyFromColumnName(relation, distributionColumnString);
+		Assert(distributionColumnVar != NULL);
+
+		relation_close(relation, NoLock);
+	}
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		if (distributionMethod == DISTRIBUTE_BY_NONE && distributionColumnVar != NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Reference or local tables cannot have "
+								   "distribution columns")));
+		}
+		else if (distributionMethod != DISTRIBUTE_BY_NONE &&
+				 distributionColumnVar == NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Distribution column cannot be NULL for "
+								   "relation \"%s\"", get_rel_name(relationId))));
+		}
+
+		/*
+		 * Even if the table owner is a malicious user and the partition
+		 * metadata is not sane, the user can only affect its own tables.
+		 * Given that the user is owner of the table, we should allow.
+		 */
+		EnsurePartitionMetadataIsSane(relationId, distributionMethod, colocationId,
+									  replicationModel, distributionColumnVar);
+	}
+
+	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumnVar,
+							  colocationId, replicationModel, autoConverted);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsurePartitionMetadataIsSane ensures that the input values are safe
+ * for inserting into pg_dist_partition metadata.
+ */
+static void
+EnsurePartitionMetadataIsSane(Oid relationId, char distributionMethod, int colocationId,
+							  char replicationModel, Var *distributionColumnVar)
+{
+	if (!(distributionMethod == DISTRIBUTE_BY_HASH ||
+		  distributionMethod == DISTRIBUTE_BY_NONE))
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Metadata syncing is only allowed for hash, reference "
+							   "and local tables:%c", distributionMethod)));
+	}
+
+	if (colocationId < INVALID_COLOCATION_ID)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Metadata syncing is only allowed for valid "
+							   "colocation id values.")));
+	}
+	else if (colocationId != INVALID_COLOCATION_ID &&
+			 distributionMethod == DISTRIBUTE_BY_HASH)
+	{
+		int count = 1;
+		List *targetColocatedTableList =
+			ColocationGroupTableList(colocationId, count);
+
+		/*
+		 * If we have any colocated hash tables, ensure if they share the
+		 * same distribution key properties.
+		 */
+		if (list_length(targetColocatedTableList) >= 1)
+		{
+			Oid targetRelationId = linitial_oid(targetColocatedTableList);
+
+			EnsureColumnTypeEquality(relationId, targetRelationId, distributionColumnVar,
+									 DistPartitionKeyOrError(targetRelationId));
+		}
+	}
+
+
+	if (!(replicationModel == REPLICATION_MODEL_2PC ||
+		  replicationModel == REPLICATION_MODEL_STREAMING ||
+		  replicationModel == REPLICATION_MODEL_COORDINATOR))
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Metadata syncing is only allowed for "
+							   "known replication models.")));
+	}
+
+	if (distributionMethod == DISTRIBUTE_BY_NONE &&
+		!(replicationModel == REPLICATION_MODEL_STREAMING ||
+		  replicationModel == REPLICATION_MODEL_2PC))
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Local or references tables can only have '%c' or '%c' "
+							   "as the replication model.",
+							   REPLICATION_MODEL_STREAMING, REPLICATION_MODEL_2PC)));
+	}
+}
+
+
+/*
+ * citus_internal_add_shard_metadata is an internal UDF to
+ * add a row to pg_dist_shard.
+ */
+Datum
+citus_internal_add_shard_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_ENSURE_ARGNOTNULL(0, "relation");
+	Oid relationId = PG_GETARG_OID(0);
+
+	PG_ENSURE_ARGNOTNULL(1, "shard id");
+	int64 shardId = PG_GETARG_INT64(1);
+
+	PG_ENSURE_ARGNOTNULL(2, "storage type");
+	char storageType = PG_GETARG_CHAR(2);
+
+	text *shardMinValue = NULL;
+	if (!PG_ARGISNULL(3))
+	{
+		shardMinValue = PG_GETARG_TEXT_P(3);
+	}
+
+	text *shardMaxValue = NULL;
+	if (!PG_ARGISNULL(4))
+	{
+		shardMaxValue = PG_GETARG_TEXT_P(4);
+	}
+
+	/* only owner of the table (or superuser) is allowed to add the Citus metadata */
+	EnsureTableOwner(relationId);
+
+	/* we want to serialize all the metadata changes to this table */
+	LockRelationOid(relationId, ShareUpdateExclusiveLock);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		/*
+		 * Even if the table owner is a malicious user and the shard metadata is
+		 * not sane, the user can only affect its own tables. Given that the
+		 * user is owner of the table, we should allow.
+		 */
+		EnsureShardMetadataIsSane(relationId, shardId, storageType, shardMinValue,
+								  shardMaxValue);
+	}
+
+	InsertShardRow(relationId, shardId, storageType, shardMinValue, shardMaxValue);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsureCoordinatorInitiatedOperation is a helper function which ensures that
+ * the execution is initiated by the coordinator on a worker node.
+ */
+static void
+EnsureCoordinatorInitiatedOperation(void)
+{
+	/*
+	 * We are restricting the operation to only MX workers with the local group id
+	 * check. The other two checks are to ensure that the operation is initiated
+	 * by the coordinator.
+	 */
+	if (!IsCitusInitiatedRemoteBackend() || !MyBackendIsInDisributedTransaction() ||
+		GetLocalGroupId() == COORDINATOR_GROUP_ID)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("This is an internal Citus function can only be "
+							   "used in a distributed transaction")));
+	}
+}
+
+
+/*
+ * EnsureShardMetadataIsSane ensures that the input values are safe
+ * for inserting into pg_dist_shard metadata.
+ */
+static void
+EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storageType,
+						  text *shardMinValue, text *shardMaxValue)
+{
+	if (shardId <= INVALID_SHARD_ID)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Invalid shard id: %ld", shardId)));
+	}
+
+	if (!(storageType == SHARD_STORAGE_TABLE ||
+		  storageType == SHARD_STORAGE_FOREIGN))
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Invalid shard storage type: %c", storageType)));
+	}
+
+	char partitionMethod = PartitionMethodViaCatalog(relationId);
+	if (partitionMethod == DISTRIBUTE_BY_INVALID)
+	{
+		/* connection from the coordinator operating on a shard */
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("The relation \"%s\" does not have a valid "
+							   "entry in pg_dist_partition.",
+							   get_rel_name(relationId))));
+	}
+	else if (!(partitionMethod == DISTRIBUTE_BY_HASH ||
+			   partitionMethod == DISTRIBUTE_BY_NONE))
+	{
+		/* connection from the coordinator operating on a shard */
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Metadata syncing is only allowed for hash, "
+							   "reference and local tables: %c", partitionMethod)));
+	}
+
+	List *distShardTupleList = LookupDistShardTuples(relationId);
+	if (partitionMethod == DISTRIBUTE_BY_NONE)
+	{
+		if (shardMinValue != NULL || shardMaxValue != NULL)
+		{
+			char *relationName = get_rel_name(relationId);
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Shards of reference or local table \"%s\" should "
+								   "have NULL shard ranges", relationName)));
+		}
+		else if (list_length(distShardTupleList) != 0)
+		{
+			char *relationName = get_rel_name(relationId);
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("relation \"%s\" has already at least one shard, "
+								   "adding more is not allowed", relationName)));
+		}
+	}
+	else if (partitionMethod == DISTRIBUTE_BY_HASH)
+	{
+		if (shardMinValue == NULL || shardMaxValue == NULL)
+		{
+			char *relationName = get_rel_name(relationId);
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Shards of has distributed table  \"%s\" "
+								   "cannot have NULL shard ranges", relationName)));
+		}
+
+		char *shardMinValueString = text_to_cstring(shardMinValue);
+		char *shardMaxValueString = text_to_cstring(shardMaxValue);
+
+		/* pg_strtoint32 does the syntax and out of bound checks for us */
+		int32 shardMinValueInt = pg_strtoint32(shardMinValueString);
+		int32 shardMaxValueInt = pg_strtoint32(shardMaxValueString);
+
+		if (shardMinValueInt > shardMaxValueInt)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("shardMinValue=%d is greater than "
+								   "shardMaxValue=%d for table \"%s\", which is "
+								   "not allowed", shardMinValueInt,
+								   shardMaxValueInt, get_rel_name(relationId))));
+		}
+
+		/*
+		 * We are only dealing with hash distributed tables, that's why we
+		 * can hard code data type and typemod.
+		 */
+		const int intervalTypeId = INT4OID;
+		const int intervalTypeMod = -1;
+
+		Relation distShardRelation = table_open(DistShardRelationId(), AccessShareLock);
+		TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
+
+		FmgrInfo *shardIntervalCompareFunction =
+			GetFunctionInfo(intervalTypeId, BTREE_AM_OID, BTORDER_PROC);
+
+		HeapTuple shardTuple = NULL;
+		foreach_ptr(shardTuple, distShardTupleList)
+		{
+			ShardInterval *shardInterval =
+				TupleToShardInterval(shardTuple, distShardTupleDesc,
+									 intervalTypeId, intervalTypeMod);
+
+			Datum firstMin = Int32GetDatum(shardMinValueInt);
+			Datum firstMax = Int32GetDatum(shardMaxValueInt);
+			Datum secondMin = shardInterval->minValue;
+			Datum secondMax = shardInterval->maxValue;
+			Oid collationId = InvalidOid;
+
+			/*
+			 * This is an unexpected case as we are reading the metadata, which has
+			 * already been verified for being not NULL. Still, lets be extra
+			 * cautious to avoid any crashes.
+			 */
+			if (!shardInterval->minValueExists || !shardInterval->maxValueExists)
+			{
+				char *relationName = get_rel_name(relationId);
+				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+								errmsg("Shards of has distributed table  \"%s\" "
+									   "cannot have NULL shard ranges", relationName)));
+			}
+
+			if (ShardIntervalsOverlapWithParams(firstMin, firstMax, secondMin, secondMax,
+												shardIntervalCompareFunction,
+												collationId))
+			{
+				ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+								errmsg("Shard intervals overlap for table \"%s\": "
+									   "%ld and %ld", get_rel_name(relationId),
+									   shardId, shardInterval->shardId)));
+			}
+		}
+
+		table_close(distShardRelation, NoLock);
+	}
+}
+
+
+/*
+ * citus_internal_add_placement_metadata is an internal UDF to
+ * add a row to pg_dist_placement.
+ */
+Datum
+citus_internal_add_placement_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int64 shardId = PG_GETARG_INT64(0);
+	int32 shardState = PG_GETARG_INT32(1);
+	int64 shardLength = PG_GETARG_INT64(2);
+	int32 groupId = PG_GETARG_INT32(3);
+	int64 placementId = PG_GETARG_INT64(4);
+
+	bool missingOk = false;
+	Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
+
+	/* only owner of the table is allowed to modify the metadata */
+	EnsureTableOwner(relationId);
+
+	/* we want to serialize all the metadata changes to this table */
+	LockRelationOid(relationId, ShareUpdateExclusiveLock);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		/*
+		 * Even if the table owner is a malicious user, as long as the shard placements
+		 * fit into basic requirements of Citus metadata, the user can only affect its
+		 * own tables. Given that the user is owner of the table, we should allow.
+		 */
+		EnsureShardPlacementMetadataIsSane(relationId, shardId, placementId, shardState,
+										   shardLength, groupId);
+	}
+
+	InsertShardPlacementRow(shardId, placementId, shardState, shardLength, groupId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * EnsureShardPlacementMetadataIsSane ensures if the input parameters for
+ * the shard placement metadata is sane.
+ */
+static void
+EnsureShardPlacementMetadataIsSane(Oid relationId, int64 shardId, int64 placementId,
+								   int32 shardState, int64 shardLength, int32 groupId)
+{
+	/* we have just read the metadata, so we are sure that the shard exists */
+	Assert(ShardExists(shardId));
+
+	if (placementId <= INVALID_PLACEMENT_ID)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Shard placement has invalid placement id "
+							   "(%ld) for shard(%ld)", placementId, shardId)));
+	}
+
+	if (shardState != SHARD_STATE_ACTIVE)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Invalid shard state: %d", shardState)));
+	}
+
+	bool nodeIsInMetadata = false;
+	WorkerNode *workerNode =
+		PrimaryNodeForGroup(groupId, &nodeIsInMetadata);
+	if (!workerNode)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Node with group id %d for shard placement "
+							   "%ld does not exist", groupId, shardId)));
+	}
+}
+
+
+/*
+ * ShouldSkipMetadataChecks returns true if the current user is allowed to
+ * make any
+ */
+static bool
+ShouldSkipMetadataChecks(void)
+{
+	if (strcmp(EnableManualMetadataChangesForUser, "") != 0)
+	{
+		/*
+		 * EnableManualMetadataChangesForUser is a GUC which
+		 * can be changed by a super user. We use this GUC as
+		 * a safety belt in case the current metadata checks are
+		 * too restrictive and the operator can allow users to skip
+		 * the checks.
+		 */
+
+		/*
+		 * Make sure that the user exists, and print it to prevent any
+		 * optimization skipping the get_role_oid call.
+		 */
+		bool missingOK = false;
+		Oid allowedUserId = get_role_oid(EnableManualMetadataChangesForUser, missingOK);
+		if (allowedUserId == GetUserId())
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
+ * citus_internal_update_placement_metadata is an internal UDF to
+ * update a row in pg_dist_placement.
+ */
+Datum
+citus_internal_update_placement_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int64 shardId = PG_GETARG_INT64(0);
+	int32 sourceGroupId = PG_GETARG_INT32(1);
+	int32 targetGroupId = PG_GETARG_INT32(2);
+
+	ShardPlacement *placement = NULL;
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		if (!ShardExists(shardId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Shard id does not exists: %ld", shardId)));
+		}
+
+		bool missingOk = false;
+		EnsureShardOwner(shardId, missingOk);
+
+		/*
+		 * This function ensures that the source group exists hence we
+		 * call it from this code-block.
+		 */
+		placement = ActiveShardPlacementOnGroup(sourceGroupId, shardId);
+
+		bool nodeIsInMetadata = false;
+		WorkerNode *workerNode =
+			PrimaryNodeForGroup(targetGroupId, &nodeIsInMetadata);
+		if (!workerNode)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Node with group id %d for shard placement "
+								   "%ld does not exist", targetGroupId, shardId)));
+		}
+	}
+	else
+	{
+		placement = ActiveShardPlacementOnGroup(sourceGroupId, shardId);
+	}
+
+	/*
+	 * Updating pg_dist_placement ensures that the node with targetGroupId
+	 * exists and this is the only placement on that group.
+	 */
+	if (placement == NULL)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("Active placement for shard %ld is not "
+							   "found on group:%d", shardId, targetGroupId)));
+	}
+
+	UpdatePlacementGroupId(placement->placementId, targetGroupId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_delete_shard_metadata is an internal UDF to
+ * delete a row in pg_dist_shard and corresponding placement rows
+ * from pg_dist_shard_placement.
+ */
+Datum
+citus_internal_delete_shard_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int64 shardId = PG_GETARG_INT64(0);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		if (!ShardExists(shardId))
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Shard id does not exists: %ld", shardId)));
+		}
+
+		bool missingOk = false;
+		EnsureShardOwner(shardId, missingOk);
+	}
+
+	List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
+	ShardPlacement *shardPlacement = NULL;
+	foreach_ptr(shardPlacement, shardPlacementList)
+	{
+		DeleteShardPlacementRow(shardPlacement->placementId);
+	}
+
+	DeleteShardRow(shardId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_update_relation_colocation is an internal UDF to
+ * delete a row in pg_dist_shard and corresponding placement rows
+ * from pg_dist_shard_placement.
+ */
+Datum
+citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	Oid relationId = PG_GETARG_OID(0);
+	uint32 tagetColocationId = PG_GETARG_UINT32(1);
+
+	EnsureTableOwner(relationId);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+
+		/* ensure that the table is in pg_dist_partition */
+		char partitionMethod = PartitionMethodViaCatalog(relationId);
+		if (partitionMethod == DISTRIBUTE_BY_INVALID)
+		{
+			/* connection from the coordinator operating on a shard */
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("The relation \"%s\" does not have a valid "
+								   "entry in pg_dist_partition.",
+								   get_rel_name(relationId))));
+		}
+		else if (partitionMethod != DISTRIBUTE_BY_HASH)
+		{
+			/* connection from the coordinator operating on a shard */
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("Updating colocation ids are only allowed for hash "
+								   "distributed tables: %c", partitionMethod)));
+		}
+
+		int count = 1;
+		List *targetColocatedTableList =
+			ColocationGroupTableList(tagetColocationId, count);
+
+		if (list_length(targetColocatedTableList) == 0)
+		{
+			/* the table is colocated with none, so nothing to check */
+		}
+		else
+		{
+			Oid targetRelationId = linitial_oid(targetColocatedTableList);
+
+			ErrorIfShardPlacementsNotColocated(relationId, targetRelationId);
+			CheckReplicationModel(relationId, targetRelationId);
+			CheckDistributionColumnType(relationId, targetRelationId);
+		}
+	}
+
+	bool localOnly = true;
+	UpdateRelationColocationGroup(relationId, tagetColocationId, localOnly);
+
+	PG_RETURN_VOID();
 }

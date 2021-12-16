@@ -133,9 +133,9 @@ PreprocessCompositeTypeStmt(Node *node, const char *queryString,
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will have the object, because they will
-	 * either get it now, or get it in master_add_node after this transaction finishes and
+	 * either get it now, or get it in citus_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
@@ -189,8 +189,6 @@ PostprocessCompositeTypeStmt(Node *node, const char *queryString)
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
-	MarkObjectDistributed(&typeAddress);
-
 	return NIL;
 }
 
@@ -206,7 +204,7 @@ PreprocessAlterTypeStmt(Node *node, const char *queryString,
 						ProcessUtilityContext processUtilityContext)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
 
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 	if (!ShouldPropagateObject(&typeAddress))
@@ -299,13 +297,6 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
-	/*
-	 * now that the object has been created and distributed to the workers we mark them as
-	 * distributed so we know to keep them up to date and recreate on a new node in the
-	 * future
-	 */
-	MarkObjectDistributed(&typeAddress);
-
 	return NIL;
 }
 
@@ -316,7 +307,7 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
  *
  * Since it is an alter of an existing type we actually have the ObjectAddress. This is
  * used to check if the type is distributed, if so the alter will be executed on the
- * workers directly to keep the types in sync accross the cluster.
+ * workers directly to keep the types in sync across the cluster.
  */
 List *
 PreprocessAlterEnumStmt(Node *node, const char *queryString,
@@ -443,6 +434,8 @@ PreprocessRenameTypeStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+
 	/* fully qualify */
 	QualifyTreeNode(node);
 
@@ -480,6 +473,8 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
 
 	QualifyTreeNode((Node *) stmt);
 
@@ -789,7 +784,7 @@ ObjectAddress
 AlterTypeStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-	Assert(stmt->relkind == OBJECT_TYPE);
+	Assert(AlterTableStmtObjType_compat(stmt) == OBJECT_TYPE);
 
 	TypeName *typeName = MakeTypeNameFromRangeVar(stmt->relation);
 	Oid typeOid = LookupTypeNameOid(NULL, typeName, missing_ok);
@@ -973,7 +968,8 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 	/* add owner ship change so the creation command can be run as a different user */
 	const char *username = GetUserNameFromId(GetTypeOwner(typeAddress->objectId), false);
 	initStringInfo(&buf);
-	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND, getObjectIdentity(typeAddress),
+	appendStringInfo(&buf, ALTER_TYPE_OWNER_COMMAND,
+					 getObjectIdentity_compat(typeAddress, false),
 					 quote_identifier(username));
 	ddlCommands = lappend(ddlCommands, buf.data);
 
@@ -1124,7 +1120,7 @@ MakeTypeNameFromRangeVar(const RangeVar *relation)
  * EnsureSequentialModeForTypeDDL makes sure that the current transaction is already in
  * sequential mode, or can still safely be put in sequential mode, it errors if that is
  * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the begining.
+ * sequential mode set from the beginning.
  *
  * As types are node scoped objects there exists only 1 instance of the type used by
  * potentially multiple shards. To make sure all shards in the transaction can interact

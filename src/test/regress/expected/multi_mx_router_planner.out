@@ -1377,11 +1377,11 @@ SELECT author_articles_max_id();
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash_mx ah
 		WHERE author_id = 1"
-PL/pgSQL function author_articles_max_id() line 5 at SQL statement
+PL/pgSQL function author_articles_max_id() line XX at SQL statement
 DEBUG:  query has a single distribution column value: 1
 CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash_mx ah
 		WHERE author_id = 1"
-PL/pgSQL function author_articles_max_id() line 5 at SQL statement
+PL/pgSQL function author_articles_max_id() line XX at SQL statement
  author_articles_max_id
 ---------------------------------------------------------------------
                      41
@@ -1403,12 +1403,12 @@ DEBUG:  Creating router plan
 CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
 		FROM articles_hash_mx ah
 		WHERE author_id = 1"
-PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
+PL/pgSQL function author_articles_id_word_count() line XX at RETURN QUERY
 DEBUG:  query has a single distribution column value: 1
 CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
 		FROM articles_hash_mx ah
 		WHERE author_id = 1"
-PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
+PL/pgSQL function author_articles_id_word_count() line XX at RETURN QUERY
  id | word_count
 ---------------------------------------------------------------------
   1 |       9572

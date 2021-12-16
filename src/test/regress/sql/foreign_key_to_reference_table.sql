@@ -97,50 +97,50 @@ SELECT create_reference_table('referenced_table');
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET NULL;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET NULL);
 SELECT create_distributed_table('referencing_table', 'ref_id');
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 BEGIN;
   CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT);
   SELECT create_distributed_table('referencing_table', 'ref_id');
 COMMIT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE SET DEFAULT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE CASCADE;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 -- check if we can add the foreign key while adding the column
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD COLUMN referencing int REFERENCES referenced_table(id) ON UPDATE CASCADE;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 -- foreign keys are only supported when the replication factor = 1
@@ -148,21 +148,21 @@ SET citus.shard_replication_factor TO 2;
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(id);
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 -- should fail when we add the column as well
 CREATE TABLE referencing_table(id int, ref_id int);
 SELECT create_distributed_table('referencing_table', 'ref_id');
 ALTER TABLE referencing_table ADD COLUMN referencing_col int REFERENCES referenced_table(id) ON DELETE SET NULL;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 SET citus.shard_replication_factor TO 1;
 
 -- simple create_distributed_table should work in/out transactions on tables with foreign key to reference tables
 CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(id));
 SELECT create_distributed_table('referencing_table', 'ref_id');
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 DROP TABLE referenced_table;
 
@@ -172,7 +172,7 @@ BEGIN;
   CREATE TABLE referencing_table(id int, ref_id int, FOREIGN KEY (id) REFERENCES referenced_table(id));
   SELECT create_distributed_table('referencing_table', 'ref_id');
 COMMIT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE referencing_table;
 
 -- foreign keys are supported either in between distributed tables including the
@@ -411,7 +411,7 @@ SELECT create_distributed_table('referencing_table', 'id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE;
 ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
 
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 INSERT INTO referenced_table2 SELECT x, x+1 FROM generate_series(500,1500) AS f(x);
@@ -442,7 +442,7 @@ SELECT create_reference_table('referenced_table');
 SELECT create_reference_table('referenced_table2');
 SELECT create_distributed_table('referencing_table', 'id');
 
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 
 \set VERBOSITY terse
 DROP TABLE referenced_table CASCADE;
@@ -468,7 +468,7 @@ BEGIN;
   ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (ref_id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
 COMMIT;
 
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 INSERT INTO referenced_table2 SELECT x, x+1 FROM generate_series(500,1500) AS f(x);
@@ -503,7 +503,7 @@ BEGIN;
   ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (ref_id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
 COMMIT;
 
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 
 DROP TABLE referenced_table CASCADE;
 DROP TABLE referenced_table2 CASCADE;
@@ -532,7 +532,7 @@ ALTER TABLE referencing_table2 ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id) REFE
 ALTER TABLE referencing_table2 ADD CONSTRAINT fkey_ref_to_dist FOREIGN KEY (id) REFERENCES referencing_table(id) ON DELETE CASCADE;
 COMMIT;
 
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(0,1000) AS f(x);
 -- should fail
@@ -560,7 +560,7 @@ DROP TABLE referencing_table2 CASCADE;
 CREATE TABLE referenced_table(test_column int, test_column2 int UNIQUE, PRIMARY KEY(test_column));
 SELECT create_reference_table('referenced_table');
 
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 
 \set VERBOSITY terse
 DROP TABLE referenced_table CASCADE;
@@ -579,7 +579,7 @@ SELECT create_distributed_table('referencing_table', 'id');
 SELECT create_distributed_table('referencing_referencing_table', 'id');
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id, ref_id2) REFERENCES referenced_table(test_column, test_column2) ON DELETE CASCADE;
 
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.referencing%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.referencing%\d{2,}';
 
 INSERT INTO referenced_table SELECT x, x+1 FROM generate_series(1,1000) AS f(x);
 INSERT INTO referencing_table SELECT x, x+1, x+2 FROM generate_series(1,999) AS f(x);
@@ -647,10 +647,10 @@ CREATE TABLE test_table_2(id int PRIMARY KEY, value_1 int, FOREIGN KEY(value_1) 
 
 SELECT create_reference_table('test_table_1');
 SELECT create_distributed_table('test_table_2', 'id');
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 
 ALTER TABLE test_table_2 DROP CONSTRAINT test_table_2_value_1_fkey;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 
 DROP TABLE test_table_1, test_table_2;
 
@@ -666,7 +666,7 @@ BEGIN;
   ALTER TABLE test_table_2 DROP CONSTRAINT test_table_2_value_1_fkey;
 COMMIT;
 
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE test_table_1, test_table_2;
 
 -- check if we can drop the primary key which cascades to the foreign key
@@ -677,7 +677,7 @@ SELECT create_reference_table('test_table_1');
 SELECT create_distributed_table('test_table_2', 'id');
 
 ALTER TABLE test_table_1 DROP CONSTRAINT test_table_1_pkey CASCADE;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE test_table_1, test_table_2;
 
 -- check if we can drop the primary key which cascades to the foreign key in a transaction block
@@ -691,7 +691,7 @@ BEGIN;
   ALTER TABLE test_table_1 DROP CONSTRAINT test_table_1_pkey CASCADE;
 COMMIT;
 
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE test_table_1, test_table_2;
 
 -- check if we can drop the column which foreign key is referencing from
@@ -702,7 +702,7 @@ SELECT create_reference_table('test_table_1');
 SELECT create_distributed_table('test_table_2', 'id');
 
 ALTER TABLE test_table_2 DROP COLUMN value_1;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE test_table_1, test_table_2;
 
 -- check if we can drop the column which foreign key is referencing from in a transaction block
@@ -715,7 +715,7 @@ BEGIN;
 
   ALTER TABLE test_table_2 DROP COLUMN value_1;
 COMMIT;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE test_table_1, test_table_2;
 
 -- check if we can drop the column which foreign key is referencing to
@@ -726,7 +726,7 @@ SELECT create_reference_table('test_table_1');
 SELECT create_distributed_table('test_table_2', 'id');
 
 ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE test_table_1, test_table_2;
 
 -- check if we can drop the column which foreign key is referencing from in a transaction block
@@ -739,7 +739,7 @@ BEGIN;
 
   ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
 COMMIT;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE test_table_1, test_table_2;
 
 -- check if we can alter the column type which foreign key is referencing to
@@ -759,7 +759,7 @@ INSERT INTO test_table_1 VALUES (2147483648,4);
 INSERT INTO test_table_2 VALUES (4,2147483648);
 -- should fail since there is a bigint out of integer range > (2^32 - 1)
 ALTER TABLE test_table_2 ALTER COLUMN value_1 SET DATA TYPE int;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE test_table_1 CASCADE;
 DROP TABLE test_table_2;
 
@@ -775,7 +775,7 @@ BEGIN;
   ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
 COMMIT;
 
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
 DROP TABLE test_table_1, test_table_2;
 
 -- check if we can TRUNCATE the referenced table

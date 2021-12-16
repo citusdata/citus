@@ -43,7 +43,23 @@ SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  t
 (1 row)
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('columnar_truncate_test');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  2 |              150001
+(1 row)
+
 TRUNCATE TABLE columnar_truncate_test;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('columnar_truncate_test');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  1 |                   1
+(1 row)
+
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
@@ -77,7 +93,7 @@ SELECT count(*) FROM columnar_truncate_test_compressed;
 SELECT pg_relation_size('columnar_truncate_test_compressed');
  pg_relation_size
 ---------------------------------------------------------------------
-                0
+            16384
 (1 row)
 
 INSERT INTO columnar_truncate_test select a, a from generate_series(1, 10) a;

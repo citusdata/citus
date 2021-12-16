@@ -219,8 +219,8 @@ SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::regclass::t
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,6)
- (localhost,57638,t,6)
+ (localhost,57637,t,9)
+ (localhost,57638,t,9)
 (2 rows)
 
 SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
@@ -291,8 +291,8 @@ SELECT logicalrelid::text FROM pg_dist_partition WHERE logicalrelid::regclass::t
 SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
- (localhost,57637,t,15)
- (localhost,57638,t,15)
+ (localhost,57637,t,18)
+ (localhost,57638,t,18)
 (2 rows)
 
 SELECT inhrelid::regclass::text FROM pg_catalog.pg_inherits WHERE inhparent = 'partitioned_table'::regclass ORDER BY 1;
@@ -360,7 +360,7 @@ SELECT create_distributed_table('referencing_dist_table', 'a', colocate_with:='r
 
 SET client_min_messages TO WARNING;
 SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
-    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1;
+    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1,2;
    Referencing Table    |                      Definition
 ---------------------------------------------------------------------
  referencing_dist_table | FOREIGN KEY (a) REFERENCES table_with_references(a1)
@@ -375,12 +375,12 @@ SELECT alter_distributed_table('table_with_references', shard_count := 12, casca
 (1 row)
 
 SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
-    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1;
+    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1,2;
    Referencing Table    |                      Definition
 ---------------------------------------------------------------------
  referencing_dist_table | FOREIGN KEY (a) REFERENCES table_with_references(a1)
- table_with_references  | FOREIGN KEY (a2) REFERENCES referenced_ref_table(a)
  table_with_references  | FOREIGN KEY (a1) REFERENCES referenced_dist_table(a)
+ table_with_references  | FOREIGN KEY (a2) REFERENCES referenced_ref_table(a)
 (3 rows)
 
 SELECT alter_distributed_table('table_with_references', shard_count := 10, cascade_to_colocated := false);
@@ -392,7 +392,7 @@ WARNING:  foreign key referencing_dist_table_a_fkey will be dropped
 (1 row)
 
 SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
-    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1;
+    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1,2;
    Referencing Table   |                     Definition
 ---------------------------------------------------------------------
  table_with_references | FOREIGN KEY (a2) REFERENCES referenced_ref_table(a)
@@ -497,46 +497,6 @@ SELECT table_name::text, shard_count, access_method FROM public.citus_tables WHE
 (1 row)
 
 \endif
--- test with metadata sync
-SET citus.replication_model TO 'streaming';
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-CREATE TABLE metadata_sync_table (a BIGSERIAL);
-SELECT create_distributed_table('metadata_sync_table', 'a', colocate_with:='none');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT alter_distributed_table('metadata_sync_table', shard_count:=6);
- alter_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT alter_distributed_table('metadata_sync_table', shard_count:=8);
- alter_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT table_name, shard_count FROM public.citus_tables WHERE table_name::text = 'metadata_sync_table';
-     table_name      | shard_count
----------------------------------------------------------------------
- metadata_sync_table |           8
-(1 row)
-
-SET citus.replication_model TO DEFAULT;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 -- test complex cascade operations
 CREATE TABLE cas_1 (a INT UNIQUE);
 CREATE TABLE cas_2 (a INT UNIQUE);

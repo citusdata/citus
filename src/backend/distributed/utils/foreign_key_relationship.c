@@ -32,6 +32,7 @@
 #if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
 #endif
+#include "utils/inval.h"
 #include "utils/memutils.h"
 
 
@@ -82,6 +83,7 @@ static ForeignConstraintRelationshipNode * GetRelationshipNodeForRelationId(Oid
 																			relationId,
 																			bool *isFound);
 static void CreateForeignConstraintRelationshipGraph(void);
+static bool IsForeignConstraintRelationshipGraphValid(void);
 static List * GetNeighbourList(ForeignConstraintRelationshipNode *relationshipNode,
 							   bool isReferencing);
 static List * GetRelationIdsFromRelationshipNodeList(List *fKeyRelationshipNodeList);
@@ -137,12 +139,23 @@ GetForeignKeyConnectedRelationIdList(Oid relationId)
 
 
 /*
- * ConnectedToReferenceTableViaFKey returns true if given relationId is
- * connected to a reference table via its foreign key subgraph.
+ * ShouldUndistributeCitusLocalTable returns true if given relationId needs
+ * to be undistributed. Here we do not undistribute table if it's converted by the user,
+ * or connected to a table converted by the user, or a reference table, via foreign keys.
  */
 bool
-ConnectedToReferenceTableViaFKey(Oid relationId)
+ShouldUndistributeCitusLocalTable(Oid relationId)
 {
+	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
+	if (!cacheEntry->autoConverted)
+	{
+		/*
+		 * The relation is not added to metadata automatically,
+		 * we shouldn't undistribute it.
+		 */
+		return false;
+	}
+
 	/*
 	 * As we will operate on foreign key connected relations, here we
 	 * invalidate foreign key graph so that we act on fresh graph.
@@ -150,7 +163,8 @@ ConnectedToReferenceTableViaFKey(Oid relationId)
 	InvalidateForeignKeyGraph();
 
 	List *fkeyConnectedRelations = GetForeignKeyConnectedRelationIdList(relationId);
-	return RelationIdListHasReferenceTable(fkeyConnectedRelations);
+
+	return !RelationIdListHasReferenceTable(fkeyConnectedRelations);
 }
 
 
@@ -348,9 +362,15 @@ CreateForeignConstraintRelationshipGraph()
 /*
  * IsForeignConstraintGraphValid check whether there is a valid graph.
  */
-bool
+static bool
 IsForeignConstraintRelationshipGraphValid()
 {
+	/*
+	 * We might have some concurrent metadata changes. In order to get the changes,
+	 * we first need to accept the cache invalidation messages.
+	 */
+	AcceptInvalidationMessages();
+
 	if (fConstraintRelationshipGraph != NULL && fConstraintRelationshipGraph->isValid)
 	{
 		return true;

@@ -1,6 +1,7 @@
 \set VERBOSITY terse
 
 SET citus.next_shard_id TO 1516000;
+SET citus.next_placement_id TO 1516000;
 SET citus.shard_replication_factor TO 1;
 
 CREATE SCHEMA citus_add_local_table_to_metadata_cascade;
@@ -76,9 +77,6 @@ ROLLBACK;
 
 BEGIN;
   CREATE TABLE partitioned_table (col_1 INT REFERENCES local_table_1 (col_1)) PARTITION BY RANGE (col_1);
-  -- now that we introduced a partitioned table into our foreign key subgraph,
-  -- citus_add_local_table_to_metadata(cascade_via_foreign_keys) would fail for
-  -- partitioned_table as citus_add_local_table_to_metadata doesn't support partitioned tables
   SELECT citus_add_local_table_to_metadata('local_table_2', cascade_via_foreign_keys=>true);
 ROLLBACK;
 

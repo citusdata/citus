@@ -59,6 +59,8 @@ master_drop_distributed_table_metadata(PG_FUNCTION_ARGS)
 Datum
 master_remove_partition_metadata(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *tableNameText = PG_GETARG_TEXT_P(2);
@@ -66,15 +68,13 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *tableName = text_to_cstring(tableNameText);
 
-	CheckCitusVersion(ERROR);
-
 	/*
 	 * The SQL_DROP trigger calls this function even for tables that are
 	 * not distributed. In that case, silently ignore. This is not very
 	 * user-friendly, but this function is really only meant to be called
 	 * from the trigger.
 	 */
-	if (!IsCitusTable(relationId) || !EnableDDLPropagation)
+	if (!IsCitusTableViaCatalog(relationId) || !EnableDDLPropagation)
 	{
 		PG_RETURN_VOID();
 	}
@@ -97,14 +97,14 @@ master_remove_partition_metadata(PG_FUNCTION_ARGS)
 Datum
 master_remove_distributed_table_metadata_from_workers(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *tableNameText = PG_GETARG_TEXT_P(2);
 
 	char *schemaName = text_to_cstring(schemaNameText);
 	char *tableName = text_to_cstring(tableNameText);
-
-	CheckCitusVersion(ERROR);
 
 	CheckTableSchemaNameForDrop(relationId, &schemaName, &tableName);
 
@@ -134,14 +134,14 @@ MasterRemoveDistributedTableMetadataFromWorkers(Oid relationId, char *schemaName
 	 * user-friendly, but this function is really only meant to be called
 	 * from the trigger.
 	 */
-	if (!IsCitusTable(relationId) || !EnableDDLPropagation)
+	if (!IsCitusTableViaCatalog(relationId) || !EnableDDLPropagation)
 	{
 		return;
 	}
 
 	EnsureCoordinator();
 
-	if (!ShouldSyncTableMetadata(relationId))
+	if (!ShouldSyncTableMetadataViaCatalog(relationId))
 	{
 		return;
 	}

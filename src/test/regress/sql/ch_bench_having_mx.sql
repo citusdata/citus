@@ -1,5 +1,4 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1640000;
-SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 4;
 
@@ -123,7 +122,6 @@ order by s_i_id;
 
 
 \c - - - :master_port
-SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 4;
 

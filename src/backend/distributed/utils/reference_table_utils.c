@@ -48,6 +48,7 @@ static StringInfo CopyShardPlacementToWorkerNodeQuery(
 static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
 								 int nodePort);
 static bool AnyRelationsModifiedInTransaction(List *relationIdList);
+static List * ReplicatedMetadataSyncedDistributedTableList(void);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(upgrade_to_reference_table);
@@ -130,7 +131,7 @@ EnsureReferenceTablesExistOnAllNodesExtended(char transferMode)
 	uint64 shardId = shardInterval->shardId;
 
 	/*
-	 * We only take an access share lock, otherwise we'll hold up master_add_node.
+	 * We only take an access share lock, otherwise we'll hold up citus_add_node.
 	 * In case of create_reference_table() where we don't want concurrent writes
 	 * to pg_dist_node, we have already acquired ShareLock on pg_dist_node.
 	 */
@@ -327,9 +328,12 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 
 /*
  * ReplicateShardToNode function replicates given shard to the given worker node
- * in a separate transaction. While replicating, it only replicates the shard to the
- * workers which does not have a healthy replica of the shard. This function also modifies
- * metadata by inserting/updating related rows in pg_dist_placement.
+ * in a separate transaction. If the worker already has
+ * a replica of the shard this is a no-op. This function also modifies metadata
+ * by inserting/updating related rows in pg_dist_placement.
+ *
+ * IMPORTANT: This should only be used to replicate shards of a reference
+ * table.
  */
 static void
 ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
@@ -344,59 +348,44 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	List *ddlCommandList =
 		CopyShardCommandList(shardInterval, srcNodeName, srcNodePort, includeData);
 
-	List *shardPlacementList = ShardPlacementList(shardId);
+	List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
 																 nodeName, nodePort);
 	char *tableOwner = TableOwner(shardInterval->relationId);
 
-	/*
-	 * Although this function is used for reference tables, and reference table shard
-	 * placements always have shardState = SHARD_STATE_ACTIVE, in case of an upgrade
-	 * of a non-reference table to reference table, unhealty placements may exist.
-	 * In this case, repair the shard placement and update its state in pg_dist_placement.
-	 */
-	if (targetPlacement == NULL || targetPlacement->shardState != SHARD_STATE_ACTIVE)
+	if (targetPlacement != NULL)
 	{
-		uint64 placementId = 0;
-		int32 groupId = 0;
-
-		ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to the node %s:%d",
-								get_rel_name(shardInterval->relationId), nodeName,
-								nodePort)));
-
-		EnsureNoModificationsHaveBeenDone();
-		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
-												   ddlCommandList);
-		if (targetPlacement == NULL)
+		if (targetPlacement->shardState == SHARD_STATE_ACTIVE)
 		{
-			groupId = GroupForNode(nodeName, nodePort);
-
-			placementId = GetNextPlacementId();
-			InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE, 0,
-									groupId);
+			/* We already have the shard, nothing to do */
+			return;
 		}
-		else
-		{
-			groupId = targetPlacement->groupId;
-			placementId = targetPlacement->placementId;
-			UpdateShardPlacementState(placementId, SHARD_STATE_ACTIVE);
-		}
+		ereport(ERROR, (errmsg(
+							"Placement for reference table \"%s\" on node %s:%d is not active. This should not be possible, please report this as a bug",
+							get_rel_name(shardInterval->relationId), nodeName,
+							nodePort)));
+	}
 
-		/*
-		 * Although ReplicateShardToAllNodes is used only for reference tables,
-		 * during the upgrade phase, the placements are created before the table is
-		 * marked as a reference table. All metadata (including the placement
-		 * metadata) will be copied to workers after all reference table changed
-		 * are finished.
-		 */
-		if (ShouldSyncTableMetadata(shardInterval->relationId))
-		{
-			char *placementCommand = PlacementUpsertCommand(shardId, placementId,
-															SHARD_STATE_ACTIVE, 0,
-															groupId);
+	ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to the node %s:%d",
+							get_rel_name(shardInterval->relationId), nodeName,
+							nodePort)));
 
-			SendCommandToWorkersWithMetadata(placementCommand);
-		}
+	EnsureNoModificationsHaveBeenDone();
+	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
+											  ddlCommandList);
+	int32 groupId = GroupForNode(nodeName, nodePort);
+
+	uint64 placementId = GetNextPlacementId();
+	InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE, 0,
+							groupId);
+
+	if (ShouldSyncTableMetadata(shardInterval->relationId))
+	{
+		char *placementCommand = PlacementUpsertCommand(shardId, placementId,
+														SHARD_STATE_ACTIVE, 0,
+														groupId);
+
+		SendCommandToWorkersWithMetadata(placementCommand);
 	}
 }
 
@@ -438,59 +427,84 @@ CreateReferenceTableColocationId()
 
 
 /*
- * DeleteAllReferenceTablePlacementsFromNodeGroup function iterates over list of reference
- * tables and deletes all reference table placements from pg_dist_placement table
- * for given group.
+ * DeleteAllReplicatedTablePlacementsFromNodeGroup function iterates over
+ * list of reference and replicated hash distributed tables and deletes
+ * all placements from pg_dist_placement table for given group.
  */
 void
-DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId)
+DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool forceRemoteDelete)
 {
 	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
-	List *referenceShardIntervalList = NIL;
+	List *replicatedMetadataSyncedDistributedTableList =
+		ReplicatedMetadataSyncedDistributedTableList();
+
+	List *replicatedTableList =
+		list_concat(referenceTableList, replicatedMetadataSyncedDistributedTableList);
 
 	/* if there are no reference tables, we do not need to do anything */
-	if (list_length(referenceTableList) == 0)
+	if (list_length(replicatedTableList) == 0)
 	{
 		return;
 	}
 
-	/*
-	 * We sort the reference table list to prevent deadlocks in concurrent
-	 * DeleteAllReferenceTablePlacementsFromNodeGroup calls.
-	 */
-	referenceTableList = SortList(referenceTableList, CompareOids);
-	if (ClusterHasKnownMetadataWorkers())
-	{
-		referenceShardIntervalList = GetSortedReferenceShardIntervals(referenceTableList);
-
-		BlockWritesToShardList(referenceShardIntervalList);
-	}
-
 	StringInfo deletePlacementCommand = makeStringInfo();
-	Oid referenceTableId = InvalidOid;
-	foreach_oid(referenceTableId, referenceTableList)
+	Oid replicatedTableId = InvalidOid;
+	foreach_oid(replicatedTableId, replicatedTableList)
 	{
-		List *placements = GroupShardPlacementsForTableOnGroup(referenceTableId,
-															   groupId);
+		List *placements =
+			GroupShardPlacementsForTableOnGroup(replicatedTableId, groupId);
 		if (list_length(placements) == 0)
 		{
-			/* this happens if the node was previously disabled */
+			/*
+			 * This happens either the node was previously disabled or the table
+			 * doesn't have placement on this node.
+			 */
 			continue;
 		}
 
-		GroupShardPlacement *placement = (GroupShardPlacement *) linitial(placements);
+		GroupShardPlacement *placement = NULL;
+		foreach_ptr(placement, placements)
+		{
+			LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
 
-		LockShardDistributionMetadata(placement->shardId, ExclusiveLock);
+			DeleteShardPlacementRow(placement->placementId);
 
-		DeleteShardPlacementRow(placement->placementId);
+			if (forceRemoteDelete)
+			{
+				resetStringInfo(deletePlacementCommand);
+				appendStringInfo(deletePlacementCommand,
+								 "DELETE FROM pg_catalog.pg_dist_placement "
+								 "WHERE placementid = " UINT64_FORMAT,
+								 placement->placementId);
 
-		resetStringInfo(deletePlacementCommand);
-		appendStringInfo(deletePlacementCommand,
-						 "DELETE FROM pg_dist_placement WHERE placementid = "
-						 UINT64_FORMAT,
-						 placement->placementId);
-		SendCommandToWorkersWithMetadata(deletePlacementCommand->data);
+				SendCommandToWorkersWithMetadata(deletePlacementCommand->data);
+			}
+		}
 	}
+}
+
+
+/*
+ * ReplicatedMetadataSyncedDistributedTableList is a helper function which returns the
+ * list of replicated hash distributed tables.
+ */
+static List *
+ReplicatedMetadataSyncedDistributedTableList(void)
+{
+	List *distributedRelationList = CitusTableTypeIdList(DISTRIBUTED_TABLE);
+	List *replicatedHashDistributedTableList = NIL;
+
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, distributedRelationList)
+	{
+		if (ShouldSyncTableMetadata(relationId) && !SingleReplicatedTable(relationId))
+		{
+			replicatedHashDistributedTableList =
+				lappend_oid(replicatedHashDistributedTableList, relationId);
+		}
+	}
+
+	return replicatedHashDistributedTableList;
 }
 
 
@@ -582,8 +596,8 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 			char *tableOwner = TableOwner(shardInterval->relationId);
 			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
 
-			SendCommandListToWorkerInSingleTransaction(nodeName, nodePort, tableOwner,
-													   commandList);
+			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
+													  commandList);
 		}
 	}
 }

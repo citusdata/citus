@@ -12,6 +12,7 @@ AS $$
 SELECT count(*) FROM (SELECT * FROM json_object_keys($1)) t
 $$;
 
+SELECT run_command_on_master_and_workers($r$
 CREATE OR REPLACE FUNCTION keys_sort (json)
 RETURNS json LANGUAGE SQL
 AS $$
@@ -19,6 +20,7 @@ SELECT json_object_agg(key, value) FROM (
 	SELECT * FROM json_each($1) ORDER BY key
 ) t
 $$;
+$r$);
 
 -- Check multi_cat_agg() aggregate which is used to implement json_object_agg()
 
@@ -100,4 +102,4 @@ SELECT keys_sort(json_object_agg(l_orderkey::text || l_linenumber::text, ARRAY[l
 
 -- Check that we return NULL in case there are no input rows to json_object_agg()
 
-SELECT json_object_agg(l_shipdate, l_orderkey) FROM lineitem WHERE l_quantity < 0;
+SELECT keys_sort(json_object_agg(l_shipdate, l_orderkey)) FROM lineitem WHERE l_quantity < 0;

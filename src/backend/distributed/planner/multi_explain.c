@@ -11,6 +11,8 @@
 #include "libpq-fe.h"
 #include "miscadmin.h"
 
+#include "distributed/pg_version_constants.h"
+
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/namespace.h"
@@ -251,7 +253,13 @@ NonPushableInsertSelectExplainScan(CustomScanState *node, List *ancestors,
 	/* explain the inner SELECT query */
 	IntoClause *into = NULL;
 	ParamListInfo params = NULL;
-	char *queryString = NULL;
+
+	/*
+	 * With PG14, we need to provide a string here,
+	 * for now we put an empty string, which is valid according to postgres.
+	 */
+	char *queryString = pstrdup("");
+
 	ExplainOneQuery(queryCopy, 0, into, es, queryString, params, NULL);
 
 	ExplainCloseGroup("Select Query", "Select Query", false, es);
@@ -278,7 +286,12 @@ ExplainSubPlans(DistributedPlan *distributedPlan, ExplainState *es)
 		PlannedStmt *plan = subPlan->plan;
 		IntoClause *into = NULL;
 		ParamListInfo params = NULL;
-		char *queryString = NULL;
+
+		/*
+		 * With PG14, we need to provide a string here,
+		 * for now we put an empty string, which is valid according to postgres.
+		 */
+		char *queryString = pstrdup("");
 		instr_time planduration;
 		#if PG_VERSION_NUM >= PG_VERSION_13
 
@@ -987,8 +1000,6 @@ worker_last_saved_explain_analyze(PG_FUNCTION_ARGS)
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, columnValues, columnNulls);
 	}
-
-	tuplestore_donestoring(tupleStore);
 	PG_RETURN_DATUM(0);
 }
 
@@ -1024,8 +1035,8 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 	DestReceiver *tupleStoreDest = CreateTuplestoreDestReceiver();
-	SetTuplestoreDestReceiverParams(tupleStoreDest, tupleStore,
-									CurrentMemoryContext, false);
+	SetTuplestoreDestReceiverParams_compat(tupleStoreDest, tupleStore,
+										   CurrentMemoryContext, false, NULL, NULL);
 
 	List *parseTreeList = pg_parse_query(queryString);
 	if (list_length(parseTreeList) != 1)
@@ -1073,8 +1084,6 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 					  &planDuration, &executionDurationMillisec);
 
 	ExplainEndOutput(es);
-
-	tuplestore_donestoring(tupleStore);
 
 	/* save EXPLAIN ANALYZE result to be fetched later */
 	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);
@@ -1241,10 +1250,8 @@ CitusExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
 
 	/* plan the query */
 	PlannedStmt *plan = pg_plan_query_compat(query, NULL, cursorOptions, params);
-
 	INSTR_TIME_SET_CURRENT(planduration);
 	INSTR_TIME_SUBTRACT(planduration, planstart);
-
 	#if PG_VERSION_NUM >= PG_VERSION_13
 
 	/* calc differences of buffer counters. */
@@ -1624,7 +1631,7 @@ ExplainOneQuery(Query *query, int cursorOptions,
 
 
 /*
- * ExplainAnalyzeWorkerPlan produces explain output into es. If es->analyze, it also executes
+ * ExplainWorkerPlan produces explain output into es. If es->analyze, it also executes
  * the given plannedStmt and sends the results to dest. It puts total time to execute in
  * executionDurationMillisec.
  *

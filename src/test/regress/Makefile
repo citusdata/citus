@@ -27,8 +27,9 @@ MULTI_INSTALLDIR=$(CURDIR)/tmp_check/install
 pg_regress_multi_check = $(PERL) $(citus_abs_srcdir)/pg_regress_multi.pl --pgxsdir="$(pgxsdir)" --bindir="$(bindir)" --libdir="$(libdir)" --majorversion="$(MAJORVERSION)" --postgres-builddir="$(postgres_abs_builddir)"  --postgres-srcdir="$(postgres_abs_srcdir)"
 MULTI_REGRESS_OPTS = --inputdir=$(citus_abs_srcdir) $(pg_regress_locale_flags) --launcher="$(citus_abs_srcdir)/log_test_times"
 
-pg_upgrade_check = $(citus_abs_srcdir)/upgrade/pg_upgrade_test.py
-citus_upgrade_check = $(citus_abs_srcdir)/upgrade/citus_upgrade_test.py
+pg_upgrade_check = $(citus_abs_srcdir)/citus_tests/upgrade/pg_upgrade_test.py
+citus_upgrade_check =CITUS_OLD_VERSION=$(citus-old-version) $(citus_abs_srcdir)/citus_tests/upgrade/citus_upgrade_test.py
+arbitrary_config_check = $(citus_abs_srcdir)/citus_tests/arbitrary_configs/citus_arbitrary_configs.py
 
 template_isolation_files = $(shell find $(citus_abs_srcdir)/spec/ -name '*.spec')
 generated_isolation_files = $(patsubst $(citus_abs_srcdir)/spec/%,$(citus_abs_srcdir)/build/specs/%,$(template_isolation_files))
@@ -42,7 +43,7 @@ output_files := $(patsubst $(citus_abs_srcdir)/output/%.source,expected/%.out, $
 # intermediate, for muscle memory backward compatibility.
 check: check-full
 # check-full triggers all tests that ought to be run routinely
-check-full: check-multi check-multi-mx check-worker check-operations check-follower-cluster check-failure
+check-full: check-multi check-multi-mx check-multi-1 check-worker check-operations check-follower-cluster check-isolation check-failure
 
 
 ISOLATION_DEPDIR=.deps/isolation
@@ -52,12 +53,19 @@ ISOLATION_BUILDDIR=build/specs
 # ex: make print-generated_isolation_files
 print-%  : ; @echo $* = $($*)
 
-.PHONY: create-symbolic-link
+.PHONY: create-symbolic-link create-tablespaces
 
 create-symbolic-link:
 	mkdir -p $(citus_abs_srcdir)/build
 	ln -fsn $(citus_abs_srcdir)/expected $(citus_abs_srcdir)/build/
 
+create-tablespaces:
+	rm -rf $(citus_abs_srcdir)/tmp_check/ts1
+	mkdir -p $(citus_abs_srcdir)/tmp_check/ts1
+	rm -rf $(citus_abs_srcdir)/tmp_check/ts0
+	mkdir -p $(citus_abs_srcdir)/tmp_check/ts0
+	rm -rf $(citus_abs_srcdir)/tmp_check/ts2
+	mkdir -p $(citus_abs_srcdir)/tmp_check/ts2
 
 # How this target works:
 # cpp is used before running isolation tests to preprocess spec files.
@@ -90,10 +98,6 @@ ifndef CITUS_VALGRIND_LOG_FILE
 CITUS_VALGRIND_LOG_FILE := citus_valgrind_test_log.txt
 endif
 
-ifndef COLUMNAR_VALGRIND_LOG_FILE
-COLUMNAR_VALGRIND_LOG_FILE := columnar_valgrind_test_log.txt
-endif
-
 # using pg_regress_multi_check unnecessarily starts up multiple nodes, which isn't needed
 # for check-worker. But that's harmless besides a few cycles.
 check-worker: all
@@ -106,7 +110,7 @@ check-base: all
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/base_schedule $(EXTRA_TESTS)
 
 # check-minimal only sets up the cluster
-check-minimal: all
+check-minimal: all create-tablespaces
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/minimal_schedule $(EXTRA_TESTS)
 
@@ -132,6 +136,10 @@ check-multi: all
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
+check-multi-1: all
+	$(pg_regress_multi_check) --load-extension=citus \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
+
 check-multi-hyperscale: all
 	$(pg_regress_multi_check) --conninfo="$(conninfo)" --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule_hyperscale $(EXTRA_TESTS)
@@ -145,10 +153,15 @@ check-multi-vg: all
 	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_schedule $(EXTRA_TESTS)
 
+check-multi-1-vg: all
+	$(pg_regress_multi_check) --load-extension=citus --valgrind \
+	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/multi_1_schedule $(EXTRA_TESTS)
+
 check-columnar-vg: all
 	$(pg_regress_multi_check) --load-extension=citus --valgrind \
-	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(COLUMNAR_VALGRIND_LOG_FILE) \
-	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_am_schedule $(EXTRA_TESTS)
+	--pg_ctl-timeout=360 --connection-timeout=500000 --valgrind-path=valgrind --valgrind-log-file=$(CITUS_VALGRIND_LOG_FILE) \
+	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
 
 check-isolation: all  $(isolation_test_files)
 	$(pg_regress_multi_check) --load-extension=citus --isolationtester \
@@ -197,6 +210,12 @@ check-failure-base: all
 check-pg-upgrade:
 	$(pg_upgrade_check) --old-bindir=$(old-bindir) --new-bindir=$(new-bindir) --pgxsdir=$(pgxsdir)
 
+check-arbitrary-configs:
+	${arbitrary_config_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --configs=$(CONFIGS) --seed=$(seed)
+
+check-arbitrary-base:
+	${arbitrary_config_check} --bindir=$(bindir) --pgxsdir=$(pgxsdir) --parallel=$(parallel) --configs=$(CONFIGS) --seed=$(seed) --base
+
 check-citus-upgrade:
 	$(citus_upgrade_check) \
 		--bindir=$(bindir) \
@@ -231,3 +250,6 @@ clean-upgrade-artifacts:
 clean distclean maintainer-clean:
 	rm -f $(output_files) $(input_files)
 	rm -rf tmp_check/
+	rm -rf tmp_citus_test/
+
+all: create-tablespaces

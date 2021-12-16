@@ -105,7 +105,7 @@ typedef struct PlacementUpdateEventProgress
 	int sourcePort;
 	char targetName[255];
 	int targetPort;
-	uint64 progress;
+	pg_atomic_uint64 progress;
 } PlacementUpdateEventProgress;
 
 typedef struct NodeFillState
@@ -190,6 +190,7 @@ extern List * RebalancePlacementUpdates(List *workerNodeList, List *shardPlaceme
 										RebalancePlanFunctions *rebalancePlanFunctions);
 extern List * ReplicationPlacementUpdates(List *workerNodeList, List *shardPlacementList,
 										  int shardReplicationFactor);
+extern void ExecuteCriticalCommandInSeparateTransaction(char *command);
 
 
 #endif   /* SHARD_REBALANCER_H */

@@ -32,6 +32,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transaction_management.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/worker_shard_visibility.h"
 #include "storage/lmgr.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -88,11 +89,13 @@ citus_truncate_trigger(PG_FUNCTION_ARGS)
 		Oid schemaId = get_rel_namespace(relationId);
 		char *schemaName = get_namespace_name(schemaId);
 		char *relationName = get_rel_name(relationId);
+		bool dropShardsMetadataOnly = false;
 
-		DirectFunctionCall3(citus_drop_all_shards,
+		DirectFunctionCall4(citus_drop_all_shards,
 							ObjectIdGetDatum(relationId),
+							CStringGetTextDatum(schemaName),
 							CStringGetTextDatum(relationName),
-							CStringGetTextDatum(schemaName));
+							BoolGetDatum(dropShardsMetadataOnly));
 	}
 	else
 	{
@@ -174,10 +177,11 @@ TruncateTaskList(Oid relationId)
 Datum
 truncate_local_data_after_distributing_table(PG_FUNCTION_ARGS)
 {
-	Oid relationId = PG_GETARG_OID(0);
-
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
+
+	Oid relationId = PG_GETARG_OID(0);
+
 	EnsureLocalTableCanBeTruncated(relationId);
 
 	TruncateStmt *truncateStmt = makeNode(TruncateStmt);
@@ -215,25 +219,20 @@ EnsureLocalTableCanBeTruncated(Oid relationId)
 								  "tables.")));
 	}
 
-	/* make sure there are no foreign key references from a local table */
-	SetForeignConstraintRelationshipGraphInvalid();
-	List *referencingRelationList = ReferencingRelationIdList(relationId);
-
-	Oid referencingRelation = InvalidOid;
-	foreach_oid(referencingRelation, referencingRelationList)
+	List *referencingForeignConstaintsFromLocalTables =
+		GetForeignKeysFromLocalTables(relationId);
+	if (list_length(referencingForeignConstaintsFromLocalTables) > 0)
 	{
-		/* we do not truncate a table if there is a local table referencing it */
-		if (!IsCitusTable(referencingRelation))
-		{
-			char *referencedRelationName = get_rel_name(relationId);
-			char *referencingRelationName = get_rel_name(referencingRelation);
+		Oid foreignKeyId = linitial_oid(referencingForeignConstaintsFromLocalTables);
+		Oid referencingRelation = GetReferencingTableId(foreignKeyId);
+		char *referencedRelationName = get_rel_name(relationId);
+		char *referencingRelationName = get_rel_name(referencingRelation);
 
-			ereport(ERROR, (errmsg("cannot truncate a table referenced in a "
-								   "foreign key constraint by a local table"),
-							errdetail("Table \"%s\" references \"%s\"",
-									  referencingRelationName,
-									  referencedRelationName)));
-		}
+		ereport(ERROR, (errmsg("cannot truncate a table referenced in a "
+							   "foreign key constraint by a local table"),
+						errdetail("Table \"%s\" references \"%s\"",
+								  referencingRelationName,
+								  referencedRelationName)));
 	}
 }
 
@@ -265,6 +264,9 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 	foreach_ptr(rangeVar, relationList)
 	{
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+
+		ErrorIfIllegallyChangingKnownShard(relationId);
+
 		char relationKind = get_rel_relkind(relationId);
 		if (IsCitusTable(relationId) &&
 			relationKind == RELKIND_FOREIGN_TABLE)
@@ -422,7 +424,7 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 	const char *lockModeText = LockModeToLockModeText(lockMode);
 
 	/*
-	 * We want to acquire locks in the same order accross the nodes.
+	 * We want to acquire locks in the same order across the nodes.
 	 * Although relation ids may change, their ordering will not.
 	 */
 	relationIdList = SortList(relationIdList, CompareOids);

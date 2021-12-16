@@ -6,11 +6,23 @@
 SET citus.next_shard_id TO 520000;
 SET citus.coordinator_aggregation_strategy TO 'disabled';
 
+SELECT run_command_on_master_and_workers($r$
 CREATE OR REPLACE FUNCTION count_keys (jsonb)
 RETURNS bigint LANGUAGE SQL
 AS $$
 SELECT count(*) FROM (SELECT * FROM jsonb_object_keys($1)) t
 $$;
+$r$);
+
+SELECT run_command_on_master_and_workers($r$
+CREATE OR REPLACE FUNCTION keys_sort (jsonb)
+RETURNS jsonb LANGUAGE SQL
+AS $$
+SELECT jsonb_object_agg(key, value) FROM (
+	SELECT * FROM jsonb_each($1) ORDER BY key
+) t
+$$;
+$r$);
 
 -- Check multi_cat_agg() aggregate which is used to implement jsonb_object_agg()
 
@@ -70,26 +82,26 @@ SELECT l_quantity, jsonb_object_agg(l_orderkey::text || l_linenumber::text, l_or
 
 -- Check that we can execute jsonb_object_agg() with an expression containing NULL values
 
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text,
-						case when l_quantity > 20 then l_quantity else NULL end)
+SELECT keys_sort(jsonb_object_agg(l_orderkey::text || l_linenumber::text,
+						case when l_quantity > 20 then l_quantity else NULL end))
 	FROM lineitem WHERE l_orderkey < 5;
 
 -- Check that we can execute jsonb_object_agg() with an expression containing different types
 
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text,
-						case when l_quantity > 20 then to_jsonb(l_quantity) else '"f"'::jsonb end)
+SELECT keys_sort(jsonb_object_agg(l_orderkey::text || l_linenumber::text,
+						case when l_quantity > 20 then to_jsonb(l_quantity) else '"f"'::jsonb end))
 	FROM lineitem WHERE l_orderkey < 5;
 
 -- Check that we can execute jsonb_object_agg() with an expression containing jsonb arrays
 
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, jsonb_build_array(l_quantity, l_shipdate))
+SELECT keys_sort(jsonb_object_agg(l_orderkey::text || l_linenumber::text, jsonb_build_array(l_quantity, l_shipdate)))
 	FROM lineitem WHERE l_orderkey < 3;
 
 -- Check that we can execute jsonb_object_agg() with an expression containing arrays
 
-SELECT jsonb_object_agg(l_orderkey::text || l_linenumber::text, ARRAY[l_quantity, l_orderkey])
+SELECT keys_sort(jsonb_object_agg(l_orderkey::text || l_linenumber::text, ARRAY[l_quantity, l_orderkey]))
 	FROM lineitem WHERE l_orderkey < 3;
 
 -- Check that we return NULL in case there are no input rows to jsonb_object_agg()
 
-SELECT jsonb_object_agg(l_shipdate, l_orderkey) FROM lineitem WHERE l_quantity < 0;
+SELECT keys_sort(jsonb_object_agg(l_shipdate, l_orderkey)) FROM lineitem WHERE l_quantity < 0;

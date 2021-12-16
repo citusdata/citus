@@ -8,9 +8,9 @@ SET citus.explain_distributed_queries TO off;
 SET client_min_messages TO DEBUG2;
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
-DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  join prunable for intervals [1,5986] and [8997,14947]
-DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
+DEBUG:  join prunable for intervals [0,2147483647] and [-2147483648,-1]
   sum  |        avg
 ---------------------------------------------------------------------
  36089 | 3.0074166666666667
@@ -18,8 +18,9 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
 
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 9030;
-DEBUG:  Router planner does not support append-partitioned tables.
-DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
+DEBUG:  join prunable for intervals [0,2147483647] and [-2147483648,-1]
   sum  |        avg
 ---------------------------------------------------------------------
  17999 | 3.0189533713518953
@@ -29,7 +30,9 @@ DEBUG:  join prunable for intervals [8997,14947] and [1,5986]
 -- works as expected in this case.
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 20000;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
+DEBUG:  join prunable for intervals [0,2147483647] and [-2147483648,-1]
  sum | avg
 ---------------------------------------------------------------------
      |
@@ -38,18 +41,44 @@ DEBUG:  Router planner does not support append-partitioned tables.
 -- Partition pruning left three shards for the lineitem and one shard for the
 -- orders table. These shard sets don't overlap, so join pruning should prune
 -- out all the shards, and leave us with an empty task list.
+select * from pg_dist_shard
+where logicalrelid='lineitem'::regclass or
+	  logicalrelid='orders'::regclass
+order by shardid;
+ logicalrelid | shardid | shardstorage | shardminvalue | shardmaxvalue
+---------------------------------------------------------------------
+ lineitem     |  360000 | t            | -2147483648   | -1
+ lineitem     |  360001 | t            | 0             | 2147483647
+ orders       |  360002 | t            | -2147483648   | -1
+ orders       |  360003 | t            | 0             | 2147483647
+(4 rows)
+
+set client_min_messages to debug3;
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND l_orderkey > 6000 AND o_orderkey < 6000;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  no shard pruning constraints on lineitem found
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  no shard pruning constraints on orders found
+DEBUG:  shard count after pruning for orders: 2
+DEBUG:  Router planner cannot handle multi-shard select queries
+DEBUG:  no shard pruning constraints on lineitem found
+DEBUG:  shard count after pruning for lineitem: 2
+DEBUG:  no shard pruning constraints on orders found
+DEBUG:  shard count after pruning for orders: 2
+DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
+DEBUG:  join prunable for intervals [0,2147483647] and [-2147483648,-1]
+DEBUG:  assigned task to node localhost:xxxxx
+DEBUG:  assigned task to node localhost:xxxxx
  sum | avg
 ---------------------------------------------------------------------
      |
 (1 row)
 
+set client_min_messages to debug2;
 -- Make sure that we can handle filters without a column
 SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey AND false;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Creating router plan
  sum | avg
 ---------------------------------------------------------------------
      |
@@ -58,7 +87,7 @@ DEBUG:  Router planner does not support append-partitioned tables.
 SELECT sum(l_linenumber), avg(l_linenumber)
     FROM lineitem INNER JOIN orders ON (l_orderkey = o_orderkey)
 	WHERE false;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Creating router plan
  sum | avg
 ---------------------------------------------------------------------
      |
@@ -72,7 +101,7 @@ EXPLAIN (COSTS OFF)
 SELECT count(*)
 	FROM array_partitioned_table table1, array_partitioned_table table2
 	WHERE table1.array_column = table2.array_column;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [{},{AZZXSP27F21T6,AZZXSP27F21T6}] and [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}]
 DEBUG:  join prunable for intervals [{BA1000U2AMO4ZGX,BZZXSP27F21T6},{CA1000U2AMO4ZGX,CZZXSP27F21T6}] and [{},{AZZXSP27F21T6,AZZXSP27F21T6}]
                              QUERY PLAN
@@ -86,7 +115,7 @@ EXPLAIN (COSTS OFF)
 SELECT count(*)
 	FROM composite_partitioned_table table1, composite_partitioned_table table2
 	WHERE table1.composite_column = table2.composite_column;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [(a,3,b),(b,4,c)] and [(c,5,d),(d,6,e)]
 DEBUG:  join prunable for intervals [(c,5,d),(d,6,e)] and [(a,3,b),(b,4,c)]
                              QUERY PLAN
@@ -101,7 +130,7 @@ EXPLAIN (COSTS OFF)
 SELECT count(*)
 	FROM varchar_partitioned_table table1, varchar_partitioned_table table2
 	WHERE table1.varchar_column = table2.varchar_column;
-DEBUG:  Router planner does not support append-partitioned tables.
+DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  join prunable for intervals [AA1000U2AMO4ZGX,AZZXSP27F21T6] and [BA1000U2AMO4ZGX,BZZXSP27F21T6]
 DEBUG:  join prunable for intervals [BA1000U2AMO4ZGX,BZZXSP27F21T6] and [AA1000U2AMO4ZGX,AZZXSP27F21T6]
                              QUERY PLAN

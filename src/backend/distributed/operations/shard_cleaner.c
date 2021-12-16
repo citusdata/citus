@@ -12,60 +12,109 @@
 
 #include "postgres.h"
 
+#include "access/xact.h"
+#include "postmaster/postmaster.h"
 
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/shard_cleaner.h"
+#include "distributed/shard_rebalancer.h"
+#include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/worker_transaction.h"
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(master_defer_delete_shards);
+PG_FUNCTION_INFO_V1(citus_cleanup_orphaned_shards);
+PG_FUNCTION_INFO_V1(isolation_cleanup_orphaned_shards);
 
 static bool TryDropShard(GroupShardPlacement *placement);
 static bool TryLockRelationAndPlacementCleanup(Oid relationId, LOCKMODE lockmode);
 
+
 /*
- * master_defer_delete_shards implements a user-facing UDF to deleter orphaned shards that
- * are still haning around in the system. These shards are orphaned by previous actions
- * that were not directly able to delete the placements eg. shard moving or dropping of a
- * distributed table while one of the data nodes was not online.
+ * citus_cleanup_orphaned_shards implements a user-facing UDF to delete
+ * orphaned shards that are still haning around in the system. These shards are
+ * orphaned by previous actions that were not directly able to delete the
+ * placements eg. shard moving or dropping of a distributed table while one of
+ * the data nodes was not online.
  *
- * This function iterates through placements where shardstate is SHARD_STATE_TO_DELETE
- * (shardstate = 4), drops the corresponding tables from the node and removes the
- * placement information from the catalog.
+ * This function iterates through placements where shardstate is
+ * SHARD_STATE_TO_DELETE (shardstate = 4), drops the corresponding tables from
+ * the node and removes the placement information from the catalog.
  *
- * The function takes no arguments and runs cluster wide
+ * The function takes no arguments and runs cluster wide. It cannot be run in a
+ * transaction, because holding the locks it takes for a long time is not good.
+ * While the locks are held, it is impossible for the background daemon to
+ * cleanup orphaned shards.
  */
 Datum
-master_defer_delete_shards(PG_FUNCTION_ARGS)
+citus_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+	PreventInTransactionBlock(true, "citus_cleanup_orphaned_shards");
+
+	bool waitForLocks = true;
+	int droppedShardCount = DropOrphanedShards(waitForLocks);
+	if (droppedShardCount > 0)
+	{
+		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
+	}
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * isolation_cleanup_orphaned_shards implements a test UDF that's the same as
+ * citus_cleanup_orphaned_shards. The only difference is that this command can
+ * be run in transactions, this is to test
+ */
+Datum
+isolation_cleanup_orphaned_shards(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 	EnsureCoordinator();
 
 	bool waitForLocks = true;
-	int droppedShardCount = DropMarkedShards(waitForLocks);
+	int droppedShardCount = DropOrphanedShards(waitForLocks);
+	if (droppedShardCount > 0)
+	{
+		ereport(NOTICE, (errmsg("cleaned up %d orphaned shards", droppedShardCount)));
+	}
 
-	PG_RETURN_INT32(droppedShardCount);
+	PG_RETURN_VOID();
 }
 
 
 /*
- * TryDropMarkedShards is a wrapper around DropMarkedShards that catches
+ * DropOrphanedShardsInSeparateTransaction cleans up orphaned shards by
+ * connecting to localhost. This is done, so that the locks that
+ * DropOrphanedShards takes are only held for a short time.
+ */
+void
+DropOrphanedShardsInSeparateTransaction(void)
+{
+	ExecuteCriticalCommandInSeparateTransaction("CALL citus_cleanup_orphaned_shards()");
+}
+
+
+/*
+ * TryDropOrphanedShards is a wrapper around DropOrphanedShards that catches
  * any errors to make it safe to use in the maintenance daemon.
  *
  * If dropping any of the shards failed this function returns -1, otherwise it
  * returns the number of dropped shards.
  */
 int
-TryDropMarkedShards(bool waitForLocks)
+TryDropOrphanedShards(bool waitForLocks)
 {
 	int droppedShardCount = 0;
 	MemoryContext savedContext = CurrentMemoryContext;
 	PG_TRY();
 	{
-		droppedShardCount = DropMarkedShards(waitForLocks);
+		droppedShardCount = DropOrphanedShards(waitForLocks);
 	}
 	PG_CATCH();
 	{
@@ -84,7 +133,7 @@ TryDropMarkedShards(bool waitForLocks)
 
 
 /*
- * DropMarkedShards removes shards that were marked SHARD_STATE_TO_DELETE before.
+ * DropOrphanedShards removes shards that were marked SHARD_STATE_TO_DELETE before.
  *
  * It does so by trying to take an exclusive lock on the shard and its
  * colocated placements before removing. If the lock cannot be obtained it
@@ -103,7 +152,7 @@ TryDropMarkedShards(bool waitForLocks)
  *
  */
 int
-DropMarkedShards(bool waitForLocks)
+DropOrphanedShards(bool waitForLocks)
 {
 	int removedShardCount = 0;
 	ListCell *shardPlacementCell = NULL;
@@ -159,7 +208,7 @@ DropMarkedShards(bool waitForLocks)
 
 	if (failedShardDropCount > 0)
 	{
-		ereport(WARNING, (errmsg("Failed to drop %d old shards out of %d",
+		ereport(WARNING, (errmsg("Failed to drop %d orphaned shards out of %d",
 								 failedShardDropCount, list_length(shardPlacementList))));
 	}
 
@@ -168,7 +217,7 @@ DropMarkedShards(bool waitForLocks)
 
 
 /*
- * TryLockRelationAndCleanup tries to lock the given relation
+ * TryLockRelationAndPlacementCleanup tries to lock the given relation
  * and the placement cleanup. If it cannot, it returns false.
  *
  */
@@ -226,9 +275,9 @@ TryDropShard(GroupShardPlacement *placement)
 
 	/* remove the shard from the node */
 	bool success =
-		SendOptionalCommandListToWorkerInTransaction(shardPlacement->nodeName,
-													 shardPlacement->nodePort,
-													 NULL, dropCommandList);
+		SendOptionalCommandListToWorkerOutsideTransaction(shardPlacement->nodeName,
+														  shardPlacement->nodePort,
+														  NULL, dropCommandList);
 	if (success)
 	{
 		/* delete the actual placement */

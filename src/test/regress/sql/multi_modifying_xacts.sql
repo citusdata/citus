@@ -1,4 +1,3 @@
-
 SET citus.next_shard_id TO 1200000;
 SET citus.next_placement_id TO 1200000;
 
@@ -17,11 +16,13 @@ CREATE TABLE labs (
 	name text NOT NULL
 );
 
-SELECT master_create_distributed_table('researchers', 'lab_id', 'hash');
-SELECT master_create_worker_shards('researchers', 2, 2);
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('researchers', 'lab_id', shard_count:=2);
 
-SELECT master_create_distributed_table('labs', 'id', 'hash');
-SELECT master_create_worker_shards('labs', 1, 1);
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('labs', 'id', shard_count:=1);
+
+RESET citus.shard_replication_factor;
 
 -- might be confusing to have two people in the same lab with the same name
 CREATE UNIQUE INDEX avoid_name_confusion_idx ON researchers (lab_id, name);
@@ -254,7 +255,6 @@ SELECT * FROM researchers WHERE lab_id = 6;
 SELECT count(*) FROM pg_dist_transaction;
 
 -- 2pc failure and success tests
-SET citus.multi_shard_commit_protocol TO '2pc';
 SELECT recover_prepared_transactions();
 -- copy with unique index violation
 BEGIN;
@@ -282,7 +282,6 @@ SELECT * FROM researchers WHERE lab_id = 6;
 -- verify 2pc
 SELECT count(*) FROM pg_dist_transaction;
 
-RESET citus.multi_shard_commit_protocol;
 
 -- create a check function
 SELECT * from run_command_on_workers('CREATE FUNCTION reject_large_id() RETURNS trigger AS $rli$
@@ -302,9 +301,9 @@ ORDER BY nodeport, shardid;
 
 -- hide postgresql version dependend messages for next test only
 \set VERBOSITY terse
--- deferred check should abort the transaction
+-- for replicated tables use 2PC even if multi-shard commit protocol
+-- is set to 2PC
 BEGIN;
-SET LOCAL citus.multi_shard_commit_protocol TO '1pc';
 DELETE FROM researchers WHERE lab_id = 6;
 \copy researchers FROM STDIN delimiter ','
 31, 6, 'Bjarne Stroustrup'
@@ -313,6 +312,29 @@ DELETE FROM researchers WHERE lab_id = 6;
 30, 6, 'Dennis Ritchie'
 \.
 COMMIT;
+
+-- single row, multi-row INSERTs should also fail
+-- with or without transaction blocks on the COMMIT time
+INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup');
+INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup'), (32, 7, 'Bjarne Stroustrup');
+
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup');
+COMMIT;
+
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup'), (32, 7, 'Bjarne Stroustrup');
+COMMIT;
+
+-- and, rollback should be fine
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup');
+ROLLBACK;
+
+BEGIN;
+    INSERT INTO researchers VALUES (31, 6, 'Bjarne Stroustrup'), (32, 7, 'Bjarne Stroustrup');
+ROLLBACK;
+
 \unset VERBOSITY
 
 -- verify everyhing including delete is rolled back
@@ -488,16 +510,17 @@ FOR EACH ROW EXECUTE PROCEDURE reject_bad();
 \c - - - :master_port
 
 -- should be the same story as before, just at COMMIT time
+-- as we use 2PC, the transaction is rollbacked
 BEGIN;
 INSERT INTO objects VALUES (1, 'apple');
 INSERT INTO objects VALUES (2, 'BAD');
 INSERT INTO labs VALUES (9, 'Umbrella Corporation');
 COMMIT;
 
--- data should be persisted
+-- data should not persisted
 SELECT * FROM objects WHERE id = 2;
 
--- but one placement should be bad
+-- and nonne of the placements should be bad
 SELECT count(*)
 FROM   pg_dist_shard_placement AS sp,
 	   pg_dist_shard           AS s
@@ -561,11 +584,11 @@ INSERT INTO labs VALUES (9, 'BAD');
 COMMIT;
 \set VERBOSITY default
 
--- data to objects should be persisted, but labs should not...
+-- none of the changes should be persisted
 SELECT * FROM objects WHERE id = 1;
 SELECT * FROM labs WHERE id = 8;
 
--- labs should be healthy, but one object placement shouldn't be
+-- all placements should be healthy
 SELECT   s.logicalrelid::regclass::text, sp.shardstate, count(*)
 FROM     pg_dist_shard_placement AS sp,
 	     pg_dist_shard           AS s
@@ -899,6 +922,7 @@ SELECT create_distributed_table('numbers_hash_failure_test', 'key');
 
 -- ensure that the shard is created for this user
 \c - test_user - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt reference_failure_test_1200015
 
 -- now connect with the default user,
@@ -918,8 +942,6 @@ COMMIT;
 
 BEGIN;
 COPY reference_failure_test FROM STDIN WITH (FORMAT 'csv');
-2,2
-\.
 COMMIT;
 
 -- show that no data go through the table and shard states are good
@@ -937,19 +959,16 @@ AND      s.logicalrelid = 'reference_failure_test'::regclass
 GROUP BY s.logicalrelid, sp.shardstate
 ORDER BY s.logicalrelid, sp.shardstate;
 
+-- any failure rollbacks the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-1,1
-2,2
-\.
+ABORT;
 
--- some placements are invalid before abort
+-- none of placements are invalid after abort
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
-
-ABORT;
 
 -- verify nothing is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
@@ -960,27 +979,18 @@ FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
 
+-- all failures roll back the transaction
 BEGIN;
 COPY numbers_hash_failure_test FROM STDIN WITH (FORMAT 'csv');
-1,1
-2,2
-\.
-
--- check shard states before commit
-SELECT shardid, shardstate, nodename, nodeport
-FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
-WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
-ORDER BY shardid, nodeport;
-
 COMMIT;
 
--- expect some placements to be market invalid after commit
+-- expect none of the placements to be market invalid after commit
 SELECT shardid, shardstate, nodename, nodeport
 FROM pg_dist_shard_placement JOIN pg_dist_shard USING (shardid)
 WHERE logicalrelid = 'numbers_hash_failure_test'::regclass
 ORDER BY shardid, nodeport;
 
--- verify data is inserted
+-- verify no data is inserted
 SELECT count(*) FROM numbers_hash_failure_test;
 
 -- break the other node as well
@@ -1022,6 +1032,7 @@ CREATE TABLE itemgroups (
 );
 SELECT create_reference_table('itemgroups');
 
+DROP TABLE IF EXISTS users ;
 CREATE TABLE users (
     id int PRIMARY KEY,
     name text,

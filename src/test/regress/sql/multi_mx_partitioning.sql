@@ -8,7 +8,6 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 
 -- make sure wen can create partitioning tables in MX
-SET citus.replication_model TO 'streaming';
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- 1-) Distributing partitioned table
@@ -56,7 +55,6 @@ ORDER BY
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
 -- 2-) Creating partition of a distributed table
@@ -86,7 +84,6 @@ ORDER BY
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
 -- 3-) Attaching non distributed table to a distributed table
@@ -125,7 +122,6 @@ SELECT * FROM partitioning_test ORDER BY 1;
 SELECT inhrelid::regclass FROM pg_inherits WHERE inhparent = 'partitioning_test'::regclass ORDER BY 1;
 
 \c - - - :master_port
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
 -- 4-) Attaching distributed table to distributed table
@@ -161,6 +157,51 @@ DROP TABLE partitioning_test;
 
 \c - - - :master_port
 
+-- Make sure that creating index on only parent and child won't form any inheritance but it will
+-- be formed after attaching child index to parent index
+CREATE INDEX partitioning_test_2010_idx ON ONLY partitioning_test_2010 USING btree (id);
+
+-- Show that there is no inheritance relation for the index above
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass = 'partitioning_test_2010_idx'::regclass;
+
+-- Now add the index only on parent and show that there won't be any inheritance for those indices
+CREATE INDEX partition_only_parent_index ON ONLY partitioning_test USING btree (id);
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass = 'partitioning_test_2010_idx'::regclass;
+
+-- Now attach the child index to parent and show there is inheritance
+ALTER INDEX partition_only_parent_index ATTACH PARTITION partitioning_test_2010_idx;
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass = 'partitioning_test_2010_idx'::regclass;
+
+-- show that index on parent is invalid before attaching partition indices for all partitions
+CREATE INDEX partitioning_test_2011_idx ON ONLY partitioning_test_2011 USING btree (id);
+CREATE INDEX partitioning_test_2012_idx ON ONLY partitioning_test_2012 USING btree (id);
+CREATE INDEX partitioning_test_2013_idx ON ONLY partitioning_test_2013 USING btree (id);
+
+SELECT indisvalid FROM pg_index WHERE indexrelid::regclass = 'partition_only_parent_index'::regclass;
+
+-- show that index on parent becomes valid after attaching all partition indices
+ALTER INDEX partition_only_parent_index ATTACH PARTITION partitioning_test_2011_idx;
+ALTER INDEX partition_only_parent_index ATTACH PARTITION partitioning_test_2012_idx;
+ALTER INDEX partition_only_parent_index ATTACH PARTITION partitioning_test_2013_idx;
+
+SELECT indisvalid FROM pg_index WHERE indexrelid::regclass = 'partition_only_parent_index'::regclass;
+
+-- show that creating new partitions gets the index by default and the index is still valid
+CREATE TABLE partitioning_test_2014 PARTITION OF partitioning_test FOR VALUES FROM ('2014-01-01') TO ('2015-01-01');
+
+SELECT count(*) FROM pg_index WHERE indexrelid::regclass::text LIKE 'partitioning_test_2014%';
+
+SELECT indisvalid FROM pg_index WHERE indexrelid::regclass = 'partition_only_parent_index'::regclass;
+
+\c - - - :worker_1_port
+
+-- Show that partitioned index is not visible on the MX worker node
+select citus_table_is_visible(indexrelid::regclass) from pg_index where indexrelid::regclass::text LIKE 'partition_only_parent_index_%' limit 1;
+
+\c - - - :master_port
+
+DROP INDEX partition_only_parent_index;
+
 -- make sure we can repeatedly call start_metadata_sync_to_node
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
@@ -175,7 +216,6 @@ DROP TABLE partitioning_test;
 DROP TABLE IF EXISTS partitioning_test_2013;
 
 -- test schema drop with partitioned tables
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA partition_test;
 SET SEARCH_PATH TO partition_test;

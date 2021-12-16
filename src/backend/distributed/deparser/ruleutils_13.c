@@ -465,6 +465,19 @@ pg_get_query_def(Query *query, StringInfo buffer)
 	get_query_def(query, buffer, NIL, NULL, 0, WRAP_COLUMN_DEFAULT, 0);
 }
 
+/*
+ * get_merged_argument_list merges both IN and OUT arguments lists into one and also
+ * eliminates the INOUT duplicates(present in both the lists).
+ */
+bool
+get_merged_argument_list(CallStmt *stmt, List **mergedNamedArgList,
+					   Oid **mergedNamedArgTypes,
+					   List **mergedArgumentList,
+					   int *totalArguments)
+{
+	/* No OUT argument support in Postgres 13 */
+	return false;
+}
 
 /*
  * pg_get_rule_expr deparses an expression and returns the result as a string.
@@ -6068,6 +6081,10 @@ get_rule_expr(Node *node, deparse_context *context,
 			get_tablefunc((TableFunc *) node, context, showimplicit);
 			break;
 
+		case T_CallStmt:
+			get_func_expr(((CallStmt *) node)->funcexpr, context, showimplicit);
+			break;
+
 		default:
 			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(node));
 			break;
@@ -8559,4 +8576,4 @@ getOwnedSequences_internal(Oid relid, AttrNumber attnum, char deptype)
 	return result;
 }
 
-#endif /* (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13) */
+#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */

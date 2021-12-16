@@ -63,6 +63,7 @@ typedef struct
 	char partitionMethod;
 	uint32 colocationId;
 	char replicationModel;
+	bool autoConverted; /* table auto-added to metadata, valid for citus local tables */
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
@@ -143,12 +144,19 @@ extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
 
 extern bool IsCitusTable(Oid relationId);
+extern bool IsCitusTableViaCatalog(Oid relationId);
+extern char PgDistPartitionViaCatalog(Oid relationId);
+extern List * LookupDistShardTuples(Oid relationId);
+extern char PartitionMethodViaCatalog(Oid relationId);
+extern Var * PartitionColumnViaCatalog(Oid relationId);
 extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
 extern Oid RelationIdForShard(uint64 shardId);
 extern bool ReferenceTableShardId(uint64 shardId);
-extern ShardPlacement * FindShardPlacementOnGroup(int32 groupId, uint64 shardId);
+extern ShardPlacement * ShardPlacementOnGroupIncludingOrphanedPlacements(int32 groupId,
+																		 uint64 shardId);
+extern ShardPlacement * ActiveShardPlacementOnGroup(int32 groupId, uint64 shardId);
 extern GroupShardPlacement * LoadGroupShardPlacement(uint64 shardId, uint64 placementId);
 extern ShardPlacement * LoadShardPlacement(uint64 shardId, uint64 placementId);
 extern CitusTableCacheEntry * GetCitusTableCacheEntry(Oid distributedRelationId);
@@ -158,7 +166,7 @@ extern DistObjectCacheEntry * LookupDistObjectCacheEntry(Oid classid, Oid objid,
 extern int32 GetLocalGroupId(void);
 extern void CitusTableCacheFlushInvalidatedEntries(void);
 extern Oid LookupShardRelationFromCatalog(int64 shardId, bool missing_ok);
-extern List * ShardPlacementList(uint64 shardId);
+extern List * ShardPlacementListIncludingOrphanedPlacements(uint64 shardId);
 extern bool ShardExists(int64 shardId);
 extern void CitusInvalidateRelcacheByRelid(Oid relationId);
 extern void CitusInvalidateRelcacheByShardId(int64 shardId);
@@ -180,11 +188,10 @@ extern bool HasOverlappingShardInterval(ShardInterval **shardIntervalArray,
 extern ShardPlacement * ShardPlacementForFunctionColocatedWithReferenceTable(
 	CitusTableCacheEntry *cacheEntry);
 extern ShardPlacement * ShardPlacementForFunctionColocatedWithDistTable(
-	DistObjectCacheEntry *procedure, FuncExpr *funcExpr, Var *partitionColumn,
+	DistObjectCacheEntry *procedure, List *argumentList, Var *partitionColumn,
 	CitusTableCacheEntry
 	*cacheEntry,
 	PlannedStmt *plan);
-
 extern bool CitusHasBeenLoaded(void);
 extern bool CheckCitusVersion(int elevel);
 extern bool CheckAvailableVersion(int elevel);
@@ -192,8 +199,12 @@ extern bool InstalledAndAvailableVersionsSame(void);
 extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
 extern void ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
+extern void EnsureModificationsCanRunOnRelation(Oid relationId);
 extern char LookupDistributionMethod(Oid distributionMethodOid);
 extern bool RelationExists(Oid relationId);
+extern ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
+											TupleDesc tupleDescriptor, Oid intervalTypeId,
+											int32 intervalTypeMod);
 
 /* access WorkerNodeHash */
 extern bool HasAnyNodes(void);

@@ -7,6 +7,7 @@
 -- CREATE TEST TABLES
 --
 CREATE SCHEMA multi_index_statements;
+CREATE SCHEMA multi_index_statements_2;
 SET search_path TO multi_index_statements;
 SET citus.next_shard_id TO 102080;
 CREATE TABLE index_test_range(a int, b int, c int);
@@ -65,7 +66,7 @@ CREATE INDEX lineitem_partkey_desc_index ON public.lineitem (l_partkey DESC);
 CREATE INDEX lineitem_partial_index ON public.lineitem (l_shipdate)
 	WHERE l_shipdate < '1995-01-01';
 CREATE INDEX lineitem_colref_index ON public.lineitem (record_ne(lineitem.*, NULL));
-SET client_min_messages = ERROR; -- avoid version dependant warning about WAL
+SET client_min_messages = ERROR; -- avoid version dependent warning about WAL
 CREATE INDEX lineitem_orderkey_hash_index ON public.lineitem USING hash (l_partkey);
 CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range(a);
 CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range(a,b);
@@ -75,6 +76,34 @@ CREATE UNIQUE INDEX index_test_hash_index_a_b_partial ON index_test_hash(a,b) WH
 CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON index_test_range(a,b) WHERE c IS NOT NULL;
 CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON index_test_hash(a) INCLUDE (b,c);
 RESET client_min_messages;
+-- Verify that we can create expression indexes and be robust to different schemas
+CREATE OR REPLACE FUNCTION value_plus_one(a int)
+RETURNS int IMMUTABLE AS $$
+BEGIN
+	RETURN a + 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('value_plus_one(int)');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION multi_index_statements_2.value_plus_one(a int)
+RETURNS int IMMUTABLE AS $$
+BEGIN
+	RETURN a + 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('multi_index_statements_2.value_plus_one(int)');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE INDEX ON index_test_hash ((value_plus_one(b)));
+CREATE INDEX ON index_test_hash ((multi_index_statements.value_plus_one(b)));
+CREATE INDEX ON index_test_hash ((multi_index_statements_2.value_plus_one(b)));
 -- Verify that we handle if not exists statements correctly
 CREATE INDEX lineitem_orderkey_index on public.lineitem(l_orderkey);
 ERROR:  relation "lineitem_orderkey_index" already exists
@@ -104,6 +133,9 @@ DROP TABLE local_table;
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
        schemaname       |    tablename     |             indexname              | tablespace |                                                                  indexdef
 ---------------------------------------------------------------------
+ multi_index_statements | index_test_hash  | index_test_hash_expr_idx           |            | CREATE INDEX index_test_hash_expr_idx ON multi_index_statements.index_test_hash USING btree (value_plus_one(b))
+ multi_index_statements | index_test_hash  | index_test_hash_expr_idx1          |            | CREATE INDEX index_test_hash_expr_idx1 ON multi_index_statements.index_test_hash USING btree (value_plus_one(b))
+ multi_index_statements | index_test_hash  | index_test_hash_expr_idx2          |            | CREATE INDEX index_test_hash_expr_idx2 ON multi_index_statements.index_test_hash USING btree (multi_index_statements_2.value_plus_one(b))
  multi_index_statements | index_test_hash  | index_test_hash_index_a            |            | CREATE UNIQUE INDEX index_test_hash_index_a ON multi_index_statements.index_test_hash USING btree (a)
  multi_index_statements | index_test_hash  | index_test_hash_index_a_b          |            | CREATE UNIQUE INDEX index_test_hash_index_a_b ON multi_index_statements.index_test_hash USING btree (a, b)
  multi_index_statements | index_test_hash  | index_test_hash_index_a_b_c        |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON multi_index_statements.index_test_hash USING btree (a) INCLUDE (b, c)
@@ -120,28 +152,28 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
  public                 | lineitem         | lineitem_partkey_desc_index        |            | CREATE INDEX lineitem_partkey_desc_index ON public.lineitem USING btree (l_partkey DESC)
  public                 | lineitem         | lineitem_pkey                      |            | CREATE UNIQUE INDEX lineitem_pkey ON public.lineitem USING btree (l_orderkey, l_linenumber)
  public                 | lineitem         | lineitem_time_index                |            | CREATE INDEX lineitem_time_index ON public.lineitem USING btree (l_shipdate)
-(16 rows)
+(19 rows)
 
 \c - - - :worker_1_port
-SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
+SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_%' ORDER BY relname LIMIT 1);
  count
 ---------------------------------------------------------------------
      9
 (1 row)
 
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash_%';
  count
 ---------------------------------------------------------------------
-    32
+    56
 (1 row)
 
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range_%';
  count
 ---------------------------------------------------------------------
      6
 (1 row)
 
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append_%';
  count
 ---------------------------------------------------------------------
      0
@@ -150,8 +182,6 @@ SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
 \c - - - :master_port
 SET search_path TO multi_index_statements, public;
 -- Verify that we error out on unsupported statement types
-CREATE UNIQUE INDEX try_index ON public.lineitem (l_orderkey);
-ERROR:  creating unique indexes on append-partitioned tables is currently unsupported
 CREATE INDEX try_index ON lineitem (l_orderkey) TABLESPACE newtablespace;
 ERROR:  specifying tablespaces with CREATE INDEX statements is currently unsupported
 CREATE UNIQUE INDEX try_unique_range_index ON index_test_range(b);
@@ -186,6 +216,9 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
        schemaname       |    tablename     |             indexname              | tablespace |                                                                  indexdef
 ---------------------------------------------------------------------
  multi_index_statements | index_test_hash  | index_test_hash_a_idx              |            | CREATE UNIQUE INDEX index_test_hash_a_idx ON multi_index_statements.index_test_hash USING btree (a)
+ multi_index_statements | index_test_hash  | index_test_hash_expr_idx           |            | CREATE INDEX index_test_hash_expr_idx ON multi_index_statements.index_test_hash USING btree (value_plus_one(b))
+ multi_index_statements | index_test_hash  | index_test_hash_expr_idx1          |            | CREATE INDEX index_test_hash_expr_idx1 ON multi_index_statements.index_test_hash USING btree (value_plus_one(b))
+ multi_index_statements | index_test_hash  | index_test_hash_expr_idx2          |            | CREATE INDEX index_test_hash_expr_idx2 ON multi_index_statements.index_test_hash USING btree (multi_index_statements_2.value_plus_one(b))
  multi_index_statements | index_test_hash  | index_test_hash_index_a            |            | CREATE UNIQUE INDEX index_test_hash_index_a ON multi_index_statements.index_test_hash USING btree (a)
  multi_index_statements | index_test_hash  | index_test_hash_index_a_b          |            | CREATE UNIQUE INDEX index_test_hash_index_a_b ON multi_index_statements.index_test_hash USING btree (a, b)
  multi_index_statements | index_test_hash  | index_test_hash_index_a_b_c        |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON multi_index_statements.index_test_hash USING btree (a) INCLUDE (b, c)
@@ -204,7 +237,7 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
  public                 | lineitem         | lineitem_partkey_desc_index        |            | CREATE INDEX lineitem_partkey_desc_index ON public.lineitem USING btree (l_partkey DESC)
  public                 | lineitem         | lineitem_pkey                      |            | CREATE UNIQUE INDEX lineitem_pkey ON public.lineitem USING btree (l_orderkey, l_linenumber)
  public                 | lineitem         | lineitem_time_index                |            | CREATE INDEX lineitem_time_index ON public.lineitem USING btree (l_shipdate)
-(19 rows)
+(22 rows)
 
 --
 -- REINDEX
@@ -222,16 +255,11 @@ DROP INDEX lineitem_orderkey_index, lineitem_partial_index;
 ERROR:  cannot drop multiple distributed objects in a single command
 HINT:  Try dropping each object in a separate DROP command.
 -- Verify that we can succesfully drop indexes
+DROP INDEX lineitem_orderkey_index;
+DROP INDEX lineitem_orderkey_index_new;
 DROP INDEX lineitem_partkey_desc_index;
 DROP INDEX lineitem_partial_index;
 DROP INDEX lineitem_colref_index;
--- Verify that we can drop distributed indexes with local indexes
-CREATE TABLE local_table(a int, b int);
-CREATE INDEX local_index ON local_table(a);
-CREATE INDEX local_index2 ON local_table(b);
-DROP INDEX lineitem_orderkey_index, local_index;
-DROP INDEX IF EXISTS lineitem_orderkey_index_new, local_index2, non_existing_index;
-NOTICE:  index "non_existing_index" does not exist, skipping
 -- Verify that we handle if exists statements correctly
 DROP INDEX non_existent_index;
 ERROR:  index "non_existent_index" does not exist
@@ -258,22 +286,26 @@ SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (
 (2 rows)
 
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
-       schemaname       |    tablename    |          indexname          | tablespace |                                                         indexdef
+       schemaname       |    tablename    |          indexname          | tablespace |                                                                 indexdef
 ---------------------------------------------------------------------
  multi_index_statements | index_test_hash | index_test_hash_a_idx       |            | CREATE UNIQUE INDEX index_test_hash_a_idx ON multi_index_statements.index_test_hash USING btree (a)
+ multi_index_statements | index_test_hash | index_test_hash_expr_idx    |            | CREATE INDEX index_test_hash_expr_idx ON multi_index_statements.index_test_hash USING btree (value_plus_one(b))
+ multi_index_statements | index_test_hash | index_test_hash_expr_idx1   |            | CREATE INDEX index_test_hash_expr_idx1 ON multi_index_statements.index_test_hash USING btree (value_plus_one(b))
+ multi_index_statements | index_test_hash | index_test_hash_expr_idx2   |            | CREATE INDEX index_test_hash_expr_idx2 ON multi_index_statements.index_test_hash USING btree (multi_index_statements_2.value_plus_one(b))
  multi_index_statements | index_test_hash | index_test_hash_index_a_b_c |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON multi_index_statements.index_test_hash USING btree (a) INCLUDE (b, c)
-(2 rows)
+(5 rows)
 
 \c - - - :worker_1_port
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
+SET citus.override_table_visibility TO FALSE;
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname SIMILAR TO 'lineitem%\d' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
     indrelid     |           indexrelid
 ---------------------------------------------------------------------
- lineitem_290000 | lineitem_l_orderkey_idx_290000
- lineitem_290000 | lineitem_l_shipdate_idx_290000
+ lineitem_360000 | lineitem_l_orderkey_idx_360000
+ lineitem_360000 | lineitem_l_shipdate_idx_360000
 (2 rows)
 
-SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
-       schemaname       |       tablename        |             indexname              | tablespace |                                                                indexdef
+SELECT * FROM pg_indexes WHERE tablename SIMILAR TO 'index_test_%\d' ORDER BY indexname;
+       schemaname       |       tablename        |             indexname              | tablespace |                                                                        indexdef
 ---------------------------------------------------------------------
  multi_index_statements | index_test_hash_102082 | index_test_hash_a_idx_102082       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102082 ON multi_index_statements.index_test_hash_102082 USING btree (a)
  multi_index_statements | index_test_hash_102083 | index_test_hash_a_idx_102083       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102083 ON multi_index_statements.index_test_hash_102083 USING btree (a)
@@ -283,6 +315,30 @@ SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
  multi_index_statements | index_test_hash_102087 | index_test_hash_a_idx_102087       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102087 ON multi_index_statements.index_test_hash_102087 USING btree (a)
  multi_index_statements | index_test_hash_102088 | index_test_hash_a_idx_102088       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102088 ON multi_index_statements.index_test_hash_102088 USING btree (a)
  multi_index_statements | index_test_hash_102089 | index_test_hash_a_idx_102089       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102089 ON multi_index_statements.index_test_hash_102089 USING btree (a)
+ multi_index_statements | index_test_hash_102082 | index_test_hash_expr_idx1_102082   |            | CREATE INDEX index_test_hash_expr_idx1_102082 ON multi_index_statements.index_test_hash_102082 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102083 | index_test_hash_expr_idx1_102083   |            | CREATE INDEX index_test_hash_expr_idx1_102083 ON multi_index_statements.index_test_hash_102083 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102084 | index_test_hash_expr_idx1_102084   |            | CREATE INDEX index_test_hash_expr_idx1_102084 ON multi_index_statements.index_test_hash_102084 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102085 | index_test_hash_expr_idx1_102085   |            | CREATE INDEX index_test_hash_expr_idx1_102085 ON multi_index_statements.index_test_hash_102085 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102086 | index_test_hash_expr_idx1_102086   |            | CREATE INDEX index_test_hash_expr_idx1_102086 ON multi_index_statements.index_test_hash_102086 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102087 | index_test_hash_expr_idx1_102087   |            | CREATE INDEX index_test_hash_expr_idx1_102087 ON multi_index_statements.index_test_hash_102087 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102088 | index_test_hash_expr_idx1_102088   |            | CREATE INDEX index_test_hash_expr_idx1_102088 ON multi_index_statements.index_test_hash_102088 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102089 | index_test_hash_expr_idx1_102089   |            | CREATE INDEX index_test_hash_expr_idx1_102089 ON multi_index_statements.index_test_hash_102089 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102082 | index_test_hash_expr_idx2_102082   |            | CREATE INDEX index_test_hash_expr_idx2_102082 ON multi_index_statements.index_test_hash_102082 USING btree (multi_index_statements_2.value_plus_one(b))
+ multi_index_statements | index_test_hash_102083 | index_test_hash_expr_idx2_102083   |            | CREATE INDEX index_test_hash_expr_idx2_102083 ON multi_index_statements.index_test_hash_102083 USING btree (multi_index_statements_2.value_plus_one(b))
+ multi_index_statements | index_test_hash_102084 | index_test_hash_expr_idx2_102084   |            | CREATE INDEX index_test_hash_expr_idx2_102084 ON multi_index_statements.index_test_hash_102084 USING btree (multi_index_statements_2.value_plus_one(b))
+ multi_index_statements | index_test_hash_102085 | index_test_hash_expr_idx2_102085   |            | CREATE INDEX index_test_hash_expr_idx2_102085 ON multi_index_statements.index_test_hash_102085 USING btree (multi_index_statements_2.value_plus_one(b))
+ multi_index_statements | index_test_hash_102086 | index_test_hash_expr_idx2_102086   |            | CREATE INDEX index_test_hash_expr_idx2_102086 ON multi_index_statements.index_test_hash_102086 USING btree (multi_index_statements_2.value_plus_one(b))
+ multi_index_statements | index_test_hash_102087 | index_test_hash_expr_idx2_102087   |            | CREATE INDEX index_test_hash_expr_idx2_102087 ON multi_index_statements.index_test_hash_102087 USING btree (multi_index_statements_2.value_plus_one(b))
+ multi_index_statements | index_test_hash_102088 | index_test_hash_expr_idx2_102088   |            | CREATE INDEX index_test_hash_expr_idx2_102088 ON multi_index_statements.index_test_hash_102088 USING btree (multi_index_statements_2.value_plus_one(b))
+ multi_index_statements | index_test_hash_102089 | index_test_hash_expr_idx2_102089   |            | CREATE INDEX index_test_hash_expr_idx2_102089 ON multi_index_statements.index_test_hash_102089 USING btree (multi_index_statements_2.value_plus_one(b))
+ multi_index_statements | index_test_hash_102082 | index_test_hash_expr_idx_102082    |            | CREATE INDEX index_test_hash_expr_idx_102082 ON multi_index_statements.index_test_hash_102082 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102083 | index_test_hash_expr_idx_102083    |            | CREATE INDEX index_test_hash_expr_idx_102083 ON multi_index_statements.index_test_hash_102083 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102084 | index_test_hash_expr_idx_102084    |            | CREATE INDEX index_test_hash_expr_idx_102084 ON multi_index_statements.index_test_hash_102084 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102085 | index_test_hash_expr_idx_102085    |            | CREATE INDEX index_test_hash_expr_idx_102085 ON multi_index_statements.index_test_hash_102085 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102086 | index_test_hash_expr_idx_102086    |            | CREATE INDEX index_test_hash_expr_idx_102086 ON multi_index_statements.index_test_hash_102086 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102087 | index_test_hash_expr_idx_102087    |            | CREATE INDEX index_test_hash_expr_idx_102087 ON multi_index_statements.index_test_hash_102087 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102088 | index_test_hash_expr_idx_102088    |            | CREATE INDEX index_test_hash_expr_idx_102088 ON multi_index_statements.index_test_hash_102088 USING btree (multi_index_statements.value_plus_one(b))
+ multi_index_statements | index_test_hash_102089 | index_test_hash_expr_idx_102089    |            | CREATE INDEX index_test_hash_expr_idx_102089 ON multi_index_statements.index_test_hash_102089 USING btree (multi_index_statements.value_plus_one(b))
  multi_index_statements | index_test_hash_102082 | index_test_hash_index_a_b_c_102082 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102082 ON multi_index_statements.index_test_hash_102082 USING btree (a) INCLUDE (b, c)
  multi_index_statements | index_test_hash_102083 | index_test_hash_index_a_b_c_102083 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102083 ON multi_index_statements.index_test_hash_102083 USING btree (a) INCLUDE (b, c)
  multi_index_statements | index_test_hash_102084 | index_test_hash_index_a_b_c_102084 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102084 ON multi_index_statements.index_test_hash_102084 USING btree (a) INCLUDE (b, c)
@@ -291,7 +347,7 @@ SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
  multi_index_statements | index_test_hash_102087 | index_test_hash_index_a_b_c_102087 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102087 ON multi_index_statements.index_test_hash_102087 USING btree (a) INCLUDE (b, c)
  multi_index_statements | index_test_hash_102088 | index_test_hash_index_a_b_c_102088 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102088 ON multi_index_statements.index_test_hash_102088 USING btree (a) INCLUDE (b, c)
  multi_index_statements | index_test_hash_102089 | index_test_hash_index_a_b_c_102089 |            | CREATE UNIQUE INDEX index_test_hash_index_a_b_c_102089 ON multi_index_statements.index_test_hash_102089 USING btree (a) INCLUDE (b, c)
-(16 rows)
+(40 rows)
 
 -- create index that will conflict with master operations
 CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON multi_index_statements.index_test_hash_102089(b);
@@ -353,6 +409,10 @@ CREATE INDEX ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creat
     ON test_index_creation1 USING btree
     (tenant_id, timeperiod);
 NOTICE:  identifier "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1" will be truncated to "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_c"
+DEBUG:  identifier "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1" will be truncated to "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_c"
+DETAIL:  from localhost:xxxxx
+DEBUG:  identifier "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1" will be truncated to "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_c"
+DETAIL:  from localhost:xxxxx
 RESET client_min_messages;
 CREATE TABLE test_index_creation1_p2020_09_26 PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-26 00:00:00') TO ('2020-09-27 00:00:00');
 CREATE TABLE test_index_creation1_p2020_09_27 PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-27 00:00:00') TO ('2020-09-28 00:00:00');
@@ -412,6 +472,107 @@ DEBUG:  the index name on the shards of the partition is too long, switching to 
 CREATE INDEX f1
     ON test_index_creation1 USING btree
     (field1);
+-- should be able to create index only for parent on both
+-- coordinator and worker nodes
+CREATE INDEX parent_index
+    ON ONLY test_index_creation1 USING btree
+    (field1);
+-- show that we have parent index only on the parent table not on the partitions
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text = 'test_index_creation1' AND indexrelid::regclass::text = 'parent_index';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text LIKE 'test_index_creation1_p2020%' AND indexrelid::regclass::text LIKE 'parent_index%';
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO multi_index_statements;
+-- show that we have parent index_* only on the parent shards not on the partition shards
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text LIKE 'test_index_creation1_%' AND indexrelid::regclass::text LIKE 'parent_index%';
+ count
+---------------------------------------------------------------------
+    16
+(1 row)
+
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text LIKE 'test_index_creation1_p2020%' AND indexrelid::regclass::text LIKE 'parent_index%';
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+\c - - - :master_port
+SET search_path TO multi_index_statements;
+-- attach child index of a partition to parent index of the partitioned table
+CREATE INDEX child_index
+    ON test_index_creation1_p2020_09_26 USING btree
+    (field1);
+ALTER INDEX parent_index ATTACH PARTITION child_index;
+-- show that child index inherits from parent index which means it is attached to it
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text = 'child_index' AND inhparent::regclass::text = 'parent_index';
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO multi_index_statements;
+-- show that child indices of partition shards also inherit from parent indices of parent shards
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index\_%' AND inhparent::regclass::text LIKE 'parent_index\_%';
+ count
+---------------------------------------------------------------------
+    16
+(1 row)
+
+\c - - - :master_port
+SET search_path TO multi_index_statements;
+-- verify error check for partitioned index
+ALTER INDEX parent_index SET TABLESPACE foo;
+ERROR:  alter index ... set tablespace ... is currently unsupported
+DETAIL:  Only RENAME TO, SET (), RESET (), ATTACH PARTITION and SET STATISTICS are supported.
+-- drop parent index and show that child index will also be dropped
+DROP INDEX parent_index;
+SELECT count(*) FROM pg_index where indexrelid::regclass::text = 'child_index';
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- show that having a foreign key to reference table causes sequential execution mode
+-- with ALTER INDEX ... ATTACH PARTITION
+CREATE TABLE index_creation_reference_table (id int primary key);
+SELECT create_reference_table('index_creation_reference_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE test_index_creation1 ADD CONSTRAINT foreign_key_to_ref_table
+    FOREIGN KEY (tenant_id)
+    REFERENCES index_creation_reference_table (id);
+CREATE INDEX parent_index ON ONLY test_index_creation1 USING btree (field1);
+CREATE INDEX child_index ON test_index_creation1_p2020_09_26 USING btree (field1);
+BEGIN;
+    show citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ parallel
+(1 row)
+
+    ALTER INDEX parent_index ATTACH PARTITION child_index;
+    show citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+ROLLBACK;
+DROP TABLE index_creation_reference_table CASCADE;
+NOTICE:  drop cascades to constraint foreign_key_to_ref_table on table test_index_creation1
 SELECT
 'CREATE TABLE distributed_table(' ||
 string_Agg('col' || x::text || ' int,', ' ') ||
@@ -513,3 +674,4 @@ SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::
 -- final clean up
 DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
 DROP SCHEMA multi_index_statements CASCADE;
+DROP SCHEMA multi_index_statements_2 CASCADE;

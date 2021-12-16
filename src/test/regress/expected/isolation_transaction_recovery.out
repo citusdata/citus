@@ -2,7 +2,9 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-begin s1-recover s2-insert s1-commit
 create_reference_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -11,8 +13,10 @@ step s1-recover:
     SELECT recover_prepared_transactions();
 
 recover_prepared_transactions
+---------------------------------------------------------------------
+                            0
+(1 row)
 
-0
 step s2-insert:
     INSERT INTO test_transaction_recovery VALUES (1,2);
 
@@ -22,7 +26,9 @@ step s1-commit:
 
 starting permutation: s1-begin s1-recover s2-recover s1-commit
 create_reference_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-begin:
     BEGIN;
@@ -31,15 +37,19 @@ step s1-recover:
     SELECT recover_prepared_transactions();
 
 recover_prepared_transactions
+---------------------------------------------------------------------
+                            0
+(1 row)
 
-0
 step s2-recover:
     SELECT recover_prepared_transactions();
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-recover: <... completed>
 recover_prepared_transactions
+---------------------------------------------------------------------
+                            0
+(1 row)
 
-0

@@ -280,7 +280,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="PREPARE TRANSACTION").kill()');
 (1 row)
 
 SELECT create_distributed_table('test_table', 'id');
-ERROR:  connection not open
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
  count
@@ -586,7 +589,6 @@ DROP SCHEMA create_distributed_table_non_empty_failure;
 CREATE SCHEMA create_distributed_table_non_empty_failure;
 CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
-SET citus.multi_shard_commit_protocol TO '1pc';
 SELECT citus.mitmproxy('conn.kill()');
  mitmproxy
 ---------------------------------------------------------------------

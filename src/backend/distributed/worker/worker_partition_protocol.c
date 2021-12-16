@@ -49,7 +49,11 @@
 
 
 /* Config variables managed via guc.c */
+#if PG_VERSION_NUM >= PG_VERSION_14
+bool BinaryWorkerCopyFormat = true;   /* binary format for copying between workers */
+#else
 bool BinaryWorkerCopyFormat = false;   /* binary format for copying between workers */
+#endif
 int PartitionBufferSize = 16384; /* total partitioning buffer size in KB */
 
 /* Local variables */
@@ -109,6 +113,8 @@ PG_FUNCTION_INFO_V1(worker_hash_partition_table);
 Datum
 worker_range_partition_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
@@ -129,8 +135,6 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 
 	/* first check that array element's and partition column's types match */
 	Oid splitPointType = ARR_ELEMTYPE(splitPointObject);
-
-	CheckCitusVersion(ERROR);
 
 	if (splitPointType != partitionColumnType)
 	{
@@ -188,6 +192,8 @@ worker_range_partition_table(PG_FUNCTION_ARGS)
 Datum
 worker_hash_partition_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 taskId = PG_GETARG_UINT32(1);
 	text *filterQueryText = PG_GETARG_TEXT_P(2);
@@ -208,8 +214,6 @@ worker_hash_partition_table(PG_FUNCTION_ARGS)
 
 	Datum *hashRangeArray = DeconstructArrayObject(hashRangeObject);
 	int32 partitionCount = ArrayObjectCount(hashRangeObject);
-
-	CheckCitusVersion(ERROR);
 
 	HashPartitionContext *partitionContext = palloc0(sizeof(HashPartitionContext));
 	partitionContext->syntheticShardIntervalArray =

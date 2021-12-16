@@ -22,11 +22,13 @@ extern Oid PartitionParentOid(Oid partitionOid);
 extern Oid PartitionWithLongestNameRelationId(Oid parentRelationId);
 extern List * PartitionList(Oid parentRelationId);
 extern char * GenerateDetachPartitionCommand(Oid partitionTableId);
+extern List * GenerateDetachPartitionCommandRelationIdList(List *relationIds);
 extern char * GenerateAttachShardPartitionCommand(ShardInterval *shardInterval);
 extern char * GenerateAlterTableAttachPartitionCommand(Oid partitionTableId);
+extern List * GenerateAttachPartitionCommandRelationIdList(List *relationIds);
 extern char * GeneratePartitioningInformation(Oid tableId);
 extern void FixPartitionConstraintsOnWorkers(Oid relationId);
 extern void FixLocalPartitionConstraints(Oid relationId, int64 shardId);
-
+extern void FixPartitionShardIndexNames(Oid relationId, Oid parentIndexOid);
 
 #endif /* MULTI_PARTITIONING_UTILS_H_ */

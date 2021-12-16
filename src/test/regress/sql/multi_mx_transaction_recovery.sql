@@ -2,7 +2,6 @@
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 
 CREATE TABLE test_recovery (x text);
 SELECT create_distributed_table('test_recovery', 'x');
@@ -12,8 +11,6 @@ SELECT create_distributed_table('test_recovery', 'x');
 -- Disable auto-recovery for the initial tests
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
-
-SET citus.multi_shard_commit_protocol TO '2pc';
 
 -- Ensure pg_dist_transaction is empty for test
 SELECT recover_prepared_transactions();

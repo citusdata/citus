@@ -29,7 +29,6 @@ CREATE TABLE distributed_mx_table (
 CREATE INDEX ON distributed_mx_table USING GIN (value);
 
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 
 SET citus.shard_count TO 4;
 
@@ -75,7 +74,6 @@ WHERE logicalrelid = 'distributed_mx_table'::regclass;
 -- Create a table and then roll back the transaction
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 
 BEGIN;
 CREATE TABLE should_not_exist (
@@ -92,7 +90,6 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_not_exist';
 -- Ensure that we don't allow prepare on a metadata transaction
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 
 BEGIN;
 CREATE TABLE should_not_exist (
@@ -127,7 +124,6 @@ WHERE logicalrelid = 'citus_mx_schema_for_xacts.objects_for_xacts'::regclass;
 
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 
 -- now show that we can rollback on creating mx table, but shards remain....
 BEGIN;

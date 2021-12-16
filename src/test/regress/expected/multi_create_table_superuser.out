@@ -1,60 +1,9 @@
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360005;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 100000;
--- Since we're superuser, we can set the replication model to 'streaming' to
--- create a one-off MX table... but if we forget to set the replication factor to one,
--- we should see an error reminding us to fix that
-SET citus.replication_model TO 'streaming';
-SELECT create_distributed_table('mx_table_test', 'col1');
-ERROR:  replication factors above one are incompatible with the streaming replication model
-HINT:  Try again after reducing "citus.shard_replication_factor" to one or setting "citus.replication_model" to "statement".
--- ok, so now actually create the one-off MX table
 SET citus.shard_replication_factor TO 1;
-SELECT create_distributed_table('mx_table_test', 'col1');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='mx_table_test'::regclass;
- repmodel
----------------------------------------------------------------------
- s
-(1 row)
-
-DROP TABLE mx_table_test;
--- Show that master_create_distributed_table ignores citus.replication_model GUC
-CREATE TABLE s_table(a int);
-SELECT master_create_distributed_table('s_table', 'a', 'hash');
-NOTICE:  using statement-based replication
-DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
-HINT:  Use create_distributed_table to use the streaming replication model.
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='s_table'::regclass;
- repmodel
----------------------------------------------------------------------
- c
-(1 row)
-
--- Show that master_create_worker_shards complains when RF>1 and replication model is streaming
-UPDATE pg_dist_partition SET repmodel = 's' WHERE logicalrelid='s_table'::regclass;
-SELECT master_create_worker_shards('s_table', 4, 2);
-ERROR:  using replication factor 2 with the streaming replication model is not supported
-DETAIL:  The table s_table is marked as streaming replicated and the shard replication factor of streaming replicated tables must be 1.
-HINT:  Use replication factor 1.
-DROP TABLE s_table;
-RESET citus.replication_model;
--- Show that create_distributed_table with append and range distributions ignore
--- citus.replication_model GUC
-SET citus.shard_replication_factor TO 2;
-SET citus.replication_model TO streaming;
+-- test that range and append distributed tables have coordinator replication
 CREATE TABLE repmodel_test (a int);
 SELECT create_distributed_table('repmodel_test', 'a', 'append');
-NOTICE:  using statement-based replication
-DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -69,8 +18,6 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regcl
 DROP TABLE repmodel_test;
 CREATE TABLE repmodel_test (a int);
 SELECT create_distributed_table('repmodel_test', 'a', 'range');
-NOTICE:  using statement-based replication
-DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -83,13 +30,9 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regcl
 (1 row)
 
 DROP TABLE repmodel_test;
--- Show that master_create_distributed_table created statement replicated tables no matter
--- what citus.replication_model set to
+-- test that deprecated api creates distributed tables with coordinator replication
 CREATE TABLE repmodel_test (a int);
 SELECT master_create_distributed_table('repmodel_test', 'a', 'hash');
-NOTICE:  using statement-based replication
-DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
-HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table
 ---------------------------------------------------------------------
 
@@ -104,9 +47,6 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regcl
 DROP TABLE repmodel_test;
 CREATE TABLE repmodel_test (a int);
 SELECT master_create_distributed_table('repmodel_test', 'a', 'append');
-NOTICE:  using statement-based replication
-DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
-HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table
 ---------------------------------------------------------------------
 
@@ -121,9 +61,6 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regcl
 DROP TABLE repmodel_test;
 CREATE TABLE repmodel_test (a int);
 SELECT master_create_distributed_table('repmodel_test', 'a', 'range');
-NOTICE:  using statement-based replication
-DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
-HINT:  Use create_distributed_table to use the streaming replication model.
  master_create_distributed_table
 ---------------------------------------------------------------------
 
@@ -136,92 +73,7 @@ SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regcl
 (1 row)
 
 DROP TABLE repmodel_test;
--- Check that the replication_model overwrite behavior is the same with RF=1
-SET citus.shard_replication_factor TO 1;
-CREATE TABLE repmodel_test (a int);
-SELECT create_distributed_table('repmodel_test', 'a', 'append');
-NOTICE:  using statement-based replication
-DETAIL:  Streaming replication is supported only for hash-distributed tables.
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
- repmodel
----------------------------------------------------------------------
- c
-(1 row)
-
-DROP TABLE repmodel_test;
-CREATE TABLE repmodel_test (a int);
-SELECT create_distributed_table('repmodel_test', 'a', 'range');
-NOTICE:  using statement-based replication
-DETAIL:  Streaming replication is supported only for hash-distributed tables.
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
- repmodel
----------------------------------------------------------------------
- c
-(1 row)
-
-DROP TABLE repmodel_test;
-CREATE TABLE repmodel_test (a int);
-SELECT master_create_distributed_table('repmodel_test', 'a', 'hash');
-NOTICE:  using statement-based replication
-DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
-HINT:  Use create_distributed_table to use the streaming replication model.
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
- repmodel
----------------------------------------------------------------------
- c
-(1 row)
-
-DROP TABLE repmodel_test;
-CREATE TABLE repmodel_test (a int);
-SELECT master_create_distributed_table('repmodel_test', 'a', 'append');
-NOTICE:  using statement-based replication
-DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
-HINT:  Use create_distributed_table to use the streaming replication model.
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
- repmodel
----------------------------------------------------------------------
- c
-(1 row)
-
-DROP TABLE repmodel_test;
-CREATE TABLE repmodel_test (a int);
-SELECT master_create_distributed_table('repmodel_test', 'a', 'range');
-NOTICE:  using statement-based replication
-DETAIL:  The current replication_model setting is 'streaming', which is not supported by master_create_distributed_table.
-HINT:  Use create_distributed_table to use the streaming replication model.
- master_create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT repmodel FROM pg_dist_partition WHERE logicalrelid='repmodel_test'::regclass;
- repmodel
----------------------------------------------------------------------
- c
-(1 row)
-
-DROP TABLE repmodel_test;
-RESET citus.replication_model;
+RESET citus.shard_replication_factor;
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 360025;
 -- There should be no table on the worker node
 \c - - :public_worker_1_host :worker_1_port
@@ -339,7 +191,7 @@ SELECT create_distributed_table('unlogged_table', 'key');
 (1 row)
 
 SELECT * FROM master_get_table_ddl_events('unlogged_table');
-                    master_get_table_ddl_events
+                          master_get_table_ddl_events
 ---------------------------------------------------------------------
  CREATE UNLOGGED TABLE public.unlogged_table (key text, value text)
  ALTER TABLE public.unlogged_table OWNER TO postgres

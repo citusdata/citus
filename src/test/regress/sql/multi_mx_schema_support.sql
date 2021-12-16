@@ -229,7 +229,6 @@ CREATE SCHEMA "CiTuS.TeAeN";
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 
 -- in the first test make sure that we handle DDLs
 -- when search path is set
@@ -315,6 +314,9 @@ SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%'
     GROUP BY table_schema;
+
+-- Show that altering distributed schema is not allowed on worker nodes
+ALTER SCHEMA mx_old_schema RENAME TO temp_mx_old_schema;
 \c - - - :master_port
 
 ALTER TABLE mx_old_schema.table_set_schema SET SCHEMA mx_new_schema;

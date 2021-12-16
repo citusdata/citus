@@ -318,10 +318,6 @@ static Node * WorkerLimitCount(Node *limitCount, Node *limitOffset, OrderByLimit
 static List * WorkerSortClauseList(Node *limitCount,
 								   List *groupClauseList, List *sortClauseList,
 								   OrderByLimitReference orderByLimitReference);
-static List * GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
-													 List *sortClauseList,
-													 AttrNumber *targetProjectionNumber,
-													 Index *nextSortGroupRefIndex);
 static bool CanPushDownLimitApproximate(List *sortClauseList, List *targetList);
 static bool HasOrderByAggregate(List *sortClauseList, List *targetList);
 static bool HasOrderByNonCommutativeAggregate(List *sortClauseList, List *targetList);
@@ -331,7 +327,7 @@ static bool ShouldProcessDistinctOrderAndLimitForWorker(
 	ExtendedOpNodeProperties *extendedOpNodeProperties,
 	bool pushingDownOriginalGrouping,
 	Node *havingQual);
-
+static bool IsIndexInRange(const List *list, int index);
 
 /*
  * MultiLogicalPlanOptimize applies multi-relational algebra optimizations on
@@ -1851,7 +1847,11 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		{
 			/* array_cat_agg() takes anyarray as input */
 			catAggregateName = ARRAY_CAT_AGGREGATE_NAME;
+#if PG_VERSION_NUM >= PG_VERSION_14
+			catInputType = ANYCOMPATIBLEARRAYOID;
+#else
 			catInputType = ANYARRAYOID;
+#endif
 		}
 		else if (aggregateType == AGGREGATE_JSONB_AGG ||
 				 aggregateType == AGGREGATE_JSONB_OBJECT_AGG)
@@ -1886,7 +1886,26 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		newMasterAggregate->args = list_make1(catAggArgument);
 		newMasterAggregate->aggfilter = NULL;
 		newMasterAggregate->aggtranstype = InvalidOid;
-		newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
+
+		if (aggregateType == AGGREGATE_ARRAY_AGG)
+		{
+#if PG_VERSION_NUM >= PG_VERSION_14
+
+			/*
+			 * Postgres expects the type of the array here such as INT4ARRAYOID.
+			 * Hence we set it to workerReturnType. If we set this to
+			 * ANYCOMPATIBLEARRAYOID then we will get the following error:
+			 * "argument declared anycompatiblearray is not an array but type anycompatiblearray"
+			 */
+			newMasterAggregate->aggargtypes = list_make1_oid(workerReturnType);
+#else
+			newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
+#endif
+		}
+		else
+		{
+			newMasterAggregate->aggargtypes = list_make1_oid(ANYARRAYOID);
+		}
 		newMasterAggregate->aggsplit = AGGSPLIT_SIMPLE;
 
 		newMasterExpression = (Expr *) newMasterAggregate;
@@ -2607,7 +2626,7 @@ ProcessHavingClauseForWorkerQuery(Node *originalHavingQual,
 
 
 /*
- * PrcoessDistinctClauseForWorkerQuery gets the inputs and modifies the outputs
+ * ProcessDistinctClauseForWorkerQuery gets the inputs and modifies the outputs
  * such that worker query's DISTINCT and DISTINCT ON clauses are set accordingly.
  * Note the function may or may not decide to pushdown the DISTINCT and DISTINCT
  * on clauses based on the inputs.
@@ -2701,38 +2720,6 @@ ProcessWindowFunctionsForWorkerQuery(List *windowClauseList,
 		return;
 	}
 
-	WindowClause *windowClause = NULL;
-	foreach_ptr(windowClause, windowClauseList)
-	{
-		List *partitionClauseTargetList =
-			GenerateNewTargetEntriesForSortClauses(originalTargetEntryList,
-												   windowClause->partitionClause,
-												   &(queryTargetList->
-													 targetProjectionNumber),
-												   queryWindowClause->
-												   nextSortGroupRefIndex);
-		List *orderClauseTargetList =
-			GenerateNewTargetEntriesForSortClauses(originalTargetEntryList,
-												   windowClause->orderClause,
-												   &(queryTargetList->
-													 targetProjectionNumber),
-												   queryWindowClause->
-												   nextSortGroupRefIndex);
-
-		/*
-		 * Note that even Citus does push down the window clauses as-is, we may still need to
-		 * add the generated entries to the target list. The reason is that the same aggregates
-		 * might be referred from another target entry that is a bare aggregate (e.g., no window
-		 * functions), which would have been mutated. For instance, when an average aggregate
-		 * is mutated on the target list, the window function would refer to a sum aggregate,
-		 * which is obviously wrong.
-		 */
-		queryTargetList->targetEntryList = list_concat(queryTargetList->targetEntryList,
-													   partitionClauseTargetList);
-		queryTargetList->targetEntryList = list_concat(queryTargetList->targetEntryList,
-													   orderClauseTargetList);
-	}
-
 	queryWindowClause->workerWindowClauseList = windowClauseList;
 	queryWindowClause->hasWindowFunctions = true;
 }
@@ -2798,24 +2785,11 @@ ProcessLimitOrderByForWorkerQuery(OrderByLimitReference orderByLimitReference,
 							 groupClauseList,
 							 sortClauseList,
 							 orderByLimitReference);
-
-	/*
-	 * TODO: Do we really need to add the target entries if we're not pushing
-	 * down ORDER BY?
-	 */
-	List *newTargetEntryListForSortClauses =
-		GenerateNewTargetEntriesForSortClauses(originalTargetList,
-											   queryOrderByLimit->workerSortClauseList,
-											   &(queryTargetList->targetProjectionNumber),
-											   queryOrderByLimit->nextSortGroupRefIndex);
-
-	queryTargetList->targetEntryList =
-		list_concat(queryTargetList->targetEntryList, newTargetEntryListForSortClauses);
 }
 
 
 /*
- * BuildLimitOrderByReference is a helper function that simply builds
+ * BuildOrderByLimitReference is a helper function that simply builds
  * the necessary information for processing the limit and order by.
  * The return value should be used in a read-only manner.
  */
@@ -3634,8 +3608,8 @@ static Oid
 CitusFunctionOidWithSignature(char *functionName, int numargs, Oid *argtypes)
 {
 	List *aggregateName = list_make2(makeString("pg_catalog"), makeString(functionName));
-	FuncCandidateList clist = FuncnameGetCandidates(aggregateName, numargs, NIL, false,
-													false, true);
+	FuncCandidateList clist = FuncnameGetCandidates_compat(aggregateName, numargs, NIL,
+														   false, false, false, true);
 
 	for (; clist; clist = clist->next)
 	{
@@ -4421,16 +4395,19 @@ GroupTargetEntryList(List *groupClauseList, List *targetEntryList)
  * reference tables do not have partition column. The function does not
  * support queries with CTEs, it would return false if columnExpression
  * refers to a column returned by a CTE.
+ *
+ * If skipOuterVars is true, then it doesn't process the outervars.
  */
 bool
-IsPartitionColumn(Expr *columnExpression, Query *query)
+IsPartitionColumn(Expr *columnExpression, Query *query, bool skipOuterVars)
 {
 	bool isPartitionColumn = false;
-	Oid relationId = InvalidOid;
 	Var *column = NULL;
+	RangeTblEntry *relationRTE = NULL;
 
-	FindReferencedTableColumn(columnExpression, NIL, query, &relationId, &column);
-
+	FindReferencedTableColumn(columnExpression, NIL, query, &column, &relationRTE,
+							  skipOuterVars);
+	Oid relationId = relationRTE ? relationRTE->relid : InvalidOid;
 	if (relationId != InvalidOid && column != NULL)
 	{
 		Var *partitionColumn = DistPartitionKey(relationId);
@@ -4449,21 +4426,26 @@ IsPartitionColumn(Expr *columnExpression, Query *query)
 /*
  * FindReferencedTableColumn recursively traverses query tree to find actual relation
  * id, and column that columnExpression refers to. If columnExpression is a
- * non-relational or computed/derived expression, the function returns InvalidOid for
- * relationId and NULL for column. The caller should provide parent query list from
+ * non-relational or computed/derived expression, the function returns NULL for
+ * rte and NULL for column. The caller should provide parent query list from
  * top of the tree to this particular Query's parent. This argument is used to look
  * into CTEs that may be present in the query.
+ *
+ * If skipOuterVars is true, then it doesn't check vars coming from outer queries.
+ * We probably don't need this skipOuterVars check but we wanted to be on the safe side
+ * and used it only in UNION path, we can separately work on verifying that it doesn't break
+ * anything existing.
  */
 void
 FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *query,
-						  Oid *relationId, Var **column)
+						  Var **column, RangeTblEntry **rteContainingReferencedColumn,
+						  bool skipOuterVars)
 {
 	Var *candidateColumn = NULL;
-	List *rangetableList = query->rtable;
 	Expr *strippedColumnExpression = (Expr *) strip_implicit_coercions(
 		(Node *) columnExpression);
 
-	*relationId = InvalidOid;
+	*rteContainingReferencedColumn = NULL;
 	*column = NULL;
 
 	if (IsA(strippedColumnExpression, Var))
@@ -4486,15 +4468,44 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		return;
 	}
 
-	/*
-	 * We currently don't support finding partition keys in the subqueries
-	 * that reference outer subqueries. For example, in correlated
-	 * subqueries in WHERE clause, we don't support use of partition keys
-	 * in the subquery that is referred from the outer query.
-	 */
+
 	if (candidateColumn->varlevelsup > 0)
 	{
-		return;
+		if (skipOuterVars)
+		{
+			/*
+			 * we don't want to process outer vars, so we return early.
+			 */
+			return;
+		}
+
+		/*
+		 * We currently don't support finding partition keys in the subqueries
+		 * that reference outer subqueries. For example, in correlated
+		 * subqueries in WHERE clause, we don't support use of partition keys
+		 * in the subquery that is referred from the outer query.
+		 */
+
+		int parentQueryIndex = list_length(parentQueryList) -
+							   candidateColumn->varlevelsup;
+		if (!(IsIndexInRange(parentQueryList, parentQueryIndex)))
+		{
+			return;
+		}
+
+		/*
+		 * Before we recurse into the query tree, we should update the candidateColumn and we use copy of it.
+		 * As we get the query from varlevelsup up, we reset the varlevelsup.
+		 */
+		candidateColumn = copyObject(candidateColumn);
+		candidateColumn->varlevelsup = 0;
+
+		/*
+		 * We should be careful about these fields because they need to
+		 * be updated correctly based on ctelevelsup and varlevelsup.
+		 */
+		query = list_nth(parentQueryList, parentQueryIndex);
+		parentQueryList = list_truncate(parentQueryList, parentQueryIndex);
 	}
 
 	if (candidateColumn->varattno == InvalidAttrNumber)
@@ -4506,12 +4517,13 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		return;
 	}
 
+	List *rangetableList = query->rtable;
 	int rangeTableEntryIndex = candidateColumn->varno - 1;
 	RangeTblEntry *rangeTableEntry = list_nth(rangetableList, rangeTableEntryIndex);
 
 	if (rangeTableEntry->rtekind == RTE_RELATION)
 	{
-		*relationId = rangeTableEntry->relid;
+		*rteContainingReferencedColumn = rangeTableEntry;
 		*column = candidateColumn;
 	}
 	else if (rangeTableEntry->rtekind == RTE_SUBQUERY)
@@ -4525,7 +4537,8 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		/* append current query to parent query list */
 		parentQueryList = lappend(parentQueryList, query);
 		FindReferencedTableColumn(subColumnExpression, parentQueryList,
-								  subquery, relationId, column);
+								  subquery, column, rteContainingReferencedColumn,
+								  skipOuterVars);
 	}
 	else if (rangeTableEntry->rtekind == RTE_JOIN)
 	{
@@ -4534,11 +4547,17 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		Expr *joinColumn = list_nth(joinColumnList, joinColumnIndex);
 
 		/* parent query list stays the same since still in the same query boundary */
-		FindReferencedTableColumn(joinColumn, parentQueryList, query,
-								  relationId, column);
+		FindReferencedTableColumn(joinColumn, parentQueryList, query, column,
+								  rteContainingReferencedColumn, skipOuterVars);
 	}
 	else if (rangeTableEntry->rtekind == RTE_CTE)
 	{
+		/*
+		 * When outerVars are considered, we modify parentQueryList, so this
+		 * logic might need to change when we support outervars in CTEs.
+		 */
+		Assert(skipOuterVars);
+
 		int cteParentListIndex = list_length(parentQueryList) -
 								 rangeTableEntry->ctelevelsup - 1;
 		Query *cteParentQuery = NULL;
@@ -4550,7 +4569,7 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 		 * moment due to usage from IsPartitionColumn. Callers of that function
 		 * do not have access to parent query list.
 		 */
-		if (cteParentListIndex >= 0)
+		if (IsIndexInRange(parentQueryList, cteParentListIndex))
 		{
 			cteParentQuery = list_nth(parentQueryList, cteParentListIndex);
 			cteList = cteParentQuery->cteList;
@@ -4575,9 +4594,21 @@ FindReferencedTableColumn(Expr *columnExpression, List *parentQueryList, Query *
 
 			parentQueryList = lappend(parentQueryList, query);
 			FindReferencedTableColumn(targetEntry->expr, parentQueryList,
-									  cteQuery, relationId, column);
+									  cteQuery, column, rteContainingReferencedColumn,
+									  skipOuterVars);
 		}
 	}
+}
+
+
+/*
+ * IsIndexInRange returns true if the given index is within the
+ * range of the given list.
+ */
+static bool
+IsIndexInRange(const List *list, int index)
+{
+	return index >= 0 && index < list_length(list);
 }
 
 
@@ -4792,87 +4823,6 @@ WorkerSortClauseList(Node *limitCount, List *groupClauseList, List *sortClauseLi
 	}
 
 	return workerSortClauseList;
-}
-
-
-/*
- * GenerateNewTargetEntriesForSortClauses goes over provided sort clause lists and
- * creates new target entries if needed to make sure sort clauses has correct
- * references. The function returns list of new target entries, caller is
- * responsible to add those target entries to the end of worker target list.
- *
- * The function is required because we change the target entry if it contains an
- * expression having an aggregate operation, or just the AVG aggregate.
- * Afterwards any order by clause referring to original target entry starts
- * to point to a wrong expression.
- *
- * Note the function modifies SortGroupClause items in sortClauseList,
- * targetProjectionNumber, and nextSortGroupRefIndex.
- */
-static List *
-GenerateNewTargetEntriesForSortClauses(List *originalTargetList,
-									   List *sortClauseList,
-									   AttrNumber *targetProjectionNumber,
-									   Index *nextSortGroupRefIndex)
-{
-	List *createdTargetList = NIL;
-
-	SortGroupClause *sgClause = NULL;
-	foreach_ptr(sgClause, sortClauseList)
-	{
-		TargetEntry *targetEntry = get_sortgroupclause_tle(sgClause, originalTargetList);
-		Expr *targetExpr = targetEntry->expr;
-		bool containsAggregate = contain_aggs_of_level((Node *) targetExpr, 0);
-		bool createNewTargetEntry = false;
-
-		/* we are only interested in target entries containing aggregates */
-		if (!containsAggregate)
-		{
-			continue;
-		}
-
-		/*
-		 * If the target expression is not an Aggref, it is either an expression
-		 * on a single aggregate, or expression containing multiple aggregates.
-		 * Worker query mutates these target entries to have a naked target entry
-		 * per aggregate function. We want to use original target entries if this
-		 * the case.
-		 * If the original target expression is an avg aggref, we also want to use
-		 * original target entry.
-		 */
-		if (!IsA(targetExpr, Aggref))
-		{
-			createNewTargetEntry = true;
-		}
-		else
-		{
-			Aggref *aggNode = (Aggref *) targetExpr;
-			AggregateType aggregateType = GetAggregateType(aggNode);
-			if (aggregateType == AGGREGATE_AVERAGE)
-			{
-				createNewTargetEntry = true;
-			}
-		}
-
-		if (createNewTargetEntry)
-		{
-			bool resJunk = true;
-			AttrNumber nextResNo = (*targetProjectionNumber);
-			Expr *newExpr = copyObject(targetExpr);
-			TargetEntry *newTargetEntry = makeTargetEntry(newExpr, nextResNo,
-														  targetEntry->resname, resJunk);
-			newTargetEntry->ressortgroupref = *nextSortGroupRefIndex;
-
-			createdTargetList = lappend(createdTargetList, newTargetEntry);
-
-			sgClause->tleSortGroupRef = *nextSortGroupRefIndex;
-
-			(*nextSortGroupRefIndex)++;
-			(*targetProjectionNumber)++;
-		}
-	}
-
-	return createdTargetList;
 }
 
 

@@ -227,11 +227,13 @@ PlacementAccessTypeToText(ShardPlacementAccessType accessType)
 static void
 RecordRelationAccessBase(Oid relationId, ShardPlacementAccessType accessType)
 {
-	/*
-	 * We call this only for reference tables, and we don't support partitioned
-	 * reference tables.
-	 */
-	Assert(!PartitionedTable(relationId) && !PartitionTable(relationId));
+	if (IsCitusTableType(relationId, REFERENCE_TABLE))
+	{
+		/*
+		 * We don't support partitioned reference tables.
+		 */
+		Assert(!PartitionedTable(relationId) && !PartitionTable(relationId));
+	}
 
 	/* make sure that this is not a conflicting access */
 	CheckConflictingRelationAccesses(relationId, accessType);
@@ -671,7 +673,7 @@ GetRelationAccessMode(Oid relationId, ShardPlacementAccessType accessType)
  * of the relation accesses.
  *
  * In many cases, we'd only need IsMultiStatementTransaction(), however, for some
- * cases such as CTEs, where Citus uses the same connections accross multiple queries,
+ * cases such as CTEs, where Citus uses the same connections across multiple queries,
  * we should still record the relation accesses even not inside an explicit transaction
  * block. Thus, keeping track of the relation accesses inside coordinated transactions
  * is also required.
@@ -793,7 +795,8 @@ CheckConflictingRelationAccesses(Oid relationId, ShardPlacementAccessType access
 								 "foreign keys. Any parallel modification to "
 								 "those hash distributed tables in the same "
 								 "transaction can only be executed in sequential query "
-								 "execution mode", relationName)));
+								 "execution mode",
+								 relationName != NULL ? relationName : "<dropped>")));
 
 			/*
 			 * Switching to sequential mode is admittedly confusing and, could be useless

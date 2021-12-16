@@ -16,6 +16,7 @@ SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
 (1 row)
 
 SET citus.next_shard_id TO 580000;
+CREATE SCHEMA multi_extension;
 SELECT $definition$
 CREATE OR REPLACE FUNCTION test.maintenance_worker()
     RETURNS pg_stat_activity
@@ -42,13 +43,14 @@ END;
 $$;
 $definition$ create_function_test_maintenance_worker
 \gset
-CREATE TABLE prev_objects(description text);
-CREATE TABLE extension_diff(previous_object text COLLATE "C",
+CREATE TABLE multi_extension.prev_objects(description text);
+CREATE TABLE multi_extension.extension_diff(previous_object text COLLATE "C",
                             current_object text COLLATE "C");
-CREATE FUNCTION print_extension_changes()
+CREATE FUNCTION multi_extension.print_extension_changes()
 RETURNS TABLE(previous_object text, current_object text)
 AS $func$
 BEGIN
+    SET LOCAL search_path TO multi_extension;
 	TRUNCATE TABLE extension_diff;
 
 	CREATE TABLE current_objects AS
@@ -130,14 +132,14 @@ ALTER EXTENSION citus UPDATE TO '9.1-1';
 ALTER EXTENSION citus UPDATE TO '9.2-1';
 ALTER EXTENSION citus UPDATE TO '9.2-2';
 -- Snapshot of state at 9.2-2
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object |                                                                                                        current_object
 ---------------------------------------------------------------------
                  | event trigger citus_cascade_to_partition
                  | function alter_role_if_exists(text,text) boolean
                  | function any_value(anyelement) anyelement
                  | function any_value_agg(anyelement,anyelement) anyelement
-                 | function array_cat_agg(anyarray) anyarray
+                 | function array_cat_agg(anyarray) anycompatiblearray
                  | function assign_distributed_transaction_id(integer,bigint,timestamp with time zone) void
                  | function authinfo_valid(text) boolean
                  | function broadcast_intermediate_result(text,text) bigint
@@ -327,7 +329,7 @@ SELECT * FROM print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.2-4';
 ALTER EXTENSION citus UPDATE TO '9.2-2';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
@@ -342,7 +344,7 @@ ALTER EXTENSION citus UPDATE TO '9.3-1';
 ERROR:  extension "citus" has no update path from version "9.2-2" to version "9.3-1"
 ALTER EXTENSION citus UPDATE TO '9.2-4';
 -- Snapshot of state at 9.2-4
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
@@ -351,14 +353,14 @@ SELECT * FROM print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.3-2';
 ALTER EXTENSION citus UPDATE TO '9.2-4';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
 
 -- Snapshot of state at 9.3-2
 ALTER EXTENSION citus UPDATE TO '9.3-2';
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
                   previous_object                  |                            current_object
 ---------------------------------------------------------------------
  function citus_extradata_container(internal) void |
@@ -374,24 +376,124 @@ SELECT * FROM print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 ALTER EXTENSION citus UPDATE TO '9.3-2';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
 
 -- Snapshot of state at 9.4-1
 ALTER EXTENSION citus UPDATE TO '9.4-1';
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object |                                                    current_object
 ---------------------------------------------------------------------
                  | function worker_last_saved_explain_analyze() TABLE(explain_analyze_output text, execution_duration double precision)
                  | function worker_save_query_explain_analyze(text,jsonb) SETOF record
 (2 rows)
 
+-- Test upgrade paths for backported citus_pg_upgrade functions
+ALTER EXTENSION citus UPDATE TO '9.4-2';
+ALTER EXTENSION citus UPDATE TO '9.4-1';
+-- Should be empty result, even though the downgrade doesn't undo the upgrade, the
+-- function signature doesn't change, which is reflected here.
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+ALTER EXTENSION citus UPDATE TO '9.4-2';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 9.4-1
+ALTER EXTENSION citus UPDATE TO '9.4-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Test upgrade paths for backported improvement of master_update_table_statistics function
+ALTER EXTENSION citus UPDATE TO '9.4-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+            prosrc
+---------------------------------------------------------------------
+ citus_update_table_statistics
+(1 row)
+
+ALTER EXTENSION citus UPDATE TO '9.4-2';
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+                               prosrc
+---------------------------------------------------------------------
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
+
+(1 row)
+
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+ALTER EXTENSION citus UPDATE TO '9.4-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+            prosrc
+---------------------------------------------------------------------
+ citus_update_table_statistics
+(1 row)
+
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 9.4-1
+ALTER EXTENSION citus UPDATE TO '9.4-1';
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+                               prosrc
+---------------------------------------------------------------------
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
+
+(1 row)
+
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
 -- Test downgrade to 9.4-1 from 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 BEGIN;
   SELECT master_add_node('localhost', :master_port, groupId=>0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  master_add_node
 ---------------------------------------------------------------------
                1
@@ -409,19 +511,19 @@ NOTICE:  create_citus_local_table is deprecated in favour of citus_add_local_tab
   ALTER EXTENSION citus UPDATE TO '9.4-1';
 ERROR:  citus local tables are introduced in Citus 9.5
 HINT:  To downgrade Citus to an older version, you should first convert each citus local table to a postgres table by executing SELECT undistribute_table("%s")
-CONTEXT:  PL/pgSQL function inline_code_block line 11 at RAISE
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 ROLLBACK;
 -- now we can downgrade as there is no citus local table
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
 
 -- Snapshot of state at 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
                              previous_object                              |                             current_object
 ---------------------------------------------------------------------
  function master_drop_sequences(text[]) void                              |
@@ -436,18 +538,119 @@ SELECT * FROM print_extension_changes();
                                                                           | function worker_record_sequence_dependency(regclass,regclass,name) void
 (10 rows)
 
--- Test downgrade to 9.5-1 from 10.0-1
-ALTER EXTENSION citus UPDATE TO '10.0-1';
+-- Test upgrade paths for backported citus_pg_upgrade functions
+ALTER EXTENSION citus UPDATE TO '9.5-2';
 ALTER EXTENSION citus UPDATE TO '9.5-1';
--- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+-- Should be empty result, even though the downgrade doesn't undo the upgrade, the
+-- function signature doesn't change, which is reflected here.
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
 
--- Snapshot of state at 10.0-1
-ALTER EXTENSION citus UPDATE TO '10.0-1';
-SELECT * FROM print_extension_changes();
+ALTER EXTENSION citus UPDATE TO '9.5-2';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 9.5-1
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Test upgrade paths for backported improvement of master_update_table_statistics function
+ALTER EXTENSION citus UPDATE TO '9.5-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+            prosrc
+---------------------------------------------------------------------
+ citus_update_table_statistics
+(1 row)
+
+ALTER EXTENSION citus UPDATE TO '9.5-2';
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+                               prosrc
+---------------------------------------------------------------------
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
+
+(1 row)
+
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+ALTER EXTENSION citus UPDATE TO '9.5-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+            prosrc
+---------------------------------------------------------------------
+ citus_update_table_statistics
+(1 row)
+
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 9.5-1
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+                               prosrc
+---------------------------------------------------------------------
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
+
+(1 row)
+
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- We removed the upgrade paths to 10.0-1, 10.0-2 and 10.0-3 due to a bug that blocked
+-- upgrades to 10.0, Therefore we test upgrades to 10.0-4 instead
+-- Test downgrade to 9.5-1 from 10.0-4
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.0-4
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+SELECT * FROM multi_extension.print_extension_changes();
                                    previous_object                                    |                                                current_object
 ---------------------------------------------------------------------
  function citus_total_relation_size(regclass) bigint                                  |
@@ -488,6 +691,7 @@ SELECT * FROM print_extension_changes();
                                                                                       | function citus_dist_shard_cache_invalidate() trigger
                                                                                       | function citus_drain_node(text,integer,citus.shard_transfer_mode,name) void
                                                                                       | function citus_drop_all_shards(regclass,text,text) integer
+                                                                                      | function citus_get_active_worker_nodes() SETOF record
                                                                                       | function citus_internal.columnar_ensure_objects_exist() void
                                                                                       | function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode) void
                                                                                       | function citus_remove_node(text,integer) void
@@ -515,63 +719,95 @@ SELECT * FROM print_extension_changes();
                                                                                       | table columnar.options
                                                                                       | table columnar.stripe
                                                                                       | view citus_shards
-                                                                                      | view citus_tables
+                                                                                      | view public.citus_tables
                                                                                       | view time_partitions
-(67 rows)
+(68 rows)
 
--- Test downgrade to 10.0-1 from 10.0-2
-ALTER EXTENSION citus UPDATE TO '10.0-2';
-ALTER EXTENSION citus UPDATE TO '10.0-1';
--- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
- previous_object | current_object
+-- check that we depend on the existence of public schema, and we can not drop it now
+DROP SCHEMA public;
+ERROR:  cannot drop schema public because other objects depend on it
+DETAIL:  extension citus depends on schema public
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+-- verify that citus_tables view is on pg_catalog if public schema is absent.
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+DROP SCHEMA public;
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+SELECT * FROM multi_extension.print_extension_changes();
+      previous_object      |   current_object
 ---------------------------------------------------------------------
-(0 rows)
+ view public.citus_tables  |
+                           | view citus_tables
+(2 rows)
 
--- Snapshot of state at 10.0-2
-ALTER EXTENSION citus UPDATE TO '10.0-2';
-SELECT * FROM print_extension_changes();
- previous_object | current_object
+-- recreate public schema, and recreate citus_tables in the public schema by default
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO public;
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+SELECT * FROM multi_extension.print_extension_changes();
+  previous_object   |      current_object
 ---------------------------------------------------------------------
-(0 rows)
+ view citus_tables  |
+                    | view public.citus_tables
+(2 rows)
 
--- Test downgrade to 10.0-2 from 10.0-3
-ALTER EXTENSION citus UPDATE TO '10.0-3';
-ALTER EXTENSION citus UPDATE TO '10.0-2';
--- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
- previous_object | current_object
----------------------------------------------------------------------
-(0 rows)
-
--- Snapshot of state at 10.0-3
-ALTER EXTENSION citus UPDATE TO '10.0-3';
-SELECT * FROM print_extension_changes();
- previous_object |                    current_object
----------------------------------------------------------------------
-                 | function citus_get_active_worker_nodes() SETOF record
-(1 row)
-
--- Test downgrade to 10.0-3 from 10.1-1
+-- not print "HINT: " to hide current lib version
+\set VERBOSITY terse
+CREATE TABLE columnar_table(a INT, b INT) USING columnar;
+SET citus.enable_version_checks TO ON;
+-- all should throw an error due to version mismatch
+VACUUM FULL columnar_table;
+ERROR:  loaded Citus library version differs from installed extension version
+INSERT INTO columnar_table SELECT i FROM generate_series(1, 10) i;
+ERROR:  loaded Citus library version differs from installed extension version
+VACUUM columnar_table;
+WARNING:  loaded Citus library version differs from installed extension version
+TRUNCATE columnar_table;
+ERROR:  loaded Citus library version differs from installed extension version
+DROP TABLE columnar_table;
+ERROR:  loaded Citus library version differs from installed extension version
+CREATE INDEX ON columnar_table (a);
+ERROR:  loaded Citus library version differs from installed extension version
+SELECT alter_columnar_table_set('columnar_table', compression => 'pglz');
+ERROR:  loaded Citus library version differs from installed extension version
+SELECT alter_columnar_table_reset('columnar_table');
+ERROR:  loaded Citus library version differs from installed extension version
+INSERT INTO columnar_table SELECT * FROM columnar_table;
+ERROR:  loaded Citus library version differs from installed extension version
+SELECT 1 FROM columnar_table; -- columnar custom scan
+ERROR:  loaded Citus library version differs from installed extension version
+SET columnar.enable_custom_scan TO OFF;
+SELECT 1 FROM columnar_table; -- seq scan
+ERROR:  loaded Citus library version differs from installed extension version
+CREATE TABLE new_columnar_table (a int) USING columnar;
+ERROR:  loaded Citus library version differs from installed extension version
+-- do cleanup for the rest of the tests
+SET citus.enable_version_checks TO OFF;
+DROP TABLE columnar_table;
+RESET columnar.enable_custom_scan;
+\set VERBOSITY default
+-- Test downgrade to 10.0-4 from 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
-ALTER EXTENSION citus UPDATE TO '10.0-3';
+ALTER EXTENSION citus UPDATE TO '10.0-4';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
  previous_object | current_object
 ---------------------------------------------------------------------
 (0 rows)
 
 -- Snapshot of state at 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
                                                                                                         previous_object                                                                                                        |                                                                                                                          current_object
 ---------------------------------------------------------------------
  function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real) void                                                                                                                                            |
  function citus_internal.columnar_ensure_objects_exist() void                                                                                                                                                                  |
+ function citus_internal.pg_dist_rebalance_strategy_enterprise_check() trigger                                                                                                                                                 |
  function create_distributed_table(regclass,text,citus.distribution_type,text) void                                                                                                                                            |
  function get_rebalance_progress() TABLE(sessionid integer, table_name regclass, shardid bigint, shard_size bigint, sourcename text, sourceport integer, targetname text, targetport integer, progress bigint)                 |
  function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name) TABLE(table_name regclass, shardid bigint, shard_size bigint, sourcename text, sourceport integer, targetname text, targetport integer) |
                                                                                                                                                                                                                                | function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real,real) void
+                                                                                                                                                                                                                               | function citus_cleanup_orphaned_shards()
                                                                                                                                                                                                                                | function citus_local_disk_space_stats() record
                                                                                                                                                                                                                                | function create_distributed_table(regclass,text,citus.distribution_type,text,integer) void
                                                                                                                                                                                                                                | function get_rebalance_progress() TABLE(sessionid integer, table_name regclass, shardid bigint, shard_size bigint, sourcename text, sourceport integer, targetname text, targetport integer, progress bigint, source_shard_size bigint, target_shard_size bigint)
@@ -579,14 +815,176 @@ SELECT * FROM print_extension_changes();
                                                                                                                                                                                                                                | function worker_partitioned_relation_size(regclass) bigint
                                                                                                                                                                                                                                | function worker_partitioned_relation_total_size(regclass) bigint
                                                                                                                                                                                                                                | function worker_partitioned_table_size(regclass) bigint
-(13 rows)
+(15 rows)
 
-DROP TABLE prev_objects, extension_diff;
+-- Test downgrade to 10.1-1 from 10.2-1
+ALTER EXTENSION citus UPDATE TO '10.2-1';
+ALTER EXTENSION citus UPDATE TO '10.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.2-1
+ALTER EXTENSION citus UPDATE TO '10.2-1';
+SELECT * FROM multi_extension.print_extension_changes();
+                      previous_object                       |                                                                                     current_object
+---------------------------------------------------------------------
+ function citus_drop_all_shards(regclass,text,text) integer |
+ function stop_metadata_sync_to_node(text,integer) void     |
+                                                            | function citus_drop_all_shards(regclass,text,text,boolean) integer
+                                                            | function citus_internal.downgrade_columnar_storage(regclass) void
+                                                            | function citus_internal.upgrade_columnar_storage(regclass) void
+                                                            | function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char") void
+                                                            | function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint) void
+                                                            | function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text) void
+                                                            | function citus_internal_delete_shard_metadata(bigint) void
+                                                            | function citus_internal_update_placement_metadata(bigint,integer,integer) void
+                                                            | function citus_internal_update_relation_colocation(oid,integer) void
+                                                            | function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone) boolean
+                                                            | function drop_old_time_partitions(regclass,timestamp with time zone)
+                                                            | function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone) TABLE(partition_name text, range_from_value text, range_to_value text)
+                                                            | function stop_metadata_sync_to_node(text,integer,boolean) void
+                                                            | function worker_nextval(regclass) integer
+(16 rows)
+
+-- Test downgrade to 10.2-1 from 10.2-2
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+ALTER EXTENSION citus UPDATE TO '10.2-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.2-2
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Test downgrade to 10.2-2 from 10.2-3
+ALTER EXTENSION citus UPDATE TO '10.2-3';
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.2-3
+ALTER EXTENSION citus UPDATE TO '10.2-3';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Test downgrade to 10.2-3 from 10.2-4
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+ALTER EXTENSION citus UPDATE TO '10.2-3';
+-- Make sure that we don't delete pg_depend entries added in
+-- columnar--10.2-3--10.2-4.sql when downgrading to 10.2-3.
+SELECT COUNT(*)=10
+FROM pg_depend
+WHERE classid = 'pg_am'::regclass::oid AND
+      objid = (select oid from pg_am where amname = 'columnar') AND
+      objsubid = 0 AND
+      refclassid = 'pg_class'::regclass::oid AND
+      refobjsubid = 0 AND
+      deptype = 'n';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 10.2-4
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object |                              current_object
+---------------------------------------------------------------------
+                 | function citus_internal.columnar_ensure_am_depends_catalog() void
+                 | function fix_all_partition_shard_index_names() SETOF regclass
+                 | function fix_partition_shard_index_names(regclass) void
+                 | function worker_fix_partition_shard_index_names(regclass,text,text) void
+(4 rows)
+
+-- Make sure that we defined dependencies from all rel objects (tables,
+-- indexes, sequences ..) to columnar table access method ...
+SELECT pg_class.oid INTO columnar_schema_members
+FROM pg_class, pg_namespace
+WHERE pg_namespace.oid=pg_class.relnamespace AND
+      pg_namespace.nspname='columnar';
+SELECT refobjid INTO columnar_schema_members_pg_depend
+FROM pg_depend
+WHERE classid = 'pg_am'::regclass::oid AND
+      objid = (select oid from pg_am where amname = 'columnar') AND
+      objsubid = 0 AND
+      refclassid = 'pg_class'::regclass::oid AND
+      refobjsubid = 0 AND
+      deptype = 'n';
+-- ... , so this should be empty,
+(TABLE columnar_schema_members EXCEPT TABLE columnar_schema_members_pg_depend)
+UNION
+(TABLE columnar_schema_members_pg_depend EXCEPT TABLE columnar_schema_members);
+ oid
+---------------------------------------------------------------------
+(0 rows)
+
+-- ... , and both columnar_schema_members_pg_depend & columnar_schema_members
+-- should have 10 entries.
+SELECT COUNT(*)=10 FROM columnar_schema_members_pg_depend;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
+-- Use a synthetic pg_dist_shard record to show that upgrade fails
+-- when there are cstore_fdw tables
+INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage) VALUES ('pg_dist_shard', 1, 'c');
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+ERROR:  cstore_fdw tables are deprecated as of Citus 11.0
+HINT:  Install Citus 10.2 and convert your cstore_fdw tables to the columnar access method before upgrading further
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
+DELETE FROM pg_dist_shard WHERE shardid = 1;
+-- Test downgrade to 10.2-4 from 11.0-1
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+ previous_object | current_object
+---------------------------------------------------------------------
+(0 rows)
+
+-- Snapshot of state at 11.0-1
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+SELECT * FROM multi_extension.print_extension_changes();
+                           previous_object                            |                        current_object
+---------------------------------------------------------------------
+ function citus_disable_node(text,integer) void                       |
+ function master_append_table_to_shard(bigint,text,text,integer) real |
+ function master_apply_delete_command(text) integer                   |
+ function master_get_table_metadata(text) record                      |
+                                                                      | function citus_check_cluster_node_health() SETOF record
+                                                                      | function citus_check_connection_to_node(text,integer) boolean
+                                                                      | function citus_disable_node(text,integer,boolean) void
+                                                                      | function citus_internal_add_object_metadata(text,text[],text[],integer,integer) void
+(8 rows)
+
+DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
 SHOW citus.version;
  citus.version
 ---------------------------------------------------------------------
- 10.1devel
+ 11.0devel
 (1 row)
 
 -- ensure no unexpected objects were created outside pg_catalog
@@ -609,7 +1007,7 @@ RESET citus.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '8.0-1';
 ERROR:  specified version incompatible with loaded Citus library
-DETAIL:  Loaded library requires 10.1, but 8.0-1 was specified.
+DETAIL:  Loaded library requires 11.0, but 8.0-1 was specified.
 HINT:  If a newer library is present, restart the database and try the command again.
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
@@ -652,7 +1050,7 @@ ORDER BY 1;
 -- We should not distribute table in version mistmatch
 SELECT create_distributed_table('version_mismatch_table', 'column1');
 ERROR:  loaded Citus library version differs from installed extension version
-DETAIL:  Loaded library requires 10.1, but the installed extension version is 8.1-1.
+DETAIL:  Loaded library requires 11.0, but the installed extension version is 8.1-1.
 HINT:  Run ALTER EXTENSION citus UPDATE and try again.
 -- This function will cause fail in next ALTER EXTENSION
 CREATE OR REPLACE FUNCTION pg_catalog.relation_is_a_known_shard(regclass)
@@ -826,6 +1224,9 @@ HINT:  You can manually create a database and its extensions on workers.
 \c - - - :master_port
 \c another
 CREATE EXTENSION citus;
+\c - - - :worker_1_port
+CREATE EXTENSION citus;
+\c - - - :master_port
 SET citus.enable_object_propagation TO off; -- prevent distributed transactions during add node
 SELECT FROM master_add_node('localhost', :worker_1_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
@@ -834,7 +1235,6 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
 (1 row)
 
 \c - - - :worker_1_port
-CREATE EXTENSION citus;
 ALTER FUNCTION assign_distributed_transaction_id(initiator_node_identifier integer, transaction_number bigint, transaction_stamp timestamp with time zone)
 RENAME TO dummy_assign_function;
 \c - - - :master_port
@@ -852,7 +1252,7 @@ BEGIN
 END;
 $$;
 ERROR:  create distributed table failed
-CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
+CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
 \c regression
 \c - - - :master_port
 DROP DATABASE another;
@@ -924,3 +1324,7 @@ SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenanc
 (1 row)
 
 DROP TABLE version_mismatch_table;
+DROP SCHEMA multi_extension;
+ERROR:  cannot drop schema multi_extension because other objects depend on it
+DETAIL:  function multi_extension.print_extension_changes() depends on schema multi_extension
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.

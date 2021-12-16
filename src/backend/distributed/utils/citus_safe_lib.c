@@ -83,11 +83,11 @@ SafeStringToInt64(const char *str)
 	}
 	else if ((errno == ERANGE && number == LLONG_MIN) || number < INT64_MIN)
 	{
-		ereport(ERROR, (errmsg("Error parsing %s as int64, underflow occured\n", str)));
+		ereport(ERROR, (errmsg("Error parsing %s as int64, underflow occurred\n", str)));
 	}
 	else if ((errno == ERANGE && number == LLONG_MAX) || number > INT64_MAX)
 	{
-		ereport(ERROR, (errmsg("Error parsing %s as int64, overflow occured\n", str)));
+		ereport(ERROR, (errmsg("Error parsing %s as int64, overflow occurred\n", str)));
 	}
 	else if (errno == EINVAL)
 	{
@@ -130,7 +130,7 @@ SafeStringToUint64(const char *str)
 	}
 	else if ((errno == ERANGE && number == ULLONG_MAX) || number > UINT64_MAX)
 	{
-		ereport(ERROR, (errmsg("Error parsing %s as uint64, overflow occured\n", str)));
+		ereport(ERROR, (errmsg("Error parsing %s as uint64, overflow occurred\n", str)));
 	}
 	else if (errno == EINVAL)
 	{

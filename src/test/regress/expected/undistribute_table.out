@@ -130,11 +130,22 @@ HINT:  Use cascade option to undistribute all the relations involved in a foreig
 DROP TABLE referenced_table, referencing_table;
 -- test distributed foreign tables
 -- we expect errors
+-- and we need metadata sync off for foreign tables
+SELECT stop_metadata_sync_to_node(nodename, nodeport) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
+NOTICE:  dropping metadata on the node (localhost,57638)
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+
+(2 rows)
+
 CREATE FOREIGN TABLE foreign_table (
   id bigint not null,
   full_name text not null default ''
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 SELECT create_distributed_table('foreign_table', 'id');
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
@@ -144,6 +155,13 @@ NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 SELECT undistribute_table('foreign_table');
 ERROR:  cannot complete operation because it is a foreign table
 DROP FOREIGN TABLE foreign_table;
+SELECT start_metadata_sync_to_node(nodename, nodeport) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+
+(2 rows)
+
 -- test partitioned tables
 CREATE TABLE partitioned_table (id INT, a INT) PARTITION BY RANGE (id);
 CREATE TABLE partitioned_table_1_5 PARTITION OF partitioned_table FOR VALUES FROM (1) TO (5);
@@ -163,7 +181,7 @@ SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LI
  partitioned_table_6_10
 (3 rows)
 
-SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname SIMILAR TO 'partitioned\_table%\d{3,}'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,6)
@@ -224,7 +242,7 @@ SELECT logicalrelid FROM pg_dist_partition WHERE logicalrelid::regclass::text LI
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname LIKE 'partitioned\_table%'$$);
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_catalog.pg_class WHERE relname SIMILAR TO 'partitioned\_table%\d{3,}'$$);
  run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,0)

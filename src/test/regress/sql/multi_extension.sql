@@ -13,6 +13,7 @@ SHOW server_version \gset
 SELECT substring(:'server_version', '\d+')::int > 11 AS version_above_eleven;
 
 SET citus.next_shard_id TO 580000;
+CREATE SCHEMA multi_extension;
 
 SELECT $definition$
 CREATE OR REPLACE FUNCTION test.maintenance_worker()
@@ -41,14 +42,15 @@ $$;
 $definition$ create_function_test_maintenance_worker
 \gset
 
-CREATE TABLE prev_objects(description text);
-CREATE TABLE extension_diff(previous_object text COLLATE "C",
+CREATE TABLE multi_extension.prev_objects(description text);
+CREATE TABLE multi_extension.extension_diff(previous_object text COLLATE "C",
                             current_object text COLLATE "C");
 
-CREATE FUNCTION print_extension_changes()
+CREATE FUNCTION multi_extension.print_extension_changes()
 RETURNS TABLE(previous_object text, current_object text)
 AS $func$
 BEGIN
+    SET LOCAL search_path TO multi_extension;
 	TRUNCATE TABLE extension_diff;
 
 	CREATE TABLE current_objects AS
@@ -128,13 +130,13 @@ ALTER EXTENSION citus UPDATE TO '9.1-1';
 ALTER EXTENSION citus UPDATE TO '9.2-1';
 ALTER EXTENSION citus UPDATE TO '9.2-2';
 -- Snapshot of state at 9.2-2
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 9.2-2 from 9.2-4
 ALTER EXTENSION citus UPDATE TO '9.2-4';
 ALTER EXTENSION citus UPDATE TO '9.2-2';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
 /*
  * As we mistakenly bumped schema version to 9.3-1 in a bad release, we support
@@ -146,27 +148,65 @@ ALTER EXTENSION citus UPDATE TO '9.3-1';
 
 ALTER EXTENSION citus UPDATE TO '9.2-4';
 -- Snapshot of state at 9.2-4
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 9.2-4 from 9.3-2
 ALTER EXTENSION citus UPDATE TO '9.3-2';
 ALTER EXTENSION citus UPDATE TO '9.2-4';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 9.3-2
 ALTER EXTENSION citus UPDATE TO '9.3-2';
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 9.3-2 from 9.4-1
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 ALTER EXTENSION citus UPDATE TO '9.3-2';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 9.4-1
 ALTER EXTENSION citus UPDATE TO '9.4-1';
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test upgrade paths for backported citus_pg_upgrade functions
+ALTER EXTENSION citus UPDATE TO '9.4-2';
+ALTER EXTENSION citus UPDATE TO '9.4-1';
+-- Should be empty result, even though the downgrade doesn't undo the upgrade, the
+-- function signature doesn't change, which is reflected here.
+SELECT * FROM multi_extension.print_extension_changes();
+
+ALTER EXTENSION citus UPDATE TO '9.4-2';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 9.4-1
+ALTER EXTENSION citus UPDATE TO '9.4-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test upgrade paths for backported improvement of master_update_table_statistics function
+ALTER EXTENSION citus UPDATE TO '9.4-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+ALTER EXTENSION citus UPDATE TO '9.4-2';
+
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+
+ALTER EXTENSION citus UPDATE TO '9.4-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 9.4-1
+ALTER EXTENSION citus UPDATE TO '9.4-1';
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 9.4-1 from 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
@@ -184,53 +224,213 @@ ROLLBACK;
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
--- Test downgrade to 9.5-1 from 10.0-1
-ALTER EXTENSION citus UPDATE TO '10.0-1';
+-- Test upgrade paths for backported citus_pg_upgrade functions
+ALTER EXTENSION citus UPDATE TO '9.5-2';
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+-- Should be empty result, even though the downgrade doesn't undo the upgrade, the
+-- function signature doesn't change, which is reflected here.
+SELECT * FROM multi_extension.print_extension_changes();
+
+ALTER EXTENSION citus UPDATE TO '9.5-2';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 9.5-1
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test upgrade paths for backported improvement of master_update_table_statistics function
+ALTER EXTENSION citus UPDATE TO '9.5-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+ALTER EXTENSION citus UPDATE TO '9.5-2';
+
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+
+ALTER EXTENSION citus UPDATE TO '9.5-3';
+-- should see the new source code with internal function citus_update_table_statistics
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 9.5-1
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+-- should see the old source code
+SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
+-- Should be empty result
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- We removed the upgrade paths to 10.0-1, 10.0-2 and 10.0-3 due to a bug that blocked
+-- upgrades to 10.0, Therefore we test upgrades to 10.0-4 instead
+
+-- Test downgrade to 9.5-1 from 10.0-4
+ALTER EXTENSION citus UPDATE TO '10.0-4';
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
--- Snapshot of state at 10.0-1
-ALTER EXTENSION citus UPDATE TO '10.0-1';
-SELECT * FROM print_extension_changes();
+-- Snapshot of state at 10.0-4
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+SELECT * FROM multi_extension.print_extension_changes();
 
--- Test downgrade to 10.0-1 from 10.0-2
-ALTER EXTENSION citus UPDATE TO '10.0-2';
-ALTER EXTENSION citus UPDATE TO '10.0-1';
--- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+-- check that we depend on the existence of public schema, and we can not drop it now
+DROP SCHEMA public;
 
--- Snapshot of state at 10.0-2
-ALTER EXTENSION citus UPDATE TO '10.0-2';
-SELECT * FROM print_extension_changes();
+-- verify that citus_tables view is on pg_catalog if public schema is absent.
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+DROP SCHEMA public;
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+SELECT * FROM multi_extension.print_extension_changes();
 
--- Test downgrade to 10.0-2 from 10.0-3
-ALTER EXTENSION citus UPDATE TO '10.0-3';
-ALTER EXTENSION citus UPDATE TO '10.0-2';
--- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+-- recreate public schema, and recreate citus_tables in the public schema by default
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO public;
+ALTER EXTENSION citus UPDATE TO '9.5-1';
+ALTER EXTENSION citus UPDATE TO '10.0-4';
+SELECT * FROM multi_extension.print_extension_changes();
 
--- Snapshot of state at 10.0-3
-ALTER EXTENSION citus UPDATE TO '10.0-3';
-SELECT * FROM print_extension_changes();
+-- not print "HINT: " to hide current lib version
+\set VERBOSITY terse
+CREATE TABLE columnar_table(a INT, b INT) USING columnar;
+SET citus.enable_version_checks TO ON;
 
--- Test downgrade to 10.0-3 from 10.1-1
+-- all should throw an error due to version mismatch
+VACUUM FULL columnar_table;
+INSERT INTO columnar_table SELECT i FROM generate_series(1, 10) i;
+VACUUM columnar_table;
+TRUNCATE columnar_table;
+DROP TABLE columnar_table;
+CREATE INDEX ON columnar_table (a);
+SELECT alter_columnar_table_set('columnar_table', compression => 'pglz');
+SELECT alter_columnar_table_reset('columnar_table');
+INSERT INTO columnar_table SELECT * FROM columnar_table;
+
+SELECT 1 FROM columnar_table; -- columnar custom scan
+
+SET columnar.enable_custom_scan TO OFF;
+SELECT 1 FROM columnar_table; -- seq scan
+
+CREATE TABLE new_columnar_table (a int) USING columnar;
+
+-- do cleanup for the rest of the tests
+SET citus.enable_version_checks TO OFF;
+DROP TABLE columnar_table;
+RESET columnar.enable_custom_scan;
+\set VERBOSITY default
+
+-- Test downgrade to 10.0-4 from 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
-ALTER EXTENSION citus UPDATE TO '10.0-3';
+ALTER EXTENSION citus UPDATE TO '10.0-4';
 -- Should be empty result since upgrade+downgrade should be a no-op
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
 -- Snapshot of state at 10.1-1
 ALTER EXTENSION citus UPDATE TO '10.1-1';
-SELECT * FROM print_extension_changes();
+SELECT * FROM multi_extension.print_extension_changes();
 
-DROP TABLE prev_objects, extension_diff;
+-- Test downgrade to 10.1-1 from 10.2-1
+ALTER EXTENSION citus UPDATE TO '10.2-1';
+ALTER EXTENSION citus UPDATE TO '10.1-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 10.2-1
+ALTER EXTENSION citus UPDATE TO '10.2-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 10.2-1 from 10.2-2
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+ALTER EXTENSION citus UPDATE TO '10.2-1';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 10.2-2
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 10.2-2 from 10.2-3
+ALTER EXTENSION citus UPDATE TO '10.2-3';
+ALTER EXTENSION citus UPDATE TO '10.2-2';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 10.2-3
+ALTER EXTENSION citus UPDATE TO '10.2-3';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Test downgrade to 10.2-3 from 10.2-4
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+ALTER EXTENSION citus UPDATE TO '10.2-3';
+
+-- Make sure that we don't delete pg_depend entries added in
+-- columnar--10.2-3--10.2-4.sql when downgrading to 10.2-3.
+SELECT COUNT(*)=10
+FROM pg_depend
+WHERE classid = 'pg_am'::regclass::oid AND
+      objid = (select oid from pg_am where amname = 'columnar') AND
+      objsubid = 0 AND
+      refclassid = 'pg_class'::regclass::oid AND
+      refobjsubid = 0 AND
+      deptype = 'n';
+
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 10.2-4
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Make sure that we defined dependencies from all rel objects (tables,
+-- indexes, sequences ..) to columnar table access method ...
+SELECT pg_class.oid INTO columnar_schema_members
+FROM pg_class, pg_namespace
+WHERE pg_namespace.oid=pg_class.relnamespace AND
+      pg_namespace.nspname='columnar';
+SELECT refobjid INTO columnar_schema_members_pg_depend
+FROM pg_depend
+WHERE classid = 'pg_am'::regclass::oid AND
+      objid = (select oid from pg_am where amname = 'columnar') AND
+      objsubid = 0 AND
+      refclassid = 'pg_class'::regclass::oid AND
+      refobjsubid = 0 AND
+      deptype = 'n';
+
+-- ... , so this should be empty,
+(TABLE columnar_schema_members EXCEPT TABLE columnar_schema_members_pg_depend)
+UNION
+(TABLE columnar_schema_members_pg_depend EXCEPT TABLE columnar_schema_members);
+
+-- ... , and both columnar_schema_members_pg_depend & columnar_schema_members
+-- should have 10 entries.
+SELECT COUNT(*)=10 FROM columnar_schema_members_pg_depend;
+
+DROP TABLE columnar_schema_members, columnar_schema_members_pg_depend;
+
+-- Use a synthetic pg_dist_shard record to show that upgrade fails
+-- when there are cstore_fdw tables
+INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage) VALUES ('pg_dist_shard', 1, 'c');
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+DELETE FROM pg_dist_shard WHERE shardid = 1;
+
+-- Test downgrade to 10.2-4 from 11.0-1
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+ALTER EXTENSION citus UPDATE TO '10.2-4';
+-- Should be empty result since upgrade+downgrade should be a no-op
+SELECT * FROM multi_extension.print_extension_changes();
+
+-- Snapshot of state at 11.0-1
+ALTER EXTENSION citus UPDATE TO '11.0-1';
+SELECT * FROM multi_extension.print_extension_changes();
+
+DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 
 -- show running version
 SHOW citus.version;
@@ -434,11 +634,14 @@ CREATE DATABASE another;
 
 \c another
 CREATE EXTENSION citus;
+\c - - - :worker_1_port
+CREATE EXTENSION citus;
+\c - - - :master_port
+
 SET citus.enable_object_propagation TO off; -- prevent distributed transactions during add node
 SELECT FROM master_add_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
-CREATE EXTENSION citus;
 ALTER FUNCTION assign_distributed_transaction_id(initiator_node_identifier integer, transaction_number bigint, transaction_stamp timestamp with time zone)
 RENAME TO dummy_assign_function;
 
@@ -498,3 +701,4 @@ FROM test.maintenance_worker();
 SELECT count(*) FROM pg_stat_activity WHERE application_name = 'Citus Maintenance Daemon';
 
 DROP TABLE version_mismatch_table;
+DROP SCHEMA multi_extension;

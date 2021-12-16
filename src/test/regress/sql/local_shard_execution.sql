@@ -3,7 +3,6 @@ SET search_path TO local_shard_execution;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 SET citus.next_shard_id TO 1470000;
 
 CREATE TABLE reference_table (key int PRIMARY KEY);
@@ -205,6 +204,8 @@ INSERT INTO distributed_table SELECT 1, '1',15 FROM distributed_table WHERE key 
 -- sanity check: multi-shard INSERT..SELECT pushdown goes through distributed execution
 INSERT INTO distributed_table SELECT * FROM distributed_table ON CONFLICT DO NOTHING;
 
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
 
 -- EXPLAIN for local execution just works fine
 -- though going through distributed execution
@@ -581,7 +582,9 @@ SELECT DISTINCT trim(value) FROM (
 PREPARE local_prepare_param (int) AS SELECT count(*) FROM distributed_table WHERE key = $1;
 PREPARE remote_prepare_param (int) AS SELECT count(*) FROM distributed_table WHERE key != $1;
 BEGIN;
-	-- 6 local execution without params
+	-- 8 local execution without params
+	EXECUTE local_prepare_no_param;
+	EXECUTE local_prepare_no_param;
 	EXECUTE local_prepare_no_param;
 	EXECUTE local_prepare_no_param;
 	EXECUTE local_prepare_no_param;
@@ -589,7 +592,9 @@ BEGIN;
 	EXECUTE local_prepare_no_param;
 	EXECUTE local_prepare_no_param;
 
-	-- 6 local execution without params and some subqueries
+	-- 8 local execution without params and some subqueries
+	EXECUTE local_prepare_no_param_subquery;
+	EXECUTE local_prepare_no_param_subquery;
 	EXECUTE local_prepare_no_param_subquery;
 	EXECUTE local_prepare_no_param_subquery;
 	EXECUTE local_prepare_no_param_subquery;
@@ -597,12 +602,14 @@ BEGIN;
 	EXECUTE local_prepare_no_param_subquery;
 	EXECUTE local_prepare_no_param_subquery;
 
-	-- 6 local executions with params
+	-- 8 local executions with params
 	EXECUTE local_prepare_param(1);
 	EXECUTE local_prepare_param(5);
 	EXECUTE local_prepare_param(6);
 	EXECUTE local_prepare_param(1);
 	EXECUTE local_prepare_param(5);
+	EXECUTE local_prepare_param(6);
+	EXECUTE local_prepare_param(6);
 	EXECUTE local_prepare_param(6);
 
 	-- followed by a non-local execution
@@ -612,7 +619,9 @@ COMMIT;
 PREPARE local_insert_prepare_no_param AS INSERT INTO distributed_table VALUES (1+0*random(), '11',21::int) ON CONFLICT(key) DO UPDATE SET value = '29' || '28' RETURNING *, key + 1, value || '30', age * 15;
 PREPARE local_insert_prepare_param (int) AS INSERT INTO distributed_table VALUES ($1+0*random(), '11',21::int) ON CONFLICT(key) DO UPDATE SET value = '29' || '28' RETURNING *, key + 1, value || '30', age * 15;
 BEGIN;
-	-- 6 local execution without params
+	-- 8 local execution without params
+	EXECUTE local_insert_prepare_no_param;
+	EXECUTE local_insert_prepare_no_param;
 	EXECUTE local_insert_prepare_no_param;
 	EXECUTE local_insert_prepare_no_param;
 	EXECUTE local_insert_prepare_no_param;
@@ -620,12 +629,14 @@ BEGIN;
 	EXECUTE local_insert_prepare_no_param;
 	EXECUTE local_insert_prepare_no_param;
 
-	-- 6 local executions with params
+	-- 8 local executions with params
 	EXECUTE local_insert_prepare_param(1);
 	EXECUTE local_insert_prepare_param(5);
 	EXECUTE local_insert_prepare_param(6);
 	EXECUTE local_insert_prepare_param(1);
 	EXECUTE local_insert_prepare_param(5);
+	EXECUTE local_insert_prepare_param(6);
+	EXECUTE local_insert_prepare_param(6);
 	EXECUTE local_insert_prepare_param(6);
 
 	-- followed by a non-local execution
@@ -648,7 +659,11 @@ BEGIN;
 	EXECUTE local_multi_row_insert_prepare_no_param;
 	EXECUTE local_multi_row_insert_prepare_no_param;
 	EXECUTE local_multi_row_insert_prepare_no_param;
+	EXECUTE local_multi_row_insert_prepare_no_param;
+	EXECUTE local_multi_row_insert_prepare_no_param;
 
+	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
+	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
 	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
 	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
 	EXECUTE local_multi_row_insert_prepare_no_param_multi_shard;
@@ -662,6 +677,8 @@ BEGIN;
 	EXECUTE local_multi_row_insert_prepare_params(5,1);
 	EXECUTE local_multi_row_insert_prepare_params(5,6);
 	EXECUTE local_multi_row_insert_prepare_params(5,1);
+	EXECUTE local_multi_row_insert_prepare_params(1,6);
+	EXECUTE local_multi_row_insert_prepare_params(1,5);
 
 	-- one task is remote
 	EXECUTE local_multi_row_insert_prepare_params(5,11);
@@ -801,7 +818,9 @@ TRUNCATE collections_list;
 
 -- make sure that even if local execution is used, the sequence values
 -- are generated locally
+SET citus.enable_ddl_propagation TO OFF;
 ALTER SEQUENCE collections_list_key_seq NO MINVALUE NO MAXVALUE;
+RESET citus.enable_ddl_propagation;
 
 PREPARE serial_prepared_local AS INSERT INTO collections_list (collection_id) VALUES (0) RETURNING key, ser;
 
@@ -816,6 +835,13 @@ EXECUTE serial_prepared_local;
 SELECT setval('collections_list_key_seq', 708);
 EXECUTE serial_prepared_local;
 SELECT setval('collections_list_key_seq', 709);
+EXECUTE serial_prepared_local;
+
+-- get ready for the next executions
+DELETE FROM collections_list WHERE key IN (5,6);
+SELECT setval('collections_list_key_seq', 4);
+EXECUTE serial_prepared_local;
+SELECT setval('collections_list_key_seq', 5);
 EXECUTE serial_prepared_local;
 
 -- and, one remote test
@@ -877,7 +903,6 @@ RESET citus.log_local_commands;
 \c - - - :master_port
 SET citus.next_shard_id TO 1480000;
 -- test both local and remote execution with custom type
-SET citus.replication_model TO "streaming";
 SET citus.shard_replication_factor TO 1;
 CREATE TYPE invite_resp AS ENUM ('yes', 'no', 'maybe');
 
@@ -931,8 +956,10 @@ CALL regular_procedure('no');
 CALL regular_procedure('no');
 CALL regular_procedure('no');
 CALL regular_procedure('no');
+CALL regular_procedure('no');
 
 PREPARE multi_shard_no_dist_key(invite_resp) AS select * from event_responses where response = $1::invite_resp ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 1;
+EXECUTE multi_shard_no_dist_key('yes');
 EXECUTE multi_shard_no_dist_key('yes');
 EXECUTE multi_shard_no_dist_key('yes');
 EXECUTE multi_shard_no_dist_key('yes');
@@ -949,8 +976,10 @@ EXECUTE multi_shard_with_dist_key(1, 'yes');
 EXECUTE multi_shard_with_dist_key(1, 'yes');
 EXECUTE multi_shard_with_dist_key(1, 'yes');
 EXECUTE multi_shard_with_dist_key(1, 'yes');
+EXECUTE multi_shard_with_dist_key(1, 'yes');
 
 PREPARE query_pushdown_no_dist_key(invite_resp) AS select * from event_responses e1 LEFT JOIN event_responses e2 USING(event_id) where e1.response = $1::invite_resp ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC LIMIT 1;
+EXECUTE query_pushdown_no_dist_key('yes');
 EXECUTE query_pushdown_no_dist_key('yes');
 EXECUTE query_pushdown_no_dist_key('yes');
 EXECUTE query_pushdown_no_dist_key('yes');
@@ -967,6 +996,7 @@ EXECUTE insert_select_via_coord('yes');
 EXECUTE insert_select_via_coord('yes');
 EXECUTE insert_select_via_coord('yes');
 EXECUTE insert_select_via_coord('yes');
+EXECUTE insert_select_via_coord('yes');
 
 PREPARE insert_select_pushdown(invite_resp) AS INSERT INTO event_responses SELECT * FROM event_responses where response = $1::invite_resp ON CONFLICT (event_id, user_id) DO NOTHING;
 EXECUTE insert_select_pushdown('yes');
@@ -976,8 +1006,10 @@ EXECUTE insert_select_pushdown('yes');
 EXECUTE insert_select_pushdown('yes');
 EXECUTE insert_select_pushdown('yes');
 EXECUTE insert_select_pushdown('yes');
+EXECUTE insert_select_pushdown('yes');
 
 PREPARE router_select_with_no_dist_key_filter(invite_resp) AS select * from event_responses where event_id = 1 AND response = $1::invite_resp ORDER BY 1 DESC, 2 DESC, 3 DESC LIMIT 1;
+EXECUTE router_select_with_no_dist_key_filter('yes');
 EXECUTE router_select_with_no_dist_key_filter('yes');
 EXECUTE router_select_with_no_dist_key_filter('yes');
 EXECUTE router_select_with_no_dist_key_filter('yes');
@@ -1007,9 +1039,10 @@ $fn$;
 
 SELECT create_distributed_function('register_for_event(int,int,invite_resp)', 'p_event_id', 'event_responses');
 
--- call 7 times to make sure it works after the 5th time(postgres binds values after the 5th time)
+-- call 8 times to make sure it works after the 5th time(postgres binds values after the 5th time and Citus 2nd time)
 -- after 6th, the local execution caches the local plans and uses it
 -- execute it both locally and remotely
+CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
@@ -1026,7 +1059,7 @@ CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
-
+CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 CALL register_for_event(16, 1, 'yes');
 

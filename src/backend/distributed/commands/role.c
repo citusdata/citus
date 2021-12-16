@@ -143,7 +143,7 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
@@ -209,6 +209,15 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 	 * distributed we will not propagate the statement
 	 */
 	if (stmt->role != NULL && !IsObjectDistributed(&address))
+	{
+		return NIL;
+	}
+
+	/*
+	 * Since roles need to be handled manually on community, we need to support such queries
+	 * by handling them locally on worker nodes
+	 */
+	if (!IsCoordinator())
 	{
 		return NIL;
 	}
@@ -630,7 +639,7 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
 
 
 /*
- * MakeSetStatementArgs parses a configuraton value and creates an List of A_Const
+ * MakeSetStatementArgs parses a configuration value and creates an List of A_Const
  * Nodes with appropriate types.
  *
  * The allowed A_Const types are Integer, Float, and String.

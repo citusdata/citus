@@ -215,17 +215,27 @@ TargetListOnPartitionColumn(Query *query, List *targetEntryList)
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		Expr *targetExpression = targetEntry->expr;
 
-		bool isPartitionColumn = IsPartitionColumn(targetExpression, query);
-		Oid relationId = InvalidOid;
+		bool skipOuterVars = true;
+		bool isPartitionColumn = IsPartitionColumn(targetExpression, query,
+												   skipOuterVars);
 		Var *column = NULL;
+		RangeTblEntry *rte = NULL;
 
-		FindReferencedTableColumn(targetExpression, NIL, query, &relationId, &column);
+		FindReferencedTableColumn(targetExpression, NIL, query, &column, &rte,
+								  skipOuterVars);
+		Oid relationId = rte ? rte->relid : InvalidOid;
 
 		/*
 		 * If the expression belongs to a non-distributed table continue searching for
 		 * other partition keys.
 		 */
 		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
+		{
+			continue;
+		}
+
+		/* append-distributed tables do not have a strict partition column */
+		if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
 		{
 			continue;
 		}

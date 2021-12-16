@@ -19,6 +19,8 @@
 extern bool EnableLocalExecution;
 extern bool LogLocalCommands;
 
+extern int LocalExecutorLevel;
+
 typedef enum LocalExecutionStatus
 {
 	LOCAL_EXECUTION_REQUIRED,
@@ -44,5 +46,8 @@ extern bool TaskAccessesLocalNode(Task *task);
 extern void ErrorIfTransactionAccessedPlacementsLocally(void);
 extern void DisableLocalExecution(void);
 extern void SetLocalExecutionStatus(LocalExecutionStatus newStatus);
+extern void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
+											   Oid **parameterTypes,
+											   const char ***parameterValues);
 
 #endif /* LOCAL_EXECUTION_H */

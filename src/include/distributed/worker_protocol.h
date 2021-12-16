@@ -35,7 +35,6 @@
 #define JOB_SCHEMA_PREFIX "pg_merge_job_"
 #define TASK_FILE_PREFIX "task_"
 #define TASK_TABLE_PREFIX "task_"
-#define TABLE_FILE_PREFIX "table_"
 #define PARTITION_FILE_PREFIX "p_"
 #define ATTEMPT_FILE_SUFFIX ".attempt"
 #define MERGE_TABLE_SUFFIX "_merge"
@@ -43,7 +42,6 @@
 #define MIN_TASK_FILENAME_WIDTH 6
 #define MIN_PARTITION_FILENAME_WIDTH 5
 #define FOREIGN_FILENAME_OPTION "filename"
-#define CSTORE_TABLE_SIZE_FUNCTION_NAME "cstore_table_size"
 
 /* Defines used for fetching files and tables */
 /* the tablename in the overloaded COPY statement is the to-be-transferred file */
@@ -123,6 +121,7 @@ extern int32 ArrayObjectCount(ArrayType *arrayObject);
 extern FmgrInfo * GetFunctionInfo(Oid typeId, Oid accessMethodId, int16 procedureId);
 extern uint64 ExtractShardIdFromTableName(const char *tableName, bool missingOk);
 extern void RepartitionCleanupJobDirectories(void);
+extern void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
 
 
 /* Function declarations shared with the master planner */
@@ -162,5 +161,7 @@ extern Datum worker_find_block_local_path(PG_FUNCTION_ARGS);
 /* Function declaration for calculating hashed value */
 extern Datum worker_hash(PG_FUNCTION_ARGS);
 
+/* Function declaration for calculating nextval() in worker */
+extern Datum worker_nextval(PG_FUNCTION_ARGS);
 
 #endif   /* WORKER_PROTOCOL_H */

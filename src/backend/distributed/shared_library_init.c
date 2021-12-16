@@ -99,6 +99,9 @@ PG_MODULE_MAGIC;
 #define DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE 9999999
 static char *CitusVersion = CITUS_VERSION;
 
+/* deprecated GUC value that should not be used anywhere outside this file */
+static int ReplicationModel = REPLICATION_MODEL_STREAMING;
+
 
 void _PG_init(void);
 void _PG_fini(void);
@@ -115,6 +118,7 @@ static void RegisterCitusConfigVariables(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
+static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
@@ -172,12 +176,6 @@ static const struct config_enum_entry use_secondary_nodes_options[] = {
 static const struct config_enum_entry coordinator_aggregation_options[] = {
 	{ "disabled", COORDINATOR_AGGREGATION_DISABLED, false },
 	{ "row-gather", COORDINATOR_AGGREGATION_ROW_GATHER, false },
-	{ NULL, 0, false }
-};
-
-static const struct config_enum_entry shard_commit_protocol_options[] = {
-	{ "1pc", COMMIT_PROTOCOL_1PC, false },
-	{ "2pc", COMMIT_PROTOCOL_2PC, false },
 	{ NULL, 0, false }
 };
 
@@ -533,7 +531,7 @@ CreateRequiredDirectories(void)
 	const char *subdirs[] = {
 		"pg_foreign_file",
 		"pg_foreign_file/cached",
-		"base/" PG_JOB_CACHE_DIR
+		("base/" PG_JOB_CACHE_DIR)
 	};
 
 	for (int dirNo = 0; dirNo < lengthof(subdirs); dirNo++)
@@ -565,15 +563,47 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.allow_modifications_from_workers_to_replicated_tables",
+		gettext_noop("Enables modifications from workers to replicated "
+					 "tables such as reference tables or hash "
+					 "distributed tables with replication factor "
+					 "greater than 1."),
+		gettext_noop("Allowing modifications from the worker nodes "
+					 "requires extra locking which might decrease "
+					 "the throughput. Disabling this GUC skips the "
+					 "extra locking and prevents modifications from "
+					 "worker nodes."),
+		&AllowModificationsFromWorkersToReplicatedTables,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.binary_worker_copy_format",
 		gettext_noop("Use the binary worker copy format."),
 		gettext_noop("When enabled, data is copied from workers to workers "
 					 "in PostgreSQL's binary serialization format when "
 					 "joining large tables."),
 		&BinaryWorkerCopyFormat,
+#if PG_VERSION_NUM >= PG_VERSION_14
+		true,
+#else
 		false,
+#endif
 		PGC_SIGHUP,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.check_available_space_before_move",
+		gettext_noop("When enabled will check free disk space before a shard move"),
+		gettext_noop(
+			"Free disk space will be checked when this setting is enabled before each shard move."),
+		&CheckAvailableSpaceBeforeMove,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomStringVariable(
@@ -599,19 +629,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomRealVariable(
-		"citus.count_distinct_error_rate",
-		gettext_noop("Desired error rate when calculating count(distinct) "
-					 "approximates using the postgresql-hll extension. "
-					 "0.0 disables approximations for count(distinct); 1.0 "
-					 "provides no guarantees about the accuracy of results."),
-		NULL,
-		&CountDistinctErrorRate,
-		0.0, 0.0, 1.0,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.copy_switchover_threshold",
 		gettext_noop("Sets the threshold for copy to be switched "
@@ -628,9 +645,24 @@ RegisterCitusConfigVariables(void)
 		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomRealVariable(
+		"citus.count_distinct_error_rate",
+		gettext_noop("Desired error rate when calculating count(distinct) "
+					 "approximates using the postgresql-hll extension. "
+					 "0.0 disables approximations for count(distinct); 1.0 "
+					 "provides no guarantees about the accuracy of results."),
+		NULL,
+		&CountDistinctErrorRate,
+		0.0, 0.0, 1.0,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomBoolVariable(
 		"citus.defer_drop_after_shard_move",
-		gettext_noop("When enabled a shard move will mark old shards for deletion"),
+		gettext_noop("When enabled a shard move will mark the original shards "
+					 "for deletion after a successful move, instead of deleting "
+					 "them right away."),
 		gettext_noop("The deletion of a shard can sometimes run into a conflict with a "
 					 "long running transactions on a the shard during the drop phase of "
 					 "the shard move. This causes some moves to be rolled back after "
@@ -661,6 +693,20 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomRealVariable(
+		"citus.desired_percent_disk_available_after_move",
+		gettext_noop(
+			"Sets how many percentage of free disk space should be after a shard move"),
+		gettext_noop(
+			"This setting controls how much free space should be available after a shard move."
+			"If the free disk space will be lower than this parameter, then shard move will result in"
+			"an error."),
+		&DesiredPercentFreeAfterMove,
+		10.0, 0.0, 100.0,
+		PGC_SIGHUP,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomRealVariable(
 		"citus.distributed_deadlock_detection_factor",
 		gettext_noop("Sets the time to wait before checking for distributed "
 					 "deadlocks. Postgres' deadlock_timeout setting is "
@@ -672,6 +718,17 @@ RegisterCitusConfigVariables(void)
 		PGC_SIGHUP,
 		GUC_STANDARD,
 		ErrorIfNotASuitableDeadlockFactor, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_alter_database_owner",
+		gettext_noop("Enables propagating ALTER DATABASE ... OWNER TO ... statements to "
+					 "workers"),
+		NULL,
+		&EnableAlterDatabaseOwner,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.enable_alter_role_propagation",
@@ -695,25 +752,30 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.enable_alter_database_owner",
-		gettext_noop("Enables propagating ALTER DATABASE ... OWNER TO ... statements to "
-					 "workers"),
-		NULL,
-		&EnableAlterDatabaseOwner,
-		false,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.enable_binary_protocol",
 		gettext_noop(
 			"Enables communication between nodes using binary protocol when possible"),
 		NULL,
 		&EnableBinaryProtocol,
+#if PG_VERSION_NUM >= PG_VERSION_14
+		true,
+#else
 		false,
+#endif
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_cost_based_connection_establishment",
+		gettext_noop("When enabled the connection establishment times "
+					 "and task execution times into account for deciding "
+					 "whether or not to establish new connections."),
+		NULL,
+		&EnableCostBasedConnectionEstablishment,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -800,6 +862,39 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_manual_changes_to_shards",
+		gettext_noop("Enables dropping and truncating known shards."),
+		gettext_noop("Set to false by default. If set to true, enables "
+					 "dropping and truncating shards on the coordinator "
+					 "(or the workers with metadata)"),
+		&EnableManualChangesToShards,
+		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.enable_manual_metadata_changes_for_user",
+		gettext_noop("Enables some helper UDFs to modify metadata "
+					 "for the given user"),
+		NULL,
+		&EnableManualMetadataChangesForUser,
+		"",
+		PGC_SIGHUP,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_metadata_sync_by_default",
+		gettext_noop("Enables MX in the new nodes by default"),
+		NULL,
+		&EnableMetadataSyncByDefault,
+		true,
+		PGC_USERSET,
+		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -952,63 +1047,12 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.check_available_space_before_move",
-		gettext_noop("When enabled will check free disk space before a shard move"),
-		gettext_noop(
-			"Free disk space will be checked when this setting is enabled before each shard move."),
-		&CheckAvailableSpaceBeforeMove,
-		true,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomRealVariable(
-		"citus.desired_percent_disk_available_after_move",
-		gettext_noop(
-			"Sets how many percentage of free disk space should be after a shard move"),
-		gettext_noop(
-			"This setting controls how much free space should be available after a shard move."
-			"If the free disk space will be lower than this parameter, then shard move will result in"
-			"an error."),
-		&DesiredPercentFreeAfterMove,
-		10.0, 0.0, 100.0,
-		PGC_SIGHUP,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.enable_cost_based_connection_establishment",
-		gettext_noop("When enabled the connection establishment times "
-					 "and task execution times into account for deciding "
-					 "whether or not to establish new connections."),
-		NULL,
-		&EnableCostBasedConnectionEstablishment,
-		true,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
 		"citus.explain_distributed_queries",
 		gettext_noop("Enables Explain for distributed queries."),
 		gettext_noop("When enabled, the Explain command shows remote and local "
 					 "plans when used with a distributed query. It is enabled "
 					 "by default, but can be disabled for regression tests."),
 		&ExplainDistributedQueries,
-		true,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.function_opens_transaction_block",
-		gettext_noop("Open transaction blocks for function calls"),
-		gettext_noop("When enabled, Citus will always send a BEGIN to workers when "
-					 "running distributed queres in a function. When disabled, the "
-					 "queries may be committed immediately after the statemnent "
-					 "completes. Disabling this flag is dangerous, it is only provided "
-					 "for backwards compatibility with pre-8.2 behaviour."),
-		&FunctionOpensTransactionBlock,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -1026,6 +1070,20 @@ RegisterCitusConfigVariables(void)
 					 "will end up with using one connection per task."),
 		&ForceMaxQueryParallelization,
 		false,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.function_opens_transaction_block",
+		gettext_noop("Open transaction blocks for function calls"),
+		gettext_noop("When enabled, Citus will always send a BEGIN to workers when "
+					 "running distributed queres in a function. When disabled, the "
+					 "queries may be committed immediately after the statemnent "
+					 "completes. Disabling this flag is dangerous, it is only provided "
+					 "for backwards compatibility with pre-8.2 behaviour."),
+		&FunctionOpensTransactionBlock,
+		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
@@ -1073,6 +1131,19 @@ RegisterCitusConfigVariables(void)
 		512 * 1024, 1, INT_MAX,
 		PGC_USERSET,
 		GUC_UNIT_BYTE | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomStringVariable(
+		"citus.local_hostname",
+		gettext_noop("Sets the hostname when connecting back to itself."),
+		gettext_noop("For some operations nodes, mostly the coordinator, connect back to "
+					 "itself. When configuring SSL certificates it sometimes is required "
+					 "to use a specific hostname to match the CN of the certificate when "
+					 "verify-full is used."),
+		&LocalHostName,
+		"localhost",
+		PGC_SUSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomIntVariable(
@@ -1282,20 +1353,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
-		"citus.multi_shard_commit_protocol",
-		gettext_noop("Sets the commit protocol for commands modifying multiple shards."),
-		gettext_noop("When a failure occurs during commands that modify multiple "
-					 "shards, two-phase commit is required to ensure data is never lost "
-					 "and this is the default. However, changing to 1pc may give small "
-					 "performance benefits."),
-		&MultiShardCommitProtocol,
-		COMMIT_PROTOCOL_2PC,
-		shard_commit_protocol_options,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomEnumVariable(
 		"citus.multi_shard_modify_mode",
 		gettext_noop("Sets the connection type for multi shard modify queries"),
 		NULL,
@@ -1373,7 +1430,7 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.override_table_visibility",
-		gettext_noop("Enables replacing occurencens of pg_catalog.pg_table_visible() "
+		gettext_noop("Enables replacing occurrrences of pg_catalog.pg_table_visible() "
 					 "with pg_catalog.citus_table_visible()"),
 		gettext_noop("When enabled, shards on the Citus MX worker (data) nodes would be "
 					 "filtered out by many psql commands to provide better user "
@@ -1487,17 +1544,16 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomEnumVariable(
 		"citus.replication_model",
-		gettext_noop("Sets the replication model to be used for distributed tables."),
-		gettext_noop("Depending upon the execution environment, statement- or streaming-"
-					 "based replication modes may be employed. Though most Citus deploy-"
-					 "ments will simply use statement replication, hosted and MX-style"
-					 "deployments should set this parameter to 'streaming'."),
+		gettext_noop("Deprecated. Please use citus.shard_replication_factor instead"),
+		gettext_noop(
+			"Shard replication model is determined by the shard replication factor."
+			"'statement' replication is used only when the replication factor is one."),
 		&ReplicationModel,
-		REPLICATION_MODEL_COORDINATOR,
+		REPLICATION_MODEL_STREAMING,
 		replication_model_options,
 		PGC_SUSET,
-		GUC_SUPERUSER_ONLY,
-		NULL, NULL, NULL);
+		GUC_NO_SHOW_ALL,
+		WarnIfReplicationModelIsSet, NULL, NULL);
 
 	DefineCustomBoolVariable(
 		"citus.running_under_isolation_test",
@@ -1540,21 +1596,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomIntVariable(
-		"citus.shard_max_size",
-		gettext_noop("Sets the maximum size a shard will grow before it gets split."),
-		gettext_noop("Shards store table and file data. When the source "
-					 "file's size for one shard exceeds this configuration "
-					 "value, the database ensures that either a new shard "
-					 "gets created, or the current one gets split. Note that "
-					 "shards read this configuration value at sharded table "
-					 "creation time, and later reuse the initially read value."),
-		&ShardMaxSize,
-		1048576, 256, INT_MAX, /* max allowed size not set to MAX_KILOBYTES on purpose */
-		PGC_USERSET,
-		GUC_UNIT_KB | GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomEnumVariable(
 		"citus.shard_placement_policy",
 		gettext_noop("Sets the policy to use when choosing nodes for shard placement."),
@@ -1582,21 +1623,6 @@ RegisterCitusConfigVariables(void)
 		1, 1, MAX_SHARD_REPLICATION_FACTOR,
 		PGC_USERSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomEnumVariable(
-		"citus.single_shard_commit_protocol",
-		gettext_noop(
-			"Sets the commit protocol for commands modifying a single shards with multiple replicas."),
-		gettext_noop("When a failure occurs during commands that modify multiple "
-					 "replicas, two-phase commit is required to ensure data is never lost "
-					 "and this is the default. However, changing to 1pc may give small "
-					 "performance benefits."),
-		&SingleShardCommitProtocol,
-		COMMIT_PROTOCOL_2PC,
-		shard_commit_protocol_options,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1662,6 +1688,17 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		WarnIfDeprecatedExecutorUsed, NULL, NULL);
 
+	DefineCustomBoolVariable(
+		"citus.use_citus_managed_tables",
+		gettext_noop("Allows new local tables to be accessed on workers"),
+		gettext_noop("Adds all newly created tables to Citus metadata by default, "
+					 "when enabled. Set to false by default."),
+		&AddAllLocalTablesToMetadata,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
 	DefineCustomEnumVariable(
 		"citus.use_secondary_nodes",
 		gettext_noop("Sets the policy to use when choosing nodes for SELECT queries."),
@@ -1712,19 +1749,6 @@ RegisterCitusConfigVariables(void)
 		NOTICE,
 		log_level_options,
 		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomStringVariable(
-		"citus.local_hostname",
-		gettext_noop("Sets the hostname when connecting back to itself."),
-		gettext_noop("For some operations nodes, mostly the coordinator, connect back to "
-					 "itself. When configuring SSL certificates it sometimes is required "
-					 "to use a specific hostname to match the CN of the certificate when "
-					 "verify-full is used."),
-		&LocalHostName,
-		"localhost",
-		PGC_SUSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
@@ -1817,6 +1841,32 @@ NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source)
 
 
 /*
+ * WarnIfReplicationModelIsSet prints a warning when a user sets
+ * citus.replication_model.
+ */
+static bool
+WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source)
+{
+	/* print a warning only when user sets the guc */
+	if (source == PGC_S_SESSION)
+	{
+		ereport(NOTICE, (errcode(ERRCODE_WARNING_DEPRECATED_FEATURE),
+						 errmsg(
+							 "Setting citus.replication_model has no effect. Please use "
+							 "citus.shard_replication_factor instead."),
+						 errdetail(
+							 "Citus determines the replication model based on the "
+							 "replication factor and the replication models of the colocated "
+							 "shards. If a colocated table is present, the replication model "
+							 "is inherited. Otherwise 'streaming' replication is preferred if "
+							 "supported by the replication factor.")));
+	}
+
+	return true;
+}
+
+
+/*
  * NodeConninfoGucCheckHook ensures conninfo settings are in the expected form
  * and that the keywords of all non-null settings are on a allowlist devised to
  * keep users from setting options that may result in confusion.
@@ -1841,7 +1891,8 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 		"sslcompression",
 		"sslcrl",
 		"sslmode",
-		"sslrootcert"
+		"sslrootcert",
+		"tcp_user_timeout",
 	};
 	char *errorMsg = NULL;
 	bool conninfoValid = CheckConninfo(*newval, allowedConninfoKeywords,

@@ -28,13 +28,14 @@
 #include "commands/extension.h"
 #include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
-#include "distributed/listutils.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/intermediate_results.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
-#include "distributed/commands/multi_copy.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_server_executor.h"
@@ -45,6 +46,7 @@
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
+#include "parser/parse_relation.h"
 #include "storage/lmgr.h"
 #include "tcop/tcopprot.h"
 #include "tcop/utility.h"
@@ -67,7 +69,6 @@ static void CitusDeleteFile(const char *filename);
 static bool check_log_statement(List *stmt_list);
 static void AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 								Oid sequenceTypeId);
-static void SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg);
 
 
 /* exports for SQL callable functions */
@@ -76,6 +77,7 @@ PG_FUNCTION_INFO_V1(worker_apply_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_inter_shard_ddl_command);
 PG_FUNCTION_INFO_V1(worker_apply_sequence_command);
 PG_FUNCTION_INFO_V1(worker_append_table_to_shard);
+PG_FUNCTION_INFO_V1(worker_nextval);
 
 /*
  * Following UDFs are stub functions, you can check their comments for more
@@ -94,6 +96,8 @@ PG_FUNCTION_INFO_V1(master_expire_table_cache);
 Datum
 worker_fetch_partition_file(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 partitionTaskId = PG_GETARG_UINT32(1);
 	uint32 partitionFileId = PG_GETARG_UINT32(2);
@@ -114,8 +118,6 @@ worker_fetch_partition_file(PG_FUNCTION_ARGS)
 	 * task directory does not exist. We then lock and create the directory.
 	 */
 	bool taskDirectoryExists = DirectoryExists(taskDirectoryName);
-
-	CheckCitusVersion(ERROR);
 
 	if (!taskDirectoryExists)
 	{
@@ -383,6 +385,8 @@ CitusDeleteFile(const char *filename)
 Datum
 worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 shardId = PG_GETARG_INT64(0);
 	text *schemaNameText = PG_GETARG_TEXT_P(1);
 	text *ddlCommandText = PG_GETARG_TEXT_P(2);
@@ -390,8 +394,6 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 	char *schemaName = text_to_cstring(schemaNameText);
 	const char *ddlCommand = text_to_cstring(ddlCommandText);
 	Node *ddlCommandNode = ParseTreeNode(ddlCommand);
-
-	CheckCitusVersion(ERROR);
 
 	/* extend names in ddl command and apply extended command */
 	RelayEventExtendNames(ddlCommandNode, schemaName, shardId);
@@ -410,6 +412,8 @@ worker_apply_shard_ddl_command(PG_FUNCTION_ARGS)
 Datum
 worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 leftShardId = PG_GETARG_INT64(0);
 	text *leftShardSchemaNameText = PG_GETARG_TEXT_P(1);
 	uint64 rightShardId = PG_GETARG_INT64(2);
@@ -420,8 +424,6 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 	char *rightShardSchemaName = text_to_cstring(rightShardSchemaNameText);
 	const char *ddlCommand = text_to_cstring(ddlCommandText);
 	Node *ddlCommandNode = ParseTreeNode(ddlCommand);
-
-	CheckCitusVersion(ERROR);
 
 	/* extend names in ddl command and apply extended command */
 	RelayEventExtendNamesForInterShardCommands(ddlCommandNode, leftShardId,
@@ -443,14 +445,14 @@ worker_apply_inter_shard_ddl_command(PG_FUNCTION_ARGS)
 Datum
 worker_apply_sequence_command(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *commandText = PG_GETARG_TEXT_P(0);
 	Oid sequenceTypeId = PG_GETARG_OID(1);
 	const char *commandString = text_to_cstring(commandText);
 	Node *commandNode = ParseTreeNode(commandString);
 
 	NodeTag nodeType = nodeTag(commandNode);
-
-	CheckCitusVersion(ERROR);
 
 	if (nodeType != T_CreateSeqStmt)
 	{
@@ -579,6 +581,8 @@ ParseTreeRawStmt(const char *ddlCommand)
 Datum
 worker_append_table_to_shard(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *shardQualifiedNameText = PG_GETARG_TEXT_P(0);
 	text *sourceQualifiedNameText = PG_GETARG_TEXT_P(1);
 	text *sourceNodeNameText = PG_GETARG_TEXT_P(2);
@@ -592,11 +596,6 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	char *shardSchemaName = NULL;
 	char *sourceSchemaName = NULL;
 	char *sourceTableName = NULL;
-
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
-
-	CheckCitusVersion(ERROR);
 
 	/* We extract schema names and table names from qualified names */
 	DeconstructQualifiedName(shardQualifiedNameList, &shardSchemaName, &shardTableName);
@@ -612,10 +611,13 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	uint64 shardId = ExtractShardIdFromTableName(shardTableName, false);
 	LockShardResource(shardId, AccessExclusiveLock);
 
-	/* copy remote table's data to this node */
+	/*
+	 * Copy into intermediate results directory, which is automatically cleaned on
+	 * error.
+	 */
 	StringInfo localFilePath = makeStringInfo();
-	appendStringInfo(localFilePath, "base/%s/%s" UINT64_FORMAT,
-					 PG_JOB_CACHE_DIR, TABLE_FILE_PREFIX, shardId);
+	appendStringInfo(localFilePath, "%s/worker_append_table_to_shard_" UINT64_FORMAT,
+					 CreateIntermediateResultsDirectory(), shardId);
 
 	char *sourceQualifiedName = quote_qualified_identifier(sourceSchemaName,
 														   sourceTableName);
@@ -640,7 +642,8 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 		appendStringInfo(sourceCopyCommand, COPY_OUT_COMMAND, sourceQualifiedName);
 	}
 
-	bool received = ReceiveRegularFile(sourceNodeName, sourceNodePort, NULL,
+	char *userName = CurrentUserName();
+	bool received = ReceiveRegularFile(sourceNodeName, sourceNodePort, userName,
 									   sourceCopyCommand,
 									   localFilePath);
 	if (!received)
@@ -663,19 +666,53 @@ worker_append_table_to_shard(PG_FUNCTION_ARGS)
 	/* make sure we are allowed to execute the COPY command */
 	CheckCopyPermissions(localCopyCommand);
 
-	/* need superuser to copy from files */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
+	Relation shardRelation = table_openrv(localCopyCommand->relation, RowExclusiveLock);
 
-	ProcessUtilityParseTree((Node *) localCopyCommand, queryString->data,
-							PROCESS_UTILITY_QUERY, NULL, None_Receiver, NULL);
+	/* mimic check from copy.c */
+	if (XactReadOnly && !shardRelation->rd_islocaltemp)
+	{
+		PreventCommandIfReadOnly("COPY FROM");
+	}
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
+	ParseState *parseState = make_parsestate(NULL);
+	(void) addRangeTableEntryForRelation(parseState, shardRelation, RowExclusiveLock,
+										 NULL, false, false);
+
+	CopyFromState copyState = BeginCopyFrom_compat(parseState,
+												   shardRelation,
+												   NULL,
+												   localCopyCommand->filename,
+												   localCopyCommand->is_program,
+												   NULL,
+												   localCopyCommand->attlist,
+												   localCopyCommand->options);
+
+
+	CopyFrom(copyState);
+	EndCopyFrom(copyState);
+
+	free_parsestate(parseState);
 
 	/* finally delete the temporary file we created */
 	CitusDeleteFile(localFilePath->data);
+	table_close(shardRelation, NoLock);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_nextval calculates nextval() in worker nodes
+ * for int and smallint column default types
+ * TODO: not error out but get the proper nextval()
+ */
+Datum
+worker_nextval(PG_FUNCTION_ARGS)
+{
+	ereport(ERROR, (errmsg(
+						"nextval(sequence) calls in worker nodes are not supported"
+						" for column defaults of type int or smallint")));
+	PG_RETURN_INT32(0);
 }
 
 
@@ -734,16 +771,20 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
 	int64 sequenceMinValue = sequenceData->seqmin;
 	int valueBitLength = 48;
 
-	/* for smaller types, put the group ID into the first 4 bits */
-	if (sequenceTypeId == INT4OID)
+	/*
+	 * For int and smallint, we don't currently support insertion from workers
+	 * Check issue #5126 and PR #5254 for details.
+	 * https://github.com/citusdata/citus/issues/5126
+	 * So, no need to alter sequence min/max for now
+	 * We call setval(sequence, maxvalue) such that manually using
+	 * nextval(sequence) in the workers will error out as well.
+	 */
+	if (sequenceTypeId != INT8OID)
 	{
-		valueBitLength = 28;
-		sequenceMaxValue = INT_MAX;
-	}
-	else if (sequenceTypeId == INT2OID)
-	{
-		valueBitLength = 12;
-		sequenceMaxValue = SHRT_MAX;
+		DirectFunctionCall2(setval_oid,
+							ObjectIdGetDatum(sequenceId),
+							Int64GetDatum(sequenceMaxValue));
+		return;
 	}
 
 	/* calculate min/max values that the sequence can generate in this worker */
@@ -793,7 +834,7 @@ AlterSequenceMinMax(Oid sequenceId, char *schemaName, char *sequenceName,
  * If a DefElem with the given defname does not exist it is created and
  * added to the AlterSeqStmt.
  */
-static void
+void
 SetDefElemArg(AlterSeqStmt *statement, const char *name, Node *arg)
 {
 	DefElem *defElem = NULL;

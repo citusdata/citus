@@ -4,7 +4,6 @@ SET search_path TO 'insert_select_repartition';
 
 SET citus.next_shard_id TO 4213581;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 
 -- 4 shards, hash distributed.
 -- Negate distribution column value.
@@ -451,7 +450,6 @@ DROP TABLE source_table, target_table;
 --
 
 SET citus.shard_replication_factor TO 2;
-SET citus.replication_model TO 'statement';
 SET citus.shard_count TO 4;
 CREATE TABLE source_table(a int, b int);
 SELECT create_distributed_table('source_table', 'a');
@@ -625,7 +623,15 @@ DO UPDATE SET
 create table table_with_sequences (x int, y int, z bigserial);
 insert into table_with_sequences values (1,1);
 select create_distributed_table('table_with_sequences','x');
-explain insert into table_with_sequences select y, x from table_with_sequences;
+explain (costs off) insert into table_with_sequences select y, x from table_with_sequences;
+
+-- verify that we don't report repartitioned insert/select for tables
+-- with user-defined sequences.
+CREATE SEQUENCE user_defined_sequence;
+create table table_with_user_sequences (x int, y int, z bigint default nextval('user_defined_sequence'));
+insert into table_with_user_sequences values (1,1);
+select create_distributed_table('table_with_user_sequences','x');
+explain (costs off) insert into table_with_user_sequences select y, x from table_with_user_sequences;
 
 -- clean-up
 SET client_min_messages TO WARNING;

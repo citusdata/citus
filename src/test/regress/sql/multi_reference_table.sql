@@ -888,6 +888,7 @@ DROP INDEX reference_schema.reference_index_2;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='reference_schema.reference_table_ddl_1250019'::regclass;
 \di reference_schema.reference_index_2*
 \c - - - :master_port
+SET citus.next_shard_id TO 1255000;
 
 -- now test the renaming of the table, and back to the expected name
 ALTER TABLE reference_schema.reference_table_ddl RENAME TO reference_table_ddl_test;
@@ -895,22 +896,12 @@ ALTER TABLE reference_schema.reference_table_ddl_test RENAME TO reference_table_
 
 -- now test reference tables against some helper UDFs that Citus provides
 
--- cannot delete / drop shards from a reference table
-SELECT master_apply_delete_command('DELETE FROM reference_schema.reference_table_ddl');
-
 -- cannot add shards
 SELECT master_create_empty_shard('reference_schema.reference_table_ddl');
 
 -- get/update the statistics
-SELECT part_storage_type, part_key, part_replica_count, part_max_size,
-           part_placement_policy
-  FROM master_get_table_metadata('reference_schema.reference_table_ddl');
-
 SELECT shardid AS a_shard_id  FROM pg_dist_shard WHERE logicalrelid = 'reference_schema.reference_table_ddl'::regclass \gset
 SELECT master_update_shard_statistics(:a_shard_id);
-
-CREATE TABLE append_reference_tmp_table (id INT);
-SELECT  master_append_table_to_shard(:a_shard_id, 'append_reference_tmp_table', 'localhost', :master_port);
 
 SELECT master_get_table_ddl_events('reference_schema.reference_table_ddl');
 
@@ -1021,7 +1012,7 @@ SET client_min_messages TO ERROR;
 DROP SEQUENCE example_ref_value_seq;
 DROP TABLE reference_table_test, reference_table_test_second, reference_table_test_third,
 		   reference_table_test_fourth, reference_schema.reference_table_ddl, reference_table_composite,
-		   colocated_table_test, colocated_table_test_2, append_reference_tmp_table;
+		   colocated_table_test, colocated_table_test_2;
 DROP TYPE reference_comp_key;
 DROP SCHEMA reference_schema CASCADE;
 RESET client_min_messages;

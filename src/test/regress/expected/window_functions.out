@@ -95,6 +95,9 @@ ORDER BY
 
 -- window function operates on the results of
 -- a join
+-- we also want to verify that this doesn't crash
+-- when the logging level is DEBUG4
+SET log_min_messages TO DEBUG4;
 SELECT
 	us.user_id,
 	SUM(us.value_1) OVER (PARTITION BY us.user_id)
@@ -1383,12 +1386,16 @@ LIMIT 5;
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  Presorted Key: users_table.user_id
                                  ->  WindowAgg
-                                       ->  Sort
+                                       ->  Incremental Sort
                                              Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                             ->  HashAggregate
+                                             Presorted Key: users_table.user_id
+                                             ->  GroupAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
-                                                   ->  Seq Scan on users_table_1400256 users_table
-(18 rows)
+                                                   ->  Incremental Sort
+                                                         Sort Key: users_table.user_id, users_table.value_2
+                                                         Presorted Key: users_table.user_id
+                                                         ->  Index Scan using is_index1_1400256 on users_table_1400256 users_table
+(22 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1415,12 +1422,16 @@ LIMIT 5;
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  Presorted Key: users_table.user_id
                                  ->  WindowAgg
-                                       ->  Sort
+                                       ->  Incremental Sort
                                              Sort Key: users_table.user_id, (('1'::numeric / ('1'::numeric + avg(users_table.value_1))))
-                                             ->  HashAggregate
+                                             Presorted Key: users_table.user_id
+                                             ->  GroupAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
-                                                   ->  Seq Scan on users_table_1400256 users_table
-(18 rows)
+                                                   ->  Incremental Sort
+                                                         Sort Key: users_table.user_id, users_table.value_2
+                                                         Presorted Key: users_table.user_id
+                                                         ->  Index Scan using is_index1_1400256 on users_table_1400256 users_table
+(22 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1432,7 +1443,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                                    QUERY PLAN
+                                                            QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1447,12 +1458,16 @@ LIMIT 5;
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  Presorted Key: users_table.user_id
                                  ->  WindowAgg
-                                       ->  Sort
+                                       ->  Incremental Sort
                                              Sort Key: users_table.user_id, ((1 / (1 + sum(users_table.value_2))))
-                                             ->  HashAggregate
+                                             Presorted Key: users_table.user_id
+                                             ->  GroupAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
-                                                   ->  Seq Scan on users_table_1400256 users_table
-(18 rows)
+                                                   ->  Incremental Sort
+                                                         Sort Key: users_table.user_id, users_table.value_2
+                                                         Presorted Key: users_table.user_id
+                                                         ->  Index Scan using is_index1_1400256 on users_table_1400256 users_table
+(22 rows)
 
 EXPLAIN (COSTS FALSE)
 SELECT
@@ -1464,7 +1479,7 @@ FROM
 GROUP BY user_id, value_2
 ORDER BY user_id, avg(value_1) DESC
 LIMIT 5;
-                                              QUERY PLAN
+                                                            QUERY PLAN
 ---------------------------------------------------------------------
  Limit
    ->  Sort
@@ -1479,12 +1494,16 @@ LIMIT 5;
                                  Sort Key: users_table.user_id, (avg(users_table.value_1)) DESC
                                  Presorted Key: users_table.user_id
                                  ->  WindowAgg
-                                       ->  Sort
+                                       ->  Incremental Sort
                                              Sort Key: users_table.user_id, (sum(users_table.value_2))
-                                             ->  HashAggregate
+                                             Presorted Key: users_table.user_id
+                                             ->  GroupAggregate
                                                    Group Key: users_table.user_id, users_table.value_2
-                                                   ->  Seq Scan on users_table_1400256 users_table
-(18 rows)
+                                                   ->  Incremental Sort
+                                                         Sort Key: users_table.user_id, users_table.value_2
+                                                         Presorted Key: users_table.user_id
+                                                         ->  Index Scan using is_index1_1400256 on users_table_1400256 users_table
+(22 rows)
 
 -- Grouping can be pushed down with aggregates even when window function can't
 EXPLAIN (COSTS FALSE)
@@ -1592,4 +1611,58 @@ from public.users_table as ut limit 1;
 ---------------------------------------------------------------------
 
 (1 row)
+
+-- verify that this doesn't crash with DEBUG4
+SET log_min_messages TO DEBUG4;
+SELECT
+	user_id, max(value_1) OVER (PARTITION BY user_id, MIN(value_2))
+FROM (
+	SELECT
+		DISTINCT us.user_id, us.value_2, value_1, random() as r1
+	FROM
+		users_table as us, events_table
+	WHERE
+		us.user_id = events_table.user_id AND event_type IN (1,2)
+	ORDER BY
+		user_id, value_2
+	) s
+GROUP BY
+	1, value_1
+ORDER BY
+	2 DESC, 1;
+ user_id | max
+---------------------------------------------------------------------
+       1 |   5
+       3 |   5
+       3 |   5
+       4 |   5
+       5 |   5
+       5 |   5
+       6 |   5
+       6 |   5
+       1 |   4
+       2 |   4
+       3 |   4
+       3 |   4
+       3 |   4
+       4 |   4
+       4 |   4
+       5 |   4
+       5 |   4
+       1 |   3
+       2 |   3
+       2 |   3
+       2 |   3
+       6 |   3
+       2 |   2
+       4 |   2
+       4 |   2
+       4 |   2
+       6 |   2
+       1 |   1
+       3 |   1
+       5 |   1
+       6 |   1
+       5 |   0
+(32 rows)
 

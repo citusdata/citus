@@ -152,9 +152,9 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will have the extension, because they will
-	 * either get it now, or get it in master_add_node after this transaction finishes and
+	 * either get it now, or get it in citus_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
@@ -187,8 +187,6 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 	ObjectAddress extensionAddress = GetObjectAddressFromParseTree(node, false);
 
 	EnsureDependenciesExistOnAllNodes(&extensionAddress);
-
-	MarkObjectDistributed(&extensionAddress);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
@@ -265,9 +263,9 @@ PreprocessDropExtensionStmt(Node *node, const char *queryString,
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will drop the extension, because they will
-	 * either get it now, or get it in master_add_node after this transaction finishes and
+	 * either get it now, or get it in citus_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
@@ -401,7 +399,7 @@ PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString,
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will update the extension schema after
 	 * this transaction finishes and the pg_dist_object record becomes visible.
 	 */
@@ -469,9 +467,9 @@ PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString,
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will update the extension version, because
-	 * they will either get it now, or get it in master_add_node after this transaction
+	 * they will either get it now, or get it in citus_add_node after this transaction
 	 * finishes and the pg_dist_object record becomes visible.
 	 */
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
@@ -510,15 +508,6 @@ PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString,
 void
 PostprocessAlterExtensionCitusUpdateStmt(Node *node)
 {
-	/*
-	 * We should not postprocess this command in workers as they do not keep track
-	 * of citus.pg_dist_object.
-	 */
-	if (!IsCoordinator())
-	{
-		return;
-	}
-
 	bool citusIsUpdatedToLatestVersion = InstalledAndAvailableVersionsSame();
 
 	/*
@@ -540,10 +529,10 @@ PostprocessAlterExtensionCitusUpdateStmt(Node *node)
 
 
 /*
- * MarkAllExistingObjectsDistributed marks all objects that could be distributed by
- * resolving dependencies of "existing distributed tables" and "already distributed
- * objects" to introduce the objects created in older versions of Citus to distributed
- * object infrastructure as well.
+ * MarkExistingObjectDependenciesDistributedIfSupported marks all objects that could
+ * be distributed by resolving dependencies of "existing distributed tables" and
+ * "already distributed objects" to introduce the objects created in older versions
+ * of Citus to distributed object infrastructure as well.
  *
  * Note that this function is not responsible for ensuring if dependencies exist on
  * nodes and satisfying these dependendencies if not exists, which is already done by

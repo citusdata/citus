@@ -29,7 +29,6 @@ CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 1500
 
 -- procedures are distributed by text arguments, when run in isolation it is not guaranteed a table actually exists.
 CREATE TABLE colocation_table(id text);
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('colocation_table','id');
 
@@ -94,3 +93,6 @@ DROP SCHEMA procedure_tests2 CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA procedure_tests2 CASCADE;$$);
 DROP USER procedureuser;
 SELECT run_command_on_workers($$DROP USER procedureuser;$$);
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);

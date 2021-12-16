@@ -63,6 +63,21 @@ BEGIN
   RETURN false;
 END; $$ language plpgsql;
 
+--helper function to check there is a single task
+CREATE OR REPLACE FUNCTION explain_has_single_task(explain_command text)
+RETURNS BOOLEAN AS $$
+DECLARE
+  query_plan text;
+BEGIN
+  FOR query_plan IN EXECUTE explain_command LOOP
+    IF query_plan ILIKE '%Task Count: 1%'
+    THEN
+        RETURN true;
+    END IF;
+  END LOOP;
+  RETURN false;
+END; $$ language plpgsql;
+
 -- helper function to quickly run SQL on the whole cluster
 CREATE OR REPLACE FUNCTION run_command_on_coordinator_and_workers(p_sql text)
 RETURNS void LANGUAGE plpgsql AS $$
@@ -119,3 +134,4 @@ BEGIN
   END LOOP;
 END;
 $$ LANGUAGE plpgsql;
+

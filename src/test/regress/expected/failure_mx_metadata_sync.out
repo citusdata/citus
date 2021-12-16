@@ -6,7 +6,6 @@ SET SEARCH_PATH = mx_metadata_sync;
 SET citus.shard_count TO 2;
 SET citus.next_shard_id TO 16000000;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 SELECT pg_backend_pid() as pid \gset
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -22,7 +21,14 @@ SELECT create_distributed_table('t1', 'id');
 (1 row)
 
 INSERT INTO t1 SELECT x FROM generate_series(1,100) AS f(x);
--- Initial metadata status
+-- Initially turn metadata sync off because we'll ingest errors to start/stop metadata sync operations
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
  hasmetadata
 ---------------------------------------------------------------------
@@ -137,7 +143,7 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
 
 -- Check failures on DDL command propagation
 CREATE TABLE t2 (id int PRIMARY KEY);
-SELECT citus.mitmproxy('conn.onParse(query="^INSERT INTO pg_dist_placement").kill()');
+SELECT citus.mitmproxy('conn.onParse(query="citus_internal_add_placement_metadata").kill()');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -148,7 +154,7 @@ ERROR:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
 CONTEXT:  while executing command on localhost:xxxxx
-SELECT citus.mitmproxy('conn.onParse(query="^INSERT INTO pg_dist_shard").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onParse(query="citus_internal_add_shard_metadata").cancel(' || :pid || ')');
  mitmproxy
 ---------------------------------------------------------------------
 
@@ -165,6 +171,215 @@ WHERE logicalrelid='t2'::regclass;
  f
 (1 row)
 
+-- Failure to set groupid in the worker
+SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET groupid").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET groupid").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
+connection not open
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Failure to drop all tables in pg_dist_partition
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
+connection not open
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Failure to truncate pg_dist_node in the worker
+SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").cancel(' || :pid || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+ERROR:  canceling statement due to user request
+SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
+connection not open
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_port
+SELECT count(*) FROM pg_dist_node;
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+\c - - - :master_port
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
+ hasmetadata
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- Verify we can drop metadata after unsuccessful attempts
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+NOTICE:  dropping metadata on the node (localhost,9060)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_2_port
+SELECT count(*) FROM pg_dist_node;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+\c - - - :master_port
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
+ hasmetadata
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- turn metadata sync back on
+SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SET SEARCH_PATH = mx_metadata_sync;
 DROP TABLE t1;
 DROP TABLE t2;
 DROP SCHEMA mx_metadata_sync CASCADE;

@@ -5,7 +5,7 @@
 # everyone needing autoconf installed, the resulting files are checked
 # into the SCM.
 
-AC_INIT([Citus], [10.1devel])
+AC_INIT([Citus], [11.0devel])
 AC_COPYRIGHT([Copyright (c) Citus Data, Inc.])
 
 # we'll need sed and awk for some of the version commands
@@ -74,7 +74,7 @@ if test -z "$version_num"; then
   AC_MSG_ERROR([Could not detect PostgreSQL version from pg_config.])
 fi
 
-if test "$version_num" != '12' -a "$version_num" != '13'; then
+if test "$version_num" != '12' -a "$version_num" != '13' -a "$version_num" != '14'; then
    AC_MSG_ERROR([Citus is not compatible with the detected PostgreSQL version ${version_num}.])
 else
    AC_MSG_NOTICE([building against PostgreSQL $version_num])

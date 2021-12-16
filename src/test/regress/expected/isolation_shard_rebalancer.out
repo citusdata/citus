@@ -2,14 +2,18 @@ Parsed test spec with 2 sessions
 
 starting permutation: s1-rebalance-nc s2-rebalance-nc s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-nc:
  BEGIN;
  select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-nc:
  select rebalance_table_shards('non_colocated');
@@ -19,19 +23,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-rebalance-nc s2-replicate-nc s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-nc:
  BEGIN;
  select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-replicate-nc:
  select replicate_table_shards('non_colocated');
@@ -41,19 +51,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-nc s2-rebalance-nc s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-nc:
  BEGIN;
  select replicate_table_shards('non_colocated');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-nc:
  select rebalance_table_shards('non_colocated');
@@ -63,19 +79,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-nc s2-replicate-nc s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-nc:
  BEGIN;
  select replicate_table_shards('non_colocated');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-replicate-nc:
  select replicate_table_shards('non_colocated');
@@ -85,19 +107,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-rebalance-c1 s2-rebalance-c2 s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-c1:
  BEGIN;
  select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-c2:
  select rebalance_table_shards('colocated2');
@@ -107,19 +135,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-rebalance-c1 s2-replicate-c2 s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-c1:
  BEGIN;
  select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-replicate-c2:
  select replicate_table_shards('colocated2');
@@ -129,19 +163,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-c1 s2-rebalance-c2 s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-c1:
  BEGIN;
  select replicate_table_shards('colocated1');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-c2:
  select rebalance_table_shards('colocated2');
@@ -151,19 +191,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-c1 s2-replicate-c2 s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-c1:
  BEGIN;
  select replicate_table_shards('colocated1');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-replicate-c2:
  select replicate_table_shards('colocated2');
@@ -173,115 +219,153 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-rebalance-c1 s2-rebalance-nc s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-c1:
  BEGIN;
  select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-nc:
  select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-rebalance-c1 s2-replicate-nc s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-c1:
  BEGIN;
  select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-replicate-nc:
  select replicate_table_shards('non_colocated');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-c1 s2-rebalance-nc s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-c1:
  BEGIN;
  select replicate_table_shards('colocated1');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-nc:
  select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-c1 s2-replicate-nc s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-c1:
  BEGIN;
  select replicate_table_shards('colocated1');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-replicate-nc:
  select replicate_table_shards('non_colocated');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-rebalance-c1 s2-rebalance-all s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-c1:
  BEGIN;
  select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-all:
  select rebalance_table_shards();
@@ -291,19 +375,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-c1 s2-rebalance-all s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-c1:
  BEGIN;
  select replicate_table_shards('colocated1');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-all:
  select rebalance_table_shards();
@@ -313,19 +403,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-rebalance-nc s2-rebalance-all s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-nc:
  BEGIN;
  select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-all:
  select rebalance_table_shards();
@@ -335,19 +431,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-nc s2-rebalance-all s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-nc:
  BEGIN;
  select replicate_table_shards('non_colocated');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-rebalance-all:
  select rebalance_table_shards();
@@ -357,19 +459,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-rebalance-c1 s2-drain s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-c1:
  BEGIN;
  select rebalance_table_shards('colocated1');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-drain:
  select master_drain_node('localhost', 57638);
@@ -379,19 +487,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-c1 s2-drain s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-c1:
  BEGIN;
  select replicate_table_shards('colocated1');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-drain:
  select master_drain_node('localhost', 57638);
@@ -401,19 +515,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-rebalance-nc s2-drain s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-rebalance-nc:
  BEGIN;
  select rebalance_table_shards('non_colocated');
 
 rebalance_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-drain:
  select master_drain_node('localhost', 57638);
@@ -423,19 +543,25 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-replicate-nc s2-drain s1-commit
 create_distributed_table
+---------------------------------------------------------------------
 
+(1 row)
 
 step s1-replicate-nc:
  BEGIN;
  select replicate_table_shards('non_colocated');
 
 replicate_table_shards
+---------------------------------------------------------------------
 
+(1 row)
 
 step s2-drain:
  select master_drain_node('localhost', 57638);
@@ -445,5 +571,7 @@ step s1-commit:
  COMMIT;
 
 master_set_node_property
+---------------------------------------------------------------------
 
+(1 row)
 

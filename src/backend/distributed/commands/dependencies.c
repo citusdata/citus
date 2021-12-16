@@ -28,6 +28,7 @@
 
 typedef bool (*AddressPredicate)(const ObjectAddress *);
 
+static int ObjectAddressComparator(const void *a, const void *b);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
@@ -40,11 +41,10 @@ bool EnableDependencyCreation = true;
  * workers via a separate session that will be committed directly so that the objects are
  * visible to potentially multiple sessions creating the shards.
  *
- * Note; only the actual objects are created via a separate session, the local records to
+ * Note; only the actual objects are created via a separate session, the records to
  * pg_dist_object are created in this session. As a side effect the objects could be
- * created on the workers without a catalog entry on the coordinator. Updates to the
- * objects on the coordinator are not propagated to the workers until the record is
- * visible on the coordinator.
+ * created on the workers without a catalog entry. Updates to the objects on the coordinator
+ * are not propagated to the workers until the record is visible on the coordinator.
  *
  * This is solved by creating the dependencies in an idempotent manner, either via
  * postgres native CREATE IF NOT EXISTS, or citus helper functions.
@@ -81,37 +81,27 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	/*
 	 * Make sure that no new nodes are added after this point until the end of the
 	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by master_add_node.
+	 * ExclusiveLock taken by citus_add_node.
 	 * This guarantees that all active nodes will have the object, because they will
-	 * either get it now, or get it in master_add_node after this transaction finishes and
+	 * either get it now, or get it in citus_add_node after this transaction finishes and
 	 * the pg_dist_object record becomes visible.
 	 */
 	List *workerNodeList = ActivePrimaryNonCoordinatorNodeList(RowShareLock);
 
 	/*
-	 * right after we acquired the lock we mark our objects as distributed, these changes
-	 * will not become visible before we have successfully created all the objects on our
-	 * workers.
+	 * Lock dependent objects explicitly to make sure same DDL command won't be sent
+	 * multiple times from parallel sessions.
 	 *
-	 * It is possible to create distributed tables which depend on other dependencies
-	 * before any node is in the cluster. If we would wait till we actually had connected
-	 * to the nodes before marking the objects as distributed these objects would never be
-	 * created on the workers when they get added, causing shards to fail to create.
+	 * Sort dependencies that will be created on workers to not to have any deadlock
+	 * issue if different sessions are creating different objects.
 	 */
-	foreach_ptr(dependency, dependenciesWithCommands)
+	List *addressSortedDependencies = SortList(dependenciesWithCommands,
+											   ObjectAddressComparator);
+	foreach_ptr(dependency, addressSortedDependencies)
 	{
-		MarkObjectDistributed(dependency);
+		LockDatabaseObject(dependency->classId, dependency->objectId,
+						   dependency->objectSubId, ExclusiveLock);
 	}
-
-	/*
-	 * collect and connect to all applicable nodes
-	 */
-	if (list_length(workerNodeList) <= 0)
-	{
-		/* no nodes to execute on */
-		return;
-	}
-
 
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
@@ -119,10 +109,69 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		const char *nodeName = workerNode->workerName;
 		uint32 nodePort = workerNode->workerPort;
 
-		SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
-												   CitusExtensionOwnerName(),
-												   ddlCommands);
+		SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+												  CitusExtensionOwnerName(),
+												  ddlCommands);
 	}
+
+	/*
+	 * We do this after creating the objects on the workers, we make sure
+	 * that objects have been created on worker nodes before marking them
+	 * distributed, so MarkObjectDistributed wouldn't fail.
+	 */
+	foreach_ptr(dependency, dependenciesWithCommands)
+	{
+		MarkObjectDistributed(dependency);
+	}
+}
+
+
+/*
+ * Copied from PG object_address_comparator function to compare ObjectAddresses.
+ */
+static int
+ObjectAddressComparator(const void *a, const void *b)
+{
+	const ObjectAddress *obja = (const ObjectAddress *) a;
+	const ObjectAddress *objb = (const ObjectAddress *) b;
+
+	/*
+	 * Primary sort key is OID descending.
+	 */
+	if (obja->objectId > objb->objectId)
+	{
+		return -1;
+	}
+	if (obja->objectId < objb->objectId)
+	{
+		return 1;
+	}
+
+	/*
+	 * Next sort on catalog ID, in case identical OIDs appear in different
+	 * catalogs. Sort direction is pretty arbitrary here.
+	 */
+	if (obja->classId < objb->classId)
+	{
+		return -1;
+	}
+	if (obja->classId > objb->classId)
+	{
+		return 1;
+	}
+
+	/*
+	 * Last, sort on object subId.
+	 */
+	if ((unsigned int) obja->objectSubId < (unsigned int) objb->objectSubId)
+	{
+		return -1;
+	}
+	if ((unsigned int) obja->objectSubId > (unsigned int) objb->objectSubId)
+	{
+		return 1;
+	}
+	return 0;
 }
 
 
@@ -251,7 +300,9 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 	 */
 	Assert(false);
 	ereport(ERROR, (errmsg("unsupported object %s for distribution by citus",
-						   getObjectTypeDescription(dependency)),
+						   getObjectTypeDescription_compat(dependency,
+
+	                                                       /* missingOk: */ false)),
 					errdetail(
 						"citus tries to recreate an unsupported object on its workers"),
 					errhint("please report a bug as this should not be happening")));
@@ -312,8 +363,8 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
 
-	SendCommandListToWorkerInSingleTransaction(nodeName, nodePort,
-											   CitusExtensionOwnerName(), ddlCommands);
+	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+											  CitusExtensionOwnerName(), ddlCommands);
 }
 
 

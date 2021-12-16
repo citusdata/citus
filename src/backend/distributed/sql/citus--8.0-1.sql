@@ -320,9 +320,23 @@ CREATE TRIGGER dist_shard_cache_invalidate
 
 
 -- Citus aggregates
+
+DO $proc$
+BEGIN
+IF substring(current_Setting('server_version'), '\d+')::int >= 14 THEN
+    EXECUTE $$
+CREATE AGGREGATE array_cat_agg(anycompatiblearray) (SFUNC = array_cat, STYPE = anycompatiblearray);
+COMMENT ON AGGREGATE array_cat_agg(anycompatiblearray)
+    IS 'concatenate input arrays into a single array';
+  $$;
+ELSE
+    EXECUTE $$
 CREATE AGGREGATE array_cat_agg(anyarray) (SFUNC = array_cat, STYPE = anyarray);
 COMMENT ON AGGREGATE array_cat_agg(anyarray)
     IS 'concatenate input arrays into a single array';
+    $$;
+END IF;
+END$proc$;
 
 GRANT SELECT ON pg_catalog.pg_dist_partition TO public;
 GRANT SELECT ON pg_catalog.pg_dist_shard TO public;

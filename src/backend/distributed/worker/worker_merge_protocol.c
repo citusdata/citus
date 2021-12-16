@@ -35,6 +35,7 @@
 
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
+#include "parser/parse_relation.h"
 #include "parser/parse_type.h"
 #include "storage/lmgr.h"
 #include "utils/acl.h"
@@ -68,14 +69,14 @@ PG_FUNCTION_INFO_V1(worker_repartition_cleanup);
 Datum
 worker_create_schema(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	text *ownerText = PG_GETARG_TEXT_P(1);
 	char *ownerString = TextDatumGetCString(ownerText);
 
 
 	StringInfo jobSchemaName = JobSchemaName(jobId);
-	CheckCitusVersion(ERROR);
-
 	bool schemaExists = JobSchemaExists(jobSchemaName);
 	if (!schemaExists)
 	{
@@ -144,11 +145,11 @@ CreateJobSchema(StringInfo schemaName, char *schemaOwner)
 Datum
 worker_repartition_cleanup(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	StringInfo jobDirectoryName = JobDirectoryName(jobId);
 	StringInfo jobSchemaName = JobSchemaName(jobId);
-
-	CheckCitusVersion(ERROR);
 
 	Oid schemaId = get_namespace_oid(jobSchemaName->data, false);
 
@@ -173,6 +174,8 @@ worker_repartition_cleanup(PG_FUNCTION_ARGS)
 Datum
 worker_merge_files_into_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	uint64 jobId = PG_GETARG_INT64(0);
 	uint32 taskId = PG_GETARG_UINT32(1);
 	ArrayType *columnNameObject = PG_GETARG_ARRAYTYPE_P(2);
@@ -181,15 +184,11 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 	StringInfo jobSchemaName = JobSchemaName(jobId);
 	StringInfo taskTableName = TaskTableName(taskId);
 	StringInfo taskDirectoryName = TaskDirectoryName(jobId, taskId);
-	Oid savedUserId = InvalidOid;
-	int savedSecurityContext = 0;
 	Oid userId = GetUserId();
 
 	/* we should have the same number of column names and types */
 	int32 columnNameCount = ArrayObjectCount(columnNameObject);
 	int32 columnTypeCount = ArrayObjectCount(columnTypeObject);
-
-	CheckCitusVersion(ERROR);
 
 	if (columnNameCount != columnTypeCount)
 	{
@@ -231,14 +230,9 @@ worker_merge_files_into_table(PG_FUNCTION_ARGS)
 
 	CreateTaskTable(jobSchemaName, taskTableName, columnNameList, columnTypeList);
 
-	/* need superuser to copy from files */
-	GetUserIdAndSecContext(&savedUserId, &savedSecurityContext);
-	SetUserIdAndSecContext(CitusExtensionOwner(), SECURITY_LOCAL_USERID_CHANGE);
-
 	CopyTaskFilesFromDirectory(jobSchemaName, taskTableName, taskDirectoryName,
 							   userId);
 
-	SetUserIdAndSecContext(savedUserId, savedSecurityContext);
 	PG_RETURN_VOID();
 }
 
@@ -264,10 +258,10 @@ worker_merge_files_and_run_query(PG_FUNCTION_ARGS)
 Datum
 worker_cleanup_job_schema_cache(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	ScanKey scanKey = NULL;
 	int scanKeyCount = 0;
-
-	CheckCitusVersion(ERROR);
 
 	Relation pgNamespace = table_open(NamespaceRelationId, AccessExclusiveLock);
 	TableScanDesc scanDescriptor = table_beginscan_catalog(pgNamespace, scanKeyCount,
@@ -557,8 +551,8 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 		appendStringInfo(fullFilename, "%s/%s", directoryName, baseFilename);
 
 		/* build relation object and copy statement */
-		RangeVar *relation = makeRangeVar(schemaName->data, relationName->data, -1);
-		CopyStmt *copyStatement = CopyStatement(relation, fullFilename->data);
+		RangeVar *rangeVar = makeRangeVar(schemaName->data, relationName->data, -1);
+		CopyStmt *copyStatement = CopyStatement(rangeVar, fullFilename->data);
 		if (BinaryWorkerCopyFormat)
 		{
 			DefElem *copyOption = makeDefElem("format", (Node *) makeString("binary"),
@@ -567,12 +561,26 @@ CopyTaskFilesFromDirectory(StringInfo schemaName, StringInfo relationName,
 		}
 
 		{
-			ParseState *pstate = make_parsestate(NULL);
-			pstate->p_sourcetext = queryString;
+			ParseState *parseState = make_parsestate(NULL);
+			parseState->p_sourcetext = queryString;
 
-			DoCopy(pstate, copyStatement, -1, -1, &copiedRowCount);
+			Relation relation = table_openrv(rangeVar, RowExclusiveLock);
+			(void) addRangeTableEntryForRelation(parseState, relation, RowExclusiveLock,
+												 NULL, false, false);
 
-			free_parsestate(pstate);
+			CopyFromState copyState = BeginCopyFrom_compat(parseState,
+														   relation,
+														   NULL,
+														   copyStatement->filename,
+														   copyStatement->is_program,
+														   NULL,
+														   copyStatement->attlist,
+														   copyStatement->options);
+			copiedRowCount = CopyFrom(copyState);
+			EndCopyFrom(copyState);
+
+			free_parsestate(parseState);
+			table_close(relation, NoLock);
 		}
 
 		copiedRowTotal += copiedRowCount;

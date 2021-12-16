@@ -1,0 +1,409 @@
+SET search_path TO "intermediate result pruning";
+
+-- a very basic case, where the intermediate result
+-- should go to both workers
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key FROM table_1 WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	some_values_1 JOIN table_2 USING (key);
+
+
+-- a very basic case, where the intermediate result
+-- should only go to one worker because the final query is a router
+-- we use random() to prevent postgres inline the CTE(s)
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 3;
+
+-- a similar query, but with a reference table now
+-- given that reference tables are replicated to all nodes
+-- we have to broadcast to all nodes
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	some_values_1 JOIN ref_table USING (key);
+
+
+-- a similar query as above, but this time use the CTE inside
+-- another CTE
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1)
+SELECT
+	count(*)
+FROM
+	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 3;
+
+-- the second CTE does a join with a distributed table
+-- and the final query is a router query
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key))
+SELECT
+	count(*)
+FROM
+	some_values_2 JOIN table_2 USING (key) WHERE table_2.key = 3;
+
+-- the first CTE is used both within second CTE and the final query
+-- the second CTE does a join with a distributed table
+-- and the final query is a router query
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key))
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
+
+-- the first CTE is used both within second CTE and the final query
+-- the second CTE does a join with a distributed table but a router query on a worker
+-- and the final query is another router query on another worker
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 4)
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 4;
+
+-- the first CTE is used both within second CTE and the final query
+-- the second CTE does a join with a distributed table but a router query on a worker
+-- and the final query is a router query on the same worker, so the first result is only
+-- broadcasted to a single node
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 3)
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key = 3;
+
+-- the same query with the above, but the final query is hitting all shards
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key))
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 3;
+
+-- even if we add a filter on the first query and make it a router query,
+-- the first intermediate result still hits all workers because of the final
+-- join is hitting all workers
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE table_2.key = 3)
+SELECT
+	count(*)
+FROM
+	(some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key) WHERE table_2.key != 4;
+
+-- the reference table is joined with a distributed table and an intermediate
+-- result, but the distributed table hits all shards, so the intermediate
+-- result is sent to all nodes
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM ref_table WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key);
+
+-- similar query as above, but this time the whole query is a router
+-- query, so no intermediate results
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM ref_table WHERE value IN ('3', '4'))
+SELECT
+	count(*)
+FROM
+	(some_values_1 JOIN ref_table USING (key)) JOIN table_2 USING (key) WHERE table_2.key = 4;
+
+
+-- now, the second CTE has a single shard join with a distributed table
+-- so the first CTE should only be broadcasted to that node
+-- since the final query doesn't have a join, it should simply be broadcasted
+-- to one node
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1)
+SELECT
+	count(*)
+FROM
+	some_values_2;
+
+
+-- the same query inlined inside a CTE, and the final query has a
+-- join with a distributed table
+WITH top_cte as MATERIALIZED (
+		WITH some_values_1 AS MATERIALIZED
+		(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+		some_values_2 AS MATERIALIZED
+		(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 4)
+	SELECT
+		DISTINCT key
+	FROM
+		some_values_2
+)
+SELECT
+	count(*)
+FROM
+	top_cte JOIN table_2 USING (key);
+
+
+-- very much the same query, but this time the top query is also a router query
+-- on a single worker, so all intermediate results only hit a single node
+WITH top_cte as MATERIALIZED (
+		WITH some_values_1 AS MATERIALIZED
+		(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+		some_values_2 AS MATERIALIZED
+		(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 1)
+	SELECT
+		DISTINCT key
+	FROM
+		some_values_2
+)
+SELECT
+	count(*)
+FROM
+	top_cte JOIN table_2 USING (key) WHERE table_2.key = 2;
+
+
+-- some_values_1 is first used by a single shard-query, and than with a multi-shard
+-- CTE, finally a cartesian product join
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('6', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1 JOIN table_2 USING (key) WHERE key = 4),
+	some_values_3 AS MATERIALIZED
+	(SELECT key FROM (some_values_2 JOIN table_2 USING (key)) JOIN some_values_1 USING (key))
+SELECT * FROM some_values_3 JOIN ref_table ON (true) ORDER BY 1,2,3;
+
+
+
+-- join on intermediate results, so should only
+-- go to a single node
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM table_2 WHERE value IN ('3', '4'))
+SELECT count(*) FROM some_values_2 JOIN some_values_1 USING (key);
+
+-- same query with WHERE false make sure that we're not broken
+-- for such edge cases
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM table_2 WHERE value IN ('3', '4'))
+SELECT count(*) FROM some_values_2 JOIN some_values_1 USING (key) WHERE false;
+
+
+-- do not use some_values_2 at all, so only 2 intermediate results are
+-- broadcasted
+WITH some_values_1 AS MATERIALIZED
+	(SELECT key, random() FROM table_1 WHERE value IN ('3', '4')),
+	some_values_2 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1),
+	some_values_3 AS MATERIALIZED
+	(SELECT key, random() FROM some_values_1)
+SELECT
+	count(*)
+FROM
+	some_values_3;
+
+-- lets have some deeper intermediate results
+-- the inner most two results and the final query (which contains only intermediate results)
+-- hitting single worker, others hitting all workers
+-- (see below query where all intermediate results hit a single node)
+SELECT count(*) FROM
+(
+	SELECT avg(min::int) FROM
+	(
+		SELECT min(table_1.value) FROM
+		(
+			SELECT avg(value::int) as avg_ev_type FROM
+			(
+				SELECT max(value) as mx_val_1 FROM
+				(
+					SELECT avg(value::int) as avg FROM
+					(
+						SELECT cnt FROM
+						(
+							SELECT count(*) as cnt, value
+							FROM table_1
+							WHERE key = 1
+							GROUP BY value
+						) as level_1, table_1
+						WHERE table_1.key = level_1.cnt AND key = 3
+					) as level_2, table_2
+					WHERE table_2.key = level_2.cnt AND key = 5
+					GROUP BY level_2.cnt
+				) as level_3, table_1
+				WHERE value::numeric = level_3.avg AND key = 6
+				GROUP BY level_3.avg
+			) as level_4, table_2
+			WHERE level_4.mx_val_1::int = table_2.key
+			GROUP BY level_4.mx_val_1
+		) as level_5, table_1
+		WHERE level_5.avg_ev_type = table_1.key AND key > 111
+		GROUP BY level_5.avg_ev_type
+	) as level_6, table_1 WHERE table_1.key::int = level_6.min::int
+	GROUP BY table_1.value
+) as bar;
+-- the same query where all intermediate results hits one
+-- worker because each and every query is a router query -- but on different nodes
+SELECT count(*) FROM
+(
+	SELECT avg(min::int) FROM
+	(
+		SELECT min(table_1.value) FROM
+		(
+			SELECT avg(value::int) as avg_ev_type FROM
+			(
+				SELECT max(value) as mx_val_1 FROM
+				(
+					SELECT avg(value::int) as avg FROM
+					(
+						SELECT cnt FROM
+						(
+							SELECT count(*) as cnt, value
+							FROM table_1
+							WHERE key = 1
+							GROUP BY value
+						) as level_1, table_1
+						WHERE table_1.key = level_1.cnt AND key = 3
+					) as level_2, table_2
+					WHERE table_2.key = level_2.cnt AND key = 5
+					GROUP BY level_2.cnt
+				) as level_3, table_1
+				WHERE value::numeric = level_3.avg AND key = 6
+				GROUP BY level_3.avg
+			) as level_4, table_2
+			WHERE level_4.mx_val_1::int = table_2.key AND table_2.key = 1
+			GROUP BY level_4.mx_val_1
+		) as level_5, table_1
+		WHERE level_5.avg_ev_type = table_1.key AND key = 111
+		GROUP BY level_5.avg_ev_type
+	) as level_6, table_1
+	WHERE table_1.key::int = level_6.min::int AND table_1.key = 4
+	GROUP BY table_1.value
+) as bar;
+
+
+-- sanity checks for set operations
+
+-- the intermediate results should just hit a single worker
+(SELECT key FROM table_1 WHERE key = 1)
+INTERSECT
+(SELECT key FROM table_1 WHERE key = 2);
+
+-- the intermediate results should just hit a single worker
+WITH cte_1 AS MATERIALIZED
+(
+	(SELECT key FROM table_1 WHERE key = 1)
+	INTERSECT
+	(SELECT key FROM table_1 WHERE key = 2)
+),
+cte_2 AS MATERIALIZED
+(
+	(SELECT key FROM table_1 WHERE key = 3)
+	INTERSECT
+	(SELECT key FROM table_1 WHERE key = 4)
+)
+SELECT * FROM cte_1
+	UNION
+SELECT * FROM cte_2;
+
+-- one final test with SET operations, where
+-- we join the results with distributed tables
+-- so cte_1 should hit all workers, but still the
+-- others should hit single worker each
+WITH cte_1 AS MATERIALIZED
+(
+	(SELECT key FROM table_1 WHERE key = 1)
+	INTERSECT
+	(SELECT key FROM table_1 WHERE key = 2)
+),
+cte_2 AS MATERIALIZED
+(
+	SELECT count(*) FROM table_1 JOIN cte_1 USING (key)
+)
+SELECT * FROM cte_2;
+
+
+-- sanity checks for non-colocated subquery joins
+-- the recursively planned subquery (bar) should hit all
+-- nodes
+SELECT
+	count(*)
+FROM
+	(SELECT key, random() FROM table_1) as foo,
+	(SELECT key, random() FROM table_2) as bar
+WHERE
+	foo.key != bar.key;
+
+-- the recursively planned subquery (bar) should hit one
+-- node because foo goes to a single node
+SELECT
+	count(*)
+FROM
+	(SELECT key, random() FROM table_1 WHERE key = 1) as foo,
+	(SELECT key, random() FROM table_2) as bar
+WHERE
+	foo.key != bar.key;
+
+
+SELECT *
+FROM
+(
+    WITH accounts_cte AS MATERIALIZED (
+        SELECT id AS account_id
+        FROM accounts
+    ),
+    joined_stats_cte_1 AS MATERIALIZED (
+        SELECT spent, account_id
+        FROM stats
+        INNER JOIN accounts_cte USING (account_id)
+    ),
+    joined_stats_cte_2 AS MATERIALIZED (
+        SELECT spent, account_id
+        FROM joined_stats_cte_1
+        INNER JOIN accounts_cte USING (account_id)
+    )
+    SELECT SUM(spent) OVER (PARTITION BY coalesce(account_id, NULL))
+    FROM accounts_cte
+    INNER JOIN joined_stats_cte_2 USING (account_id)
+) inner_query;
+
+
+
+-- Testing a having clause that could have been a where clause between a distributed table
+-- and a reference table. This query was the cause for intermediate results not being
+-- available during the replace of the planner for the master query with the standard
+-- planner.
+-- Since the having clause could have been a where clause the having clause on the grouping
+-- on the coordinator is replaced with a Result node containing a One-time filter if the
+-- having qual (one-time filter works because the query doesn't change with the tuples
+-- returned from below).
+SELECT count(*),
+       spent
+FROM stats
+GROUP BY 2
+HAVING (
+           SELECT count(*)
+           FROM accounts
+       ) > 0;
+

@@ -67,6 +67,7 @@ CREATE TABLE products_append (
 );
 
 SELECT create_distributed_table('products_append', 'product_no', 'append');
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 
 -- Can only add primary key constraint on distribution column (or group
 -- of columns including distribution column)
@@ -75,7 +76,7 @@ ALTER TABLE products_append ADD CONSTRAINT p_key_name PRIMARY KEY(name);
 ALTER TABLE products_append ADD CONSTRAINT p_key PRIMARY KEY(product_no);
 
 --- Error out since first and third rows have the same product_no
-\COPY products_append FROM STDIN DELIMITER AS ',';
+COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
 1, Product_1, 10
 2, Product_2, 15
 1, Product_3, 8
@@ -138,6 +139,7 @@ DROP TABLE unique_test_table_ref;
 -- Check "UNIQUE CONSTRAINT" with append table
 CREATE TABLE unique_test_table_append(id int, name varchar(20));
 SELECT create_distributed_table('unique_test_table_append', 'id', 'append');
+SELECT master_create_empty_shard('unique_test_table_append') AS shardid \gset
 
 -- Can only add unique constraint on distribution column (or group
 -- of columns including distribution column)
@@ -146,7 +148,7 @@ ALTER TABLE unique_test_table_append ADD CONSTRAINT unn_name UNIQUE(name);
 ALTER TABLE unique_test_table_append ADD CONSTRAINT unn_id UNIQUE(id);
 
 -- Error out. Table can not have two rows with the same id.
-\COPY unique_test_table_append FROM STDIN DELIMITER AS ',';
+COPY unique_test_table_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
 1, Product_1
 2, Product_2
 1, Product_3
@@ -207,13 +209,14 @@ CREATE TABLE products_append (
 );
 
 SELECT create_distributed_table('products_append', 'product_no', 'append');
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 
 -- Can add column and table check constraints
 ALTER TABLE products_append ADD CONSTRAINT p_check CHECK(price > 0);
 ALTER TABLE products_append ADD CONSTRAINT p_multi_check CHECK(price > discounted_price);
 
 -- Error out,since the third row conflicting with the p_multi_check
-\COPY products_append FROM STDIN DELIMITER AS ',';
+COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
 1, Product_1, 10, 5
 2, Product_2, 15, 8
 1, Product_3, 8, 10
@@ -277,6 +280,7 @@ CREATE TABLE products_append (
 );
 
 SELECT create_distributed_table('products_append', 'product_no','append');
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 
 -- Can only add exclusion constraint on distribution column (or group of column
 -- including distribution column)
@@ -285,7 +289,7 @@ ALTER TABLE products_append ADD CONSTRAINT exc_name EXCLUDE USING btree (name wi
 ALTER TABLE products_append ADD CONSTRAINT exc_pno_name EXCLUDE USING btree (product_no with =, name with =);
 
 -- Error out since first and third can not pass the exclusion check.
-\COPY products_append FROM STDIN DELIMITER AS ',';
+COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
 1, Product_1, 10
 1, Product_2, 15
 1, Product_1, 8
@@ -335,11 +339,12 @@ CREATE TABLE products_append (
 );
 
 SELECT create_distributed_table('products_append', 'product_no', 'append');
+SELECT master_create_empty_shard('products_append') AS shardid \gset
 
 ALTER TABLE products_append ALTER COLUMN name SET NOT NULL;
 
 -- Error out since name and product_no columns can not handle NULL value.
-\COPY products_append FROM STDIN DELIMITER AS ',';
+COPY products_append FROM STDIN WITH (DELIMITER ',', append_to_shard :shardid);
 1, \N, 10
 \N, Product_2, 15
 1, Product_1, 8

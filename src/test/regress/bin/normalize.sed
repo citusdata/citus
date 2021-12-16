@@ -122,6 +122,8 @@ s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\
 
 # assign_distributed_transaction id params
 s/(NOTICE.*)assign_distributed_transaction_id\([0-9]+, [0-9]+, '.*'\)/\1assign_distributed_transaction_id\(xx, xx, 'xxxxxxx'\)/g
+s/(NOTICE.*)PREPARE TRANSACTION 'citus_[0-9]+_[0-9]+_[0-9]+_[0-9]+'/\1PREPARE TRANSACTION 'citus_xx_xx_xx_xx'/g
+s/(NOTICE.*)COMMIT PREPARED 'citus_[0-9]+_[0-9]+_[0-9]+_[0-9]+'/\1COMMIT PREPARED 'citus_xx_xx_xx_xx'/g
 
 # toast tables
 s/pg_toast_[0-9]+/pg_toast_xxxxx/g
@@ -179,7 +181,7 @@ s/relation with OID [0-9]+ does not exist/relation with OID XXXX does not exist/
 /^DEBUG:  EventTriggerInvoke [0-9]+$/d
 
 # ignore DEBUG1 messages that Postgres generates
-/^DEBUG:  rehashing catalog cache id [0-9]+$/d
+/^DEBUG:  rehashing catalog cache id .*$/d
 
 # ignore JIT related messages
 /^DEBUG:  probing availability of JIT.*/d
@@ -200,9 +202,9 @@ s/citus_local_table_4_idx_[0-9]+/citus_local_table_4_idx_xxxxxx/g
 s/citus_local_table_4_[0-9]+/citus_local_table_4_xxxxxx/g
 s/ERROR:  cannot append to shardId [0-9]+/ERROR:  cannot append to shardId xxxxxx/g
 
-# hide warning/hint message that we get when executing create_citus_local_table
-/local tables that are added to metadata but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
-/Consider setting citus.enable_local_reference_table_foreign_keys to 'off' to disable this behavior$/d
+# hide notice/hint message that we get when converting local tables automatically
+/local tables that are added to metadata automatically by citus, but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
+/Executing citus_add_local_table_to_metadata(.*) prevents this for the given relation, and all of the connected relations$/d
 
 # normalize partitioned table shard constraint name errors for upgrade_partition_constraints_(before|after)
 s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
@@ -227,3 +229,30 @@ s/^(DEBUG:  the index name on the shards of the partition is too long, switching
 
 # normalize errors for not being able to connect to a non-existing host
 s/could not translate host name "foobar" to address: .*$/could not translate host name "foobar" to address: <system specific error>/g
+
+s/ERROR:  parallel workers for vacuum must/ERROR:  parallel vacuum degree must/g
+
+# ignore PL/pgSQL line numbers that differ on Mac builds
+s/(CONTEXT:  PL\/pgSQL function .* line )([0-9]+)/\1XX/g
+s/^(PL\/pgSQL function .* line) [0-9]+ (.*)/\1 XX \2/g
+
+# can be removed after dropping PG13 support
+s/ERROR:  parallel workers for vacuum must be between/ERROR:  parallel vacuum degree must be between/g
+s/ERROR:  fake_fetch_row_version not implemented/ERROR:  fake_tuple_update not implemented/g
+s/ERROR:  COMMIT is not allowed in an SQL function/ERROR:  COMMIT is not allowed in a SQL function/g
+s/ERROR:  ROLLBACK is not allowed in an SQL function/ERROR:  ROLLBACK is not allowed in a SQL function/g
+/.*Async-Capable.*/d
+/.*Async Capable.*/d
+/Parent Relationship/d
+/Parent-Relationship/d
+s/function array_cat_agg\(anyarray\) anyarray/function array_cat_agg\(anycompatiblearray\) anycompatiblearray/g
+s/function array_cat_agg\(anycompatiblearray\)/function array_cat_agg\(anyarray\)/g
+s/TRIM\(BOTH FROM value\)/btrim\(value\)/g
+s/pg14\.idx.*/pg14\.xxxxx/g
+
+s/CREATE TABLESPACE test_tablespace LOCATION.*/CREATE TABLESPACE test_tablespace LOCATION XXXX/g
+
+# columnar log for var correlation
+s/(.*absolute correlation \()([0,1]\.[0-9]+)(\) of var attribute [0-9]+ is smaller than.*)/\1X\.YZ\3/g
+
+s/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \([0-9]+, [0-9]+, [0-9]+, [0-9]+, [0-9]+\)\)/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \(xxxxxx, xxxxxx, xxxxxx, xxxxxx, xxxxxx\)\)/g

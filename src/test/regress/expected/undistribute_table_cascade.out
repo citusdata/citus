@@ -382,12 +382,12 @@ BEGIN;
   ORDER BY 1,2,3;
  conname |          conrelid           |     confrelid
 ---------------------------------------------------------------------
+ fkey_10 | partitioned_table_2         | reference_table_3
  fkey_10 | partitioned_table_2_100_200 | reference_table_3
  fkey_10 | partitioned_table_2_200_300 | reference_table_3
- fkey_10 | partitioned_table_2         | reference_table_3
+ fkey_9  | partitioned_table_1         | reference_table_3
  fkey_9  | partitioned_table_1_100_200 | reference_table_3
  fkey_9  | partitioned_table_1_200_300 | reference_table_3
- fkey_9  | partitioned_table_1         | reference_table_3
 (6 rows)
 
 ROLLBACK;

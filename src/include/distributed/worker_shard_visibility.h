@@ -14,11 +14,13 @@
 #include "nodes/nodes.h"
 
 extern bool OverrideTableVisibility;
+extern bool EnableManualChangesToShards;
 
 
 extern void ReplaceTableVisibleFunction(Node *inputNode);
 extern void ErrorIfRelationIsAKnownShard(Oid relationId);
-extern bool RelationIsAKnownShard(Oid shardRelationId, bool onlySearchPath);
+extern void ErrorIfIllegallyChangingKnownShard(Oid relationId);
+extern bool RelationIsAKnownShard(Oid shardRelationId);
 
 
 #endif /* WORKER_SHARD_VISIBILITY_H */

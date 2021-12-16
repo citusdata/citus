@@ -33,9 +33,9 @@
 
 
 static void EnsureSequentialModeForCitusTableCascadeFunction(List *relationIdList);
+static List * GetPartitionRelationIds(List *relationIdList);
 static void LockRelationsWithLockMode(List *relationIdList, LOCKMODE lockMode);
-static List * RemovePartitionRelationIds(List *relationIdList);
-static List * GetFKeyCreationCommandsForRelationIdList(List *relationIdList);
+static void ErrorIfConvertingMultiLevelPartitionedTable(List *relationIdList);
 static void DropRelationIdListForeignKeys(List *relationIdList, int fKeyFlags);
 static List * GetRelationDropFkeyCommands(Oid relationId, int fKeyFlags);
 static char * GetDropFkeyCascadeCommand(Oid foreignKeyId);
@@ -46,17 +46,14 @@ static void ExecuteForeignKeyCreateCommand(const char *commandString,
 										   bool skip_validation);
 
 /*
- * CascadeOperationForConnectedRelations executes citus table function specified
- * by CascadeOperationType argument on each relation that relation
- * with relationId is connected via it's foreign key graph, which includes
- * input relation itself.
- * Also see CascadeOperationType enum definition for supported
- * citus table functions.
+ * CascadeOperationForFkeyConnectedRelations is a wrapper function which calls
+ * CascadeOperationForRelationIdList for the foreign key connected relations, for
+ * the given relationId.
  */
 void
-CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
-									  CascadeOperationType
-									  cascadeOperationType)
+CascadeOperationForFkeyConnectedRelations(Oid relationId, LOCKMODE lockMode,
+										  CascadeOperationType
+										  cascadeOperationType)
 {
 	/*
 	 * As we will operate on foreign key connected relations, here we
@@ -72,7 +69,39 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 		return;
 	}
 
-	LockRelationsWithLockMode(fKeyConnectedRelationIdList, lockMode);
+	CascadeOperationForRelationIdList(fKeyConnectedRelationIdList, lockMode,
+									  cascadeOperationType);
+}
+
+
+/*
+ * CascadeOperationForRelationIdList executes citus table function specified
+ * by CascadeOperationType argument on each relation in the relationIdList;
+ * Also see CascadeOperationType enum definition for supported
+ * citus table functions.
+ */
+void
+CascadeOperationForRelationIdList(List *relationIdList, LOCKMODE lockMode,
+								  CascadeOperationType
+								  cascadeOperationType)
+{
+	LockRelationsWithLockMode(relationIdList, lockMode);
+
+	if (cascadeOperationType == CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA ||
+		cascadeOperationType == CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA)
+	{
+		/*
+		 * In CreateCitusLocalTable function, this check would never error out,
+		 * since CreateCitusLocalTable gets called with partition relations, *after*
+		 * they are detached.
+		 * Instead, here, it would error out if the user tries to convert a multi-level
+		 * partitioned table, since partitioned table conversions always go through here.
+		 * Also, there can be a multi-level partitioned table, to be cascaded via foreign
+		 * keys, and they are hard to detect in CreateCitusLocalTable.
+		 * Therefore, we put this check here.
+		 */
+		ErrorIfConvertingMultiLevelPartitionedTable(relationIdList);
+	}
 
 	/*
 	 * Before removing any partition relations, we should error out here if any
@@ -81,25 +110,29 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 	 * We should handle this case here as we remove partition relations in this
 	 * function	before ExecuteCascadeOperationForRelationIdList.
 	 */
-	ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(fKeyConnectedRelationIdList);
+	ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(relationIdList);
+
+	List *partitonRelationList = GetPartitionRelationIds(relationIdList);
 
 	/*
-	 * We shouldn't cascade through foreign keys on partition tables as citus
-	 * table functions already have their own logics to handle partition relations.
+	 * Here we generate detach/attach commands, if there are any partition tables
+	 * in our "relations-to-cascade" list.
 	 */
-	List *nonPartitionRelationIdList =
-		RemovePartitionRelationIds(fKeyConnectedRelationIdList);
+	List *detachPartitionCommands =
+		GenerateDetachPartitionCommandRelationIdList(partitonRelationList);
+	List *attachPartitionCommands =
+		GenerateAttachPartitionCommandRelationIdList(partitonRelationList);
 
 	/*
 	 * Our foreign key subgraph can have distributed tables which might already
 	 * be modified in current transaction. So switch to sequential execution
 	 * before executing any ddl's to prevent erroring out later in this function.
 	 */
-	EnsureSequentialModeForCitusTableCascadeFunction(nonPartitionRelationIdList);
+	EnsureSequentialModeForCitusTableCascadeFunction(relationIdList);
 
 	/* store foreign key creation commands before dropping them */
 	List *fKeyCreationCommands =
-		GetFKeyCreationCommandsForRelationIdList(nonPartitionRelationIdList);
+		GetFKeyCreationCommandsForRelationIdList(relationIdList);
 
 	/*
 	 * Note that here we only drop referencing foreign keys for each relation.
@@ -107,13 +140,40 @@ CascadeOperationForConnectedRelations(Oid relationId, LOCKMODE lockMode,
 	 * relations' referencing foreign keys.
 	 */
 	int fKeyFlags = INCLUDE_REFERENCING_CONSTRAINTS | INCLUDE_ALL_TABLE_TYPES;
-	DropRelationIdListForeignKeys(nonPartitionRelationIdList, fKeyFlags);
-	ExecuteCascadeOperationForRelationIdList(nonPartitionRelationIdList,
+	DropRelationIdListForeignKeys(relationIdList, fKeyFlags);
+
+	ExecuteAndLogUtilityCommandList(detachPartitionCommands);
+
+	ExecuteCascadeOperationForRelationIdList(relationIdList,
 											 cascadeOperationType);
+
+	ExecuteAndLogUtilityCommandList(attachPartitionCommands);
 
 	/* now recreate foreign keys on tables */
 	bool skip_validation = true;
 	ExecuteForeignKeyCreateCommandList(fKeyCreationCommands, skip_validation);
+}
+
+
+/*
+ * GetPartitionRelationIds returns a list of relation id's by picking
+ * partition relation id's from given relationIdList.
+ */
+static List *
+GetPartitionRelationIds(List *relationIdList)
+{
+	List *partitionRelationIdList = NIL;
+
+	Oid relationId = InvalidOid;
+	foreach_oid(relationId, relationIdList)
+	{
+		if (PartitionTable(relationId))
+		{
+			partitionRelationIdList = lappend_oid(partitionRelationIdList, relationId);
+		}
+	}
+
+	return partitionRelationIdList;
 }
 
 
@@ -129,6 +189,36 @@ LockRelationsWithLockMode(List *relationIdList, LOCKMODE lockMode)
 	foreach_oid(relationId, relationIdList)
 	{
 		LockRelationOid(relationId, lockMode);
+	}
+}
+
+
+/*
+ * ErrorIfConvertingMultiLevelPartitionedTable iterates given relationIdList and checks
+ * if there's a multi-level partitioned table involved or not. As we currently don't
+ * support converting multi-level partitioned tables into Citus Local Tables,
+ * this function errors out for such a case. We detect the multi-level partitioned
+ * table if one of the relations is both partition and partitioned table.
+ */
+static void
+ErrorIfConvertingMultiLevelPartitionedTable(List *relationIdList)
+{
+	Oid relationId;
+	foreach_oid(relationId, relationIdList)
+	{
+		if (PartitionedTable(relationId) && PartitionTable(relationId))
+		{
+			Oid parentRelId = PartitionParentOid(relationId);
+			char *parentRelationName = get_rel_name(parentRelId);
+			char *relationName = get_rel_name(relationId);
+
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("Citus does not support multi-level "
+								   "partitioned tables"),
+							errdetail("Relation \"%s\" is partitioned table itself so "
+									  "cannot be partition of relation \"%s\".",
+									  relationName, parentRelationName)));
+		}
 	}
 }
 
@@ -164,30 +254,6 @@ ErrorIfAnyPartitionRelationInvolvedInNonInheritedFKey(List *relationIdList)
 						errhint("Remove non-inherited foreign keys from %s and "
 								"try operation again", partitionRelationQualifiedName)));
 	}
-}
-
-
-/*
- * RemovePartitionRelationIds returns a list of relation id's by removing
- * partition relation id's from given relationIdList.
- */
-static List *
-RemovePartitionRelationIds(List *relationIdList)
-{
-	List *nonPartitionRelationIdList = NIL;
-
-	Oid relationId = InvalidOid;
-	foreach_oid(relationId, relationIdList)
-	{
-		if (PartitionTable(relationId))
-		{
-			continue;
-		}
-
-		nonPartitionRelationIdList = lappend_oid(nonPartitionRelationIdList, relationId);
-	}
-
-	return nonPartitionRelationIdList;
 }
 
 
@@ -247,7 +313,7 @@ RelationIdListHasReferenceTable(List *relationIdList)
  * GetFKeyCreationCommandsForRelationIdList returns a list of DDL commands to
  * create foreign keys for each relation in relationIdList.
  */
-static List *
+List *
 GetFKeyCreationCommandsForRelationIdList(List *relationIdList)
 {
 	List *fKeyCreationCommands = NIL;
@@ -409,11 +475,25 @@ ExecuteCascadeOperationForRelationIdList(List *relationIdList,
 				break;
 			}
 
-			case CASCADE_FKEY_ADD_LOCAL_TABLE_TO_METADATA:
+			case CASCADE_USER_ADD_LOCAL_TABLE_TO_METADATA:
 			{
 				if (!IsCitusTable(relationId))
 				{
-					CreateCitusLocalTable(relationId, cascadeViaForeignKeys);
+					bool autoConverted = false;
+					CreateCitusLocalTable(relationId, cascadeViaForeignKeys,
+										  autoConverted);
+				}
+
+				break;
+			}
+
+			case CASCADE_AUTO_ADD_LOCAL_TABLE_TO_METADATA:
+			{
+				if (!IsCitusTable(relationId))
+				{
+					bool autoConverted = true;
+					CreateCitusLocalTable(relationId, cascadeViaForeignKeys,
+										  autoConverted);
 				}
 
 				break;

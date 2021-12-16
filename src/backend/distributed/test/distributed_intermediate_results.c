@@ -101,9 +101,6 @@ partition_task_list_results(PG_FUNCTION_ARGS)
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, columnValues, columnNulls);
 	}
-
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_DATUM(0);
 }
 
@@ -186,8 +183,5 @@ redistribute_task_list_results(PG_FUNCTION_ARGS)
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, columnValues, columnNulls);
 	}
-
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_DATUM(0);
 }

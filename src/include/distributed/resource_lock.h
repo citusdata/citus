@@ -39,10 +39,7 @@ typedef enum AdvisoryLocktagClass
 	ADV_LOCKTAG_CLASS_CITUS_REBALANCE_COLOCATION = 7,
 	ADV_LOCKTAG_CLASS_CITUS_COLOCATED_SHARDS_METADATA = 8,
 	ADV_LOCKTAG_CLASS_CITUS_OPERATIONS = 9,
-	ADV_LOCKTAG_CLASS_CITUS_PLACEMENT_CLEANUP = 10,
-
-	/* Columnar lock types */
-	ADV_LOCKTAG_CLASS_COLUMNAR_STRIPE_RESERVATION = 11
+	ADV_LOCKTAG_CLASS_CITUS_PLACEMENT_CLEANUP = 10
 } AdvisoryLocktagClass;
 
 /* CitusOperations has constants for citus operations */
@@ -102,13 +99,6 @@ typedef enum CitusOperations
 						 (uint32) operationId, \
 						 ADV_LOCKTAG_CLASS_CITUS_OPERATIONS)
 
-#define SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, relation) \
-	SET_LOCKTAG_ADVISORY(tag, \
-						 relation->rd_lockInfo.lockRelId.dbId, \
-						 relation->rd_lockInfo.lockRelId.relId, \
-						 0, \
-						 ADV_LOCKTAG_CLASS_COLUMNAR_STRIPE_RESERVATION)
-
 /* reuse advisory lock, but with different, unused field 4 (10)
  * Also it has the database hardcoded to MyDatabaseId, to ensure the locks
  * are local to each database */
@@ -124,6 +114,7 @@ typedef enum CitusOperations
 extern void LockShardDistributionMetadata(int64 shardId, LOCKMODE lockMode);
 extern void LockPlacementCleanup(void);
 extern bool TryLockPlacementCleanup(void);
+extern void EnsureShardOwner(uint64 shardId, bool missingOk);
 extern void LockShardListMetadataOnWorkers(LOCKMODE lockmode, List *shardIntervalList);
 extern void BlockWritesToShardList(List *shardList);
 
@@ -154,7 +145,8 @@ extern void LockRelationShardResources(List *relationShardList, LOCKMODE lockMod
 extern List * GetSortedReferenceShardIntervals(List *relationList);
 
 /* Lock parent table's colocated shard resource */
-extern void LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode);
+extern void LockParentShardResourceIfPartition(List *shardIntervalList,
+											   LOCKMODE lockMode);
 
 /* Lock mode translation between text and enum */
 extern LOCKMODE LockModeTextToLockMode(const char *lockModeName);

@@ -1,5 +1,6 @@
 \set VERBOSITY terse
 SET citus.next_shard_id TO 1518000;
+SET citus.next_placement_id TO 4090000;
 SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA fkeys_between_local_ref;
 SET search_path TO fkeys_between_local_ref;
@@ -9,7 +10,7 @@ CREATE VIEW citus_local_tables_in_schema AS
 SELECT logicalrelid FROM pg_dist_partition, pg_tables
 WHERE tablename=logicalrelid::regclass::text AND
       schemaname='fkeys_between_local_ref' AND
-      partmethod = 'n' AND repmodel = 'c';
+      partmethod = 'n' AND repmodel = 's';
 -- remove coordinator if it is added to pg_dist_node and test
 -- behavior when coordinator is not added to metadata
 SELECT COUNT(master_remove_node(nodename, nodeport)) < 2
@@ -99,10 +100,9 @@ CREATE TABLE partitioned_table_1_100_200 PARTITION OF partitioned_table_1 FOR VA
 CREATE TABLE partitioned_table_1_200_300 PARTITION OF partitioned_table_1 FOR VALUES FROM (200) TO (300);
 INSERT INTO partitioned_table_1 SELECT i FROM generate_series(195, 205) i;
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES local_table_4(col_1);
--- now that we attached partitioned table to graph below errors out
--- since we cannot create citus local table from partitioned tables
+BEGIN;
 ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
-ERROR:  cannot add local table "partitioned_table_1" to metadata, only regular tables and foreign tables can be added to citus metadata
+ROLLBACK;
 ALTER TABLE partitioned_table_1 DROP CONSTRAINT fkey_8;
 BEGIN;
   -- now that we detached partitioned table from graph, succeeds
@@ -195,10 +195,10 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- local_table_1     | n          | c
- local_table_2     | n          | c
- local_table_3     | n          | c
- local_table_4     | n          | c
+ local_table_1     | n          | s
+ local_table_2     | n          | s
+ local_table_3     | n          | s
+ local_table_4     | n          | s
  reference_table_1 | n          | t
  reference_table_2 | n          | t
 (6 rows)
@@ -279,12 +279,12 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- local_table_1     | n          | c
- local_table_2     | n          | c
- local_table_3     | n          | c
- local_table_4     | n          | c
- local_table_5     | n          | c
- local_table_6     | n          | c
+ local_table_1     | n          | s
+ local_table_2     | n          | s
+ local_table_3     | n          | s
+ local_table_4     | n          | s
+ local_table_5     | n          | s
+ local_table_6     | n          | s
  reference_table_1 | n          | t
 (7 rows)
 
@@ -318,18 +318,18 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- distributed_table | h          | c
- local_table_1     | n          | c
- local_table_2     | n          | c
- local_table_3     | n          | c
- local_table_4     | n          | c
- local_table_5     | n          | c
+ distributed_table | h          | s
+ local_table_1     | n          | s
+ local_table_2     | n          | s
+ local_table_3     | n          | s
+ local_table_4     | n          | s
+ local_table_5     | n          | s
  reference_table_1 | n          | t
 (7 rows)
 
   -- show that we validate foreign key constraints, errors out
   INSERT INTO local_table_5 VALUES (300);
-ERROR:  insert or update on table "local_table_5_1518070" violates foreign key constraint "local_table_5_col_1_fkey1_1518070"
+ERROR:  insert or update on table "local_table_5_1518073" violates foreign key constraint "local_table_5_col_1_fkey1_1518073"
 ROLLBACK;
 BEGIN;
   CREATE SCHEMA another_schema_fkeys_between_local_ref;
@@ -348,29 +348,30 @@ BEGIN;
   ORDER BY tablename;
                       tablename                       | partmethod | repmodel
 ---------------------------------------------------------------------
- another_schema_fkeys_between_local_ref.local_table_6 | n          | c
- distributed_table                                    | h          | c
- local_table_1                                        | n          | c
- local_table_2                                        | n          | c
- local_table_3                                        | n          | c
- local_table_4                                        | n          | c
- local_table_5                                        | n          | c
+ another_schema_fkeys_between_local_ref.local_table_6 | n          | s
+ distributed_table                                    | h          | s
+ local_table_1                                        | n          | s
+ local_table_2                                        | n          | s
+ local_table_3                                        | n          | s
+ local_table_4                                        | n          | s
+ local_table_5                                        | n          | s
  reference_table_1                                    | n          | t
 (8 rows)
 
   DROP TABLE local_table_3 CASCADE;
   DROP SCHEMA another_schema_fkeys_between_local_ref CASCADE;
-  -- now we shouldn't see local_table_5 since now it is not connected to any reference tables
-  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  -- now we shouldn't see local_table_5 since now it is not connected to any reference tables/citus local tables
+  -- and it's converted automatically
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel, autoconverted FROM pg_dist_partition
   WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
   ORDER BY tablename;
-     tablename     | partmethod | repmodel
+     tablename     | partmethod | repmodel | autoconverted
 ---------------------------------------------------------------------
- distributed_table | h          | c
- local_table_1     | n          | c
- local_table_2     | n          | c
- local_table_4     | n          | c
- reference_table_1 | n          | t
+ distributed_table | h          | s        | f
+ local_table_1     | n          | s        | t
+ local_table_2     | n          | s        | t
+ local_table_4     | n          | s        | t
+ reference_table_1 | n          | t        | f
 (5 rows)
 
 ROLLBACK;
@@ -395,13 +396,13 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- distributed_table | h          | c
- local_table_1     | n          | c
- local_table_2     | n          | c
- local_table_3     | n          | c
- local_table_4     | n          | c
- local_table_5     | n          | c
- local_table_6     | n          | c
+ distributed_table | h          | s
+ local_table_1     | n          | s
+ local_table_2     | n          | s
+ local_table_3     | n          | s
+ local_table_4     | n          | s
+ local_table_5     | n          | s
+ local_table_6     | n          | s
  reference_table_1 | n          | t
 (8 rows)
 
@@ -423,12 +424,12 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- distributed_table | h          | c
- local_table_1     | n          | c
+ distributed_table | h          | s
+ local_table_1     | n          | s
  local_table_2     | n          | t
- local_table_3     | n          | c
- local_table_4     | n          | c
- local_table_5     | n          | c
+ local_table_3     | n          | s
+ local_table_4     | n          | s
+ local_table_5     | n          | s
  local_table_6     | n          | t
  reference_table_1 | n          | t
 (8 rows)
@@ -452,7 +453,7 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- distributed_table | h          | c
+ distributed_table | h          | s
  local_table_2     | n          | t
  local_table_6     | n          | t
  reference_table_1 | n          | t
@@ -476,7 +477,7 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- distributed_table | h          | c
+ distributed_table | h          | s
  reference_table_1 | n          | t
 (2 rows)
 
@@ -501,11 +502,11 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- distributed_table | h          | c
+ distributed_table | h          | s
  local_table_1     | n          | t
- local_table_2     | h          | c
- local_table_3     | n          | c
- local_table_4     | n          | c
+ local_table_2     | h          | s
+ local_table_3     | n          | s
+ local_table_4     | n          | s
  reference_table_1 | n          | t
 (6 rows)
 
@@ -528,9 +529,9 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- distributed_table | h          | c
- local_table_1     | n          | c
- local_table_2     | n          | c
+ distributed_table | h          | s
+ local_table_1     | n          | s
+ local_table_2     | n          | s
  local_table_3     | n          | t
  local_table_4     | n          | t
  reference_table_1 | n          | t
@@ -562,12 +563,12 @@ BEGIN;
   ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- distributed_table | h          | c
+ distributed_table | h          | s
  local_table_1     | n          | t
- local_table_2     | h          | c
- local_table_3     | n          | c
- local_table_4     | n          | c
- local_table_5     | h          | c
+ local_table_2     | h          | s
+ local_table_3     | n          | s
+ local_table_4     | n          | s
+ local_table_5     | h          | s
  reference_table_1 | n          | t
 (7 rows)
 
@@ -611,19 +612,18 @@ WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='f
 ORDER BY tablename;
      tablename     | partmethod | repmodel
 ---------------------------------------------------------------------
- distributed_table | h          | c
+ distributed_table | h          | s
  local_table_1     | n          | t
- local_table_2     | h          | c
- local_table_3     | n          | c
- local_table_4     | n          | c
- local_table_6     | h          | c
+ local_table_2     | h          | s
+ local_table_3     | n          | s
+ local_table_4     | n          | s
+ local_table_6     | h          | s
  reference_table_1 | n          | t
 (7 rows)
 
--- this errors out as we don't support creating citus local
--- tables from partitioned tables
+BEGIN;
 CREATE TABLE part_local_table (col_1 INT REFERENCES reference_table_1(col_1)) PARTITION BY RANGE (col_1);
-ERROR:  cannot add local table "part_local_table" to metadata, only regular tables and foreign tables can be added to citus metadata
+ROLLBACK;
 -- they fail as col_99 does not exist
 CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_99) REFERENCES reference_table_1(col_1));
 ERROR:  column "col_99" referenced in foreign key constraint does not exist
@@ -662,7 +662,7 @@ BEGIN;
   ORDER BY tablename;
  tablename  | partmethod | repmodel
 ---------------------------------------------------------------------
- pg_local_1 | n          | c
+ pg_local_1 | n          | s
  ref_1      | n          | t
  ref_2      | n          | t
 (3 rows)
@@ -691,7 +691,7 @@ BEGIN;
   ORDER BY tablename;
  tablename  | partmethod | repmodel
 ---------------------------------------------------------------------
- pg_local_1 | n          | c
+ pg_local_1 | n          | s
  ref_1      | n          | t
  ref_2      | n          | t
 (3 rows)
@@ -720,7 +720,7 @@ BEGIN;
   ORDER BY tablename;
  tablename  | partmethod | repmodel
 ---------------------------------------------------------------------
- pg_local_1 | n          | c
+ pg_local_1 | n          | s
  ref_1      | n          | t
  ref_2      | n          | t
 (3 rows)
@@ -755,7 +755,7 @@ BEGIN;
   ORDER BY tablename;
  tablename  | partmethod | repmodel
 ---------------------------------------------------------------------
- pg_local_3 | n          | c
+ pg_local_3 | n          | s
  ref_1      | n          | t
 (2 rows)
 
@@ -767,10 +767,10 @@ BEGIN;
   ORDER BY tablename;
  tablename  | partmethod | repmodel
 ---------------------------------------------------------------------
- pg_local_1 | n          | c
- pg_local_2 | n          | c
- pg_local_3 | n          | c
- pg_local_4 | n          | c
+ pg_local_1 | n          | s
+ pg_local_2 | n          | s
+ pg_local_3 | n          | s
+ pg_local_4 | n          | s
  ref_1      | n          | t
 (5 rows)
 

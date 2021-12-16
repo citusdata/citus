@@ -49,14 +49,13 @@ PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 Datum
 worker_drop_distributed_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *relationName = PG_GETARG_TEXT_P(0);
 	Oid relationId = ResolveRelationId(relationName, true);
 
 	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
 	char relationKind = '\0';
-
-	CheckCitusVersion(ERROR);
-	EnsureSuperUser();
 
 	if (!OidIsValid(relationId))
 	{
@@ -64,6 +63,8 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 								text_to_cstring(relationName))));
 		PG_RETURN_VOID();
 	}
+
+	EnsureTableOwner(relationId);
 
 	List *shardList = LoadShardList(relationId);
 
@@ -79,6 +80,21 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	distributedTableObject.classId = RelationRelationId;
 	distributedTableObject.objectId = relationId;
 	distributedTableObject.objectSubId = 0;
+
+	/* Drop dependent sequences from pg_dist_object */
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	List *ownedSequences = getOwnedSequences(relationId);
+	#else
+	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
+	#endif
+
+	Oid ownedSequenceOid = InvalidOid;
+	foreach_oid(ownedSequenceOid, ownedSequences)
+	{
+		ObjectAddress ownedSequenceAddress = { 0 };
+		ObjectAddressSet(ownedSequenceAddress, RelationRelationId, ownedSequenceOid);
+		UnmarkObjectDistributed(&ownedSequenceAddress);
+	}
 
 	/* drop the server for the foreign relations */
 	if (relationKind == RELKIND_FOREIGN_TABLE)
@@ -120,7 +136,7 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	{
 		uint64 shardId = *shardIdPointer;
 
-		List *shardPlacementList = ShardPlacementList(shardId);
+		List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 		ShardPlacement *placement = NULL;
 		foreach_ptr(placement, shardPlacementList)
 		{

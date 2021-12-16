@@ -1,4 +1,3 @@
-/columnar_chunk_filtering.sql
 /columnar_copyto.sql
 /columnar_data_types.sql
 /columnar_load.sql
@@ -6,19 +5,15 @@
 /multi_agg_distinct.sql
 /multi_agg_type_conversion.sql
 /multi_alter_table_statements.sql
-/multi_append_table_to_shard.sql
 /multi_behavioral_analytics_create_table.sql
 /multi_behavioral_analytics_create_table_superuser.sql
 /multi_complex_count_distinct.sql
 /multi_copy.sql
-/multi_create_schema.sql
-/multi_large_shardid.sql
 /multi_load_data.sql
 /multi_load_data_superuser.sql
-/multi_load_large_records.sql
 /multi_load_more_data.sql
-/multi_master_delete_protocol.sql
 /multi_mx_copy_data.sql
 /multi_outer_join.sql
 /multi_outer_join_reference.sql
+/tablespace.sql
 /worker_copy.sql

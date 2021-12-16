@@ -11,16 +11,18 @@ step s1-select-from-t1-t2-for-update:
   ORDER BY 1
   FOR UPDATE;
 
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s2-begin:
  BEGIN;
 
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -28,7 +30,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-t2-for-share s2-begin s2-delete-t1 s1-commit s2-commit
@@ -42,16 +46,18 @@ step s1-select-from-t1-t2-for-share:
   ORDER BY 1
   FOR SHARE;
 
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s2-begin:
  BEGIN;
 
 step s2-delete-t1:
  DELETE FROM test_table_1_rf1 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-delete-t1: <... completed>
@@ -59,7 +65,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-rt-for-update s2-begin s2-update-t1 s1-commit s2-commit
@@ -73,16 +81,18 @@ step s1-select-from-t1-rt-for-update:
   ORDER BY 1
   FOR UPDATE;
 
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s2-begin:
  BEGIN;
 
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -90,7 +100,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-rt-with-lc-for-update s2-begin s2-update-rt s1-commit s2-commit
@@ -105,16 +117,18 @@ step s1-select-from-t1-rt-with-lc-for-update:
   FOR UPDATE
   OF rt1;
 
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s2-begin:
  BEGIN;
 
 step s2-update-rt:
  UPDATE ref_table SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-rt: <... completed>
@@ -122,7 +136,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-rt-with-lc-for-update s2-begin s2-update-t1 s1-commit s2-commit
@@ -137,9 +153,11 @@ step s1-select-from-t1-rt-with-lc-for-update:
   FOR UPDATE
   OF rt1;
 
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s2-begin:
  BEGIN;
 
@@ -153,7 +171,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-t2-for-share s2-begin s2-select-from-t1-t2-for-share s1-commit s2-commit
@@ -167,9 +187,11 @@ step s1-select-from-t1-t2-for-share:
   ORDER BY 1
   FOR SHARE;
 
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s2-begin:
  BEGIN;
 
@@ -180,9 +202,11 @@ step s2-select-from-t1-t2-for-share:
   ORDER BY 1
   FOR SHARE;
 
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s1-commit:
  COMMIT;
 
@@ -190,7 +214,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-rt-for-update s2-begin s2-select-from-t1-t2-for-update s1-commit s2-commit
@@ -204,9 +230,11 @@ step s1-select-from-t1-rt-for-update:
   ORDER BY 1
   FOR UPDATE;
 
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s2-begin:
  BEGIN;
 
@@ -217,18 +245,22 @@ step s2-select-from-t1-t2-for-update:
   ORDER BY 1
   FOR UPDATE;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-select-from-t1-t2-for-update: <... completed>
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-within-cte s2-begin s2-select-from-t1-t2-for-update s1-commit s2-commit
@@ -240,8 +272,10 @@ step s1-select-from-t1-within-cte:
  SELECT * FROM first_value WHERE EXISTS (SELECT * FROM first_value);
 
 val_1
+---------------------------------------------------------------------
+    2
+(1 row)
 
-2
 step s2-begin:
  BEGIN;
 
@@ -252,18 +286,22 @@ step s2-select-from-t1-t2-for-update:
   ORDER BY 1
   FOR UPDATE;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-select-from-t1-t2-for-update: <... completed>
-id             val_1          id             val_1
+id|val_1|id|val_1
+---------------------------------------------------------------------
+ 1|    2| 1|    2
+(1 row)
 
-1              2              1              2
 step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-within-cte s2-begin s2-update-t1 s1-commit s2-commit
@@ -275,15 +313,17 @@ step s1-select-from-t1-within-cte:
  SELECT * FROM first_value WHERE EXISTS (SELECT * FROM first_value);
 
 val_1
+---------------------------------------------------------------------
+    2
+(1 row)
 
-2
 step s2-begin:
  BEGIN;
 
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -291,7 +331,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-with-subquery s2-begin s2-update-t1 s1-commit s2-commit
@@ -305,16 +347,18 @@ step s1-select-from-t1-with-subquery:
  RESET client_min_messages;
 
 DEBUG:  query has a single distribution column value: 1
-id             val_1
+id|val_1
+---------------------------------------------------------------------
+ 1|    2
+(1 row)
 
-1              2
 step s2-begin:
  BEGIN;
 
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -322,7 +366,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-rt-with-subquery s2-begin s2-update-rt s1-commit s2-commit
@@ -332,16 +378,18 @@ step s1-begin:
 step s1-select-from-rt-with-subquery:
  SELECT * FROM (SELECT * FROM ref_table FOR UPDATE) foo WHERE id = 1;
 
-id             val_1
+id|val_1
+---------------------------------------------------------------------
+ 1|    2
+(1 row)
 
-1              2
 step s2-begin:
  BEGIN;
 
 step s2-update-rt:
  UPDATE ref_table SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-rt: <... completed>
@@ -349,7 +397,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-select-from-t1-with-view s2-begin s2-update-t1 s1-commit s2-commit
@@ -359,16 +409,18 @@ step s1-begin:
 step s1-select-from-t1-with-view:
  SELECT * FROM test_1 WHERE id = 1 FOR UPDATE;
 
-id             val_1
+id|val_1
+---------------------------------------------------------------------
+ 1|    2
+(1 row)
 
-1              2
 step s2-begin:
  BEGIN;
 
 step s2-update-t1:
  UPDATE test_table_1_rf1 SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-t1: <... completed>
@@ -376,7 +428,9 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 
 
 starting permutation: s1-begin s1-update-rt-with-cte-select-from-rt s2-begin s2-update-rt s1-commit s2-commit
@@ -393,7 +447,7 @@ step s2-begin:
 step s2-update-rt:
  UPDATE ref_table SET val_1 = 5 WHERE id = 1;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
  COMMIT;
 
 step s2-update-rt: <... completed>
@@ -401,5 +455,7 @@ step s2-commit:
  COMMIT;
 
 restore_isolation_tester_func
+---------------------------------------------------------------------
 
+(1 row)
 

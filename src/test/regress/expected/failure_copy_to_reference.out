@@ -36,7 +36,6 @@ SELECT citus.mitmproxy('conn.kill()');
 
 \copy test_table FROM STDIN DELIMITER ','
 ERROR:  failure on connection marked as essential: localhost:xxxxx
-CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -64,7 +63,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 \copy test_table FROM STDIN DELIMITER ','
 ERROR:  failure on connection marked as essential: localhost:xxxxx
-CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -92,7 +90,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 
 \copy test_table FROM STDIN DELIMITER ','
 ERROR:  canceling statement due to user request
-CONTEXT:  COPY test_table, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -264,7 +261,10 @@ SELECT citus.mitmproxy('conn.onQuery(query="^PREPARE TRANSACTION").kill()');
 (1 row)
 
 \copy test_table FROM STDIN DELIMITER ','
-ERROR:  connection not open
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -395,7 +395,10 @@ BEGIN;
 SET LOCAL client_min_messages TO WARNING;
 \copy test_table FROM STDIN DELIMITER ','
 ROLLBACK;
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -428,7 +431,10 @@ BEGIN;
 SET LOCAL client_min_messages TO WARNING;
 \copy test_table FROM STDIN DELIMITER ','
 ROLLBACK;
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy

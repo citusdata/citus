@@ -56,7 +56,9 @@ BEGIN
   RAISE INFO 'information message %', $1;
 END;
 $proc$;
+SET citus.enable_object_propagation TO OFF;
 SELECT create_distributed_function('raise_info(text)');
+RESET citus.enable_object_propagation;
 
 SELECT deparse_and_run_on_workers($cmd$
 ALTER PROCEDURE  raise_info CALLED ON NULL INPUT

@@ -88,13 +88,11 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
           "Node Type": "Aggregate",
           "Strategy": "Hashed",
           "Partial Mode": "Simple",
-          "Parent Relationship": "Outer",
           "Parallel Aware": false,
           "Group Key": ["remote_scan.l_quantity"],
           "Plans": [
             {
               "Node Type": "Custom Scan",
-              "Parent Relationship": "Outer",
               "Custom Plan Provider": "Citus Adaptive",
               "Parallel Aware": false,
               "Distributed Query": {
@@ -116,7 +114,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                               "Plans": [
                                 {
                                   "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
                                   "Parallel Aware": false,
                                   "Relation Name": "lineitem_mx_1220052",
                                   "Alias": "lineitem_mx"
@@ -162,7 +159,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Node-Type>Aggregate</Node-Type>
           <Strategy>Hashed</Strategy>
           <Partial-Mode>Simple</Partial-Mode>
-          <Parent-Relationship>Outer</Parent-Relationship>
           <Parallel-Aware>false</Parallel-Aware>
           <Group-Key>
             <Item>remote_scan.l_quantity</Item>
@@ -170,7 +166,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
           <Plans>
             <Plan>
               <Node-Type>Custom Scan</Node-Type>
-              <Parent-Relationship>Outer</Parent-Relationship>
               <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
               <Parallel-Aware>false</Parallel-Aware>
               <Distributed-Query>
@@ -194,7 +189,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                               <Plans>
                                 <Plan>
                                   <Node-Type>Seq Scan</Node-Type>
-                                  <Parent-Relationship>Outer</Parent-Relationship>
                                   <Parallel-Aware>false</Parallel-Aware>
                                   <Relation-Name>lineitem_mx_1220052</Relation-Name>
                                   <Alias>lineitem_mx</Alias>
@@ -234,13 +228,11 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
       - Node Type: "Aggregate"
         Strategy: "Hashed"
         Partial Mode: "Simple"
-        Parent Relationship: "Outer"
         Parallel Aware: false
         Group Key:
           - "remote_scan.l_quantity"
         Plans:
           - Node Type: "Custom Scan"
-            Parent Relationship: "Outer"
             Custom Plan Provider: "Citus Adaptive"
             Parallel Aware: false
             Distributed Query:
@@ -259,7 +251,6 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                             - "l_quantity"
                           Plans:
                             - Node Type: "Seq Scan"
-                              Parent Relationship: "Outer"
                               Parallel Aware: false
                               Relation Name: "lineitem_mx_1220052"
                               Alias: "lineitem_mx"
@@ -537,7 +528,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
       "Plans": [
         {
           "Node Type": "Custom Scan",
-          "Parent Relationship": "Outer",
           "Custom Plan Provider": "Citus Adaptive",
           "Parallel Aware": false,
           "Distributed Query": {
@@ -558,7 +548,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                           "Plans": [
                             {
                               "Node Type": "Hash Join",
-                              "Parent Relationship": "Outer",
                               "Parallel Aware": false,
                               "Join Type": "Inner",
                               "Inner Unique": false,
@@ -566,7 +555,6 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                               "Plans": [
                                 {
                                   "Node Type": "Hash Join",
-                                  "Parent Relationship": "Outer",
                                   "Parallel Aware": false,
                                   "Join Type": "Inner",
                                   "Inner Unique": false,
@@ -574,19 +562,16 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                   "Plans": [
                                     {
                                       "Node Type": "Seq Scan",
-                                      "Parent Relationship": "Outer",
                                       "Parallel Aware": false,
                                       "Relation Name": "supplier_mx_1220087",
                                       "Alias": "supplier_mx"
                                     },
                                     {
                                       "Node Type": "Hash",
-                                      "Parent Relationship": "Inner",
                                       "Parallel Aware": false,
                                       "Plans": [
                                         {
                                           "Node Type": "Seq Scan",
-                                          "Parent Relationship": "Outer",
                                           "Parallel Aware": false,
                                           "Relation Name": "lineitem_mx_1220052",
                                           "Alias": "lineitem_mx"
@@ -597,12 +582,10 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                 },
                                 {
                                   "Node Type": "Hash",
-                                  "Parent Relationship": "Inner",
                                   "Parallel Aware": false,
                                   "Plans": [
                                     {
                                       "Node Type": "Hash Join",
-                                      "Parent Relationship": "Outer",
                                       "Parallel Aware": false,
                                       "Join Type": "Inner",
                                       "Inner Unique": false,
@@ -610,19 +593,16 @@ EXPLAIN (COSTS FALSE, FORMAT JSON)
                                       "Plans": [
                                         {
                                           "Node Type": "Seq Scan",
-                                          "Parent Relationship": "Outer",
                                           "Parallel Aware": false,
                                           "Relation Name": "customer_mx_1220084",
                                           "Alias": "customer_mx"
                                         },
                                         {
                                           "Node Type": "Hash",
-                                          "Parent Relationship": "Inner",
                                           "Parallel Aware": false,
                                           "Plans": [
                                             {
                                               "Node Type": "Seq Scan",
-                                              "Parent Relationship": "Outer",
                                               "Parallel Aware": false,
                                               "Relation Name": "orders_mx_1220068",
                                               "Alias": "orders_mx"
@@ -673,7 +653,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
       <Plans>
         <Plan>
           <Node-Type>Custom Scan</Node-Type>
-          <Parent-Relationship>Outer</Parent-Relationship>
           <Custom-Plan-Provider>Citus Adaptive</Custom-Plan-Provider>
           <Parallel-Aware>false</Parallel-Aware>
           <Distributed-Query>
@@ -694,7 +673,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                           <Plans>
                             <Plan>
                               <Node-Type>Hash Join</Node-Type>
-                              <Parent-Relationship>Outer</Parent-Relationship>
                               <Parallel-Aware>false</Parallel-Aware>
                               <Join-Type>Inner</Join-Type>
                               <Inner-Unique>false</Inner-Unique>
@@ -702,7 +680,6 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                               <Plans>
                                 <Plan>
                                   <Node-Type>Hash Join</Node-Type>
-                                  <Parent-Relationship>Outer</Parent-Relationship>
                                   <Parallel-Aware>false</Parallel-Aware>
                                   <Join-Type>Inner</Join-Type>
                                   <Inner-Unique>false</Inner-Unique>
@@ -710,19 +687,16 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                                   <Plans>
                                     <Plan>
                                       <Node-Type>Seq Scan</Node-Type>
-                                      <Parent-Relationship>Outer</Parent-Relationship>
                                       <Parallel-Aware>false</Parallel-Aware>
                                       <Relation-Name>supplier_mx_1220087</Relation-Name>
                                       <Alias>supplier_mx</Alias>
                                     </Plan>
                                     <Plan>
                                       <Node-Type>Hash</Node-Type>
-                                      <Parent-Relationship>Inner</Parent-Relationship>
                                       <Parallel-Aware>false</Parallel-Aware>
                                       <Plans>
                                         <Plan>
                                           <Node-Type>Seq Scan</Node-Type>
-                                          <Parent-Relationship>Outer</Parent-Relationship>
                                           <Parallel-Aware>false</Parallel-Aware>
                                           <Relation-Name>lineitem_mx_1220052</Relation-Name>
                                           <Alias>lineitem_mx</Alias>
@@ -733,12 +707,10 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                                 </Plan>
                                 <Plan>
                                   <Node-Type>Hash</Node-Type>
-                                  <Parent-Relationship>Inner</Parent-Relationship>
                                   <Parallel-Aware>false</Parallel-Aware>
                                   <Plans>
                                     <Plan>
                                       <Node-Type>Hash Join</Node-Type>
-                                      <Parent-Relationship>Outer</Parent-Relationship>
                                       <Parallel-Aware>false</Parallel-Aware>
                                       <Join-Type>Inner</Join-Type>
                                       <Inner-Unique>false</Inner-Unique>
@@ -746,19 +718,16 @@ EXPLAIN (COSTS FALSE, FORMAT XML)
                                       <Plans>
                                         <Plan>
                                           <Node-Type>Seq Scan</Node-Type>
-                                          <Parent-Relationship>Outer</Parent-Relationship>
                                           <Parallel-Aware>false</Parallel-Aware>
                                           <Relation-Name>customer_mx_1220084</Relation-Name>
                                           <Alias>customer_mx</Alias>
                                         </Plan>
                                         <Plan>
                                           <Node-Type>Hash</Node-Type>
-                                          <Parent-Relationship>Inner</Parent-Relationship>
                                           <Parallel-Aware>false</Parallel-Aware>
                                           <Plans>
                                             <Plan>
                                               <Node-Type>Seq Scan</Node-Type>
-                                              <Parent-Relationship>Outer</Parent-Relationship>
                                               <Parallel-Aware>false</Parallel-Aware>
                                               <Relation-Name>orders_mx_1220068</Relation-Name>
                                               <Alias>orders_mx</Alias>
@@ -805,7 +774,6 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
     Parallel Aware: false
     Plans:
       - Node Type: "Custom Scan"
-        Parent Relationship: "Outer"
         Custom Plan Provider: "Citus Adaptive"
         Parallel Aware: false
         Distributed Query:
@@ -822,55 +790,45 @@ EXPLAIN (COSTS FALSE, FORMAT YAML)
                       Parallel Aware: false
                       Plans:
                         - Node Type: "Hash Join"
-                          Parent Relationship: "Outer"
                           Parallel Aware: false
                           Join Type: "Inner"
                           Inner Unique: false
                           Hash Cond: "(lineitem_mx.l_orderkey = orders_mx.o_orderkey)"
                           Plans:
                             - Node Type: "Hash Join"
-                              Parent Relationship: "Outer"
                               Parallel Aware: false
                               Join Type: "Inner"
                               Inner Unique: false
                               Hash Cond: "(supplier_mx.s_suppkey = lineitem_mx.l_suppkey)"
                               Plans:
                                 - Node Type: "Seq Scan"
-                                  Parent Relationship: "Outer"
                                   Parallel Aware: false
                                   Relation Name: "supplier_mx_1220087"
                                   Alias: "supplier_mx"
                                 - Node Type: "Hash"
-                                  Parent Relationship: "Inner"
                                   Parallel Aware: false
                                   Plans:
                                     - Node Type: "Seq Scan"
-                                      Parent Relationship: "Outer"
                                       Parallel Aware: false
                                       Relation Name: "lineitem_mx_1220052"
                                       Alias: "lineitem_mx"
                             - Node Type: "Hash"
-                              Parent Relationship: "Inner"
                               Parallel Aware: false
                               Plans:
                                 - Node Type: "Hash Join"
-                                  Parent Relationship: "Outer"
                                   Parallel Aware: false
                                   Join Type: "Inner"
                                   Inner Unique: false
                                   Hash Cond: "(customer_mx.c_custkey = orders_mx.o_custkey)"
                                   Plans:
                                     - Node Type: "Seq Scan"
-                                      Parent Relationship: "Outer"
                                       Parallel Aware: false
                                       Relation Name: "customer_mx_1220084"
                                       Alias: "customer_mx"
                                     - Node Type: "Hash"
-                                      Parent Relationship: "Inner"
                                       Parallel Aware: false
                                       Plans:
                                         - Node Type: "Seq Scan"
-                                          Parent Relationship: "Outer"
                                           Parallel Aware: false
                                           Relation Name: "orders_mx_1220068"
                                           Alias: "orders_mx"

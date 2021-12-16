@@ -9,7 +9,7 @@ SET search_path TO 'ddl_failure';
 -- do not cache any connections
 SET citus.max_cached_conns_per_worker TO 0;
 -- we don't want to see the prepared transaction numbers in the warnings
-SET client_min_messages TO ERROR;
+SET client_min_messages TO WARNING;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -17,8 +17,7 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 SET citus.next_shard_id TO 100800;
--- we'll start with replication factor 1, 1PC and parallel mode
-SET citus.multi_shard_commit_protocol TO '1pc';
+-- we'll start with replication factor 1, 2PC and parallel mode
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 CREATE TABLE test_table (key int, value int);
@@ -70,9 +69,12 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
+WARNING:  server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
+connection not open
+CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
 ---------------------------------------------------------------------
@@ -128,44 +130,15 @@ SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where r
  {key,value}
 (1 row)
 
--- kill as soon as the coordinator sends COMMIT
-SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER TABLE test_table ADD COLUMN new_column INT;
+-- manually drop & re-create the table for the next tests
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
 
 (1 row)
 
--- since we've killed the connection just after
--- the coordinator sends the COMMIT, the command should be applied
--- to the distributed table and the shards on the other worker
--- however, there is no way to recover the failure on the shards
--- that live in the failed worker, since we're running 1PC
-SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
-       array_agg
----------------------------------------------------------------------
- {key,new_column,value}
-(1 row)
-
-SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
-              run_command_on_placements
----------------------------------------------------------------------
- (localhost,9060,100800,t,"{key,value}")
- (localhost,9060,100802,t,"{key,value}")
- (localhost,57637,100801,t,"{key,new_column,value}")
- (localhost,57637,100803,t,"{key,new_column,value}")
-(4 rows)
-
--- manually drop & re-create the table for the next tests
 DROP TABLE test_table;
 SET citus.next_shard_id TO 100800;
-SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 CREATE TABLE test_table (key int, value int);
@@ -183,6 +156,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").cancel(' ||  pg_backend_pi
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
+WARNING:
+CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  failed to commit transaction on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -219,18 +195,30 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="^COMMIT").kill()');
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 WARNING:  failed to commit transaction on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  could not commit transaction for shard xxxxx on any active node
-WARNING:  could not commit transaction for shard xxxxx on any active node
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -285,9 +273,15 @@ BEGIN;
 SET LOCAL client_min_messages TO WARNING;
 ALTER TABLE test_table DROP COLUMN new_column;
 ROLLBACK;
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 -- now cancel just after the worker sends response to
 -- but Postgres doesn't accepts interrupts during COMMIT and ROLLBACK
@@ -335,8 +329,6 @@ SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORD
  (localhost,57637,100803,t,"{key,new_column,value}")
 (4 rows)
 
--- now, lets test with 2PC
-SET citus.multi_shard_commit_protocol TO '2pc';
 -- in the first test, kill just in the first
 -- response we get from the worker
 SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
@@ -379,9 +371,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
        array_agg
 ---------------------------------------------------------------------
@@ -443,7 +433,10 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 (1 row)
 
 ALTER TABLE test_table DROP COLUMN new_column;
-ERROR:  connection not open
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -693,7 +686,6 @@ SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORD
 (4 rows)
 
 -- another set of tests with 2PC and replication factor = 2
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 2;
 -- re-create the table with replication factor 2
@@ -747,9 +739,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
 ---------------------------------------------------------------------
@@ -811,7 +801,10 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection not open
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
@@ -1039,9 +1032,7 @@ SELECT citus.mitmproxy('conn.onQuery(query="^BEGIN TRANSACTION ISOLATION LEVEL R
 (1 row)
 
 ALTER TABLE test_table ADD COLUMN new_column INT;
-ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
+ERROR:  failure on connection marked as essential: localhost:xxxxx
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
   array_agg
 ---------------------------------------------------------------------

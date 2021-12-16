@@ -3,7 +3,6 @@ CREATE SCHEMA insert_select_repartition;
 SET search_path TO 'insert_select_repartition';
 SET citus.next_shard_id TO 4213581;
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO 'streaming';
 -- 4 shards, hash distributed.
 -- Negate distribution column value.
 SET citus.shard_count TO 4;
@@ -51,8 +50,6 @@ CREATE TYPE composite_key_type AS (f1 int, f2 text);
 -- source
 CREATE TABLE source_table(f1 int, key composite_key_type, value int, mapped_key composite_key_type);
 SELECT create_distributed_table('source_table', 'key', 'range');
-NOTICE:  using statement-based replication
-DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -69,8 +66,6 @@ INSERT INTO source_table VALUES (6, (32, 'g'), 50, (8, 'g'));
 -- target
 CREATE TABLE target_table(f1 int DEFAULT 0, value int, key composite_key_type PRIMARY KEY);
 SELECT create_distributed_table('target_table', 'key', 'range');
-NOTICE:  using statement-based replication
-DETAIL:  Streaming replication is supported only for hash-distributed tables.
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -824,7 +819,6 @@ UPDATE source_table SET b = NULL where b IN (9, 4);
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE target_table(a int, b int not null);
 SELECT create_distributed_table('target_table', 'a', 'range');
-NOTICE:  using statement-based replication
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -939,7 +933,6 @@ DROP TABLE source_table, target_table;
 -- Range partitioned target's ranges doesn't cover the whole range
 --
 SET citus.shard_replication_factor TO 2;
-SET citus.replication_model TO 'statement';
 SET citus.shard_count TO 4;
 CREATE TABLE source_table(a int, b int);
 SELECT create_distributed_table('source_table', 'a');
@@ -1216,7 +1209,6 @@ ON CONFLICT(c1, c2, c3, c4, c5, c6)
 DO UPDATE SET
  cardinality = enriched.cardinality + excluded.cardinality,
  sum = enriched.sum + excluded.sum;
-DEBUG:  rehashing catalog cache id 14 for pg_opclass; 17 tups, 8 buckets at character 224
 DEBUG:  INSERT target table and the source relation of the SELECT partition column value must be colocated in distributed INSERT ... SELECT
 DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  performing repartitioned INSERT ... SELECT
@@ -1261,17 +1253,43 @@ NOTICE:  copying the data has completed
 
 (1 row)
 
-explain insert into table_with_sequences select y, x from table_with_sequences;
-                                                      QUERY PLAN
+explain (costs off) insert into table_with_sequences select y, x from table_with_sequences;
+                                   QUERY PLAN
 ---------------------------------------------------------------------
- Custom Scan (Citus INSERT ... SELECT)  (cost=0.00..0.00 rows=0 width=0)
+ Custom Scan (Citus INSERT ... SELECT)
    INSERT/SELECT method: pull to coordinator
-   ->  Custom Scan (Citus Adaptive)  (cost=0.00..250.00 rows=100000 width=16)
+   ->  Custom Scan (Citus Adaptive)
          Task Count: 4
          Tasks Shown: One of 4
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
-               ->  Seq Scan on table_with_sequences_4213648 table_with_sequences  (cost=0.00..28.50 rows=1850 width=8)
+               ->  Seq Scan on table_with_sequences_4213648 table_with_sequences
+(8 rows)
+
+-- verify that we don't report repartitioned insert/select for tables
+-- with user-defined sequences.
+CREATE SEQUENCE user_defined_sequence;
+create table table_with_user_sequences (x int, y int, z bigint default nextval('user_defined_sequence'));
+insert into table_with_user_sequences values (1,1);
+select create_distributed_table('table_with_user_sequences','x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+explain (costs off) insert into table_with_user_sequences select y, x from table_with_user_sequences;
+                                        QUERY PLAN
+---------------------------------------------------------------------
+ Custom Scan (Citus INSERT ... SELECT)
+   INSERT/SELECT method: pull to coordinator
+   ->  Custom Scan (Citus Adaptive)
+         Task Count: 4
+         Tasks Shown: One of 4
+         ->  Task
+               Node: host=localhost port=xxxxx dbname=regression
+               ->  Seq Scan on table_with_user_sequences_4213652 table_with_user_sequences
 (8 rows)
 
 -- clean-up

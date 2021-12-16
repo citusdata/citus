@@ -181,6 +181,11 @@ static TableConversionReturn * AlterTableSetAccessMethod(
 static TableConversionReturn * ConvertTable(TableConversionState *con);
 static bool SwitchToSequentialAndLocalExecutionIfShardNameTooLong(char *relationName,
 																  char *longestShardName);
+static void DropIndexesNotSupportedByColumnar(Oid relationId,
+											  bool suppressNoticeMessages);
+static char * GetIndexAccessMethodName(Oid indexId);
+static void DropConstraintRestrict(Oid relationId, Oid constraintId);
+static void DropIndexRestrict(Oid indexId);
 static void EnsureTableNotReferencing(Oid relationId, char conversionType);
 static void EnsureTableNotReferenced(Oid relationId, char conversionType);
 static void EnsureTableNotForeign(Oid relationId);
@@ -204,7 +209,6 @@ static char * GetAccessMethodForMatViewIfExists(Oid viewOid);
 static bool WillRecreateForeignKeyToReferenceTable(Oid relationId,
 												   CascadeToColocatedOption cascadeOption);
 static void WarningsForDroppingForeignKeysWithDistributedTables(Oid relationId);
-static void ExecuteQueryViaSPI(char *query, int SPIOK);
 
 PG_FUNCTION_INFO_V1(undistribute_table);
 PG_FUNCTION_INFO_V1(alter_distributed_table);
@@ -219,10 +223,10 @@ PG_FUNCTION_INFO_V1(worker_change_sequence_dependency);
 Datum
 undistribute_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	bool cascadeViaForeignKeys = PG_GETARG_BOOL(1);
-
-	CheckCitusVersion(ERROR);
 
 	TableConversionParameters params = {
 		.relationId = relationId,
@@ -243,6 +247,8 @@ undistribute_table(PG_FUNCTION_ARGS)
 Datum
 alter_distributed_table(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 
 	char *distributionColumn = NULL;
@@ -280,9 +286,6 @@ alter_distributed_table(PG_FUNCTION_ARGS)
 		}
 	}
 
-	CheckCitusVersion(ERROR);
-
-
 	TableConversionParameters params = {
 		.relationId = relationId,
 		.distributionColumn = distributionColumn,
@@ -305,12 +308,12 @@ alter_distributed_table(PG_FUNCTION_ARGS)
 Datum
 alter_table_set_access_method(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 
 	text *accessMethodText = PG_GETARG_TEXT_P(1);
 	char *accessMethod = text_to_cstring(accessMethodText);
-
-	CheckCitusVersion(ERROR);
 
 	TableConversionParameters params = {
 		.relationId = relationId,
@@ -524,8 +527,8 @@ ConvertTable(TableConversionState *con)
 		 * Acquire ExclusiveLock as UndistributeTable does in order to
 		 * make sure that no modifications happen on the relations.
 		 */
-		CascadeOperationForConnectedRelations(con->relationId, ExclusiveLock,
-											  CASCADE_FKEY_UNDISTRIBUTE_TABLE);
+		CascadeOperationForFkeyConnectedRelations(con->relationId, ExclusiveLock,
+												  CASCADE_FKEY_UNDISTRIBUTE_TABLE);
 
 		/*
 		 * Undistributed every foreign key connected relation in our foreign key
@@ -536,29 +539,22 @@ ConvertTable(TableConversionState *con)
 	}
 	char *newAccessMethod = con->accessMethod ? con->accessMethod :
 							con->originalAccessMethod;
-	List *preLoadCommands = GetPreLoadTableCreationCommands(con->relationId, true,
+	IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
+	List *preLoadCommands = GetPreLoadTableCreationCommands(con->relationId,
+															includeSequenceDefaults,
 															newAccessMethod);
 
-	bool includeIndexes = true;
 	if (con->accessMethod && strcmp(con->accessMethod, "columnar") == 0)
 	{
-		if (!con->suppressNoticeMessages)
-		{
-			List *explicitIndexesOnTable = GetExplicitIndexOidList(con->relationId);
-			Oid indexOid = InvalidOid;
-			foreach_oid(indexOid, explicitIndexesOnTable)
-			{
-				ereport(NOTICE, (errmsg("the index %s on table %s will be dropped, "
-										"because columnar tables cannot have indexes",
-										get_rel_name(indexOid),
-										quote_qualified_identifier(con->schemaName,
-																   con->relationName))));
-			}
-		}
-
-		includeIndexes = false;
+		DropIndexesNotSupportedByColumnar(con->relationId,
+										  con->suppressNoticeMessages);
 	}
 
+	/*
+	 * Since we already dropped unsupported indexes, we can safely pass
+	 * includeIndexes to be true.
+	 */
+	bool includeIndexes = true;
 	bool includeReplicaIdentity = true;
 	List *postLoadCommands = GetPostLoadTableCreationCommands(con->relationId,
 															  includeIndexes,
@@ -828,6 +824,112 @@ ConvertTable(TableConversionState *con)
 
 
 /*
+ * DropIndexesNotSupportedByColumnar is a helper function used during accces
+ * method conversion to drop the indexes that are not supported by columnarAM.
+ */
+static void
+DropIndexesNotSupportedByColumnar(Oid relationId, bool suppressNoticeMessages)
+{
+	Relation columnarRelation = RelationIdGetRelation(relationId);
+	List *indexIdList = RelationGetIndexList(columnarRelation);
+
+	/*
+	 * Immediately close the relation since we might execute ALTER TABLE
+	 * for that relation.
+	 */
+	RelationClose(columnarRelation);
+
+	Oid indexId = InvalidOid;
+	foreach_oid(indexId, indexIdList)
+	{
+		char *indexAmName = GetIndexAccessMethodName(indexId);
+		if (ColumnarSupportsIndexAM(indexAmName))
+		{
+			continue;
+		}
+
+		if (!suppressNoticeMessages)
+		{
+			ereport(NOTICE, (errmsg("unsupported access method for index %s "
+									"on columnar table %s, given index and "
+									"the constraint depending on the index "
+									"(if any) will be dropped",
+									get_rel_name(indexId),
+									generate_qualified_relation_name(relationId))));
+		}
+
+		Oid constraintId = get_index_constraint(indexId);
+		if (OidIsValid(constraintId))
+		{
+			/* index is implied by a constraint, so drop the constraint itself */
+			DropConstraintRestrict(relationId, constraintId);
+		}
+		else
+		{
+			DropIndexRestrict(indexId);
+		}
+	}
+}
+
+
+/*
+ * GetIndexAccessMethodName returns access method name of index with indexId.
+ * If there is no such index, then errors out.
+ */
+static char *
+GetIndexAccessMethodName(Oid indexId)
+{
+	/* fetch pg_class tuple of the index relation */
+	HeapTuple indexTuple = SearchSysCache1(RELOID, ObjectIdGetDatum(indexId));
+	if (!HeapTupleIsValid(indexTuple))
+	{
+		ereport(ERROR, (errmsg("index with oid %u does not exist", indexId)));
+	}
+
+	Form_pg_class indexForm = (Form_pg_class) GETSTRUCT(indexTuple);
+	Oid indexAMId = indexForm->relam;
+	ReleaseSysCache(indexTuple);
+
+	char *indexAmName = get_am_name(indexAMId);
+	if (!indexAmName)
+	{
+		ereport(ERROR, (errmsg("access method with oid %u does not exist", indexAMId)));
+	}
+
+	return indexAmName;
+}
+
+
+/*
+ * DropConstraintRestrict drops the constraint with constraintId by using spi.
+ */
+static void
+DropConstraintRestrict(Oid relationId, Oid constraintId)
+{
+	char *qualifiedRelationName = generate_qualified_relation_name(relationId);
+	char *constraintName = get_constraint_name(constraintId);
+	const char *quotedConstraintName = quote_identifier(constraintName);
+	StringInfo dropConstraintCommand = makeStringInfo();
+	appendStringInfo(dropConstraintCommand, "ALTER TABLE %s DROP CONSTRAINT %s RESTRICT;",
+					 qualifiedRelationName, quotedConstraintName);
+	ExecuteQueryViaSPI(dropConstraintCommand->data, SPI_OK_UTILITY);
+}
+
+
+/*
+ * DropIndexRestrict drops the index with indexId by using spi.
+ */
+static void
+DropIndexRestrict(Oid indexId)
+{
+	char *qualifiedIndexName = generate_qualified_relation_name(indexId);
+	StringInfo dropIndexCommand = makeStringInfo();
+	appendStringInfo(dropIndexCommand, "DROP INDEX %s RESTRICT;", qualifiedIndexName);
+	ExecuteQueryViaSPI(dropIndexCommand->data, SPI_OK_UTILITY);
+}
+
+
+/*
  * EnsureTableNotReferencing checks if the table has a reference to another
  * table and errors if it is.
  */
@@ -1073,6 +1175,30 @@ CreateDistributedTableLike(TableConversionState *con)
 	{
 		newShardCount = con->shardCount;
 	}
+
+	Oid originalRelationId = con->relationId;
+	if (con->originalDistributionKey != NULL && PartitionTable(originalRelationId))
+	{
+		/*
+		 * Due to dropped columns, the partition tables might have different
+		 * distribution keys than their parents, see issue #5123 for details.
+		 *
+		 * At this point, we get the partitioning information from the
+		 * originalRelationId, but we get the distribution key for newRelationId.
+		 *
+		 * We have to do this, because the newRelationId is just a placeholder
+		 * at this moment, but that's going to be the table in pg_dist_partition.
+		 */
+		Oid parentRelationId = PartitionParentOid(originalRelationId);
+		Var *parentDistKey = DistPartitionKey(parentRelationId);
+		char *parentDistKeyColumnName =
+			ColumnToColumnName(parentRelationId, nodeToString(parentDistKey));
+
+		newDistributionKey =
+			FindColumnWithNameOnTargetRelation(parentRelationId, parentDistKeyColumnName,
+											   con->newRelationId);
+	}
+
 	char partitionMethod = PartitionMethod(con->relationId);
 	CreateDistributedTable(con->newRelationId, newDistributionKey, partitionMethod,
 						   newShardCount, true, newColocateWith, false);
@@ -1097,7 +1223,10 @@ CreateCitusTableLike(TableConversionState *con)
 	}
 	else if (IsCitusTableType(con->relationId, CITUS_LOCAL_TABLE))
 	{
-		CreateCitusLocalTable(con->newRelationId, false);
+		CitusTableCacheEntry *entry = GetCitusTableCacheEntry(con->relationId);
+		bool autoConverted = entry->autoConverted;
+		bool cascade = false;
+		CreateCitusLocalTable(con->newRelationId, cascade, autoConverted);
 
 		/*
 		 * creating Citus local table adds a shell table on top

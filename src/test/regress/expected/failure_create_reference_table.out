@@ -147,7 +147,10 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 (1 row)
 
 SELECT create_reference_table('ref_table');
-ERROR:  connection not open
+ERROR:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT count(*) FROM pg_dist_shard_placement;
  count
@@ -227,7 +230,10 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 (1 row)
 
 ROLLBACK;
-WARNING:  connection not open
+WARNING:  server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection not open
 CONTEXT:  while executing command on localhost:xxxxx
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodeport;
  shardid | shardstate | shardlength | nodename | nodeport | placementid

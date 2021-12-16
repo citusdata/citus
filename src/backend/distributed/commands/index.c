@@ -18,11 +18,13 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/deparser.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -62,7 +64,6 @@ static List * GenerateIndexParameters(IndexStmt *createIndexStatement);
 static DDLJob * GenerateCreateIndexDDLJob(IndexStmt *createIndexStatement,
 										  const char *createIndexCommand);
 static Oid CreateIndexStmtGetRelationId(IndexStmt *createIndexStatement);
-static LOCKMODE GetCreateIndexRelationLockMode(IndexStmt *createIndexStatement);
 static List * CreateIndexTaskList(IndexStmt *indexStmt);
 static List * CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt);
 static void RangeVarCallbackForDropIndex(const RangeVar *rel, Oid relOid, Oid oldRelOid,
@@ -71,6 +72,7 @@ static void RangeVarCallbackForReindexIndex(const RangeVar *rel, Oid relOid, Oid
 											oldRelOid,
 											void *arg);
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
+static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
 
 
@@ -307,43 +309,31 @@ ExecuteFunctionOnEachTableIndex(Oid relationId, PGIndexProcessor pgIndexProcesso
 								int indexFlags)
 {
 	List *result = NIL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
-
-	/* open system catalog and scan all indexes that belong to this table */
-	Relation pgIndex = table_open(IndexRelationId, AccessShareLock);
-
-	ScanKeyInit(&scanKey[0], Anum_pg_index_indrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
-
-	SysScanDesc scanDescriptor = systable_beginscan(pgIndex,
-													IndexIndrelidIndexId, true, /* indexOK */
-													NULL, scanKeyCount, scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	Relation relation = RelationIdGetRelation(relationId);
+	List *indexIdList = RelationGetIndexList(relation);
+	Oid indexId = InvalidOid;
+	foreach_oid(indexId, indexIdList)
 	{
-		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(heapTuple);
-		pgIndexProcessor(indexForm, &result, indexFlags);
+		HeapTuple indexTuple = SearchSysCache1(INDEXRELID, ObjectIdGetDatum(indexId));
+		if (!HeapTupleIsValid(indexTuple))
+		{
+			ereport(ERROR, (errmsg("cache lookup failed for index with oid %u",
+								   indexId)));
+		}
 
-		heapTuple = systable_getnext(scanDescriptor);
+		Form_pg_index indexForm = (Form_pg_index) GETSTRUCT(indexTuple);
+		pgIndexProcessor(indexForm, &result, indexFlags);
+		ReleaseSysCache(indexTuple);
 	}
 
-	/* clean up scan and close system catalog */
-	systable_endscan(scanDescriptor);
-	table_close(pgIndex, AccessShareLock);
-
-	/* revert back to original search_path */
-	PopOverrideSearchPath();
-
+	RelationClose(relation);
 	return result;
 }
 
 
 /*
- * SwitchToSequentialOrLocalExecutionIfIndexNameTooLong generates the longest index name
+ * SwitchToSequentialAndLocalExecutionIfIndexNameTooLong generates the longest index name
  * on the shards of the partitions, and if exceeds the limit switches to sequential and
  * local execution to prevent self-deadlocks.
  */
@@ -475,9 +465,8 @@ GenerateCreateIndexDDLJob(IndexStmt *createIndexStatement, const char *createInd
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
 	ddlJob->targetRelationId = CreateIndexStmtGetRelationId(createIndexStatement);
-	ddlJob->concurrentIndexCmd = createIndexStatement->concurrent;
 	ddlJob->startNewTransaction = createIndexStatement->concurrent;
-	ddlJob->commandString = createIndexCommand;
+	ddlJob->metadataSyncCommand = createIndexCommand;
 	ddlJob->taskList = CreateIndexTaskList(createIndexStatement);
 
 	return ddlJob;
@@ -503,7 +492,7 @@ CreateIndexStmtGetRelationId(IndexStmt *createIndexStatement)
  * GetCreateIndexRelationLockMode returns required lock mode to open the
  * relation that given CREATE INDEX command operates on.
  */
-static LOCKMODE
+LOCKMODE
 GetCreateIndexRelationLockMode(IndexStmt *createIndexStatement)
 {
 	if (createIndexStatement->concurrent)
@@ -541,8 +530,8 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 	{
 		Relation relation = NULL;
 		Oid relationId = InvalidOid;
-		LOCKMODE lockmode = reindexStatement->concurrent ? ShareUpdateExclusiveLock :
-							AccessExclusiveLock;
+		LOCKMODE lockmode = IsReindexWithParam_compat(reindexStatement, "concurrently") ?
+							ShareUpdateExclusiveLock : AccessExclusiveLock;
 		MemoryContext relationContext = NULL;
 
 		Assert(reindexStatement->kind == REINDEX_OBJECT_INDEX ||
@@ -551,7 +540,8 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 		if (reindexStatement->kind == REINDEX_OBJECT_INDEX)
 		{
 			struct ReindexIndexCallbackState state;
-			state.concurrent = reindexStatement->concurrent;
+			state.concurrent = IsReindexWithParam_compat(reindexStatement,
+														 "concurrently");
 			state.locked_table_oid = InvalidOid;
 
 			Oid indOid = RangeVarGetRelidExtended(reindexStatement->relation,
@@ -600,11 +590,18 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 
 		if (isCitusRelation)
 		{
+			if (PartitionedTable(relationId))
+			{
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+								errmsg("REINDEX TABLE queries on distributed partitioned "
+									   "tables are not supported")));
+			}
+
 			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 			ddlJob->targetRelationId = relationId;
-			ddlJob->concurrentIndexCmd = reindexStatement->concurrent;
-			ddlJob->startNewTransaction = reindexStatement->concurrent;
-			ddlJob->commandString = reindexCommand;
+			ddlJob->startNewTransaction = IsReindexWithParam_compat(reindexStatement,
+																	"concurrently");
+			ddlJob->metadataSyncCommand = reindexCommand;
 			ddlJob->taskList = CreateReindexTaskList(relationId, reindexStatement);
 
 			ddlJobs = list_make1(ddlJob);
@@ -681,21 +678,9 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		bool isCitusRelation = IsCitusTable(relationId);
 		if (isCitusRelation)
 		{
-			if (OidIsValid(distributedIndexId))
-			{
-				/*
-				 * We already have a distributed index in the list, and Citus
-				 * currently only support dropping a single distributed index.
-				 */
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot drop multiple distributed objects in "
-									   "a single command"),
-								errhint("Try dropping each object in a separate DROP "
-										"command.")));
-			}
-
 			distributedIndexId = indexId;
 			distributedRelationId = relationId;
+			break;
 		}
 	}
 
@@ -703,13 +688,14 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 	{
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
+		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
+
 		if (AnyForeignKeyDependsOnIndex(distributedIndexId))
 		{
 			MarkInvalidateForeignKeyGraph();
 		}
 
 		ddlJob->targetRelationId = distributedRelationId;
-		ddlJob->concurrentIndexCmd = dropIndexStatement->concurrent;
 
 		/*
 		 * We do not want DROP INDEX CONCURRENTLY to commit locally before
@@ -717,7 +703,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		 * to be able to repeat the DROP INDEX later.
 		 */
 		ddlJob->startNewTransaction = false;
-		ddlJob->commandString = dropIndexCommand;
+		ddlJob->metadataSyncCommand = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
 
@@ -811,6 +797,7 @@ ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
 			case AT_ResetRelOptions:    /* RESET (...) */
 			case AT_ReplaceRelOptions:  /* replace entire option list */
 			case AT_SetStatistics:  /* SET STATISTICS */
+			case AT_AttachPartition: /* ATTACH PARTITION */
 			{
 				/* this command is supported by Citus */
 				break;
@@ -824,7 +811,7 @@ ErrorIfUnsupportedAlterIndexStmt(AlterTableStmt *alterTableStatement)
 						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 						 errmsg("alter index ... set tablespace ... "
 								"is currently unsupported"),
-						 errdetail("Only RENAME TO, SET (), RESET () "
+						 errdetail("Only RENAME TO, SET (), RESET (), ATTACH PARTITION "
 								   "and SET STATISTICS are supported.")));
 				return; /* keep compiler happy */
 			}
@@ -867,6 +854,7 @@ CreateIndexTaskList(IndexStmt *indexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction = indexStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 
@@ -911,6 +899,8 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction =
+			IsReindexWithParam_compat(reindexStmt, "concurrently");
 
 		taskList = lappend(taskList, task);
 
@@ -1162,6 +1152,26 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 
 
 /*
+ * ErrorIfUnsupportedDropIndexStmt checks if the corresponding drop index statement is
+ * supported for distributed tables and errors out if it is not.
+ */
+static void
+ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
+{
+	Assert(dropIndexStatement->removeType == OBJECT_INDEX);
+
+	if (list_length(dropIndexStatement->objects) > 1)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot drop multiple distributed objects in a "
+							   "single command"),
+						errhint("Try dropping each object in a separate DROP "
+								"command.")));
+	}
+}
+
+
+/*
  * DropIndexTaskList builds a list of tasks to execute a DROP INDEX command
  * against a specified distributed table.
  */
@@ -1206,6 +1216,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction = dropStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 

@@ -3,9 +3,21 @@ Parsed test spec with 4 sessions
 starting permutation: s1-begin s2-begin s1-update s2-update detector-dump-wait-edges s1-abort s2-abort
 step s1-begin:
     BEGIN;
+    SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+
+assign_distributed_transaction_id
+---------------------------------------------------------------------
+
+(1 row)
 
 step s2-begin:
     BEGIN;
+    SELECT assign_distributed_transaction_id(0, 9, '2021-07-09 15:41:55.542377+02');
+
+assign_distributed_transaction_id
+---------------------------------------------------------------------
+
+(1 row)
 
 step s1-update:
     UPDATE distributed_table SET y = 1 WHERE x = 1;
@@ -26,13 +38,17 @@ step detector-dump-wait-edges:
         blocking_transaction_waiting;
     SELECT * FROM get_adjacency_list_wait_graph() ORDER BY 1;
 
-waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
+waiting_transaction_num|blocking_transaction_num|blocking_transaction_waiting
+---------------------------------------------------------------------
+                      9|                       8|f
+(1 row)
 
-400            399            f
-transactionnumberwaitingtransactionnumbers
+transactionnumber|waitingtransactionnumbers
+---------------------------------------------------------------------
+                8|
+                9|                        8
+(2 rows)
 
-399
-400            399
 step s1-abort:
     ABORT;
 
@@ -40,16 +56,39 @@ step s2-update: <... completed>
 step s2-abort:
     ABORT;
 
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
 
 starting permutation: s1-begin s2-begin s3-begin s1-update s2-update s3-update detector-dump-wait-edges s1-abort s2-abort s3-abort
 step s1-begin:
     BEGIN;
+    SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+
+assign_distributed_transaction_id
+---------------------------------------------------------------------
+
+(1 row)
 
 step s2-begin:
     BEGIN;
+    SELECT assign_distributed_transaction_id(0, 9, '2021-07-09 15:41:55.542377+02');
+
+assign_distributed_transaction_id
+---------------------------------------------------------------------
+
+(1 row)
 
 step s3-begin:
     BEGIN;
+    SELECT assign_distributed_transaction_id(0, 10, '2021-07-09 15:41:55.542377+02');
+
+assign_distributed_transaction_id
+---------------------------------------------------------------------
+
+(1 row)
 
 step s1-update:
     UPDATE distributed_table SET y = 1 WHERE x = 1;
@@ -73,16 +112,20 @@ step detector-dump-wait-edges:
         blocking_transaction_waiting;
     SELECT * FROM get_adjacency_list_wait_graph() ORDER BY 1;
 
-waiting_transaction_numblocking_transaction_numblocking_transaction_waiting
+waiting_transaction_num|blocking_transaction_num|blocking_transaction_waiting
+---------------------------------------------------------------------
+                      9|                       8|f
+                     10|                       8|f
+                     10|                       9|t
+(3 rows)
 
-404            403            f
-405            403            f
-405            404            t
-transactionnumberwaitingtransactionnumbers
+transactionnumber|waitingtransactionnumbers
+---------------------------------------------------------------------
+                8|
+                9|8
+               10|8,9
+(3 rows)
 
-403
-404            403
-405            403,404
 step s1-abort:
     ABORT;
 
@@ -93,4 +136,9 @@ step s2-abort:
 step s3-update: <... completed>
 step s3-abort:
     ABORT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 

@@ -46,11 +46,6 @@
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
 
-/* GUC, the commit protocol to use for commands affecting more than one connection */
-int MultiShardCommitProtocol = COMMIT_PROTOCOL_2PC;
-int SingleShardCommitProtocol = COMMIT_PROTOCOL_2PC;
-int SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
-
 /*
  * GUC that determines whether a SELECT in a transaction block should also run in
  * a transaction block on the worker even if no writes have occurred yet.
@@ -95,13 +90,13 @@ MemoryContext CommitContext = NULL;
 
 /*
  * Should this coordinated transaction use 2PC? Set by
- * CoordinatedTransactionUse2PC(), e.g. if DDL was issued and
- * MultiShardCommitProtocol was set to 2PC. But, even if this
- * flag is set, the transaction manager is smart enough to only
+ * CoordinatedTransactionUse2PC(), e.g. if any modification
+ * is issued and us 2PC. But, even if this flag is set,
+ * the transaction manager is smart enough to only
  * do 2PC on the remote connections that did a modification.
  *
  * As a variable name ShouldCoordinatedTransactionUse2PC could
- * be improved. We use CoordinatedTransactionShouldUse2PC() as the
+ * be improved. We use Use2PCForCoordinatedTransaction() as the
  * public API function, hence couldn't come up with a better name
  * for the underlying variable at the moment.
  */
@@ -120,12 +115,13 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 											  SubTransactionId parentSubid, void *arg);
 
 /* remaining functions */
-static void ResetShardPlacementTransactionState(void);
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
 static bool MaybeExecutingUDF(void);
 static void ResetGlobalVariables(void);
+static bool SwallowErrors(void (*func)(void));
+static void ForceAllInProgressConnectionsToClose(void);
 
 
 /*
@@ -190,14 +186,14 @@ InCoordinatedTransaction(void)
 
 
 /*
- * CoordinatedTransactionShouldUse2PC() signals that the current coordinated
+ * Use2PCForCoordinatedTransaction() signals that the current coordinated
  * transaction should use 2PC to commit.
  *
  * Note that even if 2PC is enabled, it is only used for connections that make
  * modification (DML or DDL).
  */
 void
-CoordinatedTransactionShouldUse2PC(void)
+Use2PCForCoordinatedTransaction(void)
 {
 	Assert(InCoordinatedTransaction());
 
@@ -267,13 +263,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			MemoryContext previousContext = CurrentMemoryContext;
 			MemoryContextSwitchTo(CommitContext);
 
-			/*
-			 * Call other parts of citus that need to integrate into
-			 * transaction management. Do so before doing other work, so the
-			 * callbacks still can perform work if needed.
-			 */
-			ResetShardPlacementTransactionState();
-
 			if (CurrentCoordinatedTransactionState == COORD_TRANS_PREPARED)
 			{
 				/* handles both already prepared and open transactions */
@@ -320,20 +309,37 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			RemoveIntermediateResultsDirectory();
 
-			ResetShardPlacementTransactionState();
-
 			/* handles both already prepared and open transactions */
 			if (CurrentCoordinatedTransactionState > COORD_TRANS_IDLE)
 			{
-				CoordinatedRemoteTransactionsAbort();
+				/*
+				 * Since CoordinateRemoteTransactionsAbort may cause an error and it is
+				 * not allowed to error out at that point, swallow the error if any.
+				 *
+				 * Particular error we've observed was CreateWaitEventSet throwing an error
+				 * when out of file descriptor.
+				 *
+				 * If an error is swallowed, connections of all active transactions must
+				 * be forced to close at the end of the transaction explicitly.
+				 */
+				bool errorSwallowed = SwallowErrors(CoordinatedRemoteTransactionsAbort);
+				if (errorSwallowed == true)
+				{
+					ForceAllInProgressConnectionsToClose();
+				}
 			}
 
-			/* close connections etc. */
-			if (CurrentCoordinatedTransactionState != COORD_TRANS_NONE)
-			{
-				ResetPlacementConnectionManagement();
-				AfterXactConnectionHandling(false);
-			}
+			/*
+			 * Close connections etc. Contrary to a successful transaction we reset the
+			 * placement connection management irregardless of state of the statemachine
+			 * as recorded in CurrentCoordinatedTransactionState.
+			 * The hashmaps recording the connection management live a memory context
+			 * higher compared to most of the data referenced in the hashmap. This causes
+			 * use after free errors when the contents are retained due to an error caused
+			 * before the CurrentCoordinatedTransactionState changed.
+			 */
+			ResetPlacementConnectionManagement();
+			AfterXactConnectionHandling(false);
 
 			ResetGlobalVariables();
 
@@ -418,14 +424,6 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			 * fails, which can lead to divergence when not using 2PC.
 			 */
 
-			/*
-			 * Check whether the coordinated transaction is in a state we want
-			 * to persist, or whether we want to error out.  This handles the
-			 * case where iteratively executed commands marked all placements
-			 * as invalid.
-			 */
-			MarkFailedShardPlacements();
-
 			if (ShouldCoordinatedTransactionUse2PC)
 			{
 				CoordinatedRemoteTransactionsPrepare();
@@ -452,9 +450,9 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 
 			/*
 			 * Check again whether shards/placement successfully
-			 * committed. This handles failure at COMMIT/PREPARE time.
+			 * committed. This handles failure at COMMIT time.
 			 */
-			PostCommitMarkFailedShardPlacements(ShouldCoordinatedTransactionUse2PC);
+			ErrorIfPostCommitFailedShardPlacements();
 			break;
 		}
 
@@ -470,6 +468,69 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 			break;
 		}
 	}
+}
+
+
+/*
+ * ForceAllInProgressConnectionsToClose forces all connections of in progress transactions
+ * to close at the end of the transaction.
+ */
+static void
+ForceAllInProgressConnectionsToClose(void)
+{
+	dlist_iter iter;
+	dlist_foreach(iter, &InProgressTransactions)
+	{
+		MultiConnection *connection = dlist_container(MultiConnection,
+													  transactionNode,
+													  iter.cur);
+
+		connection->forceCloseAtTransactionEnd = true;
+	}
+}
+
+
+/*
+ * If an ERROR is thrown while processing a transaction the ABORT handler is called.
+ * ERRORS thrown during ABORT are not treated any differently, the ABORT handler is also
+ * called during processing of those. If an ERROR was raised the first time through it's
+ * unlikely that the second try will succeed; more likely that an ERROR will be thrown
+ * again. This loop continues until Postgres notices and PANICs, complaining about a stack
+ * overflow.
+ *
+ * Instead of looping and crashing, SwallowErrors lets us attempt to continue running the
+ * ABORT logic. This wouldn't be safe in most other parts of the codebase, in
+ * approximately none of the places where we emit ERROR do we first clean up after
+ * ourselves! It's fine inside the ABORT handler though; Postgres is going to clean
+ * everything up before control passes back to us.
+ *
+ * If it swallows any error, returns true. Otherwise, returns false.
+ */
+static bool
+SwallowErrors(void (*func)())
+{
+	MemoryContext savedContext = CurrentMemoryContext;
+	volatile bool anyErrorSwallowed = false;
+
+	PG_TRY();
+	{
+		func();
+	}
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(savedContext);
+		ErrorData *edata = CopyErrorData();
+		FlushErrorState();
+
+		/* rethrow as WARNING */
+		edata->elevel = WARNING;
+		ThrowErrorData(edata);
+
+		anyErrorSwallowed = true;
+	}
+	PG_END_TRY();
+
+	return anyErrorSwallowed;
 }
 
 
@@ -490,21 +551,6 @@ ResetGlobalVariables()
 	TransactionModifiedNodeMetadata = false;
 	MetadataSyncOnCommit = false;
 	ResetWorkerErrorIndication();
-}
-
-
-/*
- * ResetShardPlacementTransactionState performs cleanup after the end of a
- * transaction.
- */
-static void
-ResetShardPlacementTransactionState(void)
-{
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
-	{
-		MultiShardCommitProtocol = SavedMultiShardCommitProtocol;
-		SavedMultiShardCommitProtocol = COMMIT_PROTOCOL_BARE;
-	}
 }
 
 

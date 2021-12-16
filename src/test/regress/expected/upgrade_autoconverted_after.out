@@ -1,0 +1,9 @@
+select logicalrelid, autoconverted from pg_dist_partition
+    where logicalrelid IN ('citus_schema.citus_local_autoconverted'::regclass,
+                           'citus_schema.citus_local_not_autoconverted'::regclass);
+                logicalrelid                | autoconverted
+---------------------------------------------------------------------
+ citus_schema.citus_local_autoconverted     | t
+ citus_schema.citus_local_not_autoconverted | f
+(2 rows)
+

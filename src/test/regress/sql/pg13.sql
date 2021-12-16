@@ -14,6 +14,9 @@ SET citus.shard_replication_factor to 1;
 SET citus.shard_count to 2;
 SET citus.next_shard_id TO 65000;
 
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
+
 CREATE TABLE dist_table (name char, age int);
 CREATE INDEX name_index on dist_table(name);
 
@@ -91,7 +94,7 @@ SELECT create_distributed_table('my_table', 'a');
 
 CREATE TABLE test_table(a int, b tsvector);
 SELECT create_distributed_table('test_table', 'a');
--- we currently don't support this
+-- operator class options are supported
 CREATE INDEX test_table_index ON test_table USING gist (b tsvector_ops(siglen = 100));
 
 -- testing WAL
@@ -111,9 +114,15 @@ EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMI
 INSERT INTO test_wal VALUES(3,33),(4,44),(5,55) RETURNING *;
 
 -- make sure WAL works in distributed subplans
+-- this test has different output for pg14 and here we mostly test that
+-- we don't get an error, hence we use explain_has_distributed_subplan.
+SELECT public.explain_has_distributed_subplan(
+$$
 EXPLAIN (ANALYZE TRUE, WAL TRUE, COSTS FALSE, SUMMARY FALSE, BUFFERS FALSE, TIMING FALSE)
 WITH cte_1 AS (INSERT INTO test_wal VALUES(6,66),(7,77),(8,88) RETURNING *)
 SELECT * FROM cte_1;
+$$
+);
 
 SET client_min_messages TO WARNING;
 drop schema test_pg13 cascade;

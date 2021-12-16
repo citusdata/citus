@@ -5,6 +5,17 @@ CREATE FUNCTION columnar_relation_storageid(relid oid) RETURNS bigint
     LANGUAGE C STABLE STRICT
     AS 'citus', $$columnar_relation_storageid$$;
 
+CREATE OR REPLACE FUNCTION columnar_storage_info(
+    rel regclass,
+    version_major OUT int4,
+    version_minor OUT int4,
+    storage_id OUT int8,
+    reserved_stripe_id OUT int8,
+    reserved_row_number OUT int8,
+    reserved_offset OUT int8)
+  STRICT
+  LANGUAGE c AS 'citus', $$columnar_storage_info$$;
+
 CREATE FUNCTION compression_type_supported(type text) RETURNS boolean
 AS $$
 BEGIN
@@ -73,3 +84,46 @@ CREATE FUNCTION top_memory_context_usage()
 	RETURNS BIGINT AS $$
 		SELECT TopMemoryContext FROM columnar_test_helpers.columnar_store_memory_stats();
 	$$ LANGUAGE SQL VOLATILE;
+
+CREATE OR REPLACE FUNCTION uses_index_scan(command text)
+RETURNS BOOLEAN AS $$
+DECLARE
+  query_plan text;
+BEGIN
+  FOR query_plan IN EXECUTE 'EXPLAIN' || command LOOP
+    IF query_plan ILIKE '%Index Only Scan using%' OR
+       query_plan ILIKE '%Index Scan using%'
+    THEN
+        RETURN true;
+    END IF;
+  END LOOP;
+  RETURN false;
+END; $$ language plpgsql;
+
+CREATE OR REPLACE FUNCTION uses_custom_scan(command text)
+RETURNS BOOLEAN AS $$
+DECLARE
+  query_plan text;
+BEGIN
+  FOR query_plan IN EXECUTE 'EXPLAIN' || command LOOP
+    IF query_plan ILIKE '%Custom Scan (ColumnarScan)%'
+    THEN
+        RETURN true;
+    END IF;
+  END LOOP;
+  RETURN false;
+END; $$ language plpgsql;
+
+CREATE OR REPLACE FUNCTION uses_seq_scan(command text)
+RETURNS BOOLEAN AS $$
+DECLARE
+  query_plan text;
+BEGIN
+  FOR query_plan IN EXECUTE 'EXPLAIN' || command LOOP
+    IF query_plan ILIKE '%Seq Scan on %'
+    THEN
+        RETURN true;
+    END IF;
+  END LOOP;
+  RETURN false;
+END; $$ language plpgsql;

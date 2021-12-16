@@ -137,11 +137,15 @@ explain (costs off, summary off) select * from
 ---------------------------------------------------------------------
  Nested Loop Left Join
    ->  Custom Scan (ColumnarScan) on int8_tbl_columnar a
+         Columnar Projected Columns: q1, q2
    ->  Nested Loop
+         ->  Custom Scan (ColumnarScan) on int8_tbl_columnar c
+               Columnar Projected Columns: q1
          ->  Custom Scan (ColumnarScan) on int8_tbl_columnar b
                Filter: (a.q2 = q1)
-         ->  Custom Scan (ColumnarScan) on int8_tbl_columnar c
-(6 rows)
+               Columnar Projected Columns: q1
+               Columnar Chunk Group Filters: (a.q2 = q1)
+(10 rows)
 
 explain (costs off, summary off)
   SELECT COUNT(*) FROM INT8_TBL_columnar t1 JOIN
@@ -153,9 +157,11 @@ explain (costs off, summary off)
    ->  Hash Join
          Hash Cond: (t2.q1 = t1.q1)
          ->  Custom Scan (ColumnarScan) on int8_tbl_columnar t2
+               Columnar Projected Columns: q1
          ->  Hash
                ->  Custom Scan (ColumnarScan) on int8_tbl_columnar t1
-(6 rows)
+                     Columnar Projected Columns: q1
+(8 rows)
 
 CREATE TABLE INT8_TBL_heap (LIKE INT8_TBL_columnar) ;
 INSERT INTO INT8_TBL_heap SELECT * FROM INT8_TBL_columnar;
@@ -181,3 +187,52 @@ UNION
 
 SET client_min_messages TO WARNING;
 DROP SCHEMA columnar_join CASCADE;
+--
+-- https://github.com/citusdata/citus/issues/5258
+--
+set default_table_access_method to columnar;
+CREATE TABLE atest1 ( a int, b text );
+CREATE TABLE atest2 (col1 varchar(10), col2 boolean);
+INSERT INTO atest1 VALUES (1, 'one');
+SELECT * FROM atest1; -- ok
+ a |  b
+---------------------------------------------------------------------
+ 1 | one
+(1 row)
+
+SELECT * FROM atest2; -- ok
+ col1 | col2
+---------------------------------------------------------------------
+(0 rows)
+
+INSERT INTO atest1 VALUES (2, 'two'); -- ok
+INSERT INTO atest1 SELECT 1, b FROM atest1; -- ok
+SELECT * FROM atest2 WHERE ( col1 IN ( SELECT b FROM atest1 ) );
+ col1 | col2
+---------------------------------------------------------------------
+(0 rows)
+
+DROP TABLE atest1;
+DROP TABLE atest2;
+set default_table_access_method to default;
+create temp table t1 (f1 numeric(14,0), f2 varchar(30)) USING columnar;
+select * from
+  (select distinct f1, f2, (select f2 from t1 x where x.f1 = up.f1) as fs
+   from t1 up) ss
+group by f1,f2,fs;
+ f1 | f2 | fs
+---------------------------------------------------------------------
+(0 rows)
+
+drop table t1;
+CREATE TABLE tbl1(c0 int4range) USING COLUMNAR;
+CREATE TABLE tbl2(c0 int4range);
+INSERT INTO tbl1(c0) VALUES('[0,1]'::int4range);
+INSERT INTO tbl1(c0) VALUES('[0,1]'::int4range);
+SELECT tbl1.c0 FROM tbl1 JOIN tbl2 ON tbl1.c0=tbl2.c0 WHERE tbl2.c0<=tbl2.c0 ISNULL;
+ c0
+---------------------------------------------------------------------
+(0 rows)
+
+DROP TABLE tbl1;
+DROP TABLE tbl2;

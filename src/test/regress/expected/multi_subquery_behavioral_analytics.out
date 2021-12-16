@@ -875,7 +875,7 @@ SET citus.subquery_pushdown to ON;
 NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
 DETAIL:  When enabled, the planner skips many correctness checks for subqueries and pushes down the queries to shards as-is. It means that the queries are likely to return wrong results unless the user is absolutely sure that pushing down the subquery is safe. This GUC is maintained only for backward compatibility, no new users are supposed to use it. The planner is capable of pushing down as much computation as possible to the shards depending on the query.
 -- multi-subquery-join
--- The first query has filters on partion column to make it router plannable
+-- The first query has filters on partition column to make it router plannable
 -- but it is processed by logical planner since we disabled router execution
 SELECT
   e1.user_id,

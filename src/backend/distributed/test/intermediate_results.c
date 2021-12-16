@@ -34,6 +34,8 @@ PG_FUNCTION_INFO_V1(store_intermediate_result_on_node);
 Datum
 store_intermediate_result_on_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	char *nodeNameString = text_to_cstring(nodeNameText);
 	int nodePort = PG_GETARG_INT32(1);
@@ -43,8 +45,6 @@ store_intermediate_result_on_node(PG_FUNCTION_ARGS)
 	char *queryString = text_to_cstring(queryText);
 	bool writeLocalFile = false;
 	ParamListInfo paramListInfo = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	WorkerNode *workerNode = FindWorkerNodeOrError(nodeNameString, nodePort);
 

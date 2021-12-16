@@ -6,7 +6,6 @@ set search_path to multi_mx_call, public;
 -- Create worker-local tables to test procedure calls were routed
 
 set citus.shard_replication_factor to 2;
-set citus.replication_model to 'statement';
 
 -- This table requires specific settings, create before getting into things
 create table mx_call_dist_table_replica(id int, val int);
@@ -14,7 +13,6 @@ select create_distributed_table('mx_call_dist_table_replica', 'id');
 insert into mx_call_dist_table_replica values (9,1),(8,2),(7,3),(6,4),(5,5);
 
 set citus.shard_replication_factor to 1;
-set citus.replication_model to 'streaming';
 
 --
 -- Create tables and procedures we want to use in tests
@@ -186,6 +184,16 @@ select create_distributed_function('mx_call_proc_tx(int)', '$1', 'mx_call_dist_t
 CALL multi_mx_call.mx_call_proc_tx(20);
 SELECT id, val FROM mx_call_dist_table_1 ORDER BY id, val;
 
+-- Show that function delegation works from worker nodes as well
+\c - - - :worker_1_port
+SET search_path to multi_mx_call, public;
+SET client_min_messages TO DEBUG1;
+CALL multi_mx_call.mx_call_proc_tx(9);
+
+\c - - - :master_port
+SET search_path to multi_mx_call, public;
+SET client_min_messages TO DEBUG1;
+
 -- Test that we properly propagate errors raised from procedures.
 CREATE PROCEDURE mx_call_proc_raise(x int) LANGUAGE plpgsql AS $$
 BEGIN
@@ -198,8 +206,10 @@ call multi_mx_call.mx_call_proc_raise(2);
 \set VERBOSITY default
 
 -- Test that we don't propagate to non-metadata worker nodes
+SET client_min_messages TO WARNING;
 select stop_metadata_sync_to_node('localhost', :worker_1_port);
 select stop_metadata_sync_to_node('localhost', :worker_2_port);
+SET client_min_messages TO DEBUG1;
 call multi_mx_call.mx_call_proc(2, 0);
 SET client_min_messages TO NOTICE;
 select start_metadata_sync_to_node('localhost', :worker_1_port);

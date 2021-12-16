@@ -8,7 +8,6 @@ SELECT nextval('pg_catalog.pg_dist_colocationid_seq') AS last_colocation_id \gse
 SELECT nextval('pg_catalog.pg_dist_shardid_seq') AS last_shard_id \gset
 
 
-SET citus.replication_model TO streaming;
 SET citus.shard_count TO 8;
 SET citus.shard_replication_factor TO 1;
 SET citus.replicate_reference_tables_on_activate TO off;
@@ -61,6 +60,10 @@ SELECT create_reference_table('ref_table');
 
 CREATE TABLE dist_table_1(a int primary key, b int references ref_table(a));
 SELECT create_distributed_table('dist_table_1', 'a');
+
+CREATE SEQUENCE sequence;
+CREATE TABLE reference_table (a int default nextval('sequence'));
+SELECT create_reference_table('reference_table');
 
 -- update the node
 SELECT 1 FROM master_update_node((SELECT nodeid FROM pg_dist_node),
@@ -159,8 +162,26 @@ SELECT nodeid, hasmetadata, metadatasynced FROM pg_dist_node;
 --------------------------------------------------------------------------
 -- Test updating a node when another node is in readonly-mode
 --------------------------------------------------------------------------
-SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
-SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
+
+-- first, add node and sync metadata in the same transaction
+CREATE TYPE some_type AS (a int, b int);
+CREATE TABLE some_ref_table (a int, b some_type);
+SELECT create_reference_table('some_ref_table');
+INSERT INTO some_ref_table (a) SELECT i FROM generate_series(0,10)i;
+
+BEGIN;
+	SELECT master_add_node('localhost', :worker_2_port) AS nodeid_2 \gset
+	SELECT 1 FROM start_metadata_sync_to_node('localhost', :worker_2_port);
+
+  -- and modifications can be read from any worker in the same transaction
+  INSERT INTO some_ref_table (a) SELECT i FROM generate_series(0,10)i;
+  SET LOCAL citus.task_assignment_policy TO "round-robin";
+  SELECT count(*) FROM some_ref_table;
+  SELECT count(*) FROM some_ref_table;
+COMMIT;
+
+DROP TABLE some_ref_table;
+DROP TYPE some_type;
 
 -- Create a table with shards on both nodes
 CREATE TABLE dist_table_2(a int);
@@ -265,14 +286,14 @@ SELECT verify_metadata('localhost', :worker_1_port),
 -- Don't drop the reference table so it has shards on the nodes being disabled
 DROP TABLE dist_table_1, dist_table_2;
 
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
+SELECT pg_catalog.citus_disable_node_and_wait('localhost', :worker_2_port);
 SELECT verify_metadata('localhost', :worker_1_port);
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 SELECT verify_metadata('localhost', :worker_1_port);
 
 ------------------------------------------------------------------------------------
--- Test master_disable_node() when the node that is being disabled is actually down
+-- Test citus_disable_node_and_wait() when the node that is being disabled is actually down
 ------------------------------------------------------------------------------------
 SELECT master_update_node(:nodeid_2, 'localhost', 1);
 SELECT wait_until_metadata_sync(30000);
@@ -280,12 +301,9 @@ SELECT wait_until_metadata_sync(30000);
 -- set metadatasynced so we try porpagating metadata changes
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
 
--- should error out
-SELECT 1 FROM master_disable_node('localhost', 1);
-
--- try again after stopping metadata sync
-SELECT stop_metadata_sync_to_node('localhost', 1);
-SELECT 1 FROM master_disable_node('localhost', 1);
+-- should not error out, citus_disable_node is tolerant for node failures
+-- but we should not wait metadata syncing to finish as this node is down
+SELECT 1 FROM citus_disable_node('localhost', 1, true);
 
 SELECT verify_metadata('localhost', :worker_1_port);
 
@@ -295,9 +313,8 @@ SELECT wait_until_metadata_sync(30000);
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 SELECT verify_metadata('localhost', :worker_1_port);
 
-
 ------------------------------------------------------------------------------------
--- Test master_disable_node() when the other node is down
+-- Test citus_disable_node_and_wait() when the other node is down
 ------------------------------------------------------------------------------------
 -- node 1 is down.
 SELECT master_update_node(:nodeid_1, 'localhost', 1);
@@ -306,12 +323,13 @@ SELECT wait_until_metadata_sync(30000);
 -- set metadatasynced so we try porpagating metadata changes
 UPDATE pg_dist_node SET metadatasynced = TRUE WHERE nodeid IN (:nodeid_1, :nodeid_2);
 
--- should error out
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
+-- should not error out, citus_disable_node is tolerant for node failures
+-- but we should not wait metadata syncing to finish as this node is down
+SELECT 1 FROM citus_disable_node('localhost', :worker_2_port);
 
 -- try again after stopping metadata sync
 SELECT stop_metadata_sync_to_node('localhost', 1);
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_disable_node_and_wait('localhost', :worker_2_port);
 
 -- bring up node 1
 SELECT master_update_node(:nodeid_1, 'localhost', :worker_1_port);
@@ -355,7 +373,9 @@ DROP DATABASE db_to_drop;
 SELECT datname FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
 
 -- cleanup
+DROP SEQUENCE sequence CASCADE;
 DROP TABLE ref_table;
+DROP TABLE reference_table;
 TRUNCATE pg_dist_colocation;
 SELECT count(*) FROM (SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node) t;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
@@ -366,4 +386,3 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART :last_shard_id;
 
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
-RESET citus.replication_model;

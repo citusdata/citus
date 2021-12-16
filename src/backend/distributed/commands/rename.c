@@ -16,6 +16,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata_cache.h"
 #include "nodes/parsenodes.h"
+#include "utils/lsyscache.h"
 
 
 /*
@@ -60,6 +61,15 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 	if (!OidIsValid(objectRelationId))
 	{
 		return NIL;
+	}
+
+	/* check whether we are dealing with a sequence here */
+	if (get_rel_relkind(objectRelationId) == RELKIND_SEQUENCE)
+	{
+		RenameStmt *stmtCopy = copyObject(renameStmt);
+		stmtCopy->renameType = OBJECT_SEQUENCE;
+		return PreprocessRenameSequenceStmt((Node *) stmtCopy, renameCommand,
+											processUtilityContext);
 	}
 
 	/* we have no planning to do unless the table is distributed */
@@ -118,8 +128,7 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	ddlJob->targetRelationId = tableRelationId;
-	ddlJob->concurrentIndexCmd = false;
-	ddlJob->commandString = renameCommand;
+	ddlJob->metadataSyncCommand = renameCommand;
 	ddlJob->taskList = DDLTaskList(tableRelationId, renameCommand);
 
 	return list_make1(ddlJob);
@@ -127,7 +136,7 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 
 
 /*
- * ErrorIfDistributedRenameStmt errors out if the corresponding rename statement
+ * ErrorIfUnsupportedRenameStmt errors out if the corresponding rename statement
  * operates on any part of a distributed table other than a column.
  *
  * Note: This function handles RenameStmt applied to relations handed by Citus.

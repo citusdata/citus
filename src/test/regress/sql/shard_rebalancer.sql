@@ -2,10 +2,12 @@
 -- MUTLI_SHARD_REBALANCER
 --
 
-CREATE TABLE dist_table_test(a int primary key);
-SELECT create_distributed_table('dist_table_test', 'a');
+SET citus.next_shard_id TO 433000;
 CREATE TABLE ref_table_test(a int primary key);
 SELECT create_reference_table('ref_table_test');
+CREATE TABLE dist_table_test(a int primary key);
+SELECT create_distributed_table('dist_table_test', 'a');
+CREATE TABLE postgres_table_test(a int primary key);
 
 -- make sure that all rebalance operations works fine when
 -- reference tables are replicated to the coordinator
@@ -13,19 +15,34 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
 
 -- should just be noops even if we add the coordinator to the pg_dist_node
 SELECT rebalance_table_shards('dist_table_test');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT rebalance_table_shards();
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 
 -- test that calling rebalance_table_shards without specifying relation
 -- wouldn't move shard of the citus local table.
+SET citus.next_shard_id TO 433100;
 CREATE TABLE citus_local_table(a int, b int);
 SELECT citus_add_local_table_to_metadata('citus_local_table');
 INSERT INTO citus_local_table VALUES (1, 2);
 
 SELECT rebalance_table_shards();
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
+
+-- Check that rebalance_table_shards and get_rebalance_table_shards_plan fail
+-- for any type of table, but distributed tables.
+SELECT rebalance_table_shards('ref_table_test');
+SELECT rebalance_table_shards('postgres_table_test');
+SELECT rebalance_table_shards('citus_local_table');
+SELECT get_rebalance_table_shards_plan('ref_table_test');
+SELECT get_rebalance_table_shards_plan('postgres_table_test');
+SELECT get_rebalance_table_shards_plan('citus_local_table');
+
+-- Check that citus_move_shard_placement fails for shards belonging reference
+-- tables or citus local tables
+SELECT citus_move_shard_placement(433000, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+SELECT citus_move_shard_placement(433100, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 
 -- show that citus local table shard is still on the coordinator
 SELECT tablename FROM pg_catalog.pg_tables where tablename like 'citus_local_table_%';
@@ -38,14 +55,14 @@ SELECT pg_reload_conf();
 SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 SELECT master_drain_node('localhost', :master_port);
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
 SELECT pg_sleep(.1); -- wait to make sure the config has changed before running the GUC
 
 SELECT master_drain_node('localhost', :master_port);
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 -- show that citus local table shard is still on the coordinator
 SELECT tablename FROM pg_catalog.pg_tables where tablename like 'citus_local_table_%';
@@ -61,8 +78,11 @@ CREATE TABLE dist_table_test_2(a int);
 SET citus.shard_count TO 4;
 
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO "statement";
 SELECT create_distributed_table('dist_table_test_2', 'a');
+
+-- Mark tables as coordinator replicated in order to be able to test replicate_table_shards
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+  ('dist_table_test_2'::regclass);
 
 -- replicate_table_shards should fail when the hostname GUC is set to a non-reachable node
 ALTER SYSTEM SET citus.local_hostname TO 'foobar';
@@ -80,10 +100,9 @@ SELECT pg_sleep(.1); -- wait to make sure the config has changed before running 
 SET citus.shard_replication_factor TO 2;
 SELECT replicate_table_shards('dist_table_test_2',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 
-DROP TABLE dist_table_test, dist_table_test_2, ref_table_test;
+DROP TABLE dist_table_test, dist_table_test_2, ref_table_test, postgres_table_test;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
-RESET citus.replication_model;
 
 -- Create a user to test multiuser usage of rebalancer functions
 -- We explicitely don't create this user on worker nodes yet, so we can
@@ -312,10 +331,10 @@ DELETE FROM pg_dist_shard_placement WHERE placementid in (
 
 -- Upload the test data to the shards
 
-SELECT count(master_append_table_to_shard(shardid, 'shard_rebalancer_test_data',
-                                          host(inet_server_addr()), inet_server_port()))
-    FROM pg_dist_shard
-    WHERE logicalrelid = 'replication_test_table'::regclass;
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123000)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123001)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123002)
+\COPY replication_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123003)
 
 -- Verify that there is one node with all placements
 
@@ -394,7 +413,7 @@ AS $$
     pg_dist_shard_placement src USING (shardid),
     (SELECT nodename, nodeport FROM pg_dist_shard_placement ORDER BY nodeport DESC LIMIT 1) dst
     WHERE src.nodeport < dst.nodeport AND s.logicalrelid = rel::regclass;
-    SELECT public.master_defer_delete_shards();
+    CALL citus_cleanup_orphaned_shards();
 $$;
 
 CALL create_unbalanced_shards('rebalance_test_table');
@@ -403,10 +422,12 @@ SET citus.shard_replication_factor TO 2;
 
 -- Upload the test data to the shards
 
-SELECT count(master_append_table_to_shard(shardid, 'shard_rebalancer_test_data',
-        host(inet_server_addr()), inet_server_port()))
-FROM pg_dist_shard
-WHERE logicalrelid = 'rebalance_test_table'::regclass;
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123004)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123005)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123006)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123007)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123008)
+\COPY rebalance_test_table FROM PROGRAM 'echo 1' WITH (format 'csv', append_to_shard 123009)
 
 -- Verify that there is one node with all placements
 
@@ -426,7 +447,7 @@ FROM (
          FROM pg_dist_shard
          WHERE logicalrelid = 'rebalance_test_table'::regclass
      ) T;
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 ALTER SYSTEM RESET citus.local_hostname;
 SELECT pg_reload_conf();
@@ -443,7 +464,7 @@ FROM (
     FROM pg_dist_shard
     WHERE logicalrelid = 'rebalance_test_table'::regclass
 ) T;
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 SELECT * FROM table_placements_per_node;
 
@@ -478,26 +499,26 @@ SELECT rebalance_table_shards('rebalance_test_table',
 RESET ROLE;
 -- Confirm no moves took place at all during these errors
 SELECT * FROM table_placements_per_node;
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 SELECT rebalance_table_shards('rebalance_test_table',
     threshold := 0, max_shard_moves := 1,
     shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 SELECT * FROM table_placements_per_node;
 
 -- Check that threshold=1 doesn't move any shards
 
 SELECT rebalance_table_shards('rebalance_test_table', threshold := 1, shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 SELECT * FROM table_placements_per_node;
 
 -- Move the remaining shards using threshold=0
 
 SELECT rebalance_table_shards('rebalance_test_table', threshold := 0);
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 SELECT * FROM table_placements_per_node;
 
@@ -505,7 +526,7 @@ SELECT * FROM table_placements_per_node;
 -- any effects.
 
 SELECT rebalance_table_shards('rebalance_test_table', threshold := 0, shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 SELECT * FROM table_placements_per_node;
 
@@ -529,8 +550,9 @@ CREATE TABLE test_schema_support.nation_hash (
     n_comment varchar(152)
 );
 
-SELECT master_create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 1);
+SET citus.shard_count TO 4;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
 
 CREATE TABLE test_schema_support.nation_hash2 (
     n_nationkey integer not null,
@@ -539,21 +561,24 @@ CREATE TABLE test_schema_support.nation_hash2 (
     n_comment varchar(152)
 );
 
-SELECT master_create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash2', 4, 1);
+SELECT create_distributed_table('test_schema_support.nation_hash2', 'n_nationkey', 'hash');
+
+-- Mark tables as coordinator replicated in order to be able to test replicate_table_shards
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+  ('test_schema_support.nation_hash2'::regclass, 'test_schema_support.nation_hash'::regclass);
 
 -- Shard count before replication
 SELECT COUNT(*) FROM pg_dist_shard_placement;
 
 SET search_path TO public;
-SELECT replicate_table_shards('test_schema_support.nation_hash', shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('test_schema_support.nation_hash', shard_replication_factor:=2, max_shard_copies:=1, shard_transfer_mode:='block_writes');
 
--- Confirm replication
+-- Confirm replication, both tables replicated due to colocation
 SELECT COUNT(*) FROM pg_dist_shard_placement;
 
 -- Test with search_path is set
 SET search_path TO test_schema_support;
-SELECT replicate_table_shards('nation_hash2', shard_transfer_mode:='block_writes');
+SELECT replicate_table_shards('nation_hash2', shard_replication_factor:=2, shard_transfer_mode:='block_writes');
 
 -- Confirm replication
 SELECT COUNT(*) FROM pg_dist_shard_placement;
@@ -579,16 +604,31 @@ CREATE TABLE test_schema_support.imbalanced_table (
 SELECT master_create_distributed_table('test_schema_support.imbalanced_table', 'id', 'append');
 
 SET citus.shard_replication_factor TO 1;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
-SELECT master_append_table_to_shard(123018, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
+1
+2
+3
+4
+\.
 
 SET citus.shard_replication_factor TO 2;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
-SELECT master_append_table_to_shard(123019, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
+1
+2
+3
+4
+\.
 
 SET citus.shard_replication_factor TO 1;
-SELECT * from master_create_empty_shard('test_schema_support.imbalanced_table');
-SELECT master_append_table_to_shard(123020, 'test_schema_support.imbalanced_table_local', 'localhost', :master_port);
+SELECT master_create_empty_shard('test_schema_support.imbalanced_table') AS shardid \gset
+COPY test_schema_support.imbalanced_table FROM STDIN WITH (format 'csv', append_to_shard :shardid);
+1
+2
+3
+4
+\.
 
 -- imbalanced_table is now imbalanced
 
@@ -600,11 +640,11 @@ SELECT COUNT(*) FROM imbalanced_table;
 
 -- Try force_logical
 SELECT rebalance_table_shards('imbalanced_table', threshold:=0, shard_transfer_mode:='force_logical');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 -- Test rebalance operation
 SELECT rebalance_table_shards('imbalanced_table', threshold:=0, shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 -- Confirm rebalance
 -- Shard counts in each node after rebalance
@@ -631,7 +671,7 @@ SELECT create_distributed_table('colocated_rebalance_test', 'id');
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', 10000, 'block_writes')
 FROM pg_dist_shard_placement
 WHERE nodeport = :worker_2_port;
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 -- Try to move shards to a node where shards are not allowed
 SELECT * from master_set_node_property('localhost', :worker_1_port, 'shouldhaveshards', false);
@@ -658,7 +698,7 @@ UPDATE pg_dist_node SET noderole = 'primary' WHERE nodeport = :worker_1_port;
 SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
 FROM pg_dist_shard_placement
 WHERE nodeport = :worker_2_port;
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 SELECT create_distributed_table('colocated_rebalance_test2', 'id');
 
@@ -669,7 +709,7 @@ SELECT * FROM public.table_placements_per_node;
 SELECT * FROM get_rebalance_table_shards_plan('colocated_rebalance_test', threshold := 0, drain_only := true);
 -- Running with drain_only shouldn't do anything
 SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0, shard_transfer_mode := 'block_writes', drain_only := true);
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 -- Confirm that nothing changed
 SELECT * FROM public.table_placements_per_node;
@@ -682,11 +722,30 @@ SELECT * FROM get_rebalance_table_shards_plan('colocated_rebalance_test', rebala
 SELECT * FROM get_rebalance_progress();
 -- Actually do the rebalance
 SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 -- Check that we can call this function without a crash
 SELECT * FROM get_rebalance_progress();
 
--- Confirm that the nodes are now there
+-- Confirm that the shards are now there
+SELECT * FROM public.table_placements_per_node;
+
+CALL citus_cleanup_orphaned_shards();
+select * from pg_dist_placement ORDER BY placementid;
+
+
+-- Move all shards to worker1 again
+SELECT master_move_shard_placement(shardid, 'localhost', :worker_2_port, 'localhost', :worker_1_port, 'block_writes')
+FROM pg_dist_shard NATURAL JOIN pg_dist_placement NATURAL JOIN pg_dist_node
+WHERE nodeport = :worker_2_port AND logicalrelid = 'colocated_rebalance_test'::regclass;
+
+-- Confirm that the shards are now all on worker1
+SELECT * FROM public.table_placements_per_node;
+
+-- Explicitly don't run citus_cleanup_orphaned_shards, rebalance_table_shards
+-- should do that for automatically.
+SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0, shard_transfer_mode := 'block_writes');
+
+-- Confirm that the shards are now moved
 SELECT * FROM public.table_placements_per_node;
 
 
@@ -700,22 +759,22 @@ SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaves
 
 SELECT * FROM get_rebalance_table_shards_plan('colocated_rebalance_test', threshold := 0);
 SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 SELECT * FROM get_rebalance_table_shards_plan('non_colocated_rebalance_test', threshold := 0);
 SELECT * FROM rebalance_table_shards('non_colocated_rebalance_test', threshold := 0, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 -- Put shards back
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 
 SELECT * FROM rebalance_table_shards('colocated_rebalance_test', threshold := 0, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 SELECT * FROM rebalance_table_shards('non_colocated_rebalance_test', threshold := 0, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 -- testing behaviour when setting shouldhaveshards to false and rebalancing all
@@ -723,13 +782,13 @@ SELECT * FROM public.table_placements_per_node;
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
 SELECT * FROM get_rebalance_table_shards_plan(threshold := 0, drain_only := true);
 SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'block_writes', drain_only := true);
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 -- Put shards back
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 -- testing behaviour when setting shouldhaveshards to false and rebalancing all
@@ -737,13 +796,13 @@ SELECT * FROM public.table_placements_per_node;
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', false);
 SELECT * FROM get_rebalance_table_shards_plan(threshold := 0);
 SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 -- Put shards back
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 -- Make it a data node again
@@ -751,14 +810,14 @@ SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaves
 
 -- testing behaviour of master_drain_node
 SELECT * from master_drain_node('localhost', :worker_2_port, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 select shouldhaveshards from pg_dist_node where nodeport = :worker_2_port;
 SELECT * FROM public.table_placements_per_node;
 
 -- Put shards back
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'shouldhaveshards', true);
 SELECT * FROM rebalance_table_shards(threshold := 0, shard_transfer_mode := 'block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 
@@ -827,15 +886,15 @@ SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_d
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size', threshold := 0);
 
 SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'by_disk_size', shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'by_disk_size', shard_transfer_mode:='block_writes', threshold := 0);
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 -- Check that sizes of colocated tables are added together for rebalances
@@ -886,8 +945,9 @@ SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_d
 -- supports improvement_threshold
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'by_disk_size', improvement_threshold := 0);
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'by_disk_size', shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
+VACUUM FULL tab, tab2;
 ANALYZE tab, tab2;
 
 \c - - - :worker_1_port
@@ -943,13 +1003,13 @@ SELECT citus_add_rebalance_strategy(
 
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'capacity_high_worker_2');
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'capacity_high_worker_2', shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 SELECT citus_set_default_rebalance_strategy('capacity_high_worker_2');
 SELECT * FROM get_rebalance_table_shards_plan('tab');
 SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 CREATE FUNCTION only_worker_1(shardid bigint, nodeidarg int)
@@ -970,7 +1030,7 @@ SELECT citus_add_rebalance_strategy(
 SELECT citus_set_default_rebalance_strategy('only_worker_1');
 SELECT * FROM get_rebalance_table_shards_plan('tab');
 SELECT * FROM rebalance_table_shards('tab', shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM public.table_placements_per_node;
 
 SELECT citus_set_default_rebalance_strategy('by_shard_count');
@@ -979,18 +1039,18 @@ SELECT * FROM get_rebalance_table_shards_plan('tab');
 -- Check all the error handling cases
 SELECT * FROM get_rebalance_table_shards_plan('tab', rebalance_strategy := 'non_existing');
 SELECT * FROM rebalance_table_shards('tab', rebalance_strategy := 'non_existing');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM master_drain_node('localhost', :worker_2_port, rebalance_strategy := 'non_existing');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT citus_set_default_rebalance_strategy('non_existing');
 
 
 UPDATE pg_dist_rebalance_strategy SET default_strategy=false;
 SELECT * FROM get_rebalance_table_shards_plan('tab');
 SELECT * FROM rebalance_table_shards('tab');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 SELECT * FROM master_drain_node('localhost', :worker_2_port);
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 UPDATE pg_dist_rebalance_strategy SET default_strategy=true WHERE name='by_shard_count';
 
 CREATE OR REPLACE FUNCTION shard_cost_no_arguments()
@@ -1173,7 +1233,7 @@ DROP TABLE tab;
 
 -- we don't need the coordinator on pg_dist_node anymore
 SELECT 1 FROM master_remove_node('localhost', :master_port);
-
+SELECT public.wait_until_metadata_sync(30000);
 
 --
 -- Make sure that rebalance_table_shards() and replicate_table_shards() replicate
@@ -1188,7 +1248,6 @@ CREATE TABLE dist_table_test_3(a int);
 SET citus.shard_count TO 4;
 
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO "statement";
 SELECT create_distributed_table('dist_table_test_3', 'a');
 
 CREATE TABLE ref_table(a int);
@@ -1201,9 +1260,16 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
 SET citus.shard_replication_factor TO 2;
 SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
 
+-- Mark table as coordinator replicated in order to be able to test replicate_table_shards
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+  ('dist_table_test_3'::regclass);
+
+SELECT replicate_table_shards('dist_table_test_3',  max_shard_copies := 4,  shard_transfer_mode:='block_writes');
+
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
 SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT public.wait_until_metadata_sync(30000);
 
 CREATE TABLE rebalance_test_table(int_column int);
 SELECT master_create_distributed_table('rebalance_test_table', 'int_column', 'append');
@@ -1215,13 +1281,15 @@ SELECT 1 FROM master_add_node('localhost', :master_port, groupId=>0);
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
 SELECT rebalance_table_shards('rebalance_test_table', shard_transfer_mode:='block_writes');
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid = 'ref_table'::regclass;
 
 DROP TABLE dist_table_test_3, rebalance_test_table, ref_table;
 
 SELECT 1 FROM master_remove_node('localhost', :master_port);
+SELECT public.wait_until_metadata_sync(30000);
+
 
 -- reference table 2 will not have a replica identity, causing the rebalancer to not work
 -- when ran in the default mode. Instead we need to change the shard transfer mode to make
@@ -1236,6 +1304,7 @@ CREATE TABLE r2 (a int, b int);
 -- node without the reference tables
 
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync(30000);
 
 SELECT create_distributed_table('t1','a');
 SELECT create_reference_table('r1');
@@ -1248,7 +1317,7 @@ INSERT INTO r2 VALUES (1,2), (3,4);
 SELECT 1 from master_add_node('localhost', :worker_2_port);
 
 SELECT rebalance_table_shards();
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 DROP TABLE t1, r1, r2;
 
@@ -1260,6 +1329,7 @@ SELECT count(*) FROM pg_dist_partition;
 -- executing the rebalancer
 
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync(30000);
 
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
 SELECT create_reference_table('r1');
@@ -1275,7 +1345,7 @@ WHERE logicalrelid = 'r1'::regclass;
 
 -- rebalance with _only_ a reference table, this should trigger the copy
 SELECT rebalance_table_shards();
-SELECT public.master_defer_delete_shards();
+CALL citus_cleanup_orphaned_shards();
 
 -- verify the reference table is on all nodes after the rebalance
 SELECT count(*)
@@ -1292,6 +1362,7 @@ DROP TABLE r1;
 -- fail.
 
 SELECT 1 from master_remove_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync(30000);
 
 CREATE TABLE t1 (a int PRIMARY KEY, b int);
 CREATE TABLE r1 (a int PRIMARY KEY, b int);
@@ -1309,6 +1380,11 @@ WHERE logicalrelid = 'r1'::regclass;
 
 SELECT replicate_table_shards('t1',  shard_replication_factor := 2);
 
+-- Mark table as coordinator replicated in order to be able to test replicate_table_shards
+UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid IN
+  ('t1'::regclass);
+SELECT replicate_table_shards('t1',  shard_replication_factor := 2);
+
 -- verify the reference table is on all nodes after replicate_table_shards
 SELECT count(*)
 FROM pg_dist_shard
@@ -1316,3 +1392,4 @@ JOIN pg_dist_shard_placement USING (shardid)
 WHERE logicalrelid = 'r1'::regclass;
 
 DROP TABLE t1, r1;
+

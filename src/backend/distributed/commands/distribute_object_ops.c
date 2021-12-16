@@ -15,6 +15,7 @@
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
 #include "distributed/pg_version_constants.h"
+#include "distributed/version_compat.h"
 
 static DistributeObjectOps NoDistributeOps = {
 	.deparse = NULL,
@@ -22,6 +23,7 @@ static DistributeObjectOps NoDistributeOps = {
 	.preprocess = NULL,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Aggregate_AlterObjectSchema = {
 	.deparse = DeparseAlterFunctionSchemaStmt,
@@ -29,6 +31,7 @@ static DistributeObjectOps Aggregate_AlterObjectSchema = {
 	.preprocess = PreprocessAlterFunctionSchemaStmt,
 	.postprocess = PostprocessAlterFunctionSchemaStmt,
 	.address = AlterFunctionSchemaStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Aggregate_AlterOwner = {
 	.deparse = DeparseAlterFunctionOwnerStmt,
@@ -36,6 +39,7 @@ static DistributeObjectOps Aggregate_AlterOwner = {
 	.preprocess = PreprocessAlterFunctionOwnerStmt,
 	.postprocess = NULL,
 	.address = AlterFunctionOwnerObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Aggregate_Define = {
 	.deparse = NULL,
@@ -43,6 +47,7 @@ static DistributeObjectOps Aggregate_Define = {
 	.preprocess = NULL,
 	.postprocess = NULL,
 	.address = DefineAggregateStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Aggregate_Drop = {
 	.deparse = DeparseDropFunctionStmt,
@@ -50,6 +55,7 @@ static DistributeObjectOps Aggregate_Drop = {
 	.preprocess = PreprocessDropFunctionStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Aggregate_Rename = {
 	.deparse = DeparseRenameFunctionStmt,
@@ -57,6 +63,7 @@ static DistributeObjectOps Aggregate_Rename = {
 	.preprocess = PreprocessRenameFunctionStmt,
 	.postprocess = NULL,
 	.address = RenameFunctionStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_AlterEnum = {
 	.deparse = DeparseAlterEnumStmt,
@@ -64,6 +71,7 @@ static DistributeObjectOps Any_AlterEnum = {
 	.preprocess = PreprocessAlterEnumStmt,
 	.postprocess = NULL,
 	.address = AlterEnumStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_AlterExtension = {
 	.deparse = DeparseAlterExtensionStmt,
@@ -71,6 +79,7 @@ static DistributeObjectOps Any_AlterExtension = {
 	.preprocess = PreprocessAlterExtensionUpdateStmt,
 	.postprocess = NULL,
 	.address = AlterExtensionUpdateStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_AlterExtensionContents = {
 	.deparse = NULL,
@@ -78,6 +87,7 @@ static DistributeObjectOps Any_AlterExtensionContents = {
 	.preprocess = PreprocessAlterExtensionContentsStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_AlterFunction = {
 	.deparse = DeparseAlterFunctionStmt,
@@ -85,6 +95,7 @@ static DistributeObjectOps Any_AlterFunction = {
 	.preprocess = PreprocessAlterFunctionStmt,
 	.postprocess = NULL,
 	.address = AlterFunctionStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_AlterPolicy = {
 	.deparse = NULL,
@@ -92,6 +103,7 @@ static DistributeObjectOps Any_AlterPolicy = {
 	.preprocess = PreprocessAlterPolicyStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_AlterRole = {
 	.deparse = DeparseAlterRoleStmt,
@@ -99,6 +111,7 @@ static DistributeObjectOps Any_AlterRole = {
 	.preprocess = NULL,
 	.postprocess = PostprocessAlterRoleStmt,
 	.address = AlterRoleStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_AlterRoleSet = {
 	.deparse = DeparseAlterRoleSetStmt,
@@ -106,6 +119,7 @@ static DistributeObjectOps Any_AlterRoleSet = {
 	.preprocess = PreprocessAlterRoleSetStmt,
 	.postprocess = NULL,
 	.address = AlterRoleSetStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_AlterTableMoveAll = {
 	.deparse = NULL,
@@ -113,6 +127,7 @@ static DistributeObjectOps Any_AlterTableMoveAll = {
 	.preprocess = PreprocessAlterTableMoveAllStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_Cluster = {
 	.deparse = NULL,
@@ -120,6 +135,7 @@ static DistributeObjectOps Any_Cluster = {
 	.preprocess = PreprocessClusterStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_CompositeType = {
 	.deparse = DeparseCompositeTypeStmt,
@@ -127,6 +143,7 @@ static DistributeObjectOps Any_CompositeType = {
 	.preprocess = PreprocessCompositeTypeStmt,
 	.postprocess = PostprocessCompositeTypeStmt,
 	.address = CompositeTypeStmtObjectAddress,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateEnum = {
 	.deparse = DeparseCreateEnumStmt,
@@ -134,6 +151,7 @@ static DistributeObjectOps Any_CreateEnum = {
 	.preprocess = PreprocessCreateEnumStmt,
 	.postprocess = PostprocessCreateEnumStmt,
 	.address = CreateEnumStmtObjectAddress,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateExtension = {
 	.deparse = DeparseCreateExtensionStmt,
@@ -141,6 +159,7 @@ static DistributeObjectOps Any_CreateExtension = {
 	.preprocess = NULL,
 	.postprocess = PostprocessCreateExtensionStmt,
 	.address = CreateExtensionStmtObjectAddress,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateFunction = {
 	.deparse = NULL,
@@ -148,6 +167,7 @@ static DistributeObjectOps Any_CreateFunction = {
 	.preprocess = PreprocessCreateFunctionStmt,
 	.postprocess = PostprocessCreateFunctionStmt,
 	.address = CreateFunctionStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_CreatePolicy = {
 	.deparse = NULL,
@@ -155,6 +175,7 @@ static DistributeObjectOps Any_CreatePolicy = {
 	.preprocess = PreprocessCreatePolicyStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_CreateStatistics = {
 	.deparse = DeparseCreateStatisticsStmt,
@@ -162,6 +183,7 @@ static DistributeObjectOps Any_CreateStatistics = {
 	.preprocess = PreprocessCreateStatisticsStmt,
 	.postprocess = PostprocessCreateStatisticsStmt,
 	.address = CreateStatisticsStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_CreateTrigger = {
 	.deparse = NULL,
@@ -169,6 +191,7 @@ static DistributeObjectOps Any_CreateTrigger = {
 	.preprocess = NULL,
 	.postprocess = PostprocessCreateTriggerStmt,
 	.address = CreateTriggerStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_Grant = {
 	.deparse = NULL,
@@ -176,6 +199,7 @@ static DistributeObjectOps Any_Grant = {
 	.preprocess = PreprocessGrantStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_Index = {
 	.deparse = NULL,
@@ -183,6 +207,7 @@ static DistributeObjectOps Any_Index = {
 	.preprocess = PreprocessIndexStmt,
 	.postprocess = PostprocessIndexStmt,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_Reindex = {
 	.deparse = NULL,
@@ -190,6 +215,7 @@ static DistributeObjectOps Any_Reindex = {
 	.preprocess = PreprocessReindexStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Any_Rename = {
 	.deparse = NULL,
@@ -197,6 +223,7 @@ static DistributeObjectOps Any_Rename = {
 	.preprocess = PreprocessRenameStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Attribute_Rename = {
 	.deparse = DeparseRenameAttributeStmt,
@@ -204,6 +231,7 @@ static DistributeObjectOps Attribute_Rename = {
 	.preprocess = PreprocessRenameAttributeStmt,
 	.postprocess = NULL,
 	.address = RenameAttributeStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Collation_AlterObjectSchema = {
 	.deparse = DeparseAlterCollationSchemaStmt,
@@ -211,6 +239,7 @@ static DistributeObjectOps Collation_AlterObjectSchema = {
 	.preprocess = PreprocessAlterCollationSchemaStmt,
 	.postprocess = PostprocessAlterCollationSchemaStmt,
 	.address = AlterCollationSchemaStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Collation_AlterOwner = {
 	.deparse = DeparseAlterCollationOwnerStmt,
@@ -218,6 +247,7 @@ static DistributeObjectOps Collation_AlterOwner = {
 	.preprocess = PreprocessAlterCollationOwnerStmt,
 	.postprocess = NULL,
 	.address = AlterCollationOwnerObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Collation_Define = {
 	.deparse = NULL,
@@ -225,6 +255,7 @@ static DistributeObjectOps Collation_Define = {
 	.preprocess = NULL,
 	.postprocess = PostprocessDefineCollationStmt,
 	.address = DefineCollationStmtObjectAddress,
+	.markDistributed = true,
 };
 static DistributeObjectOps Collation_Drop = {
 	.deparse = DeparseDropCollationStmt,
@@ -232,6 +263,7 @@ static DistributeObjectOps Collation_Drop = {
 	.preprocess = PreprocessDropCollationStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Collation_Rename = {
 	.deparse = DeparseRenameCollationStmt,
@@ -239,6 +271,7 @@ static DistributeObjectOps Collation_Rename = {
 	.preprocess = PreprocessRenameCollationStmt,
 	.postprocess = NULL,
 	.address = RenameCollationStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Database_AlterOwner = {
 	.deparse = DeparseAlterDatabaseOwnerStmt,
@@ -246,6 +279,7 @@ static DistributeObjectOps Database_AlterOwner = {
 	.preprocess = PreprocessAlterDatabaseOwnerStmt,
 	.postprocess = PostprocessAlterDatabaseOwnerStmt,
 	.address = AlterDatabaseOwnerObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Extension_AlterObjectSchema = {
 	.deparse = DeparseAlterExtensionSchemaStmt,
@@ -253,6 +287,7 @@ static DistributeObjectOps Extension_AlterObjectSchema = {
 	.preprocess = PreprocessAlterExtensionSchemaStmt,
 	.postprocess = PostprocessAlterExtensionSchemaStmt,
 	.address = AlterExtensionSchemaStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Extension_Drop = {
 	.deparse = DeparseDropExtensionStmt,
@@ -260,6 +295,7 @@ static DistributeObjectOps Extension_Drop = {
 	.preprocess = PreprocessDropExtensionStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps ForeignTable_AlterTable = {
 	.deparse = NULL,
@@ -267,6 +303,7 @@ static DistributeObjectOps ForeignTable_AlterTable = {
 	.preprocess = PreprocessAlterTableStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Function_AlterObjectDepends = {
 	.deparse = DeparseAlterFunctionDependsStmt,
@@ -274,6 +311,7 @@ static DistributeObjectOps Function_AlterObjectDepends = {
 	.preprocess = PreprocessAlterFunctionDependsStmt,
 	.postprocess = NULL,
 	.address = AlterFunctionDependsStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Function_AlterObjectSchema = {
 	.deparse = DeparseAlterFunctionSchemaStmt,
@@ -281,6 +319,7 @@ static DistributeObjectOps Function_AlterObjectSchema = {
 	.preprocess = PreprocessAlterFunctionSchemaStmt,
 	.postprocess = PostprocessAlterFunctionSchemaStmt,
 	.address = AlterFunctionSchemaStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Function_AlterOwner = {
 	.deparse = DeparseAlterFunctionOwnerStmt,
@@ -288,6 +327,7 @@ static DistributeObjectOps Function_AlterOwner = {
 	.preprocess = PreprocessAlterFunctionOwnerStmt,
 	.postprocess = NULL,
 	.address = AlterFunctionOwnerObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Function_Drop = {
 	.deparse = DeparseDropFunctionStmt,
@@ -295,6 +335,7 @@ static DistributeObjectOps Function_Drop = {
 	.preprocess = PreprocessDropFunctionStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Function_Rename = {
 	.deparse = DeparseRenameFunctionStmt,
@@ -302,6 +343,7 @@ static DistributeObjectOps Function_Rename = {
 	.preprocess = PreprocessRenameFunctionStmt,
 	.postprocess = NULL,
 	.address = RenameFunctionStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Index_AlterTable = {
 	.deparse = NULL,
@@ -309,6 +351,7 @@ static DistributeObjectOps Index_AlterTable = {
 	.preprocess = PreprocessAlterTableStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Index_Drop = {
 	.deparse = NULL,
@@ -316,6 +359,7 @@ static DistributeObjectOps Index_Drop = {
 	.preprocess = PreprocessDropIndexStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Policy_Drop = {
 	.deparse = NULL,
@@ -323,6 +367,7 @@ static DistributeObjectOps Policy_Drop = {
 	.preprocess = PreprocessDropPolicyStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Procedure_AlterObjectDepends = {
 	.deparse = DeparseAlterFunctionDependsStmt,
@@ -330,6 +375,7 @@ static DistributeObjectOps Procedure_AlterObjectDepends = {
 	.preprocess = PreprocessAlterFunctionDependsStmt,
 	.postprocess = NULL,
 	.address = AlterFunctionDependsStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Procedure_AlterObjectSchema = {
 	.deparse = DeparseAlterFunctionSchemaStmt,
@@ -337,6 +383,7 @@ static DistributeObjectOps Procedure_AlterObjectSchema = {
 	.preprocess = PreprocessAlterFunctionSchemaStmt,
 	.postprocess = PostprocessAlterFunctionSchemaStmt,
 	.address = AlterFunctionSchemaStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Procedure_AlterOwner = {
 	.deparse = DeparseAlterFunctionOwnerStmt,
@@ -344,6 +391,7 @@ static DistributeObjectOps Procedure_AlterOwner = {
 	.preprocess = PreprocessAlterFunctionOwnerStmt,
 	.postprocess = NULL,
 	.address = AlterFunctionOwnerObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Procedure_Drop = {
 	.deparse = DeparseDropFunctionStmt,
@@ -351,6 +399,7 @@ static DistributeObjectOps Procedure_Drop = {
 	.preprocess = PreprocessDropFunctionStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Procedure_Rename = {
 	.deparse = DeparseRenameFunctionStmt,
@@ -358,6 +407,7 @@ static DistributeObjectOps Procedure_Rename = {
 	.preprocess = PreprocessRenameFunctionStmt,
 	.postprocess = NULL,
 	.address = RenameFunctionStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Routine_AlterObjectDepends = {
 	.deparse = DeparseAlterFunctionDependsStmt,
@@ -365,6 +415,47 @@ static DistributeObjectOps Routine_AlterObjectDepends = {
 	.preprocess = PreprocessAlterFunctionDependsStmt,
 	.postprocess = NULL,
 	.address = AlterFunctionDependsStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Sequence_Alter = {
+	.deparse = NULL,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterSequenceStmt,
+	.postprocess = NULL,
+	.address = AlterSequenceStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Sequence_AlterObjectSchema = {
+	.deparse = DeparseAlterSequenceSchemaStmt,
+	.qualify = QualifyAlterSequenceSchemaStmt,
+	.preprocess = PreprocessAlterSequenceSchemaStmt,
+	.postprocess = PostprocessAlterSequenceSchemaStmt,
+	.address = AlterSequenceSchemaStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Sequence_AlterOwner = {
+	.deparse = DeparseAlterSequenceOwnerStmt,
+	.qualify = QualifyAlterSequenceOwnerStmt,
+	.preprocess = PreprocessAlterSequenceOwnerStmt,
+	.postprocess = PostprocessAlterSequenceOwnerStmt,
+	.address = AlterSequenceOwnerStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps Sequence_Drop = {
+	.deparse = DeparseDropSequenceStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropSequenceStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps Sequence_Rename = {
+	.deparse = DeparseRenameSequenceStmt,
+	.qualify = QualifyRenameSequenceStmt,
+	.preprocess = PreprocessRenameSequenceStmt,
+	.postprocess = NULL,
+	.address = RenameSequenceStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Trigger_AlterObjectDepends = {
 	.deparse = NULL,
@@ -372,6 +463,7 @@ static DistributeObjectOps Trigger_AlterObjectDepends = {
 	.preprocess = NULL,
 	.postprocess = PostprocessAlterTriggerDependsStmt,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Routine_AlterObjectSchema = {
 	.deparse = DeparseAlterFunctionSchemaStmt,
@@ -379,6 +471,7 @@ static DistributeObjectOps Routine_AlterObjectSchema = {
 	.preprocess = PreprocessAlterFunctionSchemaStmt,
 	.postprocess = PostprocessAlterFunctionSchemaStmt,
 	.address = AlterFunctionSchemaStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Routine_AlterOwner = {
 	.deparse = DeparseAlterFunctionOwnerStmt,
@@ -386,6 +479,7 @@ static DistributeObjectOps Routine_AlterOwner = {
 	.preprocess = PreprocessAlterFunctionOwnerStmt,
 	.postprocess = NULL,
 	.address = AlterFunctionOwnerObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Routine_Drop = {
 	.deparse = DeparseDropFunctionStmt,
@@ -393,6 +487,7 @@ static DistributeObjectOps Routine_Drop = {
 	.preprocess = PreprocessDropFunctionStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Routine_Rename = {
 	.deparse = DeparseRenameFunctionStmt,
@@ -400,6 +495,7 @@ static DistributeObjectOps Routine_Rename = {
 	.preprocess = PreprocessRenameFunctionStmt,
 	.postprocess = NULL,
 	.address = RenameFunctionStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Schema_Drop = {
 	.deparse = NULL,
@@ -407,6 +503,7 @@ static DistributeObjectOps Schema_Drop = {
 	.preprocess = PreprocessDropSchemaStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Schema_Grant = {
 	.deparse = DeparseGrantOnSchemaStmt,
@@ -414,6 +511,7 @@ static DistributeObjectOps Schema_Grant = {
 	.preprocess = PreprocessGrantOnSchemaStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Schema_Rename = {
 	.deparse = DeparseAlterSchemaRenameStmt,
@@ -421,6 +519,7 @@ static DistributeObjectOps Schema_Rename = {
 	.preprocess = PreprocessAlterSchemaRenameStmt,
 	.postprocess = NULL,
 	.address = AlterSchemaRenameStmtObjectAddress,
+	.markDistributed = false,
 };
 #if PG_VERSION_NUM >= PG_VERSION_13
 static DistributeObjectOps Statistics_Alter = {
@@ -429,6 +528,7 @@ static DistributeObjectOps Statistics_Alter = {
 	.preprocess = PreprocessAlterStatisticsStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 #endif
 static DistributeObjectOps Statistics_AlterObjectSchema = {
@@ -437,6 +537,7 @@ static DistributeObjectOps Statistics_AlterObjectSchema = {
 	.preprocess = PreprocessAlterStatisticsSchemaStmt,
 	.postprocess = PostprocessAlterStatisticsSchemaStmt,
 	.address = AlterStatisticsSchemaStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Statistics_AlterOwner = {
 	.deparse = DeparseAlterStatisticsOwnerStmt,
@@ -444,6 +545,7 @@ static DistributeObjectOps Statistics_AlterOwner = {
 	.preprocess = PreprocessAlterStatisticsOwnerStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Statistics_Drop = {
 	.deparse = NULL,
@@ -451,6 +553,7 @@ static DistributeObjectOps Statistics_Drop = {
 	.preprocess = PreprocessDropStatisticsStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Statistics_Rename = {
 	.deparse = DeparseAlterStatisticsRenameStmt,
@@ -458,13 +561,15 @@ static DistributeObjectOps Statistics_Rename = {
 	.preprocess = PreprocessAlterStatisticsRenameStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Table_AlterTable = {
-	.deparse = NULL,
+	.deparse = DeparseAlterTableStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessAlterTableStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Table_AlterObjectSchema = {
 	.deparse = DeparseAlterTableSchemaStmt,
@@ -472,6 +577,7 @@ static DistributeObjectOps Table_AlterObjectSchema = {
 	.preprocess = PreprocessAlterTableSchemaStmt,
 	.postprocess = PostprocessAlterTableSchemaStmt,
 	.address = AlterTableSchemaStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Table_Drop = {
 	.deparse = NULL,
@@ -479,6 +585,7 @@ static DistributeObjectOps Table_Drop = {
 	.preprocess = PreprocessDropTableStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Type_AlterObjectSchema = {
 	.deparse = DeparseAlterTypeSchemaStmt,
@@ -486,6 +593,7 @@ static DistributeObjectOps Type_AlterObjectSchema = {
 	.preprocess = PreprocessAlterTypeSchemaStmt,
 	.postprocess = PostprocessAlterTypeSchemaStmt,
 	.address = AlterTypeSchemaStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Type_AlterOwner = {
 	.deparse = DeparseAlterTypeOwnerStmt,
@@ -493,6 +601,7 @@ static DistributeObjectOps Type_AlterOwner = {
 	.preprocess = PreprocessAlterTypeOwnerStmt,
 	.postprocess = NULL,
 	.address = AlterTypeOwnerObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Type_AlterTable = {
 	.deparse = DeparseAlterTypeStmt,
@@ -500,6 +609,7 @@ static DistributeObjectOps Type_AlterTable = {
 	.preprocess = PreprocessAlterTypeStmt,
 	.postprocess = NULL,
 	.address = AlterTypeStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Type_Drop = {
 	.deparse = DeparseDropTypeStmt,
@@ -507,6 +617,7 @@ static DistributeObjectOps Type_Drop = {
 	.preprocess = PreprocessDropTypeStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Trigger_Drop = {
 	.deparse = NULL,
@@ -514,6 +625,7 @@ static DistributeObjectOps Trigger_Drop = {
 	.preprocess = PreprocessDropTriggerStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
 };
 static DistributeObjectOps Type_Rename = {
 	.deparse = DeparseRenameTypeStmt,
@@ -521,6 +633,7 @@ static DistributeObjectOps Type_Rename = {
 	.preprocess = PreprocessRenameTypeStmt,
 	.postprocess = NULL,
 	.address = RenameTypeStmtObjectAddress,
+	.markDistributed = false,
 };
 static DistributeObjectOps Trigger_Rename = {
 	.deparse = NULL,
@@ -528,6 +641,7 @@ static DistributeObjectOps Trigger_Rename = {
 	.preprocess = NULL,
 	.postprocess = PostprocessAlterTriggerRenameStmt,
 	.address = NULL,
+	.markDistributed = false,
 };
 
 
@@ -628,6 +742,11 @@ GetDistributeObjectOps(Node *node)
 					return &Routine_AlterObjectSchema;
 				}
 
+				case OBJECT_SEQUENCE:
+				{
+					return &Sequence_AlterObjectSchema;
+				}
+
 				case OBJECT_STATISTIC_EXT:
 				{
 					return &Statistics_AlterObjectSchema;
@@ -717,6 +836,11 @@ GetDistributeObjectOps(Node *node)
 			return &Any_AlterRoleSet;
 		}
 
+		case T_AlterSeqStmt:
+		{
+			return &Sequence_Alter;
+		}
+
 #if PG_VERSION_NUM >= PG_VERSION_13
 		case T_AlterStatsStmt:
 		{
@@ -727,7 +851,7 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterTableStmt:
 		{
 			AlterTableStmt *stmt = castNode(AlterTableStmt, node);
-			switch (stmt->relkind)
+			switch (AlterTableStmtObjType_compat(stmt))
 			{
 				case OBJECT_TYPE:
 				{
@@ -747,6 +871,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_INDEX:
 				{
 					return &Index_AlterTable;
+				}
+
+				case OBJECT_SEQUENCE:
+				{
+					return &Sequence_AlterOwner;
 				}
 
 				default:
@@ -873,6 +1002,11 @@ GetDistributeObjectOps(Node *node)
 					return &Schema_Drop;
 				}
 
+				case OBJECT_SEQUENCE:
+				{
+					return &Sequence_Drop;
+				}
+
 				case OBJECT_STATISTIC_EXT:
 				{
 					return &Statistics_Drop;
@@ -965,6 +1099,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_SCHEMA:
 				{
 					return &Schema_Rename;
+				}
+
+				case OBJECT_SEQUENCE:
+				{
+					return &Sequence_Rename;
 				}
 
 				case OBJECT_STATISTIC_EXT:

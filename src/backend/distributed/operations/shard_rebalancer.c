@@ -43,6 +43,7 @@
 #include "distributed/repair_shards.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/shard_cleaner.h"
 #include "distributed/tuplestore.h"
 #include "distributed/worker_protocol.h"
 #include "funcapi.h"
@@ -547,6 +548,7 @@ GetShardCost(uint64 shardId, void *voidContext)
 Datum
 citus_shard_cost_by_disk_size(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	uint64 shardId = PG_GETARG_INT64(0);
 	bool missingOk = false;
 	ShardPlacement *shardPlacement = ActiveShardPlacement(shardId, missingOk);
@@ -612,7 +614,7 @@ GetColocatedRebalanceSteps(List *placementUpdateList)
 /*
  * AcquireColocationLock tries to acquire a lock for rebalance/replication. If
  * this is it not possible it fails instantly because this means another
- * rebalance/repliction is currently happening. This would really mess up
+ * rebalance/replication is currently happening. This would really mess up
  * planning.
  */
 static void
@@ -699,6 +701,8 @@ ExecutePlacementUpdates(List *placementUpdateList, Oid shardReplicationModeOid,
 							   "unsupported")));
 	}
 
+	DropOrphanedShardsInSeparateTransaction();
+
 	foreach(placementUpdateCell, placementUpdateList)
 	{
 		PlacementUpdateEvent *placementUpdate = lfirst(placementUpdateCell);
@@ -740,12 +744,12 @@ SetupRebalanceMonitor(List *placementUpdateList, Oid relationId)
 	List *colocatedUpdateList = GetColocatedRebalanceSteps(placementUpdateList);
 	ListCell *colocatedUpdateCell = NULL;
 
-	ProgressMonitorData *monitor = CreateProgressMonitor(REBALANCE_ACTIVITY_MAGIC_NUMBER,
-														 list_length(colocatedUpdateList),
-														 sizeof(
-															 PlacementUpdateEventProgress),
-														 relationId);
-	PlacementUpdateEventProgress *rebalanceSteps = monitor->steps;
+	dsm_handle dsmHandle;
+	ProgressMonitorData *monitor = CreateProgressMonitor(
+		list_length(colocatedUpdateList),
+		sizeof(PlacementUpdateEventProgress),
+		&dsmHandle);
+	PlacementUpdateEventProgress *rebalanceSteps = ProgressMonitorSteps(monitor);
 
 	int32 eventIndex = 0;
 	foreach(colocatedUpdateCell, colocatedUpdateList)
@@ -759,8 +763,11 @@ SetupRebalanceMonitor(List *placementUpdateList, Oid relationId)
 		event->shardId = colocatedUpdate->shardId;
 		event->sourcePort = colocatedUpdate->sourceNode->workerPort;
 		event->targetPort = colocatedUpdate->targetNode->workerPort;
+		pg_atomic_init_u64(&event->progress, REBALANCE_PROGRESS_WAITING);
+
 		eventIndex++;
 	}
+	RegisterProgressMonitor(REBALANCE_ACTIVITY_MAGIC_NUMBER, relationId, dsmHandle);
 }
 
 
@@ -782,11 +789,12 @@ SetupRebalanceMonitor(List *placementUpdateList, Oid relationId)
 Datum
 rebalance_table_shards(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	List *relationIdList = NIL;
 	if (!PG_ARGISNULL(0))
 	{
 		Oid relationId = PG_GETARG_OID(0);
-		ErrorIfMoveCitusLocalTable(relationId);
+		ErrorIfMoveUnsupportedTableType(relationId);
 
 		relationIdList = list_make1_oid(relationId);
 	}
@@ -886,6 +894,7 @@ GetRebalanceStrategy(Name name)
 Datum
 citus_drain_node(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	PG_ENSURE_ARGNOTNULL(0, "nodename");
 	PG_ENSURE_ARGNOTNULL(1, "nodeport");
 	PG_ENSURE_ARGNOTNULL(2, "shard_transfer_mode");
@@ -905,17 +914,15 @@ citus_drain_node(PG_FUNCTION_ARGS)
 	};
 
 	char *nodeName = text_to_cstring(nodeNameText);
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
-													PostPortNumber);
 
 	/*
 	 * This is done in a separate session. This way it's not undone if the
 	 * draining fails midway through.
 	 */
-	ExecuteCriticalRemoteCommand(connection, psprintf(
-									 "SELECT master_set_node_property(%s, %i, 'shouldhaveshards', false)",
-									 quote_literal_cstr(nodeName), nodePort));
+	ExecuteCriticalCommandInSeparateTransaction(psprintf(
+													"SELECT master_set_node_property(%s, %i, 'shouldhaveshards', false)",
+													quote_literal_cstr(nodeName),
+													nodePort));
 
 	RebalanceTableShards(&options, shardTransferModeOid);
 
@@ -930,6 +937,7 @@ citus_drain_node(PG_FUNCTION_ARGS)
 Datum
 replicate_table_shards(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	Oid relationId = PG_GETARG_OID(0);
 	uint32 shardReplicationFactor = PG_GETARG_INT32(1);
 	int32 maxShardCopies = PG_GETARG_INT32(2);
@@ -984,11 +992,12 @@ master_drain_node(PG_FUNCTION_ARGS)
 Datum
 get_rebalance_table_shards_plan(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	List *relationIdList = NIL;
 	if (!PG_ARGISNULL(0))
 	{
 		Oid relationId = PG_GETARG_OID(0);
-		ErrorIfMoveCitusLocalTable(relationId);
+		ErrorIfMoveUnsupportedTableType(relationId);
 
 		relationIdList = list_make1_oid(relationId);
 	}
@@ -1049,8 +1058,6 @@ get_rebalance_table_shards_plan(PG_FUNCTION_ARGS)
 		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 	}
 
-	tuplestore_donestoring(tupstore);
-
 	return (Datum) 0;
 }
 
@@ -1065,8 +1072,8 @@ get_rebalance_table_shards_plan(PG_FUNCTION_ARGS)
 Datum
 get_rebalance_progress(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	List *segmentList = NIL;
-	ListCell *rebalanceMonitorCell = NULL;
 	TupleDesc tupdesc;
 	Tuplestorestate *tupstore = SetupTuplestore(fcinfo, &tupdesc);
 
@@ -1074,12 +1081,12 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 	List *rebalanceMonitorList = ProgressMonitorList(REBALANCE_ACTIVITY_MAGIC_NUMBER,
 													 &segmentList);
 
-
-	foreach(rebalanceMonitorCell, rebalanceMonitorList)
+	ProgressMonitorData *monitor = NULL;
+	foreach_ptr(monitor, rebalanceMonitorList)
 	{
-		ProgressMonitorData *monitor = lfirst(rebalanceMonitorCell);
-		PlacementUpdateEventProgress *placementUpdateEvents = monitor->steps;
-		HTAB *shardStatistics = BuildWorkerShardStatisticsHash(monitor->steps,
+		PlacementUpdateEventProgress *placementUpdateEvents = ProgressMonitorSteps(
+			monitor);
+		HTAB *shardStatistics = BuildWorkerShardStatisticsHash(placementUpdateEvents,
 															   monitor->stepCount);
 		HTAB *shardSizes = BuildShardSizesHash(monitor, shardStatistics);
 		for (int eventIndex = 0; eventIndex < monitor->stepCount; eventIndex++)
@@ -1115,15 +1122,13 @@ get_rebalance_progress(PG_FUNCTION_ARGS)
 			values[5] = UInt32GetDatum(step->sourcePort);
 			values[6] = PointerGetDatum(cstring_to_text(step->targetName));
 			values[7] = UInt32GetDatum(step->targetPort);
-			values[8] = UInt64GetDatum(step->progress);
+			values[8] = UInt64GetDatum(pg_atomic_read_u64(&step->progress));
 			values[9] = UInt64GetDatum(sourceSize);
 			values[10] = UInt64GetDatum(targetSize);
 
 			tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 		}
 	}
-
-	tuplestore_donestoring(tupstore);
 
 	DetachFromDSMSegments(segmentList);
 
@@ -1149,22 +1154,24 @@ BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics)
 	HTAB *shardSizes = hash_create(
 		"ShardSizeHash", 32, &info,
 		HASH_ELEM | HASH_CONTEXT | HASH_BLOBS);
-	PlacementUpdateEventProgress *placementUpdateEvents = monitor->steps;
+	PlacementUpdateEventProgress *placementUpdateEvents = ProgressMonitorSteps(monitor);
+
 	for (int eventIndex = 0; eventIndex < monitor->stepCount; eventIndex++)
 	{
 		PlacementUpdateEventProgress *step = placementUpdateEvents + eventIndex;
+
 		uint64 shardId = step->shardId;
 		uint64 shardSize = 0;
 		uint64 backupShardSize = 0;
+		uint64 progress = pg_atomic_read_u64(&step->progress);
 
 		uint64 sourceSize = WorkerShardSize(shardStatistics, step->sourceName,
 											step->sourcePort, shardId);
 		uint64 targetSize = WorkerShardSize(shardStatistics, step->targetName,
 											step->targetPort, shardId);
 
-
-		if (step->progress == REBALANCE_PROGRESS_WAITING ||
-			step->progress == REBALANCE_PROGRESS_MOVING)
+		if (progress == REBALANCE_PROGRESS_WAITING ||
+			progress == REBALANCE_PROGRESS_MOVING)
 		{
 			/*
 			 * If we are not done with the move, the correct shard size is the
@@ -1173,7 +1180,7 @@ BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics)
 			shardSize = sourceSize;
 			backupShardSize = targetSize;
 		}
-		else if (step->progress == REBALANCE_PROGRESS_MOVED)
+		else if (progress == REBALANCE_PROGRESS_MOVED)
 		{
 			/*
 			 * If we are done with the move, the correct shard size is the size
@@ -1200,14 +1207,15 @@ BuildShardSizesHash(ProgressMonitorData *monitor, HTAB *shardStatistics)
 			}
 
 			/*
-			 * There exist some race conditions where it's possible that the
-			 * the state of the steps we see in shared memory are a bit behind
-			 * what is actually going on. So it is possible that even though a
-			 * step is reported as still being in the MOVING state, the shard
-			 * move might have just finished completing. This in turn can mean
-			 * that the source size is 0 while the target size is not. We try
-			 * to handle such rare edge cases by falling back on the other
-			 * shard size if that one is not 0.
+			 * Because of the way we fetch shard sizes they are from a slightly
+			 * earlier moment than the progress state we just read from shared
+			 * memory. Usually this is no problem, but there exist some race
+			 * conditions where this matters. For example, for very quick moves
+			 * it is possible that even though a step is now reported as MOVED,
+			 * when we read the shard sizes the move had not even started yet.
+			 * This in turn can mean that the target size is 0 while the source
+			 * size is not. We try to handle such rare edge cases by falling
+			 * back on the other shard size if that one is not 0.
 			 */
 			shardSize = backupShardSize;
 		}
@@ -1423,7 +1431,7 @@ GetMovedShardIdsByWorker(PlacementUpdateEventProgress *steps, int stepCount,
 		AddToWorkerShardIdSet(shardsByWorker, step->sourceName, step->sourcePort,
 							  step->shardId);
 
-		if (step->progress == REBALANCE_PROGRESS_WAITING)
+		if (pg_atomic_read_u64(&step->progress) == REBALANCE_PROGRESS_WAITING)
 		{
 			/*
 			 * shard move has not started so we don't need target stats for
@@ -1683,20 +1691,32 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 										  REBALANCE_PROGRESS_MOVING);
 
 	ConflictShardPlacementUpdateOnlyWithIsolationTesting(shardId);
-	int connectionFlag = FORCE_NEW_CONNECTION;
-	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
-													PostPortNumber);
 
 	/*
 	 * In case of failure, we throw an error such that rebalance_table_shards
 	 * fails early.
 	 */
-	ExecuteCriticalRemoteCommand(connection, placementUpdateCommand->data);
+	ExecuteCriticalCommandInSeparateTransaction(placementUpdateCommand->data);
 
 	UpdateColocatedShardPlacementProgress(shardId,
 										  sourceNode->workerName,
 										  sourceNode->workerPort,
 										  REBALANCE_PROGRESS_MOVED);
+}
+
+
+/*
+ * ExecuteCriticalCommandInSeparateTransaction runs a command in a separate
+ * transaction that is commited right away. This is useful for things that you
+ * don't want to rollback when the current transaction is rolled back.
+ */
+void
+ExecuteCriticalCommandInSeparateTransaction(char *command)
+{
+	int connectionFlag = FORCE_NEW_CONNECTION;
+	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
+													PostPortNumber);
+	ExecuteCriticalRemoteCommand(connection, command);
 	CloseConnection(connection);
 }
 
@@ -1782,16 +1802,21 @@ RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
 		hash_destroy(state->placementsHash);
 	}
 
+	int64 ignoredMoves = 0;
+	foreach_ptr(state, rebalanceStates)
+	{
+		ignoredMoves += state->ignoredMoves;
+	}
 
-	if (state->ignoredMoves > 0)
+	if (ignoredMoves > 0)
 	{
 		if (MaxRebalancerLoggedIgnoredMoves == -1 ||
-			state->ignoredMoves <= MaxRebalancerLoggedIgnoredMoves)
+			ignoredMoves <= MaxRebalancerLoggedIgnoredMoves)
 		{
 			ereport(NOTICE, (
 						errmsg(
 							"Ignored %ld moves, all of which are shown in notices above",
-							state->ignoredMoves
+							ignoredMoves
 							),
 						errhint(
 							"If you do want these moves to happen, try changing improvement_threshold to a lower value than what it is now (%g).",
@@ -1803,7 +1828,7 @@ RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
 			ereport(NOTICE, (
 						errmsg(
 							"Ignored %ld moves, %d of which are shown in notices above",
-							state->ignoredMoves,
+							ignoredMoves,
 							MaxRebalancerLoggedIgnoredMoves
 							),
 						errhint(
@@ -2019,7 +2044,7 @@ CompareShardCostAsc(const void *void1, const void *void2)
 
 
 /*
- * CompareShardCostAsc can be used to sort shard costs from high cost to low
+ * CompareShardCostDesc can be used to sort shard costs from high cost to low
  * cost.
  */
 static int
@@ -2080,8 +2105,8 @@ CompareDisallowedPlacementAsc(const void *void1, const void *void2)
 
 
 /*
- * CompareDisallowedPlacementAsc can be used to sort disallowed placements from
- * low cost to high cost.
+ * CompareDisallowedPlacementDesc can be used to sort disallowed placements from
+ * high cost to low cost.
  */
 static int
 CompareDisallowedPlacementDesc(const void *a, const void *b)
@@ -2590,7 +2615,7 @@ ActivePlacementsHash(List *shardPlacementList)
 
 
 /*
- * PlacementsHashFinds returns true if there exists a shard placement with the
+ * PlacementsHashFind returns true if there exists a shard placement with the
  * given workerNode and shard id in the given placements hash, otherwise it
  * returns false.
  */
@@ -2652,7 +2677,7 @@ PlacementsHashRemove(HTAB *placementsHash, uint64 shardId, WorkerNode *workerNod
 
 
 /*
- * ShardPlacementCompare compares two shard placements using shard id, node name,
+ * PlacementsHashCompare compares two shard placements using shard id, node name,
  * and node port number.
  */
 static int
@@ -2693,7 +2718,7 @@ PlacementsHashCompare(const void *lhsKey, const void *rhsKey, Size keySize)
 
 
 /*
- * ShardPlacementHashCode computes the hash code for a shard placement from the
+ * PlacementsHashHashCode computes the hash code for a shard placement from the
  * placement's shard id, node name, and node port number.
  */
 static uint32
@@ -2747,9 +2772,9 @@ UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName, int sour
 {
 	ProgressMonitorData *header = GetCurrentProgressMonitor();
 
-	if (header != NULL && header->steps != NULL)
+	if (header != NULL)
 	{
-		PlacementUpdateEventProgress *steps = header->steps;
+		PlacementUpdateEventProgress *steps = ProgressMonitorSteps(header);
 		ListCell *colocatedShardIntervalCell = NULL;
 
 		ShardInterval *shardInterval = LoadShardInterval(shardId);
@@ -2775,7 +2800,7 @@ UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName, int sour
 				strcmp(step->sourceName, sourceName) == 0 &&
 				step->sourcePort == sourcePort)
 			{
-				step->progress = progress;
+				pg_atomic_write_u64(&step->progress, progress);
 			}
 		}
 	}
@@ -2783,13 +2808,12 @@ UpdateColocatedShardPlacementProgress(uint64 shardId, char *sourceName, int sour
 
 
 /*
- * citus_rebalance_strategy_enterprise_check is trigger function, intended for
- * use in prohibiting writes to pg_dist_rebalance_strategy in Citus Community.
+ * pg_dist_rebalance_strategy_enterprise_check is a now removed function, but
+ * to avoid issues during upgrades a C stub is kept.
  */
 Datum
 pg_dist_rebalance_strategy_enterprise_check(PG_FUNCTION_ARGS)
 {
-	/* This is Enterprise, so this check is a no-op */
 	PG_RETURN_VOID();
 }
 
@@ -2809,6 +2833,7 @@ pg_dist_rebalance_strategy_enterprise_check(PG_FUNCTION_ARGS)
 Datum
 citus_validate_rebalance_strategy_functions(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
 	EnsureShardCostUDF(PG_GETARG_OID(0));
 	EnsureNodeCapacityUDF(PG_GETARG_OID(1));
 	EnsureShardAllowedOnNodeUDF(PG_GETARG_OID(2));
@@ -2895,7 +2920,7 @@ EnsureNodeCapacityUDF(Oid functionOid)
 
 
 /*
- * EnsureNodeCapacityUDF checks that the UDF matching the oid has the correct
+ * EnsureShardAllowedOnNodeUDF checks that the UDF matching the oid has the correct
  * signature to be used as a NodeCapacity function. The expected signature is:
  *
  * shard_allowed_on_node(shardid bigint, nodeid int) returns boolean

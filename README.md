@@ -2,7 +2,7 @@
 
 [![Slack Status](http://slack.citusdata.com/badge.svg)](https://slack.citusdata.com)
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
-[![Code Coverage](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)
+[![Code Coverage](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)](https://app.codecov.io/gh/citusdata/citus)
 
 ## What is Citus?
 
@@ -16,6 +16,8 @@ With Citus, you extend your PostgreSQL database with new superpowers:
 - **Columnar storage** compresses data, speeds up scans, and supports fast projections, both on regular and distributed tables.
 
 You can use these Citus superpowers to make your Postgres database scale-out ready on a single Citus node. Or you can build a large cluster capable of handling **high transaction throughputs**, especially in **multi-tenant apps**, run **fast analytical queries**, and process large amounts of **time series** or **IoT data** for **real-time analytics**. When your data size and volume grow, you can easily add more worker nodes to the cluster and rebalance the shards.
+
+Our [SIGMOD '21](https://2021.sigmod.org/) paper [Citus: Distributed PostgreSQL for Data-Intensive Applications](https://doi.org/10.1145/3448016.3457551) gives a more detailed look into what Citus is, how it works, and why it works that way.
 
 ![Citus scales out from a single node](/citus-scale-out.png)
 
@@ -79,14 +81,14 @@ Install packages on Ubuntu / Debian:
 ```bash
 curl https://install.citusdata.com/community/deb.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo apt-get -y install postgresql-13-citus-10.0
+sudo apt-get -y install postgresql-14-citus-10.2
 ```
 
 Install packages on CentOS / Fedora / Red Hat:
 ```bash
 curl https://install.citusdata.com/community/rpm.sh > add-citus-repo.sh
 sudo bash add-citus-repo.sh
-sudo yum install -y citus100_13
+sudo yum install -y citus102_14
 ```
 
 To add Citus to your local PostgreSQL database, add the following to `postgresql.conf`:
@@ -293,7 +295,7 @@ CREATE TABLE events_row AS SELECT * FROM events_columnar;
 
 You can use columnar storage by itself, or in a distributed table to combine the benefits of compression and the distributed query engine.
 
-When using columnar storage, you should only load data in batch using `COPY` or `INSERT..SELECT` to achieve good  compression. Update, delete, indexes, and foreign keys are currently unsupported on columnar tables. However, you can use partitioned tables in which newer partitions use row-based storage, and older partitions are compressed using columnar storage.
+When using columnar storage, you should only load data in batch using `COPY` or `INSERT..SELECT` to achieve good  compression. Update, delete, and foreign keys are currently unsupported on columnar tables. However, you can use partitioned tables in which newer partitions use row-based storage, and older partitions are compressed using columnar storage.
 
 To learn more about columnar storage, check out the [columnar storage README](https://github.com/citusdata/citus/blob/master/src/backend/columnar/README.md).
 

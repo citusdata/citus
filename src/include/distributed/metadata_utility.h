@@ -30,18 +30,16 @@
 
 /* total number of hash tokens (2^32) */
 #define HASH_TOKEN_COUNT INT64CONST(4294967296)
-#define SELECT_EXIST_QUERY "SELECT EXISTS (SELECT 1 FROM %s)"
+#define SELECT_TRUE_QUERY "SELECT TRUE FROM %s LIMIT 1"
 #define PG_TABLE_SIZE_FUNCTION "pg_table_size(%s)"
 #define PG_RELATION_SIZE_FUNCTION "pg_relation_size(%s)"
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
-#define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
 #define WORKER_PARTITIONED_TABLE_SIZE_FUNCTION "worker_partitioned_table_size(%s)"
 #define WORKER_PARTITIONED_RELATION_SIZE_FUNCTION "worker_partitioned_relation_size(%s)"
 #define WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION \
 	"worker_partitioned_relation_total_size(%s)"
 
-#define SHARD_SIZES_COLUMN_COUNT 2
-#define UPDATE_SHARD_STATISTICS_COLUMN_COUNT 4
+#define SHARD_SIZES_COLUMN_COUNT (3)
 
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
@@ -191,13 +189,9 @@ typedef enum SizeQueryType
 {
 	RELATION_SIZE, /* pg_relation_size() */
 	TOTAL_RELATION_SIZE, /* pg_total_relation_size() */
-	TABLE_SIZE, /* pg_table_size() */
-	CSTORE_TABLE_SIZE /* cstore_table_size() */
+	TABLE_SIZE /* pg_table_size() */
 } SizeQueryType;
 
-
-/* Config variable managed via guc.c */
-extern int ReplicationModel;
 
 /* Size functions */
 extern Datum citus_table_size(PG_FUNCTION_ARGS);
@@ -207,6 +201,7 @@ extern Datum citus_relation_size(PG_FUNCTION_ARGS);
 /* Function declarations to read shard and shard placement data */
 extern uint32 TableShardReplicationFactor(Oid relationId);
 extern List * LoadShardIntervalList(Oid relationId);
+extern List * LoadUnsortedShardIntervalListViaCatalog(Oid relationId);
 extern ShardInterval * LoadShardIntervalWithLongestShardName(Oid relationId);
 extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
@@ -216,8 +211,9 @@ extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
 extern List * ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId);
 extern List * ActiveShardPlacementList(uint64 shardId);
+extern List * ShardPlacementListWithoutOrphanedPlacements(uint64 shardId);
 extern ShardPlacement * ActiveShardPlacement(uint64 shardId, bool missingOk);
-extern List * BuildShardPlacementList(ShardInterval *shardInterval);
+extern List * BuildShardPlacementList(int64 shardId);
 extern List * AllShardPlacementsOnNodeGroup(int32 groupId);
 extern List * AllShardPlacementsWithShardPlacementState(ShardState shardState);
 extern List * GroupShardPlacementsForTableOnGroup(Oid relationId, int32 groupId);
@@ -225,7 +221,6 @@ extern StringInfo GenerateSizeQueryOnMultiplePlacements(List *shardIntervalList,
 														SizeQueryType sizeQueryType,
 														bool optimizePartitionCalculations);
 extern List * RemoveCoordinatorPlacementIfNotSingleNode(List *placementList);
-extern ShardPlacement * ShardPlacementOnGroup(uint64 shardId, int groupId);
 
 /* Function declarations to modify shard and shard placement data */
 extern void InsertShardRow(Oid relationId, uint64 shardId, char storageType,
@@ -236,13 +231,12 @@ extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  int32 groupId);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
-									  char replicationModel);
+									  char replicationModel, bool autoConverted);
+extern void UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
-extern void UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement,
-												char shardState);
-extern void MarkShardPlacementInactive(ShardPlacement *shardPlacement);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
+extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRow(uint64 placementId);
 extern void CreateDistributedTable(Oid relationId, Var *distributionColumn,
 								   char distributionMethod, int shardCount,
@@ -267,9 +261,9 @@ extern void EnsureFunctionOwner(Oid functionId);
 extern void EnsureSuperUser(void);
 extern void ErrorIfTableIsACatalogTable(Relation relation);
 extern void EnsureTableNotDistributed(Oid relationId);
-extern void EnsureReplicationSettings(Oid relationId, char replicationModel);
 extern void EnsureRelationExists(Oid relationId);
 extern bool RegularTable(Oid relationId);
+extern bool TableEmpty(Oid tableId);
 extern bool RelationUsesIdentityColumns(TupleDesc relationDesc);
 extern char * ConstructQualifiedShardName(ShardInterval *shardInterval);
 extern uint64 GetFirstShardId(Oid relationId);
@@ -285,10 +279,19 @@ extern ShardInterval * DeformedDistShardTupleToShardInterval(Datum *datumArray,
 															 int32 intervalTypeMod);
 extern void GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
 								Oid *intervalTypeId, int32 *intervalTypeMod);
-extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds, bool
-												   useDistributedTransaction, bool
-												   useShardMinMaxQuery);
+extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds,
+												   bool useDistributedTransaction);
 extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
 											   uint64 *availableBytes,
 											   uint64 *totalBytes);
+extern void ExecuteQueryViaSPI(char *query, int SPIOK);
+extern void EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId);
+extern void AlterSequenceType(Oid seqOid, Oid typeOid);
+extern void MarkSequenceListDistributedAndPropagateWithDependencies(Oid relationId,
+																	List *sequenceList);
+extern void MarkSequenceDistributedAndPropagateWithDependencies(Oid relationId, Oid
+																sequenceOid);
+extern void EnsureDistributedSequencesHaveOneType(Oid relationId,
+												  List *dependentSequenceList,
+												  List *attnumList);
 #endif   /* METADATA_UTILITY_H */

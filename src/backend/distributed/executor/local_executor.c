@@ -108,8 +108,15 @@
 bool EnableLocalExecution = true;
 bool LogLocalCommands = false;
 
+int LocalExecutorLevel = 0;
+
 static LocalExecutionStatus CurrentLocalExecutionStatus = LOCAL_EXECUTION_OPTIONAL;
 
+static uint64 ExecuteLocalTaskListInternal(List *taskList,
+										   ParamListInfo paramListInfo,
+										   DistributedPlan *distributedPlan,
+										   TupleDestination *defaultTupleDest,
+										   bool isUtilityCommand);
 static void SplitLocalAndRemotePlacements(List *taskPlacementList,
 										  List **localTaskPlacementList,
 										  List **remoteTaskPlacementList);
@@ -121,9 +128,6 @@ static void LogLocalCommand(Task *task);
 static uint64 LocallyPlanAndExecuteMultipleQueries(List *queryStrings,
 												   TupleDestination *tupleDest,
 												   Task *task);
-static void ExtractParametersForLocalExecution(ParamListInfo paramListInfo,
-											   Oid **parameterTypes,
-											   const char ***parameterValues);
 static void ExecuteUdfTaskQuery(Query *localUdfCommandQuery);
 static void EnsureTransitionPossible(LocalExecutionStatus from,
 									 LocalExecutionStatus to);
@@ -140,7 +144,7 @@ GetCurrentLocalExecutionStatus(void)
 
 
 /*
- * ExecuteLocalTasks executes the given tasks locally.
+ * ExecuteLocalTaskList executes the given tasks locally.
  *
  * The function goes over the task list and executes them locally.
  * The returning tuples (if any) is stored in the tupleStoreState.
@@ -200,10 +204,8 @@ ExecuteLocalTaskListExtended(List *taskList,
 							 TupleDestination *defaultTupleDest,
 							 bool isUtilityCommand)
 {
-	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
-	int numParams = 0;
-	Oid *parameterTypes = NULL;
 	uint64 totalRowsProcessed = 0;
+	ParamListInfo paramListInfo = copyParamList(orig_paramListInfo);
 
 	/*
 	 * Even if we are executing local tasks, we still enable
@@ -217,6 +219,38 @@ ExecuteLocalTaskListExtended(List *taskList,
 	 * we only deal with local tasks in the transaction.
 	 */
 	UseCoordinatedTransaction();
+
+	LocalExecutorLevel++;
+	PG_TRY();
+	{
+		totalRowsProcessed = ExecuteLocalTaskListInternal(taskList, paramListInfo,
+														  distributedPlan,
+														  defaultTupleDest,
+														  isUtilityCommand);
+	}
+	PG_CATCH();
+	{
+		LocalExecutorLevel--;
+
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+	LocalExecutorLevel--;
+
+	return totalRowsProcessed;
+}
+
+
+static uint64
+ExecuteLocalTaskListInternal(List *taskList,
+							 ParamListInfo paramListInfo,
+							 DistributedPlan *distributedPlan,
+							 TupleDestination *defaultTupleDest,
+							 bool isUtilityCommand)
+{
+	uint64 totalRowsProcessed = 0;
+	int numParams = 0;
+	Oid *parameterTypes = NULL;
 
 	if (paramListInfo != NULL)
 	{
@@ -263,7 +297,7 @@ ExecuteLocalTaskListExtended(List *taskList,
 			 * queries are also ReadOnly, our 2PC logic is smart enough to skip sending
 			 * PREPARE to those connections.
 			 */
-			CoordinatedTransactionShouldUse2PC();
+			Use2PCForCoordinatedTransaction();
 		}
 
 		LogLocalCommand(task);
@@ -401,7 +435,7 @@ LocallyPlanAndExecuteMultipleQueries(List *queryStrings, TupleDestination *tuple
  * value arrays. It does not change the oid of custom types, because the
  * query will be run locally.
  */
-static void
+void
 ExtractParametersForLocalExecution(ParamListInfo paramListInfo, Oid **parameterTypes,
 								   const char ***parameterValues)
 {
@@ -615,7 +649,7 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	int localPlacementIndex = 0;
 
 	/*
-	 * Use the tupleStore provided by the scanState because it is shared accross
+	 * Use the tupleStore provided by the scanState because it is shared across
 	 * the other task executions and the adaptive executor.
 	 *
 	 * Also note that as long as the tupleDest is provided, local execution always

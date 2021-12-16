@@ -34,6 +34,7 @@
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/multi_executor.h"
 #include "distributed/function_utils.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
@@ -206,7 +207,7 @@ static ScanKeyData DistObjectScanKey[3];
 
 
 /* local function forward declarations */
-static bool IsCitusTableViaCatalog(Oid relationId);
+static HeapTuple PgDistPartitionTupleViaCatalog(Oid relationId);
 static ShardIdCacheEntry * LookupShardIdCacheEntry(int64 shardId);
 static CitusTableCacheEntry * BuildCitusTableCacheEntry(Oid relationId);
 static void BuildCachedShardList(CitusTableCacheEntry *cacheEntry);
@@ -236,13 +237,9 @@ static void InvalidateLocalGroupIdRelationCacheCallback(Datum argument, Oid rela
 static void CitusTableCacheEntryReleaseCallback(ResourceReleasePhase phase, bool isCommit,
 												bool isTopLevel, void *arg);
 static HeapTuple LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId);
-static List * LookupDistShardTuples(Oid relationId);
 static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 									  Oid *columnTypeId, int32 *columnTypeMod,
 									  Oid *intervalTypeId, int32 *intervalTypeMod);
-static ShardInterval * TupleToShardInterval(HeapTuple heapTuple,
-											TupleDesc tupleDescriptor, Oid intervalTypeId,
-											int32 intervalTypeMod);
 static void CachedNamespaceLookup(const char *nspname, Oid *cachedOid);
 static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
 static void CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
@@ -297,6 +294,67 @@ EnsureModificationsCanRun(void)
 	{
 		ereport(ERROR, (errmsg("writing to worker nodes is not currently allowed"),
 						errdetail("citus.use_secondary_nodes is set to 'always'")));
+	}
+}
+
+
+/*
+ * EnsureModificationsCanRunOnRelation firsts calls into EnsureModificationsCanRun() and
+ * then does one more additional check. The additional check is to give a proper error
+ * message if any relation that is modified is replicated, as replicated tables use
+ * 2PC and 2PC cannot happen when recovery is in progress.
+ */
+void
+EnsureModificationsCanRunOnRelation(Oid relationId)
+{
+	EnsureModificationsCanRun();
+
+	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
+	{
+		/* we are not interested in PG tables */
+		return;
+	}
+
+	bool modifiedTableReplicated =
+		IsCitusTableType(relationId, REFERENCE_TABLE) ||
+		!SingleReplicatedTable(relationId);
+
+	if (!IsCoordinator() && !AllowModificationsFromWorkersToReplicatedTables &&
+		modifiedTableReplicated)
+	{
+		ereport(ERROR, (errmsg("modifications via the worker nodes are not "
+							   "allowed for replicated tables such as reference "
+							   "tables or hash distributed tables with replication "
+							   "factor greater than 1."),
+						errhint("All modifications to replicated tables should "
+								"happen via the coordinator unless "
+								"citus.allow_modifications_from_workers_to_replicated_tables "
+								" = true."),
+						errdetail("Allowing modifications from the worker nodes "
+								  "requires extra locking which might decrease "
+								  "the throughput.")));
+	}
+
+	/*
+	 * Even if user allows writes from standby, we should not allow for
+	 * replicated tables as they require 2PC. And, 2PC needs to write a log
+	 * record on the coordinator.
+	 */
+	if (!(RecoveryInProgress() && WritableStandbyCoordinator))
+	{
+		return;
+	}
+
+	if (modifiedTableReplicated)
+	{
+		ereport(ERROR, (errmsg("writing to worker nodes is not currently "
+							   "allowed for replicated tables such as reference "
+							   "tables or hash distributed tables with replication "
+							   "factor greater than 1."),
+						errhint("All modifications to replicated tables "
+								"happen via 2PC, and 2PC requires the "
+								"database to be in a writable state."),
+						errdetail("the database is read-only")));
 	}
 }
 
@@ -425,8 +483,113 @@ IsCitusTable(Oid relationId)
  * offset and the corresponding index.  If we ever come close to changing
  * that, we'll have to work a bit harder.
  */
-static bool
+bool
 IsCitusTableViaCatalog(Oid relationId)
+{
+	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+
+	bool heapTupleIsValid = HeapTupleIsValid(partitionTuple);
+
+	if (heapTupleIsValid)
+	{
+		heap_freetuple(partitionTuple);
+	}
+	return heapTupleIsValid;
+}
+
+
+/*
+ * PartitionMethodViaCatalog gets a relationId and returns the partition
+ * method column from pg_dist_partition via reading from catalog.
+ */
+char
+PartitionMethodViaCatalog(Oid relationId)
+{
+	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+	if (!HeapTupleIsValid(partitionTuple))
+	{
+		return DISTRIBUTE_BY_INVALID;
+	}
+
+	Datum datumArray[Natts_pg_dist_partition];
+	bool isNullArray[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
+
+	if (isNullArray[Anum_pg_dist_partition_partmethod - 1])
+	{
+		/* partition method cannot be NULL, still let's make sure */
+		heap_freetuple(partitionTuple);
+		table_close(pgDistPartition, NoLock);
+		return DISTRIBUTE_BY_INVALID;
+	}
+
+	Datum partitionMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
+	char partitionMethodChar = DatumGetChar(partitionMethodDatum);
+
+	heap_freetuple(partitionTuple);
+	table_close(pgDistPartition, NoLock);
+
+	return partitionMethodChar;
+}
+
+
+/*
+ * PartitionColumnViaCatalog gets a relationId and returns the partition
+ * key column from pg_dist_partition via reading from catalog.
+ */
+Var *
+PartitionColumnViaCatalog(Oid relationId)
+{
+	HeapTuple partitionTuple = PgDistPartitionTupleViaCatalog(relationId);
+	if (!HeapTupleIsValid(partitionTuple))
+	{
+		return NULL;
+	}
+
+	Datum datumArray[Natts_pg_dist_partition];
+	bool isNullArray[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), AccessShareLock);
+
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	heap_deform_tuple(partitionTuple, tupleDescriptor, datumArray, isNullArray);
+
+	if (isNullArray[Anum_pg_dist_partition_partkey - 1])
+	{
+		/* partition key cannot be NULL, still let's make sure */
+		heap_freetuple(partitionTuple);
+		table_close(pgDistPartition, NoLock);
+		return NULL;
+	}
+
+	Datum partitionKeyDatum = datumArray[Anum_pg_dist_partition_partkey - 1];
+	char *partitionKeyString = TextDatumGetCString(partitionKeyDatum);
+
+	/* convert the string to a Node and ensure it is a Var */
+	Node *partitionNode = stringToNode(partitionKeyString);
+	Assert(IsA(partitionNode, Var));
+
+	Var *partitionColumn = (Var *) partitionNode;
+
+	heap_freetuple(partitionTuple);
+	table_close(pgDistPartition, NoLock);
+
+	return partitionColumn;
+}
+
+
+/*
+ * PgDistPartitionTupleViaCatalog is a helper function that searches
+ * pg_dist_partition for the given relationId. The caller is responsible
+ * for ensuring that the returned heap tuple is valid before accessing
+ * its fields.
+ */
+static HeapTuple
+PgDistPartitionTupleViaCatalog(Oid relationId)
 {
 	const int scanKeyCount = 1;
 	ScanKeyData scanKey[1];
@@ -442,10 +605,17 @@ IsCitusTableViaCatalog(Oid relationId)
 													indexOK, NULL, scanKeyCount, scanKey);
 
 	HeapTuple partitionTuple = systable_getnext(scanDescriptor);
+
+	if (HeapTupleIsValid(partitionTuple))
+	{
+		/* callers should have the tuple in their memory contexts */
+		partitionTuple = heap_copytuple(partitionTuple);
+	}
+
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPartition, AccessShareLock);
 
-	return HeapTupleIsValid(partitionTuple);
+	return partitionTuple;
 }
 
 
@@ -594,12 +764,14 @@ LoadShardPlacement(uint64 shardId, uint64 placementId)
 
 
 /*
- * FindShardPlacementOnGroup returns the shard placement for the given shard
- * on the given group, or returns NULL if no placement for the shard exists
- * on the group.
+ * ShardPlacementOnGroupIncludingOrphanedPlacements returns the shard placement
+ * for the given shard on the given group, or returns NULL if no placement for
+ * the shard exists on the group.
+ *
+ * NOTE: This can return inactive or orphaned placements.
  */
 ShardPlacement *
-FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
+ShardPlacementOnGroupIncludingOrphanedPlacements(int32 groupId, uint64 shardId)
 {
 	ShardPlacement *placementOnNode = NULL;
 
@@ -614,7 +786,6 @@ FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
 	for (int placementIndex = 0; placementIndex < numberOfPlacements; placementIndex++)
 	{
 		GroupShardPlacement *placement = &placementArray[placementIndex];
-
 		if (placement->groupId == groupId)
 		{
 			placementOnNode = ResolveGroupShardPlacement(placement, tableEntry,
@@ -624,6 +795,28 @@ FindShardPlacementOnGroup(int32 groupId, uint64 shardId)
 	}
 
 	return placementOnNode;
+}
+
+
+/*
+ * ActiveShardPlacementOnGroup returns the active shard placement for the
+ * given shard on the given group, or returns NULL if no active placement for
+ * the shard exists on the group.
+ */
+ShardPlacement *
+ActiveShardPlacementOnGroup(int32 groupId, uint64 shardId)
+{
+	ShardPlacement *placement =
+		ShardPlacementOnGroupIncludingOrphanedPlacements(groupId, shardId);
+	if (placement == NULL)
+	{
+		return NULL;
+	}
+	if (placement->shardState != SHARD_STATE_ACTIVE)
+	{
+		return NULL;
+	}
+	return placement;
 }
 
 
@@ -791,13 +984,14 @@ LookupNodeForGroup(int32 groupId)
 
 /*
  * ShardPlacementList returns the list of placements for the given shard from
- * the cache.
+ * the cache. This list includes placements that are orphaned, because they
+ * their deletion is postponed to a later point (shardstate = 4).
  *
  * The returned list is deep copied from the cache and thus can be modified
  * and pfree()d freely.
  */
 List *
-ShardPlacementList(uint64 shardId)
+ShardPlacementListIncludingOrphanedPlacements(uint64 shardId)
 {
 	List *placementList = NIL;
 
@@ -854,7 +1048,7 @@ InitializeTableCacheEntry(int64 shardId)
 
 
 /*
- * RefreshInvalidTableCacheEntry checks if the cache entry is still valid and
+ * RefreshTableCacheEntryIfInvalid checks if the cache entry is still valid and
  * refreshes it in cache when it's not. It returns true if it refreshed the
  * entry in the cache and false if it didn't.
  */
@@ -1258,6 +1452,20 @@ BuildCitusTableCacheEntry(Oid relationId)
 		cacheEntry->replicationModel = DatumGetChar(replicationModelDatum);
 	}
 
+	if (isNullArray[Anum_pg_dist_partition_autoconverted - 1])
+	{
+		/*
+		 * We don't expect this to happen, but set it to false (the default value)
+		 * to not break if anything goes wrong.
+		 */
+		cacheEntry->autoConverted = false;
+	}
+	else
+	{
+		cacheEntry->autoConverted = DatumGetBool(
+			datumArray[Anum_pg_dist_partition_autoconverted - 1]);
+	}
+
 	heap_freetuple(distPartitionTuple);
 
 	BuildCachedShardList(cacheEntry);
@@ -1480,7 +1688,7 @@ BuildCachedShardList(CitusTableCacheEntry *cacheEntry)
 		cacheEntry->shardIntervalArrayLength++;
 
 		/* build list of shard placements */
-		List *placementList = BuildShardPlacementList(shardInterval);
+		List *placementList = BuildShardPlacementList(shardId);
 		int numberOfPlacements = list_length(placementList);
 
 		/* and copy that list into the cache entry */
@@ -2641,6 +2849,8 @@ SecondaryNodeRoleId(void)
 Datum
 citus_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldLogicalRelationId = InvalidOid;
 	Oid newLogicalRelationId = InvalidOid;
@@ -2650,8 +2860,6 @@ citus_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	if (RelationGetRelid(triggerData->tg_relation) != DistPartitionRelationId())
 	{
@@ -2718,6 +2926,8 @@ master_dist_partition_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldLogicalRelationId = InvalidOid;
 	Oid newLogicalRelationId = InvalidOid;
@@ -2727,8 +2937,6 @@ citus_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	if (RelationGetRelid(triggerData->tg_relation) != DistShardRelationId())
 	{
@@ -2795,6 +3003,8 @@ master_dist_shard_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	TriggerData *triggerData = (TriggerData *) fcinfo->context;
 	Oid oldShardId = InvalidOid;
 	Oid newShardId = InvalidOid;
@@ -2804,8 +3014,6 @@ citus_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * Before 7.0-2 this trigger is on pg_dist_shard_placement,
@@ -2884,13 +3092,13 @@ master_dist_placement_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	CitusInvalidateRelcacheByRelid(DistNodeRelationId());
 
@@ -2919,13 +3127,13 @@ master_dist_node_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_conninfo_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	/* no-op in community edition */
 
@@ -2954,13 +3162,13 @@ master_dist_authinfo_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	CitusInvalidateRelcacheByRelid(DistLocalGroupIdRelationId());
 
@@ -2989,13 +3197,13 @@ master_dist_local_group_cache_invalidate(PG_FUNCTION_ARGS)
 Datum
 citus_dist_object_cache_invalidate(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	if (!CALLED_AS_TRIGGER(fcinfo))
 	{
 		ereport(ERROR, (errcode(ERRCODE_E_R_I_E_TRIGGER_PROTOCOL_VIOLATED),
 						errmsg("must be called as trigger")));
 	}
-
-	CheckCitusVersion(ERROR);
 
 	CitusInvalidateRelcacheByRelid(DistObjectRelationId());
 
@@ -3344,8 +3552,7 @@ GetLocalGroupId(void)
 		return LocalGroupId;
 	}
 
-	Oid localGroupTableOid = get_relname_relid("pg_dist_local_group",
-											   PG_CATALOG_NAMESPACE);
+	Oid localGroupTableOid = DistLocalGroupIdRelationId();
 	if (localGroupTableOid == InvalidOid)
 	{
 		return 0;
@@ -3525,13 +3732,14 @@ ResetCitusTableCacheEntry(CitusTableCacheEntry *cacheEntry)
 	cacheEntry->hasUninitializedShardInterval = false;
 	cacheEntry->hasUniformHashDistribution = false;
 	cacheEntry->hasOverlappingShardInterval = false;
+	cacheEntry->autoConverted = false;
 
 	pfree(cacheEntry);
 }
 
 
 /*
- * RemoveShardIdCacheEntries removes all shard ID cache entries belonging to the
+ * RemoveStaleShardIdCacheEntries removes all shard ID cache entries belonging to the
  * given table entry. If the shard ID belongs to a different (newer) table entry,
  * we leave it in place.
  */
@@ -3828,23 +4036,19 @@ CitusTableTypeIdList(CitusTableType citusTableType)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		bool isNull = false;
+		bool isNullArray[Natts_pg_dist_partition];
+		Datum datumArray[Natts_pg_dist_partition];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
 
-		Datum partMethodDatum =
-			heap_getattr(heapTuple, Anum_pg_dist_partition_partmethod,
-						 tupleDescriptor, &isNull);
-		Datum replicationModelDatum =
-			heap_getattr(heapTuple, Anum_pg_dist_partition_repmodel,
-						 tupleDescriptor, &isNull);
+		Datum partMethodDatum = datumArray[Anum_pg_dist_partition_partmethod - 1];
+		Datum replicationModelDatum = datumArray[Anum_pg_dist_partition_repmodel - 1];
 
 		Oid partitionMethod = DatumGetChar(partMethodDatum);
 		Oid replicationModel = DatumGetChar(replicationModelDatum);
 
 		if (IsCitusTableTypeInternal(partitionMethod, replicationModel, citusTableType))
 		{
-			Datum relationIdDatum = heap_getattr(heapTuple,
-												 Anum_pg_dist_partition_logicalrelid,
-												 tupleDescriptor, &isNull);
+			Datum relationIdDatum = datumArray[Anum_pg_dist_partition_logicalrelid - 1];
 
 			Oid relationId = DatumGetObjectId(relationIdDatum);
 
@@ -3974,7 +4178,7 @@ LookupDistPartitionTuple(Relation pgDistPartition, Oid relationId)
  * LookupDistShardTuples returns a list of all dist_shard tuples for the
  * specified relation.
  */
-static List *
+List *
 LookupDistShardTuples(Oid relationId)
 {
 	List *distShardTupleList = NIL;
@@ -4103,19 +4307,6 @@ GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMethod,
 	{
 		case DISTRIBUTE_BY_APPEND:
 		case DISTRIBUTE_BY_RANGE:
-		{
-			Node *partitionNode = stringToNode(partitionKeyString);
-			Var *partitionColumn = (Var *) partitionNode;
-			Assert(IsA(partitionNode, Var));
-
-			GetIntervalTypeInfo(partitionMethod, partitionColumn,
-								intervalTypeId, intervalTypeMod);
-
-			*columnTypeId = partitionColumn->vartype;
-			*columnTypeMod = partitionColumn->vartypmod;
-			break;
-		}
-
 		case DISTRIBUTE_BY_HASH:
 		{
 			Node *partitionNode = stringToNode(partitionKeyString);
@@ -4185,7 +4376,7 @@ GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
  * TupleToShardInterval transforms the specified dist_shard tuple into a new
  * ShardInterval using the provided descriptor and partition type information.
  */
-static ShardInterval *
+ShardInterval *
 TupleToShardInterval(HeapTuple heapTuple, TupleDesc tupleDescriptor, Oid
 					 intervalTypeId,
 					 int32 intervalTypeMod)

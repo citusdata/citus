@@ -293,6 +293,18 @@ Instead use SQL type comments, i.e:
 ```
 See [#3115](https://github.com/citusdata/citus/pull/3115) for more info.
 
+## `disallow_hash_comments_in_spec_files.sh`
+
+We do not use comments starting with # in spec files because it creates errors
+from C preprocessor that expects directives after this character.
+Instead use C type comments, i.e:
+```
+// this is a single line comment
+
+/*
+ * this is a multi line comment
+ */
+```
 
 ## `disallow_long_changelog_entries.sh`
 
@@ -358,3 +370,9 @@ This script checks and fixes issues with `.gitignore` rules:
 2. Makes sure we do not commit any generated files that should be ignored. If there is an
    ignored file in the git tree, the user is expected to review the files that are removed
    from the git tree and commit them.
+
+## `check_gucs_are_alphabetically_sorted.sh`
+
+This script checks the order of the GUCs defined in `shared_library_init.c`.
+To solve this failure, please check `shared_library_init.c` and make sure that the GUC
+definitions are in alphabetical order.

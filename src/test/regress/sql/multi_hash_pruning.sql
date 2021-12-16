@@ -126,14 +126,14 @@ SELECT count(*) FROM lineitem_hash_part
 SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey IN (SELECT l_orderkey FROM lineitem_hash_part);
 SELECT count(*) FROM lineitem_hash_part WHERE l_orderkey = ANY (SELECT l_orderkey FROM lineitem_hash_part);
 
--- Check whether we support range queries with append distributed table
+-- Check whether we support range queries
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey >= 1 AND l_orderkey <= 3;
 
 SELECT count(*) FROM lineitem
 	WHERE (l_orderkey >= 1 AND l_orderkey <= 3) AND (l_quantity > 11 AND l_quantity < 22);
 
--- Check whether we support IN/ANY in subquery with append and range distributed table
+-- Check whether we support IN/ANY in subquery
 SELECT count(*) FROM lineitem
 	WHERE l_orderkey = ANY ('{1,2,3}');
 

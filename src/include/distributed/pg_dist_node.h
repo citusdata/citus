@@ -15,7 +15,7 @@
  *      compiler constants for pg_dist_node
  * ----------------
  *
- *  n.b. master_add_node, master_add_inactive_node, and master_activate_node all
+ *  n.b. citus_add_node, citus_add_inactive_node, and citus_activate_node all
  *  directly return pg_dist_node tuples. This means their definitions (and
  *  in particular their OUT parameters) must be changed whenever the definition of
  *  pg_dist_node changes.

@@ -9,6 +9,9 @@ SET citus.next_shard_id TO 570000;
 SET citus.explain_distributed_queries TO on;
 SET citus.enable_repartition_joins to ON;
 
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
+
 -- Function that parses explain output as JSON
 CREATE FUNCTION explain_json(query text)
 RETURNS jsonb
@@ -95,8 +98,8 @@ SET LOCAL citus.enable_repartition_joins TO true;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
 -- Confirm repartiton join in distributed subplan works
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
-WITH repartion AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
-SELECT count(*) from repartion;
+WITH repartition AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
+SELECT count(*) from repartition;
 END;
 DROP TABLE t1, t2;
 
@@ -539,7 +542,7 @@ EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE router_executor
 \set VERBOSITY TERSE
 PREPARE multi_shard_query_param(int) AS UPDATE lineitem SET l_quantity = $1;
 BEGIN;
-EXPLAIN EXECUTE multi_shard_query_param(5);
+EXPLAIN (COSTS OFF) EXECUTE multi_shard_query_param(5);
 ROLLBACK;
 BEGIN;
 EXPLAIN (ANALYZE ON, COSTS OFF, TIMING OFF, SUMMARY OFF) EXECUTE multi_shard_query_param(5);
@@ -990,7 +993,7 @@ deallocate update_query;
 
 -- prepared deletes
 PREPARE delete_query AS DELETE FROM simple WHERE name=$1 OR name=$2;
-EXPLAIN EXECUTE delete_query('x', 'y');
+EXPLAIN (COSTS OFF) EXECUTE delete_query('x', 'y');
 EXPLAIN :default_analyze_flags EXECUTE delete_query('x', 'y');
 deallocate delete_query;
 

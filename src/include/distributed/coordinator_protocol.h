@@ -51,9 +51,6 @@
 #define TRANSFER_MODE_FORCE_LOGICAL 'l'
 #define TRANSFER_MODE_BLOCK_WRITES 'b'
 
-/* Name of columnar foreign data wrapper */
-#define CSTORE_FDW_NAME "cstore_fdw"
-
 #define SHARDID_SEQUENCE_NAME "pg_dist_shardid_seq"
 #define PLACEMENTID_SEQUENCE_NAME "pg_dist_placement_placementid_seq"
 
@@ -101,12 +98,33 @@ typedef enum TableDDLCommandType
 typedef enum IndexDefinitionDeparseFlags
 {
 	INCLUDE_CREATE_INDEX_STATEMENTS = 1 << 0,
-	INCLUDE_INDEX_CLUSTERED_STATEMENTS = 1 << 1,
-	INCLUDE_INDEX_STATISTICS_STATEMENTTS = 1 << 2,
+	INCLUDE_CREATE_CONSTRAINT_STATEMENTS = 1 << 1,
+	INCLUDE_INDEX_CLUSTERED_STATEMENTS = 1 << 2,
+	INCLUDE_INDEX_STATISTICS_STATEMENTTS = 1 << 3,
 	INCLUDE_INDEX_ALL_STATEMENTS = INCLUDE_CREATE_INDEX_STATEMENTS |
+								   INCLUDE_CREATE_CONSTRAINT_STATEMENTS |
 								   INCLUDE_INDEX_CLUSTERED_STATEMENTS |
 								   INCLUDE_INDEX_STATISTICS_STATEMENTTS
 } IndexDefinitionDeparseFlags;
+
+
+/*
+ * IncludeSequenceDefaults decides on inclusion of DEFAULT clauses for columns
+ * getting their default values from a sequence when creating the definition
+ * of a table.
+ */
+typedef enum IncludeSequenceDefaults
+{
+	NO_SEQUENCE_DEFAULTS = 0, /* don't include sequence defaults */
+	NEXTVAL_SEQUENCE_DEFAULTS = 1, /* include sequence defaults */
+
+	/*
+	 * Include sequence defaults, but use worker_nextval instead of nextval
+	 * when the default will be called in worker node, and the column type is
+	 * int or smallint.
+	 */
+	WORKER_NEXTVAL_SEQUENCE_DEFAULTS = 2,
+} IncludeSequenceDefaults;
 
 
 struct TableDDLCommand;
@@ -178,7 +196,6 @@ extern char * GetTableDDLCommand(TableDDLCommand *command);
 /* Config variables managed via guc.c */
 extern int ShardCount;
 extern int ShardReplicationFactor;
-extern int ShardMaxSize;
 extern int ShardPlacementPolicy;
 extern int NextShardId;
 extern int NextPlacementId;
@@ -187,15 +204,15 @@ extern int NextPlacementId;
 extern bool IsCoordinator(void);
 
 /* Function declarations local to the distributed module */
-extern bool CStoreTable(Oid relationId);
 extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
-extern List * GetFullTableCreationCommands(Oid relationId, bool includeSequenceDefaults);
+extern List * GetFullTableCreationCommands(Oid relationId,
+										   IncludeSequenceDefaults includeSequenceDefaults);
 extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes,
 											   bool includeReplicaIdentity);
-extern List * GetPreLoadTableCreationCommands(Oid relationId,
-											  bool includeSequenceDefaults,
+extern List * GetPreLoadTableCreationCommands(Oid relationId, IncludeSequenceDefaults
+											  includeSequenceDefaults,
 											  char *accessMethod);
 extern List * GetTableIndexAndConstraintCommands(Oid relationId, int indexFlags);
 extern List * GetTableIndexAndConstraintCommandsExcludingReplicaIdentity(Oid relationId,
@@ -246,9 +263,7 @@ extern Datum master_stage_shard_placement_row(PG_FUNCTION_ARGS);
 
 /* Function declarations to help with data staging and deletion */
 extern Datum master_create_empty_shard(PG_FUNCTION_ARGS);
-extern Datum master_append_table_to_shard(PG_FUNCTION_ARGS);
 extern Datum master_update_shard_statistics(PG_FUNCTION_ARGS);
-extern Datum master_apply_delete_command(PG_FUNCTION_ARGS);
 extern Datum master_drop_sequences(PG_FUNCTION_ARGS);
 extern Datum master_modify_multiple_shards(PG_FUNCTION_ARGS);
 extern Datum lock_relation_if_exists(PG_FUNCTION_ARGS);
@@ -280,7 +295,6 @@ extern ShardPlacement * SearchShardPlacementInListOrError(List *shardPlacementLi
 														  uint32 nodePort);
 extern void ErrorIfTargetNodeIsNotSafeToMove(const char *targetNodeName, int
 											 targetNodePort);
-extern void ErrorIfMoveCitusLocalTable(Oid relationId);
 extern char LookupShardTransferMode(Oid shardReplicationModeOid);
 extern void BlockWritesToShardList(List *shardList);
 extern List * WorkerApplyShardDDLCommandList(List *ddlCommandList, int64 shardId);

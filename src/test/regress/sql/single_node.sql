@@ -3,7 +3,9 @@ SET search_path TO single_node;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 90630500;
-SET citus.replication_model TO 'streaming';
+
+-- Ensure tuple data in explain analyze output is the same on all PG versions
+SET citus.enable_binary_protocol = TRUE;
 
 -- adding the coordinator as inactive is disallowed
 SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
@@ -13,7 +15,7 @@ SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 
 -- coordinator cannot be disabled
-SELECT 1 FROM master_disable_node('localhost', :master_port);
+SELECT 1 FROM citus_disable_node('localhost', :master_port);
 
 RESET client_min_messages;
 
@@ -363,6 +365,13 @@ BEGIN;
 	INSERT INTO test SELECT i,i FROM generate_series(0,100)i;
 ROLLBACK;
 
+-- master_create_empty_shard on coordinator
+BEGIN;
+CREATE TABLE append_table (a INT, b INT);
+SELECT create_distributed_table('append_table','a','append');
+SELECT master_create_empty_shard('append_table');
+END;
+
 -- alter table inside a tx block
 BEGIN;
 	ALTER TABLE test ADD COLUMN z single_node.new_type;
@@ -527,7 +536,7 @@ SELECT count(*) FROM local;
 SELECT * FROM local ORDER BY c;
 SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
--- Check repartion joins are supported
+-- Check repartition joins are supported
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
 SET citus.enable_single_hash_repartition_joins TO ON;
@@ -905,6 +914,25 @@ SELECT bool_and(z is null) FROM cte_1;
 WITH cte_1 AS
 (INSERT INTO non_binary_copy_test SELECT * FROM non_binary_copy_test LIMIT 10000 ON CONFLICT (key) DO UPDATE SET value = (0, 'citus0')::new_type RETURNING key, z)
 SELECT count(DISTINCT key::text), count(DISTINCT z::text) FROM cte_1;
+
+-- test disabling drop and truncate for known shards
+SET citus.shard_replication_factor TO 1;
+CREATE TABLE test_disabling_drop_and_truncate (a int);
+SELECT create_distributed_table('test_disabling_drop_and_truncate', 'a');
+SET citus.enable_manual_changes_to_shards TO off;
+
+-- these should error out
+DROP TABLE test_disabling_drop_and_truncate_102040;
+TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
+
+RESET citus.enable_manual_changes_to_shards ;
+
+-- these should work as expected
+TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
+DROP TABLE test_disabling_drop_and_truncate_102040;
+
+RESET citus.shard_replication_factor;
+DROP TABLE test_disabling_drop_and_truncate;
 
 -- lets flush the copy often to make sure everyhing is fine
 SET citus.local_copy_flush_threshold TO 1;

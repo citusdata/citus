@@ -92,9 +92,8 @@ PreprocessCreateStatisticsStmt(Node *node, const char *queryString,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
 	ddlJob->targetRelationId = relationId;
-	ddlJob->concurrentIndexCmd = false;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -198,9 +197,8 @@ PreprocessDropStatisticsStmt(Node *node, const char *queryString,
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
 		ddlJob->targetRelationId = relationId;
-		ddlJob->concurrentIndexCmd = false;
 		ddlJob->startNewTransaction = false;
-		ddlJob->commandString = ddlCommand;
+		ddlJob->metadataSyncCommand = ddlCommand;
 		ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 		ddlJobs = lappend(ddlJobs, ddlJob);
@@ -238,9 +236,8 @@ PreprocessAlterStatisticsRenameStmt(Node *node, const char *queryString,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
 	ddlJob->targetRelationId = relationId;
-	ddlJob->concurrentIndexCmd = false;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -277,9 +274,8 @@ PreprocessAlterStatisticsSchemaStmt(Node *node, const char *queryString,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
 	ddlJob->targetRelationId = relationId;
-	ddlJob->concurrentIndexCmd = false;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -352,7 +348,18 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 {
 	AlterStatsStmt *stmt = castNode(AlterStatsStmt, node);
 
-	Oid statsOid = get_statistics_object_oid(stmt->defnames, false);
+	Oid statsOid = get_statistics_object_oid(stmt->defnames, stmt->missing_ok);
+
+	if (!OidIsValid(statsOid))
+	{
+		/*
+		 * If statsOid is invalid, here we can assume that the query includes
+		 * IF EXISTS clause, since get_statistics_object_oid would error out otherwise.
+		 * So here we can safely return NIL here without checking stmt->missing_ok.
+		 */
+		return NIL;
+	}
+
 	Oid relationId = GetRelIdByStatsOid(statsOid);
 
 	if (!IsCitusTable(relationId) || !ShouldPropagate())
@@ -369,9 +376,8 @@ PreprocessAlterStatisticsStmt(Node *node, const char *queryString,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
 	ddlJob->targetRelationId = relationId;
-	ddlJob->concurrentIndexCmd = false;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -410,9 +416,8 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
 	ddlJob->targetRelationId = relationId;
-	ddlJob->concurrentIndexCmd = false;
 	ddlJob->startNewTransaction = false;
-	ddlJob->commandString = ddlCommand;
+	ddlJob->metadataSyncCommand = ddlCommand;
 	ddlJob->taskList = DDLTaskList(relationId, ddlCommand);
 
 	List *ddlJobs = list_make1(ddlJob);
@@ -425,23 +430,25 @@ PreprocessAlterStatisticsOwnerStmt(Node *node, const char *queryString,
  * GetExplicitStatisticsCommandList returns the list of DDL commands to create
  * or alter statistics that are explicitly created for the table with relationId.
  * This function gets called when distributing the table with relationId.
- * See comment of GetExplicitStatisticsIdList function.
  */
 List *
 GetExplicitStatisticsCommandList(Oid relationId)
 {
 	List *explicitStatisticsCommandList = NIL;
 
-	PushOverrideEmptySearchPath(CurrentMemoryContext);
+	Relation relation = RelationIdGetRelation(relationId);
+	List *statisticsIdList = RelationGetStatExtList(relation);
+	RelationClose(relation);
 
-	List *statisticsIdList = GetExplicitStatisticsIdList(relationId);
+	/* generate fully-qualified names */
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	Oid statisticsId = InvalidOid;
 	foreach_oid(statisticsId, statisticsIdList)
 	{
 		/* we need create commands for already created stats before distribution */
-		char *createStatisticsCommand = pg_get_statisticsobj_worker(statisticsId,
-																	false);
+		char *createStatisticsCommand = pg_get_statisticsobj_worker_compat(statisticsId,
+																		   false, false);
 
 		explicitStatisticsCommandList =
 			lappend(explicitStatisticsCommandList,
@@ -488,23 +495,19 @@ GetExplicitStatisticsSchemaIdList(Oid relationId)
 {
 	List *schemaIdList = NIL;
 
-	Relation pgStatistics = table_open(StatisticExtRelationId, AccessShareLock);
+	Relation relation = RelationIdGetRelation(relationId);
+	List *statsIdList = RelationGetStatExtList(relation);
+	RelationClose(relation);
 
-	int scanKeyCount = 1;
-	ScanKeyData scanKey[1];
-
-	ScanKeyInit(&scanKey[0], Anum_pg_statistic_ext_stxrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
-
-	bool useIndex = true;
-	SysScanDesc scanDescriptor = systable_beginscan(pgStatistics,
-													StatisticExtRelidIndexId,
-													useIndex, NULL, scanKeyCount,
-													scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	Oid statsId = InvalidOid;
+	foreach_oid(statsId, statsIdList)
 	{
+		HeapTuple heapTuple = SearchSysCache1(STATEXTOID, ObjectIdGetDatum(statsId));
+		if (!HeapTupleIsValid(heapTuple))
+		{
+			ereport(ERROR, (errmsg("cache lookup failed for statistics "
+								   "object with oid %u", statsId)));
+		}
 		FormData_pg_statistic_ext *statisticsForm =
 			(FormData_pg_statistic_ext *) GETSTRUCT(heapTuple);
 
@@ -513,12 +516,9 @@ GetExplicitStatisticsSchemaIdList(Oid relationId)
 		{
 			schemaIdList = lappend_oid(schemaIdList, schemaId);
 		}
-
-		heapTuple = systable_getnext(scanDescriptor);
+		ReleaseSysCache(heapTuple);
 	}
 
-	systable_endscan(scanDescriptor);
-	table_close(pgStatistics, NoLock);
 
 	return schemaIdList;
 }
@@ -564,48 +564,6 @@ GetAlterIndexStatisticsCommands(Oid indexOid)
 	}
 
 	return alterIndexStatisticsCommandList;
-}
-
-
-/*
- * GetExplicitStatisticsIdList returns a list of OIDs corresponding to the statistics
- * that are explicitly created on the relation with relationId. That means,
- * this function discards internal statistics implicitly created by postgres.
- */
-List *
-GetExplicitStatisticsIdList(Oid relationId)
-{
-	List *statisticsIdList = NIL;
-
-	Relation pgStatistics = table_open(StatisticExtRelationId, AccessShareLock);
-
-	int scanKeyCount = 1;
-	ScanKeyData scanKey[1];
-
-	ScanKeyInit(&scanKey[0], Anum_pg_statistic_ext_stxrelid,
-				BTEqualStrategyNumber, F_OIDEQ, relationId);
-
-	bool useIndex = true;
-	SysScanDesc scanDescriptor = systable_beginscan(pgStatistics,
-													StatisticExtRelidIndexId,
-													useIndex, NULL, scanKeyCount,
-													scanKey);
-
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
-	{
-		FormData_pg_statistic_ext *statisticsForm =
-			(FormData_pg_statistic_ext *) GETSTRUCT(heapTuple);
-		Oid statisticsId = statisticsForm->oid;
-		statisticsIdList = lappend_oid(statisticsIdList, statisticsId);
-
-		heapTuple = systable_getnext(scanDescriptor);
-	}
-
-	systable_endscan(scanDescriptor);
-	table_close(pgStatistics, NoLock);
-
-	return statisticsIdList;
 }
 
 

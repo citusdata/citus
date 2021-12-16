@@ -1020,7 +1020,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 									 currentPartitionMethod,
 									 currentAnchorTable);
 		}
-		else
+		else if (candidatePartitionMethod == DISTRIBUTE_BY_RANGE)
 		{
 			return MakeJoinOrderNode(candidateTable, SINGLE_RANGE_PARTITION_JOIN,
 									 currentPartitionColumnList,
@@ -1059,7 +1059,7 @@ SinglePartitionJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 										 candidatePartitionMethod,
 										 candidateTable);
 			}
-			else
+			else if (currentPartitionMethod == DISTRIBUTE_BY_RANGE)
 			{
 				return MakeJoinOrderNode(candidateTable,
 										 SINGLE_RANGE_PARTITION_JOIN,

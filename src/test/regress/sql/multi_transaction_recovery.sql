@@ -70,7 +70,6 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 SET citus.force_max_query_parallelization TO ON;
 SET citus.shard_replication_factor TO 2;
 SET citus.shard_count TO 2;
-SET citus.multi_shard_commit_protocol TO '2pc';
 
 -- create_distributed_table may behave differently if shards
 -- created via the executor or not, so not checking its value
@@ -87,9 +86,10 @@ SELECT count(*) >= 4 FROM pg_dist_transaction;
 
 SELECT recover_prepared_transactions();
 
--- plain INSERT does not use 2PC
+-- plain INSERT uses 2PC
 INSERT INTO test_recovery VALUES ('hello');
 SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
 
 -- Aborted DDL commands should not write transaction recovery records
 BEGIN;
@@ -192,6 +192,18 @@ CREATE TABLE test_2pcskip (a int);
 SELECT create_distributed_table('test_2pcskip', 'a');
 INSERT INTO test_2pcskip SELECT i FROM generate_series(0, 5)i;
 SELECT recover_prepared_transactions();
+
+SELECT shardid INTO selected_shard FROM pg_dist_shard WHERE logicalrelid='test_2pcskip'::regclass LIMIT 1;
+SELECT COUNT(*) FROM pg_dist_transaction;
+BEGIN;
+SET LOCAL citus.defer_drop_after_shard_move TO OFF;
+SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_1_port, 'localhost', :worker_2_port);
+COMMIT;
+SELECT COUNT(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
+
+SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_2_port, 'localhost', :worker_1_port);
+
 
 -- for the following test, ensure that 6 and 7 go to different shards on different workers
 SELECT count(DISTINCT nodeport) FROM pg_dist_shard_placement WHERE shardid IN (get_shard_id_for_distribution_column('test_2pcskip', 6),get_shard_id_for_distribution_column('test_2pcskip', 7));

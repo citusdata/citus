@@ -48,6 +48,7 @@ extern void QualifyAlterCollationOwnerStmt(Node *stmt);
 
 /* forward declarations for deparse_table_stmts.c */
 extern char * DeparseAlterTableSchemaStmt(Node *stmt);
+extern char * DeparseAlterTableStmt(Node *node);
 
 extern void QualifyAlterTableSchemaStmt(Node *stmt);
 
@@ -129,5 +130,16 @@ extern char * DeparseAlterExtensionStmt(Node *stmt);
 
 /* forward declarations for deparse_database_stmts.c */
 extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
+
+/* forward declarations for deparse_sequence_stmts.c */
+extern char * DeparseDropSequenceStmt(Node *node);
+extern char * DeparseRenameSequenceStmt(Node *node);
+extern char * DeparseAlterSequenceSchemaStmt(Node *node);
+extern char * DeparseAlterSequenceOwnerStmt(Node *node);
+
+/* forward declarations for qualify_sequence_stmt.c */
+extern void QualifyRenameSequenceStmt(Node *node);
+extern void QualifyAlterSequenceSchemaStmt(Node *node);
+extern void QualifyAlterSequenceOwnerStmt(Node *node);
 
 #endif /* CITUS_DEPARSER_H */

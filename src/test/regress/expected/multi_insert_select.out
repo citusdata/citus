@@ -2212,7 +2212,7 @@ FROM
   table_with_defaults
 GROUP BY
   store_id, first_name, last_name;
--- Volatile function in default should be disallowed
+-- Volatile function in default should be disallowed - SERIAL pseudo-types
 CREATE TABLE table_with_serial (
   store_id int,
   s bigserial
@@ -2224,6 +2224,25 @@ SELECT create_distributed_table('table_with_serial', 'store_id');
 (1 row)
 
 INSERT INTO table_with_serial (store_id)
+SELECT
+  store_id
+FROM
+  table_with_defaults
+GROUP BY
+  store_id;
+-- Volatile function in default should be disallowed - user-defined sequence
+CREATE SEQUENCE user_defined_sequence;
+CREATE TABLE table_with_user_sequence (
+  store_id int,
+  s bigint default nextval('user_defined_sequence')
+);
+SELECT create_distributed_table('table_with_user_sequence', 'store_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO table_with_user_sequence (store_id)
 SELECT
   store_id
 FROM
@@ -2719,6 +2738,92 @@ SELECT * FROM dist_table_with_sequence ORDER BY user_id, value_1;
 (6 rows)
 
 DROP TABLE dist_table_with_sequence;
+-- Select into distributed table with a user-defined sequence
+CREATE SEQUENCE seq1;
+CREATE SEQUENCE seq2;
+CREATE TABLE dist_table_with_user_sequence (user_id int default nextval('seq1'), value_1 bigint default nextval('seq2'));
+SELECT create_distributed_table('dist_table_with_user_sequence', 'user_id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- from local query
+INSERT INTO dist_table_with_user_sequence (value_1)
+SELECT s FROM generate_series(1,5) s;
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(5 rows)
+
+-- from a distributed query
+INSERT INTO dist_table_with_user_sequence (value_1)
+SELECT value_1 FROM dist_table_with_user_sequence ORDER BY value_1;
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+       6 |       1
+       7 |       2
+       8 |       3
+       9 |       4
+      10 |       5
+(10 rows)
+
+TRUNCATE dist_table_with_user_sequence;
+INSERT INTO dist_table_with_user_sequence (user_id)
+SELECT user_id FROM raw_events_second ORDER BY user_id;
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(5 rows)
+
+WITH top10 AS (
+  SELECT user_id FROM raw_events_second WHERE value_1 IS NOT NULL ORDER BY value_1 LIMIT 10
+)
+INSERT INTO dist_table_with_user_sequence (value_1)
+SELECT * FROM top10;
+ERROR:  cannot handle complex subqueries when the router executor is disabled
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |       1
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(5 rows)
+
+-- router queries become logical planner queries when there is a nextval call
+INSERT INTO dist_table_with_user_sequence (user_id)
+SELECT user_id FROM dist_table_with_user_sequence WHERE user_id = 1;
+SELECT * FROM dist_table_with_user_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |       1
+       1 |       6
+       2 |       2
+       3 |       3
+       4 |       4
+       5 |       5
+(6 rows)
+
+DROP TABLE dist_table_with_user_sequence;
+DROP SEQUENCE seq1, seq2;
 -- Select from distributed table into reference table
 CREATE TABLE ref_table (user_id serial, value_1 int);
 SELECT create_reference_table('ref_table');
@@ -2783,6 +2888,72 @@ SELECT * FROM ref_table ORDER BY user_id, value_1;
 (20 rows)
 
 DROP TABLE ref_table;
+-- Select from distributed table into reference table with user-defined sequence
+CREATE SEQUENCE seq1;
+CREATE TABLE ref_table_with_user_sequence (user_id int default nextval('seq1'), value_1 int);
+SELECT create_reference_table('ref_table_with_user_sequence');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO ref_table_with_user_sequence
+SELECT user_id, value_1 FROM raw_events_second;
+SELECT * FROM ref_table_with_user_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |
+       2 |
+       3 |
+       4 |
+       5 |
+(5 rows)
+
+INSERT INTO ref_table_with_user_sequence (value_1)
+SELECT value_1 FROM raw_events_second ORDER BY value_1;
+SELECT * FROM ref_table_with_user_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |
+       1 |
+       2 |
+       2 |
+       3 |
+       3 |
+       4 |
+       4 |
+       5 |
+       5 |
+(10 rows)
+
+INSERT INTO ref_table_with_user_sequence SELECT * FROM ref_table_with_user_sequence;
+SELECT * FROM ref_table_with_user_sequence ORDER BY user_id, value_1;
+ user_id | value_1
+---------------------------------------------------------------------
+       1 |
+       1 |
+       1 |
+       1 |
+       2 |
+       2 |
+       2 |
+       2 |
+       3 |
+       3 |
+       3 |
+       3 |
+       4 |
+       4 |
+       4 |
+       4 |
+       5 |
+       5 |
+       5 |
+       5 |
+(20 rows)
+
+DROP TABLE ref_table_with_user_sequence;
+DROP SEQUENCE seq1;
 -- Select from reference table into reference table
 CREATE TABLE ref1 (d timestamptz);
 SELECT create_reference_table('ref1');
@@ -3000,7 +3171,7 @@ FROM (
   SELECT user_id, value_1
   FROM coerce_events
 ) AS ftop;
-ERROR:  new row for relation "coerce_agg_13300060" violates check constraint "small_number_13300060"
+ERROR:  new row for relation "coerce_agg_13300067" violates check constraint "small_number_13300067"
 \set VERBOSITY DEFAULT
 SELECT * FROM coerce_agg ORDER BY 1 DESC, 2 DESC;
  user_id | value_1_agg
@@ -3076,6 +3247,8 @@ DROP TABLE reference_table;
 DROP TABLE agg_events;
 DROP TABLE table_with_defaults;
 DROP TABLE table_with_serial;
+DROP TABLE table_with_user_sequence;
+DROP SEQUENCE user_defined_sequence;
 DROP TABLE text_table;
 DROP TABLE char_table;
 DROP TABLE table_with_starts_with_defaults;

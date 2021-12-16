@@ -747,7 +747,16 @@ RouterModifyTaskForShardInterval(Query *originalQuery,
 			continue;
 		}
 
-		shardRestrictionList = make_simple_restrictinfo((Expr *) shardOpExpressions);
+
+		/*
+		 * passing NULL for plannerInfo will be problematic if we have placeholder
+		 * vars. However, it won't be the case here because we are building
+		 * the expression from shard intervals which don't have placeholder vars.
+		 * Note that this is only the case with PG14 as the parameter doesn't exist
+		 * prior to that.
+		 */
+		shardRestrictionList = make_simple_restrictinfo_compat(NULL,
+															   (Expr *) shardOpExpressions);
 		extendedBaseRestrictInfo = lappend(extendedBaseRestrictInfo,
 										   shardRestrictionList);
 
@@ -1136,7 +1145,8 @@ HasUnsupportedDistinctOn(Query *query)
 		TargetEntry *distinctEntry = get_sortgroupclause_tle(distinctClause,
 															 query->targetList);
 
-		if (IsPartitionColumn(distinctEntry->expr, query))
+		bool skipOuterVars = true;
+		if (IsPartitionColumn(distinctEntry->expr, query, skipOuterVars))
 		{
 			return false;
 		}
@@ -1170,7 +1180,6 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
 		List *insertTargetEntryColumnList = pull_var_clause_default((Node *) targetEntry);
-		Oid subqueryPartitionColumnRelationId = InvalidOid;
 		Var *subqueryPartitionColumn = NULL;
 
 		/*
@@ -1202,11 +1211,18 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 													insertVar->varattno - 1);
 		Expr *selectTargetExpr = subqueryTargetEntry->expr;
 
+		RangeTblEntry *subqueryPartitionColumnRelationIdRTE = NULL;
 		List *parentQueryList = list_make2(query, subquery);
+		bool skipOuterVars = true;
 		FindReferencedTableColumn(selectTargetExpr,
 								  parentQueryList, subquery,
-								  &subqueryPartitionColumnRelationId,
-								  &subqueryPartitionColumn);
+								  &subqueryPartitionColumn,
+								  &subqueryPartitionColumnRelationIdRTE,
+								  skipOuterVars);
+		Oid subqueryPartitionColumnRelationId = subqueryPartitionColumnRelationIdRTE ?
+												subqueryPartitionColumnRelationIdRTE->
+												relid :
+												InvalidOid;
 
 		/*
 		 * Corresponding (i.e., in the same ordinal position as the target table's
@@ -1339,7 +1355,7 @@ InsertPartitionColumnMatchesSelect(Query *query, RangeTblEntry *insertRte,
 		}
 
 		/* finally, check that the select target column is a partition column */
-		if (!IsPartitionColumn(selectTargetExpr, subquery))
+		if (!IsPartitionColumn(selectTargetExpr, subquery, skipOuterVars))
 		{
 			return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 								 "cannot perform distributed INSERT INTO ... SELECT "

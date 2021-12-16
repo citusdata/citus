@@ -15,8 +15,7 @@ SET citus.force_max_query_parallelization TO on;
 
 SELECT citus.mitmproxy('conn.allow()');
 
--- we'll start with replication factor 1, 1PC and parallel mode
-SET citus.multi_shard_commit_protocol TO '1pc';
+-- we'll start with replication factor 1, 2PC and parallel mode
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 
@@ -77,14 +76,13 @@ SELECT citus.mitmproxy('conn.allow()');
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
--- kill as soon as the coordinator sends COMMIT
--- One shard should not get truncated but the other should
--- since it is sent from another connection.
--- Thus, we should see a partially successful truncate
--- Note: This is the result of using 1pc and there is no way to recover from it
+-- kill as soon as the coordinator sends COMMIT PREPARED
+-- the transaction succeeds on one placement, and we need to
+-- recover prepared statements to see the other placement as well
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 TRUNCATE test_table;
 SELECT citus.mitmproxy('conn.allow()');
+SELECT recover_prepared_transactions();
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
@@ -192,8 +190,6 @@ SELECT recover_prepared_transactions();
 SELECT * FROM unhealthy_shard_count;
 SELECT count(*) FROM test_table;
 
--- now, lets test with 2PC
-SET citus.multi_shard_commit_protocol TO '2pc';
 
 -- in the first test, kill just in the first
 -- response we get from the worker
@@ -308,7 +304,6 @@ SELECT recover_prepared_transactions();
 SELECT count(*) FROM test_table;
 
 -- final set of tests with 2PC and replication factor = 2
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 2;
 

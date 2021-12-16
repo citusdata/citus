@@ -21,7 +21,8 @@
 extern void EnsureReferenceTablesExistOnAllNodes(void);
 extern void EnsureReferenceTablesExistOnAllNodesExtended(char transferMode);
 extern uint32 CreateReferenceTableColocationId(void);
-extern void DeleteAllReferenceTablePlacementsFromNodeGroup(int32 groupId);
+extern void DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool
+															forceRemoteDelete);
 extern int CompareOids(const void *leftElement, const void *rightElement);
 extern int ReferenceTableReplicationFactor(void);
 extern void ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort);

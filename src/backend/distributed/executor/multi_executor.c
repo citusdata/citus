@@ -56,6 +56,7 @@
  */
 int MultiShardConnectionType = PARALLEL_CONNECTION;
 bool WritableStandbyCoordinator = false;
+bool AllowModificationsFromWorkersToReplicatedTables = true;
 
 /*
  * Pointer to bound parameters of the current ongoing call to ExecutorRun.
@@ -322,7 +323,7 @@ ReturnTupleFromTuplestore(CitusScanState *scanState)
 	{
 		/*
 		 * If there is a very selective qual on the Citus Scan node we might block
-		 * interupts for a longer time if we would not check for interrupts in this loop
+		 * interrupts for a longer time if we would not check for interrupts in this loop
 		 */
 		CHECK_FOR_INTERRUPTS();
 
@@ -410,8 +411,9 @@ ReadFileIntoTupleStore(char *fileName, char *copyFormat, TupleDesc tupleDescript
 									  location);
 	copyOptions = lappend(copyOptions, copyOption);
 
-	CopyState copyState = BeginCopyFrom(NULL, stubRelation, fileName, false, NULL,
-										NULL, copyOptions);
+	CopyFromState copyState = BeginCopyFrom_compat(NULL, stubRelation, NULL,
+												   fileName, false, NULL,
+												   NULL, copyOptions);
 
 	while (true)
 	{

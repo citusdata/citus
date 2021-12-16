@@ -14,7 +14,7 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
   AND deptype = 'e'
   AND e.extname='citus'
 ORDER BY 1;
-                                               description
+                                                   description
 ---------------------------------------------------------------------
  access method columnar
  event trigger citus_cascade_to_partition
@@ -38,10 +38,13 @@ ORDER BY 1;
  function citus_add_rebalance_strategy(name,regproc,regproc,regproc,real,real,real)
  function citus_add_secondary_node(text,integer,text,integer,name)
  function citus_blocking_pids(integer)
+ function citus_check_cluster_node_health()
+ function citus_check_connection_to_node(text,integer)
+ function citus_cleanup_orphaned_shards()
  function citus_conninfo_cache_invalidate()
  function citus_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
  function citus_create_restore_point(text)
- function citus_disable_node(text,integer)
+ function citus_disable_node(text,integer,boolean)
  function citus_dist_local_group_cache_invalidate()
  function citus_dist_node_cache_invalidate()
  function citus_dist_object_cache_invalidate()
@@ -50,20 +53,29 @@ ORDER BY 1;
  function citus_dist_shard_cache_invalidate()
  function citus_dist_stat_activity()
  function citus_drain_node(text,integer,citus.shard_transfer_mode,name)
- function citus_drop_all_shards(regclass,text,text)
+ function citus_drop_all_shards(regclass,text,text,boolean)
  function citus_drop_trigger()
  function citus_executor_name(integer)
  function citus_extradata_container(internal)
  function citus_finish_pg_upgrade()
  function citus_get_active_worker_nodes()
+ function citus_internal.columnar_ensure_am_depends_catalog()
+ function citus_internal.downgrade_columnar_storage(regclass)
  function citus_internal.find_groupid_for_node(text,integer)
  function citus_internal.pg_dist_node_trigger_func()
- function citus_internal.pg_dist_rebalance_strategy_enterprise_check()
  function citus_internal.pg_dist_rebalance_strategy_trigger_func()
  function citus_internal.pg_dist_shard_placement_trigger_func()
  function citus_internal.refresh_isolation_tester_prepared_statement()
  function citus_internal.replace_isolation_tester_func()
  function citus_internal.restore_isolation_tester_func()
+ function citus_internal.upgrade_columnar_storage(regclass)
+ function citus_internal_add_object_metadata(text,text[],text[],integer,integer)
+ function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char")
+ function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint)
+ function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text)
+ function citus_internal_delete_shard_metadata(bigint)
+ function citus_internal_update_placement_metadata(bigint,integer,integer)
+ function citus_internal_update_relation_colocation(oid,integer)
  function citus_isolation_test_session_is_blocked(integer,integer[])
  function citus_json_concatenate(json,json)
  function citus_json_concatenate_final(json)
@@ -109,10 +121,14 @@ ORDER BY 1;
  function create_distributed_table(regclass,text,citus.distribution_type,text,integer)
  function create_intermediate_result(text,text)
  function create_reference_table(regclass)
+ function create_time_partitions(regclass,interval,timestamp with time zone,timestamp with time zone)
  function distributed_tables_colocated(regclass,regclass)
+ function drop_old_time_partitions(regclass,timestamp with time zone)
  function dump_global_wait_edges()
  function dump_local_wait_edges()
  function fetch_intermediate_results(text[],text,integer)
+ function fix_all_partition_shard_index_names()
+ function fix_partition_shard_index_names(regclass)
  function fix_pre_citus10_partitioned_table_constraint_names()
  function fix_pre_citus10_partitioned_table_constraint_names(regclass)
  function get_all_active_transactions()
@@ -120,6 +136,7 @@ ORDER BY 1;
  function get_colocated_table_array(regclass)
  function get_current_transaction_id()
  function get_global_active_transactions()
+ function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone)
  function get_rebalance_progress()
  function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name,real)
  function get_shard_id_for_distribution_column(regclass,"any")
@@ -133,8 +150,6 @@ ORDER BY 1;
  function master_add_inactive_node(text,integer,integer,noderole,name)
  function master_add_node(text,integer,integer,noderole,name)
  function master_add_secondary_node(text,integer,text,integer,name)
- function master_append_table_to_shard(bigint,text,text,integer)
- function master_apply_delete_command(text)
  function master_copy_shard_placement(bigint,text,integer,text,integer,boolean,citus.shard_transfer_mode)
  function master_create_empty_shard(text)
  function master_disable_node(text,integer)
@@ -143,7 +158,6 @@ ORDER BY 1;
  function master_get_new_placementid()
  function master_get_new_shardid()
  function master_get_table_ddl_events(text)
- function master_get_table_metadata(text)
  function master_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
  function master_remove_distributed_table_metadata_from_workers(regclass,text,text)
  function master_remove_node(text,integer)
@@ -171,7 +185,7 @@ ORDER BY 1;
  function run_command_on_workers(text,boolean)
  function shard_name(regclass,bigint)
  function start_metadata_sync_to_node(text,integer)
- function stop_metadata_sync_to_node(text,integer)
+ function stop_metadata_sync_to_node(text,integer,boolean)
  function time_partition_range(regclass)
  function truncate_local_data_after_distributing_table(regclass)
  function undistribute_table(regclass,boolean)
@@ -191,11 +205,13 @@ ORDER BY 1;
  function worker_drop_distributed_table(text)
  function worker_fetch_foreign_file(text,text,bigint,text[],integer[])
  function worker_fetch_partition_file(bigint,integer,integer,integer,text,integer)
+ function worker_fix_partition_shard_index_names(regclass,text,text)
  function worker_fix_pre_citus10_partitioned_table_constraint_names(regclass,bigint,text)
  function worker_hash("any")
  function worker_hash_partition_table(bigint,integer,text,text,oid,anyarray)
  function worker_last_saved_explain_analyze()
  function worker_merge_files_into_table(bigint,integer,text[],text[])
+ function worker_nextval(regclass)
  function worker_partial_agg(oid,anyelement)
  function worker_partial_agg_ffunc(internal)
  function worker_partial_agg_sfunc(internal,oid,anyelement)
@@ -238,13 +254,13 @@ ORDER BY 1;
  type noderole
  view citus_dist_stat_activity
  view citus_lock_waits
+ view citus_schema.citus_tables
  view citus_shard_indexes_on_worker
  view citus_shards
  view citus_shards_on_worker
  view citus_stat_statements
- view citus_tables
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(230 rows)
+(246 rows)
 

@@ -77,10 +77,10 @@ drop_constraint_cascade_via_perform_deletion(PG_FUNCTION_ARGS)
 Datum
 get_referencing_relation_id_list(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	FuncCallContext *functionContext = NULL;
 	ListCell *foreignRelationCell = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	/* for the first we call this UDF, we need to populate the result to return set */
 	if (SRF_IS_FIRSTCALL())
@@ -136,10 +136,10 @@ get_referencing_relation_id_list(PG_FUNCTION_ARGS)
 Datum
 get_referenced_relation_id_list(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	FuncCallContext *functionContext = NULL;
 	ListCell *foreignRelationCell = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	/* for the first we call this UDF, we need to populate the result to return set */
 	if (SRF_IS_FIRSTCALL())
@@ -215,8 +215,5 @@ get_foreign_key_connected_relations(PG_FUNCTION_ARGS)
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);
 	}
-
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_VOID();
 }

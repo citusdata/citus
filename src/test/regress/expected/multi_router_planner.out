@@ -1931,26 +1931,34 @@ DEBUG:  query has a single distribution column value: 2
 SELECT * FROM articles_hash ar join authors_range au on (ar.author_id = au.id)
 	WHERE ar.author_id = 3;
 DEBUG:  found no worker with all shard placements
-DEBUG:  join prunable for intervals [1,10] and [11,20]
-DEBUG:  join prunable for intervals [1,10] and [21,30]
-DEBUG:  join prunable for intervals [1,10] and [31,40]
-DEBUG:  join prunable for intervals [11,20] and [1,10]
-DEBUG:  join prunable for intervals [11,20] and [21,30]
-DEBUG:  join prunable for intervals [11,20] and [31,40]
-DEBUG:  join prunable for intervals [21,30] and [1,10]
-DEBUG:  join prunable for intervals [21,30] and [11,20]
-DEBUG:  join prunable for intervals [21,30] and [31,40]
-DEBUG:  join prunable for intervals [31,40] and [1,10]
-DEBUG:  join prunable for intervals [31,40] and [11,20]
-DEBUG:  join prunable for intervals [31,40] and [21,30]
+DEBUG:  join prunable for task partitionId 0 and 1
+DEBUG:  join prunable for task partitionId 0 and 2
+DEBUG:  join prunable for task partitionId 0 and 3
+DEBUG:  join prunable for task partitionId 1 and 0
+DEBUG:  join prunable for task partitionId 1 and 2
+DEBUG:  join prunable for task partitionId 1 and 3
+DEBUG:  join prunable for task partitionId 2 and 0
+DEBUG:  join prunable for task partitionId 2 and 1
+DEBUG:  join prunable for task partitionId 2 and 3
+DEBUG:  join prunable for task partitionId 3 and 0
+DEBUG:  join prunable for task partitionId 3 and 1
+DEBUG:  join prunable for task partitionId 3 and 2
 DEBUG:  pruning merge fetch taskId 1
 DETAIL:  Creating dependency on merge taskId 2
-DEBUG:  pruning merge fetch taskId 3
+DEBUG:  pruning merge fetch taskId 2
+DETAIL:  Creating dependency on merge taskId 5
+DEBUG:  pruning merge fetch taskId 4
 DETAIL:  Creating dependency on merge taskId 4
 DEBUG:  pruning merge fetch taskId 5
-DETAIL:  Creating dependency on merge taskId 6
+DETAIL:  Creating dependency on merge taskId 10
 DEBUG:  pruning merge fetch taskId 7
+DETAIL:  Creating dependency on merge taskId 6
+DEBUG:  pruning merge fetch taskId 8
+DETAIL:  Creating dependency on merge taskId 15
+DEBUG:  pruning merge fetch taskId 10
 DETAIL:  Creating dependency on merge taskId 8
+DEBUG:  pruning merge fetch taskId 11
+DETAIL:  Creating dependency on merge taskId 20
  id | author_id | title | word_count | name | id
 ---------------------------------------------------------------------
 (0 rows)
@@ -2303,11 +2311,11 @@ SELECT author_articles_max_id();
 DEBUG:  Creating router plan
 CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash ah
 		WHERE author_id = 1"
-PL/pgSQL function author_articles_max_id() line 5 at SQL statement
+PL/pgSQL function author_articles_max_id() line XX at SQL statement
 DEBUG:  query has a single distribution column value: 1
 CONTEXT:  SQL statement "SELECT MAX(id) FROM articles_hash ah
 		WHERE author_id = 1"
-PL/pgSQL function author_articles_max_id() line 5 at SQL statement
+PL/pgSQL function author_articles_max_id() line XX at SQL statement
  author_articles_max_id
 ---------------------------------------------------------------------
                      41
@@ -2329,12 +2337,12 @@ DEBUG:  Creating router plan
 CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
 		FROM articles_hash ah
 		WHERE author_id = 1"
-PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
+PL/pgSQL function author_articles_id_word_count() line XX at RETURN QUERY
 DEBUG:  query has a single distribution column value: 1
 CONTEXT:  SQL statement "SELECT ah.id, ah.word_count
 		FROM articles_hash ah
 		WHERE author_id = 1"
-PL/pgSQL function author_articles_id_word_count() line 4 at RETURN QUERY
+PL/pgSQL function author_articles_id_word_count() line XX at RETURN QUERY
  id | word_count
 ---------------------------------------------------------------------
   1 |       9572
@@ -2440,28 +2448,14 @@ NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
 HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 GRANT INSERT ON ALL TABLES IN SCHEMA public TO router_user;
 \c - router_user - :master_port
--- first test that it is marked invalid inside a transaction block
 -- we will fail to connect to worker 2, since the user does not exist
+-- still, we never mark placements inactive. Instead, fail the transaction
 BEGIN;
 INSERT INTO failure_test VALUES (1, 1);
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
-SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
-	WHERE shardid IN (
-		SELECT shardid FROM pg_dist_shard
-		WHERE logicalrelid = 'failure_test'::regclass
-	)
-	ORDER BY placementid;
- shardid | shardstate | nodename  | nodeport
----------------------------------------------------------------------
-  840017 |          1 | localhost |    57637
-  840017 |          3 | localhost |    57638
-  840018 |          1 | localhost |    57638
-  840018 |          1 | localhost |    57637
-(4 rows)
-
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
 ROLLBACK;
 INSERT INTO failure_test VALUES (2, 1);
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
+ERROR:  connection to the remote node localhost:xxxxx failed with the following error: FATAL:  role "router_user" does not exist
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 	WHERE shardid IN (
 		SELECT shardid FROM pg_dist_shard
@@ -2472,7 +2466,7 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement
 ---------------------------------------------------------------------
   840017 |          1 | localhost |    57637
   840017 |          1 | localhost |    57638
-  840018 |          3 | localhost |    57638
+  840018 |          1 | localhost |    57638
   840018 |          1 | localhost |    57637
 (4 rows)
 

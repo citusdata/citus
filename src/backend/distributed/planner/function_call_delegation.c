@@ -112,9 +112,18 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	}
 
 	int32 localGroupId = GetLocalGroupId();
-	if (localGroupId != COORDINATOR_GROUP_ID || localGroupId == GROUP_ID_UPGRADING)
+	if (localGroupId != COORDINATOR_GROUP_ID && IsCitusInitiatedRemoteBackend())
 	{
-		/* do not delegate from workers, or while upgrading */
+		/*
+		 * Do not delegate from workers if it is initiated by Citus already.
+		 * It means that this function has already been delegated to this node.
+		 */
+		return NULL;
+	}
+
+	if (localGroupId == GROUP_ID_UPGRADING)
+	{
+		/* do not delegate while upgrading */
 		return NULL;
 	}
 
@@ -265,7 +274,8 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	}
 	else
 	{
-		placement = ShardPlacementForFunctionColocatedWithDistTable(procedure, funcExpr,
+		placement = ShardPlacementForFunctionColocatedWithDistTable(procedure,
+																	funcExpr->args,
 																	partitionColumn,
 																	distTable,
 																	planContext->plan);
@@ -346,19 +356,19 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
  */
 ShardPlacement *
 ShardPlacementForFunctionColocatedWithDistTable(DistObjectCacheEntry *procedure,
-												FuncExpr *funcExpr,
+												List *argumentList,
 												Var *partitionColumn,
 												CitusTableCacheEntry *cacheEntry,
 												PlannedStmt *plan)
 {
 	if (procedure->distributionArgIndex < 0 ||
-		procedure->distributionArgIndex >= list_length(funcExpr->args))
+		procedure->distributionArgIndex >= list_length(argumentList))
 	{
 		ereport(DEBUG1, (errmsg("cannot push down invalid distribution_argument_index")));
 		return NULL;
 	}
 
-	Node *partitionValueNode = (Node *) list_nth(funcExpr->args,
+	Node *partitionValueNode = (Node *) list_nth(argumentList,
 												 procedure->distributionArgIndex);
 	partitionValueNode = strip_implicit_coercions(partitionValueNode);
 

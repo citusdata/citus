@@ -1,8 +1,19 @@
 /*-------------------------------------------------------------------------
  *
- * columnar_metadata_tables.c
+ * columnar_metadata.c
  *
- * Copyright (c), Citus Data, Inc.
+ * Copyright (c) Citus Data, Inc.
+ *
+ * Manages metadata for columnar relations in separate, shared metadata tables
+ * in the "columnar" schema.
+ *
+ *   * holds basic stripe information including data size and row counts
+ *   * holds basic chunk and chunk group information like data offsets and
+ *     min/max values (used for Chunk Group Filtering)
+ *   * useful for fast VACUUM operations (e.g. reporting with VACUUM VERBOSE)
+ *   * useful for stats/costing
+ *   * maps logical row numbers to stripe IDs
+ *   * TODO: visibility information
  *
  *-------------------------------------------------------------------------
  */
@@ -14,7 +25,9 @@
 
 #include "citus_version.h"
 #include "columnar/columnar.h"
+#include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"
+#include "distributed/listutils.h"
 
 #include <sys/stat.h>
 #include "access/heapam.h"
@@ -30,7 +43,6 @@
 #include "commands/sequence.h"
 #include "commands/trigger.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/resource_lock.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -39,6 +51,7 @@
 #include "port.h"
 #include "storage/fd.h"
 #include "storage/lmgr.h"
+#include "storage/procarray.h"
 #include "storage/smgr.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -48,46 +61,45 @@
 #include "utils/relfilenodemap.h"
 
 
-/*
- * Content of the first page in main fork, which stores metadata at file
- * level.
- */
-typedef struct ColumnarMetapage
-{
-	/*
-	 * Store version of file format used, so we can detect files from
-	 * previous versions if we change file format.
-	 */
-	int versionMajor;
-	int versionMinor;
-
-	/*
-	 * Each of the metadata table rows are identified by a storageId.
-	 * We store it also in the main fork so we can link metadata rows
-	 * with data files.
-	 */
-	uint64 storageId;
-} ColumnarMetapage;
-
-
 typedef struct
 {
 	Relation rel;
 	EState *estate;
+	ResultRelInfo *resultRelInfo;
 } ModifyState;
 
-static void InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe);
+/* RowNumberLookupMode to be used in StripeMetadataLookupRowNumber */
+typedef enum RowNumberLookupMode
+{
+	/*
+	 * Find the stripe whose firstRowNumber is less than or equal to given
+	 * input rowNumber.
+	 */
+	FIND_LESS_OR_EQUAL,
+
+	/*
+	 * Find the stripe whose firstRowNumber is greater than input rowNumber.
+	 */
+	FIND_GREATER
+} RowNumberLookupMode;
+
+static void InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId,
+										 uint32 columnCount, uint32 chunkGroupRowCount,
+										 uint64 firstRowNumber);
 static void GetHighestUsedAddressAndId(uint64 storageId,
 									   uint64 *highestUsedAddress,
 									   uint64 *highestUsedId);
-static void LockForStripeReservation(Relation rel, LOCKMODE mode);
-static void UnlockForStripeReservation(Relation rel, LOCKMODE mode);
+static StripeMetadata * UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId,
+												bool *update, Datum *newValues);
 static List * ReadDataFileStripeList(uint64 storageId, Snapshot snapshot);
+static StripeMetadata * BuildStripeMetadata(Relation columnarStripes,
+											HeapTuple heapTuple);
 static uint32 * ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32
-										chunkGroupCount);
+										chunkGroupCount, Snapshot snapshot);
 static Oid ColumnarStorageIdSequenceRelationId(void);
 static Oid ColumnarStripeRelationId(void);
-static Oid ColumnarStripeIndexRelationId(void);
+static Oid ColumnarStripePKeyIndexRelationId(void);
+static Oid ColumnarStripeFirstRowNumberIndexRelationId(void);
 static Oid ColumnarOptionsRelationId(void);
 static Oid ColumnarOptionsIndexRegclass(void);
 static Oid ColumnarChunkRelationId(void);
@@ -95,6 +107,8 @@ static Oid ColumnarChunkGroupRelationId(void);
 static Oid ColumnarChunkIndexRelationId(void);
 static Oid ColumnarChunkGroupIndexRelationId(void);
 static Oid ColumnarNamespaceId(void);
+static uint64 LookupStorageId(RelFileNode relfilenode);
+static uint64 GetHighestUsedRowNumber(uint64 storageId);
 static void DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 												   AttrNumber storageIdAtrrNumber,
 												   Oid storageIdIndexId,
@@ -107,9 +121,11 @@ static void FinishModifyRelation(ModifyState *state);
 static EState * create_estate_for_relation(Relation rel);
 static bytea * DatumToBytea(Datum value, Form_pg_attribute attrForm);
 static Datum ByteaToDatum(bytea *bytes, Form_pg_attribute attrForm);
-static ColumnarMetapage * InitMetapage(Relation relation);
-static ColumnarMetapage * ReadMetapage(RelFileNode relfilenode, bool missingOk);
 static bool WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite);
+static StripeMetadata * StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber,
+													  Snapshot snapshot,
+													  RowNumberLookupMode lookupMode);
+static void CheckStripeMetadataConsistency(StripeMetadata *stripeMetadata);
 
 PG_FUNCTION_INFO_V1(columnar_relation_storageid);
 
@@ -140,7 +156,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 
 
 /* constants for columnar.stripe */
-#define Natts_columnar_stripe 8
+#define Natts_columnar_stripe 9
 #define Anum_columnar_stripe_storageid 1
 #define Anum_columnar_stripe_stripe 2
 #define Anum_columnar_stripe_file_offset 3
@@ -149,6 +165,7 @@ typedef FormData_columnar_options *Form_columnar_options;
 #define Anum_columnar_stripe_chunk_row_count 6
 #define Anum_columnar_stripe_row_count 7
 #define Anum_columnar_stripe_chunk_count 8
+#define Anum_columnar_stripe_first_row_number 9
 
 /* constants for columnar.chunk_group */
 #define Natts_columnar_chunkgroup 4
@@ -261,7 +278,7 @@ WriteColumnarOptions(Oid regclass, ColumnarOptions *options, bool overwrite)
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
 															1, scanKey);
 
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		if (overwrite)
@@ -318,8 +335,13 @@ DeleteColumnarTableOptions(Oid regclass, bool missingOk)
 	 */
 	Assert(!IsBinaryUpgrade);
 
-	Relation columnarOptions = relation_open(ColumnarOptionsRelationId(),
-											 RowExclusiveLock);
+	Relation columnarOptions = try_relation_open(ColumnarOptionsRelationId(),
+												 RowExclusiveLock);
+	if (columnarOptions == NULL)
+	{
+		/* extension has been dropped */
+		return false;
+	}
 
 	/* find existing item to remove */
 	ScanKeyData scanKey[1] = { 0 };
@@ -331,7 +353,7 @@ DeleteColumnarTableOptions(Oid regclass, bool missingOk)
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
 															1, scanKey);
 
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		CatalogTupleDelete(columnarOptions, &heapTuple->t_self);
@@ -384,7 +406,7 @@ ReadColumnarOptions(Oid regclass, ColumnarOptions *options)
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarOptions, index, NULL,
 															1, scanKey);
 
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
 	if (HeapTupleIsValid(heapTuple))
 	{
 		Form_columnar_options tupOptions = (Form_columnar_options) GETSTRUCT(heapTuple);
@@ -423,7 +445,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 	uint32 chunkIndex = 0;
 	uint32 columnCount = chunkList->columnCount;
 
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunk);
@@ -436,7 +458,7 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 				&chunkList->chunkSkipNodeArray[columnIndex][chunkIndex];
 
 			Datum values[Natts_columnar_chunk] = {
-				UInt64GetDatum(metapage->storageId),
+				UInt64GetDatum(storageId),
 				Int64GetDatum(stripe),
 				Int32GetDatum(columnIndex + 1),
 				Int32GetDatum(chunkIndex),
@@ -475,8 +497,6 @@ SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe, StripeSkipList *chunk
 
 	FinishModifyRelation(modifyState);
 	table_close(columnarChunk, RowExclusiveLock);
-
-	CommandCounterIncrement();
 }
 
 
@@ -487,7 +507,7 @@ void
 SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 				List *chunkGroupRowCounts)
 {
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
 	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, RowExclusiveLock);
 	ModifyState *modifyState = StartModifyRelation(columnarChunkGroup);
@@ -499,7 +519,7 @@ SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 	{
 		int64 rowCount = lfirst_int(lc);
 		Datum values[Natts_columnar_chunkgroup] = {
-			UInt64GetDatum(metapage->storageId),
+			UInt64GetDatum(storageId),
 			Int64GetDatum(stripe),
 			Int32GetDatum(chunkId),
 			Int64GetDatum(rowCount)
@@ -513,8 +533,6 @@ SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 
 	FinishModifyRelation(modifyState);
 	table_close(columnarChunkGroup, NoLock);
-
-	CommandCounterIncrement();
 }
 
 
@@ -523,26 +541,26 @@ SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
  */
 StripeSkipList *
 ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescriptor,
-				   uint32 chunkCount)
+				   uint32 chunkCount, Snapshot snapshot)
 {
 	int32 columnIndex = 0;
 	HeapTuple heapTuple = NULL;
 	uint32 columnCount = tupleDescriptor->natts;
 	ScanKeyData scanKey[2];
 
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, false);
+	uint64 storageId = LookupStorageId(relfilenode);
 
 	Oid columnarChunkOid = ColumnarChunkRelationId();
 	Relation columnarChunk = table_open(columnarChunkOid, AccessShareLock);
 	Relation index = index_open(ColumnarChunkIndexRelationId(), AccessShareLock);
 
 	ScanKeyInit(&scanKey[0], Anum_columnar_chunk_storageid,
-				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(metapage->storageId));
+				BTEqualStrategyNumber, F_OIDEQ, UInt64GetDatum(storageId));
 	ScanKeyInit(&scanKey[1], Anum_columnar_chunk_stripe,
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
-	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarChunk, index, NULL,
-															2, scanKey);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarChunk, index,
+															snapshot, 2, scanKey);
 
 	StripeSkipList *chunkList = palloc0(sizeof(StripeSkipList));
 	chunkList->chunkCount = chunkCount;
@@ -554,7 +572,8 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 			palloc0(chunkCount * sizeof(ColumnChunkSkipNode));
 	}
 
-	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
+																 ForwardScanDirection)))
 	{
 		Datum datumArray[Natts_columnar_chunk];
 		bool isNullArray[Natts_columnar_chunk];
@@ -624,9 +643,265 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
 	table_close(columnarChunk, AccessShareLock);
 
 	chunkList->chunkGroupRowCounts =
-		ReadChunkGroupRowCounts(metapage->storageId, stripe, chunkCount);
+		ReadChunkGroupRowCounts(storageId, stripe, chunkCount, snapshot);
 
 	return chunkList;
+}
+
+
+/*
+ * FindStripeByRowNumber returns StripeMetadata for the stripe whose
+ * firstRowNumber is greater than given rowNumber. If no such stripe
+ * exists, then returns NULL.
+ */
+StripeMetadata *
+FindNextStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
+{
+	return StripeMetadataLookupRowNumber(relation, rowNumber, snapshot, FIND_GREATER);
+}
+
+
+/*
+ * FindStripeByRowNumber returns StripeMetadata for the stripe that contains
+ * the row with rowNumber. If no such stripe exists, then returns NULL.
+ */
+StripeMetadata *
+FindStripeByRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot)
+{
+	StripeMetadata *stripeMetadata =
+		FindStripeWithMatchingFirstRowNumber(relation, rowNumber, snapshot);
+	if (!stripeMetadata)
+	{
+		return NULL;
+	}
+
+	if (rowNumber > StripeGetHighestRowNumber(stripeMetadata))
+	{
+		return NULL;
+	}
+
+	return stripeMetadata;
+}
+
+
+/*
+ * FindStripeWithMatchingFirstRowNumber returns a StripeMetadata object for
+ * the stripe that has the greatest firstRowNumber among the stripes whose
+ * firstRowNumber is smaller than or equal to given rowNumber. If no such
+ * stripe exists, then returns NULL.
+ *
+ * Note that this doesn't mean that found stripe certainly contains the tuple
+ * with given rowNumber. This is because, it also needs to be verified if
+ * highest row number that found stripe contains is greater than or equal to
+ * given rowNumber. For this reason, unless that additional check is done,
+ * this function is mostly useful for checking against "possible" constraint
+ * violations due to concurrent writes that are not flushed by other backends
+ * yet.
+ */
+StripeMetadata *
+FindStripeWithMatchingFirstRowNumber(Relation relation, uint64 rowNumber,
+									 Snapshot snapshot)
+{
+	return StripeMetadataLookupRowNumber(relation, rowNumber, snapshot,
+										 FIND_LESS_OR_EQUAL);
+}
+
+
+/*
+ * StripeWriteState returns write state of given stripe.
+ */
+StripeWriteStateEnum
+StripeWriteState(StripeMetadata *stripeMetadata)
+{
+	if (stripeMetadata->aborted)
+	{
+		return STRIPE_WRITE_ABORTED;
+	}
+	else if (stripeMetadata->rowCount > 0)
+	{
+		return STRIPE_WRITE_FLUSHED;
+	}
+	else
+	{
+		return STRIPE_WRITE_IN_PROGRESS;
+	}
+}
+
+
+/*
+ * StripeGetHighestRowNumber returns rowNumber of the row with highest
+ * rowNumber in given stripe.
+ */
+uint64
+StripeGetHighestRowNumber(StripeMetadata *stripeMetadata)
+{
+	return stripeMetadata->firstRowNumber + stripeMetadata->rowCount - 1;
+}
+
+
+/*
+ * StripeMetadataLookupRowNumber returns StripeMetadata for the stripe whose
+ * firstRowNumber is less than or equal to (FIND_LESS_OR_EQUAL), or is
+ * greater than (FIND_GREATER) given rowNumber by doing backward index
+ * scan on stripe_first_row_number_idx.
+ * If no such stripe exists, then returns NULL.
+ */
+static StripeMetadata *
+StripeMetadataLookupRowNumber(Relation relation, uint64 rowNumber, Snapshot snapshot,
+							  RowNumberLookupMode lookupMode)
+{
+	Assert(lookupMode == FIND_LESS_OR_EQUAL || lookupMode == FIND_GREATER);
+
+	StripeMetadata *foundStripeMetadata = NULL;
+
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	ScanKeyData scanKey[2];
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+
+	StrategyNumber strategyNumber = InvalidStrategy;
+	RegProcedure procedure = InvalidOid;
+	if (lookupMode == FIND_LESS_OR_EQUAL)
+	{
+		strategyNumber = BTLessEqualStrategyNumber;
+		procedure = F_INT8LE;
+	}
+	else if (lookupMode == FIND_GREATER)
+	{
+		strategyNumber = BTGreaterStrategyNumber;
+		procedure = F_INT8GT;
+	}
+	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_first_row_number,
+				strategyNumber, procedure, UInt64GetDatum(rowNumber));
+
+
+	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
+								AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
+															snapshot, 2,
+															scanKey);
+
+	ScanDirection scanDirection = NoMovementScanDirection;
+	if (lookupMode == FIND_LESS_OR_EQUAL)
+	{
+		scanDirection = BackwardScanDirection;
+	}
+	else if (lookupMode == FIND_GREATER)
+	{
+		scanDirection = ForwardScanDirection;
+	}
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, scanDirection);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		foundStripeMetadata = BuildStripeMetadata(columnarStripes, heapTuple);
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
+
+	return foundStripeMetadata;
+}
+
+
+/*
+ * CheckStripeMetadataConsistency first decides if stripe write operation for
+ * given stripe is "flushed", "aborted" or "in-progress", then errors out if
+ * its metadata entry contradicts with this fact.
+ *
+ * Checks performed here are just to catch bugs, so it is encouraged to call
+ * this function whenever a StripeMetadata object is built from an heap tuple
+ * of columnar.stripe. Currently, BuildStripeMetadata is the only function
+ * that does this.
+ */
+static void
+CheckStripeMetadataConsistency(StripeMetadata *stripeMetadata)
+{
+	bool stripeLooksInProgress =
+		stripeMetadata->rowCount == 0 && stripeMetadata->chunkCount == 0 &&
+		stripeMetadata->fileOffset == ColumnarInvalidLogicalOffset &&
+		stripeMetadata->dataLength == 0;
+
+	/*
+	 * Even if stripe is flushed, fileOffset and dataLength might be equal
+	 * to 0 for zero column tables, but those two should still be consistent
+	 * with respect to each other.
+	 */
+	bool stripeLooksFlushed =
+		stripeMetadata->rowCount > 0 && stripeMetadata->chunkCount > 0 &&
+		((stripeMetadata->fileOffset != ColumnarInvalidLogicalOffset &&
+		  stripeMetadata->dataLength > 0) ||
+		 (stripeMetadata->fileOffset == ColumnarInvalidLogicalOffset &&
+		  stripeMetadata->dataLength == 0));
+
+	StripeWriteStateEnum stripeWriteState = StripeWriteState(stripeMetadata);
+	if (stripeWriteState == STRIPE_WRITE_FLUSHED && stripeLooksFlushed)
+	{
+		/*
+		 * If stripe was flushed to disk, then we expect stripe to store
+		 * at least one tuple.
+		 */
+		return;
+	}
+	else if (stripeWriteState == STRIPE_WRITE_IN_PROGRESS && stripeLooksInProgress)
+	{
+		/*
+		 * If stripe was not flushed to disk, then values of given four
+		 * fields should match the columns inserted by
+		 * InsertEmptyStripeMetadataRow.
+		 */
+		return;
+	}
+	else if (stripeWriteState == STRIPE_WRITE_ABORTED && (stripeLooksInProgress ||
+														  stripeLooksFlushed))
+	{
+		/*
+		 * Stripe metadata entry for an aborted write can be complete or
+		 * incomplete. We might have aborted the transaction before or after
+		 * inserting into stripe metadata.
+		 */
+		return;
+	}
+
+	ereport(ERROR, (errmsg("unexpected stripe state, stripe metadata "
+						   "entry for stripe with id=" UINT64_FORMAT
+						   " is not consistent", stripeMetadata->id)));
+}
+
+
+/*
+ * FindStripeWithHighestRowNumber returns StripeMetadata for the stripe that
+ * has the row with highest rowNumber by doing backward index scan on
+ * stripe_first_row_number_idx. If given relation is empty, then returns NULL.
+ */
+StripeMetadata *
+FindStripeWithHighestRowNumber(Relation relation, Snapshot snapshot)
+{
+	StripeMetadata *stripeWithHighestRowNumber = NULL;
+
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	ScanKeyData scanKey[1];
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+
+	Relation columnarStripes = table_open(ColumnarStripeRelationId(), AccessShareLock);
+	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
+								AccessShareLock);
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
+															snapshot, 1, scanKey);
+
+	HeapTuple heapTuple = systable_getnext_ordered(scanDescriptor, BackwardScanDirection);
+	if (HeapTupleIsValid(heapTuple))
+	{
+		stripeWithHighestRowNumber = BuildStripeMetadata(columnarStripes, heapTuple);
+	}
+
+	systable_endscan_ordered(scanDescriptor);
+	index_close(index, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
+
+	return stripeWithHighestRowNumber;
 }
 
 
@@ -635,7 +910,8 @@ ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe, TupleDesc tupleDescri
  * given stripe.
  */
 static uint32 *
-ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount)
+ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount,
+						Snapshot snapshot)
 {
 	Oid columnarChunkGroupOid = ColumnarChunkGroupRelationId();
 	Relation columnarChunkGroup = table_open(columnarChunkGroupOid, AccessShareLock);
@@ -648,13 +924,14 @@ ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount)
 				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripe));
 
 	SysScanDesc scanDescriptor =
-		systable_beginscan_ordered(columnarChunkGroup, index, NULL, 2, scanKey);
+		systable_beginscan_ordered(columnarChunkGroup, index, snapshot, 2, scanKey);
 
 	uint32 chunkGroupIndex = 0;
 	HeapTuple heapTuple = NULL;
 	uint32 *chunkGroupRowCounts = palloc0(chunkGroupCount * sizeof(uint32));
 
-	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
+																 ForwardScanDirection)))
 	{
 		Datum datumArray[Natts_columnar_chunkgroup];
 		bool isNullArray[Natts_columnar_chunkgroup];
@@ -690,22 +967,36 @@ ReadChunkGroupRowCounts(uint64 storageId, uint64 stripe, uint32 chunkGroupCount)
 
 
 /*
- * InsertStripeMetadataRow adds a row to columnar.stripe.
+ * InsertEmptyStripeMetadataRow adds a row to columnar.stripe for the empty
+ * stripe reservation made for stripeId.
  */
 static void
-InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
+InsertEmptyStripeMetadataRow(uint64 storageId, uint64 stripeId, uint32 columnCount,
+							 uint32 chunkGroupRowCount, uint64 firstRowNumber)
 {
-	bool nulls[Natts_columnar_stripe] = { 0 };
-	Datum values[Natts_columnar_stripe] = {
-		UInt64GetDatum(storageId),
-		Int64GetDatum(stripe->id),
-		Int64GetDatum(stripe->fileOffset),
-		Int64GetDatum(stripe->dataLength),
-		Int32GetDatum(stripe->columnCount),
-		Int32GetDatum(stripe->chunkGroupRowCount),
-		Int64GetDatum(stripe->rowCount),
-		Int32GetDatum(stripe->chunkCount)
-	};
+	bool nulls[Natts_columnar_stripe] = { false };
+
+	Datum values[Natts_columnar_stripe] = { 0 };
+	values[Anum_columnar_stripe_storageid - 1] =
+		UInt64GetDatum(storageId);
+	values[Anum_columnar_stripe_stripe - 1] =
+		UInt64GetDatum(stripeId);
+	values[Anum_columnar_stripe_column_count - 1] =
+		UInt32GetDatum(columnCount);
+	values[Anum_columnar_stripe_chunk_row_count - 1] =
+		UInt32GetDatum(chunkGroupRowCount);
+	values[Anum_columnar_stripe_first_row_number - 1] =
+		UInt64GetDatum(firstRowNumber);
+
+	/* stripe has no rows yet, so initialize rest of the columns accordingly */
+	values[Anum_columnar_stripe_row_count - 1] =
+		UInt64GetDatum(0);
+	values[Anum_columnar_stripe_file_offset - 1] =
+		UInt64GetDatum(ColumnarInvalidLogicalOffset);
+	values[Anum_columnar_stripe_data_length - 1] =
+		UInt64GetDatum(0);
+	values[Anum_columnar_stripe_chunk_count - 1] =
+		UInt32GetDatum(0);
 
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 	Relation columnarStripes = table_open(columnarStripesOid, RowExclusiveLock);
@@ -715,8 +1006,6 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 	InsertTupleAndEnforceConstraints(modifyState, values, nulls);
 
 	FinishModifyRelation(modifyState);
-
-	CommandCounterIncrement();
 
 	table_close(columnarStripes, RowExclusiveLock);
 }
@@ -729,15 +1018,9 @@ InsertStripeMetadataRow(uint64 storageId, StripeMetadata *stripe)
 List *
 StripesForRelfilenode(RelFileNode relfilenode)
 {
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-	if (metapage == NULL)
-	{
-		/* empty relation */
-		return NIL;
-	}
+	uint64 storageId = LookupStorageId(relfilenode);
 
-
-	return ReadDataFileStripeList(metapage->storageId, GetTransactionSnapshot());
+	return ReadDataFileStripeList(storageId, GetTransactionSnapshot());
 }
 
 
@@ -752,17 +1035,11 @@ StripesForRelfilenode(RelFileNode relfilenode)
 uint64
 GetHighestUsedAddress(RelFileNode relfilenode)
 {
+	uint64 storageId = LookupStorageId(relfilenode);
+
 	uint64 highestUsedAddress = 0;
 	uint64 highestUsedId = 0;
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-
-	/* empty data file? */
-	if (metapage == NULL)
-	{
-		return 0;
-	}
-
-	GetHighestUsedAddressAndId(metapage->storageId, &highestUsedAddress, &highestUsedId);
+	GetHighestUsedAddressAndId(storageId, &highestUsedAddress, &highestUsedId);
 
 	return highestUsedAddress;
 }
@@ -800,100 +1077,133 @@ GetHighestUsedAddressAndId(uint64 storageId,
 
 
 /*
- * LockForStripeReservation acquires a lock for stripe reservation.
- */
-static void
-LockForStripeReservation(Relation rel, LOCKMODE mode)
-{
-	/*
-	 * We use an advisory lock here so we can easily detect these kind of
-	 * locks in IsProcessWaitingForSafeOperations() and don't include them
-	 * in the lock graph.
-	 */
-	LOCKTAG tag;
-	SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, rel);
-	LockAcquire(&tag, mode, false, false);
-}
-
-
-/*
- * UnlockForStripeReservation releases the stripe reservation lock.
- */
-static void
-UnlockForStripeReservation(Relation rel, LOCKMODE mode)
-{
-	LOCKTAG tag;
-	SET_LOCKTAG_COLUMNAR_STRIPE_RESERVATION(tag, rel);
-	LockRelease(&tag, mode, false);
-}
-
-
-/*
- * ReserveStripe reserves and stripe of given size for the given relation,
+ * ReserveEmptyStripe reserves an empty stripe for given relation
  * and inserts it into columnar.stripe. It is guaranteed that concurrent
  * writes won't overwrite the returned stripe.
  */
-StripeMetadata
-ReserveStripe(Relation rel, uint64 sizeBytes,
-			  uint64 rowCount, uint64 columnCount,
-			  uint64 chunkCount, uint64 chunkGroupRowCount)
+EmptyStripeReservation *
+ReserveEmptyStripe(Relation rel, uint64 columnCount, uint64 chunkGroupRowCount,
+				   uint64 stripeRowCount)
 {
-	StripeMetadata stripe = { 0 };
-	uint64 currLogicalHigh = 0;
-	uint64 highestId = 0;
+	EmptyStripeReservation *stripeReservation = palloc0(sizeof(EmptyStripeReservation));
+
+	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
+
+	stripeReservation->stripeId = ColumnarStorageReserveStripeId(rel);
+	stripeReservation->stripeFirstRowNumber =
+		ColumnarStorageReserveRowNumber(rel, stripeRowCount);
 
 	/*
-	 * We take ExclusiveLock here, so two space reservations conflict.
+	 * XXX: Instead of inserting a dummy entry to columnar.stripe and
+	 * updating it when flushing the stripe, we could have a hash table
+	 * in shared memory for the bookkeeping of ongoing writes.
 	 */
-	LOCKMODE lockMode = ExclusiveLock;
-	LockForStripeReservation(rel, lockMode);
+	InsertEmptyStripeMetadataRow(storageId, stripeReservation->stripeId,
+								 columnCount, chunkGroupRowCount,
+								 stripeReservation->stripeFirstRowNumber);
 
-	RelFileNode relfilenode = rel->rd_node;
+	return stripeReservation;
+}
+
+
+/*
+ * CompleteStripeReservation completes reservation of the stripe with
+ * stripeId for given size and in-place updates related stripe metadata tuple
+ * to complete reservation.
+ */
+StripeMetadata *
+CompleteStripeReservation(Relation rel, uint64 stripeId, uint64 sizeBytes,
+						  uint64 rowCount, uint64 chunkCount)
+{
+	uint64 resLogicalStart = ColumnarStorageReserveData(rel, sizeBytes);
+	uint64 storageId = ColumnarStorageGetStorageId(rel, false);
+
+	bool update[Natts_columnar_stripe] = { false };
+	update[Anum_columnar_stripe_file_offset - 1] = true;
+	update[Anum_columnar_stripe_data_length - 1] = true;
+	update[Anum_columnar_stripe_row_count - 1] = true;
+	update[Anum_columnar_stripe_chunk_count - 1] = true;
+
+	Datum newValues[Natts_columnar_stripe] = { 0 };
+	newValues[Anum_columnar_stripe_file_offset - 1] = Int64GetDatum(resLogicalStart);
+	newValues[Anum_columnar_stripe_data_length - 1] = Int64GetDatum(sizeBytes);
+	newValues[Anum_columnar_stripe_row_count - 1] = UInt64GetDatum(rowCount);
+	newValues[Anum_columnar_stripe_chunk_count - 1] = Int32GetDatum(chunkCount);
+
+	return UpdateStripeMetadataRow(storageId, stripeId, update, newValues);
+}
+
+
+/*
+ * UpdateStripeMetadataRow updates stripe metadata tuple for the stripe with
+ * stripeId according to given newValues and update arrays.
+ * Note that this function shouldn't be used for the cases where any indexes
+ * of stripe metadata should be updated according to modifications done.
+ */
+static StripeMetadata *
+UpdateStripeMetadataRow(uint64 storageId, uint64 stripeId, bool *update,
+						Datum *newValues)
+{
+	SnapshotData dirtySnapshot;
+	InitDirtySnapshot(dirtySnapshot);
+
+	ScanKeyData scanKey[2];
+	ScanKeyInit(&scanKey[0], Anum_columnar_stripe_storageid,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(storageId));
+	ScanKeyInit(&scanKey[1], Anum_columnar_stripe_stripe,
+				BTEqualStrategyNumber, F_OIDEQ, Int32GetDatum(stripeId));
+
+	Oid columnarStripesOid = ColumnarStripeRelationId();
+
+	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
+	Relation columnarStripePkeyIndex = index_open(ColumnarStripePKeyIndexRelationId(),
+												  AccessShareLock);
+
+	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes,
+															columnarStripePkeyIndex,
+															&dirtySnapshot, 2, scanKey);
+
+	HeapTuple oldTuple = systable_getnext_ordered(scanDescriptor, ForwardScanDirection);
+	if (!HeapTupleIsValid(oldTuple))
+	{
+		ereport(ERROR, (errmsg("attempted to modify an unexpected stripe, "
+							   "columnar storage with id=" UINT64_FORMAT
+							   " does not have stripe with id=" UINT64_FORMAT,
+							   storageId, stripeId)));
+	}
 
 	/*
-	 * If this is the first stripe for this relation, initialize the
-	 * metapage, otherwise use the previously initialized metapage.
+	 * heap_inplace_update already doesn't allow changing size of the original
+	 * tuple, so we don't allow setting any Datum's to NULL values.
 	 */
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-	if (metapage == NULL)
-	{
-		metapage = InitMetapage(rel);
-	}
+	bool newNulls[Natts_columnar_stripe] = { false };
+	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
+	HeapTuple modifiedTuple = heap_modify_tuple(oldTuple, tupleDescriptor,
+												newValues, newNulls, update);
 
-	GetHighestUsedAddressAndId(metapage->storageId, &currLogicalHigh, &highestId);
-	SmgrAddr currSmgrHigh = logical_to_smgr(currLogicalHigh);
+	heap_inplace_update(columnarStripes, modifiedTuple);
 
-	SmgrAddr resSmgrStart = next_block_start(currSmgrHigh);
-	uint64 resLogicalStart = smgr_to_logical(resSmgrStart);
+	/*
+	 * Existing tuple now contains modifications, because we used
+	 * heap_inplace_update().
+	 */
+	HeapTuple newTuple = oldTuple;
 
-	uint64 resLogicalEnd = resLogicalStart + sizeBytes - 1;
-	SmgrAddr resSmgrEnd = logical_to_smgr(resLogicalEnd);
+	/*
+	 * Must not pass modifiedTuple, because BuildStripeMetadata expects a real
+	 * heap tuple with MVCC fields.
+	 */
+	StripeMetadata *modifiedStripeMetadata = BuildStripeMetadata(columnarStripes,
+																 newTuple);
 
-	RelationOpenSmgr(rel);
-	uint64 nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	CommandCounterIncrement();
 
-	while (resSmgrEnd.blockno >= nblocks)
-	{
-		Buffer newBuffer = ReadBuffer(rel, P_NEW);
-		ReleaseBuffer(newBuffer);
-		nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
-	}
+	systable_endscan_ordered(scanDescriptor);
+	index_close(columnarStripePkeyIndex, AccessShareLock);
+	table_close(columnarStripes, AccessShareLock);
 
-	RelationCloseSmgr(rel);
-
-	stripe.fileOffset = resLogicalStart;
-	stripe.dataLength = sizeBytes;
-	stripe.chunkCount = chunkCount;
-	stripe.chunkGroupRowCount = chunkGroupRowCount;
-	stripe.columnCount = columnCount;
-	stripe.rowCount = rowCount;
-	stripe.id = highestId + 1;
-
-	InsertStripeMetadataRow(metapage->storageId, &stripe);
-
-	UnlockForStripeReservation(rel, lockMode);
-
-	return stripe;
+	/* return StripeMetadata object built from modified tuple */
+	return modifiedStripeMetadata;
 }
 
 
@@ -914,35 +1224,17 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	Oid columnarStripesOid = ColumnarStripeRelationId();
 
 	Relation columnarStripes = table_open(columnarStripesOid, AccessShareLock);
-	Relation index = index_open(ColumnarStripeIndexRelationId(), AccessShareLock);
-	TupleDesc tupleDescriptor = RelationGetDescr(columnarStripes);
+	Relation index = index_open(ColumnarStripeFirstRowNumberIndexRelationId(),
+								AccessShareLock);
 
 	SysScanDesc scanDescriptor = systable_beginscan_ordered(columnarStripes, index,
 															snapshot, 1,
 															scanKey);
 
-	while (HeapTupleIsValid(heapTuple = systable_getnext(scanDescriptor)))
+	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
+																 ForwardScanDirection)))
 	{
-		Datum datumArray[Natts_columnar_stripe];
-		bool isNullArray[Natts_columnar_stripe];
-
-		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
-
-		StripeMetadata *stripeMetadata = palloc0(sizeof(StripeMetadata));
-		stripeMetadata->id = DatumGetInt64(datumArray[Anum_columnar_stripe_stripe - 1]);
-		stripeMetadata->fileOffset = DatumGetInt64(
-			datumArray[Anum_columnar_stripe_file_offset - 1]);
-		stripeMetadata->dataLength = DatumGetInt64(
-			datumArray[Anum_columnar_stripe_data_length - 1]);
-		stripeMetadata->columnCount = DatumGetInt32(
-			datumArray[Anum_columnar_stripe_column_count - 1]);
-		stripeMetadata->chunkCount = DatumGetInt32(
-			datumArray[Anum_columnar_stripe_chunk_count - 1]);
-		stripeMetadata->chunkGroupRowCount = DatumGetInt32(
-			datumArray[Anum_columnar_stripe_chunk_row_count - 1]);
-		stripeMetadata->rowCount = DatumGetInt64(
-			datumArray[Anum_columnar_stripe_row_count - 1]);
-
+		StripeMetadata *stripeMetadata = BuildStripeMetadata(columnarStripes, heapTuple);
 		stripeMetadataList = lappend(stripeMetadataList, stripeMetadata);
 	}
 
@@ -951,6 +1243,57 @@ ReadDataFileStripeList(uint64 storageId, Snapshot snapshot)
 	table_close(columnarStripes, AccessShareLock);
 
 	return stripeMetadataList;
+}
+
+
+/*
+ * BuildStripeMetadata builds a StripeMetadata object from given heap tuple.
+ *
+ * NB: heapTuple must be a proper heap tuple with MVCC fields.
+ */
+static StripeMetadata *
+BuildStripeMetadata(Relation columnarStripes, HeapTuple heapTuple)
+{
+	Assert(RelationGetRelid(columnarStripes) == ColumnarStripeRelationId());
+
+	Datum datumArray[Natts_columnar_stripe];
+	bool isNullArray[Natts_columnar_stripe];
+	heap_deform_tuple(heapTuple, RelationGetDescr(columnarStripes),
+					  datumArray, isNullArray);
+
+	StripeMetadata *stripeMetadata = palloc0(sizeof(StripeMetadata));
+	stripeMetadata->id = DatumGetInt64(datumArray[Anum_columnar_stripe_stripe - 1]);
+	stripeMetadata->fileOffset = DatumGetInt64(
+		datumArray[Anum_columnar_stripe_file_offset - 1]);
+	stripeMetadata->dataLength = DatumGetInt64(
+		datumArray[Anum_columnar_stripe_data_length - 1]);
+	stripeMetadata->columnCount = DatumGetInt32(
+		datumArray[Anum_columnar_stripe_column_count - 1]);
+	stripeMetadata->chunkCount = DatumGetInt32(
+		datumArray[Anum_columnar_stripe_chunk_count - 1]);
+	stripeMetadata->chunkGroupRowCount = DatumGetInt32(
+		datumArray[Anum_columnar_stripe_chunk_row_count - 1]);
+	stripeMetadata->rowCount = DatumGetInt64(
+		datumArray[Anum_columnar_stripe_row_count - 1]);
+	stripeMetadata->firstRowNumber = DatumGetUInt64(
+		datumArray[Anum_columnar_stripe_first_row_number - 1]);
+
+	/*
+	 * If there is unflushed data in a parent transaction, then we would
+	 * have already thrown an error before starting to scan the table.. If
+	 * the data is from an earlier subxact that committed, then it would
+	 * have been flushed already. For this reason, we don't care about
+	 * subtransaction id here.
+	 */
+	TransactionId entryXmin = HeapTupleHeaderGetXmin(heapTuple->t_data);
+	stripeMetadata->aborted = !TransactionIdIsInProgress(entryXmin) &&
+							  TransactionIdDidAbort(entryXmin);
+	stripeMetadata->insertedByCurrentXact =
+		TransactionIdIsCurrentTransactionId(entryXmin);
+
+	CheckStripeMetadataConsistency(stripeMetadata);
+
+	return stripeMetadata;
 }
 
 
@@ -970,28 +1313,20 @@ DeleteMetadataRows(RelFileNode relfilenode)
 		return;
 	}
 
-	ColumnarMetapage *metapage = ReadMetapage(relfilenode, true);
-	if (metapage == NULL)
-	{
-		/*
-		 * No data has been written to this storage yet, so there is no
-		 * associated metadata yet.
-		 */
-		return;
-	}
+	uint64 storageId = LookupStorageId(relfilenode);
 
 	DeleteStorageFromColumnarMetadataTable(ColumnarStripeRelationId(),
 										   Anum_columnar_stripe_storageid,
-										   ColumnarStripeIndexRelationId(),
-										   metapage->storageId);
+										   ColumnarStripePKeyIndexRelationId(),
+										   storageId);
 	DeleteStorageFromColumnarMetadataTable(ColumnarChunkGroupRelationId(),
 										   Anum_columnar_chunkgroup_storageid,
 										   ColumnarChunkGroupIndexRelationId(),
-										   metapage->storageId);
+										   storageId);
 	DeleteStorageFromColumnarMetadataTable(ColumnarChunkRelationId(),
 										   Anum_columnar_chunk_storageid,
 										   ColumnarChunkIndexRelationId(),
-										   metapage->storageId);
+										   storageId);
 }
 
 
@@ -1022,11 +1357,11 @@ DeleteStorageFromColumnarMetadataTable(Oid metadataTableId,
 
 	ModifyState *modifyState = StartModifyRelation(metadataTable);
 
-	HeapTuple heapTuple = systable_getnext(scanDescriptor);
-	while (HeapTupleIsValid(heapTuple))
+	HeapTuple heapTuple;
+	while (HeapTupleIsValid(heapTuple = systable_getnext_ordered(scanDescriptor,
+																 ForwardScanDirection)))
 	{
 		DeleteTupleAndEnforceConstraints(modifyState, heapTuple);
-		heapTuple = systable_getnext(scanDescriptor);
 	}
 
 	systable_endscan_ordered(scanDescriptor);
@@ -1046,12 +1381,20 @@ StartModifyRelation(Relation rel)
 {
 	EState *estate = create_estate_for_relation(rel);
 
+#if PG_VERSION_NUM >= PG_VERSION_14
+	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
+	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
+#else
+	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
+#endif
+
 	/* ExecSimpleRelationInsert, ... require caller to open indexes */
-	ExecOpenIndices(estate->es_result_relation_info, false);
+	ExecOpenIndices(resultRelInfo, false);
 
 	ModifyState *modifyState = palloc(sizeof(ModifyState));
 	modifyState->rel = rel;
 	modifyState->estate = estate;
+	modifyState->resultRelInfo = resultRelInfo;
 
 	return modifyState;
 }
@@ -1073,7 +1416,7 @@ InsertTupleAndEnforceConstraints(ModifyState *state, Datum *values, bool *nulls)
 	ExecStoreHeapTuple(tuple, slot, false);
 
 	/* use ExecSimpleRelationInsert to enforce constraints */
-	ExecSimpleRelationInsert(state->estate, slot);
+	ExecSimpleRelationInsert_compat(state->resultRelInfo, state->estate, slot);
 }
 
 
@@ -1085,7 +1428,7 @@ static void
 DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple)
 {
 	EState *estate = state->estate;
-	ResultRelInfo *resultRelInfo = estate->es_result_relation_info;
+	ResultRelInfo *resultRelInfo = state->resultRelInfo;
 
 	ItemPointer tid = &(heapTuple->t_self);
 	simple_heap_delete(state->rel, tid);
@@ -1101,12 +1444,19 @@ DeleteTupleAndEnforceConstraints(ModifyState *state, HeapTuple heapTuple)
 static void
 FinishModifyRelation(ModifyState *state)
 {
-	ExecCloseIndices(state->estate->es_result_relation_info);
+	ExecCloseIndices(state->resultRelInfo);
 
 	AfterTriggerEndQuery(state->estate);
+#if PG_VERSION_NUM >= PG_VERSION_14
+	ExecCloseResultRelations(state->estate);
+	ExecCloseRangeTableRelations(state->estate);
+#else
 	ExecCleanUpTriggerState(state->estate);
+#endif
 	ExecResetTupleTable(state->estate->es_tupleTable, false);
 	FreeExecutorState(state->estate);
+
+	CommandCounterIncrement();
 }
 
 
@@ -1131,12 +1481,14 @@ create_estate_for_relation(Relation rel)
 	rte->rellockmode = AccessShareLock;
 	ExecInitRangeTable(estate, list_make1(rte));
 
+#if PG_VERSION_NUM < PG_VERSION_14
 	ResultRelInfo *resultRelInfo = makeNode(ResultRelInfo);
 	InitResultRelInfo(resultRelInfo, rel, 1, NULL, 0);
 
 	estate->es_result_relations = resultRelInfo;
 	estate->es_num_result_relations = 1;
 	estate->es_result_relation_info = resultRelInfo;
+#endif
 
 	estate->es_output_cid = GetCurrentCommandId(true);
 
@@ -1226,13 +1578,25 @@ ColumnarStripeRelationId(void)
 
 
 /*
- * ColumnarStripeIndexRelationId returns relation id of columnar.stripe_pkey.
+ * ColumnarStripePKeyIndexRelationId returns relation id of columnar.stripe_pkey.
  * TODO: should we cache this similar to citus?
  */
 static Oid
-ColumnarStripeIndexRelationId(void)
+ColumnarStripePKeyIndexRelationId(void)
 {
 	return get_relname_relid("stripe_pkey", ColumnarNamespaceId());
+}
+
+
+/*
+ * ColumnarStripeFirstRowNumberIndexRelationId returns relation id of
+ * columnar.stripe_first_row_number_idx.
+ * TODO: should we cache this similar to citus?
+ */
+static Oid
+ColumnarStripeFirstRowNumberIndexRelationId(void)
+{
+	return get_relname_relid("stripe_first_row_number_idx", ColumnarNamespaceId());
 }
 
 
@@ -1312,75 +1676,31 @@ ColumnarNamespaceId(void)
 
 
 /*
- * ReadMetapage reads metapage for the given relfilenode. It returns
+ * LookupStorageId reads storage metapage to find the storage ID for the given relfilenode. It returns
  * false if the relation doesn't have a meta page yet.
  */
-static ColumnarMetapage *
-ReadMetapage(RelFileNode relfilenode, bool missingOk)
+static uint64
+LookupStorageId(RelFileNode relfilenode)
 {
-	StringInfo metapageBuffer = NULL;
 	Oid relationId = RelidByRelfilenode(relfilenode.spcNode,
 										relfilenode.relNode);
-	if (OidIsValid(relationId))
-	{
-		Relation relation = relation_open(relationId, NoLock);
 
-		RelationOpenSmgr(relation);
-		int nblocks = smgrnblocks(relation->rd_smgr, MAIN_FORKNUM);
-		RelationCloseSmgr(relation);
+	Relation relation = relation_open(relationId, AccessShareLock);
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
+	table_close(relation, AccessShareLock);
 
-		if (nblocks != 0)
-		{
-			metapageBuffer = ReadFromSmgr(relation, 0, sizeof(ColumnarMetapage));
-		}
-
-		relation_close(relation, NoLock);
-	}
-
-	if (metapageBuffer == NULL)
-	{
-		if (!missingOk)
-		{
-			elog(ERROR, "columnar metapage was not found");
-		}
-
-		return NULL;
-	}
-
-	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
-	memcpy_s((void *) metapage, sizeof(ColumnarMetapage),
-			 metapageBuffer->data, sizeof(ColumnarMetapage));
-
-	return metapage;
+	return storageId;
 }
 
 
 /*
- * InitMetapage initializes metapage for the given relation.
+ * ColumnarMetadataNewStorageId - create a new, unique storage id and return
+ * it.
  */
-static ColumnarMetapage *
-InitMetapage(Relation relation)
+uint64
+ColumnarMetadataNewStorageId()
 {
-	/*
-	 * If we init metapage during upgrade, we might override the
-	 * pre-upgrade storage id which will render pre-upgrade data
-	 * invisible.
-	 */
-	Assert(!IsBinaryUpgrade);
-	ColumnarMetapage *metapage = palloc0(sizeof(ColumnarMetapage));
-
-	metapage->storageId = nextval_internal(ColumnarStorageIdSequenceRelationId(), false);
-	metapage->versionMajor = COLUMNAR_VERSION_MAJOR;
-	metapage->versionMinor = COLUMNAR_VERSION_MINOR;
-
-	/* create the first block */
-	Buffer newBuffer = ReadBuffer(relation, P_NEW);
-	ReleaseBuffer(newBuffer);
-
-	Assert(sizeof(ColumnarMetapage) <= BLCKSZ - SizeOfPageHeaderData);
-	WriteToSmgr(relation, 0, (char *) metapage, sizeof(ColumnarMetapage));
-
-	return metapage;
+	return nextval_internal(ColumnarStorageIdSequenceRelationId(), false);
 }
 
 
@@ -1391,20 +1711,77 @@ InitMetapage(Relation relation)
 Datum
 columnar_relation_storageid(PG_FUNCTION_ARGS)
 {
-	uint64 storageId = -1;
-
 	Oid relationId = PG_GETARG_OID(0);
 	Relation relation = relation_open(relationId, AccessShareLock);
-	if (IsColumnarTableAmTable(relationId))
+	if (!IsColumnarTableAmTable(relationId))
 	{
-		ColumnarMetapage *metadata = ReadMetapage(relation->rd_node, true);
-		if (metadata != NULL)
-		{
-			storageId = metadata->storageId;
-		}
+		elog(ERROR, "relation \"%s\" is not a columnar table",
+			 RelationGetRelationName(relation));
 	}
+
+	uint64 storageId = ColumnarStorageGetStorageId(relation, false);
 
 	relation_close(relation, AccessShareLock);
 
 	PG_RETURN_INT64(storageId);
+}
+
+
+/*
+ * ColumnarStorageUpdateIfNeeded - upgrade columnar storage to the current version by
+ * using information from the metadata tables.
+ */
+void
+ColumnarStorageUpdateIfNeeded(Relation rel, bool isUpgrade)
+{
+	if (ColumnarStorageIsCurrent(rel))
+	{
+		return;
+	}
+
+	RelationOpenSmgr(rel);
+	BlockNumber nblocks = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
+	if (nblocks < 2)
+	{
+		ColumnarStorageInit(rel->rd_smgr, ColumnarMetadataNewStorageId());
+		return;
+	}
+
+	uint64 storageId = ColumnarStorageGetStorageId(rel, true);
+
+	uint64 highestId;
+	uint64 highestOffset;
+	GetHighestUsedAddressAndId(storageId, &highestOffset, &highestId);
+
+	uint64 reservedStripeId = highestId + 1;
+	uint64 reservedOffset = highestOffset + 1;
+	uint64 reservedRowNumber = GetHighestUsedRowNumber(storageId) + 1;
+	ColumnarStorageUpdateCurrent(rel, isUpgrade, reservedStripeId,
+								 reservedRowNumber, reservedOffset);
+}
+
+
+/*
+ * GetHighestUsedRowNumber returns the highest used rowNumber for given
+ * storageId. Returns COLUMNAR_INVALID_ROW_NUMBER if storage with
+ * storageId has no stripes.
+ * Note that normally we would use ColumnarStorageGetReservedRowNumber
+ * to decide that. However, this function is designed to be used when
+ * building the metapage itself during upgrades.
+ */
+static uint64
+GetHighestUsedRowNumber(uint64 storageId)
+{
+	uint64 highestRowNumber = COLUMNAR_INVALID_ROW_NUMBER;
+
+	List *stripeMetadataList = ReadDataFileStripeList(storageId,
+													  GetTransactionSnapshot());
+	StripeMetadata *stripeMetadata = NULL;
+	foreach_ptr(stripeMetadata, stripeMetadataList)
+	{
+		highestRowNumber = Max(highestRowNumber,
+							   StripeGetHighestRowNumber(stripeMetadata));
+	}
+
+	return highestRowNumber;
 }

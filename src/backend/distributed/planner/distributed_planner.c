@@ -847,9 +847,10 @@ CreateDistributedPlan(uint64 planId, Query *originalQuery, Query *query, ParamLi
 
 	if (IsModifyCommand(originalQuery))
 	{
-		EnsureModificationsCanRun();
-
 		Oid targetRelationId = ModifyQueryResultRelationId(query);
+
+		EnsureModificationsCanRunOnRelation(targetRelationId);
+
 		EnsurePartitionTableNotReplicated(targetRelationId);
 
 		if (InsertSelectIntoCitusTable(originalQuery))

@@ -12,6 +12,14 @@ WITH sample_data AS (VALUES
 INSERT INTO test_alter_table SELECT * FROM sample_data;
 -- drop a column
 ALTER TABLE test_alter_table DROP COLUMN a;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('test_alter_table');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  2 |              150001
+(1 row)
+
 -- test analyze
 ANALYZE test_alter_table;
 -- verify select queries run as expected
@@ -59,6 +67,14 @@ SELECT * FROM test_alter_table;
  3 | 5 | 8
 (5 rows)
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('test_alter_table');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  4 |              450001
+(1 row)
+
 -- add a fixed-length column with default value
 ALTER TABLE test_alter_table ADD COLUMN e int default 3;
 SELECT * from test_alter_table;
@@ -82,6 +98,14 @@ SELECT * from test_alter_table;
  3 | 5 | 8 | 3
  1 | 2 | 4 | 8
 (6 rows)
+
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('test_alter_table');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  5 |              600001
+(1 row)
 
 -- add a variable-length column with default value
 ALTER TABLE test_alter_table ADD COLUMN f text DEFAULT 'TEXT ME';
@@ -194,6 +218,21 @@ SELECT * FROM domain_test;
  1 | 2 | x
 (2 rows)
 
+-- similar to "add column c str_domain DEFAULT 'x'", both were getting
+-- stucked before fixing https://github.com/citusdata/citus/issues/5164
+BEGIN;
+  ALTER TABLE domain_test ADD COLUMN d INT DEFAULT random();
+ROLLBACK;
+BEGIN;
+  ALTER TABLE domain_test ADD COLUMN d SERIAL;
+  SELECT * FROM domain_test ORDER BY 1,2,3,4;
+ a | b | c | d
+---------------------------------------------------------------------
+ 1 | 2 | x | 1
+ 1 | 2 | x | 2
+(2 rows)
+
+ROLLBACK;
 set default_table_access_method TO 'columnar';
 CREATE TABLE has_volatile AS
 SELECT * FROM generate_series(1,10) id;
@@ -231,7 +270,6 @@ insert into atacc1 values(1);
 alter table atacc1
   add column b float8 not null default random(),
   add primary key(a);
-ERROR:  indexes not supported for columnar tables
 -- Add a generate column with an expression value
 create table test_gen_ex (x int) using columnar;
 INSERT INTO test_gen_ex VALUES (1), (2), (3);
@@ -266,10 +304,11 @@ SELECT count(*) FROM zero_col_columnar;
 (1 row)
 
 EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
-                   QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on zero_col_columnar
-(1 row)
+   Columnar Projected Columns: <columnar optimized out all columns>
+(2 rows)
 
 INSERT INTO zero_col_columnar DEFAULT VALUES;
 INSERT INTO zero_col_columnar DEFAULT VALUES;
@@ -285,10 +324,11 @@ SELECT count(*) FROM zero_col_columnar;
 (1 row)
 
 EXPLAIN (costs off, summary off) SELECT * FROM zero_col_columnar;
-                   QUERY PLAN
+                             QUERY PLAN
 ---------------------------------------------------------------------
  Custom Scan (ColumnarScan) on zero_col_columnar
-(1 row)
+   Columnar Projected Columns: <columnar optimized out all columns>
+(2 rows)
 
 VACUUM VERBOSE zero_col_columnar;
 INFO:  statistics for "zero_col_columnar":
@@ -366,30 +406,30 @@ SELECT * FROM products ORDER BY 1;
           3 | pen     |     2
 (3 rows)
 
--- Add a UNIQUE constraint (should fail)
-CREATE TABLE products_fail (
+-- Add a UNIQUE constraint
+CREATE TABLE products_unique (
     product_no integer UNIQUE,
     name text,
     price numeric
 ) USING columnar;
-ERROR:  indexes not supported for columnar tables
 ALTER TABLE products ADD COLUMN store_id text UNIQUE;
-ERROR:  indexes not supported for columnar tables
--- Add a PRIMARY KEY constraint (should fail)
-CREATE TABLE products_fail (
+-- Add a PRIMARY KEY constraint
+CREATE TABLE products_primary (
     product_no integer PRIMARY KEY,
     name text,
     price numeric
 ) USING columnar;
-ERROR:  indexes not supported for columnar tables
-ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
-ERROR:  indexes not supported for columnar tables
+BEGIN;
+  ALTER TABLE products DROP COLUMN store_id;
+  ALTER TABLE products ADD COLUMN store_id text PRIMARY KEY;
+ERROR:  column "store_id" contains null values
+ROLLBACK;
 -- Add an EXCLUSION constraint (should fail)
 CREATE TABLE circles (
     c circle,
     EXCLUDE USING gist (c WITH &&)
 ) USING columnar;
-ERROR:  indexes not supported for columnar tables
+ERROR:  unsupported access method for the index on columnar table circles
 -- Row level security
 CREATE TABLE public.row_level_security_col (id int, pgUser CHARACTER VARYING) USING columnar;
 CREATE USER user1;

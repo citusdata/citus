@@ -44,6 +44,7 @@
 #include "distributed/metadata_sync.h"
 #include "distributed/multi_executor.h"
 #include "distributed/namespace_utils.h"
+#include "distributed/pg_dist_node.h"
 #include "distributed/reference_table_utils.h"
 #include "distributed/relation_access_tracking.h"
 #include "distributed/version_compat.h"
@@ -75,9 +76,6 @@ static int GetFunctionColocationId(Oid functionOid, char *colocateWithName, Oid
 static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 												  distributionColumnType, Oid
 												  sourceRelationId);
-static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
-										   int *distribution_argument_index,
-										   int *colocationId);
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
@@ -187,7 +185,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
 	const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
 	initStringInfo(&ddlCommand);
-	appendStringInfo(&ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
+	appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_OBJECT_PROPAGATION,
+					 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_OBJECT_PROPAGATION);
 	SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(), ddlCommand.data);
 
 	MarkObjectDistributed(&functionAddress);
@@ -259,7 +258,7 @@ DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid,
 {
 	/*
 	 * cannot provide colocate_with without distribution_arg_name when the function
-	 * is not collocated with a reference table
+	 * is not colocated with a reference table
 	 */
 	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0)
 	{
@@ -461,15 +460,6 @@ GetFunctionColocationId(Oid functionOid, char *colocateWithTableName,
 			EnsureFunctionCanBeColocatedWithTable(functionOid, distributionArgumentOid,
 												  colocatedTableId);
 		}
-		else if (ReplicationModel == REPLICATION_MODEL_COORDINATOR)
-		{
-			/* streaming replication model is required for metadata syncing */
-			ereport(ERROR, (errmsg("cannot create a function with a distribution "
-								   "argument when citus.replication_model is "
-								   "'statement'"),
-							errhint("Set citus.replication_model to 'streaming' "
-									"before creating distributed tables")));
-		}
 	}
 	else
 	{
@@ -537,7 +527,7 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 								  "with distributed tables that are created using "
 								  "streaming replication model."),
 						errhint("When distributing tables make sure that "
-								"citus.replication_model = 'streaming'")));
+								"citus.shard_replication_factor = 1")));
 	}
 
 	/*
@@ -572,8 +562,9 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 /*
  * UpdateFunctionDistributionInfo gets object address of a function and
  * updates its distribution_argument_index and colocationId in pg_dist_object.
+ * Then update pg_dist_object on nodes with metadata if object propagation is on.
  */
-static void
+void
 UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 							   int *distribution_argument_index,
 							   int *colocationId)
@@ -646,6 +637,37 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 	systable_endscan(scanDescriptor);
 
 	table_close(pgDistObjectRel, NoLock);
+
+	if (EnableDependencyCreation)
+	{
+		List *objectAddressList = list_make1((ObjectAddress *) distAddress);
+		List *distArgumentIndexList = NIL;
+		List *colocationIdList = NIL;
+
+		if (distribution_argument_index == NULL)
+		{
+			distArgumentIndexList = list_make1_int(INVALID_DISTRIBUTION_ARGUMENT_INDEX);
+		}
+		else
+		{
+			distArgumentIndexList = list_make1_int(*distribution_argument_index);
+		}
+
+		if (colocationId == NULL)
+		{
+			colocationIdList = list_make1_int(INVALID_COLOCATION_ID);
+		}
+		else
+		{
+			colocationIdList = list_make1_int(*colocationId);
+		}
+
+		char *workerPgDistObjectUpdateCommand =
+			MarkObjectsDistributedCreateCommand(objectAddressList,
+												distArgumentIndexList,
+												colocationIdList);
+		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
+	}
 }
 
 
@@ -1101,7 +1123,7 @@ EnsureSequentialModeForFunctionDDL(void)
  * and triggers the metadata syncs if the node has not the metadata. Later,
  * maintenance daemon will sync the metadata to nodes.
  */
-static void
+void
 TriggerSyncMetadataToPrimaryNodes(void)
 {
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(ShareLock);
@@ -1118,7 +1140,8 @@ TriggerSyncMetadataToPrimaryNodes(void)
 			 * this because otherwise node activation might fail withing transaction blocks.
 			 */
 			LockRelationOid(DistNodeRelationId(), ExclusiveLock);
-			MarkNodeHasMetadata(workerNode->workerName, workerNode->workerPort, true);
+			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_hasmetadata,
+									 BoolGetDatum(true));
 
 			triggerMetadataSync = true;
 		}
@@ -1438,7 +1461,7 @@ PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString,
 
 
 /*
- * PreprocessAlterTypeOwnerStmt is called for change of owner ship of functions before the owner
+ * PreprocessAlterFunctionOwnerStmt is called for change of owner ship of functions before the owner
  * ship is changed on the local instance.
  *
  * If the function for which the owner is changed is distributed we execute the change on
@@ -1494,7 +1517,7 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString,
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
+		 * extension should therefore not be propagated here.
 		 */
 		return NIL;
 	}
@@ -1595,7 +1618,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
+		 * extension should therefore not be propagated here.
 		 */
 		return NIL;
 	}
@@ -1620,7 +1643,8 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 	 * workers
 	 */
 
-	const char *functionName = getObjectIdentity(&address);
+	const char *functionName =
+		getObjectIdentity_compat(&address, /* missingOk: */ false);
 	ereport(ERROR, (errmsg("distrtibuted functions are not allowed to depend on an "
 						   "extension"),
 					errdetail("Function \"%s\" is already distributed. Functions from "
@@ -1814,8 +1838,8 @@ GenerateBackupNameForProcCollision(const ObjectAddress *address)
 		List *newProcName = list_make2(namespace, makeString(newName));
 
 		/* don't need to rename if the input arguments don't match */
-		FuncCandidateList clist = FuncnameGetCandidates(newProcName, numargs, NIL, false,
-														false, true);
+		FuncCandidateList clist = FuncnameGetCandidates_compat(newProcName, numargs, NIL,
+															   false, false, false, true);
 		for (; clist; clist = clist->next)
 		{
 			if (memcmp(clist->args, argtypes, sizeof(Oid) * numargs) == 0)
@@ -1939,8 +1963,10 @@ ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress)
 
 	if (IsObjectAddressOwnedByExtension(functionAddress, &extensionAddress))
 	{
-		char *functionName = getObjectIdentity(functionAddress);
-		char *extensionName = getObjectIdentity(&extensionAddress);
+		char *functionName =
+			getObjectIdentity_compat(functionAddress, /* missingOk: */ false);
+		char *extensionName =
+			getObjectIdentity_compat(&extensionAddress, /* missingOk: */ false);
 		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
 							   "owned by an extension"),
 						errdetail("Function \"%s\" has a dependency on extension \"%s\". "

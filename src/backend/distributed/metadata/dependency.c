@@ -101,7 +101,7 @@ typedef struct DependencyDefinition
 		/*
 		 * address is used for dependencies that are artificially added during the
 		 * chasing. Since they are added by citus code we assume the dependency needs to
-		 * be chased anyway, ofcourse it will only actually be chased if the object is a
+		 * be chased anyway, of course it will only actually be chased if the object is a
 		 * supported object by citus
 		 */
 		ObjectAddress address;
@@ -200,6 +200,31 @@ GetDependenciesForObject(const ObjectAddress *target)
 	RecurseObjectDependencies(*target,
 							  &ExpandCitusSupportedTypes,
 							  &FollowNewSupportedDependencies,
+							  &ApplyAddToDependencyList,
+							  &collector);
+
+	return collector.dependencyList;
+}
+
+
+/*
+ * GetAllDependenciesForObject returns a list of all the ObjectAddresses to be
+ * created in order before the target object could safely be created on a
+ * worker. As a caller, you probably need GetDependenciesForObject() which
+ * eliminates already distributed objects from the returned list.
+ *
+ * Some of the object might already be created on a worker. It should be created
+ * in an idempotent way.
+ */
+List *
+GetAllDependenciesForObject(const ObjectAddress *target)
+{
+	ObjectAddressCollector collector = { 0 };
+	InitObjectAddressCollector(&collector);
+
+	RecurseObjectDependencies(*target,
+							  &ExpandCitusSupportedTypes,
+							  &FollowAllSupportedDependencies,
 							  &ApplyAddToDependencyList,
 							  &collector);
 
@@ -763,7 +788,7 @@ FollowNewSupportedDependencies(ObjectAddressCollector *collector,
 
 	/*
 	 * If the object is already distributed it is not a `new` object that needs to be
-	 * distributed before we create a dependant object
+	 * distributed before we create a dependent object
 	 */
 	if (IsObjectDistributed(&address))
 	{
@@ -1212,18 +1237,31 @@ GetDependingView(Form_pg_depend pg_depend)
 										   true, NULL, 1, rkey);
 
 	HeapTuple rewriteTup = systable_getnext(rscan);
+	if (!HeapTupleIsValid(rewriteTup))
+	{
+		/*
+		 * This function already verified that objid's classid is
+		 * RewriteRelationId, so it should exists. But be on the
+		 * safe side.
+		 */
+		ereport(ERROR, (errmsg("catalog lookup failed for view %u",
+							   pg_depend->objid)));
+	}
+
 	Form_pg_rewrite pg_rewrite = (Form_pg_rewrite) GETSTRUCT(rewriteTup);
 
 	bool isView = get_rel_relkind(pg_rewrite->ev_class) == RELKIND_VIEW;
 	bool isMatView = get_rel_relkind(pg_rewrite->ev_class) == RELKIND_MATVIEW;
 	bool isDifferentThanRef = pg_rewrite->ev_class != pg_depend->refobjid;
 
+	Oid dependingView = InvalidOid;
+	if ((isView || isMatView) && isDifferentThanRef)
+	{
+		dependingView = pg_rewrite->ev_class;
+	}
+
 	systable_endscan(rscan);
 	relation_close(rewriteRel, AccessShareLock);
 
-	if ((isView || isMatView) && isDifferentThanRef)
-	{
-		return pg_rewrite->ev_class;
-	}
-	return InvalidOid;
+	return dependingView;
 }

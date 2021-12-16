@@ -83,7 +83,6 @@ GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 \c - - - :master_port
 
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 
 -- create prepare tests
@@ -163,19 +162,15 @@ SELECT * FROM columnar.stripe;
 -- alter a columnar setting
 SET columnar.chunk_group_row_limit = 1050;
 
-DO $proc$
-BEGIN
-IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
-  EXECUTE $$
-    -- create columnar table
-    CREATE TABLE columnar_table (a int) USING columnar;
-    -- alter a columnar table that is created by that unprivileged user
-    SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 100);
-    -- and drop it
-    DROP TABLE columnar_table;
-  $$;
-END IF;
-END$proc$;
+-- create columnar table
+CREATE TABLE columnar_table (a int) USING columnar;
+-- alter a columnar table that is created by that unprivileged user
+SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
+-- insert some data and read
+INSERT INTO columnar_table VALUES (1), (1);
+SELECT * FROM columnar_table;
+-- and drop it
+DROP TABLE columnar_table;
 
 -- cannot modify columnar metadata table as unprivileged user
 INSERT INTO columnar.stripe VALUES(99);
@@ -184,6 +179,8 @@ INSERT INTO columnar.stripe VALUES(99);
 -- (since citus extension has a dependency to it)
 DROP TABLE columnar.chunk;
 
+-- cannot read columnar.chunk since it could expose chunk min/max values
+SELECT * FROM columnar.chunk;
 
 -- test whether a read-only user can read from citus_tables view
 SELECT distribution_column FROM citus_tables WHERE table_name = 'test'::regclass;
@@ -345,11 +342,6 @@ SELECT create_distributed_function('usage_access_func_third(int,int[])', '$1', c
 SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third';
 SELECT run_command_on_workers($$SELECT proowner::regrole FROM pg_proc WHERE proname = 'usage_access_func_third'$$);
 
--- we don't want other tests to have metadata synced
--- that might change the test outputs, so we're just trying to be careful
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-
 RESET ROLE;
 -- now we distribute the table as super user
 SELECT create_distributed_table('full_access_user_schema.t1', 'id');
@@ -409,6 +401,30 @@ SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
 SET ROLE full_access;
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
 RESET ROLE;
+
+-- non-superuser should be able to use worker_append_table_to_shard on their own shard
+SET ROLE full_access;
+CREATE TABLE full_access_user_schema.source_table (id int);
+INSERT INTO full_access_user_schema.source_table VALUES (1);
+CREATE TABLE full_access_user_schema.shard_0 (id int);
+SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_access_user_schema.source_table', 'localhost', :worker_2_port);
+SELECT * FROM full_access_user_schema.shard_0;
+RESET ROLE;
+
+-- other users should not be able to read from a table they have no access to via worker_append_table_to_shard
+SET ROLE usage_access;
+SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_access_user_schema.source_table', 'localhost', :worker_2_port);
+RESET ROLE;
+
+-- allow usage_access to read from table
+GRANT SELECT ON full_access_user_schema.source_table TO usage_access;
+
+-- other users should not be able to write to a table they do not have write access to
+SET ROLE usage_access;
+SELECT worker_append_table_to_shard('full_access_user_schema.shard_0', 'full_access_user_schema.source_table', 'localhost', :worker_2_port);
+RESET ROLE;
+
+DROP TABLE full_access_user_schema.source_table, full_access_user_schema.shard_0;
 
 -- now we will test that only the user who owns the fetched file is able to merge it into
 -- a table

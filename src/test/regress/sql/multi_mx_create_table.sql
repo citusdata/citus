@@ -153,7 +153,6 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 \c - - - :master_port
 
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 SET search_path TO public;
 
 CREATE TABLE nation_hash(
@@ -439,5 +438,7 @@ SELECT table_name, citus_table_type, distribution_column, shard_count, table_own
 FROM citus_tables
 ORDER BY table_name::text;
 
-
 SELECT shard_name, table_name, citus_table_type, shard_size FROM citus_shards ORDER BY shard_name::text;
+
+-- Show that altering type name is not supported from worker node
+ALTER TYPE order_side_mx RENAME TO temp_order_side_mx;

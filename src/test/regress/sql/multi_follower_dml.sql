@@ -1,5 +1,10 @@
 \c - - - :master_port
 
+SET citus.shard_replication_factor TO 2;
+CREATE TABLE the_replicated_table (a int, b int, z bigserial);
+SELECT create_distributed_table('the_replicated_table', 'a');
+
+SET citus.shard_replication_factor TO 1;
 CREATE TABLE the_table (a int, b int, z bigserial);
 SELECT create_distributed_table('the_table', 'a');
 
@@ -21,20 +26,27 @@ INSERT INTO reference_table (a, b, z) VALUES (1, 2, 2);
 INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 2);
 
 -- We can allow DML on a writable standby coordinator.
--- Note that it doesn't help to enable writes for citus local tables
--- and coordinator replicated reference tables. This is because, the
--- data is in the coordinator and will hit read-only tranaction checks
--- on Postgres
+-- Note that it doesn't help to enable writes for
+--   (a) citus local tables
+--   (b) coordinator replicated reference tables.
+--   (c) reference tables or replication > 1 distributed tables
+-- (a) and (b) is because the data is in the coordinator and will hit
+-- read-only tranaction checks on Postgres
+-- (c) is because citus uses 2PC, where a transaction record should
+-- be inserted to pg_dist_node, which is not allowed
 SET citus.writable_standby_coordinator TO on;
 
 INSERT INTO the_table (a, b, z) VALUES (1, 2, 2);
 SELECT * FROM the_table;
+INSERT INTO the_replicated_table (a, b, z) VALUES (1, 2, 2);
+SELECT * FROM the_replicated_table;
 INSERT INTO reference_table (a, b, z) VALUES (1, 2, 2);
 SELECT * FROM reference_table;
 INSERT INTO citus_local_table (a, b, z) VALUES (1, 2, 2);
 SELECT * FROM citus_local_table;
 
 UPDATE the_table SET z = 3 WHERE a = 1;
+UPDATE the_replicated_table SET z = 3 WHERE a = 1;
 UPDATE reference_table SET z = 3 WHERE a = 1;
 UPDATE citus_local_table SET z = 3 WHERE a = 1;
 SELECT * FROM the_table;
@@ -42,6 +54,7 @@ SELECT * FROM reference_table;
 SELECT * FROM citus_local_table;
 
 DELETE FROM the_table WHERE a = 1;
+DELETE FROM the_replicated_table WHERE a = 1;
 DELETE FROM reference_table WHERE a = 1;
 DELETE FROM citus_local_table WHERE a = 1;
 
@@ -51,34 +64,35 @@ SELECT * FROM citus_local_table;
 
 -- drawing from a sequence is not possible
 INSERT INTO the_table (a, b) VALUES (1, 2);
+INSERT INTO the_replicated_table (a, b) VALUES (1, 2);
 INSERT INTO reference_table (a, b) VALUES (1, 2);
 INSERT INTO citus_local_table (a, b) VALUES (1, 2);
 
 -- 2PC is not possible
 INSERT INTO the_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
+INSERT INTO the_replicated_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 INSERT INTO reference_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 
--- COPY is not possible in 2PC mode
+-- COPY is not possible because Citus user 2PC
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
+\.
+COPY the_replicated_table (a, b, z) FROM STDIN WITH CSV;
 \.
 COPY reference_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 
--- 1PC is possible
-SET citus.multi_shard_commit_protocol TO '1pc';
+-- all multi-shard modifications require 2PC hence not supported
 INSERT INTO the_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 SELECT * FROM the_table ORDER BY a;
+
+-- all modifications to reference tables use 2PC, hence not supported
 INSERT INTO reference_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 SELECT * FROM reference_table ORDER BY a;
+
+-- citus local tables are on the coordinator, and coordinator is read-only
 INSERT INTO citus_local_table (a, b, z) VALUES (2, 3, 4), (5, 6, 7);
 SELECT * FROM citus_local_table ORDER BY a;
 
@@ -87,28 +101,26 @@ WITH del AS (DELETE FROM the_table RETURNING *)
 SELECT * FROM del ORDER BY a;
 WITH del AS (DELETE FROM reference_table RETURNING *)
 SELECT * FROM del ORDER BY a;
+WITH del AS (DELETE FROM the_replicated_table RETURNING *)
+SELECT * FROM del ORDER BY a;
 WITH del AS (DELETE FROM citus_local_table RETURNING *)
 SELECT * FROM del ORDER BY a;
 
--- COPY is possible in 1PC mode
+-- multi-shard COPY is not possible due to 2PC
 COPY the_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 COPY reference_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 COPY citus_local_table (a, b, z) FROM STDIN WITH CSV;
-10,10,10
-11,11,11
 \.
 SELECT * FROM the_table ORDER BY a;
 SELECT * FROM reference_table ORDER BY a;
 SELECT * FROM citus_local_table ORDER BY a;
-DELETE FROM the_table;
 DELETE FROM reference_table;
 DELETE FROM citus_local_table;
+
+-- multi-shard modification always uses 2PC, so not supported
+DELETE FROM the_table;
 
 -- DDL is not possible
 TRUNCATE the_table;
@@ -135,7 +147,7 @@ SELECT * FROM citus_local_table ORDER BY a;
 
 -- we should still disallow writes to local tables
 INSERT INTO local VALUES (1, 1);
-INSERT INTO local SELECT a, b FROM the_table;
+INSERT INTO local SELECT i,i FROM generate_series(0,100)i;
 
 -- we shouldn't be able to create local tables
 CREATE TEMP TABLE local_copy_of_the_table AS SELECT * FROM the_table;

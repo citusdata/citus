@@ -57,7 +57,7 @@ SELECT master_get_active_worker_nodes();
  (localhost,57637)
 (1 row)
 
--- try to disable a node with no placements see that node is removed
+-- try to disable a node with no placements see that node is s=removed
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
@@ -66,8 +66,14 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
         1
 (1 row)
 
-SELECT master_disable_node('localhost', :worker_2_port);
- master_disable_node
+SELECT citus_disable_node('localhost', :worker_2_port);
+ citus_disable_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_until_metadata_sync();
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
 
 (1 row)
@@ -81,12 +87,34 @@ SELECT master_get_active_worker_nodes();
 -- add some shard placements to the cluster
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
+-- test warnings on setting the deprecated guc for replication model
+BEGIN;
+SET citus.replication_model to 'statement';
+NOTICE:  Setting citus.replication_model has no effect. Please use citus.shard_replication_factor instead.
+DETAIL:  Citus determines the replication model based on the replication factor and the replication models of the colocated shards. If a colocated table is present, the replication model is inherited. Otherwise 'streaming' replication is preferred if supported by the replication factor.
+ROLLBACK;
+-- check that the rebalancer works even if there are no distributed tables
+SELECT * FROM get_rebalance_table_shards_plan();
+ table_name | shardid | shard_size | sourcename | sourceport | targetname | targetport
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM rebalance_table_shards();
+ rebalance_table_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+-- TODO: Figure out why this is necessary, rebalance_table_shards shouldn't
+-- insert stuff into pg_dist_colocation
+TRUNCATE pg_dist_colocation;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 SELECT * FROM citus_activate_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  citus_activate_node
 ---------------------------------------------------------------------
-                    3
+                   3
 (1 row)
 
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
@@ -112,8 +140,9 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  cannot remove the primary node of a node group which has shard placements
-HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is public.cluster_management_test
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
 ---------------------------------------------------------------------
@@ -121,7 +150,7 @@ SELECT master_get_active_worker_nodes();
  (localhost,57637)
 (2 rows)
 
--- insert a row so that master_disable_node() exercises closing connections
+-- insert a row so that citus_disable_node() exercises closing connections
 CREATE TABLE test_reference_table (y int primary key, name text);
 SELECT create_reference_table('test_reference_table');
  create_reference_table
@@ -130,65 +159,106 @@ SELECT create_reference_table('test_reference_table');
 (1 row)
 
 INSERT INTO test_reference_table VALUES (1, '1');
--- try to disable a node with active placements see that node is removed
--- observe that a notification is displayed
-SELECT master_disable_node('localhost', :worker_2_port);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT master_activate_node('localhost', 57638) to activate this node back.
- master_disable_node
----------------------------------------------------------------------
-
-(1 row)
-
+-- try to remove a node with active placements and reference tables
+SELECT citus_remove_node('localhost', :worker_2_port);
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is public.cluster_management_test
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
+-- try to disable a node with active placements
+-- which should fail because there are some placements
+-- which are the only placements for a given shard
+SELECT citus_disable_node('localhost', :worker_2_port);
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is public.cluster_management_test
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
 ---------------------------------------------------------------------
+ (localhost,57638)
  (localhost,57637)
-(1 row)
+(2 rows)
 
 -- try to disable a node which does not exist and see that an error is thrown
-SELECT master_disable_node('localhost.noexist', 2345);
+SELECT citus_disable_node('localhost.noexist', 2345);
 ERROR:  node at "localhost.noexist:2345" does not exist
 -- drop the table without leaving a shard placement behind (messes up other tests)
 SELECT master_activate_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
-NOTICE:  Replicating reference table "test_reference_table" to the node localhost:xxxxx
  master_activate_node
 ---------------------------------------------------------------------
                     3
 (1 row)
 
-DROP TABLE test_reference_table;
-SELECT master_disable_node('localhost', :worker_2_port);
-NOTICE:  Node localhost:xxxxx has active shard placements. Some queries may fail after this operation. Use SELECT master_activate_node('localhost', 57638) to activate this node back.
- master_disable_node
----------------------------------------------------------------------
-
-(1 row)
-
+DROP TABLE test_reference_table, cluster_management_test;
+-- create users like this so results of community and enterprise are same
+SET citus.enable_object_propagation TO ON;
+SET client_min_messages TO ERROR;
 CREATE USER non_super_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
 CREATE USER node_metadata_user;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT 1 FROM run_command_on_workers('CREATE USER node_metadata_user');
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
+RESET client_min_messages;
+SET citus.enable_object_propagation TO OFF;
 GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_secondary_node(text,int,text,int,name) TO node_metadata_user;
-GRANT EXECUTE ON FUNCTION master_disable_node(text,int) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION citus_disable_node(text,int,bool) TO node_metadata_user;
+GRANT EXECUTE ON FUNCTION citus_disable_node_and_wait(text,int,bool) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_remove_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_update_node(int,text,int,bool,int) TO node_metadata_user;
+-- user needs permission for the pg_dist_node and pg_dist_local_group for metadata syncing
+SELECT run_command_on_workers('GRANT ALL ON pg_dist_node TO node_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT ALL ON pg_dist_local_group TO node_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA citus TO node_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT run_command_on_workers('GRANT ALL ON SCHEMA citus TO node_metadata_user');
+  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,GRANT)
+ (localhost,57638,t,GRANT)
+(2 rows)
+
+SELECT master_remove_node('localhost', :worker_2_port);
+ master_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- Removing public schema from pg_dist_object because it breaks the next tests
 DELETE FROM citus.pg_dist_object WHERE objid = 'public'::regnamespace::oid;
+DELETE FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'plpgsql');
 -- try to manipulate node metadata via non-super user
 SET ROLE non_super_user;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
 ERROR:  permission denied for function master_add_inactive_node
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
 ERROR:  permission denied for function master_activate_node
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
-ERROR:  permission denied for function master_disable_node
+SELECT 1 FROM citus_disable_node('localhost', :worker_2_port + 1);
+ERROR:  permission denied for function citus_disable_node
 SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
 ERROR:  permission denied for function master_remove_node
 SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
@@ -201,13 +271,13 @@ ERROR:  permission denied for function master_update_node
 SET ROLE node_metadata_user;
 SET citus.enable_object_propagation TO off; -- prevent master activate node to actually connect for this test
 BEGIN;
-SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SELECT 1 FROM master_activate_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -215,19 +285,13 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
         1
 (1 row)
 
-SELECT 1 FROM master_disable_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
  ?column?
 ---------------------------------------------------------------------
         1
 (1 row)
 
-SELECT 1 FROM master_remove_node('localhost', :worker_2_port + 1);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM master_add_node('localhost', :worker_2_port + 1);
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
  ?column?
@@ -251,15 +315,16 @@ SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
  nodename  | nodeport | noderole
 ---------------------------------------------------------------------
  localhost |    57637 | primary
- localhost |    57639 | primary
  localhost |    57640 | secondary
  localhost |    57641 | primary
-(4 rows)
+(3 rows)
 
 ABORT;
 \c - postgres - :master_port
-SET citus.next_shard_id TO 1220016;
+SET citus.next_shard_id TO 1220000;
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
+SET citus.shard_count TO 16;
+SET citus.shard_replication_factor TO 1;
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
 ---------------------------------------------------------------------
@@ -267,21 +332,39 @@ SELECT master_get_active_worker_nodes();
 (1 row)
 
 -- restore the node for next tests
-SELECT * FROM master_activate_node('localhost', :worker_2_port);
+SELECT * FROM master_add_node('localhost', :worker_2_port);
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
- master_activate_node
+ master_add_node
 ---------------------------------------------------------------------
-                    3
+               7
+(1 row)
+
+ALTER SEQUENCE pg_dist_node_nodeid_seq RESTART WITH 7;
+ALTER SEQUENCE pg_dist_groupid_seq RESTART WITH 6;
+CREATE TABLE cluster_management_test (col_1 text, col_2 int);
+SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
+ create_distributed_table
+---------------------------------------------------------------------
+
 (1 row)
 
 -- try to remove a node with active placements and see that node removal is failed
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  cannot remove the primary node of a node group which has shard placements
-HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is public.cluster_management_test
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 -- mark all placements in the candidate node as inactive
 SELECT groupid AS worker_2_group FROM pg_dist_node WHERE nodeport=:worker_2_port \gset
 UPDATE pg_dist_placement SET shardstate=3 WHERE groupid=:worker_2_group;
+-- manual updates to pg_dist* tables are not automatically reflected to the workers, so we manually do that too
+SELECT run_command_on_workers('UPDATE pg_dist_placement SET shardstate=3 WHERE groupid=' || :'worker_2_group');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"UPDATE 8")
+ (localhost,57638,t,"UPDATE 8")
+(2 rows)
+
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
@@ -297,8 +380,9 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 
 -- try to remove a node with only inactive placements and see that removal still fails
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  cannot remove the primary node of a node group which has shard placements
-HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is public.cluster_management_test
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 SELECT master_get_active_worker_nodes();
  master_get_active_worker_nodes
 ---------------------------------------------------------------------
@@ -308,6 +392,13 @@ SELECT master_get_active_worker_nodes();
 
 -- mark all placements in the candidate node as to be deleted
 UPDATE pg_dist_placement SET shardstate=4 WHERE groupid=:worker_2_group;
+SELECT run_command_on_workers('UPDATE pg_dist_placement SET shardstate=4 WHERE groupid=' || :'worker_2_group');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"UPDATE 8")
+ (localhost,57638,t,"UPDATE 8")
+(2 rows)
+
 SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE nodeport=:worker_2_port;
  shardid | shardstate | nodename  | nodeport
 ---------------------------------------------------------------------
@@ -322,7 +413,32 @@ SELECT shardid, shardstate, nodename, nodeport FROM pg_dist_shard_placement WHER
 (8 rows)
 
 CREATE TABLE cluster_management_test_colocated (col_1 text, col_2 int);
-SELECT create_distributed_table('cluster_management_test_colocated', 'col_1', 'hash', colocate_with=>'cluster_management_test');
+-- Check that we warn the user about colocated shards that will not get created for shards that do not have active placements
+SELECT create_distributed_table('cluster_management_test_colocated', 'col_1', 'hash', colocate_with => 'cluster_management_test');
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220019
+WARNING:  could not find any shard placements for shardId 1220021
+WARNING:  could not find any shard placements for shardId 1220023
+WARNING:  could not find any shard placements for shardId 1220025
+WARNING:  could not find any shard placements for shardId 1220027
+WARNING:  could not find any shard placements for shardId 1220029
+WARNING:  could not find any shard placements for shardId 1220031
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
+WARNING:  could not find any shard placements for shardId 1220017
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -358,17 +474,6 @@ SELECT logicalrelid, shardid, shardstate, nodename, nodeport FROM pg_dist_shard_
  cluster_management_test           | 1220015 |          4 | localhost |    57638
 (24 rows)
 
--- try to remove a node with only to be deleted placements and see that removal still fails
-SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  cannot remove the primary node of a node group which has shard placements
-HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
-SELECT master_get_active_worker_nodes();
- master_get_active_worker_nodes
----------------------------------------------------------------------
- (localhost,57638)
- (localhost,57637)
-(2 rows)
-
 -- clean-up
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
  ?column?
@@ -377,23 +482,60 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 (1 row)
 
 UPDATE pg_dist_placement SET shardstate=1 WHERE groupid=:worker_2_group;
+SELECT run_command_on_workers('UPDATE pg_dist_placement SET shardstate=1 WHERE groupid=' || :'worker_2_group');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"UPDATE 8")
+ (localhost,57638,t,"UPDATE 8")
+(2 rows)
+
 SET client_min_messages TO ERROR;
 DROP TABLE cluster_management_test_colocated;
 RESET client_min_messages;
 -- when there is no primary we should get a pretty error
 UPDATE pg_dist_node SET noderole = 'secondary' WHERE nodeport=:worker_2_port;
 SELECT * FROM cluster_management_test;
-ERROR:  node group 3 does not have a primary node
+ERROR:  node group 6 does not have a primary node
 -- when there is no node at all in the group we should get a different error
 DELETE FROM pg_dist_node WHERE nodeport=:worker_2_port;
+SELECT run_command_on_workers('DELETE FROM pg_dist_node WHERE nodeport=' || :'worker_2_port');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"DELETE 1")
+(1 row)
+
 SELECT * FROM cluster_management_test;
-ERROR:  there is a shard placement in node group 3 but there are no nodes in that group
+ERROR:  there is a shard placement in node group 6 but there are no nodes in that group
 -- clean-up
+SELECT * INTO old_placements FROM pg_dist_placement WHERE groupid = :worker_2_group;
+DELETE FROM pg_dist_placement WHERE groupid = :worker_2_group;
 SELECT master_add_node('localhost', :worker_2_port) AS new_node \gset
 WARNING:  citus.enable_object_propagation is off, not creating distributed objects on worker
 DETAIL:  distributed objects are only kept in sync when citus.enable_object_propagation is set to on. Newly activated nodes will not get these objects created
+WARNING:  could not find any shard placements for shardId 1220001
+WARNING:  could not find any shard placements for shardId 1220003
+WARNING:  could not find any shard placements for shardId 1220005
+WARNING:  could not find any shard placements for shardId 1220007
+WARNING:  could not find any shard placements for shardId 1220009
+WARNING:  could not find any shard placements for shardId 1220011
+WARNING:  could not find any shard placements for shardId 1220013
+WARNING:  could not find any shard placements for shardId 1220015
+INSERT INTO pg_dist_placement SELECT * FROM old_placements;
 SELECT groupid AS new_group FROM pg_dist_node WHERE nodeid = :new_node \gset
 UPDATE pg_dist_placement SET groupid = :new_group WHERE groupid = :worker_2_group;
+SELECT run_command_on_workers('UPDATE pg_dist_placement SET groupid = ' || :'new_group' || ' WHERE groupid = ' || :'worker_2_group');
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"UPDATE 8")
+ (localhost,57638,t,"UPDATE 0")
+(2 rows)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- test that you are allowed to remove secondary nodes even if there are placements
 SELECT 1 FROM master_add_node('localhost', 9990, groupid => :new_group, noderole => 'secondary');
  ?column?
@@ -402,8 +544,9 @@ SELECT 1 FROM master_add_node('localhost', 9990, groupid => :new_group, noderole
 (1 row)
 
 SELECT master_remove_node('localhost', :worker_2_port);
-ERROR:  cannot remove the primary node of a node group which has shard placements
-HINT:  To proceed, either drop the distributed tables or use undistribute_table() function to convert them to local tables
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is public.cluster_management_test
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 SELECT master_remove_node('localhost', 9990);
  master_remove_node
 ---------------------------------------------------------------------
@@ -457,6 +600,7 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 -- check that added nodes are not propagated to nodes without metadata
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -509,8 +653,8 @@ DETAIL:  distributed objects are only kept in sync when citus.enable_object_prop
 SELECT * FROM pg_dist_node ORDER BY nodeid;
  nodeid | groupid | nodename  | nodeport | noderack | hasmetadata | isactive | noderole | nodecluster | metadatasynced | shouldhaveshards
 ---------------------------------------------------------------------
-     11 |       9 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t
-     12 |      10 | localhost |    57638 | default  | f           | t        | primary  | default     | f              | t
+     11 |       9 | localhost |    57637 | default  | t           | t        | primary  | default     | t              | t
+     12 |      10 | localhost |    57638 | default  | t           | t        | primary  | default     | t              | t
 (2 rows)
 
 -- check that mixed add/remove node commands work fine inside transaction
@@ -665,12 +809,14 @@ DELETE FROM pg_dist_node;
 \c - - - :master_port
 SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+NOTICE:  dropping metadata on the node (localhost,57638)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
@@ -717,8 +863,14 @@ SELECT master_activate_node('localhost', 9999);
                    22
 (1 row)
 
-SELECT master_disable_node('localhost', 9999);
- master_disable_node
+SELECT citus_disable_node('localhost', 9999);
+ citus_disable_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_until_metadata_sync();
+ wait_until_metadata_sync
 ---------------------------------------------------------------------
 
 (1 row)
@@ -733,11 +885,11 @@ SELECT master_remove_node('localhost', 9999);
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole)
   VALUES ('localhost', 5000, :worker_1_group, 'primary');
 ERROR:  there cannot be two primary nodes in a group
-CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line 10 at RAISE
+CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line XX at RAISE
 UPDATE pg_dist_node SET noderole = 'primary'
   WHERE groupid = :worker_1_group AND nodeport = 9998;
 ERROR:  there cannot be two primary nodes in a group
-CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line 18 at RAISE
+CONTEXT:  PL/pgSQL function citus_internal.pg_dist_node_trigger_func() line XX at RAISE
 -- check that you can't manually add a primary to a non-default cluster
 INSERT INTO pg_dist_node (nodename, nodeport, groupid, noderole, nodecluster)
   VALUES ('localhost', 5000, 1000, 'primary', 'olap');
@@ -830,6 +982,15 @@ SELECT * FROM pg_dist_node WHERE nodeid = :worker_1_node;
      16 |      14 | localhost |    57637 | default  | f           | t        | primary  | default     | f              | t
 (1 row)
 
+SET client_min_messages TO ERROR;
+SELECT start_metadata_sync_to_node(nodename, nodeport) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+
+(2 rows)
+
+RESET client_min_messages;
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE test_dist (x int, y int);
 SELECT create_distributed_table('test_dist', 'x');
@@ -1018,3 +1179,10 @@ WHERE logicalrelid = 'test_dist_non_colocated'::regclass GROUP BY nodeport ORDER
 SELECT * from master_set_node_property('localhost', :worker_2_port, 'bogusproperty', false);
 ERROR:  only the 'shouldhaveshards' property can be set using this function
 DROP TABLE test_dist, test_ref, test_dist_colocated, test_dist_non_colocated;
+-- verify that at the end of this file, all primary nodes have metadata synced
+SELECT bool_and(hasmetadata) AND bool_and(metadatasynced) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+

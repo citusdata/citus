@@ -99,12 +99,7 @@ SELECT create_distributed_table('test','x');
 
 (1 row)
 
-CREATE STATISTICS stats_xy ON (x, y) FROM test;
-ERROR:  only simple column references are allowed in CREATE STATISTICS
-CREATE STATISTICS stats_xy ON x+y FROM test;
-ERROR:  only simple column references are allowed in CREATE STATISTICS
 CREATE STATISTICS stats_xy ON x,y FROM test;
-CREATE STATISTICS IF NOT EXISTS stats_xy ON x+y FROM test;
 \c - - - :worker_1_port
 SELECT stxname
 FROM pg_statistic_ext
@@ -113,6 +108,7 @@ WHERE stxnamespace IN (
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
 )
+AND stxname SIMILAR TO '%\_\d+'
 ORDER BY stxname ASC;
      stxname
 ---------------------------------------------------------------------
@@ -220,7 +216,8 @@ WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
-);
+)
+AND stxname SIMILAR TO '%\_\d+';
  count
 ---------------------------------------------------------------------
      3
@@ -232,7 +229,8 @@ WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
-);
+)
+AND stxname SIMILAR TO '%\_\d+';
  count
 ---------------------------------------------------------------------
      3

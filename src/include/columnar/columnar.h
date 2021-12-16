@@ -39,8 +39,8 @@
 #define COMPRESSION_LEVEL_MAX 19
 
 /* Columnar file signature */
-#define COLUMNAR_VERSION_MAJOR 1
-#define COLUMNAR_VERSION_MINOR 7
+#define COLUMNAR_VERSION_MAJOR 2
+#define COLUMNAR_VERSION_MINOR 0
 
 /* miscellaneous defines */
 #define COLUMNAR_TUPLE_COST_MULTIPLIER 10
@@ -179,6 +179,27 @@ typedef struct StripeBuffers
 } StripeBuffers;
 
 
+/* return value of StripeWriteState to decide stripe write state */
+typedef enum StripeWriteStateEnum
+{
+	/* stripe write is flushed to disk, so it's readable */
+	STRIPE_WRITE_FLUSHED,
+
+	/*
+	 * Writer transaction did abort either before inserting into
+	 * columnar.stripe or after.
+	 */
+	STRIPE_WRITE_ABORTED,
+
+	/*
+	 * Writer transaction is still in-progress. Note that it is not certain
+	 * if it is being written by current backend's current transaction or
+	 * another backend.
+	 */
+	STRIPE_WRITE_IN_PROGRESS
+} StripeWriteStateEnum;
+
+
 /* ColumnarReadState represents state of a columnar scan. */
 struct ColumnarReadState;
 typedef struct ColumnarReadState ColumnarReadState;
@@ -201,23 +222,40 @@ extern CompressionType ParseCompressionType(const char *compressionTypeString);
 extern ColumnarWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
 											   ColumnarOptions options,
 											   TupleDesc tupleDescriptor);
-extern void ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
-							 bool *columnNulls);
+extern uint64 ColumnarWriteRow(ColumnarWriteState *state, Datum *columnValues,
+							   bool *columnNulls);
 extern void ColumnarFlushPendingWrites(ColumnarWriteState *state);
 extern void ColumnarEndWrite(ColumnarWriteState *state);
 extern bool ContainsPendingWrites(ColumnarWriteState *state);
 extern MemoryContext ColumnarWritePerTupleContext(ColumnarWriteState *state);
 
 /* Function declarations for reading from columnar table */
+
+/* functions applicable for both sequential and random access */
 extern ColumnarReadState * ColumnarBeginRead(Relation relation,
 											 TupleDesc tupleDescriptor,
 											 List *projectedColumnList,
-											 List *qualConditions);
-extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
-								bool *columnNulls);
-extern void ColumnarRescan(ColumnarReadState *readState);
+											 List *qualConditions,
+											 MemoryContext scanContext,
+											 Snapshot snaphot,
+											 bool randomAccess);
+extern void ColumnarReadFlushPendingWrites(ColumnarReadState *readState);
 extern void ColumnarEndRead(ColumnarReadState *state);
+extern void ColumnarResetRead(ColumnarReadState *readState);
+
+/* functions only applicable for sequential access */
+extern bool ColumnarReadNextRow(ColumnarReadState *state, Datum *columnValues,
+								bool *columnNulls, uint64 *rowNumber);
 extern int64 ColumnarReadChunkGroupsFiltered(ColumnarReadState *state);
+extern void ColumnarRescan(ColumnarReadState *readState, List *scanQual);
+
+/* functions only applicable for random access */
+extern void ColumnarReadRowByRowNumberOrError(ColumnarReadState *readState,
+											  uint64 rowNumber, Datum *columnValues,
+											  bool *columnNulls);
+extern bool ColumnarReadRowByRowNumber(ColumnarReadState *readState,
+									   uint64 rowNumber, Datum *columnValues,
+									   bool *columnNulls);
 
 /* Function declarations for common functions */
 extern FmgrInfo * GetFunctionInfoOrNull(Oid typeId, Oid accessMethodId,
@@ -233,17 +271,18 @@ extern void InitColumnarOptions(Oid regclass);
 extern void SetColumnarOptions(Oid regclass, ColumnarOptions *options);
 extern bool DeleteColumnarTableOptions(Oid regclass, bool missingOk);
 extern bool ReadColumnarOptions(Oid regclass, ColumnarOptions *options);
-extern void WriteToSmgr(Relation relation, uint64 logicalOffset,
-						char *data, uint32 dataLength);
-extern StringInfo ReadFromSmgr(Relation rel, uint64 offset, uint32 size);
 extern bool IsColumnarTableAmTable(Oid relationId);
 
 /* columnar_metadata_tables.c */
 extern void DeleteMetadataRows(RelFileNode relfilenode);
+extern uint64 ColumnarMetadataNewStorageId(void);
 extern uint64 GetHighestUsedAddress(RelFileNode relfilenode);
-extern StripeMetadata ReserveStripe(Relation rel, uint64 size,
-									uint64 rowCount, uint64 columnCount,
-									uint64 chunkCount, uint64 chunkGroupRowCount);
+extern EmptyStripeReservation * ReserveEmptyStripe(Relation rel, uint64 columnCount,
+												   uint64 chunkGroupRowCount,
+												   uint64 stripeRowCount);
+extern StripeMetadata * CompleteStripeReservation(Relation rel, uint64 stripeId,
+												  uint64 sizeBytes, uint64 rowCount,
+												  uint64 chunkCount);
 extern void SaveStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 							   StripeSkipList *stripeSkipList,
 							   TupleDesc tupleDescriptor);
@@ -251,7 +290,19 @@ extern void SaveChunkGroups(RelFileNode relfilenode, uint64 stripe,
 							List *chunkGroupRowCounts);
 extern StripeSkipList * ReadStripeSkipList(RelFileNode relfilenode, uint64 stripe,
 										   TupleDesc tupleDescriptor,
-										   uint32 chunkCount);
+										   uint32 chunkCount,
+										   Snapshot snapshot);
+extern StripeMetadata * FindNextStripeByRowNumber(Relation relation, uint64 rowNumber,
+												  Snapshot snapshot);
+extern StripeMetadata * FindStripeByRowNumber(Relation relation, uint64 rowNumber,
+											  Snapshot snapshot);
+extern StripeMetadata * FindStripeWithMatchingFirstRowNumber(Relation relation,
+															 uint64 rowNumber,
+															 Snapshot snapshot);
+extern StripeWriteStateEnum StripeWriteState(StripeMetadata *stripeMetadata);
+extern uint64 StripeGetHighestRowNumber(StripeMetadata *stripeMetadata);
+extern StripeMetadata * FindStripeWithHighestRowNumber(Relation relation,
+													   Snapshot snapshot);
 extern Datum columnar_relation_storageid(PG_FUNCTION_ARGS);
 
 
@@ -270,52 +321,6 @@ extern void NonTransactionDropWriteState(Oid relfilenode);
 extern bool PendingWritesInUpperTransactions(Oid relfilenode,
 											 SubTransactionId currentSubXid);
 extern MemoryContext GetWriteContextForDebug(void);
-
-typedef struct SmgrAddr
-{
-	BlockNumber blockno;
-	uint32 offset;
-} SmgrAddr;
-
-/*
- * Map logical offsets (as tracked in the metadata) to a physical page and
- * offset where the data is kept.
- */
-static inline SmgrAddr
-logical_to_smgr(uint64 logicalOffset)
-{
-	SmgrAddr addr;
-
-	addr.blockno = logicalOffset / COLUMNAR_BYTES_PER_PAGE;
-	addr.offset = SizeOfPageHeaderData + (logicalOffset % COLUMNAR_BYTES_PER_PAGE);
-
-	return addr;
-}
-
-
-/*
- * Map a physical page adnd offset address to a logical address.
- */
-static inline uint64
-smgr_to_logical(SmgrAddr addr)
-{
-	return COLUMNAR_BYTES_PER_PAGE * addr.blockno + addr.offset - SizeOfPageHeaderData;
-}
-
-
-/*
- * Get the first usable address of next block.
- */
-static inline SmgrAddr
-next_block_start(SmgrAddr addr)
-{
-	SmgrAddr result = {
-		.blockno = addr.blockno + 1,
-		.offset = SizeOfPageHeaderData
-	};
-
-	return result;
-}
 
 
 #endif /* COLUMNAR_H */

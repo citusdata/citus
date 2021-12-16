@@ -13,7 +13,6 @@
 CREATE SCHEMA functions_in_joins;
 SET search_path TO 'functions_in_joins';
 SET citus.next_shard_id TO 2500000;
-SET citus.replication_model to 'streaming';
 SET citus.shard_replication_factor to 1;
 
 CREATE TABLE table1 (id int, data int);

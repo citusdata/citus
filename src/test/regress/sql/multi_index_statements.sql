@@ -10,6 +10,7 @@
 --
 
 CREATE SCHEMA multi_index_statements;
+CREATE SCHEMA multi_index_statements_2;
 SET search_path TO multi_index_statements;
 
 SET citus.next_shard_id TO 102080;
@@ -44,7 +45,7 @@ CREATE INDEX lineitem_partial_index ON public.lineitem (l_shipdate)
 
 CREATE INDEX lineitem_colref_index ON public.lineitem (record_ne(lineitem.*, NULL));
 
-SET client_min_messages = ERROR; -- avoid version dependant warning about WAL
+SET client_min_messages = ERROR; -- avoid version dependent warning about WAL
 CREATE INDEX lineitem_orderkey_hash_index ON public.lineitem USING hash (l_partkey);
 CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range(a);
 CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range(a,b);
@@ -54,6 +55,28 @@ CREATE UNIQUE INDEX index_test_hash_index_a_b_partial ON index_test_hash(a,b) WH
 CREATE UNIQUE INDEX index_test_range_index_a_b_partial ON index_test_range(a,b) WHERE c IS NOT NULL;
 CREATE UNIQUE INDEX index_test_hash_index_a_b_c ON index_test_hash(a) INCLUDE (b,c);
 RESET client_min_messages;
+
+
+-- Verify that we can create expression indexes and be robust to different schemas
+CREATE OR REPLACE FUNCTION value_plus_one(a int)
+RETURNS int IMMUTABLE AS $$
+BEGIN
+	RETURN a + 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('value_plus_one(int)');
+
+CREATE OR REPLACE FUNCTION multi_index_statements_2.value_plus_one(a int)
+RETURNS int IMMUTABLE AS $$
+BEGIN
+	RETURN a + 1;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('multi_index_statements_2.value_plus_one(int)');
+
+CREATE INDEX ON index_test_hash ((value_plus_one(b)));
+CREATE INDEX ON index_test_hash ((multi_index_statements.value_plus_one(b)));
+CREATE INDEX ON index_test_hash ((multi_index_statements_2.value_plus_one(b)));
 
 -- Verify that we handle if not exists statements correctly
 CREATE INDEX lineitem_orderkey_index on public.lineitem(l_orderkey);
@@ -84,16 +107,15 @@ DROP TABLE local_table;
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
-SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
+SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_%' ORDER BY relname LIMIT 1);
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash_%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range_%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append_%';
 \c - - - :master_port
 SET search_path TO multi_index_statements, public;
 
 -- Verify that we error out on unsupported statement types
 
-CREATE UNIQUE INDEX try_index ON public.lineitem (l_orderkey);
 CREATE INDEX try_index ON lineitem (l_orderkey) TABLESPACE newtablespace;
 
 CREATE UNIQUE INDEX try_unique_range_index ON index_test_range(b);
@@ -137,16 +159,11 @@ REINDEX SYSTEM regression;
 DROP INDEX lineitem_orderkey_index, lineitem_partial_index;
 
 -- Verify that we can succesfully drop indexes
+DROP INDEX lineitem_orderkey_index;
+DROP INDEX lineitem_orderkey_index_new;
 DROP INDEX lineitem_partkey_desc_index;
 DROP INDEX lineitem_partial_index;
 DROP INDEX lineitem_colref_index;
-
--- Verify that we can drop distributed indexes with local indexes
-CREATE TABLE local_table(a int, b int);
-CREATE INDEX local_index ON local_table(a);
-CREATE INDEX local_index2 ON local_table(b);
-DROP INDEX lineitem_orderkey_index, local_index;
-DROP INDEX IF EXISTS lineitem_orderkey_index_new, local_index2, non_existing_index;
 
 -- Verify that we handle if exists statements correctly
 
@@ -171,8 +188,9 @@ DROP INDEX CONCURRENTLY lineitem_concurrently_index;
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
-SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
+SET citus.override_table_visibility TO FALSE;
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname SIMILAR TO 'lineitem%\d' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
+SELECT * FROM pg_indexes WHERE tablename SIMILAR TO 'index_test_%\d' ORDER BY indexname;
 
 -- create index that will conflict with master operations
 CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON multi_index_statements.index_test_hash_102089(b);
@@ -279,6 +297,72 @@ CREATE INDEX f1
     ON test_index_creation1 USING btree
     (field1);
 
+-- should be able to create index only for parent on both
+-- coordinator and worker nodes
+CREATE INDEX parent_index
+    ON ONLY test_index_creation1 USING btree
+    (field1);
+
+-- show that we have parent index only on the parent table not on the partitions
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text = 'test_index_creation1' AND indexrelid::regclass::text = 'parent_index';
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text LIKE 'test_index_creation1_p2020%' AND indexrelid::regclass::text LIKE 'parent_index%';
+
+\c - - - :worker_1_port
+SET search_path TO multi_index_statements;
+
+-- show that we have parent index_* only on the parent shards not on the partition shards
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text LIKE 'test_index_creation1_%' AND indexrelid::regclass::text LIKE 'parent_index%';
+SELECT count(*) FROM pg_index WHERE indrelid::regclass::text LIKE 'test_index_creation1_p2020%' AND indexrelid::regclass::text LIKE 'parent_index%';
+
+\c - - - :master_port
+SET search_path TO multi_index_statements;
+
+-- attach child index of a partition to parent index of the partitioned table
+CREATE INDEX child_index
+    ON test_index_creation1_p2020_09_26 USING btree
+    (field1);
+
+ALTER INDEX parent_index ATTACH PARTITION child_index;
+
+-- show that child index inherits from parent index which means it is attached to it
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text = 'child_index' AND inhparent::regclass::text = 'parent_index';
+
+\c - - - :worker_1_port
+SET search_path TO multi_index_statements;
+
+-- show that child indices of partition shards also inherit from parent indices of parent shards
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index\_%' AND inhparent::regclass::text LIKE 'parent_index\_%';
+
+\c - - - :master_port
+SET search_path TO multi_index_statements;
+
+-- verify error check for partitioned index
+ALTER INDEX parent_index SET TABLESPACE foo;
+
+-- drop parent index and show that child index will also be dropped
+DROP INDEX parent_index;
+SELECT count(*) FROM pg_index where indexrelid::regclass::text = 'child_index';
+
+-- show that having a foreign key to reference table causes sequential execution mode
+-- with ALTER INDEX ... ATTACH PARTITION
+
+CREATE TABLE index_creation_reference_table (id int primary key);
+SELECT create_reference_table('index_creation_reference_table');
+ALTER TABLE test_index_creation1 ADD CONSTRAINT foreign_key_to_ref_table
+    FOREIGN KEY (tenant_id)
+    REFERENCES index_creation_reference_table (id);
+
+CREATE INDEX parent_index ON ONLY test_index_creation1 USING btree (field1);
+CREATE INDEX child_index ON test_index_creation1_p2020_09_26 USING btree (field1);
+
+BEGIN;
+    show citus.multi_shard_modify_mode;
+    ALTER INDEX parent_index ATTACH PARTITION child_index;
+    show citus.multi_shard_modify_mode;
+ROLLBACK;
+
+DROP TABLE index_creation_reference_table CASCADE;
+
 SELECT
 'CREATE TABLE distributed_table(' ||
 string_Agg('col' || x::text || ' int,', ' ') ||
@@ -337,3 +421,4 @@ SELECT indisvalid AS "Index Valid?" FROM pg_index WHERE indexrelid='ith_b_idx'::
 DROP INDEX CONCURRENTLY IF EXISTS ith_b_idx;
 
 DROP SCHEMA multi_index_statements CASCADE;
+DROP SCHEMA multi_index_statements_2 CASCADE;

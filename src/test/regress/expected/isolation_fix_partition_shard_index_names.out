@@ -1,0 +1,228 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-drop-table s2-fix-partition-shard-index-names s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s1-drop-table:
+    DROP TABLE dist_partitioned_table;
+
+step s2-fix-partition-shard-index-names:
+    SET client_min_messages TO NOTICE;
+    SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+ <waiting ...>
+step s1-commit: 
+    COMMIT;
+
+step s2-fix-partition-shard-index-names: <... completed>
+s2: NOTICE:  relation with OID XXXX does not exist, skipping
+fix_partition_shard_index_names
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s2-begin s2-fix-partition-shard-index-names s1-drop-table s2-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s2-fix-partition-shard-index-names:
+    SET client_min_messages TO NOTICE;
+    SELECT fix_partition_shard_index_names('dist_partitioned_table'::regclass);
+
+fix_partition_shard_index_names
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-drop-table:
+    DROP TABLE dist_partitioned_table;
+ <waiting ...>
+step s2-commit:
+    COMMIT;
+
+step s1-drop-table: <... completed>
+
+starting permutation: s2-begin s2-create-index s1-select-from-table s2-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s2-create-index:
+    CREATE INDEX ON dist_partitioned_table USING btree(a);
+
+step s1-select-from-table:
+    SELECT * FROM dist_partitioned_table;
+
+a|created_at
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-commit:
+    COMMIT;
+
+
+starting permutation: s2-begin s2-create-index s1-insert-into-table s2-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s2-create-index:
+    CREATE INDEX ON dist_partitioned_table USING btree(a);
+
+step s1-insert-into-table:
+    INSERT INTO dist_partitioned_table VALUES (0, '2019-01-01');
+ <waiting ...>
+step s2-commit:
+    COMMIT;
+
+step s1-insert-into-table: <... completed>
+
+starting permutation: s1-begin s1-select-from-table s2-create-index-concurrently s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s1-select-from-table:
+    SELECT * FROM dist_partitioned_table;
+
+a|created_at
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-create-index-concurrently:
+    CREATE INDEX CONCURRENTLY ON dist_partitioned_table USING btree(a);
+
+ERROR:  cannot create index on partitioned table "dist_partitioned_table" concurrently
+step s1-commit:
+    COMMIT;
+
+
+starting permutation: s1-begin s1-insert-into-table s2-create-index-concurrently s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s1-insert-into-table:
+    INSERT INTO dist_partitioned_table VALUES (0, '2019-01-01');
+
+step s2-create-index-concurrently:
+    CREATE INDEX CONCURRENTLY ON dist_partitioned_table USING btree(a);
+
+ERROR:  cannot create index on partitioned table "dist_partitioned_table" concurrently
+step s1-commit:
+    COMMIT;
+
+
+starting permutation: s1-begin s1-select-from-table s2-create-index s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s1-select-from-table:
+    SELECT * FROM dist_partitioned_table;
+
+a|created_at
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-create-index:
+    CREATE INDEX ON dist_partitioned_table USING btree(a);
+
+step s1-commit:
+    COMMIT;
+
+
+starting permutation: s1-begin s1-insert-into-table s2-create-index s1-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-begin:
+    BEGIN;
+
+step s1-insert-into-table:
+    INSERT INTO dist_partitioned_table VALUES (0, '2019-01-01');
+
+step s2-create-index:
+    CREATE INDEX ON dist_partitioned_table USING btree(a);
+ <waiting ...>
+step s1-commit:
+    COMMIT;
+
+step s2-create-index: <... completed>
+
+starting permutation: s2-begin s2-create-index-concurrently s1-select-from-table s2-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s2-create-index-concurrently:
+    CREATE INDEX CONCURRENTLY ON dist_partitioned_table USING btree(a);
+
+ERROR:  CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+step s1-select-from-table:
+    SELECT * FROM dist_partitioned_table;
+
+a|created_at
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-commit:
+    COMMIT;
+
+
+starting permutation: s2-begin s2-create-index-concurrently s1-insert-into-table s2-commit
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-begin:
+    BEGIN;
+
+step s2-create-index-concurrently:
+    CREATE INDEX CONCURRENTLY ON dist_partitioned_table USING btree(a);
+
+ERROR:  CREATE INDEX CONCURRENTLY cannot run inside a transaction block
+step s1-insert-into-table:
+    INSERT INTO dist_partitioned_table VALUES (0, '2019-01-01');
+
+step s2-commit:
+    COMMIT;
+

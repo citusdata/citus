@@ -13,14 +13,14 @@ INSERT INTO mod_test VALUES (2, 6);
 
 SELECT COUNT(*) FROM mod_test WHERE key=2;
 
--- some clean up
+-- none of the placements are marked as INACTIVE
 UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'mod_test'::regclass
 ) AND shardstate = 3 RETURNING placementid;
 TRUNCATE mod_test;
 
--- verify behavior of UPDATE ... RETURNING; should mark as failed
+-- verify behavior of UPDATE ... RETURNING; should fail the transaction
 SELECT citus.mitmproxy('conn.allow()');
 INSERT INTO mod_test VALUES (2, 6);
 
@@ -29,7 +29,7 @@ UPDATE mod_test SET value='ok' WHERE key=2 RETURNING key;
 
 SELECT COUNT(*) FROM mod_test WHERE value='ok';
 
--- some clean up
+-- none of the placements are marked as INACTIVE
 UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'mod_test'::regclass
@@ -37,7 +37,7 @@ WHERE shardid IN (
 TRUNCATE mod_test;
 
 -- verify behavior of multi-statement modifications to a single shard
--- should succeed but mark a placement as failed
+-- should fail the transaction and never mark placements inactive
 SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
 
 BEGIN;
@@ -49,7 +49,7 @@ COMMIT;
 
 SELECT COUNT(*) FROM mod_test WHERE key=2;
 
--- some clean up
+-- none of the placements are marked as INACTIVE
 UPDATE pg_dist_shard_placement SET shardstate = 1
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'mod_test'::regclass

@@ -70,12 +70,12 @@ PG_FUNCTION_INFO_V1(master_modify_multiple_shards);
 Datum
 master_modify_multiple_shards(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	text *queryText = PG_GETARG_TEXT_P(0);
 	char *queryString = text_to_cstring(queryText);
 	RawStmt *rawStmt = (RawStmt *) ParseTreeRawStmt(queryString);
 	Node *queryTreeNode = rawStmt->stmt;
-
-	CheckCitusVersion(ERROR);
 
 	if (!IsA(queryTreeNode, DeleteStmt) && !IsA(queryTreeNode, UpdateStmt))
 	{

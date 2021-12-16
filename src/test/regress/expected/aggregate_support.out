@@ -613,14 +613,14 @@ select run_command_on_workers($$create user notsuper$$);
 
 grant all on schema aggregate_support to notsuper;
 grant all on all tables in schema aggregate_support to notsuper;
-select run_command_on_workers($$
+select 1 from run_command_on_workers($$
 grant all on schema aggregate_support to notsuper;
 grant all on all tables in schema aggregate_support to notsuper;
 $$);
-  run_command_on_workers
+ ?column?
 ---------------------------------------------------------------------
- (localhost,57637,t,GRANT)
- (localhost,57638,t,GRANT)
+        1
+        1
 (2 rows)
 
 set role notsuper;
@@ -872,7 +872,7 @@ END;
 $function$;
 SELECT const_function(1), string_agg(a::character, ',') FROM t1;
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
+CONTEXT:  PL/pgSQL function const_function(integer) line XX at RAISE
  const_function | string_agg
 ---------------------------------------------------------------------
               1 |
@@ -880,7 +880,7 @@ CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
 
 SELECT const_function(1), count(b) FROM t1;
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
+CONTEXT:  PL/pgSQL function const_function(integer) line XX at RAISE
  const_function | count
 ---------------------------------------------------------------------
               1 |     0
@@ -888,7 +888,7 @@ CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
 
 SELECT const_function(1), count(b), 10 FROM t1;
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
+CONTEXT:  PL/pgSQL function const_function(integer) line XX at RAISE
  const_function | count | ?column?
 ---------------------------------------------------------------------
               1 |     0 |       10
@@ -896,9 +896,9 @@ CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
 
 SELECT const_function(1), count(b), const_function(10) FROM t1;
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
+CONTEXT:  PL/pgSQL function const_function(integer) line XX at RAISE
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
+CONTEXT:  PL/pgSQL function const_function(integer) line XX at RAISE
  const_function | count | const_function
 ---------------------------------------------------------------------
               1 |     0 |              1
@@ -906,7 +906,7 @@ CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
 
 SELECT square_func(5), string_agg(a::character, ','),const_function(1) FROM t1;
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
+CONTEXT:  PL/pgSQL function const_function(integer) line XX at RAISE
  square_func | string_agg | const_function
 ---------------------------------------------------------------------
           25 |            |              1
@@ -914,7 +914,7 @@ CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
 
 SELECT square_func_stable(5), string_agg(a::character, ','),const_function(1) FROM t1;
 NOTICE:  stable_fn called
-CONTEXT:  PL/pgSQL function const_function(integer) line 3 at RAISE
+CONTEXT:  PL/pgSQL function const_function(integer) line XX at RAISE
  square_func_stable | string_agg | const_function
 ---------------------------------------------------------------------
                  25 |            |              1

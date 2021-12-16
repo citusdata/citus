@@ -31,8 +31,12 @@
 typedef enum CitusCopyDest
 {
 	COPY_FILE,                  /* to/from file (or a piped program) */
+#if PG_VERSION_NUM >= PG_VERSION_14
+	COPY_FRONTEND,              /* to frontend */
+#else
 	COPY_OLD_FE,                /* to/from frontend (2.0 protocol) */
 	COPY_NEW_FE,                /* to/from frontend (3.0 protocol) */
+#endif
 	COPY_CALLBACK               /* to/from callback function */
 } CitusCopyDest;
 
@@ -104,8 +108,6 @@ typedef struct CitusCopyDestReceiver
 	/* template for COPY statement to send to workers */
 	CopyStmt *copyStatement;
 
-	bool stopOnFailure;
-
 	/*
 	 * shardId to CopyShardState map. Also used in insert_select_executor.c for
 	 * task pruning.
@@ -138,6 +140,12 @@ typedef struct CitusCopyDestReceiver
 	 * files as if they are shards.
 	 */
 	char *colocatedIntermediateResultIdPrefix;
+
+	/*
+	 * When copying into append-partitioned tables, the destination shard is chosen
+	 * upfront.
+	 */
+	uint64 appendShardId;
 } CitusCopyDestReceiver;
 
 
@@ -150,7 +158,6 @@ extern CitusCopyDestReceiver * CreateCitusCopyDestReceiver(Oid relationId,
 														   List *columnNameList,
 														   int partitionColumnIndex,
 														   EState *executorState,
-														   bool stopOnFailure,
 														   char *intermediateResultPrefix);
 extern FmgrInfo * ColumnOutputFunctions(TupleDesc rowDescriptor, bool binaryFormat);
 extern bool CanUseBinaryCopyFormat(TupleDesc tupleDescription);

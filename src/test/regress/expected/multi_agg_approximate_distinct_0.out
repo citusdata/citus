@@ -14,6 +14,31 @@ WHERE name = 'hll'
  f
 (1 row)
 
+SELECT public.explain_has_distributed_subplan($$
+ EXPLAIN SELECT symbol_id,
+        HLL_ADD_AGG(HLL_HASH_BIGINT(event_id)) AS event_hll_hash,
+        HLL_CARDINALITY(HLL_ADD_AGG(HLL_HASH_BIGINT(event_id))) AS event_n_users
+ FROM (
+    SELECT event_time, composite_id, event_id, 4640476 symbol_id FROM "events"
+ UNION ALL
+    SELECT event_time, composite_id, event_id, 4640477 symbol_id FROM "events"
+ ) pushdown_events
+ GROUP BY symbol_id;
+ $$);
+ERROR:  function hll_hash_bigint(bigint) does not exist
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:
+ EXPLAIN SELECT symbol_id,
+        HLL_ADD_AGG(HLL_HASH_BIGINT(event_id)) AS event_hll_hash,
+        HLL_CARDINALITY(HLL_ADD_AGG(HLL_HASH_BIGINT(event_id))) AS event_n_users
+ FROM (
+    SELECT event_time, composite_id, event_id, 4640476 symbol_id FROM "events"
+ UNION ALL
+    SELECT event_time, composite_id, event_id, 4640477 symbol_id FROM "events"
+ ) pushdown_events
+ GROUP BY symbol_id;
+
+CONTEXT:  PL/pgSQL function explain_has_distributed_subplan(text) line XX at FOR over EXECUTE statement
 SET citus.coordinator_aggregation_strategy TO 'disabled';
 -- Try to execute count(distinct) when approximate distincts aren't enabled
 SELECT count(distinct l_orderkey) FROM lineitem;
@@ -118,12 +143,12 @@ SELECT l_returnflag, count(DISTINCT l_shipdate) as count_distinct, count(*) as t
 ERROR:  cannot compute count (distinct) approximation
 HINT:  You need to have the hll extension loaded.
 SELECT
-	l_orderkey,
+	l_partkey,
 	count(l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
 	count(DISTINCT l_partkey) FILTER (WHERE l_shipmode = 'AIR'),
 	count(DISTINCT CASE WHEN l_shipmode = 'AIR' THEN l_partkey ELSE NULL END)
 	FROM lineitem
-	GROUP BY l_orderkey
+	GROUP BY l_partkey
 	ORDER BY 2 DESC, 1 DESC
 	LIMIT 10;
 ERROR:  cannot compute count (distinct) approximation

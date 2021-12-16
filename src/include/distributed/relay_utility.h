@@ -27,12 +27,14 @@
 
 /*
  * ShardState represents last known states of shards on a given node.
+ *
+ * The numbers assigned per state used for historical reason and should
+ * not be changed since they correspond to shardstate in pg_dist_placement.
  */
 typedef enum
 {
 	SHARD_STATE_INVALID_FIRST = 0,
 	SHARD_STATE_ACTIVE = 1,
-	SHARD_STATE_INACTIVE = 3,
 	SHARD_STATE_TO_DELETE = 4,
 } ShardState;
 

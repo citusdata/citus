@@ -14,6 +14,7 @@ test: worker_copy
 # ----------
 # Range and hash re-partitioning related regression tests
 # ----------
+test: worker_disable_binary_worker_copy_format
 test: worker_range_partition worker_range_partition_complex
 test: worker_hash_partition worker_hash_partition_complex
 test: worker_merge_range_files worker_merge_hash_files

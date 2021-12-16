@@ -58,7 +58,7 @@ static void SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerS
 void
 SendCommandToWorker(const char *nodeName, int32 nodePort, const char *command)
 {
-	const char *nodeUser = CitusExtensionOwnerName();
+	const char *nodeUser = CurrentUserName();
 	SendCommandToWorkerAsUser(nodeName, nodePort, nodeUser, command);
 }
 
@@ -96,7 +96,7 @@ SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort, const char *node
 	uint32 connectionFlags = 0;
 
 	UseCoordinatedTransaction();
-	CoordinatedTransactionShouldUse2PC();
+	Use2PCForCoordinatedTransaction();
 
 	MultiConnection *transactionConnection = GetNodeUserDatabaseConnection(
 		connectionFlags, nodeName,
@@ -118,7 +118,7 @@ SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort, const char *node
 void
 SendCommandToWorkersWithMetadata(const char *command)
 {
-	SendCommandToMetadataWorkersParams(command, CitusExtensionOwnerName(),
+	SendCommandToMetadataWorkersParams(command, CurrentUserName(),
 									   0, NULL, NULL);
 }
 
@@ -168,7 +168,7 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 {
 	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_METADATA_NODES;
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
-	char *nodeUser = CitusExtensionOwnerName();
+	char *nodeUser = CurrentUserName();
 
 	ErrorIfAnyMetadataNodeOutOfSync(workerNodeList);
 
@@ -194,51 +194,6 @@ SendBareCommandListToMetadataWorkers(List *commandList)
 
 		CloseConnection(workerConnection);
 	}
-}
-
-
-/*
- * SendBareOptionalCommandListToAllWorkersAsUser sends a list of commands
- * to all workers in serial. Commands are committed immediately: new
- * connections are always used and no transaction block is used (hence "bare").
- */
-int
-SendBareOptionalCommandListToAllWorkersAsUser(List *commandList, const char *user)
-{
-	TargetWorkerSet targetWorkerSet = NON_COORDINATOR_NODES;
-	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
-	int maxError = RESPONSE_OKAY;
-
-	/* run commands serially */
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerNodeList)
-	{
-		const char *nodeName = workerNode->workerName;
-		int nodePort = workerNode->workerPort;
-		int connectionFlags = FORCE_NEW_CONNECTION;
-
-		MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
-																		  nodeName,
-																		  nodePort, user,
-																		  NULL);
-
-		/* iterate over the commands and execute them in the same connection */
-		const char *commandString = NULL;
-		foreach_ptr(commandString, commandList)
-		{
-			int result = ExecuteOptionalRemoteCommand(workerConnection, commandString,
-													  NULL);
-			if (result != RESPONSE_OKAY)
-			{
-				maxError = Max(maxError, result);
-				break;
-			}
-		}
-
-		CloseConnection(workerConnection);
-	}
-
-	return maxError;
 }
 
 
@@ -404,7 +359,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 	List *workerNodeList = TargetWorkerSetNodeList(targetWorkerSet, ShareLock);
 
 	UseCoordinatedTransaction();
-	CoordinatedTransactionShouldUse2PC();
+	Use2PCForCoordinatedTransaction();
 
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
@@ -412,7 +367,7 @@ SendCommandToWorkersParamsInternal(TargetWorkerSet targetWorkerSet, const char *
 	{
 		const char *nodeName = workerNode->workerName;
 		int nodePort = workerNode->workerPort;
-		int32 connectionFlags = 0;
+		int32 connectionFlags = REQUIRE_METADATA_CONNECTION;
 
 		MultiConnection *connection = StartNodeUserDatabaseConnection(connectionFlags,
 																	  nodeName, nodePort,
@@ -479,14 +434,14 @@ EnsureNoModificationsHaveBeenDone()
 
 
 /*
- * SendCommandListToWorkerInSingleTransaction opens connection to the node with the given
- * nodeName and nodePort. Then, the connection starts a transaction on the remote
- * node and executes the commands in the transaction. The function raises error if
- * any of the queries fails.
+ * SendCommandListToWorkerOutsideTransaction forces to open a new connection
+ * to the node with the given nodeName and nodePort. Then, the connection starts
+ * a transaction on the remote node and executes the commands in the transaction.
+ * The function raises error if any of the queries fails.
  */
 void
-SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
-										   const char *nodeUser, List *commandList)
+SendCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
+										  const char *nodeUser, List *commandList)
 {
 	int connectionFlags = FORCE_NEW_CONNECTION;
 
@@ -510,13 +465,45 @@ SendCommandListToWorkerInSingleTransaction(const char *nodeName, int32 nodePort,
 
 
 /*
- * SendOptionalCommandListToWorkerInTransaction sends the given command list to
- * the given worker in a single transaction. If any of the commands fail, it
- * rollbacks the transaction, and otherwise commits.
+ * SendCommandListToWorkerInCoordinatedTransaction opens connection to the node
+ * with the given nodeName and nodePort. The commands are sent as part of the
+ * coordinated transaction. Any failures aborts the coordinated transaction.
+ */
+void
+SendMetadataCommandListToWorkerInCoordinatedTransaction(const char *nodeName,
+														int32 nodePort,
+														const char *nodeUser,
+														List *commandList)
+{
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+
+	UseCoordinatedTransaction();
+
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  nodeName, nodePort,
+																	  nodeUser, NULL);
+
+	MarkRemoteTransactionCritical(workerConnection);
+	RemoteTransactionBeginIfNecessary(workerConnection);
+
+	/* iterate over the commands and execute them in the same connection */
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
+	{
+		ExecuteCriticalRemoteCommand(workerConnection, commandString);
+	}
+}
+
+
+/*
+ * SendOptionalCommandListToWorkerOutsideTransaction sends the given command
+ * list to the given worker in a single transaction that is outside of the
+ * coordinated tranaction. If any of the commands fail, it rollbacks the
+ * transaction, and otherwise commits.
  */
 bool
-SendOptionalCommandListToWorkerInTransaction(const char *nodeName, int32 nodePort,
-											 const char *nodeUser, List *commandList)
+SendOptionalCommandListToWorkerOutsideTransaction(const char *nodeName, int32 nodePort,
+												  const char *nodeUser, List *commandList)
 {
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	bool failed = false;
@@ -551,6 +538,51 @@ SendOptionalCommandListToWorkerInTransaction(const char *nodeName, int32 nodePor
 	}
 
 	CloseConnection(workerConnection);
+
+	return !failed;
+}
+
+
+/*
+ * SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction sends the given
+ * command list to the given worker as part of the coordinated transaction.
+ * If any of the commands fail, the function returns false.
+ */
+bool
+SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(const char *nodeName,
+																int32 nodePort,
+																const char *nodeUser,
+																List *commandList)
+{
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+	bool failed = false;
+
+	UseCoordinatedTransaction();
+
+	MultiConnection *workerConnection =
+		GetNodeUserDatabaseConnection(connectionFlags, nodeName, nodePort,
+									  nodeUser, NULL);
+	if (PQstatus(workerConnection->pgConn) != CONNECTION_OK)
+	{
+		return false;
+	}
+
+	RemoteTransactionsBeginIfNecessary(list_make1(workerConnection));
+
+	/* iterate over the commands and execute them in the same connection */
+	const char *commandString = NULL;
+	foreach_ptr(commandString, commandList)
+	{
+		if (ExecuteOptionalRemoteCommand(workerConnection, commandString, NULL) !=
+			RESPONSE_OKAY)
+		{
+			failed = true;
+
+			bool raiseErrors = false;
+			MarkRemoteTransactionFailed(workerConnection, raiseErrors);
+			break;
+		}
+	}
 
 	return !failed;
 }

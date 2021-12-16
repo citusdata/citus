@@ -67,7 +67,7 @@ SELECT create_reference_table('reference_table_2');
 SELECT undistribute_table('reference_table_2');
 
 create table countries(
-  id serial primary key
+  id bigserial primary key
   , name text
   , code varchar(2) collate "C" unique
 );
@@ -82,8 +82,6 @@ CREATE TABLE users (
   , country_id int references countries(id)
   , primary key (org_id, id)
 );
-
-SET citus.replication_model to 'streaming';
 
 -- "users" table was implicitly added to citus metadata when defining foreign key,
 -- so create_distributed_table would first undistribute it.

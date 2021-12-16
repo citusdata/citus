@@ -293,7 +293,9 @@ SELECT minimum_value::bigint AS min_value,
   FROM information_schema.sequences
   WHERE sequence_name = 'app_analytics_events_mx_id_seq' \gset
 SELECT last_value FROM app_analytics_events_mx_id_seq \gset
+SET citus.enable_ddl_propagation TO OFF;
 ALTER SEQUENCE app_analytics_events_mx_id_seq NO MINVALUE NO MAXVALUE;
+RESET citus.enable_ddl_propagation;
 SELECT setval('app_analytics_events_mx_id_seq'::regclass, 3940649673949184);
 
 INSERT INTO app_analytics_events_mx VALUES (DEFAULT, 101, 'Fauxkemon Geaux') RETURNING id;
@@ -302,5 +304,8 @@ INSERT INTO app_analytics_events_mx (app_id, name) VALUES (103, 'Mynt') RETURNIN
 
 -- clean up
 SELECT 1 FROM setval('app_analytics_events_mx_id_seq'::regclass, :last_value);
+
+SET citus.enable_ddl_propagation TO OFF;
 ALTER SEQUENCE app_analytics_events_mx_id_seq
   MINVALUE :min_value MAXVALUE :max_value;
+RESET citus.enable_ddl_propagation;

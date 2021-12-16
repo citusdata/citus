@@ -35,7 +35,6 @@ END; $$ language plpgsql STABLE;
 
 CREATE TYPE user_data AS (name text, age int);
 
-SET citus.replication_model TO streaming;
 SET citus.shard_replication_factor TO 1;
 
 CREATE TABLE user_info_data (user_id int, u_data user_data, user_index int);
@@ -160,6 +159,7 @@ EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
+EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 
 TRUNCATE user_info_data;
 
@@ -266,6 +266,8 @@ INSERT INTO user_info_data VALUES(1, ('test', 1)::user_data);
 EXECUTE router_with_only_function;
 INSERT INTO user_info_data VALUES(1, ('test', 1)::user_data);
 EXECUTE router_with_only_function;
+INSERT INTO user_info_data VALUES(1, ('test', 1)::user_data);
+EXECUTE router_with_only_function;
 
 \c - - - :worker_2_port
 
@@ -347,9 +349,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)');
 EXECUTE fast_path_router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)');
 EXECUTE fast_path_router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
-
-
-
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)');
+EXECUTE fast_path_router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
 
 PREPARE fast_path_router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 RETURNING user_id, u_data;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
@@ -366,7 +367,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data)
 EXECUTE fast_path_router_with_param_on_non_dist_key(('test', 1)::user_data);
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
 EXECUTE fast_path_router_with_param_on_non_dist_key(('test', 1)::user_data);
-
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
+EXECUTE fast_path_router_with_param_on_non_dist_key(('test', 1)::user_data);
 
 
 INSERT INTO user_info_data (user_id, u_data) VALUES
@@ -401,9 +403,11 @@ INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data)
 EXECUTE fast_path_router_with_only_function;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
 EXECUTE fast_path_router_with_only_function;
-
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
+EXECUTE fast_path_router_with_only_function;
 
 PREPARE insert_with_function_and_param(user_data) AS INSERT INTO user_info_data VALUES (3, $1, (get_local_node_id_stable() > 0)::int) RETURNING user_id;
+EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
 EXECUTE insert_with_function_and_param(('test', 1)::user_data);
@@ -480,8 +484,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)');
 EXECUTE router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)');
 EXECUTE router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
-
-
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, '(''test'', 2)');
+EXECUTE router_with_param_on_non_dist_key_and_func(('''test''', get_constant_stable())::user_data);
 
 
 PREPARE router_with_param_on_non_dist_key(user_data) AS DELETE FROM user_info_data WHERE u_data = $1 AND user_id  = 3 AND user_id  = 3 RETURNING user_id, u_data;
@@ -499,7 +503,8 @@ INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data)
 EXECUTE router_with_param_on_non_dist_key(('test', 1)::user_data);
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
 EXECUTE router_with_param_on_non_dist_key(('test', 1)::user_data);
-
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 1)::user_data);
+EXECUTE router_with_param_on_non_dist_key(('test', 1)::user_data);
 
 
 INSERT INTO user_info_data (user_id, u_data) VALUES
@@ -520,6 +525,8 @@ EXECUTE router_with_two_params(('test', 2)::user_data, 16);
 
 
 PREPARE router_with_only_function AS DELETE FROM user_info_data WHERE get_constant_stable() = 2AND user_id = 3 RETURNING user_id, u_data;
+INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
+EXECUTE router_with_only_function;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);
 EXECUTE router_with_only_function;
 INSERT INTO user_info_data (user_id, u_data) VALUES  (3, ('test', 2)::user_data);

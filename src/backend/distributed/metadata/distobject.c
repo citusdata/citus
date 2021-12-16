@@ -28,10 +28,14 @@
 #include "catalog/pg_type.h"
 #include "citus_version.h"
 #include "commands/extension.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_transaction.h"
 #include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
@@ -75,8 +79,12 @@ citus_unmark_object_distributed(PG_FUNCTION_ARGS)
 	{
 		ereport(ERROR, (errmsg("object still exists"),
 						errdetail("the %s \"%s\" still exists",
-								  getObjectTypeDescription(&address),
-								  getObjectIdentity(&address)),
+								  getObjectTypeDescription_compat(&address,
+
+		                                                          /* missingOk: */ false),
+								  getObjectIdentity_compat(&address,
+
+		                                                   /* missingOk: */ false)),
 						errhint("drop the object via a DROP command")));
 	}
 
@@ -135,6 +143,9 @@ ObjectExists(const ObjectAddress *address)
 /*
  * MarkObjectDistributed marks an object as a distributed object by citus. Marking is done
  * by adding appropriate entries to citus.pg_dist_object.
+ *
+ * This also marks the object as distributed on all of the workers with metadata
+ * if object propagation is on.
  */
 void
 MarkObjectDistributed(const ObjectAddress *distAddress)
@@ -159,6 +170,20 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 	if (spiStatus < 0)
 	{
 		ereport(ERROR, (errmsg("failed to insert object into citus.pg_dist_object")));
+	}
+
+	if (EnableDependencyCreation)
+	{
+		/* create a list by adding the address of value to not to have warning */
+		List *objectAddressList = list_make1((ObjectAddress *) distAddress);
+		List *distArgumetIndexList = list_make1_int(INVALID_DISTRIBUTION_ARGUMENT_INDEX);
+		List *colocationIdList = list_make1_int(INVALID_COLOCATION_ID);
+
+		char *workerPgDistObjectUpdateCommand =
+			MarkObjectsDistributedCreateCommand(objectAddressList,
+												distArgumetIndexList,
+												colocationIdList);
+		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
 	}
 }
 

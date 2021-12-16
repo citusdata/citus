@@ -14,14 +14,13 @@ SET search_path TO 'ddl_failure';
 SET citus.max_cached_conns_per_worker TO 0;
 
 -- we don't want to see the prepared transaction numbers in the warnings
-SET client_min_messages TO ERROR;
+SET client_min_messages TO WARNING;
 
 SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.next_shard_id TO 100800;
 
--- we'll start with replication factor 1, 1PC and parallel mode
-SET citus.multi_shard_commit_protocol TO '1pc';
+-- we'll start with replication factor 1, 2PC and parallel mode
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 
@@ -64,23 +63,10 @@ ALTER TABLE test_table ADD COLUMN new_column INT;
 -- show that we've never commited the changes
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 
--- kill as soon as the coordinator sends COMMIT
-SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
-ALTER TABLE test_table ADD COLUMN new_column INT;
-SELECT citus.mitmproxy('conn.allow()');
-
--- since we've killed the connection just after
--- the coordinator sends the COMMIT, the command should be applied
--- to the distributed table and the shards on the other worker
--- however, there is no way to recover the failure on the shards
--- that live in the failed worker, since we're running 1PC
-SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
-SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
-
 -- manually drop & re-create the table for the next tests
+SELECT citus.mitmproxy('conn.allow()');
 DROP TABLE test_table;
 SET citus.next_shard_id TO 100800;
-SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 1;
 
@@ -154,9 +140,6 @@ SELECT citus.mitmproxy('conn.allow()');
 
 SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = 'test_table'::regclass;
 SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORDER BY name::text) FROM public.table_attrs where relid = '%s'::regclass;$$) ORDER BY 1;
-
--- now, lets test with 2PC
-SET citus.multi_shard_commit_protocol TO '2pc';
 
 -- in the first test, kill just in the first
 -- response we get from the worker
@@ -273,7 +256,6 @@ SELECT run_command_on_placements('test_table', $$SELECT array_agg(name::text ORD
 
 
 -- another set of tests with 2PC and replication factor = 2
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET citus.shard_count = 4;
 SET citus.shard_replication_factor = 2;
 

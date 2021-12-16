@@ -640,8 +640,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 
 /*
  * RelayEventExtendNamesForInterShardCommands extends relation names in the given parse
- * tree for certain utility commands. The function more specifically extends table and
- * constraint names in the parse tree by appending the given shardId; thereby
+ * tree for certain utility commands. The function more specifically extends table, index
+ * and constraint names in the parse tree by appending the given shardId; thereby
  * avoiding name collisions in the database among sharded tables. This function
  * has the side effect of extending relation names in the parse tree.
  */
@@ -901,12 +901,12 @@ AppendShardIdToName(char **name, uint64 shardId)
 Datum
 shard_name(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	int64 shardId = PG_GETARG_INT64(1);
 
 	char *qualifiedName = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	if (shardId <= 0)
 	{

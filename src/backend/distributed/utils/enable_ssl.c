@@ -196,7 +196,7 @@ GloballyReloadConfig()
 /*
  * ShouldUseAutoSSL checks if citus should enable ssl based on the connection settings it
  * uses for outward connections. When the outward connection is configured to require ssl
- * it assumes the other nodes in the network have the same setting and therefor it will
+ * it assumes the other nodes in the network have the same setting and therefore it will
  * automatically enable ssl during installation.
  */
 static bool

@@ -9,6 +9,7 @@ SELECT pg_backend_pid() as pid \gset
 SET citus.next_shard_id TO 4213581;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 2;
+SET citus.max_adaptive_executor_pool_size TO 1; -- have more consistent number of connections running
 CREATE TABLE replicated_source_table(a int, b int);
 SELECT create_distributed_table('replicated_source_table', 'a');
  create_distributed_table
@@ -69,9 +70,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="worker_partition_query_result").kill
 (1 row)
 
 INSERT INTO target_table SELECT * FROM replicated_source_table;
-WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
-	This probably means the server terminated abnormally
-	before or while processing the request.
 WARNING:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.

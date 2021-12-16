@@ -1,0 +1,100 @@
+-- in order to make the enterprise and community
+-- tests outputs the same, disable enable_ddl_propagation
+-- and create the roles/schema manually
+SET citus.enable_ddl_propagation TO OFF;
+CREATE SCHEMA "Update Colocation";
+SET client_min_messages TO ERROR;
+CREATE ROLE mx_update_colocation WITH LOGIN;
+GRANT ALL ON SCHEMA "Update Colocation" TO mx_update_colocation;
+\c - - - :worker_1_port
+SET citus.enable_ddl_propagation TO OFF;
+CREATE SCHEMA "Update Colocation";
+SET client_min_messages TO ERROR;
+CREATE ROLE mx_update_colocation WITH LOGIN;
+GRANT ALL ON SCHEMA "Update Colocation" TO mx_update_colocation;
+\c - - - :worker_2_port
+SET citus.enable_ddl_propagation TO OFF;
+CREATE SCHEMA "Update Colocation";
+SET client_min_messages TO ERROR;
+CREATE ROLE mx_update_colocation WITH LOGIN;
+GRANT ALL ON SCHEMA "Update Colocation" TO mx_update_colocation;
+\c - mx_update_colocation - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path TO "Update Colocation";
+CREATE TABLE t1(a int);
+CREATE TABLE t2(a int);
+SELECT create_distributed_table('t1', 'a', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('t2', 'a', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT update_distributed_table_colocation('t1', 't2');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show that we successfuly updated the colocationids to the same value
+SELECT count(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid IN ('t1'::regclass, 't2'::regclass);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO "Update Colocation";
+SELECT count(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid IN ('t1'::regclass, 't2'::regclass);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+\c - - - :worker_2_port
+SET search_path TO "Update Colocation";
+SELECT count(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid IN ('t1'::regclass, 't2'::regclass);
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+\c - - - :master_port
+SET search_path TO "Update Colocation";
+SELECT update_distributed_table_colocation('t1', 'none');
+ update_distributed_table_colocation
+---------------------------------------------------------------------
+
+(1 row)
+
+-- show that we successfuly updated the colocationids different values
+SELECT count(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid IN ('t1'::regclass, 't2'::regclass);
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path TO "Update Colocation";
+SELECT count(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid IN ('t1'::regclass, 't2'::regclass);
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+\c - - - :worker_2_port
+SET search_path TO "Update Colocation";
+SELECT count(DISTINCT colocationid) FROM pg_dist_partition WHERE logicalrelid IN ('t1'::regclass, 't2'::regclass);
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
+\c - postgres - :master_port
+SET client_min_messages TO ERROR;
+DROP SCHEMA "Update Colocation" cascade;

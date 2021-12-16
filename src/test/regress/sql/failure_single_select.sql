@@ -14,21 +14,15 @@ SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
 SELECT * FROM select_test WHERE key = 3;
 SELECT * FROM select_test WHERE key = 3;
 
--- kill after first SELECT; txn should work (though placement marked bad)
+-- kill after first SELECT; txn should fail as INSERT triggers
+-- 2PC (and placementis not marked bad)
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").kill()');
 
 BEGIN;
 INSERT INTO select_test VALUES (3, 'more data');
 SELECT * FROM select_test WHERE key = 3;
-INSERT INTO select_test VALUES (3, 'even more data');
-SELECT * FROM select_test WHERE key = 3;
 COMMIT;
 
--- some clean up
-UPDATE pg_dist_shard_placement SET shardstate = 1
-WHERE shardid IN (
-  SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'select_test'::regclass
-);
 TRUNCATE select_test;
 
 -- now the same tests with query cancellation
@@ -66,7 +60,7 @@ INSERT INTO select_test VALUES (3, 'even more data');
 SELECT * FROM select_test WHERE key = 3;
 COMMIT;
 
--- error after second SELECT; txn should work (though placement marked bad)
+-- error after second SELECT; txn should fails the transaction
 SELECT citus.mitmproxy('conn.onQuery(query="^SELECT").after(1).reset()');
 
 BEGIN;

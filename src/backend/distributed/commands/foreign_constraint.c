@@ -76,7 +76,6 @@ static void ForeignConstraintFindDistKeys(HeapTuple pgConstraintTuple,
 										  int *referencedAttrIndex);
 static List * GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 										int searchForeignKeyColumnFlags);
-static Oid get_relation_constraint_oid_compat(HeapTuple heapTuple);
 static List * GetForeignKeysWithLocalTables(Oid relationId);
 static bool IsTableTypeIncluded(Oid relationId, int flags);
 static void UpdateConstraintIsValid(Oid constraintId, bool isValid);
@@ -234,9 +233,9 @@ ErrorIfUnsupportedForeignConstraintExists(Relation relation, char referencingDis
 		 */
 		bool referencedIsReferenceTable =
 			(referencedReplicationModel == REPLICATION_MODEL_2PC);
-		if (referencingColocationId == INVALID_COLOCATION_ID ||
-			(referencingColocationId != referencedColocationId &&
-			 !referencedIsReferenceTable))
+		if (!referencedIsReferenceTable && (
+				referencingColocationId == INVALID_COLOCATION_ID ||
+				referencingColocationId != referencedColocationId))
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("cannot create foreign key constraint since "
@@ -600,9 +599,8 @@ GetForeignKeyIdsForColumn(char *columnName, Oid relationId,
 		if (HeapTupleOfForeignConstraintIncludesColumn(heapTuple, relationId,
 													   pgConstraintKey, columnName))
 		{
-			Oid foreignKeyOid = get_relation_constraint_oid_compat(heapTuple);
 			foreignKeyIdsColumnAppeared = lappend_oid(foreignKeyIdsColumnAppeared,
-													  foreignKeyOid);
+													  constraintForm->oid);
 		}
 
 		heapTuple = systable_getnext(scanDescriptor);
@@ -702,27 +700,7 @@ GetForeignConstraintCommandsInternal(Oid relationId, int flags)
 
 
 /*
- * get_relation_constraint_oid_compat returns OID of the constraint represented
- * by the constraintForm, which is passed as an heapTuple. OID of the contraint
- * is already stored in the constraintForm struct if major PostgreSQL version is
- * 12. However, in the older versions, we should utilize HeapTupleGetOid to deduce
- * that OID with no cost.
- */
-static Oid
-get_relation_constraint_oid_compat(HeapTuple heapTuple)
-{
-	Assert(heapTuple != NULL);
-
-
-	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
-	Oid constraintOid = constraintForm->oid;
-
-	return constraintOid;
-}
-
-
-/*
- * HasForeignKeyToLocalTable returns true if relation has foreign key
+ * HasForeignKeyWithLocalTable returns true if relation has foreign key
  * relationship with a local table.
  */
 bool
@@ -734,8 +712,8 @@ HasForeignKeyWithLocalTable(Oid relationId)
 
 
 /*
- * GetForeignKeysWithLocalTables returns a list foreign keys for foreign key
- * relationaships that relation has with local tables.
+ * GetForeignKeysWithLocalTables returns a list of foreign keys for foreign key
+ * relationships that relation has with local tables.
  */
 static List *
 GetForeignKeysWithLocalTables(Oid relationId)
@@ -750,6 +728,21 @@ GetForeignKeysWithLocalTables(Oid relationId)
 							  INCLUDE_LOCAL_TABLES;
 	List *referencedFKeyList = GetForeignKeyOids(relationId, referencedFKeysFlag);
 	return list_concat(referencingFKeyList, referencedFKeyList);
+}
+
+
+/*
+ * GetForeignKeysFromLocalTables returns a list of foreign keys where the referencing
+ * relation is a local table.
+ */
+List *
+GetForeignKeysFromLocalTables(Oid relationId)
+{
+	int referencedFKeysFlag = INCLUDE_REFERENCED_CONSTRAINTS |
+							  INCLUDE_LOCAL_TABLES;
+	List *referencingFKeyList = GetForeignKeyOids(relationId, referencedFKeysFlag);
+
+	return referencingFKeyList;
 }
 
 
@@ -842,8 +835,8 @@ TableReferencing(Oid relationId)
 
 
 /*
- * ConstraintWithNameIsOfType is a wrapper around ConstraintWithNameIsOfType that returns true
- * if given constraint name identifies a uniqueness constraint, i.e:
+ * ConstraintIsAUniquenessConstraint is a wrapper around ConstraintWithNameIsOfType
+ * that returns true if given constraint name identifies a uniqueness constraint, i.e:
  *   - primary key constraint, or
  *   - unique constraint
  */
@@ -1035,7 +1028,7 @@ GetForeignKeyOids(Oid relationId, int flags)
 			continue;
 		}
 
-		Oid constraintId = get_relation_constraint_oid_compat(heapTuple);
+		Oid constraintId = constraintForm->oid;
 
 		bool isSelfReference = (constraintForm->conrelid == constraintForm->confrelid);
 		if (excludeSelfReference && isSelfReference)
@@ -1099,6 +1092,30 @@ GetReferencedTableId(Oid foreignKeyId)
 	ReleaseSysCache(heapTuple);
 
 	return referencedTableId;
+}
+
+
+/*
+ * GetReferencingTableId returns OID of the referencing relation for the foreign
+ * key with foreignKeyId. If there is no such foreign key, then this function
+ * returns InvalidOid.
+ */
+Oid
+GetReferencingTableId(Oid foreignKeyId)
+{
+	HeapTuple heapTuple = SearchSysCache1(CONSTROID, ObjectIdGetDatum(foreignKeyId));
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		/* no such foreign key */
+		return InvalidOid;
+	}
+
+	Form_pg_constraint constraintForm = (Form_pg_constraint) GETSTRUCT(heapTuple);
+	Oid referencingTableId = constraintForm->conrelid;
+
+	ReleaseSysCache(heapTuple);
+
+	return referencingTableId;
 }
 
 

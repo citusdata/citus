@@ -102,13 +102,13 @@ SELECT create_distributed_table('referencing_dist_table', 'a', colocate_with:='r
 
 SET client_min_messages TO WARNING;
 SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
-    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1;
+    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1,2;
 SELECT alter_distributed_table('table_with_references', shard_count := 12, cascade_to_colocated := true);
 SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
-    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1;
+    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1,2;
 SELECT alter_distributed_table('table_with_references', shard_count := 10, cascade_to_colocated := false);
 SELECT conrelid::regclass::text AS "Referencing Table", pg_get_constraintdef(oid, true) AS "Definition" FROM  pg_constraint
-    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1;
+    WHERE (conrelid::regclass::text = 'table_with_references' OR confrelid::regclass::text = 'table_with_references') AND contype = 'f' ORDER BY 1,2;
 
 
 -- check when multi shard modify mode is set to sequential
@@ -146,21 +146,6 @@ SELECT alter_distributed_table('columnar_table', shard_count:=6);
 SELECT table_name::text, shard_count, access_method FROM public.citus_tables WHERE table_name::text = 'columnar_table';
 \endif
 
-
--- test with metadata sync
-SET citus.replication_model TO 'streaming';
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-
-CREATE TABLE metadata_sync_table (a BIGSERIAL);
-SELECT create_distributed_table('metadata_sync_table', 'a', colocate_with:='none');
-
-SELECT alter_distributed_table('metadata_sync_table', shard_count:=6);
-SELECT alter_distributed_table('metadata_sync_table', shard_count:=8);
-
-SELECT table_name, shard_count FROM public.citus_tables WHERE table_name::text = 'metadata_sync_table';
-
-SET citus.replication_model TO DEFAULT;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
 -- test complex cascade operations
 CREATE TABLE cas_1 (a INT UNIQUE);

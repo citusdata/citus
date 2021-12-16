@@ -18,6 +18,7 @@
 #include "access/htup_details.h"
 #include "distributed/distribution_column.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/version_compat.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
@@ -49,11 +50,11 @@ PG_FUNCTION_INFO_V1(column_to_column_name);
 Datum
 column_name_to_column(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	text *columnText = PG_GETARG_TEXT_P(1);
 	char *columnName = text_to_cstring(columnText);
-
-	CheckCitusVersion(ERROR);
 
 	Relation relation = relation_open(relationId, AccessShareLock);
 
@@ -100,18 +101,65 @@ column_name_to_column_id(PG_FUNCTION_ARGS)
 Datum
 column_to_column_name(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	Oid relationId = PG_GETARG_OID(0);
 	text *columnNodeText = PG_GETARG_TEXT_P(1);
 
 	char *columnNodeString = text_to_cstring(columnNodeText);
-
-	CheckCitusVersion(ERROR);
 
 	char *columnName = ColumnToColumnName(relationId, columnNodeString);
 
 	text *columnText = cstring_to_text(columnName);
 
 	PG_RETURN_TEXT_P(columnText);
+}
+
+
+/*
+ * FindColumnWithNameOnTargetRelation gets a source table and
+ * column name. The function returns the the column with the
+ * same name on the target table.
+ *
+ * Note that due to dropping columns, the parent's distribution key may not
+ * match the partition's distribution key. See issue #5123.
+ *
+ * The function throws error if the input or output is not valid or does
+ * not exist.
+ */
+Var *
+FindColumnWithNameOnTargetRelation(Oid sourceRelationId, char *sourceColumnName,
+								   Oid targetRelationId)
+{
+	if (sourceColumnName == NULL || sourceColumnName[0] == '\0')
+	{
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN),
+						errmsg("cannot find the given column on table \"%s\"",
+							   generate_qualified_relation_name(sourceRelationId))));
+	}
+
+	AttrNumber attributeNumberOnTarget = get_attnum(targetRelationId, sourceColumnName);
+	if (attributeNumberOnTarget == InvalidAttrNumber)
+	{
+		ereport(ERROR, (errmsg("Column \"%s\" does not exist on "
+							   "relation \"%s\"", sourceColumnName,
+							   get_rel_name(targetRelationId))));
+	}
+
+	Index varNo = 1;
+	Oid targetTypeId = InvalidOid;
+	int32 targetTypMod = 0;
+	Oid targetCollation = InvalidOid;
+	Index varlevelsup = 0;
+
+	/* this function throws error in case anything goes wrong */
+	get_atttypetypmodcoll(targetRelationId, attributeNumberOnTarget,
+						  &targetTypeId, &targetTypMod, &targetCollation);
+	Var *targetColumn =
+		makeVar(varNo, attributeNumberOnTarget, targetTypeId, targetTypMod,
+				targetCollation, varlevelsup);
+
+	return targetColumn;
 }
 
 

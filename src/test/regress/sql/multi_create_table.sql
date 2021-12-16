@@ -5,7 +5,7 @@
 -- Create new table definitions for use in testing in distributed planning and
 -- execution functionality. Also create indexes to boost performance. Since we
 -- need to cover both reference join and partitioned join, we have created
--- reference and append distributed version of orders, customer and part tables.
+-- reference and hash-distributed version of orders, customer and part tables.
 
 SET citus.next_shard_id TO 360000;
 
@@ -46,7 +46,7 @@ CREATE TABLE lineitem (
 	l_shipmode char(10) not null,
 	l_comment varchar(44) not null,
 	PRIMARY KEY(l_orderkey, l_linenumber) );
-SELECT create_distributed_table('lineitem', 'l_orderkey', 'append');
+SELECT create_distributed_table('lineitem', 'l_orderkey', 'hash', shard_count := 2);
 
 CREATE INDEX lineitem_time_index ON lineitem (l_shipdate);
 
@@ -61,7 +61,7 @@ CREATE TABLE orders (
 	o_shippriority integer not null,
 	o_comment varchar(79) not null,
 	PRIMARY KEY(o_orderkey) );
-SELECT create_distributed_table('orders', 'o_orderkey', 'append');
+SELECT create_distributed_table('orders', 'o_orderkey', 'hash', colocate_with := 'lineitem');
 
 CREATE TABLE orders_reference (
 	o_orderkey bigint not null,
@@ -98,6 +98,7 @@ CREATE TABLE customer_append (
 	c_mktsegment char(10) not null,
 	c_comment varchar(117) not null);
 SELECT create_distributed_table('customer_append', 'c_custkey', 'append');
+SELECT master_create_empty_shard('customer_append');
 
 CREATE TABLE nation (
 	n_nationkey integer not null,
@@ -130,6 +131,7 @@ CREATE TABLE part_append (
 	p_retailprice decimal(15,2) not null,
 	p_comment varchar(23) not null);
 SELECT create_distributed_table('part_append', 'p_partkey', 'append');
+SELECT master_create_empty_shard('part_append');
 
 CREATE TABLE supplier
 (
@@ -155,11 +157,11 @@ CREATE TABLE supplier_single_shard
   	s_acctbal decimal(15,2) not null,
   	s_comment varchar(101) not null
 );
-SELECT create_distributed_table('supplier_single_shard', 's_suppkey', 'append');
+SELECT create_distributed_table('supplier_single_shard', 's_suppkey', 'hash', shard_count := 1);
 
 CREATE TABLE mx_table_test (col1 int, col2 text);
 
-SET citus.next_shard_id TO 360009;
+SET citus.next_shard_id TO 360013;
 
 -- Test initial data loading
 CREATE TABLE data_load_test (col1 int, col2 text, col3 serial);
@@ -264,5 +266,11 @@ SELECT shardcount FROM pg_dist_colocation WHERE colocationid IN
 (
 	SELECT colocation_id FROM citus_tables WHERE table_name = 'shard_count_table_3'::regclass
 );
+
+CREATE TEMP TABLE temp_table(a int);
+-- make sure temp table cannot be distributed and we give a good error
+select create_distributed_table('temp_table', 'a');
+select create_reference_table('temp_table');
+DROP TABLE temp_table;
 
 DROP TABLE shard_count_table_3;

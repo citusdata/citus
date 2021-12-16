@@ -29,7 +29,6 @@ CREATE TABLE distributed_mx_table (
 );
 CREATE INDEX ON distributed_mx_table USING GIN (value);
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 SET citus.shard_count TO 4;
 SELECT create_distributed_table('distributed_mx_table', 'key');
  create_distributed_table
@@ -135,7 +134,6 @@ WHERE logicalrelid = 'distributed_mx_table'::regclass;
 -- Create a table and then roll back the transaction
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 BEGIN;
 CREATE TABLE should_not_exist (
     key text primary key,
@@ -159,7 +157,6 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_not_exist';
 -- Ensure that we don't allow prepare on a metadata transaction
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 BEGIN;
 CREATE TABLE should_not_exist (
     key text primary key,
@@ -208,7 +205,6 @@ WHERE logicalrelid = 'citus_mx_schema_for_xacts.objects_for_xacts'::regclass;
 
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
-SET citus.replication_model TO streaming;
 -- now show that we can rollback on creating mx table, but shards remain....
 BEGIN;
 CREATE SCHEMA IF NOT EXISTS citus_mx_schema_for_xacts;
@@ -318,22 +314,22 @@ SELECT raise_failed_aclcheck($$
     DROP TABLE distributed_mx_table;
 $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
  $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT citus_drop_all_shards('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT master_remove_partition_metadata('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
 $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 -- make sure that we can drop unrelated tables/sequences
 CREATE TABLE unrelated_table(key serial);
 DROP TABLE unrelated_table;
@@ -362,12 +358,12 @@ SELECT raise_failed_aclcheck($$
     DROP TABLE distributed_mx_table;
 $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT master_remove_distributed_table_metadata_from_workers('distributed_mx_table'::regclass, 'public', 'distributed_mx_table');
  $$);
 ERROR:  must be owner of the object
-CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function raise_failed_aclcheck(text) line XX at RAISE
 SELECT raise_failed_aclcheck($$
     SELECT master_drop_sequences(ARRAY['public.distributed_mx_table_some_val_seq']);
 $$);

@@ -11,23 +11,21 @@
  */
 
 #include "postgres.h"
-#include "funcapi.h"
-#include "libpq-fe.h"
-#include "miscadmin.h"
-
 
 #include "access/htup_details.h"
 #include "catalog/pg_type.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/remote_commands.h"
-#include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
+#include "funcapi.h"
 #include "lib/stringinfo.h"
+#include "libpq-fe.h"
+#include "miscadmin.h"
 #include "utils/builtins.h"
-
-#include "distributed/multi_client_executor.h"
 
 
 PG_FUNCTION_INFO_V1(master_run_on_worker);
@@ -71,13 +69,13 @@ static Tuplestorestate * CreateTupleStore(TupleDesc tupleDescriptor,
 Datum
 master_run_on_worker(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	bool parallelExecution = false;
 	StringInfo *nodeNameArray = NULL;
 	int *nodePortArray = NULL;
 	StringInfo *commandStringArray = NULL;
-
-	CheckCitusVersion(ERROR);
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (!rsinfo || !(rsinfo->allowedModes & SFRM_Materialize))
@@ -206,7 +204,7 @@ ParseCommandParameters(FunctionCallInfo fcinfo, StringInfo **nodeNameArray,
 
 
 /*
- * ExecuteCommandsInParellelAndStoreResults connects to each node specified in
+ * ExecuteCommandsInParallelAndStoreResults connects to each node specified in
  * nodeNameArray and nodePortArray, and executes command in commandStringArray
  * in parallel fashion. Execution success status and result is reported for
  * each command in statusArray and resultStringArray. Each array contains
@@ -559,8 +557,5 @@ CreateTupleStore(TupleDesc tupleDescriptor,
 		pfree(nodeNameText);
 		pfree(resultText);
 	}
-
-	tuplestore_donestoring(tupleStore);
-
 	return tupleStore;
 }

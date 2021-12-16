@@ -1,3 +1,398 @@
+### citus v10.2.3 (November 29, 2021) ###
+
+* Adds `fix_partition_shard_index_names` udf to fix currently broken
+  partition index names
+
+* Fixes a bug that could break `DROP SCHEMA/EXTENSION` commands when there is
+  a columnar table
+
+* Fixes a bug that could break pg upgrades due to missing `pg_depend` records
+  for columnar table access method
+
+* Fixes a missing `FROM` clause entry error
+
+* Fixes an unexpected error that occurs when writing to a columnar table
+  created in older versions
+
+* Fixes issue when compiling Citus from source with some compilers
+
+* Reinstates optimisation for uniform shard interval ranges
+
+* Relaxes table ownership check to privileges check while acquiring lock
+
+### citus v10.0.6 (November 12, 2021) ###
+
+* Adds missing version checks for columnar tables
+
+* Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
+
+* Fixes a bug with local cached plans on tables with dropped columns
+
+* Fixes a missing `FROM` clause entry error
+
+* Fixes a use after free issue that could happen when altering a distributed
+  table
+
+* Reinstates optimisation for uniform shard interval ranges
+
+### citus v9.5.10 (November 8, 2021) ###
+
+* Fixes a release problem in 9.5.9
+
+### citus v9.5.9 (November 8, 2021) ###
+
+* Fixes a bug preventing `INSERT SELECT .. ON CONFLICT` with a constraint name
+  on local shards
+
+* Fixes a bug with local cached plans on tables with dropped columns
+
+* Fixes a crash in queries with a modifying `CTE` and a `SELECT`
+  without `FROM`
+
+* Fixes a missing `FROM` clause entry error
+
+* Fixes a missing intermediate result when coordinator is in metadata
+
+* Reinstates optimisation for uniform shard interval ranges
+
+### citus v9.2.8 (November 4, 2021) ###
+
+* Adds a configure flag to enforce security
+
+### citus v9.2.7 (November 3, 2021) ###
+
+* Fixes `ALTER TABLE IF EXISTS SET SCHEMA` with non-existing table bug
+
+* Fixes `CREATE INDEX CONCURRENTLY` with no index name on a postgres table bug
+
+* Fixes a bug that could cause crashes with certain compile flags
+
+* Fixes a crash because of overflow in partition id with certain compile flags
+
+* Fixes a memory leak in subtransaction memory handling
+
+* Fixes deparsing for queries with anonymous column references
+
+### citus v10.2.2 (October 14, 2021) ###
+
+* Fixes a bug that causes reading columnar metapage as all-zeros when
+  writing to a columnar table
+
+* Fixes a bug that could cause prerequisite columnar table access method
+  objects being not created during pg upgrades
+
+* Fixes a bug that could cause `CREATE INDEX` to fail for expressions when
+  using custom `search_path`
+
+* Fixes an unexpected error that occurs due to aborted writes to a columnar
+  table with an index
+
+### citus v10.2.1 (September 24, 2021) ###
+
+* Adds missing version-mismatch checks for columnar tables
+
+* Adds missing version-mismatch checks for internal functions
+
+* Fixes a bug that could cause partition shards being not co-located with
+  parent shards
+
+* Fixes a bug that prevents pushing down boolean expressions when using
+  columnar custom scan
+
+* Fixes a clog lookup failure that could occur when writing to a columnar table
+
+* Fixes an issue that could cause unexpected errors when there is an
+  in-progress write to a columnar table
+
+* Revokes read access to `columnar.chunk` from unprivileged user
+
+### citus v10.1.3 (September 17, 2021) ###
+
+* Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
+
+* Fixes a crash in shard rebalancer when no distributed tables exist
+
+* Fixes a use after free issue that could happen when altering a distributed
+  table
+
+### citus v9.5.8 (September 15, 2021) ###
+
+* Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
+
+* Fixes a use after free issue that could happen when altering a distributed
+  table
+
+### citus v10.2.0 (September 14, 2021) ###
+
+* Adds PostgreSQL 14 support
+
+* Adds hash & btree index support for columnar tables
+
+* Adds helper UDFs for easy time partition management:
+  `get_missing_time_partition_ranges`, `create_time_partitions`, and
+  `drop_old_time_partitions`
+
+* Adds propagation of ALTER SEQUENCE
+
+* Adds support for ALTER INDEX ATTACH PARTITION
+
+* Adds support for CREATE INDEX ON ONLY
+
+* Allows more graceful failovers when replication factor > 1
+
+* Enables chunk group filtering to work with Params for columnar tables
+
+* Enables qual push down for joins including columnar tables
+
+* Enables transferring of data using binary encoding by default on PG14
+
+* Improves `master_update_table_statistics` and provides distributed deadlock
+  detection
+
+* Includes `data_type` and `cache` in sequence definition on worker
+
+* Makes start/stop_metadata_sync_to_node() transactional
+
+* Makes sure that table exists before updating table statistics
+
+* Prevents errors with concurrent `citus_update_table_statistics` and DROP table
+
+* Reduces memory usage of columnar table scans by freeing the memory used for
+  last stripe read
+
+* Shows projected columns for columnar tables in EXPLAIN output
+
+* Speeds up dropping partitioned tables
+
+* Synchronizes hasmetadata flag on mx workers
+
+* Uses current user while syncing metadata
+
+* Adds a parameter to cleanup metadata when metadata syncing is stopped
+
+* Fixes a bug about int and smallint sequences on MX
+
+* Fixes a bug that cause partitions to have wrong distribution key after
+  DROP COLUMN
+
+* Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
+
+* Fixes a bug that caused `worker_create_or_alter_role` to crash with NULL input
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes a bug that may cause crash while aborting transaction
+
+* Fixes a bug that prevents attaching partitions when colocated foreign key
+  exists
+
+* Fixes a bug with `nextval('seq_name'::text)`
+
+* Fixes a crash in shard rebalancer when no distributed tables exist
+
+* Fixes a segfault caused by use after free in when using a cached connection
+
+* Fixes a UNION pushdown issue
+
+* Fixes a use after free issue that could happen when altering a distributed
+  table
+
+* Fixes showing target shard size in the rebalance progress monitor
+
+### citus v10.1.2 (August 16, 2021) ###
+
+* Allows more graceful failovers when replication factor > 1
+
+* Fixes a bug that causes partitions to have wrong distribution key after
+  `DROP COLUMN`
+
+### citus v10.0.5 (August 16, 2021) ###
+
+* Allows more graceful failovers when replication factor > 1
+
+* Fixes a bug that causes partitions to have wrong distribution key after
+  `DROP COLUMN`
+
+* Improves citus_update_table_statistics and provides distributed deadlock
+  detection
+
+### citus v9.5.7 (August 16, 2021) ###
+
+* Allows more graceful failovers when replication factor > 1
+
+* Fixes a bug that causes partitions to have wrong distribution key after
+  `DROP COLUMN`
+
+* Improves master_update_table_statistics and provides distributed deadlock
+  detection
+
+### citus v9.4.6 (August 8, 2021) ###
+
+* Allows more graceful failovers when replication factor > 1
+
+* Improves master_update_table_statistics and provides distributed deadlock
+  detection
+
+### citus v10.1.1 (August 5, 2021) ###
+
+* Improves citus_update_table_statistics and provides distributed deadlock
+  detection
+
+* Fixes showing target shard size in the rebalance progress monitor
+
+### citus v10.1.0 (July 14, 2021) ###
+
+* Drops support for PostgreSQL 11
+
+* Adds `shard_count` parameter to `create_distributed_table` function
+
+* Adds support for `ALTER DATABASE OWNER`
+
+* Adds support for temporary columnar tables
+
+* Adds support for using sequences as column default values when syncing
+  metadata
+
+* `alter_columnar_table_set` enforces columnar table option constraints
+
+* Continues to remove shards after failure in `DropMarkedShards`
+
+* Deprecates the `citus.replication_model` GUC
+
+* Enables `citus.defer_drop_after_shard_move` by default
+
+* Ensures free disk space before moving a shard
+
+* Fetches shard size on the fly for the rebalance monitor
+
+* Ignores old placements when disabling or removing a node
+
+* Implements `improvement_threshold` at shard rebalancer moves
+
+* Improves orphaned shard cleanup logic
+
+* Improves performance of `citus_shards`
+
+* Introduces `citus.local_hostname` GUC for connections to the current node
+
+* Makes sure connection is closed after each shard move
+
+* Makes sure that target node in shard moves is eligible for shard move
+
+* Optimizes partitioned disk size calculation for shard rebalancer
+
+* Prevents connection errors by properly terminating connections
+
+* Prevents inheriting a distributed table
+
+* Prevents users from dropping & truncating known shards
+
+* Pushes down `VALUES` clause as long as not in outer part of a `JOIN`
+
+* Reduces memory usage for multi-row inserts
+
+* Reduces memory usage while rebalancing shards
+
+* Removes length limits around partition names
+
+* Removes dependencies on the existence of public schema
+
+* Executor avoids opening extra connections
+
+* Excludes orphaned shards while finding shard placements
+
+* Preserves access method of materialized views when undistributing
+  or altering distributed tables
+
+* Fixes a bug that allowed moving of shards belonging to a reference table
+
+* Fixes a bug that can cause a crash when DEBUG4 logging is enabled
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes a bug that causes worker_create_or_alter_role to crash with NULL input
+
+* Fixes a bug where foreign key to reference table was disallowed
+
+* Fixes a bug with local cached plans on tables with dropped columns
+
+* Fixes data race in `get_rebalance_progress`
+
+* Fixes `FROM ONLY` queries on partitioned tables
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes error message for local table joins
+
+* Fixes issues caused by omitting public schema in queries
+
+* Fixes nested `SELECT` query with `UNION` bug
+
+* Fixes null relationName bug at parallel execution
+
+* Fixes possible segfaults when using Citus in the middle of an upgrade
+
+* Fixes problems with concurrent calls of `DropMarkedShards`
+
+* Fixes shared dependencies that are not resident in a database
+
+* Fixes stale hostnames bug in prepared statements after `master_update_node`
+
+* Fixes the relation size bug during rebalancing
+
+* Fixes two race conditions in the get_rebalance_progress
+
+* Fixes using 2PC when it might be necessary
+
+### citus v10.0.4 (July 14, 2021) ###
+
+* Introduces `citus.local_hostname` GUC for connections to the current node
+
+* Removes dependencies on the existence of public schema
+
+* Removes limits around long partition names
+
+* Fixes a bug that can cause a crash when DEBUG4 logging is enabled
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+* Fixes FROM ONLY queries on partitioned tables
+
+* Fixes issues caused by public schema being omitted in queries
+
+* Fixes problems with concurrent calls of DropMarkedShards
+
+* Fixes relname null bug when using parallel execution
+
+* Fixes two race conditions in the get_rebalance_progress
+
+### citus v9.5.6 (July 8, 2021) ###
+
+* Fixes minor bug in `citus_prepare_pg_upgrade` that caused it to lose its
+  idempotency
+
+### citus v9.5.5 (July 7, 2021) ###
+
+* Adds a configure flag to enforce security
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
+### citus v9.4.5 (July 7, 2021) ###
+
+* Adds a configure flag to enforce security
+
+* Avoids re-using connections for intermediate results
+
+* Fixes a bug that causes pruning incorrect shard of a range distributed table
+
+* Fixes a bug that might cause self-deadlocks when COPY used in TX block
+
+* Fixes an issue that could cause citus_finish_pg_upgrade to fail
+
 ### citus v8.3.3 (March 23, 2021) ###
 
 * Fixes a bug that leads to various issues when a connection is lost

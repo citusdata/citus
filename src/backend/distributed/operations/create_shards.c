@@ -64,6 +64,9 @@ PG_FUNCTION_INFO_V1(master_create_worker_shards);
 Datum
 master_create_worker_shards(PG_FUNCTION_ARGS)
 {
+	CheckCitusVersion(ERROR);
+	EnsureCoordinator();
+
 	text *tableNameText = PG_GETARG_TEXT_P(0);
 	int32 shardCount = PG_GETARG_INT32(1);
 	int32 replicationFactor = PG_GETARG_INT32(2);
@@ -73,9 +76,6 @@ master_create_worker_shards(PG_FUNCTION_ARGS)
 
 	/* do not add any data */
 	bool useExclusiveConnections = false;
-
-	EnsureCoordinator();
-	CheckCitusVersion(ERROR);
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create
@@ -287,7 +287,8 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		int32 shardMaxValue = DatumGetInt32(sourceShardInterval->maxValue);
 		text *shardMinValueText = IntegerToText(shardMinValue);
 		text *shardMaxValueText = IntegerToText(shardMaxValue);
-		List *sourceShardPlacementList = ShardPlacementList(sourceShardId);
+		List *sourceShardPlacementList = ShardPlacementListWithoutOrphanedPlacements(
+			sourceShardId);
 
 		InsertShardRow(targetRelationId, newShardId, targetShardStorageType,
 					   shardMinValueText, shardMaxValueText);
@@ -295,11 +296,6 @@ CreateColocatedShards(Oid targetRelationId, Oid sourceRelationId, bool
 		ShardPlacement *sourcePlacement = NULL;
 		foreach_ptr(sourcePlacement, sourceShardPlacementList)
 		{
-			if (sourcePlacement->shardState == SHARD_STATE_TO_DELETE)
-			{
-				continue;
-			}
-
 			int32 groupId = sourcePlacement->groupId;
 			const ShardState shardState = SHARD_STATE_ACTIVE;
 			const uint64 shardSize = 0;

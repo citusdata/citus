@@ -1,6 +1,8 @@
 --
 -- Testing insert on columnar tables.
 --
+CREATE SCHEMA columnar_insert;
+SET search_path TO columnar_insert;
 CREATE TABLE test_insert_command (a int) USING columnar;
 -- test single row inserts fail
 select count(*) from test_insert_command;
@@ -43,6 +45,14 @@ select count(*) from test_insert_command;
  count
 ---------------------------------------------------------------------
      3
+(1 row)
+
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('test_insert_command');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  4 |              450001
 (1 row)
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
@@ -141,6 +151,14 @@ FROM test_toast_columnar;
            5004 |           5004 |           5004 |           5004
 (1 row)
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('test_toast_columnar');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  2 |              150001
+(1 row)
+
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
  consistent
 ---------------------------------------------------------------------
@@ -153,7 +171,7 @@ DROP TABLE test_toast_columnar;
 -- We support writing into zero column tables, but not reading from them.
 -- We test that metadata makes sense so we can fix the read path in future.
 CREATE TABLE zero_col() USING columnar;
-SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 10);
+SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 1000);
  alter_columnar_table_set
 ---------------------------------------------------------------------
 
@@ -173,6 +191,14 @@ INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('zero_col');
+ version_major | version_minor | reserved_stripe_id | reserved_row_number
+---------------------------------------------------------------------
+             2 |             0 |                  6 |              750001
+(1 row)
+
 SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b
 WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
@@ -182,7 +208,7 @@ ORDER BY 1,2,3,4;
  zero_col |          2 |                 1 |         1
  zero_col |          3 |                 1 |         1
  zero_col |          4 |                 1 |         1
- zero_col |          5 |                 7 |        64
+ zero_col |          5 |                 1 |        64
 (5 rows)
 
 SELECT relname, stripe_num, value_count FROM columnar.chunk a, pg_class b
@@ -201,13 +227,84 @@ ORDER BY 1,2,3,4;
  zero_col |          2 |               0 |         1
  zero_col |          3 |               0 |         1
  zero_col |          4 |               0 |         1
- zero_col |          5 |               0 |        10
- zero_col |          5 |               1 |        10
- zero_col |          5 |               2 |        10
- zero_col |          5 |               3 |        10
- zero_col |          5 |               4 |        10
- zero_col |          5 |               5 |        10
- zero_col |          5 |               6 |         4
-(11 rows)
+ zero_col |          5 |               0 |        64
+(5 rows)
 
-DROP TABLE zero_col;
+CREATE TABLE selfinsert(x int) USING columnar;
+SELECT alter_columnar_table_set('selfinsert', stripe_row_limit => 1000);
+ alter_columnar_table_set
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+  INSERT INTO selfinsert SELECT generate_series(1,1010);
+  INSERT INTO selfinsert SELECT * FROM selfinsert;
+  SELECT SUM(x)=1021110 FROM selfinsert;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+  INSERT INTO selfinsert SELECT generate_series(1,1010);
+  INSERT INTO selfinsert SELECT * FROM selfinsert;
+  SELECT SUM(x)=1021110 FROM selfinsert;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+ROLLBACK;
+INSERT INTO selfinsert SELECT generate_series(1,1010);
+INSERT INTO selfinsert SELECT * FROM selfinsert;
+SELECT SUM(x)=1021110 FROM selfinsert;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CREATE TABLE selfconflict (f1 int PRIMARY KEY, f2 int) USING columnar;
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+  INSERT INTO selfconflict VALUES (2,1), (2,2);
+ERROR:  duplicate key value violates unique constraint "selfconflict_pkey"
+DETAIL:  Key (f1)=(2) already exists.
+COMMIT;
+SELECT COUNT(*)=0 FROM selfconflict;
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
+CREATE TABLE flush_create_index(a int, b int) USING columnar;
+BEGIN;
+  INSERT INTO flush_create_index VALUES (5, 10);
+  SET enable_seqscan TO OFF;
+  SET columnar.enable_custom_scan TO OFF;
+  SET enable_indexscan TO ON;
+  CREATE INDEX ON flush_create_index(a);
+  SELECT a FROM flush_create_index WHERE a=5;
+ a
+---------------------------------------------------------------------
+ 5
+(1 row)
+
+ROLLBACK;
+CREATE OR REPLACE FUNCTION test_columnar_storage_write_new_page(relation regclass) RETURNS void
+STRICT LANGUAGE c AS 'citus', 'test_columnar_storage_write_new_page';
+CREATE TABLE aborted_write (a int, b int) USING columnar;
+SELECT test_columnar_storage_write_new_page('aborted_write');
+ test_columnar_storage_write_new_page
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO DEBUG4;
+INSERT INTO aborted_write VALUES (5);
+DEBUG:  Flushing Stripe of size 1
+DEBUG:  overwriting page 2
+DETAIL:  This can happen after a roll-back.
+RESET search_path;
+SET client_min_messages TO WARNING;
+DROP SCHEMA columnar_insert CASCADE;

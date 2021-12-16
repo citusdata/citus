@@ -1,0 +1,368 @@
+# ----------
+# $Id$
+#
+# Regression tests that exercise distributed planning/execution functionality.
+#
+# All new regression tests are expected to be run by this schedule. Tests that
+# do not set specific task executor type should also be added to
+# multi_task_tracker_extra_schedule.
+#
+# Note that we use variant comparison files to test version dependent regression
+# test results. For more information:
+# http://www.postgresql.org/docs/current/static/regress-variant.html
+# ----------
+
+# ---
+# Tests around schema changes, these are run first, so there's no preexisting objects.
+# ---
+test: multi_extension
+test: turn_mx_off
+test: single_node
+test: single_node_truncate
+test: turn_mx_on
+test: multi_test_helpers multi_test_helpers_superuser
+test: multi_cluster_management
+
+# below tests are placed right after multi_cluster_management as we do
+# remove/add node operations and we do not want any preexisting objects
+test: non_super_user_object_metadata
+test: alter_role_propagation
+test: propagate_extension_commands
+test: escape_extension_name
+test: ref_citus_local_fkeys
+test: alter_database_owner
+
+test: multi_test_catalog_views
+test: multi_table_ddl
+test: check_mx
+test: turn_mx_off
+test: multi_sequence_default
+test: multi_name_lengths
+test: turn_mx_on
+test: multi_name_resolution
+test: multi_metadata_access
+test: multi_metadata_attributes
+
+test: multi_read_from_secondaries
+
+# ----------
+# multi_citus_tools tests utility functions written for citus tools
+# ----------
+test: check_mx
+test: turn_mx_off
+test: multi_citus_tools
+
+# ----------
+# multi_replicate_reference_table tests replicating reference tables to new nodes after we add new nodes
+# multi_remove_node_reference_table tests metadata changes after master_remove_node
+# ----------
+test: multi_replicate_reference_table
+test: turn_mx_on
+test: multi_remove_node_reference_table
+
+# ----------
+# The following distributed tests depend on creating a partitioned table and
+# uploading data to it.
+# ----------
+test: multi_create_table
+test: multi_create_table_superuser
+test: multi_create_table_constraints multi_master_protocol multi_load_data multi_load_data_superuser multi_behavioral_analytics_create_table
+test: multi_behavioral_analytics_basics multi_behavioral_analytics_single_shard_queries multi_insert_select_non_pushable_queries multi_insert_select multi_behavioral_analytics_create_table_superuser
+test: multi_shard_update_delete recursive_dml_with_different_planners_executors
+test: insert_select_repartition window_functions dml_recursive multi_insert_select_window
+test: multi_insert_select_conflict citus_table_triggers
+test: multi_row_insert insert_select_into_local_table multi_create_table_new_features alter_index
+
+# following should not run in parallel because it relies on connection counts to workers
+test: insert_select_connection_leak
+
+test: check_mx
+# ---------
+# at the end of the regression tests regarding recursively planned modifications
+# ensure that we don't leak any intermediate results
+# This test should not run in parallel with any other tests
+# ---------
+test: ensure_no_intermediate_data_leak
+
+# ----------
+# Tests for partitioning support
+# ----------
+test: multi_partitioning_utils replicated_partitioned_table
+test: multi_partitioning partitioning_issue_3970
+test: drop_partitioned_table
+test: multi_fix_partition_shard_index_names
+test: partition_wise_join
+
+# ----------
+# Tests for foreign data wrapper support
+# ----------
+test: multi_create_fdw
+
+
+
+# ----------
+# Tests for statistics propagation
+# ----------
+test: propagate_statistics
+test: pg13_propagate_statistics
+
+# ----------
+# Test for updating table statistics
+# ----------
+test: citus_update_table_statistics
+
+# ----------
+# Parallel TPC-H tests to check our distributed execution behavior
+# ----------
+test: multi_tpch_query1 multi_tpch_query3 multi_tpch_query6 multi_tpch_query10
+test: multi_tpch_query12 multi_tpch_query14 multi_tpch_query19
+test: multi_tpch_query7 multi_tpch_query7_nested
+
+# ----------
+# Parallel tests to check our join order planning logic. Note that we load data
+# below; and therefore these tests should come after the execution tests.
+# ----------
+test: multi_join_order_tpch_small multi_join_order_additional
+test: multi_load_more_data
+test: multi_join_order_tpch_repartition
+
+# ----------
+# Tests for repartition join planning and execution. Be careful when creating
+# new shards before these tests, as they expect specific shard identifiers in
+# the output.
+# ----------
+test: multi_repartition_join_planning multi_repartition_join_pruning multi_repartition_join_task_assignment multi_repartition_join_ref
+test: adaptive_executor_repartition
+
+# ---------
+# Tests that modify data should run sequentially
+# ---------
+test: with_prepare
+
+# ---------
+# Tests for recursive planning.
+# ---------
+test: with_nested with_where with_basics with_set_operations
+test: with_modifying cte_prepared_modify cte_nested_modification
+test: ensure_no_intermediate_data_leak
+test: with_executors with_join with_partitioning with_transactions with_dml
+
+# ----------
+# Tests around DDL statements run on distributed tables
+# ----------
+test: multi_index_statements
+test: multi_alter_table_statements
+test: multi_alter_table_add_constraints
+
+# ----------
+# Tests to check if we inform the user about potential caveats of creating new
+# databases, schemas, roles, and authentication information.
+# ----------
+test: multi_utility_warnings data_types
+
+# ----------
+# Tests to check the sequential and parallel executions of DDL and modification
+# commands
+# Should not be executed in parallel with other tests
+# ----------
+test: sequential_modifications
+
+# ---------
+# multi_outer_join loads data to create shards to test outer join mappings
+# ---------
+test: multi_outer_join
+
+# ---
+# Tests covering mostly modification queries and required preliminary
+# functionality related to metadata, shard creation, shard pruning and
+# "hacky" copy script for hash partitioned tables.
+# Note that the order of the following tests are important. multi_complex_count_distinct
+# is independent from the rest of the group, it is added to increase parallelism.
+# ---
+test: multi_complex_count_distinct multi_select_distinct
+test: multi_modifications
+test: multi_distribution_metadata
+test: multi_prune_shard_list
+test: multi_upsert multi_simple_queries multi_data_types
+test: master_copy_shard_placement
+# multi_utilities cannot be run in parallel with other tests because it checks
+# global locks
+test: multi_utilities
+test: foreign_key_to_reference_table validate_constraint
+test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
+
+test: multi_modifying_xacts
+test: check_mx
+test: turn_mx_off
+test: multi_generate_ddl_commands multi_repair_shards
+test: multi_create_shards
+test: multi_transaction_recovery
+test: turn_mx_on
+
+test: local_dist_join_modifications
+test: local_table_join
+test: local_dist_join_mixed
+test: citus_local_dist_joins
+
+# ---------
+# multi_copy creates hash and range-partitioned tables and performs COPY
+# multi_router_planner creates hash partitioned tables.
+# ---------
+test: multi_copy fast_path_router_modify pg_dump
+test: multi_router_planner
+# These 2 tests have prepared statements which sometimes get invalidated by concurrent tests,
+# changing the debug output. We should not run them in parallel with others
+test: null_parameters
+test: multi_router_planner_fast_path
+
+# ----------
+# multi_large_shardid loads more lineitem data using high shard identifiers
+# ----------
+test: multi_large_shardid
+
+# ----------
+#  multi_size_queries tests various size commands on distributed tables
+# ----------
+test: multi_size_queries
+
+# ----------
+# multi_drop_extension makes sure we can safely drop and recreate the extension
+# ----------
+test: multi_drop_extension
+
+# ----------
+# multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers
+# multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
+# ----------
+test: check_mx
+test: turn_mx_off
+test: multi_metadata_sync
+test: turn_mx_on
+test: multi_unsupported_worker_operations
+
+# ----------
+# grant_on_schema_propagation tests if the GRANT ... ON SCHEMA queries are propagated correctly
+# multi_schema_support makes sure we can work with tables in schemas other than public with no problem
+# ----------
+test: grant_on_schema_propagation
+test: multi_schema_support
+
+# ----------
+# multi_function_evaluation tests edge-cases in master-side function pre-evaluation
+# ----------
+test: check_mx
+test: turn_mx_off
+test: multi_function_evaluation
+
+# ----------
+# multi_truncate tests truncate functionality for distributed tables
+# ----------
+test: multi_truncate
+
+# ----------
+# multi_colocation_utils tests utility functions written for co-location feature & internal API
+# multi_colocated_shard_transfer tests master_copy_shard_placement with colocated tables.
+# ----------
+test: multi_colocation_utils
+test: turn_mx_on
+test: multi_colocated_shard_transfer
+
+# ----------
+# node_conninfo_reload tests that node_conninfo changes take effect
+# ----------
+test: node_conninfo_reload
+
+# ----------
+# multi_foreign_key tests foreign key push down on distributed tables
+# ----------
+test: multi_foreign_key
+test: multi_foreign_key_relation_graph
+
+# --------
+# Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
+# and rerun some of the tests.
+# --------
+test: check_mx
+test: turn_mx_off
+test: add_coordinator
+test: foreign_key_to_reference_table
+test: replicate_reference_tables_to_coordinator
+test: citus_local_tables
+test: multi_row_router_insert mixed_relkind_tests
+test: turn_mx_on
+test: multi_reference_table citus_local_tables_queries
+test: citus_local_table_triggers
+test: coordinator_shouldhaveshards
+test: local_shard_utility_command_execution
+test: create_ref_dist_from_citus_local
+test: undistribute_table_cascade
+test: create_citus_local_table_cascade
+test: fkeys_between_local_ref
+test: auto_undist_citus_local
+test: mx_regular_user
+test: remove_coordinator
+
+# ----------
+# multi_transactional_drop_shards tests for dropping shards using connection API
+# ----------
+test: multi_transactional_drop_shards
+
+# ----------
+# multi_multiuser tests simple combinations of permission access and queries
+# ----------
+test: multi_multiuser
+
+# ---------
+# multi_cache_invalidation tests for an obscure crash citus used to exhibit when shardids
+# changed the table they belonged to during a session
+# --------
+test: multi_cache_invalidation
+
+# ---------
+# multi_task_string_size tests task string size checks
+# ---------
+test: multi_task_string_size
+
+# ---------
+# connection encryption tests
+# ---------
+test: ssl_by_default
+
+# ---------
+# object distribution tests
+# ---------
+test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
+test: check_mx
+test: distributed_functions distributed_functions_conflict
+test: distributed_collations distributed_collations_conflict
+test: distributed_procedure
+test: turn_mx_on
+
+# ---------
+# deparsing logic tests
+# ---------
+test: multi_deparse_function multi_deparse_procedure
+
+# --------
+# cannot be run in parallel with any other tests as it checks
+# statistics across sessions
+# --------
+test: shared_connection_stats
+
+# ---------
+# run queries generated by sql smith and sqlancer that caused issues in the past
+# --------
+test: sqlsmith_failures sqlancer_failures
+
+# ---------
+# test that no tests leaked intermediate results. This should always be last
+# ---------
+test: ensure_no_intermediate_data_leak
+
+# ---------
+# ensures that we never leak any connection counts
+# in the shared memory
+# --------
+test: ensure_no_shared_connection_leak
+
+test: check_mx

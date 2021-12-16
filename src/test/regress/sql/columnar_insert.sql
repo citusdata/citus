@@ -2,6 +2,9 @@
 -- Testing insert on columnar tables.
 --
 
+CREATE SCHEMA columnar_insert;
+SET search_path TO columnar_insert;
+
 CREATE TABLE test_insert_command (a int) USING columnar;
 
 -- test single row inserts fail
@@ -21,6 +24,10 @@ select count(*) from test_insert_command_data;
 
 insert into test_insert_command select * from test_insert_command_data;
 select count(*) from test_insert_command;
+
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('test_insert_command');
 
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
@@ -99,6 +106,10 @@ SELECT
   pg_column_size(external), pg_column_size(extended)
 FROM test_toast_columnar;
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('test_toast_columnar');
+
 SELECT * FROM columnar_test_helpers.chunk_group_consistency;
 
 DROP TABLE test_toast_row;
@@ -108,7 +119,7 @@ DROP TABLE test_toast_columnar;
 -- We support writing into zero column tables, but not reading from them.
 -- We test that metadata makes sense so we can fix the read path in future.
 CREATE TABLE zero_col() USING columnar;
-SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 10);
+SELECT alter_columnar_table_set('zero_col', chunk_group_row_limit => 1000);
 
 INSERT INTO zero_col DEFAULT VALUES;
 INSERT INTO zero_col DEFAULT VALUES;
@@ -128,6 +139,10 @@ INSERT INTO zero_col_heap SELECT * FROM zero_col_heap;
 
 INSERT INTO zero_col SELECT * FROM zero_col_heap;
 
+select
+  version_major, version_minor, reserved_stripe_id, reserved_row_number
+  from columnar_test_helpers.columnar_storage_info('zero_col');
+
 SELECT relname, stripe_num, chunk_group_count, row_count FROM columnar.stripe a, pg_class b
 WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
@@ -140,4 +155,61 @@ SELECT relname, stripe_num, chunk_group_num, row_count FROM columnar.chunk_group
 WHERE columnar_test_helpers.columnar_relation_storageid(b.oid)=a.storage_id AND relname = 'zero_col'
 ORDER BY 1,2,3,4;
 
-DROP TABLE zero_col;
+CREATE TABLE selfinsert(x int) USING columnar;
+
+SELECT alter_columnar_table_set('selfinsert', stripe_row_limit => 1000);
+
+BEGIN;
+  INSERT INTO selfinsert SELECT generate_series(1,1010);
+  INSERT INTO selfinsert SELECT * FROM selfinsert;
+
+  SELECT SUM(x)=1021110 FROM selfinsert;
+ROLLBACK;
+
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+  INSERT INTO selfinsert SELECT generate_series(1,1010);
+  INSERT INTO selfinsert SELECT * FROM selfinsert;
+
+  SELECT SUM(x)=1021110 FROM selfinsert;
+ROLLBACK;
+
+INSERT INTO selfinsert SELECT generate_series(1,1010);
+INSERT INTO selfinsert SELECT * FROM selfinsert;
+
+SELECT SUM(x)=1021110 FROM selfinsert;
+
+CREATE TABLE selfconflict (f1 int PRIMARY KEY, f2 int) USING columnar;
+
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+  INSERT INTO selfconflict VALUES (2,1), (2,2);
+COMMIT;
+
+SELECT COUNT(*)=0 FROM selfconflict;
+
+CREATE TABLE flush_create_index(a int, b int) USING columnar;
+BEGIN;
+  INSERT INTO flush_create_index VALUES (5, 10);
+
+  SET enable_seqscan TO OFF;
+  SET columnar.enable_custom_scan TO OFF;
+  SET enable_indexscan TO ON;
+
+  CREATE INDEX ON flush_create_index(a);
+
+  SELECT a FROM flush_create_index WHERE a=5;
+ROLLBACK;
+
+CREATE OR REPLACE FUNCTION test_columnar_storage_write_new_page(relation regclass) RETURNS void
+STRICT LANGUAGE c AS 'citus', 'test_columnar_storage_write_new_page';
+
+CREATE TABLE aborted_write (a int, b int) USING columnar;
+
+SELECT test_columnar_storage_write_new_page('aborted_write');
+
+SET client_min_messages TO DEBUG4;
+INSERT INTO aborted_write VALUES (5);
+
+RESET search_path;
+SET client_min_messages TO WARNING;
+DROP SCHEMA columnar_insert CASCADE;
+

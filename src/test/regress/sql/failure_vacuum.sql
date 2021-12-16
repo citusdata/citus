@@ -8,7 +8,6 @@ SELECT citus.mitmproxy('conn.allow()');
 
 SET citus.shard_count = 1;
 SET citus.shard_replication_factor = 2; -- one shard per worker
-SET citus.multi_shard_commit_protocol TO '1pc';
 
 CREATE TABLE vacuum_test (key int, value int);
 SELECT create_distributed_table('vacuum_test', 'key');
@@ -24,15 +23,13 @@ ANALYZE vacuum_test;
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 ANALYZE vacuum_test;
 
+SELECT citus.mitmproxy('conn.allow()');
+SELECT recover_prepared_transactions();
+
 -- ANALYZE transactions being critical is an open question, see #2430
--- show that we marked as INVALID on COMMIT FAILURE
+-- show that we never mark as INVALID on COMMIT FAILURE
 SELECT shardid, shardstate FROM pg_dist_shard_placement where shardstate != 1 AND
 shardid in ( SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass);
-
-UPDATE pg_dist_shard_placement SET shardstate = 1
-WHERE shardid IN (
-  SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'vacuum_test'::regclass
-);
 
 -- the same tests with cancel
 SELECT citus.mitmproxy('conn.onQuery(query="^VACUUM").cancel(' ||  pg_backend_pid() || ')');

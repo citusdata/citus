@@ -59,6 +59,12 @@ typedef struct AttributeEquivalenceClass
 	Index unionQueryPartitionKeyIndex;
 } AttributeEquivalenceClass;
 
+typedef struct FindQueryContainingRteIdentityContext
+{
+	int targetRTEIdentity;
+	Query *query;
+}FindQueryContainingRteIdentityContext;
+
 /*
  *  AttributeEquivalenceClassMember - one member expression of an
  *  AttributeEquivalenceClass. The important thing to consider is that
@@ -79,6 +85,7 @@ typedef struct AttributeEquivalenceClassMember
 
 
 static bool ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext);
+static bool ContextContainsAppendRelation(RelationRestrictionContext *restrictionContext);
 static int RangeTableOffsetCompat(PlannerInfo *root, AppendRelInfo *appendRelInfo);
 static Var * FindUnionAllVar(PlannerInfo *root, List *translatedVars, Oid relationOid,
 							 Index relationRteIndex, Index *partitionKeyIndex);
@@ -142,8 +149,8 @@ static void ListConcatUniqueAttributeClassMemberLists(AttributeEquivalenceClass 
 													  firstClass,
 													  AttributeEquivalenceClass *
 													  secondClass);
-static Index RelationRestrictionPartitionKeyIndex(RelationRestriction *
-												  relationRestriction);
+static Var * PartitionKeyForRTEIdentityInQuery(Query *query, int targetRTEIndex,
+											   Index *partitionKeyIndex);
 static bool AllRelationsInRestrictionContextColocated(RelationRestrictionContext *
 													  restrictionContext);
 static bool IsNotSafeRestrictionToRecursivelyPlan(Node *node);
@@ -154,6 +161,12 @@ static bool RangeTableArrayContainsAnyRTEIdentities(RangeTblEntry **rangeTableEn
 													rangeTableArrayLength, Relids
 													queryRteIdentities);
 static Relids QueryRteIdentities(Query *queryTree);
+
+static Query * FindQueryContainingRTEIdentity(Query *mainQuery, int rteIndex);
+static bool FindQueryContainingRTEIdentityInternal(Node *node,
+												   FindQueryContainingRteIdentityContext *
+												   context);
+
 
 #if PG_VERSION_NUM >= PG_VERSION_13
 static int ParentCountPriorToAppendRel(List *appendRelList, AppendRelInfo *appendRelInfo);
@@ -194,7 +207,7 @@ AllDistributionKeysInQueryAreEqual(Query *originalQuery,
 
 	if (originalQuery->setOperations || ContainsUnionSubquery(originalQuery))
 	{
-		return SafeToPushdownUnionSubquery(plannerRestrictionContext);
+		return SafeToPushdownUnionSubquery(originalQuery, plannerRestrictionContext);
 	}
 
 	return false;
@@ -225,6 +238,29 @@ ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext)
 
 
 /*
+ * ContextContainsAppendRelation determines whether the given
+ * RelationRestrictionContext contains any append-distributed tables.
+ */
+static bool
+ContextContainsAppendRelation(RelationRestrictionContext *restrictionContext)
+{
+	ListCell *relationRestrictionCell = NULL;
+
+	foreach(relationRestrictionCell, restrictionContext->relationRestrictionList)
+	{
+		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
+
+		if (IsCitusTableType(relationRestriction->relationId, APPEND_DISTRIBUTED))
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
+/*
  * SafeToPushdownUnionSubquery returns true if all the relations are returns
  * partition keys in the same ordinal position and there is no reference table
  * exists.
@@ -244,7 +280,8 @@ ContextContainsLocalRelation(RelationRestrictionContext *restrictionContext)
  * safe to push down, the function would fail to return true.
  */
 bool
-SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext)
+SafeToPushdownUnionSubquery(Query *originalQuery,
+							PlannerRestrictionContext *plannerRestrictionContext)
 {
 	RelationRestrictionContext *restrictionContext =
 		plannerRestrictionContext->relationRestrictionContext;
@@ -267,50 +304,34 @@ SafeToPushdownUnionSubquery(PlannerRestrictionContext *plannerRestrictionContext
 		RelationRestriction *relationRestriction = lfirst(relationRestrictionCell);
 		Index partitionKeyIndex = InvalidAttrNumber;
 		PlannerInfo *relationPlannerRoot = relationRestriction->plannerInfo;
-		List *targetList = relationPlannerRoot->parse->targetList;
-		List *appendRelList = relationPlannerRoot->append_rel_list;
-		Var *varToBeAdded = NULL;
-		TargetEntry *targetEntryToAdd = NULL;
+
+		int targetRTEIndex = GetRTEIdentity(relationRestriction->rte);
+		Var *varToBeAdded =
+			PartitionKeyForRTEIdentityInQuery(originalQuery, targetRTEIndex,
+											  &partitionKeyIndex);
+
+		/* union does not have partition key in the target list */
+		if (partitionKeyIndex == 0)
+		{
+			continue;
+		}
 
 		/*
-		 * We first check whether UNION ALLs are pulled up or not. Note that Postgres
-		 * planner creates AppendRelInfos per each UNION ALL query that is pulled up.
-		 * Then, postgres stores the related information in the append_rel_list on the
-		 * plannerInfo struct.
+		 * This should never happen but to be on the safe side, we have this
 		 */
-		if (appendRelList != NULL)
+		if (relationPlannerRoot->simple_rel_array_size < relationRestriction->index)
 		{
-			varToBeAdded = FindUnionAllVar(relationPlannerRoot,
-										   relationRestriction->translatedVars,
-										   relationRestriction->relationId,
-										   relationRestriction->index,
-										   &partitionKeyIndex);
-
-			/* union does not have partition key in the target list */
-			if (partitionKeyIndex == 0)
-			{
-				continue;
-			}
+			continue;
 		}
-		else
-		{
-			partitionKeyIndex =
-				RelationRestrictionPartitionKeyIndex(relationRestriction);
 
-			/* union does not have partition key in the target list */
-			if (partitionKeyIndex == 0)
-			{
-				continue;
-			}
+		/*
+		 * We update the varno because we use the original parse tree for finding the
+		 * var. However the rest of the code relies on a query tree that might be different
+		 * than the original parse tree because of postgres optimizations.
+		 * That's why we update the varno to reflect the rteIndex in the modified query tree.
+		 */
+		varToBeAdded->varno = relationRestriction->index;
 
-			targetEntryToAdd = list_nth(targetList, partitionKeyIndex - 1);
-			if (!IsA(targetEntryToAdd->expr, Var))
-			{
-				continue;
-			}
-
-			varToBeAdded = (Var *) targetEntryToAdd->expr;
-		}
 
 		/*
 		 * The current relation does not have its partition key in the target list.
@@ -506,6 +527,12 @@ RestrictionEquivalenceForPartitionKeys(PlannerRestrictionContext *restrictionCon
 	{
 		/* there is a single distributed relation, no need to continue */
 		return true;
+	}
+	else if (ContextContainsAppendRelation(
+				 restrictionContext->relationRestrictionContext))
+	{
+		/* we never consider append-distributed tables co-located */
+		return false;
 	}
 
 	List *attributeEquivalenceList = GenerateAllAttributeEquivalences(restrictionContext);
@@ -1756,20 +1783,42 @@ ContainsUnionSubquery(Query *queryTree)
 
 
 /*
- * RelationRestrictionPartitionKeyIndex gets a relation restriction and finds the
- * index that the partition key of the relation exists in the query. The query is
- * found in the planner info of the relation restriction.
+ * PartitionKeyForRTEIdentityInQuery finds the partition key var(if exists),
+ * in the given original query for the rte that has targetRTEIndex.
  */
-static Index
-RelationRestrictionPartitionKeyIndex(RelationRestriction *relationRestriction)
+static Var *
+PartitionKeyForRTEIdentityInQuery(Query *originalQuery, int targetRTEIndex,
+								  Index *partitionKeyIndex)
 {
+	Query *originalQueryContainingRTEIdentity =
+		FindQueryContainingRTEIdentity(originalQuery, targetRTEIndex);
+	if (!originalQueryContainingRTEIdentity)
+	{
+		/*
+		 * We should always find the query but we have this check for sanity.
+		 * This check makes sure that if there is a bug while finding the query,
+		 * we don't get a crash etc. and the only downside will be we might be recursively
+		 * planning a query that could be pushed down.
+		 */
+		return NULL;
+	}
+
+	/*
+	 * This approach fails to detect when
+	 * the top level query might have the column indexes in different order:
+	 * explain
+	 * SELECT count(*) FROM
+	 * (
+	 * SELECT user_id,value_2 FROM events_table
+	 * UNION
+	 * SELECT value_2, user_id FROM (SELECT user_id, value_2, random() FROM events_table) as foo
+	 * ) foobar;
+	 * So we hit https://github.com/citusdata/citus/issues/5093.
+	 */
+	List *relationTargetList = originalQueryContainingRTEIdentity->targetList;
+
 	ListCell *targetEntryCell = NULL;
 	Index partitionKeyTargetAttrIndex = 0;
-
-	PlannerInfo *relationPlannerRoot = relationRestriction->plannerInfo;
-	Query *relationPlannerParseQuery = relationPlannerRoot->parse;
-	List *relationTargetList = relationPlannerParseQuery->targetList;
-
 	foreach(targetEntryCell, relationTargetList)
 	{
 		TargetEntry *targetEntry = (TargetEntry *) lfirst(targetEntryCell);
@@ -1777,20 +1826,93 @@ RelationRestrictionPartitionKeyIndex(RelationRestriction *relationRestriction)
 
 		partitionKeyTargetAttrIndex++;
 
+		bool skipOuterVars = false;
 		if (!targetEntry->resjunk &&
 			IsA(targetExpression, Var) &&
-			IsPartitionColumn(targetExpression, relationPlannerParseQuery))
+			IsPartitionColumn(targetExpression, originalQueryContainingRTEIdentity,
+							  skipOuterVars))
 		{
 			Var *targetColumn = (Var *) targetExpression;
 
-			if (targetColumn->varno == relationRestriction->index)
+			/*
+			 * We find the referenced table column to support distribution
+			 * columns that are correlated.
+			 */
+			RangeTblEntry *rteContainingPartitionKey = NULL;
+			FindReferencedTableColumn(targetExpression, NIL,
+									  originalQueryContainingRTEIdentity,
+									  &targetColumn,
+									  &rteContainingPartitionKey,
+									  skipOuterVars);
+
+			if (rteContainingPartitionKey->rtekind == RTE_RELATION &&
+				GetRTEIdentity(rteContainingPartitionKey) == targetRTEIndex)
 			{
-				return partitionKeyTargetAttrIndex;
+				*partitionKeyIndex = partitionKeyTargetAttrIndex;
+				return (Var *) copyObject(targetColumn);
 			}
 		}
 	}
 
-	return InvalidAttrNumber;
+	return NULL;
+}
+
+
+/*
+ * FindQueryContainingRTEIdentity finds the query/subquery that has an RTE
+ * with rteIndex in its rtable.
+ */
+static Query *
+FindQueryContainingRTEIdentity(Query *query, int rteIndex)
+{
+	FindQueryContainingRteIdentityContext *findRteIdentityContext =
+		palloc0(sizeof(FindQueryContainingRteIdentityContext));
+	findRteIdentityContext->targetRTEIdentity = rteIndex;
+	FindQueryContainingRTEIdentityInternal((Node *) query, findRteIdentityContext);
+	return findRteIdentityContext->query;
+}
+
+
+/*
+ * FindQueryContainingRTEIdentityInternal walks on the given node to find a query
+ * which has an RTE that has a given rteIdentity.
+ */
+static bool
+FindQueryContainingRTEIdentityInternal(Node *node,
+									   FindQueryContainingRteIdentityContext *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+	if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		Query *parentQuery = context->query;
+		context->query = query;
+		if (query_tree_walker(query, FindQueryContainingRTEIdentityInternal, context,
+							  QTW_EXAMINE_RTES_BEFORE))
+		{
+			return true;
+		}
+		context->query = parentQuery;
+		return false;
+	}
+
+	if (!IsA(node, RangeTblEntry))
+	{
+		return expression_tree_walker(node, FindQueryContainingRTEIdentityInternal,
+									  context);
+	}
+	RangeTblEntry *rte = (RangeTblEntry *) node;
+	if (rte->rtekind == RTE_RELATION)
+	{
+		if (GetRTEIdentity(rte) == context->targetRTEIdentity)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 
@@ -1812,6 +1934,17 @@ AllRelationsInRestrictionContextColocated(RelationRestrictionContext *restrictio
 		if (IsCitusTableType(relationId, CITUS_TABLE_WITH_NO_DIST_KEY))
 		{
 			continue;
+		}
+
+		if (IsCitusTableType(relationId, APPEND_DISTRIBUTED))
+		{
+			/*
+			 * If we got to this point, it means there are multiple distributed
+			 * relations and at least one of them is append-distributed. Since
+			 * we do not consider append-distributed tables to be co-located,
+			 * we can immediately return false.
+			 */
+			return false;
 		}
 
 		int colocationId = TableColocationId(relationId);
@@ -1962,7 +2095,8 @@ GetRestrictInfoListForRelation(RangeTblEntry *rangeTblEntry,
 		 * If the restriction involves multiple tables, we cannot add it to
 		 * input relation's expression list.
 		 */
-		Relids varnos = pull_varnos((Node *) restrictionClause);
+		Relids varnos = pull_varnos_compat(relationRestriction->plannerInfo,
+										   (Node *) restrictionClause);
 		if (bms_num_members(varnos) != 1)
 		{
 			continue;

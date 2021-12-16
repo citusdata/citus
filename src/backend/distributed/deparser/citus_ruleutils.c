@@ -22,6 +22,9 @@
 #include "access/skey.h"
 #include "access/stratnum.h"
 #include "access/sysattr.h"
+#if PG_VERSION_NUM >= PG_VERSION_14
+#include "access/toast_compression.h"
+#endif
 #include "access/tupdesc.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
@@ -31,6 +34,7 @@
 #include "catalog/pg_authid.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_collation.h"
+#include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_index.h"
@@ -38,12 +42,16 @@
 #include "commands/defrem.h"
 #include "commands/extension.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
 #include "distributed/listutils.h"
 #include "distributed/multi_partitioning_utils.h"
-#include "distributed/relay_utility.h"
-#include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
+#include "distributed/namespace_utils.h"
+#include "distributed/relay_utility.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
@@ -74,6 +82,8 @@ static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
 static void simple_quote_literal(StringInfo buf, const char *val);
 static char * flatten_reloptions(Oid relid);
+static void AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer);
+
 
 /*
  * pg_get_extensiondef_string finds the foreign data wrapper that corresponds to
@@ -203,10 +213,13 @@ pg_get_sequencedef_string(Oid sequenceRelationId)
 
 	/* build our DDL command */
 	char *qualifiedSequenceName = generate_qualified_relation_name(sequenceRelationId);
+	char *typeName = format_type_be(pgSequenceForm->seqtypid);
 
 	char *sequenceDef = psprintf(CREATE_SEQUENCE_COMMAND, qualifiedSequenceName,
+								 typeName,
 								 pgSequenceForm->seqincrement, pgSequenceForm->seqmin,
 								 pgSequenceForm->seqmax, pgSequenceForm->seqstart,
+								 pgSequenceForm->seqcache,
 								 pgSequenceForm->seqcycle ? "" : "NO ");
 
 	return sequenceDef;
@@ -239,12 +252,14 @@ pg_get_sequencedef(Oid sequenceRelationId)
  * definition includes table's schema, default column values, not null and check
  * constraints. The definition does not include constraints that trigger index
  * creations; specifically, unique and primary key constraints are excluded.
- * When the flag includeSequenceDefaults is set, the function also creates
+ * When includeSequenceDefaults is NEXTVAL_SEQUENCE_DEFAULTS, the function also creates
  * DEFAULT clauses for columns getting their default values from a sequence.
+ * When it's WORKER_NEXTVAL_SEQUENCE_DEFAULTS, the function creates the DEFAULT
+ * clause using worker_nextval('sequence') and not nextval('sequence')
  */
 char *
-pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
-							 char *accessMethod)
+pg_get_tableschemadef_string(Oid tableRelationId, IncludeSequenceDefaults
+							 includeSequenceDefaults, char *accessMethod)
 {
 	bool firstAttributePrinted = false;
 	AttrNumber defaultValueIndex = 0;
@@ -362,7 +377,26 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 					}
 					else
 					{
-						appendStringInfo(&buffer, " DEFAULT %s", defaultString);
+						Oid seqOid = GetSequenceOid(tableRelationId, defaultValue->adnum);
+						if (includeSequenceDefaults == WORKER_NEXTVAL_SEQUENCE_DEFAULTS &&
+							seqOid != InvalidOid &&
+							pg_get_sequencedef(seqOid)->seqtypid != INT8OID)
+						{
+							/*
+							 * We use worker_nextval for int and smallint types.
+							 * Check issue #5126 and PR #5254 for details.
+							 * https://github.com/citusdata/citus/issues/5126
+							 */
+							char *sequenceName = generate_qualified_relation_name(
+								seqOid);
+							appendStringInfo(&buffer,
+											 " DEFAULT worker_nextval(%s::regclass)",
+											 quote_literal_cstr(sequenceName));
+						}
+						else
+						{
+							appendStringInfo(&buffer, " DEFAULT %s", defaultString);
+						}
 					}
 				}
 			}
@@ -372,6 +406,14 @@ pg_get_tableschemadef_string(Oid tableRelationId, bool includeSequenceDefaults,
 			{
 				appendStringInfoString(&buffer, " NOT NULL");
 			}
+
+#if PG_VERSION_NUM >= PG_VERSION_14
+			if (CompressionMethodIsValid(attributeForm->attcompression))
+			{
+				appendStringInfo(&buffer, " COMPRESSION %s",
+								 GetCompressionMethodName(attributeForm->attcompression));
+			}
+#endif
 
 			if (attributeForm->attcollation != InvalidOid &&
 				attributeForm->attcollation != DEFAULT_COLLATION_OID)
@@ -688,14 +730,21 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	List *deparseContext = deparse_context_for(relationName, distrelid);
 	indexStmt = transformIndexStmt(distrelid, indexStmt, NULL);
 
-	appendStringInfo(buffer, "CREATE %s INDEX %s %s %s ON %s USING %s ",
+	appendStringInfo(buffer, "CREATE %s INDEX %s %s %s ON %s %s USING %s ",
 					 (indexStmt->unique ? "UNIQUE" : ""),
 					 (indexStmt->concurrent ? "CONCURRENTLY" : ""),
 					 (indexStmt->if_not_exists ? "IF NOT EXISTS" : ""),
 					 quote_identifier(indexName),
+					 (indexStmt->relation->inh ? "" : "ONLY"),
 					 quote_qualified_identifier(indexStmt->relation->schemaname,
 												relationName),
 					 indexStmt->accessMethod);
+
+	/*
+	 * Switch to empty search_path to deparse_index_columns to produce fully-
+	 * qualified names in expressions.
+	 */
+	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
 	/* index column or expression list begins here */
 	appendStringInfoChar(buffer, '(');
@@ -707,10 +756,15 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 	{
 		appendStringInfoString(buffer, "INCLUDE (");
 		deparse_index_columns(buffer, indexStmt->indexIncludingParams, deparseContext);
-		appendStringInfoChar(buffer, ')');
+		appendStringInfoString(buffer, ") ");
 	}
 
-	AppendStorageParametersToString(buffer, indexStmt->options);
+	if (indexStmt->options != NIL)
+	{
+		appendStringInfoString(buffer, "WITH (");
+		AppendStorageParametersToString(buffer, indexStmt->options);
+		appendStringInfoString(buffer, ") ");
+	}
 
 	if (indexStmt->whereClause != NULL)
 	{
@@ -718,6 +772,9 @@ deparse_shard_index_statement(IndexStmt *origStmt, Oid distrelid, int64 shardid,
 																deparseContext, false,
 																false));
 	}
+
+	/* revert back to original search_path */
+	PopOverrideSearchPath();
 }
 
 
@@ -732,7 +789,8 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 {
 	ReindexStmt *reindexStmt = copyObject(origStmt); /* copy to avoid modifications */
 	char *relationName = NULL;
-	const char *concurrentlyString = reindexStmt->concurrent ? "CONCURRENTLY " : "";
+	const char *concurrentlyString =
+		IsReindexWithParam_compat(reindexStmt, "concurrently") ? "CONCURRENTLY " : "";
 
 
 	if (reindexStmt->kind == REINDEX_OBJECT_INDEX ||
@@ -745,11 +803,7 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 	}
 
 	appendStringInfoString(buffer, "REINDEX ");
-
-	if (reindexStmt->options == REINDEXOPT_VERBOSE)
-	{
-		appendStringInfoString(buffer, "(VERBOSE) ");
-	}
+	AddVacuumParams(reindexStmt, buffer);
 
 	switch (reindexStmt->kind)
 	{
@@ -789,6 +843,80 @@ deparse_shard_reindex_statement(ReindexStmt *origStmt, Oid distrelid, int64 shar
 							 quote_identifier(reindexStmt->name));
 			break;
 		}
+	}
+}
+
+
+/*
+ * IsReindexWithParam_compat returns true if the given parameter
+ * exists for the given reindexStmt.
+ */
+bool
+IsReindexWithParam_compat(ReindexStmt *reindexStmt, char *param)
+{
+#if PG_VERSION_NUM < PG_VERSION_14
+	if (strcmp(param, "concurrently") == 0)
+	{
+		return reindexStmt->concurrent;
+	}
+	else if (strcmp(param, "verbose") == 0)
+	{
+		return reindexStmt->options & REINDEXOPT_VERBOSE;
+	}
+	return false;
+#else
+	DefElem *opt = NULL;
+	foreach_ptr(opt, reindexStmt->params)
+	{
+		if (strcmp(opt->defname, param) == 0)
+		{
+			return defGetBoolean(opt);
+		}
+	}
+	return false;
+#endif
+}
+
+
+/*
+ * AddVacuumParams adds vacuum params to the given buffer.
+ */
+static void
+AddVacuumParams(ReindexStmt *reindexStmt, StringInfo buffer)
+{
+	StringInfo temp = makeStringInfo();
+	if (IsReindexWithParam_compat(reindexStmt, "verbose"))
+	{
+		appendStringInfoString(temp, "VERBOSE");
+	}
+#if PG_VERSION_NUM >= PG_VERSION_14
+	char *tableSpaceName = NULL;
+	DefElem *opt = NULL;
+	foreach_ptr(opt, reindexStmt->params)
+	{
+		if (strcmp(opt->defname, "tablespace") == 0)
+		{
+			tableSpaceName = defGetString(opt);
+			break;
+		}
+	}
+
+	if (tableSpaceName)
+	{
+		if (temp->len > 0)
+		{
+			appendStringInfo(temp, ", TABLESPACE %s", tableSpaceName);
+		}
+		else
+		{
+			appendStringInfo(temp, "TABLESPACE %s", tableSpaceName);
+		}
+	}
+#endif
+
+	if (temp->len > 0)
+	{
+		appendStringInfo(buffer, "(%s) ", temp->data);
 	}
 }
 
@@ -835,8 +963,9 @@ deparse_index_columns(StringInfo buffer, List *indexParameterList, List *deparse
 		/* Commit on postgres: 911e70207703799605f5a0e8aad9f06cff067c63*/
 		if (indexElement->opclassopts != NIL)
 		{
-			ereport(ERROR, errmsg(
-						"citus currently doesn't support operator class parameters in indexes"));
+			appendStringInfoString(buffer, "(");
+			AppendStorageParametersToString(buffer, indexElement->opclassopts);
+			appendStringInfoString(buffer, ") ");
 		}
 #endif
 
@@ -878,12 +1007,13 @@ pg_get_indexclusterdef_string(Oid indexRelationId)
 	/* check if the table is clustered on this index */
 	if (indexForm->indisclustered)
 	{
-		char *tableName = generate_relation_name(tableRelationId, NIL);
+		char *qualifiedRelationName =
+			generate_qualified_relation_name(tableRelationId);
 		char *indexName = get_rel_name(indexRelationId); /* needs to be quoted */
 
 		initStringInfo(&buffer);
 		appendStringInfo(&buffer, "ALTER TABLE %s CLUSTER ON %s",
-						 tableName, quote_identifier(indexName));
+						 qualifiedRelationName, quote_identifier(indexName));
 	}
 
 	ReleaseSysCache(indexTuple);
@@ -967,13 +1097,6 @@ AppendStorageParametersToString(StringInfo stringBuffer, List *optionList)
 	ListCell *optionCell = NULL;
 	bool firstOptionPrinted = false;
 
-	if (optionList == NIL)
-	{
-		return;
-	}
-
-	appendStringInfo(stringBuffer, " WITH (");
-
 	foreach(optionCell, optionList)
 	{
 		DefElem *option = (DefElem *) lfirst(optionCell);
@@ -990,8 +1113,6 @@ AppendStorageParametersToString(StringInfo stringBuffer, List *optionList)
 						 quote_identifier(optionName),
 						 quote_literal_cstr(optionValue));
 	}
-
-	appendStringInfo(stringBuffer, ")");
 }
 
 
@@ -1011,7 +1132,7 @@ contain_nextval_expression_walker(Node *node, void *context)
 	{
 		FuncExpr *funcExpr = (FuncExpr *) node;
 
-		if (funcExpr->funcid == F_NEXTVAL_OID)
+		if (funcExpr->funcid == F_NEXTVAL)
 		{
 			return true;
 		}
@@ -1187,6 +1308,8 @@ simple_quote_literal(StringInfo buf, const char *val)
  *
  * CURRENT_USER - resolved to the user name of the current role being used
  * SESSION_USER - resolved to the user name of the user that opened the session
+ * CURRENT_ROLE - same as CURRENT_USER, resolved to the user name of the current role being used
+ * Postgres treats CURRENT_ROLE is equivalent to CURRENT_USER, and we follow the same approach.
  *
  * withQuoteIdentifier is used, because if the results will be used in a query the quotes are needed but if not there
  * should not be extra quotes.
@@ -1203,6 +1326,9 @@ RoleSpecString(RoleSpec *spec, bool withQuoteIdentifier)
 				   spec->rolename;
 		}
 
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		case ROLESPEC_CURRENT_ROLE:
+		#endif
 		case ROLESPEC_CURRENT_USER:
 		{
 			return withQuoteIdentifier ?

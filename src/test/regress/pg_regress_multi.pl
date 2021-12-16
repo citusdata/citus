@@ -420,8 +420,13 @@ if (-e $hll_control)
 }
 push(@pgOptions, "shared_preload_libraries='${sharedPreloadLibraries}'");
 
-# Avoid parallelism to stabilize explain plans
-push(@pgOptions, "max_parallel_workers_per_gather=0");
+if ($vanillatest) {
+    # use the default used in vanilla tests
+    push(@pgOptions, "max_parallel_workers_per_gather=2");
+}else {
+    # Avoid parallelism to stabilize explain plans
+    push(@pgOptions, "max_parallel_workers_per_gather=0");
+}
 
 # Help with debugging
 push(@pgOptions, "log_error_verbosity = 'verbose'");
@@ -438,16 +443,27 @@ push(@pgOptions, "wal_receiver_status_interval=1");
 # src/backend/replication/logical/launcher.c.
 push(@pgOptions, "wal_retrieve_retry_interval=1000");
 
+if ($majorversion >= "14") {
+    # disable compute_query_id so that we don't get Query Identifiers
+    # in explain outputs
+    push(@pgOptions, "compute_query_id=off");
+
+    # reduce test flappiness and different PG14 plans
+    if (!$vanillatest) {
+        push(@pgOptions, "enable_incremental_sort=off");
+    }
+}
+
 # Citus options set for the tests
 push(@pgOptions, "citus.shard_count=4");
 push(@pgOptions, "citus.max_adaptive_executor_pool_size=4");
-push(@pgOptions, "citus.shard_max_size=1500kB");
 push(@pgOptions, "citus.defer_shard_delete_interval=-1");
 push(@pgOptions, "citus.repartition_join_bucket_count_per_node=2");
 push(@pgOptions, "citus.sort_returning='on'");
 push(@pgOptions, "citus.shard_replication_factor=2");
 push(@pgOptions, "citus.node_connection_timeout=${connectionTimeout}");
 push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
+push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
 
 # we disable slow start by default to encourage parallelism within tests
 push(@pgOptions, "citus.executor_slow_start_interval=0ms");
@@ -456,6 +472,8 @@ if ($useMitmproxy)
 {
   # make tests reproducible by never trying to negotiate ssl
   push(@pgOptions, "citus.node_conninfo='sslmode=disable'");
+  # The commands that we intercept are based on the the text based protocol.
+  push(@pgOptions, "citus.enable_binary_protocol='false'");
 }
 elsif ($followercluster)
 {

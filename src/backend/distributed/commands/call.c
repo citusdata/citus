@@ -11,6 +11,9 @@
  */
 
 #include "postgres.h"
+#include "funcapi.h"
+
+#include "distributed/pg_version_constants.h"
 
 #include "catalog/pg_proc.h"
 #include "commands/defrem.h"
@@ -58,7 +61,13 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 
 	DistObjectCacheEntry *procedure = LookupDistObjectCacheEntry(ProcedureRelationId,
 																 functionId, 0);
-	if (procedure == NULL || !procedure->isDistributed)
+
+	/*
+	 * If procedure is not distributed or already delegated from another
+	 * node, do not call the procedure remotely.
+	 */
+	if (procedure == NULL || !procedure->isDistributed ||
+		IsCitusInitiatedRemoteBackend())
 	{
 		return false;
 	}
@@ -111,8 +120,19 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 	}
 	else
 	{
+		List *argumentList = NIL;
+		List *namedArgList;
+		int numberOfArgs;
+		Oid *argumentTypes;
+
+		if (!get_merged_argument_list(callStmt, &namedArgList, &argumentTypes,
+									  &argumentList, &numberOfArgs))
+		{
+			argumentList = funcExpr->args;
+		}
+
 		placement =
-			ShardPlacementForFunctionColocatedWithDistTable(procedure, funcExpr,
+			ShardPlacementForFunctionColocatedWithDistTable(procedure, argumentList,
 															partitionColumn, distTable,
 															NULL);
 	}
@@ -146,8 +166,8 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 
 	/* build remote command with fully qualified names */
 	StringInfo callCommand = makeStringInfo();
-	appendStringInfo(callCommand, "CALL %s", pg_get_rule_expr((Node *) funcExpr));
 
+	appendStringInfo(callCommand, "CALL %s", pg_get_rule_expr((Node *) callStmt));
 	{
 		Tuplestorestate *tupleStore = tuplestore_begin_heap(true, false, work_mem);
 		TupleDesc tupleDesc = CallStmtResultDesc(callStmt);

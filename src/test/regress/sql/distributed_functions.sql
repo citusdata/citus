@@ -17,6 +17,15 @@ CREATE TABLE notices (
 SELECT create_distributed_table('notices', 'id');
 INSERT INTO notices VALUES (1, 'hello world');
 
+-- Create the necessary test utility function
+CREATE OR REPLACE FUNCTION master_metadata_snapshot()
+    RETURNS text[]
+    LANGUAGE C STRICT
+    AS 'citus';
+
+COMMENT ON FUNCTION master_metadata_snapshot()
+    IS 'commands to create the metadata snapshot';
+
 CREATE FUNCTION notice(text)
 RETURNS void
 LANGUAGE plpgsql AS $$
@@ -167,19 +176,13 @@ SET citus.enable_ddl_propagation TO on;
 
 -- use an unusual type to force a new colocation group
 CREATE TABLE statement_table(id int2);
-SET citus.replication_model TO 'statement';
-SET citus.shard_replication_factor TO 1;
+SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('statement_table','id');
 
 -- create a table uses streaming-based replication (can be synced)
 CREATE TABLE streaming_table(id macaddr);
-SET citus.replication_model TO 'streaming';
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('streaming_table','id');
-
--- make sure that none of the active and primary nodes hasmetadata
--- at the start of the test
-select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
 
 -- if not paremeters are supplied, we'd see that function doesn't have
 -- distribution_argument_index and colocationid
@@ -190,15 +193,10 @@ WHERE objid = 'eq_mi''xed_param_names(macaddr, macaddr)'::regprocedure;
 -- also show that we can use the function
 SELECT * FROM run_command_on_workers($$SELECT function_tests."eq_mi'xed_param_names"('0123456789ab','ba9876543210');$$) ORDER BY 1,2;
 
--- make sure that none of the active and primary nodes hasmetadata
--- since the function doesn't have a parameter
-select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
-
 -- try to co-locate with a table that uses statement-based replication
 SELECT create_distributed_function('increment(int2)', '$1');
 SELECT create_distributed_function('increment(int2)', '$1', colocate_with := 'statement_table');
 BEGIN;
-SET LOCAL citus.replication_model TO 'statement';
 DROP TABLE statement_table;
 SELECT create_distributed_function('increment(int2)', '$1');
 END;
@@ -206,6 +204,8 @@ END;
 -- try to co-locate with a table that uses streaming replication
 SELECT create_distributed_function('dup(macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.dup('0123456789ab');$$) ORDER BY 1,2;
+
+SELECT public.wait_until_metadata_sync(30000);
 
 SELECT create_distributed_function('eq(macaddr,macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('012345689ab','0123456789ab');$$) ORDER BY 1,2;
@@ -235,10 +235,6 @@ SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,maca
 ALTER ROUTINE eq(macaddr,macaddr) SET client_min_messages TO debug;
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
 ALTER FUNCTION eq(macaddr,macaddr) RESET client_min_messages;
-SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
-ALTER FUNCTION eq(macaddr,macaddr) SET "citus.setting;'" TO 'hello '' world';
-SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
-ALTER FUNCTION eq(macaddr,macaddr) RESET "citus.setting;'";
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
 ALTER FUNCTION eq(macaddr,macaddr) SET search_path TO 'sch'';ma', public;
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
@@ -321,9 +317,6 @@ DROP AGGREGATE function_tests2.sum2(int);
 -- call should fail as aggregate should have been dropped
 SELECT * FROM run_command_on_workers('SELECT function_tests2.sum2(id) FROM (select 1 id, 2) subq;') ORDER BY 1,2;
 
--- postgres doesn't accept parameter names in the regprocedure input
-SELECT create_distributed_function('eq_with_param_names(val1 macaddr, macaddr)', 'val1');
-
 -- invalid distribution_arg_name
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='test');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='int');
@@ -356,9 +349,6 @@ ROLLBACK;
 -- make sure that none of the nodes have the function because we've rollbacked
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_with_param_names';$$);
 
--- make sure that none of the active and primary nodes hasmetadata
-select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
-
 -- valid distribution with distribution_arg_name
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='val1');
 
@@ -371,13 +361,15 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_w
 -- valid distribution with distribution_arg_name -- case insensitive
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='VaL1');
 
+-- show that we are able to propagate objects with multiple item on address arrays
+SELECT * FROM (SELECT unnest(master_metadata_snapshot()) as metadata_command  order by 1) as innerResult WHERE metadata_command like '%distributed_object_data%';
+
 -- valid distribution with distribution_arg_index
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)','$1');
 
 -- a function cannot be colocated with a table that is not "streaming" replicated
 SET citus.shard_replication_factor TO 2;
 CREATE TABLE replicated_table_func_test (a macaddr);
-SET citus.replication_model TO "statement";
 SELECT create_distributed_table('replicated_table_func_test', 'a');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1', colocate_with:='replicated_table_func_test');
 
@@ -387,7 +379,6 @@ SELECT public.wait_until_metadata_sync(30000);
 -- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE replicated_table_func_test_2 (a macaddr8);
-SET citus.replication_model TO "streaming";
 SELECT create_distributed_table('replicated_table_func_test_2', 'a');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1', colocate_with:='replicated_table_func_test_2');
 
@@ -401,7 +392,6 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val
 -- finally, colocate the function with a distributed table
 SET citus.shard_replication_factor TO 1;
 CREATE TABLE replicated_table_func_test_4 (a macaddr);
-SET citus.replication_model TO "streaming";
 SELECT create_distributed_table('replicated_table_func_test_4', 'a');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1', colocate_with:='replicated_table_func_test_4');
 

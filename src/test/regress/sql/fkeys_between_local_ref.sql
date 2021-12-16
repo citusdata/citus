@@ -1,6 +1,7 @@
 \set VERBOSITY terse
 
 SET citus.next_shard_id TO 1518000;
+SET citus.next_placement_id TO 4090000;
 SET citus.shard_replication_factor TO 1;
 
 CREATE SCHEMA fkeys_between_local_ref;
@@ -13,7 +14,7 @@ CREATE VIEW citus_local_tables_in_schema AS
 SELECT logicalrelid FROM pg_dist_partition, pg_tables
 WHERE tablename=logicalrelid::regclass::text AND
       schemaname='fkeys_between_local_ref' AND
-      partmethod = 'n' AND repmodel = 'c';
+      partmethod = 'n' AND repmodel = 's';
 
 
 -- remove coordinator if it is added to pg_dist_node and test
@@ -82,11 +83,9 @@ CREATE TABLE partitioned_table_1_200_300 PARTITION OF partitioned_table_1 FOR VA
 INSERT INTO partitioned_table_1 SELECT i FROM generate_series(195, 205) i;
 
 ALTER TABLE partitioned_table_1 ADD CONSTRAINT fkey_8 FOREIGN KEY (col_1) REFERENCES local_table_4(col_1);
-
--- now that we attached partitioned table to graph below errors out
--- since we cannot create citus local table from partitioned tables
+BEGIN;
 ALTER TABLE reference_table_1 ADD CONSTRAINT fkey_9 FOREIGN KEY (col_1) REFERENCES local_table_1(col_1);
-
+ROLLBACK;
 ALTER TABLE partitioned_table_1 DROP CONSTRAINT fkey_8;
 
 BEGIN;
@@ -269,8 +268,9 @@ BEGIN;
   DROP TABLE local_table_3 CASCADE;
   DROP SCHEMA another_schema_fkeys_between_local_ref CASCADE;
 
-  -- now we shouldn't see local_table_5 since now it is not connected to any reference tables
-  SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partition
+  -- now we shouldn't see local_table_5 since now it is not connected to any reference tables/citus local tables
+  -- and it's converted automatically
+  SELECT logicalrelid::text AS tablename, partmethod, repmodel, autoconverted FROM pg_dist_partition
   WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
   ORDER BY tablename;
 ROLLBACK;
@@ -405,9 +405,9 @@ SELECT logicalrelid::text AS tablename, partmethod, repmodel FROM pg_dist_partit
 WHERE logicalrelid::text IN (SELECT tablename FROM pg_tables WHERE schemaname='fkeys_between_local_ref')
 ORDER BY tablename;
 
--- this errors out as we don't support creating citus local
--- tables from partitioned tables
+BEGIN;
 CREATE TABLE part_local_table (col_1 INT REFERENCES reference_table_1(col_1)) PARTITION BY RANGE (col_1);
+ROLLBACK;
 
 -- they fail as col_99 does not exist
 CREATE TABLE local_table_5 (col_1 INT, FOREIGN KEY (col_99) REFERENCES reference_table_1(col_1));

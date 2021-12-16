@@ -1,10 +1,3 @@
-CREATE OR REPLACE FUNCTION master_defer_delete_shards()
-    RETURNS int
-    LANGUAGE C STRICT
-    AS 'citus', $$master_defer_delete_shards$$;
-COMMENT ON FUNCTION master_defer_delete_shards()
-    IS 'remove orphaned shards';
-
 CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
     RETURNS void
     LANGUAGE C STRICT
@@ -15,7 +8,7 @@ ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
 ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
 SELECT pg_reload_conf();
 
--- Verifies pg_dist_node and pg_dist_palcement in the given worker matches the ones in coordinator
+-- Verifies pg_dist_node and pg_dist_placement in the given worker matches the ones in coordinator
 CREATE OR REPLACE FUNCTION verify_metadata(hostname TEXT, port INTEGER, master_port INTEGER DEFAULT 57636)
     RETURNS BOOLEAN
     LANGUAGE sql
@@ -30,7 +23,7 @@ WITH dist_node_summary AS (
                             ARRAY[dist_node_summary.query, dist_node_summary.query],
                             false)
 ), dist_placement_summary AS (
-    SELECT 'SELECT jsonb_agg(pg_dist_placement ORDER BY shardid) FROM pg_dist_placement' AS query
+    SELECT 'SELECT jsonb_agg(pg_dist_placement ORDER BY placementid) FROM pg_dist_placement' AS query
 ), dist_placement_check AS (
     SELECT count(distinct result) = 1 AS matches
     FROM dist_placement_summary CROSS JOIN LATERAL
@@ -61,3 +54,14 @@ CREATE OR REPLACE FUNCTION pg_catalog.partition_task_list_results(resultIdPrefix
 CREATE OR REPLACE FUNCTION top_transaction_context_size() RETURNS BIGINT
 LANGUAGE C STRICT VOLATILE
 AS 'citus', $$top_transaction_context_size$$;
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_disable_node_and_wait(nodename text, nodeport integer, force bool DEFAULT false)
+    RETURNS void
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+
+  PERFORM pg_catalog.citus_disable_node(nodename, nodeport, force);
+  PERFORM public.wait_until_metadata_sync(30000);
+END;
+$function$;

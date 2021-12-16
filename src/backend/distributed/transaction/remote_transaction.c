@@ -51,7 +51,7 @@ static void Assign2PCIdentifier(MultiConnection *connection);
 
 
 /*
- * StartRemoteTransactionBeging initiates beginning the remote transaction in
+ * StartRemoteTransactionBegin initiates beginning the remote transaction in
  * a non-blocking manner. The function sends "BEGIN" followed by
  * assign_distributed_transaction_id() to assign the distributed transaction
  * id on the remote node.
@@ -808,9 +808,11 @@ CoordinatedRemoteTransactionsPrepare(void)
 		if (transaction->transactionState != REMOTE_TRANS_PREPARING)
 		{
 			/*
-			 * Verify that the connection didn't modify any placement
+			 * Verify that either the transaction failed, hence we couldn't prepare
+			 * or the connection didn't modify any placement
 			 */
-			Assert(!ConnectionModifiedPlacement(connection));
+			Assert(transaction->transactionFailed ||
+				   !ConnectionModifiedPlacement(connection));
 			continue;
 		}
 

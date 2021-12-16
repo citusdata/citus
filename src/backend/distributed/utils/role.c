@@ -63,7 +63,7 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
  * If the role does exist it will run the query provided in alter_role_utility_query to
  * change the existing user in such a way that it is compatible with the user on the
  * coordinator. This query is expected to be a AlterRoleStmt, if a different statement is
- * provdided the function will raise an error.
+ * provided the function will raise an error.
  *
  * For both queries a NULL value can be passed to omit the execution of that condition.
  *
@@ -73,6 +73,11 @@ alter_role_if_exists(PG_FUNCTION_ARGS)
 Datum
 worker_create_or_alter_role(PG_FUNCTION_ARGS)
 {
+	if (PG_ARGISNULL(0))
+	{
+		ereport(ERROR, (errmsg("role name cannot be NULL")));
+	}
+
 	text *rolenameText = PG_GETARG_TEXT_P(0);
 	const char *rolename = text_to_cstring(rolenameText);
 

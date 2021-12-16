@@ -30,7 +30,76 @@ INSERT INTO t2 VALUES (1, 1, 1), (1, 2, 1), (2, 1, 2), (2, 2, 4), (3, 1, 3), (3,
 SELECT pg_backend_pid() as pid \gset
 SELECT count(*) FROM t2;
 
-SHOW citus.multi_shard_commit_protocol ;
+-- DELETION TESTS
+-- delete using a filter on non-partition column filter
+-- test both kill and cancellation
+
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").kill()');
+-- issue a multi shard delete
+DELETE FROM t2 WHERE b = 2;
+
+-- verify nothing is deleted
+SELECT count(*) FROM t2;
+
+-- kill just one connection
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").kill()');
+DELETE FROM t2 WHERE b = 2;
+
+-- verify nothing is deleted
+SELECT count(*) FROM t2;
+
+-- cancellation
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").cancel(' || :pid || ')');
+-- issue a multi shard delete
+DELETE FROM t2 WHERE b = 2;
+
+-- verify nothing is deleted
+SELECT count(*) FROM t2;
+
+-- cancel just one connection
+SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").cancel(' || :pid || ')');
+DELETE FROM t2 WHERE b = 2;
+
+-- verify nothing is deleted
+SELECT count(*) FROM t2;
+
+-- UPDATE TESTS
+-- update non-partition column based on a filter on another non-partition column
+-- DELETION TESTS
+-- delete using a filter on non-partition column filter
+-- test both kill and cancellation
+
+
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
+
+SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
+-- issue a multi shard update
+UPDATE t2 SET c = 4 WHERE b = 2;
+
+-- verify nothing is updated
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
+
+-- kill just one connection
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").kill()');
+UPDATE t2 SET c = 4 WHERE b = 2;
+
+-- verify nothing is updated
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
+
+-- cancellation
+SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").cancel(' || :pid || ')');
+-- issue a multi shard update
+UPDATE t2 SET c = 4 WHERE b = 2;
+
+-- verify nothing is updated
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
+
+-- cancel just one connection
+SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").cancel(' || :pid || ')');
+UPDATE t2 SET c = 4 WHERE b = 2;
+
+-- verify nothing is updated
+SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
 
 -- DELETION TESTS
 -- delete using a filter on non-partition column filter
@@ -103,81 +172,6 @@ UPDATE t2 SET c = 4 WHERE b = 2;
 -- verify nothing is updated
 SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
 
--- switch to 1PC
-SET citus.multi_shard_commit_protocol TO '1PC';
-
--- DELETION TESTS
--- delete using a filter on non-partition column filter
--- test both kill and cancellation
-
-SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").kill()');
--- issue a multi shard delete
-DELETE FROM t2 WHERE b = 2;
-
--- verify nothing is deleted
-SELECT count(*) FROM t2;
-
--- kill just one connection
-SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").kill()');
-DELETE FROM t2 WHERE b = 2;
-
--- verify nothing is deleted
-SELECT count(*) FROM t2;
-
--- cancellation
-SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM").cancel(' || :pid || ')');
--- issue a multi shard delete
-DELETE FROM t2 WHERE b = 2;
-
--- verify nothing is deleted
-SELECT count(*) FROM t2;
-
--- cancel just one connection
-SELECT citus.mitmproxy('conn.onQuery(query="DELETE FROM multi_shard.t2_201005").cancel(' || :pid || ')');
-DELETE FROM t2 WHERE b = 2;
-
--- verify nothing is deleted
-SELECT count(*) FROM t2;
-
--- UPDATE TESTS
--- update non-partition column based on a filter on another non-partition column
--- DELETION TESTS
--- delete using a filter on non-partition column filter
--- test both kill and cancellation
-
-
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
-
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").kill()');
--- issue a multi shard update
-UPDATE t2 SET c = 4 WHERE b = 2;
-
--- verify nothing is updated
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
-
--- kill just one connection
-SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").kill()');
-UPDATE t2 SET c = 4 WHERE b = 2;
-
--- verify nothing is updated
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
-
--- cancellation
-SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE").cancel(' || :pid || ')');
--- issue a multi shard update
-UPDATE t2 SET c = 4 WHERE b = 2;
-
--- verify nothing is updated
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
-
--- cancel just one connection
-SELECT citus.mitmproxy('conn.onQuery(query="UPDATE multi_shard.t2_201005").cancel(' || :pid || ')');
-UPDATE t2 SET c = 4 WHERE b = 2;
-
--- verify nothing is updated
-SELECT count(*) FILTER (WHERE b = 2) AS b2, count(*) FILTER (WHERE c = 4) AS c4 FROM t2;
-
-RESET citus.multi_shard_commit_protocol;
 
 --
 -- fail when cascading deletes from foreign key
@@ -272,8 +266,6 @@ UPDATE t3 SET b = 1 WHERE b = 2 RETURNING *;
 -- verify nothing is updated
 SELECT count(*) FILTER (WHERE b = 1) b1, count(*) FILTER (WHERE b = 2) AS b2 FROM t3;
 
--- switch to 1PC
-SET citus.multi_shard_commit_protocol TO '1PC';
 
 SELECT count(*) FILTER (WHERE b = 1) b1, count(*) FILTER (WHERE b = 2) AS b2 FROM t3;
 

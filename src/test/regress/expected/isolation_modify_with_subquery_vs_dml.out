@@ -13,12 +13,17 @@ step s2-modify_with_subquery_v1:
 step s1-insert_to_events_test_table:
     INSERT INTO events_test_table VALUES(4,6,8,10);
  <waiting ...>
-step s2-commit:
+step s2-commit: 
 	COMMIT;
 
 step s1-insert_to_events_test_table: <... completed>
 step s1-commit:
     COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-modify_with_subquery_v1 s1-update_events_test_table s2-commit s1-commit
@@ -34,12 +39,17 @@ step s2-modify_with_subquery_v1:
 step s1-update_events_test_table:
 	UPDATE users_test_table SET value_1 = 3;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
 	COMMIT;
 
 step s1-update_events_test_table: <... completed>
 step s1-commit:
     COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s2-modify_with_subquery_v1 s1-delete_events_test_table s2-commit s1-commit
@@ -55,12 +65,17 @@ step s2-modify_with_subquery_v1:
 step s1-delete_events_test_table:
 	DELETE FROM events_test_table WHERE user_id = 1 or user_id = 3;
  <waiting ...>
-step s2-commit:
+step s2-commit: 
 	COMMIT;
 
 step s1-delete_events_test_table: <... completed>
 step s1-commit:
     COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s1-insert_to_events_test_table s2-modify_with_subquery_v1 s1-commit s2-commit
@@ -76,12 +91,17 @@ step s1-insert_to_events_test_table:
 step s2-modify_with_subquery_v1:
     UPDATE users_test_table SET value_2 = 5 FROM events_test_table WHERE users_test_table.user_id = events_test_table.user_id;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-modify_with_subquery_v1: <... completed>
 step s2-commit:
 	COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s1-update_events_test_table s2-modify_with_subquery_v1 s1-commit s2-commit
@@ -97,12 +117,17 @@ step s1-update_events_test_table:
 step s2-modify_with_subquery_v1:
     UPDATE users_test_table SET value_2 = 5 FROM events_test_table WHERE users_test_table.user_id = events_test_table.user_id;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-modify_with_subquery_v1: <... completed>
 step s2-commit:
 	COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 
 
 starting permutation: s1-begin s2-begin s1-delete_events_test_table s2-modify_with_subquery_v1 s1-commit s2-commit
@@ -118,10 +143,15 @@ step s1-delete_events_test_table:
 step s2-modify_with_subquery_v1:
     UPDATE users_test_table SET value_2 = 5 FROM events_test_table WHERE users_test_table.user_id = events_test_table.user_id;
  <waiting ...>
-step s1-commit:
+step s1-commit: 
     COMMIT;
 
 step s2-modify_with_subquery_v1: <... completed>
 step s2-commit:
 	COMMIT;
+
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
 

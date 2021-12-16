@@ -496,12 +496,6 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 											char *intermediateResultIdPrefix)
 {
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
-	bool stopOnFailure = false;
-
-	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
-	{
-		stopOnFailure = true;
-	}
 
 	/* Get column name list and partition column index for the target table */
 	List *columnNameList = BuildColumnNameListFromTargetList(targetRelationId,
@@ -514,7 +508,6 @@ ExecutePlanIntoColocatedIntermediateResults(Oid targetRelationId,
 																  columnNameList,
 																  partitionColumnIndex,
 																  executorState,
-																  stopOnFailure,
 																  intermediateResultIdPrefix);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
@@ -537,12 +530,6 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 						PlannedStmt *selectPlan, EState *executorState)
 {
 	ParamListInfo paramListInfo = executorState->es_param_list_info;
-	bool stopOnFailure = false;
-
-	if (IsCitusTableType(targetRelationId, REFERENCE_TABLE))
-	{
-		stopOnFailure = true;
-	}
 
 	/* Get column name list and partition column index for the target table */
 	List *columnNameList = BuildColumnNameListFromTargetList(targetRelationId,
@@ -554,8 +541,7 @@ ExecutePlanIntoRelation(Oid targetRelationId, List *insertTargetList,
 	CitusCopyDestReceiver *copyDest = CreateCitusCopyDestReceiver(targetRelationId,
 																  columnNameList,
 																  partitionColumnIndex,
-																  executorState,
-																  stopOnFailure, NULL);
+																  executorState, NULL);
 
 	ExecutePlanIntoDestReceiver(selectPlan, paramListInfo, (DestReceiver *) copyDest);
 

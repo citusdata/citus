@@ -30,7 +30,8 @@ SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
  
 (1 row)
 
-\copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+SELECT master_create_empty_shard('lineitem_alter') AS shardid \gset
+copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
 -- verify that the storage options made it to the table definitions
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
     relname     |   reloptions    
@@ -133,7 +134,8 @@ SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
 ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
 -- \copy to verify that default values take effect
-\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
  float_column | count 
 --------------+-------
@@ -180,9 +182,12 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
 -- \copy should fail because it will try to insert NULLs for a NOT NULL column
 -- Note, this operation will create a table on the workers but it won't be in the metadata
-\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
-ERROR:  null value in column "int_column2" violates not-null constraint
+BEGIN;
+SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
+ERROR:  null value in column "int_column2" of relation "lineitem_alter_220002" violates not-null constraint
 DETAIL:  Failing row contains (1, 155190, 7706, 1, 17.00, 21168.23, 0.04, 0.02, N, O, 1996-03-13, 1996-02-12, 1996-03-22, DELIVER IN PERSON        , TRUCK     , egular courts above the, 1, null, null, null, null).
+END;
 -- Verify that DROP NOT NULL works
 ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
@@ -211,8 +216,9 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineite
  null_column     | integer               | 
 (21 rows)
 
--- \copy should succeed now 
-\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+-- \copy should succeed now
+SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
 SELECT count(*) from lineitem_alter;
  count 
 -------
@@ -389,10 +395,10 @@ ERROR:  type "non_existent_type" does not exist
 LINE 1: ALTER TABLE lineitem_alter ADD COLUMN new_column non_existen...
                                                          ^
 ALTER TABLE lineitem_alter ALTER COLUMN null_column SET NOT NULL;
-ERROR:  column "null_column" contains null values
+ERROR:  column "null_column" of relation "lineitem_alter_220000" contains null values
 CONTEXT:  while executing command on localhost:57637
 ALTER TABLE lineitem_alter ALTER COLUMN l_partkey SET DEFAULT 'a';
-ERROR:  invalid input syntax for integer: "a"
+ERROR:  invalid input syntax for type integer: "a"
 -- Verify that we error out on RENAME CONSTRAINT statement
 ALTER TABLE lineitem_alter RENAME CONSTRAINT constraint_a TO constraint_b;
 ERROR:  renaming constraints belonging to distributed tables is currently unsupported
@@ -659,23 +665,21 @@ SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_item
 -----------+-----------
 (0 rows)
 
--- Now try with 2pc off
+-- Even if 1PC is picked for multi-shard commands
+-- Citus always uses 2PC for replication > 1
 SET citus.multi_shard_commit_protocol TO '1pc';
 BEGIN;
 CREATE INDEX single_index_2 ON single_shard_items(id);
 CREATE INDEX single_index_3 ON single_shard_items(name);
 COMMIT;
-WARNING:  duplicate key value violates unique constraint "ddl_commands_command_key"
+ERROR:  duplicate key value violates unique constraint "ddl_commands_command_key"
 DETAIL:  Key (command)=(CREATE INDEX) already exists.
 CONTEXT:  while executing command on localhost:57638
-WARNING:  failed to commit transaction on localhost:57638
--- The block should have committed with a warning
+-- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
-   indexname    |     tablename      
-----------------+--------------------
- single_index_2 | single_shard_items
- single_index_3 | single_shard_items
-(2 rows)
+ indexname | tablename 
+-----------+-----------
+(0 rows)
 
 \c - - - :worker_2_port
 DROP EVENT TRIGGER log_ddl_tag;
@@ -740,7 +744,7 @@ CREATE UNIQUE INDEX temp_unique_index_1 ON test_ab(a);
 ERROR:  could not create unique index "temp_unique_index_1_220011"
 DETAIL:  Key (a)=(2) is duplicated.
 CONTEXT:  while executing command on localhost:57638
-SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard 
+SELECT shardid FROM pg_dist_shard_placement NATURAL JOIN pg_dist_shard
 WHERE logicalrelid='test_ab'::regclass AND shardstate=3;
  shardid 
 ---------
@@ -1002,18 +1006,18 @@ ALTER TABLE trigger_table DISABLE TRIGGER ALL;
 ERROR:  triggers are only supported for local tables added to metadata
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
-      value       | count 
-------------------+-------
- trigger enabled  |     2
+      value      | count 
+-----------------+-------
+ trigger enabled |     2
 (1 row)
 
 ALTER TABLE trigger_table ENABLE TRIGGER ALL;
 ERROR:  triggers are only supported for local tables added to metadata
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
-      value       | count 
-------------------+-------
- trigger enabled  |     3
+      value      | count 
+-----------------+-------
+ trigger enabled |     3
 (1 row)
 
 DROP TABLE trigger_table;
@@ -1029,12 +1033,6 @@ HINT:  Connect to worker nodes directly to manually move all tables.
 DROP TABLESPACE super_fast_ssd;
 -- Cleanup the table and its shards
 SET citus.enable_ddl_propagation to true;
-SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
- master_apply_delete_command 
------------------------------
-                           3
-(1 row)
-
 DROP TABLE lineitem_alter;
 -- check that nothing's left over on workers, other than the leftover shard created
 -- during the unsuccessful COPY
@@ -1076,7 +1074,7 @@ SELECT create_distributed_table('logged_test', 'id');
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
       relname       | logged_info 
 --------------------+-------------
  logged_test_220022 | unlogged
@@ -1095,7 +1093,7 @@ SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logg
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
       relname       | logged_info 
 --------------------+-------------
  logged_test_220022 | logged
@@ -1113,7 +1111,7 @@ SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logg
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
       relname       | logged_info 
 --------------------+-------------
  logged_test_220022 | unlogged
@@ -1140,7 +1138,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist_%' ORDER BY relname;
      relname      |   reloptions    
 ------------------+-----------------
  hash_dist_220026 | {fillfactor=40}
@@ -1159,7 +1157,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
         relname        |   reloptions    
 -----------------------+-----------------
  hash_dist_pkey_220026 | {fillfactor=40}
@@ -1177,7 +1175,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
         relname        | reloptions 
 -----------------------+------------
  hash_dist_pkey_220026 | 
@@ -1190,7 +1188,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' OR
 -- verify error message on ALTER INDEX, SET TABLESPACE is unsupported
 ALTER INDEX hash_dist_pkey SET TABLESPACE foo;
 ERROR:  alter index ... set tablespace ... is currently unsupported
-DETAIL:  Only RENAME TO, SET (), RESET () and SET STATISTICS are supported.
+DETAIL:  Only RENAME TO, SET (), RESET (), ATTACH PARTITION and SET STATISTICS are supported.
 -- verify that we can add indexes with new storage options
 CREATE UNIQUE INDEX another_index ON hash_dist(id) WITH (fillfactor=50);
 -- show the index and its storage options on coordinator, then workers
@@ -1201,7 +1199,7 @@ SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
 (1 row)
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index_%' ORDER BY relname;
        relname        |   reloptions    
 ----------------------+-----------------
  another_index_220026 | {fillfactor=50}
