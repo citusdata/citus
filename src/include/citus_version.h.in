@@ -25,7 +25,7 @@
 #undef HAVE_LIBCURL
 
 /* Define to 1 if you have the `liblz4' library (-llz4). */
-#undef HAVE_LIBLZ4
+#undef HAVE_CITUS_LIBLZ4
 
 /* Define to 1 if you have the `libzstd' library (-lzstd). */
 #undef HAVE_LIBZSTD

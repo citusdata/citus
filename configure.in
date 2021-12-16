@@ -220,7 +220,8 @@ AC_DEFINE_UNQUOTED(REPORTS_BASE_URL, "$REPORTS_BASE_URL",
 # LZ4
 #
 PGAC_ARG_BOOL(with, lz4, yes,
-              [do not use lz4])
+              [do not use lz4],
+              [AC_DEFINE([HAVE_CITUS_LIBLZ4], 1, [Define to 1 to build with lz4 support. (--with-lz4)])])
 AC_SUBST(with_lz4)
 
 if test "$with_lz4" = yes; then
