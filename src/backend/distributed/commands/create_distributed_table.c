@@ -449,11 +449,13 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	ObjectAddress tableAddress = { 0 };
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
-	/* TODO: Update owner of the sequence(?) */
 
 	/* TODO: Consider partitioned tables */
-	CreateShellTableOnWorkers(relationId);
-	MarkObjectDistributed(&tableAddress);
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		CreateShellTableOnWorkers(relationId);
+		MarkObjectDistributed(&tableAddress);
+	}
 
 	char replicationModel = DecideReplicationModel(distributionMethod,
 												   colocateWithTableName,

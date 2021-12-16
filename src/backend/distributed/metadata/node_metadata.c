@@ -824,14 +824,37 @@ ClearDistributedObjectsWithMetadataFromNode(WorkerNode *workerNode)
 	clearDistTableInfoCommandList = list_concat(clearDistTableInfoCommandList,
 										  detachPartitionCommandList);
 
+	/* iterate over the commands and execute them in the same connection */
+	const char *commandString = NULL;
+	foreach_ptr(commandString, clearDistTableInfoCommandList)
+	{
+		elog(WARNING, "Current command 1 is %s", commandString);
+	}
+
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
 									REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
+	commandString = NULL;
+	foreach_ptr(commandString, clearDistTableInfoCommandList)
+	{
+		elog(WARNING, "Current command 2 is %s", commandString);
+	}
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList, DELETE_ALL_DISTRIBUTED_OBJECTS);
+	
+	commandString = NULL;
+	foreach_ptr(commandString, clearDistTableInfoCommandList)
+	{
+		elog(WARNING, "Current command 3 is %s", commandString);
+	}
 
-	List *clearDistTableCommands = list_make3(DISABLE_DDL_PROPAGATION,
-									  		  clearDistTableInfoCommandList,
-											  ENABLE_DDL_PROPAGATION);
+	clearDistTableInfoCommandList = list_concat(list_make1(DISABLE_DDL_PROPAGATION),clearDistTableInfoCommandList);
+	clearDistTableInfoCommandList = list_concat(clearDistTableInfoCommandList, list_make1(ENABLE_DDL_PROPAGATION));
+
+	commandString = NULL;
+	foreach_ptr(commandString, clearDistTableInfoCommandList)
+	{
+		elog(WARNING, "Current command 3 is %s", commandString);
+	}
 
 	char *currentUser = CurrentUserName();
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,

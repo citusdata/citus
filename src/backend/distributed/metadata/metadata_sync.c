@@ -83,7 +83,7 @@
 char *EnableManualMetadataChangesForUser = "";
 
 
-static List * GetDistributedTableDDLEvents(Oid relationId);
+static List * GetDistributedTableMetadataEvents(Oid relationId);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
 static char * LocalGroupIdUpdateCommand(int32 groupId);
@@ -539,13 +539,13 @@ MetadataCreateCommands(void)
 
 
 /*
- * GetDistributedTableDDLEvents returns the full set of DDL commands necessary to
+ * GetDistributedTableMetadataEvents returns the full set of DDL commands necessary to
  * create the given distributed table on a worker. The list includes setting up any
  * sequences, setting the owner of the table, inserting table and shard metadata,
  * setting the truncate trigger and foreign key constraints.
  */
 static List *
-GetDistributedTableDDLEvents(Oid relationId)
+GetDistributedTableMetadataEvents(Oid relationId)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
@@ -553,13 +553,6 @@ GetDistributedTableDDLEvents(Oid relationId)
 
 	/* if the table is owned by an extension we only propagate pg_dist_* records */
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
-	if (!tableOwnedByExtension)
-	{
-		/* command to associate sequences with table */
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(
-			relationId);
-		commandList = list_concat(commandList, sequenceDependencyCommandList);
-	}
 
 	/* command to insert pg_dist_partition entry */
 	char *metadataCommand = DistributionCreateCommand(cacheEntry);
@@ -1788,6 +1781,10 @@ CreateShellTableOnWorkers(Oid relationId)
 			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
 		}
 
+		/* command to associate sequences with table */
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
+		commandList = list_concat(commandList, sequenceDependencyCommandList);
+
 		/* prevent recursive propagation */
 		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
@@ -1811,7 +1808,7 @@ CreateShellTableOnWorkers(Oid relationId)
 void
 CreateTableMetadataOnWorkers(Oid relationId)
 {
-	List *commandList = GetDistributedTableDDLEvents(relationId);
+	List *commandList = GetDistributedTableMetadataEvents(relationId);
 
 	/* prevent recursive propagation */
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
