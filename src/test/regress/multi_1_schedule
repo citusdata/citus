@@ -280,10 +280,10 @@ test: multi_foreign_key_relation_graph
 # and rerun some of the tests.
 # --------
 test: check_mx
-test: turn_mx_off
 test: add_coordinator
 test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
+test: turn_mx_off
 test: citus_local_tables
 test: multi_row_router_insert mixed_relkind_tests
 test: turn_mx_on

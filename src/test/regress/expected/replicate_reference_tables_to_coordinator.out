@@ -506,6 +506,7 @@ SELECT master_remove_node('localhost', :master_port);
 SELECT master_add_node('localhost', :master_port, groupid => 0) AS master_nodeid \gset
 NOTICE:  Replicating reference table "squares" to the node localhost:xxxxx
 NOTICE:  Replicating reference table "numbers" to the node localhost:xxxxx
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
 -- clean-up
 SET client_min_messages TO ERROR;
 DROP SCHEMA replicate_ref_to_coordinator CASCADE;
