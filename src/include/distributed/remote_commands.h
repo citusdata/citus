@@ -20,6 +20,7 @@
 
 /* GUC, determining whether statements sent to remote nodes are logged */
 extern bool LogRemoteCommands;
+extern char *GrepRemoteCommands;
 
 /* GUC that determines the number of bytes after which remote COPY is flushed */
 extern int RemoteCopyFlushThreshold;
@@ -38,6 +39,7 @@ extern void ReportResultError(MultiConnection *connection, PGresult *result,
 							  int elevel);
 extern char * pchomp(const char *in);
 extern void LogRemoteCommand(MultiConnection *connection, const char *command);
+extern bool CommandMatchesLogGrepPattern(const char *command);
 
 /* wrappers around libpq functions, with command logging support */
 extern void ExecuteCriticalRemoteCommandList(MultiConnection *connection,

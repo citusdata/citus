@@ -513,8 +513,14 @@ LogLocalCommand(Task *task)
 		return;
 	}
 
+	const char *command = TaskQueryString(task);
+	if (!CommandMatchesLogGrepPattern(command))
+	{
+		return;
+	}
+
 	ereport(NOTICE, (errmsg("executing the command locally: %s",
-							ApplyLogRedaction(TaskQueryString(task)))));
+							ApplyLogRedaction(command))));
 }
 
 

@@ -267,6 +267,68 @@ WITH cte_1 AS (UPDATE test SET y = y - 1 RETURNING *) SELECT * FROM cte_1 ORDER 
  5 | 6
 (5 rows)
 
+-- show that we can filter remote commands
+-- given that citus.grep_remote_commands, we log all commands
+SET citus.log_local_commands to true;
+SELECT count(*) FROM public.another_schema_table WHERE a = 1;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.another_schema_table_90630515 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- grep matches all commands
+SET citus.grep_remote_commands TO "%%";
+SELECT count(*) FROM public.another_schema_table WHERE a = 1;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.another_schema_table_90630515 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- only filter a specific shard for the local execution
+BEGIN;
+	SET LOCAL citus.grep_remote_commands TO "%90630515%";
+	SELECT count(*) FROM public.another_schema_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.another_schema_table_90630515 another_schema_table WHERE true
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	-- match nothing
+	SET LOCAL citus.grep_remote_commands TO '%nothing%';
+	SELECT count(*) FROM public.another_schema_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+COMMIT;
+-- only filter a specific shard for the remote execution
+BEGIN;
+	SET LOCAL citus.enable_local_execution TO FALSE;
+	SET LOCAL citus.grep_remote_commands TO '%90630515%';
+	SET LOCAL citus.log_remote_commands TO ON;
+	SELECT count(*) FROM public.another_schema_table;
+NOTICE:  issuing SELECT count(*) AS count FROM public.another_schema_table_90630515 another_schema_table WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	-- match nothing
+	SET LOCAL citus.grep_remote_commands TO '%nothing%';
+	SELECT count(*) FROM public.another_schema_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+COMMIT;
+RESET citus.log_local_commands;
+RESET citus.grep_remote_commands;
 -- Test upsert with constraint
 CREATE TABLE upsert_test
 (
