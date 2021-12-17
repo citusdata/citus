@@ -311,6 +311,12 @@ _PG_init(void)
 	original_client_auth_hook = ClientAuthentication_hook;
 	ClientAuthentication_hook = CitusAuthHook;
 
+	/*
+	 * When the options change on a columnar table, we may need to propagate
+	 * the changes to shards.
+	 */
+	ColumnarTableSetOptions_hook = ColumnarTableSetOptionsHook;
+
 	InitializeMaintenanceDaemon();
 
 	/* initialize coordinated transaction management */
