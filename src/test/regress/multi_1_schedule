@@ -48,8 +48,6 @@ test: multi_read_from_secondaries
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
 # ----------
-test: check_mx
-test: turn_mx_off
 test: multi_citus_tools
 
 # ----------
@@ -57,7 +55,6 @@ test: multi_citus_tools
 # multi_remove_node_reference_table tests metadata changes after master_remove_node
 # ----------
 test: multi_replicate_reference_table
-test: turn_mx_on
 test: multi_remove_node_reference_table
 
 # ----------

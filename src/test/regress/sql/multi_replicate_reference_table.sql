@@ -451,7 +451,7 @@ WHERE
 ORDER BY shardid, nodeport;
 
 -- verify constraints have been created on the new node
-SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname like ''ref_table%'';');
+SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname similar to ''ref_table%\d'';');
 
 DROP TABLE ref_table_1, ref_table_2, ref_table_3;
 
@@ -591,7 +591,6 @@ SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 
 SET citus.shard_replication_factor TO 1;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 SELECT master_copy_shard_placement(
            :ref_table_shard,
@@ -636,8 +635,6 @@ WHERE ref_table.a = dist_table.a;
 \c - - - :master_port
 
 SET search_path TO replicate_reference_table;
-
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 
 --
 -- The following case used to get stuck on create_distributed_table() instead
