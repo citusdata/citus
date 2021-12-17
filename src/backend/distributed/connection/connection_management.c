@@ -1459,6 +1459,8 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 bool
 IsCitusInitiatedRemoteBackend(void)
 {
+	elog(WARNING, "IsCitusInitiatedRemoteBackend");
+	elog(WARNING, "Application name is %s", application_name);
 	return application_name && strcmp(application_name, CITUS_APPLICATION_NAME) == 0;
 }
 

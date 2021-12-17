@@ -207,8 +207,6 @@ StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
 		return;
 	}
 
-	UseCoordinatedTransaction();
-
 	/*
 	 * One would normally expect to set hasmetadata first, and then metadata sync.
 	 * However, at this point we do the order reverse.

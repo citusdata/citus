@@ -650,11 +650,12 @@ SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode)
 	}
 
 	char *currentUser = CurrentUserName();
-	List *commandList = list_make3(DISABLE_DDL_PROPAGATION, multipleTableIntegrationCommandList, ENABLE_DDL_PROPAGATION);
+	multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION, multipleTableIntegrationCommandList);
+	multipleTableIntegrationCommandList = lappend(multipleTableIntegrationCommandList, ENABLE_DDL_PROPAGATION);
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
 															currentUser,
-															commandList);
+															multipleTableIntegrationCommandList);
 }
 
 
@@ -712,13 +713,14 @@ SetUpObjectMetadata(WorkerNode *workerNode)
 												  distributedObjectSyncCommandList);
 	}
 
-	List *metadataSnapshotCommands = list_make3(DISABLE_DDL_PROPAGATION, metadataSnapshotCommandList, ENABLE_DDL_PROPAGATION);
+	metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION, metadataSnapshotCommandList);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList, ENABLE_DDL_PROPAGATION);
 
 	char *currentUser = CurrentUserName();
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
 															currentUser,
-															metadataSnapshotCommands);
+															metadataSnapshotCommandList);
 }
 
 
@@ -824,43 +826,19 @@ ClearDistributedObjectsWithMetadataFromNode(WorkerNode *workerNode)
 	clearDistTableInfoCommandList = list_concat(clearDistTableInfoCommandList,
 										  detachPartitionCommandList);
 
-	/* iterate over the commands and execute them in the same connection */
-	const char *commandString = NULL;
-	foreach_ptr(commandString, clearDistTableInfoCommandList)
-	{
-		elog(WARNING, "Current command 1 is %s", commandString);
-	}
-
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
 									REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
-	commandString = NULL;
-	foreach_ptr(commandString, clearDistTableInfoCommandList)
-	{
-		elog(WARNING, "Current command 2 is %s", commandString);
-	}
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList, DELETE_ALL_DISTRIBUTED_OBJECTS);
-	
-	commandString = NULL;
-	foreach_ptr(commandString, clearDistTableInfoCommandList)
-	{
-		elog(WARNING, "Current command 3 is %s", commandString);
-	}
 
 	clearDistTableInfoCommandList = list_concat(list_make1(DISABLE_DDL_PROPAGATION),clearDistTableInfoCommandList);
 	clearDistTableInfoCommandList = list_concat(clearDistTableInfoCommandList, list_make1(ENABLE_DDL_PROPAGATION));
-
-	commandString = NULL;
-	foreach_ptr(commandString, clearDistTableInfoCommandList)
-	{
-		elog(WARNING, "Current command 3 is %s", commandString);
-	}
 
 	char *currentUser = CurrentUserName();
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
 															currentUser,
-															clearDistTableCommands);
+															clearDistTableInfoCommandList);
 }
 
 
@@ -943,7 +921,8 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 	if (list_length(ddlCommands) > 0)
 	{
 		/* if there are command wrap them in enable_ddl_propagation off */
-		ddlCommands = list_make3(DISABLE_DDL_PROPAGATION, ddlCommands, ENABLE_DDL_PROPAGATION);
+		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
+		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
 		/* send commands to new workers*/
 		SendMetadataCommandListToWorkerInCoordinatedTransaction(newWorkerNode->workerName,
@@ -1246,8 +1225,7 @@ DetachPartitionCommandList(void)
 		return NIL;
 	}
 
-	detachPartitionCommandList =
-		lcons(DISABLE_DDL_PROPAGATION, detachPartitionCommandList);
+	detachPartitionCommandList = lcons(DISABLE_DDL_PROPAGATION, detachPartitionCommandList);
 
 	/*
 	 * We probably do not need this but as an extra precaution, we are enabling

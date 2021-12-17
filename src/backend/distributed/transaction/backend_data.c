@@ -907,12 +907,14 @@ MyBackendGotCancelledDueToDeadlock(bool clearState)
 bool
 MyBackendIsInDisributedTransaction(void)
 {
+	elog(WARNING, "MyBackendIsInDisributedTransaction 1");
 	/* backend might not have used citus yet and thus not initialized backend data */
 	if (!MyBackendData)
 	{
 		return false;
 	}
 
+	elog(WARNING, "MyBackendIsInDisributedTransaction 2");	
 	return IsInDistributedTransaction(MyBackendData);
 }
 

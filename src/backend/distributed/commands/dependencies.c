@@ -392,7 +392,8 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	}
 
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
-	ddlCommands = list_make3(DISABLE_DDL_PROPAGATION, ddlCommands, ENABLE_DDL_PROPAGATION);
+	ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
+	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort, CitusExtensionOwnerName(), ddlCommands);
 }
