@@ -1088,6 +1088,18 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.grep_remote_commands",
+		gettext_noop(
+			"Applies \"command\" like citus.grep_remote_commands, if returns "
+			"true, the command is logged."),
+		NULL,
+		&GrepRemoteCommands,
+		"",
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.isolation_test_session_process_id",
 		NULL,
