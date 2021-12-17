@@ -214,7 +214,7 @@ class CitusSuperUserDefaultClusterConfig(CitusMXBaseClusterConfig):
 class CitusThreeWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
-        self.new_settings = {"citus.shard_count": 191}
+        self.new_settings = {"citus.shard_count": 191, "max_connections":1200}
         self.worker_amount = 3
 
     def setup_steps(self):
