@@ -1134,12 +1134,6 @@ ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
 
-	CheckCitusVersion(ERROR);
-	EnsureCoordinator();
-	EnsureModificationsCanRun();
-
-	EnsureSequentialModeMetadataOperations();
-
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
@@ -1169,16 +1163,15 @@ ActivateNode(char *nodeName, int nodePort)
 						BoolGetDatum(isActive));
 	}
 
-	UseCoordinatedTransaction();
-
-	ClearDistributedObjectsWithMetadataFromNode(workerNode);
-	SetUpDistributedTableWithDependencies(workerNode);
-	SetUpMultipleDistributedTableIntegrations(workerNode);
-	SetUpObjectMetadata(workerNode);
-
 	if (syncMetadata)
 	{
 		StartMetadataSyncToNode(nodeName, nodePort);
+
+		// TODO: Consider calling function below according to state
+		ClearDistributedObjectsWithMetadataFromNode(workerNode);
+		SetUpDistributedTableWithDependencies(workerNode);
+		SetUpMultipleDistributedTableIntegrations(workerNode);
+		SetUpObjectMetadata(workerNode);
 	}
 
 	/* finally, let all other active metadata nodes to learn about this change */
