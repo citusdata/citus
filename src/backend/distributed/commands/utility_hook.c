@@ -387,7 +387,10 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		parsetree = ProcessCreateSubscriptionStmt(createSubStmt);
 	}
 
-	/* process SET LOCAL stmts of allowed GUCs in multi-stmt xacts */
+	/*
+	 * Process SET LOCAL and SET TRANSACTION statements in multi-statement
+	 * transactions.
+	 */
 	if (IsA(parsetree, VariableSetStmt))
 	{
 		VariableSetStmt *setStmt = (VariableSetStmt *) parsetree;
