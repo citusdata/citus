@@ -538,9 +538,8 @@ MetadataCreateCommands(void)
 
 /*
  * GetDistributedTableMetadataEvents returns the full set of DDL commands necessary to
- * create the given distributed table on a worker. The list includes setting up any
- * sequences, setting the owner of the table, inserting table and shard metadata,
- * setting the truncate trigger and foreign key constraints.
+ * create the given distributed table metadata on a worker. The list includes setting up
+ * any shard metadata, setting the truncate trigger and foreign key constraints.
  */
 static List *
 GetDistributedTableMetadataEvents(Oid relationId)

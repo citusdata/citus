@@ -450,10 +450,11 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
+	CreateShellTableOnWorkers(relationId);
+
 	/* TODO: Consider partitioned tables */
-	if (ShouldSyncTableMetadata(relationId))
+	if (EnableDependencyCreation)
 	{
-		CreateShellTableOnWorkers(relationId);
 		MarkObjectDistributed(&tableAddress);
 	}
 

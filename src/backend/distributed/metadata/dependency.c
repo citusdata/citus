@@ -676,7 +676,7 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			 * for tables.
 			 */
 			if (relKind == RELKIND_COMPOSITE_TYPE ||
-				(relKind == RELKIND_RELATION && IsCitusTable(address->objectId)) ||
+				relKind == RELKIND_RELATION || // TODO: Should check for normal tables?
 				relKind == RELKIND_SEQUENCE)
 			{
 				return true;
