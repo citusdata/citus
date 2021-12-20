@@ -245,6 +245,12 @@ citus_add_node(PG_FUNCTION_ARGS)
 	bool nodeAlreadyExists = false;
 	nodeMetadata.groupId = PG_GETARG_INT32(2);
 
+	if (!EnableDependencyCreation)
+	{
+		ereport(ERROR, (errmsg("citus.enable_object_propagation must be on to "
+								"add node")));
+	}
+
 	/*
 	 * During tests this function is called before nodeRole and nodeCluster have been
 	 * created.
@@ -966,6 +972,12 @@ citus_activate_node(PG_FUNCTION_ARGS)
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
 
+	if (!EnableDependencyCreation)
+	{
+		ereport(ERROR, (errmsg("citus.enable_object_propagation must be on to "
+								"activate node")));
+	}
+
 	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
 												  nodePort);
 	ActivateNode(workerNode->workerName, workerNode->workerPort);
@@ -1167,11 +1179,24 @@ ActivateNode(char *nodeName, int nodePort)
 	{
 		StartMetadataSyncToNode(nodeName, nodePort);
 
-		// TODO: Consider calling function below according to state
-		ClearDistributedObjectsWithMetadataFromNode(workerNode);
-		SetUpDistributedTableWithDependencies(workerNode);
-		SetUpMultipleDistributedTableIntegrations(workerNode);
-		SetUpObjectMetadata(workerNode);
+		/* 
+		* Since coordinator node already has both objects and related metadata
+		* we don't need to recreate them.
+		*/
+		if (workerNode->groupId != COORDINATOR_GROUP_ID)
+		{
+			// TODO: Consider calling function below according to other states like primary/secondary
+			// Should we check syncMetadata always on as well?
+			ClearDistributedObjectsWithMetadataFromNode(workerNode);
+			SetUpDistributedTableWithDependencies(workerNode);
+			SetUpMultipleDistributedTableIntegrations(workerNode);
+			SetUpObjectMetadata(workerNode);
+		}
+		else if (ReplicateReferenceTablesOnActivate)
+		{
+			ReplicateAllReferenceTablesToNode(workerNode->workerName,
+											  workerNode->workerPort);
+		}
 	}
 
 	/* finally, let all other active metadata nodes to learn about this change */
@@ -1180,7 +1205,6 @@ ActivateNode(char *nodeName, int nodePort)
 
 	return newWorkerNode->nodeId;
 }
-
 
 /*
  * DetachPartitionCommandList returns list of DETACH commands to detach partitions
