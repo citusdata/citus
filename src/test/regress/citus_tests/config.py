@@ -310,7 +310,7 @@ class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
 class CitusShardReplicationFactorClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
-        self.new_settings = {"citus.shard_replication_factor": 2}
+        self.new_settings = {"citus.shard_replication_factor": 2, "max_connections": 1200}
 
 
 class CitusSingleShardClusterConfig(CitusMXBaseClusterConfig):
