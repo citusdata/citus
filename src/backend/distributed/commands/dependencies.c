@@ -58,13 +58,14 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 	/* collect all dependencies in creation order and get their ddl commands */
 	List *dependencies = GetDependenciesForObject(target);
+
+	/* TODO: Might add check for PG (not Citus) tables */
+
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
 		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
-
-		/* TODO: Might add check for tables */
 
 		/* create a new list with dependencies that actually created commands */
 		if (list_length(dependencyCommands) > 0)
@@ -243,6 +244,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				if (IsCitusTable(relationId) && !IsTableOwnedByExtension(relationId))
 				{
 					/* skip table metadata creation when the Citus table is owned by an extension */
+					// TODO: Check sequence next val type
 					List *commandList = NIL;
 					List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 																		  WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
@@ -266,6 +268,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 			if (relKind == RELKIND_SEQUENCE)
 			{
+				// TODO: Check user name for different scenarios
 				char *userName = GetUserNameFromId(GetUserId(), false);
 				return DDLCommandsForSequence(dependency->objectId, userName);
 			}
