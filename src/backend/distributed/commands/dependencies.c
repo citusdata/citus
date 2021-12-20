@@ -64,7 +64,8 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		List *dependencyCommands = GetDependencyCreateDDLCommands(dependency);
 		ddlCommands = list_concat(ddlCommands, dependencyCommands);
 
-		// TODO: Might add check for tables
+		/* TODO: Might add check for tables */
+
 		/* create a new list with dependencies that actually created commands */
 		if (list_length(dependencyCommands) > 0)
 		{
@@ -243,17 +244,20 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				{
 					/* skip table metadata creation when the Citus table is owned by an extension */
 					List *commandList = NIL;
-					List *tableDDLCommands = GetFullTableCreationCommands(relationId, WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
+					List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+																		  WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
 
 					TableDDLCommand *tableDDLCommand = NULL;
 					foreach_ptr(tableDDLCommand, tableDDLCommands)
 					{
 						Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-						commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+						commandList = lappend(commandList, GetTableDDLCommand(
+												  tableDDLCommand));
 					}
 
-					// TODO: May need to move sequence dependencies to ActiveNode directly
-					List *sequenceDependencyCommandList = SequenceDependencyCommandList(dependency->objectId);
+					/* TODO: May need to move sequence dependencies to ActiveNode directly */
+					List *sequenceDependencyCommandList = SequenceDependencyCommandList(
+						dependency->objectId);
 					commandList = list_concat(commandList, sequenceDependencyCommandList);
 
 					return commandList;
@@ -265,6 +269,9 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				char *userName = GetUserNameFromId(GetUserId(), false);
 				return DDLCommandsForSequence(dependency->objectId, userName);
 			}
+
+			/* if this relation is not supported, break to the error at the end */
+			break;
 		}
 
 		case OCLASS_COLLATION:
@@ -395,7 +402,9 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
 	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
-	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort, CitusExtensionOwnerName(), ddlCommands);
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort,
+															CitusExtensionOwnerName(),
+															ddlCommands);
 }
 
 

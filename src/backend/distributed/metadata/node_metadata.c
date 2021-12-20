@@ -248,7 +248,7 @@ citus_add_node(PG_FUNCTION_ARGS)
 	if (!EnableDependencyCreation)
 	{
 		ereport(ERROR, (errmsg("citus.enable_object_propagation must be on to "
-								"add node")));
+							   "add node")));
 	}
 
 	/*
@@ -592,10 +592,10 @@ master_set_node_property(PG_FUNCTION_ARGS)
 /*
  * SetUpMultipleDistributedTableIntegrations set up the multiple integrations
  * including
- * 
+ *
  * (i) Foreign keys
  * (ii) Partionining hierarchy
- * 
+ *
  * on the given worker node.
  */
 static void
@@ -656,8 +656,10 @@ SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode)
 	}
 
 	char *currentUser = CurrentUserName();
-	multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION, multipleTableIntegrationCommandList);
-	multipleTableIntegrationCommandList = lappend(multipleTableIntegrationCommandList, ENABLE_DDL_PROPAGATION);
+	multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION,
+												multipleTableIntegrationCommandList);
+	multipleTableIntegrationCommandList = lappend(multipleTableIntegrationCommandList,
+												  ENABLE_DDL_PROPAGATION);
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
 															currentUser,
@@ -719,8 +721,10 @@ SetUpObjectMetadata(WorkerNode *workerNode)
 												  distributedObjectSyncCommandList);
 	}
 
-	metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION, metadataSnapshotCommandList);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList, ENABLE_DDL_PROPAGATION);
+	metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION,
+										metadataSnapshotCommandList);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  ENABLE_DDL_PROPAGATION);
 
 	char *currentUser = CurrentUserName();
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
@@ -830,15 +834,18 @@ ClearDistributedObjectsWithMetadataFromNode(WorkerNode *workerNode)
 	List *detachPartitionCommandList = DetachPartitionCommandList();
 
 	clearDistTableInfoCommandList = list_concat(clearDistTableInfoCommandList,
-										  detachPartitionCommandList);
+												detachPartitionCommandList);
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
-									REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
+											REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
 
-	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList, DELETE_ALL_DISTRIBUTED_OBJECTS);
+	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
+											DELETE_ALL_DISTRIBUTED_OBJECTS);
 
-	clearDistTableInfoCommandList = list_concat(list_make1(DISABLE_DDL_PROPAGATION),clearDistTableInfoCommandList);
-	clearDistTableInfoCommandList = list_concat(clearDistTableInfoCommandList, list_make1(ENABLE_DDL_PROPAGATION));
+	clearDistTableInfoCommandList = list_concat(list_make1(DISABLE_DDL_PROPAGATION),
+												clearDistTableInfoCommandList);
+	clearDistTableInfoCommandList = list_concat(clearDistTableInfoCommandList, list_make1(
+													ENABLE_DDL_PROPAGATION));
 
 	char *currentUser = CurrentUserName();
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
@@ -932,9 +939,9 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 
 		/* send commands to new workers*/
 		SendMetadataCommandListToWorkerInCoordinatedTransaction(newWorkerNode->workerName,
-												  				newWorkerNode->workerPort,
-												  				CitusExtensionOwnerName(),
-												  				ddlCommands);
+																newWorkerNode->workerPort,
+																CitusExtensionOwnerName(),
+																ddlCommands);
 	}
 }
 
@@ -975,7 +982,7 @@ citus_activate_node(PG_FUNCTION_ARGS)
 	if (!EnableDependencyCreation)
 	{
 		ereport(ERROR, (errmsg("citus.enable_object_propagation must be on to "
-								"activate node")));
+							   "activate node")));
 	}
 
 	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
@@ -1179,14 +1186,14 @@ ActivateNode(char *nodeName, int nodePort)
 	{
 		StartMetadataSyncToNode(nodeName, nodePort);
 
-		/* 
-		* Since coordinator node already has both objects and related metadata
-		* we don't need to recreate them.
-		*/
+		/*
+		 * Since coordinator node already has both objects and related metadata
+		 * we don't need to recreate them.
+		 */
 		if (workerNode->groupId != COORDINATOR_GROUP_ID)
 		{
-			// TODO: Consider calling function below according to other states like primary/secondary
-			// Should we check syncMetadata always on as well?
+			/* TODO: Consider calling function below according to other states like primary/secondary */
+			/* Should we check syncMetadata always on as well? */
 			ClearDistributedObjectsWithMetadataFromNode(workerNode);
 			SetUpDistributedTableWithDependencies(workerNode);
 			SetUpMultipleDistributedTableIntegrations(workerNode);
@@ -1205,6 +1212,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	return newWorkerNode->nodeId;
 }
+
 
 /*
  * DetachPartitionCommandList returns list of DETACH commands to detach partitions
@@ -1242,7 +1250,8 @@ DetachPartitionCommandList(void)
 		return NIL;
 	}
 
-	detachPartitionCommandList = lcons(DISABLE_DDL_PROPAGATION, detachPartitionCommandList);
+	detachPartitionCommandList = lcons(DISABLE_DDL_PROPAGATION,
+									   detachPartitionCommandList);
 
 	/*
 	 * We probably do not need this but as an extra precaution, we are enabling

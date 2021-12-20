@@ -1819,7 +1819,6 @@ CreateTableMetadataOnWorkers(Oid relationId)
 }
 
 
-
 /*
  * SyncMetadataToNodes tries recreating the metadata snapshot in the
  * metadata workers that are out of sync. Returns the result of
