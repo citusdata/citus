@@ -214,7 +214,7 @@ class CitusSuperUserDefaultClusterConfig(CitusMXBaseClusterConfig):
 class CitusThreeWorkersManyShardsClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
-        self.new_settings = {"citus.shard_count": 191, "max_connections":1200}
+        self.new_settings = {"citus.shard_count": 191, "max_connections": 1200}
         self.worker_amount = 3
 
     def setup_steps(self):
@@ -293,6 +293,7 @@ class CitusUnusualQuerySettingsConfig(CitusMXBaseClusterConfig):
             "citus.recover_2pc_interval": "1s",
             "citus.remote_task_check_interval": "1ms",
             "citus.values_materialization_threshold": "0",
+            "max_connections": 1200,
         }
 
 
