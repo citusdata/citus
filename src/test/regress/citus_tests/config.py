@@ -202,6 +202,7 @@ class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
 class CitusSingleWorkerClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
+        self.new_settings = {"max_connections": 1200}
         self.worker_amount = 1
 
 
