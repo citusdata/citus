@@ -1,0 +1,13 @@
+SELECT citus_run_local_command($$SELECT 1; SELECT 1$$);
+ citus_run_local_command
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_run_local_command($$SELECT 1; SELECT 1/0$$);
+ERROR:  division by zero
+CONTEXT:  SQL statement "SELECT 1; SELECT 1/0"
+PL/pgSQL function citus_run_local_command(text) line XX at EXECUTE
+SELECT citus_run_local_command(NULL);
+ERROR:  query string argument of EXECUTE is null
+CONTEXT:  PL/pgSQL function citus_run_local_command(text) line XX at EXECUTE

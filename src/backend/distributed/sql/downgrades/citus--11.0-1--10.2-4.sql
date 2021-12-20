@@ -44,3 +44,4 @@ DROP FUNCTION pg_catalog.citus_check_connection_to_node (text, integer);
 DROP FUNCTION pg_catalog.citus_check_cluster_node_health ();
 
 DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer);
+DROP FUNCTION pg_catalog.citus_run_local_command(text);
