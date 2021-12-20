@@ -569,7 +569,18 @@ CreateFixPartitionShardIndexNamesTaskList(Oid parentRelationId, Oid partitionRel
 			task->taskId = taskId++;
 
 			task->taskType = DDL_TASK;
-			SetTaskQueryStringList(task, queryStringList);
+
+			/*
+			 * In order to avoid round-trips per query in queryStringList, we
+			 * join the string and send as a single command.
+			 */
+			char *string = StringJoin(queryStringList, ';');
+			StringInfo commandToRun = makeStringInfo();
+
+			appendStringInfo(commandToRun,
+							 "SELECT pg_catalog.citus_run_local_command($$%s$$)", string);
+			SetTaskQueryString(task, commandToRun->data);
+
 			task->dependentTaskList = NULL;
 			task->replicationModel = REPLICATION_MODEL_INVALID;
 			task->anchorShardId = parentShardId;

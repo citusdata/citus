@@ -7,6 +7,7 @@
 #include "udfs/citus_check_cluster_node_health/11.0-1.sql"
 
 #include "udfs/citus_internal_add_object_metadata/11.0-1.sql"
+#include "udfs/citus_run_local_command/11.0-1.sql"
 
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);
