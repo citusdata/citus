@@ -922,8 +922,15 @@ ActivateNode(char *nodeName, int nodePort)
 static bool
 ShouldSyncMetadataToNewNode(WorkerNode *newNode)
 {
-	uint32 primaryWorkerCount = ActivePrimaryNonCoordinatorNodeCount();
+	uint32 primaryWorkerCount =
+		ActivePrimaryNonCoordinatorNodeCount();
 	uint32 primariesWithMetadata = CountPrimaryWorkersWithMetadata();
+
+	/*
+	 * TODO: make this check safer
+	 * exclude the newNode as it is already in the metadata
+	 */
+	primaryWorkerCount -= 1;
 
 	if (primaryWorkerCount != 0 && primariesWithMetadata == 0)
 	{
