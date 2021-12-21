@@ -115,6 +115,20 @@ $$ LANGUAGE plpgsql STRICT IMMUTABLE;
 SELECT worker_create_or_replace_object('CREATE AGGREGATE proc_conflict.existing_agg(integer) (STYPE = integer,SFUNC = proc_conflict.existing_func2)');
 SELECT worker_create_or_replace_object('CREATE AGGREGATE proc_conflict.existing_agg(integer) (STYPE = integer,SFUNC = proc_conflict.existing_func2)');
 
+-- test worker_create_or_replace_object with a function that returns table
+CREATE OR REPLACE FUNCTION func_with_return_table(int)
+RETURNS TABLE (date date)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN query SELECT '2011-01-01'::date;
+END;
+$$;
+
+SELECT worker_create_or_replace_object('CREATE OR REPLACE FUNCTION func_with_return_table(int) RETURNS TABLE (date date) LANGUAGE plpgsql AS $$ BEGIN RETURN query SELECT ''2011-01-01''::date; END; $$;');
+
+-- verify that a backup function is created
+SELECT COUNT(*)=2 FROM pg_proc WHERE proname LIKE 'func_with_return_table%';
+
 -- hide cascades
 SET client_min_messages TO error;
 DROP SCHEMA proc_conflict CASCADE;
