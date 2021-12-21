@@ -163,8 +163,9 @@ CREATE INDEX append_zero_shard_table_idx_123456789012345678901234567890123456789
 CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890 ON name_lengths(col2);
 
 \c - - :public_worker_1_host :worker_1_port
+SET citus.override_table_visibility TO FALSE;
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
-    relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
+    relname SIMILAR TO 'tmp_idx_%\_\d{6}' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
 \c - - :master_host :master_port
 
 -- Verify that a new index name > 63 characters is auto-truncated
@@ -175,8 +176,9 @@ CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890123456789
 ALTER INDEX tmp_idx_123456789012345678901234567890123456789012345678901234567890 RENAME TO tmp_idx_newname_123456789012345678901234567890123456789012345678901234567890;
 
 \c - - :public_worker_1_host :worker_1_port
+SET citus.override_table_visibility TO FALSE;
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
-    relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
+    relname SIMILAR TO 'tmp_idx_%\_\d{6}' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
 \c - - :master_host :master_port
 
 SET citus.shard_count TO 2;
@@ -236,6 +238,7 @@ CREATE TABLE sneaky_name_lengths (
 SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
 
 \c - - :public_worker_1_host :worker_1_port
+SET citus.override_table_visibility TO FALSE;
 
 SELECT c1.relname AS unique_index_name
 FROM pg_class c1
@@ -263,6 +266,7 @@ CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (
 SELECT create_distributed_table('too_long_12345678901234567890123456789012345678901234567890', 'col1', 'hash');
 
 \c - - :public_worker_1_host :worker_1_port
+SET citus.override_table_visibility TO FALSE;
 \dt *225000000000*
 \c - - :master_host :master_port
 
@@ -283,8 +287,9 @@ FROM pg_dist_shard
 WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D!0441!043B!043E!043D' UESCAPE '!'::regclass;
 
 \c - - :public_worker_1_host :worker_1_port
-\dt public.elephant_*
-\di public.elephant_*
+SET citus.override_table_visibility TO FALSE;
+\dt public.elephant_*[0-9]+
+\di public.elephant_*[0-9]+
 \c - - :master_host :master_port
 
 SET citus.shard_count TO 2;
