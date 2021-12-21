@@ -30,3 +30,17 @@ BEGIN
 	END IF;
 END;
 $$;
+
+-- Here we keep track of partitioned tables that exists before Citus 11
+-- where we need to call fix_all_partition_shard_index_names() before
+-- metadata is synced. Note that after citus-11, we automatically
+-- adjust the indexes so we only need to fix existing indexes
+DO LANGUAGE plpgsql
+$$
+DECLARE
+  partitioned_table_exists bool :=false;
+BEGIN
+      SELECT count(*) > 0 INTO partitioned_table_exists FROM pg_dist_partition p JOIN pg_class c ON p.logicalrelid = c.oid WHERE c.relkind = 'p';
+      UPDATE pg_dist_node_metadata SET metadata=jsonb_set(metadata, '{partitioned_citus_table_exists_pre_11}', to_jsonb(partitioned_table_exists), true);
+END;
+$$;
