@@ -379,14 +379,9 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE, 0,
 							groupId);
 
-	if (ShouldSyncTableMetadata(shardInterval->relationId))
-	{
-		char *placementCommand = PlacementUpsertCommand(shardId, placementId,
-														SHARD_STATE_ACTIVE, 0,
-														groupId);
-
-		SendCommandToWorkersWithMetadata(placementCommand);
-	}
+	// Since having a duplicate on pg_dist_placement can cause issue, we don't add
+	// it to all nodes here. Caller of this function must propagate pg_dist_placement to
+	// other nodes if it is required.
 }
 
 
