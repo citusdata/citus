@@ -10,6 +10,7 @@ CREATE SCHEMA sequence_default;
 SET search_path = sequence_default, public;
 -- test both distributed and citus local tables
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1
@@ -64,13 +65,9 @@ ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is
 HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
 Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
 ALTER TABLE seq_test_0 ADD COLUMN z serial;
-ERROR:  Cannot add a column involving serial pseudotypes because the table is not empty
-HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
-Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
 ALTER TABLE seq_test_0_local_table ADD COLUMN z serial;
-ERROR:  Cannot add a column involving serial pseudotypes because the table is not empty
-HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
-Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
 -- follow hint
 ALTER TABLE seq_test_0 ADD COLUMN z int;
 ALTER TABLE seq_test_0 ALTER COLUMN z SET DEFAULT nextval('seq_0');
@@ -127,30 +124,63 @@ SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
 ---------------------------------------------------------------------
  integer |     1 |       1 | 2147483647 |         1 | no      |     1
 
--- cannot change the type of a sequence used in a distributed table
--- even if metadata is not synced to workers
+-- cannot alter a sequence used in a distributed table
+-- since the metadata is synced to workers
 ALTER SEQUENCE seq_0 AS bigint;
-ERROR:  Altering a sequence used in a distributed table is currently not supported.
+ERROR:  Altering a distributed sequence is currently not supported.
 ALTER SEQUENCE seq_0_local_table AS bigint;
-ERROR:  Altering a sequence used in a local table that is added to metadata is currently not supported.
+ERROR:  Altering a distributed sequence is currently not supported.
 -- we can change other things like increment
 -- if metadata is not synced to workers
-ALTER SEQUENCE seq_0 INCREMENT BY 2;
-ALTER SEQUENCE seq_0_local_table INCREMENT BY 2;
-\d seq_0
-                  Sequence "sequence_default.seq_0"
+BEGIN;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+NOTICE:  dropping metadata on the node (localhost,57638)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SEQUENCE seq_13;
+CREATE SEQUENCE seq_13_local_table;
+CREATE TABLE seq_test_13 (x int, y int);
+CREATE TABLE seq_test_13_local_table (x int, y int);
+SELECT create_distributed_table('seq_test_13','x');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_add_local_table_to_metadata('seq_test_13_local_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE seq_test_13 ADD COLUMN z int DEFAULT nextval('seq_13');
+ALTER TABLE seq_test_13_local_table ADD COLUMN z int DEFAULT nextval('seq_13_local_table');
+ALTER SEQUENCE seq_13 INCREMENT BY 2;
+ALTER SEQUENCE seq_13_local_table INCREMENT BY 2;
+\d seq_13
+                  Sequence "sequence_default.seq_13"
   Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
 ---------------------------------------------------------------------
  integer |     1 |       1 | 2147483647 |         2 | no      |     1
 
-\d seq_0_local_table
-            Sequence "sequence_default.seq_0_local_table"
+\d seq_13_local_table
+            Sequence "sequence_default.seq_13_local_table"
   Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
 ---------------------------------------------------------------------
  integer |     1 |       1 | 2147483647 |         2 | no      |     1
 
 -- check that we can add serial pseudo-type columns
--- when metadata is not yet synced to workers
+-- when metadata is not synced to workers
 TRUNCATE seq_test_0;
 ALTER TABLE seq_test_0 ADD COLUMN w00 smallserial;
 ALTER TABLE seq_test_0 ADD COLUMN w01 serial2;
@@ -165,6 +195,7 @@ ALTER TABLE seq_test_0_local_table ADD COLUMN w10 serial;
 ALTER TABLE seq_test_0_local_table ADD COLUMN w11 serial4;
 ALTER TABLE seq_test_0_local_table ADD COLUMN w20 bigserial;
 ALTER TABLE seq_test_0_local_table ADD COLUMN w21 serial8;
+ROLLBACK;
 -- check alter column type precaution
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE bigint;
 ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
@@ -961,12 +992,6 @@ SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
  (localhost,57637,t,"DROP SCHEMA")
  (localhost,57638,t,"DROP SCHEMA")
 (2 rows)
-
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
 
 SELECT master_remove_node('localhost', :master_port);
  master_remove_node
