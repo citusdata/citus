@@ -101,7 +101,7 @@ extern WorkerNode * SetWorkerColumnOptional(WorkerNode *workerNode, int columnIn
 											value);
 extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnIndex,
 											 Datum value);
-extern uint32 CountPrimariesWithMetadata(void);
+extern uint32 CountPrimaryWorkersWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
 
 /* Function declarations for worker node utilities */

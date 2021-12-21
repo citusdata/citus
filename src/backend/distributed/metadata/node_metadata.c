@@ -91,6 +91,7 @@ typedef struct NodeMetadata
 
 /* local function forward declarations */
 static int ActivateNode(char *nodeName, int nodePort);
+static bool ShouldSyncMetadataToNewNode(WorkerNode *newNode);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static void ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode);
 static bool PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement
@@ -883,8 +884,7 @@ ActivateNode(char *nodeName, int nodePort)
 	workerNode =
 		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
 								 BoolGetDatum(isActive));
-	bool syncMetadata =
-		EnableMetadataSyncByDefault && NodeIsPrimary(workerNode);
+	bool syncMetadata = ShouldSyncMetadataToNewNode(workerNode);
 
 	if (syncMetadata)
 	{
@@ -908,6 +908,35 @@ ActivateNode(char *nodeName, int nodePort)
 	Assert(newWorkerNode->nodeId == workerNode->nodeId);
 
 	return newWorkerNode->nodeId;
+}
+
+
+/*
+ * ShouldSyncMetadataToNewNode decides to sync metadata to new node only if
+ * there is at least one healthy primary worker node with metadata synced.
+ *
+ * This is to prevent upgrades from pre Citus-11 to post Citus-11 to automatically
+ * convert the cluster to a metadata synced cluster. However, if the cluster is
+ * post Citus-11 (or had 0 workers on pre Citus-11), we'd sync the metadata.
+ */
+static bool
+ShouldSyncMetadataToNewNode(WorkerNode *newNode)
+{
+	uint32 primaryWorkerCount = ActivePrimaryNonCoordinatorNodeCount();
+	uint32 primariesWithMetadata = CountPrimaryWorkersWithMetadata();
+
+	if (primaryWorkerCount != 0 && primariesWithMetadata == 0)
+	{
+		/*
+		 * This cluster doesnt't have any worker nodes with
+		 * metadata synced. In these cases, we refrain from
+		 * syncing the metadata.
+		 */
+		return false;
+	}
+
+	/* otherwise, we check if the user explicitly disabled metadata syncing */
+	return EnableMetadataSyncByDefault && NodeIsPrimary(newNode);
 }
 
 
@@ -1472,9 +1501,9 @@ RemoveOldShardPlacementForNodeGroup(int groupId)
 }
 
 
-/* CountPrimariesWithMetadata returns the number of primary nodes which have metadata. */
+/* CountPrimaryWorkersWithMetadata returns the number of primary nodes which have metadata. */
 uint32
-CountPrimariesWithMetadata(void)
+CountPrimaryWorkersWithMetadata(void)
 {
 	uint32 primariesWithMetadata = 0;
 	WorkerNode *workerNode = NULL;
@@ -1648,7 +1677,7 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	SendCommandToWorkersWithMetadata(nodeDeleteCommand);
 
 	/* finally prepare the insert command and send it to all primary nodes */
-	uint32 primariesWithMetadata = CountPrimariesWithMetadata();
+	uint32 primariesWithMetadata = CountPrimaryWorkersWithMetadata();
 	if (primariesWithMetadata != 0)
 	{
 		List *workerNodeList = list_make1(workerNode);
