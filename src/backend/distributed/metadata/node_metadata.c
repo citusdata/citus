@@ -509,16 +509,6 @@ citus_disable_node(PG_FUNCTION_ARGS)
 								 workerNode->workerName,
 								 nodePort)));
 		}
-
-		/*
-		 * Delete replicated table placements from the coordinator's metadata,
-		 * but not remotely. That is because one more more of the remote
-		 * nodes might be down. Instead, we let the background worker
-		 * to sync the metadata when possible.
-		 */
-		bool forceRemoteDelete = false;
-		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
-														forceRemoteDelete);
 	}
 
 	TransactionModifiedNodeMetadata = true;
@@ -1182,27 +1172,44 @@ ActivateNode(char *nodeName, int nodePort)
 						BoolGetDatum(isActive));
 	}
 
-	if (syncMetadata)
-	{
-		StartMetadataSyncToNode(nodeName, nodePort);
+	/*
+	 * Delete replicated table placements from the coordinator's metadata,
+	 * including remote ones.
+	 */
+	bool forceRemoteDelete = true;
+	DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
+													forceRemoteDelete);
 
-		/*
-		 * Since coordinator node already has both objects and related metadata
-		 * we don't need to recreate them.
-		 */
+	/*
+	* Since coordinator node already has both objects and related metadata
+	* we don't need to recreate them.
+	*/
+	if (NodeIsPrimary(workerNode))
+	{
 		if (workerNode->groupId != COORDINATOR_GROUP_ID)
 		{
 			/* TODO: Consider calling function below according to other states like primary/secondary */
 			/* Should we check syncMetadata always on as well? */
 			ClearDistributedObjectsWithMetadataFromNode(workerNode);
 			SetUpDistributedTableWithDependencies(workerNode);
-			SetUpMultipleDistributedTableIntegrations(workerNode);
-			SetUpObjectMetadata(workerNode);
+
 		}
 		else if (ReplicateReferenceTablesOnActivate)
 		{
+			// We only need to replicate reference table to the coordinator node
 			ReplicateAllReferenceTablesToNode(workerNode->workerName,
-											  workerNode->workerPort);
+												workerNode->workerPort);
+		}
+	}
+
+	if (syncMetadata)
+	{
+		StartMetadataSyncToNode(nodeName, nodePort);
+
+		if (workerNode->groupId != COORDINATOR_GROUP_ID)
+		{
+			SetUpMultipleDistributedTableIntegrations(workerNode);
+			SetUpObjectMetadata(workerNode);
 		}
 	}
 

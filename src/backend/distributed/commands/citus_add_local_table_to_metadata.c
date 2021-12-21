@@ -345,7 +345,6 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * via process utility.
 	 */
 	ExecuteAndLogUtilityCommandList(shellTableDDLEvents);
-	MarkObjectDistributed(&tableAddress);
 
 	/*
 	 * Set shellRelationId as the relation with relationId now points
@@ -368,6 +367,13 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
 
 	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
+
+	/*
+	 * Mark the shell relation as distributed on each node as the last step.
+	 */
+	ObjectAddress shellRelationAddress = { 0 };
+	ObjectAddressSet(shellRelationAddress, RelationRelationId, shellRelationId);
+	MarkObjectDistributed(&shellRelationAddress);
 }
 
 
@@ -1239,6 +1245,8 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 	{
 		CreateTruncateTrigger(relationId);
 	}
+
+	CreateShellTableOnWorkers(relationId);
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
