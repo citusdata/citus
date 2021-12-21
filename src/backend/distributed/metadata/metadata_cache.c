@@ -2282,7 +2282,7 @@ DistNodeNodeIdIndexId(void)
 Oid
 DistLocalGroupIdRelationId(void)
 {
-	CachedRelationLookup("pg_dist_local_group",
+	CachedRelationLookup("pg_dist_local_node_info",
 						 &MetadataCache.distLocalGroupRelationId);
 
 	return MetadataCache.distLocalGroupRelationId;

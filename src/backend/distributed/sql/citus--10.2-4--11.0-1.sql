@@ -30,3 +30,11 @@ BEGIN
 	END IF;
 END;
 $$;
+
+
+ALTER TABLE pg_dist_local_group DISABLE TRIGGER dist_local_group_cache_invalidate;
+ALTER TABLE pg_dist_local_group RENAME TO pg_dist_local_node_info;
+ALTER TABLE pg_dist_local_node_info ADD COLUMN citus_creation_version TEXT DEFAULT NULL;
+UPDATE pg_dist_local_node_info SET citus_creation_version = (SELECT default_version FROM pg_available_extensions WHERE name = 'citus');
+ALTER TRIGGER dist_local_group_cache_invalidate ON pg_dist_local_node_info RENAME TO dist_local_info_cache_invalidate;
+ALTER TABLE pg_dist_local_node_info ENABLE TRIGGER dist_local_info_cache_invalidate;

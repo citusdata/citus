@@ -1487,7 +1487,7 @@ LocalGroupIdUpdateCommand(int32 groupId)
 {
 	StringInfo updateCommand = makeStringInfo();
 
-	appendStringInfo(updateCommand, "UPDATE pg_dist_local_group SET groupid = %d",
+	appendStringInfo(updateCommand, "UPDATE pg_dist_local_node_info SET groupid = %d",
 					 groupId);
 
 	return updateCommand->data;
