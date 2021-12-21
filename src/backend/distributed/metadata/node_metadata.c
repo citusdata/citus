@@ -1522,7 +1522,9 @@ CountPrimaryWorkersWithMetadata(void)
 
 	while ((workerNode = hash_seq_search(&status)) != NULL)
 	{
-		if (workerNode->hasMetadata && NodeIsPrimary(workerNode))
+		if (workerNode->groupId != COORDINATOR_GROUP_ID &&
+			workerNode->hasMetadata && workerNode->metadataSynced &&
+			NodeIsPrimary(workerNode))
 		{
 			primariesWithMetadata++;
 		}
