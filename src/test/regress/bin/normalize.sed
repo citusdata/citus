@@ -256,3 +256,33 @@ s/CREATE TABLESPACE test_tablespace LOCATION.*/CREATE TABLESPACE test_tablespace
 s/(.*absolute correlation \()([0,1]\.[0-9]+)(\) of var attribute [0-9]+ is smaller than.*)/\1X\.YZ\3/g
 
 s/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \([0-9]+, [0-9]+, [0-9]+, [0-9]+, [0-9]+\)\)/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \(xxxxxx, xxxxxx, xxxxxx, xxxxxx, xxxxxx\)\)/g
+
+# libpq version alignment on test images
+s/ERROR:  connection not open/ERROR:  server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request\.\nconnection not open/g
+/CONTEXT:  COPY test_table_2, line 1: "1,2"/d
+/^ERROR:  connection not open$/ {
+        s/.*/ERROR:  server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request\.\nconnection not open/g
+}
+
+/^WARNING:  connection not open$/ {
+        s/.*/WARNING:  server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request\.\nconnection not open/g
+}
+
+# used for failure_connection_establishment select removal
+/^-- use OFFSET 1 to prevent printing the line where source$/ {
+	N; /\n-- is the worker, and LIMIT 1 in case there were multiple connections$/ {
+        N; /\nSELECT citus\.dump_network_traffic\(\) ORDER BY 1 LIMIT 1 OFFSET 1;$/ {
+        	N; /\n                           dump_network_traffic$/ {
+        		N; /\n---------------------------------------------------------------------$/ {
+        			N; /\n \([0-9]+,coordinator,"\['Query\(query=SELECT \* FROM dump_local_wait_edges\(\)\)'\]"\)$/ {
+        				N; /\n\([0-9]+ row\)$/ {
+        					/.*/d
+    					}
+    				}
+    			}
+    		}
+    	}
+    }
+}
+
+
