@@ -110,6 +110,38 @@ SELECT * FROM test ORDER BY x;
 UPDATE test SET y = y + 1 RETURNING *;
 WITH cte_1 AS (UPDATE test SET y = y - 1 RETURNING *) SELECT * FROM cte_1 ORDER BY 1,2;
 
+-- show that we can filter remote commands
+-- given that citus.grep_remote_commands, we log all commands
+SET citus.log_local_commands to true;
+SELECT count(*) FROM public.another_schema_table WHERE a = 1;
+
+-- grep matches all commands
+SET citus.grep_remote_commands TO "%%";
+SELECT count(*) FROM public.another_schema_table WHERE a = 1;
+
+-- only filter a specific shard for the local execution
+BEGIN;
+	SET LOCAL citus.grep_remote_commands TO "%90630515%";
+	SELECT count(*) FROM public.another_schema_table;
+	-- match nothing
+	SET LOCAL citus.grep_remote_commands TO '%nothing%';
+	SELECT count(*) FROM public.another_schema_table;
+COMMIT;
+
+-- only filter a specific shard for the remote execution
+BEGIN;
+	SET LOCAL citus.enable_local_execution TO FALSE;
+	SET LOCAL citus.grep_remote_commands TO '%90630515%';
+	SET LOCAL citus.log_remote_commands TO ON;
+	SELECT count(*) FROM public.another_schema_table;
+	-- match nothing
+	SET LOCAL citus.grep_remote_commands TO '%nothing%';
+	SELECT count(*) FROM public.another_schema_table;
+COMMIT;
+
+RESET citus.log_local_commands;
+RESET citus.grep_remote_commands;
+
 -- Test upsert with constraint
 CREATE TABLE upsert_test
 (
@@ -1022,6 +1054,8 @@ ALTER SYSTEM RESET citus.recover_2pc_interval;
 ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
 ALTER SYSTEM RESET citus.local_shared_pool_size;
 SELECT pg_reload_conf();
+
+
 
 -- suppress notices
 SET client_min_messages TO error;

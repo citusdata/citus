@@ -15,8 +15,8 @@
 # ---
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
-test: turn_mx_off
 test: multi_extension
+test: turn_mx_off
 test: single_node
 test: single_node_truncate
 test: turn_mx_on
@@ -48,8 +48,6 @@ test: multi_read_from_secondaries
 # ----------
 # multi_citus_tools tests utility functions written for citus tools
 # ----------
-test: check_mx
-test: turn_mx_off
 test: multi_citus_tools
 
 # ----------
@@ -57,7 +55,6 @@ test: multi_citus_tools
 # multi_remove_node_reference_table tests metadata changes after master_remove_node
 # ----------
 test: multi_replicate_reference_table
-test: turn_mx_on
 test: multi_remove_node_reference_table
 
 # ----------
@@ -103,11 +100,8 @@ test: multi_create_fdw
 # ----------
 # Tests for statistics propagation
 # ----------
-test: check_mx
-test: turn_mx_off
 test: propagate_statistics
 test: pg13_propagate_statistics
-test: turn_mx_on
 
 # ----------
 # Test for updating table statistics
@@ -153,6 +147,7 @@ test: with_executors with_join with_partitioning with_transactions with_dml
 # ----------
 # Tests around DDL statements run on distributed tables
 # ----------
+test: multi_index_statements
 test: multi_alter_table_statements
 test: multi_alter_table_add_constraints
 
@@ -196,11 +191,9 @@ test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactio
 test: multi_modifying_xacts
 test: check_mx
 test: turn_mx_off
-test: multi_index_statements
 test: multi_generate_ddl_commands multi_repair_shards
 test: multi_create_shards
 test: multi_transaction_recovery
-test: multi_copy
 test: turn_mx_on
 
 test: local_dist_join_modifications
@@ -212,7 +205,7 @@ test: citus_local_dist_joins
 # multi_copy creates hash and range-partitioned tables and performs COPY
 # multi_router_planner creates hash partitioned tables.
 # ---------
-test: fast_path_router_modify pg_dump
+test: multi_copy fast_path_router_modify pg_dump
 test: multi_router_planner
 # These 2 tests have prepared statements which sometimes get invalidated by concurrent tests,
 # changing the debug output. We should not run them in parallel with others
@@ -224,8 +217,6 @@ test: multi_router_planner_fast_path
 # ----------
 test: multi_large_shardid
 
-test: check_mx
-test: turn_mx_off
 # ----------
 #  multi_size_queries tests various size commands on distributed tables
 # ----------
@@ -240,9 +231,11 @@ test: multi_drop_extension
 # multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers
 # multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
 # ----------
+test: check_mx
+test: turn_mx_off
 test: multi_metadata_sync
-test: multi_unsupported_worker_operations
 test: turn_mx_on
+test: multi_unsupported_worker_operations
 
 # ----------
 # grant_on_schema_propagation tests if the GRANT ... ON SCHEMA queries are propagated correctly
@@ -287,10 +280,10 @@ test: multi_foreign_key_relation_graph
 # and rerun some of the tests.
 # --------
 test: check_mx
-test: turn_mx_off
 test: add_coordinator
 test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
+test: turn_mx_off
 test: citus_local_tables
 test: multi_row_router_insert mixed_relkind_tests
 test: turn_mx_on
@@ -303,11 +296,8 @@ test: undistribute_table_cascade
 test: create_citus_local_table_cascade
 test: fkeys_between_local_ref
 test: auto_undist_citus_local
-test: check_mx
-test: turn_mx_off
 test: mx_regular_user
 test: remove_coordinator
-test: turn_mx_on
 
 # ----------
 # multi_transactional_drop_shards tests for dropping shards using connection API

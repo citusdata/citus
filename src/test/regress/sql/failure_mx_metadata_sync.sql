@@ -14,7 +14,8 @@ CREATE TABLE t1 (id int PRIMARY KEY);
 SELECT create_distributed_table('t1', 'id');
 INSERT INTO t1 SELECT x FROM generate_series(1,100) AS f(x);
 
--- Initial metadata status
+-- Initially turn metadata sync off because we'll ingest errors to start/stop metadata sync operations
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
 
 -- Failure to set groupid in the worker
@@ -95,6 +96,10 @@ SELECT count(*) FROM pg_dist_node;
 
 \c - - - :master_port
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
+
+-- turn metadata sync back on
+SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
+
 SET SEARCH_PATH = mx_metadata_sync;
 DROP TABLE t1;
 DROP TABLE t2;

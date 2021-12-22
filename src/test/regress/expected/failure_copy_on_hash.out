@@ -282,7 +282,6 @@ SELECT citus.mitmproxy('conn.kill()');
 ERROR:  connection to the remote node localhost:xxxxx failed with the following error: server closed the connection unexpectedly
 	This probably means the server terminated abnormally
 	before or while processing the request.
-CONTEXT:  COPY test_table_2, line 1: "1,2"
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------

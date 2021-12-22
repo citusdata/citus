@@ -108,6 +108,7 @@ WHERE stxnamespace IN (
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
 )
+AND stxname SIMILAR TO '%\_\d+'
 ORDER BY stxname ASC;
      stxname
 ---------------------------------------------------------------------
@@ -215,7 +216,8 @@ WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
-);
+)
+AND stxname SIMILAR TO '%\_\d+';
  count
 ---------------------------------------------------------------------
      3
@@ -227,7 +229,8 @@ WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
-);
+)
+AND stxname SIMILAR TO '%\_\d+';
  count
 ---------------------------------------------------------------------
      3

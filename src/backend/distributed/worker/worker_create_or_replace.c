@@ -61,7 +61,7 @@ WrapCreateOrReplace(const char *sql)
  * have this functionality or where their implementation is not sufficient.
  *
  * Besides checking if an object of said name exists it tries to compare the object to be
- * created with the one in the local catalog. If there is a difference the on in the local
+ * created with the one in the local catalog. If there is a difference the one in the local
  * catalog will be renamed after which the statement can be executed on this worker to
  * create the object.
  *

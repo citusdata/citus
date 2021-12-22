@@ -35,6 +35,7 @@ static bool IsSettingSafeToPropagate(char *name);
  *
  * We currently propagate:
  * - SET LOCAL (for allowed settings)
+ * - SET TRANSACTION
  * - RESET (for allowed settings)
  * - RESET ALL
  */
@@ -72,8 +73,8 @@ ShouldPropagateSetCommand(VariableSetStmt *setStmt)
 		case VAR_SET_MULTI:
 		default:
 		{
-			/* SET (LOCAL) TRANSACTION should be handled locally */
-			return false;
+			/* SET TRANSACTION is similar to SET LOCAL */
+			return strcmp(setStmt->name, "TRANSACTION") == 0;
 		}
 	}
 }
@@ -121,7 +122,7 @@ PostprocessVariableSetStmt(VariableSetStmt *setStmt, const char *setStmtString)
 	const bool raiseInterrupts = true;
 	List *connectionList = NIL;
 
-	/* at present we only support SET LOCAL */
+	/* at present we only support SET LOCAL and SET TRANSACTION */
 	AssertArg(ShouldPropagateSetCommand(setStmt));
 
 	/* haven't seen any SET stmts so far in this (sub-)xact: initialize StringInfo */

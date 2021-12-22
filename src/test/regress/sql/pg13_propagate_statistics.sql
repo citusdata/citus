@@ -38,6 +38,7 @@ WHERE stxnamespace IN (
 	FROM pg_namespace
 	WHERE nspname IN ('statistics''TestTarget')
 )
+AND stxname SIMILAR TO '%\_\d+'
 ORDER BY stxstattarget, stxrelid::regclass ASC;
 
 \c - - - :master_port

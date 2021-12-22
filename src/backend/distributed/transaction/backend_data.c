@@ -323,9 +323,6 @@ get_global_active_transactions(PG_FUNCTION_ARGS)
 		ForgetResults(connection);
 	}
 
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_VOID();
 }
 
@@ -343,9 +340,6 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
-
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupleStore);
 
 	PG_RETURN_VOID();
 }

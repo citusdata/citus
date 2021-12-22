@@ -669,7 +669,7 @@ ORDER BY shardid, nodeport;
 (0 rows)
 
 -- verify constraints have been created on the new node
-SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname like ''ref_table%'';');
+SELECT run_command_on_workers('select count(*) from pg_constraint where contype=''f'' AND conname similar to ''ref_table%\d'';');
  run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57637,t,2)
@@ -950,12 +950,6 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 (1 row)
 
 SET citus.shard_replication_factor TO 1;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 SELECT master_copy_shard_placement(
            :ref_table_shard,
            'localhost', :worker_1_port,
@@ -1027,13 +1021,6 @@ WHERE ref_table.a = dist_table.a;
 
 \c - - - :master_port
 SET search_path TO replicate_reference_table;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-NOTICE:  dropping metadata on the node (localhost,57637)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 --
 -- The following case used to get stuck on create_distributed_table() instead
 -- of detecting the distributed deadlock.

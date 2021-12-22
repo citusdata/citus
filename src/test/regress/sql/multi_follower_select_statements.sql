@@ -111,6 +111,9 @@ UPDATE pg_dist_node SET nodecluster = 'second-cluster' WHERE noderole = 'seconda
 \c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 SELECT * FROM the_table;
 
+-- Check for connectivity in the cluster
+SELECT * FROM citus_check_cluster_node_health();
+
 -- clean up after ourselves
 \c -reuse-previous=off regression - - :master_port
 DROP TABLE the_table;

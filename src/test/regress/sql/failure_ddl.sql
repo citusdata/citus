@@ -14,7 +14,7 @@ SET search_path TO 'ddl_failure';
 SET citus.max_cached_conns_per_worker TO 0;
 
 -- we don't want to see the prepared transaction numbers in the warnings
-SET client_min_messages TO ERROR;
+SET client_min_messages TO WARNING;
 
 SELECT citus.mitmproxy('conn.allow()');
 

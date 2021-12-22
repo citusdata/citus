@@ -34,6 +34,7 @@
 #define PREPARED_TRANSACTION_NAME_FORMAT "citus_%u_%u_"UINT64_FORMAT "_%u"
 
 
+static char * AssignDistributedTransactionIdCommand(void);
 static void StartRemoteTransactionSavepointBegin(MultiConnection *connection,
 												 SubTransactionId subId);
 static void FinishRemoteTransactionSavepointBegin(MultiConnection *connection,
@@ -68,8 +69,15 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 
 	transaction->transactionState = REMOTE_TRANS_STARTING;
 
-	StringInfo beginAndSetDistributedTransactionId =
-		BeginAndSetDistributedTransactionIdCommand();
+	StringInfo beginAndSetDistributedTransactionId = makeStringInfo();
+
+	/*
+	 * Explicitly specify READ COMMITTED, the default on the remote
+	 * side might have been changed, and that would cause problematic
+	 * behaviour.
+	 */
+	appendStringInfoString(beginAndSetDistributedTransactionId,
+						   "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;");
 
 	/* append context for in-progress SAVEPOINTs for this transaction */
 	List *activeSubXacts = ActiveSubXactContexts();
@@ -97,6 +105,10 @@ StartRemoteTransactionBegin(struct MultiConnection *connection)
 	{
 		appendStringInfoString(beginAndSetDistributedTransactionId, activeSetStmts->data);
 	}
+
+	/* add SELECT assign_distributed_transaction_id ... */
+	appendStringInfoString(beginAndSetDistributedTransactionId,
+						   AssignDistributedTransactionIdCommand());
 
 	if (!SendRemoteCommand(connection, beginAndSetDistributedTransactionId->data))
 	{
@@ -126,6 +138,22 @@ BeginAndSetDistributedTransactionIdCommand(void)
 	appendStringInfoString(beginAndSetDistributedTransactionId,
 						   "BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;");
 
+	appendStringInfoString(beginAndSetDistributedTransactionId,
+						   AssignDistributedTransactionIdCommand());
+
+	return beginAndSetDistributedTransactionId;
+}
+
+
+/*
+ * AssignDistributedTransactionIdCommand returns a command to set the local
+ * distributed transaction ID on a remote transaction.
+ */
+static char *
+AssignDistributedTransactionIdCommand(void)
+{
+	StringInfo assignDistributedTransactionId = makeStringInfo();
+
 	/*
 	 * Append BEGIN and assign_distributed_transaction_id() statements into a single command
 	 * and send both in one step. The reason is purely performance, we don't want
@@ -134,14 +162,14 @@ BeginAndSetDistributedTransactionIdCommand(void)
 	DistributedTransactionId *distributedTransactionId =
 		GetCurrentDistributedTransactionId();
 	const char *timestamp = timestamptz_to_str(distributedTransactionId->timestamp);
-	appendStringInfo(beginAndSetDistributedTransactionId,
+	appendStringInfo(assignDistributedTransactionId,
 					 "SELECT assign_distributed_transaction_id(%d, " UINT64_FORMAT
 					 ", '%s');",
 					 distributedTransactionId->initiatorNodeIdentifier,
 					 distributedTransactionId->transactionNumber,
 					 timestamp);
 
-	return beginAndSetDistributedTransactionId;
+	return assignDistributedTransactionId->data;
 }
 
 

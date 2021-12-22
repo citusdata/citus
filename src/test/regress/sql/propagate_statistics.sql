@@ -89,6 +89,7 @@ WHERE stxnamespace IN (
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
 )
+AND stxname SIMILAR TO '%\_\d+'
 ORDER BY stxname ASC;
 
 SELECT count(DISTINCT stxnamespace)
@@ -97,7 +98,8 @@ WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
-);
+)
+AND stxname SIMILAR TO '%\_\d+';
 
 SELECT COUNT(DISTINCT stxowner)
 FROM pg_statistic_ext
@@ -105,7 +107,8 @@ WHERE stxnamespace IN (
 	SELECT oid
 	FROM pg_namespace
 	WHERE nspname IN ('public', 'statistics''Test', 'sc1', 'sc2')
-);
+)
+AND stxname SIMILAR TO '%\_\d+';
 
 \c - - - :master_port
 SET client_min_messages TO WARNING;

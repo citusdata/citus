@@ -13,8 +13,51 @@ SET citus.select_opens_transaction_block TO on;
 
 BEGIN;
 SELECT current_setting('enable_hashagg') FROM test WHERE id = 1;
--- should not be propagated, error should be coming from coordinator
+-- triggers an error on the worker
 SET LOCAL TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+END;
+
+BEGIN;
+SET TRANSACTION READ ONLY;
+-- should fail after setting transaction to read only
+INSERT INTO test VALUES (2,2);
+END;
+
+BEGIN;
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+-- should reflect new isolation level
+SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
+END;
+
+BEGIN;
+SET TRANSACTION READ ONLY;
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
+END;
+
+BEGIN;
+SET LOCAL transaction_read_only TO on;
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
+END;
+
+BEGIN;
+SET TRANSACTION READ ONLY;
+SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+SELECT current_setting('transaction_isolation') FROM test WHERE id = 1;
+END;
+
+BEGIN;
+SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SAVEPOINT goback;
+SET TRANSACTION READ ONLY;
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
+ROLLBACK TO SAVEPOINT goback;
+SELECT current_setting('transaction_read_only') FROM test WHERE id = 1;
 END;
 
 BEGIN;
