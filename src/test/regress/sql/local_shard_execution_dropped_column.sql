@@ -15,6 +15,8 @@ SET citus.shard_replication_factor TO 1;
 CREATE TABLE t1 (a int, b int, c int UNIQUE);
 SELECT create_distributed_table('t1', 'c');
 ALTER TABLE t1 DROP COLUMN b;
+
+-- Syncing metadata won't propagate t1
 SELECT start_metadata_sync_to_node('localhost',:worker_1_port);
 SELECT start_metadata_sync_to_node('localhost',:worker_2_port);
 

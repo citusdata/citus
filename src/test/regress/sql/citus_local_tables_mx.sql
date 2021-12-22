@@ -35,6 +35,7 @@ FOR EACH ROW EXECUTE FUNCTION dummy_function();
 
 -- Show that we can sync metadata successfully. That means, we create
 -- the function that trigger needs in mx workers too.
+-- TODO: Metadata sync won't propagate objects anymore
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 CREATE EXTENSION seg;

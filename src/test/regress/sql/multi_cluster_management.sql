@@ -78,10 +78,8 @@ SELECT master_get_active_worker_nodes();
 -- try to disable a node which does not exist and see that an error is thrown
 SELECT citus_disable_node('localhost.noexist', 2345);
 
-table pg_dist_node;
-\d
-
 -- drop the table without leaving a shard placement behind (messes up other tests)
+-- TODO: Replication ref table multiple times
 SELECT master_activate_node('localhost', :worker_2_port);
 
 DROP TABLE test_reference_table, cluster_management_test;
