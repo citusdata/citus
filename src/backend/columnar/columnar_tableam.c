@@ -2660,7 +2660,7 @@ upgrade_columnar_storage(PG_FUNCTION_ARGS)
 	 * ACCESS EXCLUSIVE LOCK is not required by the low-level routines, so we
 	 * can take only an ACCESS SHARE LOCK. But all access to non-current
 	 * columnar tables will fail anyway, so it's better to take ACCESS
-	 * EXLUSIVE LOCK now.
+	 * EXCLUSIVE LOCK now.
 	 */
 	Relation rel = table_open(relid, AccessExclusiveLock);
 	if (!IsColumnarTableAmTable(relid))
@@ -2696,7 +2696,7 @@ downgrade_columnar_storage(PG_FUNCTION_ARGS)
 	 * ACCESS EXCLUSIVE LOCK is not required by the low-level routines, so we
 	 * can take only an ACCESS SHARE LOCK. But all access to non-current
 	 * columnar tables will fail anyway, so it's better to take ACCESS
-	 * EXLUSIVE LOCK now.
+	 * EXCLUSIVE LOCK now.
 	 */
 	Relation rel = table_open(relid, AccessExclusiveLock);
 	if (!IsColumnarTableAmTable(relid))
