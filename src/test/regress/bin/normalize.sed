@@ -256,9 +256,3 @@ s/CREATE TABLESPACE test_tablespace LOCATION.*/CREATE TABLESPACE test_tablespace
 s/(.*absolute correlation \()([0,1]\.[0-9]+)(\) of var attribute [0-9]+ is smaller than.*)/\1X\.YZ\3/g
 
 s/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \([0-9]+, [0-9]+, [0-9]+, [0-9]+, [0-9]+\)\)/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \(xxxxxx, xxxxxx, xxxxxx, xxxxxx, xxxxxx\)\)/g
-
-# libpq version alignment on test images
-/ERROR:  server closed the connection unexpectedly/d
-/	This probably means the server terminated abnormally/d
-/	before or while processing the request./d
-/CONTEXT:  COPY test_table_2, line 1: "1,2"/d
