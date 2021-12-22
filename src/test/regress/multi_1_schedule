@@ -232,10 +232,7 @@ test: multi_drop_extension
 # multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers
 # multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
 # ----------
-test: check_mx
-test: turn_mx_off
 test: multi_metadata_sync
-test: turn_mx_on
 test: multi_unsupported_worker_operations
 
 # ----------

@@ -3,6 +3,21 @@
 --
 -- Tests for metadata snapshot functions, metadata syncing functions and propagation of
 -- metadata changes to MX tables.
+-- Turn metadata sync off at first
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+NOTICE:  dropping metadata on the node (localhost,57637)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+NOTICE:  dropping metadata on the node (localhost,57638)
+ stop_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
 SET citus.replicate_reference_tables_on_activate TO off;
 SELECT nextval('pg_catalog.pg_dist_placement_placementid_seq') AS last_placement_id
@@ -1467,13 +1482,14 @@ WHERE logicalrelid='mx_ref'::regclass;
 (1 row)
 
 \c - - - :master_port
+SET client_min_messages TO ERROR;
 SELECT master_add_node('localhost', :worker_2_port);
-NOTICE:  Replicating reference table "mx_ref" to the node localhost:xxxxx
  master_add_node
 ---------------------------------------------------------------------
                7
 (1 row)
 
+RESET client_min_messages;
 SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass
@@ -1914,3 +1930,16 @@ ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
+-- Turn metadata sync back on at the end
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
