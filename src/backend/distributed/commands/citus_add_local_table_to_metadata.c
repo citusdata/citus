@@ -367,13 +367,6 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
 
 	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
-
-	/*
-	 * Mark the shell relation as distributed on each node as the last step.
-	 */
-	ObjectAddress shellRelationAddress = { 0 };
-	ObjectAddressSet(shellRelationAddress, RelationRelationId, shellRelationId);
-	MarkObjectDistributed(&shellRelationAddress);
 }
 
 
@@ -1246,11 +1239,23 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 		CreateTruncateTrigger(relationId);
 	}
 
-	CreateShellTableOnWorkers(relationId);
-
+	ObjectAddress relationAddress = { 0 };
+	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
 	if (ShouldSyncTableMetadata(relationId))
 	{
+		CreateShellTableOnWorkers(relationId);
+
 		CreateTableMetadataOnWorkers(relationId);
+
+		MarkObjectDistributed(&relationAddress);
+	}
+	else
+	{
+		// Mark the table as distributed only locally
+		bool prevDependencyCreationValue = EnableDependencyCreation;
+		SetLocalEnableDependencyCreation(false);
+		MarkObjectDistributed(&relationAddress);
+		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
 	}
 
 	/*
