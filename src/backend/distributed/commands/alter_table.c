@@ -195,7 +195,7 @@ static void CreateDistributedTableLike(TableConversionState *con);
 static void CreateCitusTableLike(TableConversionState *con);
 static List * GetViewCreationCommandsOfTable(Oid relationId);
 static void ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-						 bool suppressNoticeMessages);
+						 bool suppressNoticeMessages, char conversionType);
 static bool HasAnyGeneratedStoredColumns(Oid relationId);
 static List * GetNonGeneratedStoredColumnNameList(Oid relationId);
 static void CheckAlterDistributedTableConversionParameters(TableConversionState *con);
@@ -741,7 +741,7 @@ ConvertTable(TableConversionState *con)
 	}
 
 	ReplaceTable(con->relationId, con->newRelationId, justBeforeDropCommands,
-				 con->suppressNoticeMessages);
+				 con->suppressNoticeMessages, con->conversionType);
 
 	TableDDLCommand *tableConstructionCommand = NULL;
 	foreach_ptr(tableConstructionCommand, postLoadCommands)
@@ -1296,7 +1296,7 @@ GetViewCreationCommandsOfTable(Oid relationId)
  */
 void
 ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
-			 bool suppressNoticeMessages)
+			 bool suppressNoticeMessages, char conversionType)
 {
 	char *sourceName = get_rel_name(sourceId);
 	char *targetName = get_rel_name(targetId);
@@ -1353,6 +1353,15 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 	{
 		changeDependencyFor(RelationRelationId, sequenceOid,
 							RelationRelationId, sourceId, targetId);
+
+		// Changing the dependency for sequence will prevent PG to have
+		// sequence within drop trigger
+		if (conversionType == UNDISTRIBUTE_TABLE)
+		{
+			ObjectAddress sequenceAddress = { 0 };
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+			UnmarkObjectDistributed(&sequenceAddress);
+		}
 
 		/*
 		 * Skip if we cannot sync metadata for target table.
