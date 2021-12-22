@@ -6,10 +6,9 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: "-v2021_10_27"
+    default: '-v2021_10_27'
 
 jobs:
-
   build:
     description: Build the citus extension
     parameters:
@@ -267,17 +266,16 @@ jobs:
           name: 'Save core dumps'
           path: /tmp/core_dumps
       - store_artifacts:
-          name: "Save logfiles"
+          name: 'Save logfiles'
           path: src/test/regress/tmp_citus_test/logfiles
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
-
 
   test-citus-upgrade:
     description: Runs citus upgrade tests
     parameters:
       pg_major:
-        description: "postgres major version"
+        description: 'postgres major version'
         type: integer
       image:
         description: 'docker image to use as for the tests'
@@ -360,7 +358,7 @@ jobs:
     description: Runs the common tests of citus
     parameters:
       pg_major:
-        description: "postgres major version"
+        description: 'postgres major version'
         type: integer
       image:
         description: 'docker image to use as for the tests'
@@ -370,7 +368,7 @@ jobs:
         description: 'docker image tag to use'
         type: string
       make:
-        description: "make target"
+        description: 'make target'
         type: string
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
@@ -436,7 +434,7 @@ jobs:
     description: Runs tap tests for citus
     parameters:
       pg_major:
-        description: "postgres major version"
+        description: 'postgres major version'
         type: integer
       image:
         description: 'docker image to use as for the tests'
@@ -449,7 +447,7 @@ jobs:
         description: 'name of the tap test suite to run'
         type: string
       make:
-        description: "make target"
+        description: 'make target'
         type: string
         default: installcheck
     docker:
@@ -541,7 +539,6 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-
       - check-merge-to-enterprise:
           filters:
             branches:
@@ -807,21 +804,21 @@ workflows:
           old_pg_major: 12
           new_pg_major: 13
           image_tag: '12.8-13.4-14.0'
-          requires: [build-12,build-13]
+          requires: [build-12, build-13]
 
       - test-pg-upgrade:
           name: 'test-12-14_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 14
           image_tag: '12.8-13.4-14.0'
-          requires: [build-12,build-14]
+          requires: [build-12, build-14]
 
       - test-pg-upgrade:
           name: 'test-13-14_check-pg-upgrade'
           old_pg_major: 13
           new_pg_major: 14
           image_tag: '12.8-13.4-14.0'
-          requires: [build-13,build-14]
+          requires: [build-13, build-14]
 
       - test-citus-upgrade:
           name: test-12_check-citus-upgrade

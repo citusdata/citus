@@ -44,7 +44,9 @@ reindent:
 	${citus_abs_top_srcdir}/ci/fix_style.sh
 check-style:
 	cd ${citus_abs_top_srcdir} && citus_indent --quiet --check
-.PHONY: reindent check-style
+prettier:
+	prettier --write .
+.PHONY: reindent check-style prettier
 
 # depend on install-all so that downgrade scripts are installed as well
 check: all install-all

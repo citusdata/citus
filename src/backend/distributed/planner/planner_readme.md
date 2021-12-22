@@ -6,19 +6,17 @@ If the input query is trivial (e.g., no joins, no subqueries/ctes, single table 
 
 Distributed planning (`CreateDistributedPlan`) tries several different methods to plan the query:
 
-
- 1. Fast-path router planner, proceed if the query prunes down to a single shard of a single table
- 2. Router planner, proceed if the query prunes down to a single set of co-located shards
- 3. Modification planning, proceed if the query is a DML command and all joins are co-located
- 4. Recursive planning, find CTEs and subqueries that cannot be pushed down and go back to 1
- 5. Logical planner, constructs a multi-relational algebra tree to find a distributed execution plan
+1.  Fast-path router planner, proceed if the query prunes down to a single shard of a single table
+2.  Router planner, proceed if the query prunes down to a single set of co-located shards
+3.  Modification planning, proceed if the query is a DML command and all joins are co-located
+4.  Recursive planning, find CTEs and subqueries that cannot be pushed down and go back to 1
+5.  Logical planner, constructs a multi-relational algebra tree to find a distributed execution plan
 
 ## Fast-path router planner
 
 By examining the query tree, if we can decide that the query hits only a single shard of a single table, we can skip calling `standard_planner()`. Later on the execution, we simply fetch the filter on the distribution key and do the pruning.
 
 As the name reveals, this can be considered as a sub-item of Router planner described below. The only difference is that fast-path planner doesn't rely on `standard_planner()` for collecting restriction information.
-
 
 ## Router planner
 
@@ -34,7 +32,7 @@ CTEs and subqueries that cannot be pushed down (checked using `DeferErrorIfCanno
 
 The logical planner constructs a multi-relational algebra tree from the query with operators such as `MultiTable`, `MultiProject`, `MultiJoin` and `MultiCollect`. It first picks a strategy for handling joins in `MultiLogicalPlanCreate` (pushdown planning, or join order planning) and then builds a `MultiNode` tree based on the original query tree. In the initial `MultiNode` tree, each `MultiTable` is wrapped in `MultiCollect`, which effectively means collect the entire table in one place. The `MultiNode` tree is passed to the logical optimizer which transforms the tree into one that requires less network traffic by pushing down operators. Finally, the physical planner transforms the `MultiNode` tree into a `DistributedPlan` which contains the queries to execute on shards and can be passed to the executor.
 
-###  Pushdown planning
+### Pushdown planning
 
 During the call to `standard_planner`, Postgres calls a hook named `multi_relation_restriction_hook`. We use this hook to determine whether all (occurrences of) distributed tables are joined on their respective distribution columns. When this is the case, we can be somewhat agnostic to the structure of subqueries and other joins. In that case, we treat the whole join tree as a single `MultiTable` and deparse this part of the query as is during physical planning. Pushing down a subquery is only possible when the subquery can be answered without a merge step (checked using `DeferErrorIfCannotPushdownSubquery`). However, you may notice that these subqueries are already replaced by `read_intermediate_result` calls during recursive planning. Only subqueries that have references to the outer query remain at this stage would pass through recursive planning and fail the check.
 
@@ -56,10 +54,10 @@ This section needs to be expanded.
 
 In terms of modification planning, we distinguish between several cases:
 
- 1. DML planning (`CreateModifyPlan`)
- 1.a. UPDATE/DELETE planning
- 1.b. INSERT planning
- 2. INSERT...SELECT planning (`CreateInsertSelectPlan`)
+1.  DML planning (`CreateModifyPlan`)
+    1.a. UPDATE/DELETE planning
+    1.b. INSERT planning
+2.  INSERT...SELECT planning (`CreateInsertSelectPlan`)
 
 ### UPDATE/DELETE planning
 
@@ -85,6 +83,6 @@ If `INSERT ... SELECT` query can be planned by pushing down it to the worker nod
 
 If the query can not be pushed down to the worker nodes, two different approaches can be followed depending on whether ON CONFLICT or RETURNING clauses are used.
 
-* If `ON CONFLICT` or `RETURNING` are not used, Citus uses `COPY` command to handle such queries. After planning the `SELECT` part of the `INSERT ... SELECT` query, including subqueries and CTEs, it executes the plan and send results back to the DestReceiver which is created using the target table info.
+-   If `ON CONFLICT` or `RETURNING` are not used, Citus uses `COPY` command to handle such queries. After planning the `SELECT` part of the `INSERT ... SELECT` query, including subqueries and CTEs, it executes the plan and send results back to the DestReceiver which is created using the target table info.
 
-* Since `COPY` command supports neither `ON CONFLICT` nor `RETURNING` clauses, Citus perform `INSERT ... SELECT` queries with `ON CONFLICT` or `RETURNING` clause in two phases. First, Citus plans the `SELECT` part of the query, executes the plan and saves results to the intermediate table which is colocated with target table of the `INSERT ... SELECT` query. Then, `INSERT ... SELECT` query is directly run on the worker node using the intermediate table as the source table.
+-   Since `COPY` command supports neither `ON CONFLICT` nor `RETURNING` clauses, Citus perform `INSERT ... SELECT` queries with `ON CONFLICT` or `RETURNING` clause in two phases. First, Citus plans the `SELECT` part of the query, executes the plan and saves results to the intermediate table which is colocated with target table of the `INSERT ... SELECT` query. Then, `INSERT ... SELECT` query is directly run on the worker node using the intermediate table as the source table.

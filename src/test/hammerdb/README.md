@@ -1,4 +1,3 @@
-
 # How to trigger hammerdb benchmark jobs
 
 You can trigger two types of hammerdb benchmark jobs:

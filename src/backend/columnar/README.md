@@ -7,14 +7,14 @@ reduce IO requirements though compression and projection pushdown.
 
 Existing PostgreSQL row tables work well for OLTP:
 
-* Support `UPDATE`/`DELETE` efficiently
-* Efficient single-tuple lookups
+-   Support `UPDATE`/`DELETE` efficiently
+-   Efficient single-tuple lookups
 
 The Citus Columnar tables work best for analytic or DW workloads:
 
-* Compression
-* Doesn't read unnecessary columns
-* Efficient `VACUUM`
+-   Compression
+-   Doesn't read unnecessary columns
+-   Efficient `VACUUM`
 
 # Next generation of cstore_fdw
 
@@ -23,47 +23,45 @@ Citus Columnar is the next generation of
 
 Benefits of Citus Columnar over cstore_fdw:
 
-* Citus Columnar is based on the [Table Access Method
-  API](https://www.postgresql.org/docs/current/tableam.html), which
-  allows it to behave exactly like an ordinary heap (row) table for
-  most operations.
-* Supports Write-Ahead Log (WAL).
-* Supports ``ROLLBACK``.
-* Supports physical replication.
-* Supports recovery, including Point-In-Time Restore (PITR).
-* Supports ``pg_dump`` and ``pg_upgrade`` without the need for special
-  options or extra steps.
-* Better user experience; simple ``USING``clause.
-* Supports more features that work on ordinary heap (row) tables.
+-   Citus Columnar is based on the [Table Access Method
+    API](https://www.postgresql.org/docs/current/tableam.html), which
+    allows it to behave exactly like an ordinary heap (row) table for
+    most operations.
+-   Supports Write-Ahead Log (WAL).
+-   Supports `ROLLBACK`.
+-   Supports physical replication.
+-   Supports recovery, including Point-In-Time Restore (PITR).
+-   Supports `pg_dump` and `pg_upgrade` without the need for special
+    options or extra steps.
+-   Better user experience; simple `USING`clause.
+-   Supports more features that work on ordinary heap (row) tables.
 
 # Limitations
 
-* Append-only (no ``UPDATE``/``DELETE`` support)
-* No space reclamation (e.g. rolled-back transactions may still
-  consume disk space)
-* No bitmap index scans
-* No tidscans
-* No sample scans
-* No TOAST support (large values supported inline)
-* No support for [``ON
-  CONFLICT``](https://www.postgresql.org/docs/12/sql-insert.html#SQL-ON-CONFLICT)
-  statements (except ``DO NOTHING`` actions with no target specified).
-* No support for tuple locks (``SELECT ... FOR SHARE``, ``SELECT
-  ... FOR UPDATE``)
-* No support for serializable isolation level
-* Support for PostgreSQL server versions 12+ only
-* No support for foreign keys, unique constraints, or exclusion
-  constraints
-* No support for logical decoding
-* No support for intra-node parallel scans
-* No support for ``AFTER ... FOR EACH ROW`` triggers
-* No `UNLOGGED` columnar tables
+-   Append-only (no `UPDATE`/`DELETE` support)
+-   No space reclamation (e.g. rolled-back transactions may still
+    consume disk space)
+-   No bitmap index scans
+-   No tidscans
+-   No sample scans
+-   No TOAST support (large values supported inline)
+-   No support for [`ON CONFLICT`](https://www.postgresql.org/docs/12/sql-insert.html#SQL-ON-CONFLICT)
+    statements (except `DO NOTHING` actions with no target specified).
+-   No support for tuple locks (`SELECT ... FOR SHARE`, `SELECT ... FOR UPDATE`)
+-   No support for serializable isolation level
+-   Support for PostgreSQL server versions 12+ only
+-   No support for foreign keys, unique constraints, or exclusion
+    constraints
+-   No support for logical decoding
+-   No support for intra-node parallel scans
+-   No support for `AFTER ... FOR EACH ROW` triggers
+-   No `UNLOGGED` columnar tables
 
 Future iterations will incrementally lift the limitations listed above.
 
 # User Experience
 
-Create a Columnar table by specifying ``USING columnar`` when creating
+Create a Columnar table by specifying `USING columnar` when creating
 the table.
 
 ```sql
@@ -80,8 +78,7 @@ CREATE TABLE my_columnar_table
 Insert data into the table and read from it like normal (subject to
 the limitations listed above).
 
-To see internal statistics about the table, use ``VACUUM
-VERBOSE``. Note that ``VACUUM`` (without ``FULL``) is much faster on a
+To see internal statistics about the table, use `VACUUM VERBOSE`. Note that `VACUUM` (without `FULL`) is much faster on a
 columnar table, because it scans only the metadata, and not the actual
 data.
 
@@ -109,22 +106,22 @@ SELECT alter_columnar_table_set(
 
 The following options are available:
 
-* **compression**: `[none|pglz|zstd|lz4|lz4hc]` - set the compression type
-  for _newly-inserted_ data. Existing data will not be
-  recompressed/decompressed. The default value is `zstd` (if support
-  has been compiled in).
-* **compression_level**: ``<integer>`` - Sets compression level. Valid
-  settings are from 1 through 19. If the compression method does not
-  support the level chosen, the closest level will be selected
-  instead.
-* **stripe_row_limit**: ``<integer>`` - the maximum number of rows per
-  stripe for _newly-inserted_ data. Existing stripes of data will not
-  be changed and may have more rows than this maximum value. The
-  default value is `150000`.
-* **chunk_group_row_limit**: ``<integer>`` - the maximum number of rows per
-  chunk for _newly-inserted_ data. Existing chunks of data will not be
-  changed and may have more rows than this maximum value. The default
-  value is `10000`.
+-   **compression**: `[none|pglz|zstd|lz4|lz4hc]` - set the compression type
+    for _newly-inserted_ data. Existing data will not be
+    recompressed/decompressed. The default value is `zstd` (if support
+    has been compiled in).
+-   **compression_level**: `<integer>` - Sets compression level. Valid
+    settings are from 1 through 19. If the compression method does not
+    support the level chosen, the closest level will be selected
+    instead.
+-   **stripe_row_limit**: `<integer>` - the maximum number of rows per
+    stripe for _newly-inserted_ data. Existing stripes of data will not
+    be changed and may have more rows than this maximum value. The
+    default value is `150000`.
+-   **chunk_group_row_limit**: `<integer>` - the maximum number of rows per
+    chunk for _newly-inserted_ data. Existing chunks of data will not be
+    changed and may have more rows than this maximum value. The default
+    value is `10000`.
 
 View options for all tables with:
 
@@ -135,13 +132,13 @@ SELECT * FROM columnar.options;
 You can also adjust options with a `SET` command of one of the
 following GUCs:
 
-* `columnar.compression`
-* `columnar.compression_level`
-* `columnar.stripe_row_limit`
-* `columnar.chunk_group_row_limit`
+-   `columnar.compression`
+-   `columnar.compression_level`
+-   `columnar.stripe_row_limit`
+-   `columnar.chunk_group_row_limit`
 
-GUCs only affect newly-created *tables*, not any newly-created
-*stripes* on an existing table.
+GUCs only affect newly-created _tables_, not any newly-created
+_stripes_ on an existing table.
 
 ## Partitioning
 
@@ -172,20 +169,19 @@ INSERT INTO parent VALUES ('2020-03-15', 30, 300, 'three thousand'); -- row
 When performing operations on a partitioned table with a mix of row
 and columnar partitions, take note of the following behaviors for
 operations that are supported on row tables but not columnar
-(e.g. ``UPDATE``, ``DELETE``, tuple locks, etc.):
+(e.g. `UPDATE`, `DELETE`, tuple locks, etc.):
 
-* If the operation is targeted at a specific row partition
-  (e.g. ``UPDATE p2 SET i = i + 1``), it will succeed; if targeted at
-  a specified columnar partition (e.g. ``UPDATE p1 SET i = i + 1``),
-  it will fail.
-* If the operation is targeted at the partitioned table and has a
-  ``WHERE`` clause that excludes all columnar partitions
-  (e.g. ``UPDATE parent SET i = i + 1 WHERE ts = '2020-03-15'``), it
-  will succeed.
-* If the operation is targeted at the partitioned table, but does not
-  exclude all columnar partitions, it will fail; even if the actual
-  data to be updated only affects row tables (e.g. ``UPDATE parent SET
-  i = i + 1 WHERE n = 300``).
+-   If the operation is targeted at a specific row partition
+    (e.g. `UPDATE p2 SET i = i + 1`), it will succeed; if targeted at
+    a specified columnar partition (e.g. `UPDATE p1 SET i = i + 1`),
+    it will fail.
+-   If the operation is targeted at the partitioned table and has a
+    `WHERE` clause that excludes all columnar partitions
+    (e.g. `UPDATE parent SET i = i + 1 WHERE ts = '2020-03-15'`), it
+    will succeed.
+-   If the operation is targeted at the partitioned table, but does not
+    exclude all columnar partitions, it will fail; even if the actual
+    data to be updated only affects row tables (e.g. `UPDATE parent SET i = i + 1 WHERE n = 300`).
 
 Note that Citus Columnar supports `btree` and `hash `indexes (and
 the constraints requiring them) but does not support `gist`, `gin`,
@@ -207,7 +203,7 @@ ALTER TABLE p2 ADD UNIQUE (n);
 Note: ensure that you understand any advanced features that may be
 used with the table before converting it (e.g. row-level security,
 storage options, constraints, inheritance, etc.), and ensure that they
-are reproduced in the new table or partition appropriately. ``LIKE``,
+are reproduced in the new table or partition appropriately. `LIKE`,
 used below, is a shorthand that works only in simple cases.
 
 ```sql
@@ -221,11 +217,11 @@ SELECT alter_table_set_access_method('my_table', 'heap');
 
 # Performance Microbenchmark
 
-*Important*: This microbenchmark is not intended to represent any real
- workload. Compression ratios, and therefore performance, will depend
- heavily on the specific workload. This is only for the purpose of
- illustrating a "columnar friendly" contrived workload that showcases
- the benefits of columnar.
+_Important_: This microbenchmark is not intended to represent any real
+workload. Compression ratios, and therefore performance, will depend
+heavily on the specific workload. This is only for the purpose of
+illustrating a "columnar friendly" contrived workload that showcases
+the benefits of columnar.
 
 ## Schema
 
@@ -299,19 +295,19 @@ total row count: 75000000, stripe count: 500, average rows per stripe: 150000
 chunk count: 60000, containing data for dropped columns: 0, zstd compressed: 60000
 ```
 
-``VACUUM VERBOSE`` reports a smaller compression ratio, because it
+`VACUUM VERBOSE` reports a smaller compression ratio, because it
 only averages the compression ratio of the individual chunks, and does
 not account for the metadata savings of the columnar format.
 
 ## System
 
-* Azure VM: Standard D2s v3 (2 vcpus, 8 GiB memory)
-* Linux (ubuntu 18.04)
-* Data Drive: Standard HDD (512GB, 500 IOPS Max, 60 MB/s Max)
-* PostgreSQL 13 (``--with-llvm``, ``--with-python``)
-* ``shared_buffers = 128MB``
-* ``max_parallel_workers_per_gather = 0``
-* ``jit = on``
+-   Azure VM: Standard D2s v3 (2 vcpus, 8 GiB memory)
+-   Linux (ubuntu 18.04)
+-   Data Drive: Standard HDD (512GB, 500 IOPS Max, 60 MB/s Max)
+-   PostgreSQL 13 (`--with-llvm`, `--with-python`)
+-   `shared_buffers = 128MB`
+-   `max_parallel_workers_per_gather = 0`
+-   `jit = on`
 
 Note: because this was run on a system with enough physical memory to
 hold a substantial fraction of the table, the IO benefits of columnar
@@ -332,6 +328,7 @@ SELECT vendor_id, SUM(quantity) FROM perf_columnar GROUP BY vendor_id OFFSET 100
 ```
 
 Timing (median of three runs):
- * row: 436s
- * columnar: 16s
- * speedup: **27X**
+
+-   row: 436s
+-   columnar: 16s
+-   speedup: **27X**

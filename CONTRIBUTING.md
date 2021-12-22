@@ -2,9 +2,9 @@
 
 We're happy you want to contribute! You can help us in different ways:
 
-* Open an [issue](https://github.com/citusdata/citus/issues) with
-  suggestions for improvements
-* Fork this repository and submit a pull request
+-   Open an [issue](https://github.com/citusdata/citus/issues) with
+    suggestions for improvements
+-   Fork this repository and submit a pull request
 
 Before accepting any code contributions we ask that contributors
 sign a Contributor License Agreement (CLA). For an explanation of
@@ -18,95 +18,95 @@ why we ask this as well as instructions for how to proceed, see the
 1. Install Xcode
 2. Install packages with Homebrew
 
-  ```bash
-  brew update
-  brew install git postgresql python
-  ```
+```bash
+brew update
+brew install git postgresql python
+```
 
 3. Get, build, and test the code
 
-  ```bash
-  git clone https://github.com/citusdata/citus.git
+```bash
+git clone https://github.com/citusdata/citus.git
 
-  cd citus
-  ./configure
-  make
-  make install
-  cd src/test/regress
-  make check
-  ```
+cd citus
+./configure
+make
+make install
+cd src/test/regress
+make check
+```
 
 #### Debian-based Linux (Ubuntu, Debian)
 
 1. Install build dependencies
 
-  ```bash
-  echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | \
-       sudo tee /etc/apt/sources.list.d/pgdg.list
-  wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
-       sudo apt-key add -
-  sudo apt-get update
+```bash
+echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | \
+     sudo tee /etc/apt/sources.list.d/pgdg.list
+wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
+     sudo apt-key add -
+sudo apt-get update
 
-  sudo apt-get install -y postgresql-server-dev-14 postgresql-14 \
-                          autoconf flex git libcurl4-gnutls-dev libicu-dev \
-                          libkrb5-dev liblz4-dev libpam0g-dev libreadline-dev \
-                          libselinux1-dev libssl-dev libxslt1-dev libzstd-dev \
-                          make uuid-dev
-  ```
+sudo apt-get install -y postgresql-server-dev-14 postgresql-14 \
+                        autoconf flex git libcurl4-gnutls-dev libicu-dev \
+                        libkrb5-dev liblz4-dev libpam0g-dev libreadline-dev \
+                        libselinux1-dev libssl-dev libxslt1-dev libzstd-dev \
+                        make uuid-dev
+```
 
 2. Get, build, and test the code
 
-  ```bash
-  git clone https://github.com/citusdata/citus.git
-  cd citus
-  ./configure
-  make
-  sudo make install
-  cd src/test/regress
-  make check
-  ```
+```bash
+git clone https://github.com/citusdata/citus.git
+cd citus
+./configure
+make
+sudo make install
+cd src/test/regress
+make check
+```
 
 #### Red Hat-based Linux (RHEL, CentOS, Fedora)
 
 1. Find the RPM URL for your repo at [yum.postgresql.org](http://yum.postgresql.org/repopackages.php)
 2. Register its contents with Yum:
 
-  ```bash
-  sudo yum install -y <url>
-  ```
+```bash
+sudo yum install -y <url>
+```
 
 3. Register EPEL and SCL repositories for your distro.
 
-  On CentOS:
+On CentOS:
 
-  ```bash
-  yum install -y centos-release-scl-rh epel-release
-  ```
+```bash
+yum install -y centos-release-scl-rh epel-release
+```
 
-  On RHEL, see [this RedHat blog post](https://developers.redhat.com/blog/2018/07/07/yum-install-gcc7-clang/) to install set-up SCL first. Then run:
+On RHEL, see [this RedHat blog post](https://developers.redhat.com/blog/2018/07/07/yum-install-gcc7-clang/) to install set-up SCL first. Then run:
 
-  ```bash
-  yum install -y epel-release
-  ```
+```bash
+yum install -y epel-release
+```
 
 4. Install build dependencies
 
-  ```bash
-  sudo yum update -y
-  sudo yum groupinstall -y 'Development Tools'
-  sudo yum install -y postgresql14-devel postgresql14-server     \
-                      git libcurl-devel libxml2-devel libxslt-devel \
-                      libzstd-devel llvm-toolset-7-clang llvm5.0 lz4-devel \
-                      openssl-devel pam-devel readline-devel
+```bash
+sudo yum update -y
+sudo yum groupinstall -y 'Development Tools'
+sudo yum install -y postgresql14-devel postgresql14-server     \
+                    git libcurl-devel libxml2-devel libxslt-devel \
+                    libzstd-devel llvm-toolset-7-clang llvm5.0 lz4-devel \
+                    openssl-devel pam-devel readline-devel
 
-  git clone https://github.com/citusdata/citus.git
-  cd citus
-  PG_CONFIG=/usr/pgsql-14/bin/pg_config ./configure
-  make
-  sudo make install
-  cd src/test/regress
-  make check
-  ```
+git clone https://github.com/citusdata/citus.git
+cd citus
+PG_CONFIG=/usr/pgsql-14/bin/pg_config ./configure
+make
+sudo make install
+cd src/test/regress
+make check
+```
 
 ### Following our coding conventions
 
@@ -175,6 +175,7 @@ created this stable snapshot of the function definition for your version you
 should use it in your actual sql file, e.g.
 `src/backend/distributed/sql/citus--8.3-1--9.0-1.sql`. You do this by using C
 style `#include` statements like this:
+
 ```
 #include "udfs/myudf/9.0-1.sql"
 ```

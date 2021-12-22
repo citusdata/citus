@@ -5,6 +5,7 @@ standards. Be sure you have followed the setup in the [Following our coding
 conventions](https://github.com/citusdata/citus/blob/master/CONTRIBUTING.md#following-our-coding-conventions)
 section of `CONTRIBUTING.md`. Once you've done that, most of them should be
 fixed automatically, when running:
+
 ```
 make reindent
 ```
@@ -30,9 +31,11 @@ risk for buffer overflows. This page lists the Microsoft suggested replacements:
 https://liquid.microsoft.com/Web/Object/Read/ms.security/Requirements/Microsoft.Security.SystemsADM.10082#guide
 These replacements are only available on Windows normally. Since we build for
 Linux we make most of them available with this header file:
+
 ```c
 #include "distributed/citus_safe_lib.h"
 ```
+
 This uses https://github.com/intel/safestringlib to provide them.
 
 However, still not all of them are available. For those cases we provide
@@ -40,6 +43,7 @@ some extra functions in `citus_safe_lib.h`, with similar functionality.
 
 If none of those replacements match your requirements you have to do one of the
 following:
+
 1. Add a replacement to `citus_safe_lib.{c,h}` that handles the same error cases
    that the `{func_name}_s` function that Microsoft suggests.
 2. Add a `/* IGNORE-BANNED */` comment to the line that complains. Doing this
@@ -65,8 +69,8 @@ There are two conditions in which this check passes:
 1. There are no merge conflicts between your PR branch and `enterprise-master` and after this merge the code compiles.
 2. There are merge conflicts, but there is a branch with the same name in the
    enterprise repo that:
-   1. Contains the last commit of the community branch with the same name.
-   2. Merges cleanly into `enterprise-master`
+    1. Contains the last commit of the community branch with the same name.
+    2. Merges cleanly into `enterprise-master`
 3. After merging, the code can be compiled.
 
 If the job already passes, you are done, nothing further required! Otherwise
@@ -76,18 +80,18 @@ follow the below steps.
 
 Before continuing with the real steps make sure you have done the following
 (this only needs to be done once):
+
 1. You have enabled `git rerere` in globally or in your enterprise repo
    ([docs](https://git-scm.com/docs/git-rerere), [very useful blog](https://medium.com/@porteneuve/fix-conflicts-only-once-with-git-rerere-7d116b2cec67#.3vui844dt)):
-   ```bash
-   # Enables it globally for all repos
-   git config --global rerere.enabled true
-   # Enables it only for the enterprise repo
-   cd <enterprise-repo>
-   git config rerere.enabled true
-   ```
+    ```bash
+    # Enables it globally for all repos
+    git config --global rerere.enabled true
+    # Enables it only for the enterprise repo
+    cd <enterprise-repo>
+    git config rerere.enabled true
+    ```
 2. You have set up the `community` remote on your enterprise as
    [described in CONTRIBUTING.md](https://github.com/citusdata/citus-enterprise/blob/enterprise-master/CONTRIBUTING.md#merging-community-changes-onto-enterprise).
-
 
 #### Important notes on `git rerere`
 
@@ -95,16 +99,17 @@ This is very useful as it will make sure git will automatically redo merges that
 you have done before. However, this has a downside too. It will also redo merges
 that you did, but that were incorrect. Two work around this you can use these
 commands.
+
 1. Make `git rerere` forget a merge:
-   ```bash
-   git rerere forget <badly_merged_file>
-   ```
+    ```bash
+    git rerere forget <badly_merged_file>
+    ```
 2. During conflict resolution where `git rerere` already applied the bad merge,
    simply forgetting it is not enough. Since it is already applied. In that case
    you also have to undo the apply using:
-   ```bash
-   git checkout --conflict=merge <badly_merged_file>
-   ```
+    ```bash
+    git checkout --conflict=merge <badly_merged_file>
+    ```
 
 ### Actual steps
 
@@ -130,6 +135,7 @@ git pull # Make sure your local enterprise-master is up to date
 git fetch community # Fetch your up to date branch name
 git checkout -b "$PR_BRANCH" enterprise-master
 ```
+
 Now you have X in your enterprise repo, which we refer to as
 `enterprise/$PR_BRANCH` (even though in git commands you would reference it as
 `origin/$PR_BRANCH`). This branch is currently the same as `enterprise-master`.
@@ -139,6 +145,7 @@ should apply without any merge conflicts:
 ```bash
 git merge community/master
 ```
+
 Now you need to merge `community/$PR_BRANCH` to `enterprise/$PR_BRANCH`. Solve
 any conflicts and make sure to remove any parts that should not be in enterprise
 even though it doesn't have a conflict, on enterprise repository:
@@ -169,8 +176,7 @@ The subsequent PRs on community will be able to pass the
 
 So there's one issue that can occur. Your branch will become outdated with
 master and you have to make it up to date. There are two ways to do this using
-`git merge` or `git rebase`. As usual, `git merge` is a bit easier than `git
-rebase`, but clutters git history. This section will explain both. If you don't
+`git merge` or `git rebase`. As usual, `git merge` is a bit easier than `git rebase`, but clutters git history. This section will explain both. If you don't
 know which one makes the most sense, start with `git rebase`. It's possible that
 for whatever reason this doesn't work or becomes very complex, for instance when
 new merge conflicts appear. Feel free to fall back to `git merge` in that case,
@@ -204,6 +210,7 @@ Automatic merge might have failed with the above command. However, because of
 `git rerere` it should have re-applied your original merge resolution. If this
 is indeed the case it should show something like this in the output of the
 previous command (note the `Resolved ...` line):
+
 ```
 CONFLICT (content): Merge conflict in <file_path>
 Resolved '<file_path>' using previous resolution.
@@ -213,6 +220,7 @@ Error redoing merge <merge_sha>
 
 Confirm that the merge conflict is indeed resolved correctly. In that case you
 can do the following:
+
 ```bash
 # Add files that were conflicting
 git add "$(git diff --name-only --diff-filter=U)"
@@ -222,11 +230,13 @@ git rebase --continue
 Before pushing you should do a final check that the commit hash of your final
 non merge commit matches the commit hash that's on the community repo. If that's
 not the case, you should fallback to the `git merge` approach.
+
 ```bash
 git reset origin/$PR_BRANCH --hard
 ```
 
 If the commit hashes were as expected, push the branch:
+
 ```bash
 git push origin $PR_BRANCH --force-with-lease
 ```
@@ -236,6 +246,7 @@ git push origin $PR_BRANCH --force-with-lease
 If you are falling back to the `git merge` approach after trying the
 `git rebase` approach, you should first restore the original branch on the
 community repo.
+
 ```bash
 git checkout $PR_BRANCH
 git reset ${PR_BRANCH}-backup --hard
@@ -272,6 +283,7 @@ different.
 A test should always be included in a schedule file, otherwise it will not be
 run in CI. This is most commonly forgotten for newly added tests. In that case
 the dev ran it locally without running a full schedule with something like:
+
 ```bash
 make -C src/test/regress/ check-minimal EXTRA_TESTS='multi_create_table_new_features'
 ```
@@ -288,9 +300,11 @@ section in this `README.md` file and that they include `ci/ci_helpers.sh`.
 We do not use C-style comments in migration files as the stripped
 zero-length migration files cause warning during packaging.
 Instead use SQL type comments, i.e:
+
 ```
 -- this is a comment
 ```
+
 See [#3115](https://github.com/citusdata/citus/pull/3115) for more info.
 
 ## `disallow_hash_comments_in_spec_files.sh`
@@ -298,6 +312,7 @@ See [#3115](https://github.com/citusdata/citus/pull/3115) for more info.
 We do not use comments starting with # in spec files because it creates errors
 from C preprocessor that expects directives after this character.
 Instead use C type comments, i.e:
+
 ```
 // this is a single line comment
 
@@ -329,13 +344,16 @@ because we are running the tests in a slightly different configuration.
 
 This script tries to make sure that we don't add useless declarations to our
 code. What it effectively does is replace this:
+
 ```c
 int a = 0;
 int b = 2;
 Assert(b == 2);
 a = b + b;
 ```
+
 With this equivalent, but shorter version:
+
 ```c
 int b = 2;
 Assert(b == 2);
@@ -349,6 +367,7 @@ definitely possible there's a bug in there. So far no bad ones have been found.
 
 A known issue is that it does not replace code in a block after an `#ifdef` like
 this.
+
 ```c
 int foo = 0;
 #ifdef SOMETHING
@@ -357,6 +376,7 @@ foo = 1
 foo = 2
 #endif
 ```
+
 This was deemed to be error prone and not worth the effort.
 
 ## `fix_gitignore.sh`

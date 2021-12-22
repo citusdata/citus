@@ -1,4 +1,4 @@
-In this folder, all tests which in the format of '*_add.spec' organized
+In this folder, all tests which in the format of '\*\_add.spec' organized
 according to specific format.
 
 You should use `//` in mx files not `//`. We preprocess mx files with `cpp` to

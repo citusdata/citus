@@ -1,0 +1,12 @@
+# ignore C files that are already linted with citus_indent
+*.h
+*.c
+
+# Generated files that should not be linted
+Pipfile.lock
+
+# Packaging infra requires a strict CHANGELOG format
+CHANGELOG.md
+
+# vendor files that are copied
+vendor/safestringlib/README.md
