@@ -450,14 +450,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
-	CreateShellTableOnWorkers(relationId);
-
-	/* TODO: Consider partitioned tables */
-	if (EnableDependencyCreation)
-	{
-		MarkObjectDistributed(&tableAddress);
-	}
-
 	char replicationModel = DecideReplicationModel(distributionMethod,
 												   colocateWithTableName,
 												   viaDeprecatedAPI);
@@ -542,6 +534,15 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
+		CreateShellTableOnWorkers(relationId);
+
+		/* TODO: Consider partitioned tables */
+		// TODO: Should we really check? or don't allow
+		if (EnableDependencyCreation)
+		{
+			MarkObjectDistributed(&tableAddress);
+		}
+
 		CreateTableMetadataOnWorkers(relationId);
 	}
 
