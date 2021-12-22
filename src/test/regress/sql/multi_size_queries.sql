@@ -19,6 +19,10 @@ SELECT citus_relation_size('non_distributed_table');
 SELECT citus_total_relation_size('non_distributed_table');
 DROP TABLE non_distributed_table;
 
+-- fix broken placements via disabling the node
+SET client_min_messages TO ERROR;
+SELECT replicate_table_shards('lineitem_hash_part', shard_replication_factor:=2, shard_transfer_mode:='block_writes');
+
 -- Tests on distributed table with replication factor > 1
 VACUUM (FULL) lineitem_hash_part;
 

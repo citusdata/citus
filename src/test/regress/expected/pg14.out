@@ -7,6 +7,7 @@ SELECT substring(:'server_version', '\d+')::int > 13 AS server_version_above_thi
 \endif
 create schema pg14;
 set search_path to pg14;
+SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 980000;
 SET citus.shard_count TO 2;
 -- test the new vacuum option, process_toast
@@ -21,27 +22,15 @@ SET citus.log_remote_commands TO ON;
 VACUUM (FULL) t1;
 NOTICE:  issuing VACUUM (FULL) pg14.t1_980000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (FULL) pg14.t1_980000
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (FULL) pg14.t1_980001
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM (FULL) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (FULL, PROCESS_TOAST) t1;
 NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 VACUUM (FULL, PROCESS_TOAST true) t1;
 NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980000
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM (FULL,PROCESS_TOAST) pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -49,10 +38,6 @@ VACUUM (FULL, PROCESS_TOAST false) t1;
 ERROR:  PROCESS_TOAST required with VACUUM FULL
 VACUUM (PROCESS_TOAST false) t1;
 NOTICE:  issuing VACUUM pg14.t1_980000
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM pg14.t1_980000
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing VACUUM pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing VACUUM pg14.t1_980001
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -67,24 +52,35 @@ select create_distributed_table('dist','a');
 create index idx on dist(a);
 set citus.log_remote_commands to on;
 -- make sure that we send the tablespace option
-SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 reindex(TABLESPACE test_tablespace) index idx;
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO pg14;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO pg14;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing reindex(TABLESPACE test_tablespace) index idx;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing reindex(TABLESPACE test_tablespace) index idx;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 reindex(TABLESPACE test_tablespace, verbose) index idx;
 INFO:  index "idx" was reindexed
@@ -92,34 +88,58 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO pg14;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO pg14;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing reindex(TABLESPACE test_tablespace, verbose) index idx;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing reindex(TABLESPACE test_tablespace, verbose) index idx;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 reindex(TABLESPACE test_tablespace, verbose false) index idx ;
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO pg14;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO pg14;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing reindex(TABLESPACE test_tablespace, verbose false) index idx ;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing reindex(TABLESPACE test_tablespace, verbose false) index idx ;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (TABLESPACE test_tablespace) INDEX pg14.xxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 reindex(verbose, TABLESPACE test_tablespace) index idx ;
 INFO:  index "idx" was reindexed
@@ -127,17 +147,29 @@ NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET citus.enable_ddl_propagation TO 'off'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO pg14;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SET search_path TO pg14;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing reindex(verbose, TABLESPACE test_tablespace) index idx ;
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing reindex(verbose, TABLESPACE test_tablespace) index idx ;
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing REINDEX (VERBOSE, TABLESPACE test_tablespace) INDEX pg14.xxxxx
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing COMMIT
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing COMMIT PREPARED 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- should error saying table space doesn't exist
 reindex(TABLESPACE test_tablespace1) index idx;
@@ -1188,6 +1220,55 @@ select * from nummultirange_test natural join nummultirange_test2 order by nmr;
  {[1.1,2.2)}
  {[1.1,2.2)}
 (7 rows)
+
+-- verify that recreating distributed procedures with OUT param gets propagated to workers
+CREATE OR REPLACE PROCEDURE proc_with_out_param(IN parm1 date, OUT parm2 int)
+  LANGUAGE SQL
+AS $$
+    SELECT 1;
+$$;
+-- this should error out
+SELECT create_distributed_function('proc_with_out_param(date,int)');
+ERROR:  function "proc_with_out_param(date,int)" does not exist
+-- this should work
+SELECT create_distributed_function('proc_with_out_param(date)');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO ERROR;
+CREATE ROLE r1;
+SELECT 1 FROM run_command_on_workers($$CREATE ROLE r1;$$);
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
+GRANT EXECUTE ON PROCEDURE proc_with_out_param TO r1;
+SELECT 1 FROM run_command_on_workers($$GRANT EXECUTE ON PROCEDURE proc_with_out_param TO r1;$$);
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
+RESET client_min_messages;
+CREATE OR REPLACE PROCEDURE proc_with_out_param(IN parm1 date, OUT parm2 int)
+  LANGUAGE SQL
+AS $$
+    SELECT 2;
+$$;
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc, pg_proc.proowner) from pg_proc where proname = 'proc_with_out_param';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc, pg_proc.proowner)::text from pg_proc where proname = 'proc_with_out_param')
+  as test;
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
 
 set client_min_messages to error;
 drop schema pg14 cascade;

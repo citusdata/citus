@@ -12,8 +12,6 @@ SELECT create_distributed_table('test_recovery', 'x');
 ALTER SYSTEM SET citus.recover_2pc_interval TO -1;
 SELECT pg_reload_conf();
 
-SET citus.multi_shard_commit_protocol TO '2pc';
-
 -- Ensure pg_dist_transaction is empty for test
 SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_transaction;

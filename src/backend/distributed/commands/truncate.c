@@ -424,7 +424,7 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 	const char *lockModeText = LockModeToLockModeText(lockMode);
 
 	/*
-	 * We want to acquire locks in the same order accross the nodes.
+	 * We want to acquire locks in the same order across the nodes.
 	 * Although relation ids may change, their ordering will not.
 	 */
 	relationIdList = SortList(relationIdList, CompareOids);

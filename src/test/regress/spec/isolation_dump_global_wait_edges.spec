@@ -1,5 +1,7 @@
 setup
 {
+    SELECT citus_internal.replace_isolation_tester_func();
+    SELECT citus_internal.refresh_isolation_tester_prepared_statement();
     CREATE TABLE distributed_table (x int primary key, y int);
     SELECT create_distributed_table('distributed_table', 'x');
     INSERT INTO distributed_table VALUES (1,0);
@@ -15,6 +17,7 @@ setup
 teardown
 {
     DROP TABLE distributed_table;
+ SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"
@@ -22,6 +25,7 @@ session "s1"
 step "s1-begin"
 {
     BEGIN;
+    SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
 }
 
 step "s1-update"
@@ -39,6 +43,7 @@ session "s2"
 step "s2-begin"
 {
     BEGIN;
+    SELECT assign_distributed_transaction_id(0, 9, '2021-07-09 15:41:55.542377+02');
 }
 
 step "s2-update"
@@ -56,6 +61,7 @@ session "s3"
 step "s3-begin"
 {
     BEGIN;
+    SELECT assign_distributed_transaction_id(0, 10, '2021-07-09 15:41:55.542377+02');
 }
 
 step "s3-update"

@@ -171,23 +171,23 @@ step "s5-rollback"
     ROLLBACK;
 }
 
-# CREATE INDEX (without CONCURRENTLY)
+// CREATE INDEX (without CONCURRENTLY)
 permutation "s1-begin" "s1-insert" "s2-create-index" "s3-insert" "s1-commit" "s1-force-index-scan" "s1-check-test-1-2" "s1-reset-table"
 
-# Start a session that executes INSERT in a transaction block before
-# CREATE INDEX / REINDEX CONCURRENTLY so that the latter one blocks.
+// Start a session that executes INSERT in a transaction block before
+// CREATE INDEX / REINDEX CONCURRENTLY so that the latter one blocks.
 
-# CREATE INDEX CONCURRENTLY
+// CREATE INDEX CONCURRENTLY
 permutation "s1-begin" "s1-insert" "s2-create-index-concurrently" "s3-insert" "s1-commit" "s1-force-index-scan" "s1-check-test-1-2" "s1-reset-table"
 permutation "s1-begin" "s1-insert" "s2-create-index-concurrently" "s5-begin" "s5-insert" "s3-begin" "s3-insert" "s1-commit" "s4-insert-1" "s5-commit" "s3-rollback" "s1-force-index-scan" "s1-check-test-3" "s1-reset-table"
 permutation "s4-insert-4" "s1-begin" "s1-insert" "s4-insert-2" "s2-create-index-concurrently" "s4-insert-3" "s5-begin" "s5-insert" "s3-begin" "s3-insert" "s1-rollback" "s4-insert-1" "s5-rollback" "s3-commit" "s1-force-index-scan" "s1-check-test-4" "s1-reset-table"
 permutation "s4-insert-4" "s1-begin" "s1-insert" "s2-create-partial-concurrently" "s4-insert-1" "s1-rollback" "s1-reset-table"
 
-# similar tests with REINDEX INDEX CONCURRENTLY
+// similar tests with REINDEX INDEX CONCURRENTLY
 permutation "s2-create-index" "s1-begin" "s1-insert" "s2-reindex-concurrently" "s3-insert" "s1-commit" "s1-force-index-scan" "s1-check-test-1-2" "s1-reset-table"
 permutation "s2-create-index" "s1-begin" "s1-insert" "s2-reindex-concurrently" "s5-begin" "s5-insert" "s3-begin" "s3-insert" "s1-commit" "s4-insert-1" "s5-commit" "s3-rollback" "s1-force-index-scan" "s1-check-test-3" "s1-reset-table"
 permutation "s2-create-index" "s4-insert-4" "s1-begin" "s1-insert" "s4-insert-2" "s2-reindex-concurrently" "s4-insert-3" "s5-begin" "s5-insert" "s3-begin" "s3-insert" "s1-rollback" "s4-insert-1" "s5-rollback" "s3-commit" "s1-force-index-scan" "s1-check-test-4" "s1-reset-table"
 
-# CREATE INDEX / REINDEX CONCURRENTLY fails due to duplicate values
+// CREATE INDEX / REINDEX CONCURRENTLY fails due to duplicate values
 permutation "s4-insert-5" "s1-begin" "s1-insert" "s2-create-unique-index-concurrently" "s1-commit" "s1-reset-table"
 permutation "s2-create-unique-index" "s4-insert-5" "s1-begin" "s1-insert" "s2-reindex-unique-concurrently" "s1-commit" "s1-reset-table"

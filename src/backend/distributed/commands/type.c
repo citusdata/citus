@@ -189,8 +189,6 @@ PostprocessCompositeTypeStmt(Node *node, const char *queryString)
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
-	MarkObjectDistributed(&typeAddress);
-
 	return NIL;
 }
 
@@ -299,13 +297,6 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
 	ObjectAddress typeAddress = GetObjectAddressFromParseTree(node, false);
 	EnsureDependenciesExistOnAllNodes(&typeAddress);
 
-	/*
-	 * now that the object has been created and distributed to the workers we mark them as
-	 * distributed so we know to keep them up to date and recreate on a new node in the
-	 * future
-	 */
-	MarkObjectDistributed(&typeAddress);
-
 	return NIL;
 }
 
@@ -316,7 +307,7 @@ PostprocessCreateEnumStmt(Node *node, const char *queryString)
  *
  * Since it is an alter of an existing type we actually have the ObjectAddress. This is
  * used to check if the type is distributed, if so the alter will be executed on the
- * workers directly to keep the types in sync accross the cluster.
+ * workers directly to keep the types in sync across the cluster.
  */
 List *
 PreprocessAlterEnumStmt(Node *node, const char *queryString,
@@ -443,6 +434,8 @@ PreprocessRenameTypeStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+
 	/* fully qualify */
 	QualifyTreeNode(node);
 
@@ -480,6 +473,8 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
 
 	QualifyTreeNode((Node *) stmt);
 
@@ -1125,7 +1120,7 @@ MakeTypeNameFromRangeVar(const RangeVar *relation)
  * EnsureSequentialModeForTypeDDL makes sure that the current transaction is already in
  * sequential mode, or can still safely be put in sequential mode, it errors if that is
  * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the begining.
+ * sequential mode set from the beginning.
  *
  * As types are node scoped objects there exists only 1 instance of the type used by
  * potentially multiple shards. To make sure all shards in the transaction can interact

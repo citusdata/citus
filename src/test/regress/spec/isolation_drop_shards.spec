@@ -25,11 +25,6 @@ step "s1-truncate"
 	TRUNCATE append_table;
 }
 
-step "s1-apply-delete-command"
-{
-	SELECT master_apply_delete_command('DELETE FROM append_table');
-}
-
 step "s1-drop-all-shards"
 {
 	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
@@ -47,11 +42,6 @@ step "s2-truncate"
 	TRUNCATE append_table;
 }
 
-step "s2-apply-delete-command"
-{
-	SELECT master_apply_delete_command('DELETE FROM append_table');
-}
-
 step "s2-drop-all-shards"
 {
 	SELECT citus_drop_all_shards('append_table', 'public', 'append_table');
@@ -63,18 +53,9 @@ step "s2-select"
 }
 
 permutation "s1-begin" "s1-drop-all-shards" "s2-truncate" "s1-commit"
-permutation "s1-begin" "s1-drop-all-shards" "s2-apply-delete-command" "s1-commit"
 permutation "s1-begin" "s1-drop-all-shards" "s2-drop-all-shards" "s1-commit"
 permutation "s1-begin" "s1-drop-all-shards" "s2-select" "s1-commit"
 
-// We can't verify master_apply_delete_command + SELECT since it blocks on the
-// the workers, but this is not visible on the master, meaning the isolation
-// test cannot proceed.
-permutation "s1-begin" "s1-apply-delete-command" "s2-truncate" "s1-commit"
-permutation "s1-begin" "s1-apply-delete-command" "s2-apply-delete-command" "s1-commit"
-permutation "s1-begin" "s1-apply-delete-command" "s2-drop-all-shards" "s1-commit"
-
 permutation "s1-begin" "s1-truncate" "s2-truncate" "s1-commit"
-permutation "s1-begin" "s1-truncate" "s2-apply-delete-command" "s1-commit"
 permutation "s1-begin" "s1-truncate" "s2-drop-all-shards" "s1-commit"
 permutation "s1-begin" "s1-truncate" "s2-select" "s1-commit"

@@ -17,9 +17,8 @@ SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 (1 row)
 
 -- coordinator cannot be disabled
-SELECT 1 FROM master_disable_node('localhost', :master_port);
-ERROR:  Disabling localhost:xxxxx failed
-DETAIL:  cannot change "isactive" field of the coordinator node
+SELECT 1 FROM citus_disable_node('localhost', :master_port);
+ERROR:  cannot change "isactive" field of the coordinator node
 RESET client_min_messages;
 SELECT 1 FROM master_remove_node('localhost', :master_port);
  ?column?
@@ -268,6 +267,68 @@ WITH cte_1 AS (UPDATE test SET y = y - 1 RETURNING *) SELECT * FROM cte_1 ORDER 
  5 | 6
 (5 rows)
 
+-- show that we can filter remote commands
+-- given that citus.grep_remote_commands, we log all commands
+SET citus.log_local_commands to true;
+SELECT count(*) FROM public.another_schema_table WHERE a = 1;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.another_schema_table_90630515 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- grep matches all commands
+SET citus.grep_remote_commands TO "%%";
+SELECT count(*) FROM public.another_schema_table WHERE a = 1;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.another_schema_table_90630515 another_schema_table WHERE (a OPERATOR(pg_catalog.=) 1)
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+-- only filter a specific shard for the local execution
+BEGIN;
+	SET LOCAL citus.grep_remote_commands TO "%90630515%";
+	SELECT count(*) FROM public.another_schema_table;
+NOTICE:  executing the command locally: SELECT count(*) AS count FROM public.another_schema_table_90630515 another_schema_table WHERE true
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	-- match nothing
+	SET LOCAL citus.grep_remote_commands TO '%nothing%';
+	SELECT count(*) FROM public.another_schema_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+COMMIT;
+-- only filter a specific shard for the remote execution
+BEGIN;
+	SET LOCAL citus.enable_local_execution TO FALSE;
+	SET LOCAL citus.grep_remote_commands TO '%90630515%';
+	SET LOCAL citus.log_remote_commands TO ON;
+	SELECT count(*) FROM public.another_schema_table;
+NOTICE:  issuing SELECT count(*) AS count FROM public.another_schema_table_90630515 another_schema_table WHERE true
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+	-- match nothing
+	SET LOCAL citus.grep_remote_commands TO '%nothing%';
+	SELECT count(*) FROM public.another_schema_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+COMMIT;
+RESET citus.log_local_commands;
+RESET citus.grep_remote_commands;
 -- Test upsert with constraint
 CREATE TABLE upsert_test
 (
@@ -625,6 +686,19 @@ BEGIN;
 32
 	INSERT INTO test SELECT i,i FROM generate_series(0,100)i;
 ROLLBACK;
+-- master_create_empty_shard on coordinator
+BEGIN;
+CREATE TABLE append_table (a INT, b INT);
+SELECT create_distributed_table('append_table','a','append');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT master_create_empty_shard('append_table');
+NOTICE:  Creating placements for the append partitioned tables on the coordinator is not supported, skipping coordinator ...
+ERROR:  could only create 0 of 1 of required shard replicas
+END;
 -- alter table inside a tx block
 BEGIN;
 	ALTER TABLE test ADD COLUMN z single_node.new_type;
@@ -953,7 +1027,7 @@ SELECT * FROM ref, local WHERE a = c ORDER BY a;
  7 | 8 | 7 | 8
 (2 rows)
 
--- Check repartion joins are supported
+-- Check repartition joins are supported
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
  x | y | x | y
@@ -1248,7 +1322,7 @@ NOTICE:  renaming the new table to single_node.test_2
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid = 'test_2'::regclass;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -2105,8 +2179,9 @@ SELECT pg_reload_conf();
 SET client_min_messages TO error;
 -- cannot remove coordinator since a reference table exists on coordinator and no other worker nodes are added
 SELECT 1 FROM master_remove_node('localhost', :master_port);
-ERROR:  cannot remove the last worker node because there are reference tables and it would cause data loss on reference tables
-HINT:  To proceed, either drop the reference tables or use undistribute_table() function to convert them to local tables
+ERROR:  cannot remove or disable the node localhost:xxxxx because because it contains the only shard placement for shard xxxxx
+DETAIL:  One of the table(s) that prevents the operation complete successfully is single_node.ref
+HINT:  To proceed, either drop the tables or use undistribute_table() function to convert them to local tables
 -- Cleanup
 DROP SCHEMA single_node CASCADE;
 -- Remove the coordinator again

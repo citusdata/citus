@@ -60,7 +60,7 @@ DROP TABLE testtableddl;
 RESET citus.shard_replication_factor;
 -- ensure no metadata of distributed tables are remaining
 SELECT * FROM pg_dist_partition;
- logicalrelid | partmethod | partkey | colocationid | repmodel
+ logicalrelid | partmethod | partkey | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -100,8 +100,9 @@ SELECT create_distributed_table('testserialtable', 'group_id', 'hash');
 
 (1 row)
 
--- can add additional serial columns
+-- cannot add additional serial columns when metadata is synced
 ALTER TABLE testserialtable ADD COLUMN other_id serial;
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
 -- and we shouldn't be able to change a distributed sequence's owner
 ALTER SEQUENCE testserialtable_id_seq OWNED BY NONE;
 ERROR:  cannot alter OWNED BY option of a sequence already owned by a distributed table
@@ -115,8 +116,9 @@ HINT:  Use a sequence in a distributed table by specifying a serial column type 
 -- or even change a manual sequence to be owned by a distributed table
 CREATE SEQUENCE standalone_sequence;
 ALTER SEQUENCE standalone_sequence OWNED BY testserialtable.group_id;
--- an edge case, but it's OK to change an owner to the same distributed table
+-- cannot even change owner to the same distributed table if the sequence is distributed
 ALTER SEQUENCE testserialtable_id_seq OWNED BY testserialtable.id;
+ERROR:  Altering a distributed sequence is currently not supported.
 -- drop distributed table
 \c - - - :master_port
 DROP TABLE testserialtable;
@@ -146,7 +148,6 @@ ERROR:  cannot execute ALTER TABLE command involving partition column
 ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('test_sequence_1');
 ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
 ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('test_sequence_1');
-ALTER TABLE test_table ADD COLUMN id3 bigserial;
 -- shouldn't work since the above operations should be the only subcommands
 ALTER TABLE test_table ADD COLUMN id4 int DEFAULT nextval('test_sequence_1') CHECK (id4 > 0);
 ERROR:  cannot execute ADD COLUMN .. DEFAULT nextval('..') command with other subcommands/constraints
@@ -157,9 +158,11 @@ HINT:  You can issue each subcommand separately
 ALTER TABLE test_table ALTER COLUMN id3 SET DEFAULT nextval('test_sequence_1'), ALTER COLUMN id2 DROP DEFAULT;
 ERROR:  cannot execute ALTER COLUMN COLUMN .. SET DEFAULT nextval('..') command with other subcommands
 HINT:  You can issue each subcommand separately
+-- shouldn't work because of metadata syncing
+ALTER TABLE test_table ADD COLUMN id3 bigserial;
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
 ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
-ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes with other subcommands/constraints
-HINT:  You can issue each subcommand separately
+ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
 DROP TABLE test_table CASCADE;
 DROP SEQUENCE test_sequence_0;
 DROP SEQUENCE test_sequence_1;

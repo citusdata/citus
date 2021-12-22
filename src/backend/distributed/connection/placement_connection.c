@@ -200,7 +200,7 @@ static bool ConnectionAccessedDifferentPlacement(MultiConnection *connection,
 												 ShardPlacement *placement);
 static void AssociatePlacementWithShard(ConnectionPlacementHashEntry *placementEntry,
 										ShardPlacement *placement);
-static bool CheckShardPlacements(ConnectionShardHashEntry *shardEntry);
+static bool HasModificationFailedForShard(ConnectionShardHashEntry *shardEntry);
 static uint32 ColocatedPlacementsHashHash(const void *key, Size keysize);
 static int ColocatedPlacementsHashCompare(const void *a, const void *b, Size keysize);
 
@@ -981,18 +981,19 @@ ResetPlacementConnectionManagement(void)
 
 
 /*
- * MarkFailedShardPlacements looks through every connection in the connection shard hash
- * and marks the placements associated with failed connections invalid.
+ * ErrorIfPostCommitFailedShardPlacements throws an error if any of the placements
+ * that modified the database and involved in the transaction has failed.
  *
- * Every shard must have at least one placement connection which did not fail. If all
- * modifying connections for a shard failed then the transaction will be aborted.
+ * Note that Citus already fails queries/commands in case of any failures during query
+ * processing. However, there are certain failures that can only be detected on the
+ * COMMIT time. And, this check mainly ensures to catch errors that happens on the
+ * COMMIT time on the placements.
  *
- * This will be called just before commit, so we can abort before executing remote
- * commits. It should also be called after modification statements, to ensure that we
- * don't run future statements against placements which are not up to date.
+ * The most common example for this case is the deferred errors that are thrown by
+ * triggers or constraints at the COMMIT time.
  */
 void
-MarkFailedShardPlacements()
+ErrorIfPostCommitFailedShardPlacements(void)
 {
 	HASH_SEQ_STATUS status;
 	ConnectionShardHashEntry *shardEntry = NULL;
@@ -1000,82 +1001,27 @@ MarkFailedShardPlacements()
 	hash_seq_init(&status, ConnectionShardHash);
 	while ((shardEntry = (ConnectionShardHashEntry *) hash_seq_search(&status)) != 0)
 	{
-		if (!CheckShardPlacements(shardEntry))
+		if (HasModificationFailedForShard(shardEntry))
 		{
 			ereport(ERROR,
-					(errmsg("could not make changes to shard " INT64_FORMAT
-							" on any node",
-							shardEntry->key.shardId)));
-		}
-	}
-}
-
-
-/*
- * PostCommitMarkFailedShardPlacements marks placements invalid and checks whether
- * sufficiently many placements have failed to abort the entire coordinated
- * transaction.
- *
- * This will be called just after a coordinated commit so we can handle remote
- * transactions which failed during commit.
- *
- * When using2PC is set as least one placement must succeed per shard. If all placements
- * fail for a shard the entire transaction is aborted. If using2PC is not set then a only
- * a warning will be emitted; we cannot abort because some remote transactions might have
- * already been committed.
- */
-void
-PostCommitMarkFailedShardPlacements(bool using2PC)
-{
-	HASH_SEQ_STATUS status;
-	ConnectionShardHashEntry *shardEntry = NULL;
-	int successes = 0;
-	int attempts = 0;
-
-	int elevel = using2PC ? ERROR : WARNING;
-
-	hash_seq_init(&status, ConnectionShardHash);
-	while ((shardEntry = (ConnectionShardHashEntry *) hash_seq_search(&status)) != 0)
-	{
-		attempts++;
-		if (CheckShardPlacements(shardEntry))
-		{
-			successes++;
-		}
-		else
-		{
-			/*
-			 * Only error out if we're using 2PC. If we're not using 2PC we can't error
-			 * out otherwise we can end up with a state where some shard modifications
-			 * have already committed successfully.
-			 */
-			ereport(elevel,
 					(errmsg("could not commit transaction for shard " INT64_FORMAT
-							" on any active node",
-							shardEntry->key.shardId)));
+							" on at least one active node", shardEntry->key.shardId)));
 		}
-	}
-
-	/*
-	 * If no shards could be modified at all, error out. Doesn't matter whether
-	 * we're post-commit - there's nothing to invalidate.
-	 */
-	if (attempts > 0 && successes == 0)
-	{
-		ereport(ERROR, (errmsg("could not commit transaction on any active node")));
 	}
 }
 
 
 /*
- * CheckShardPlacements is a helper function for CheckForFailedPlacements that
- * performs the per-shard work.
+ * HasModificationFailedForShard is a helper function for
+ * ErrorIfPostCommitFailedShardPlacements that performs the per-shard work.
+ *
+ * The function returns true if any placement of the input shard is modified
+ * and any failures has happened (either connection failures or transaction
+ * failures).
  */
 static bool
-CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
+HasModificationFailedForShard(ConnectionShardHashEntry *shardEntry)
 {
-	int failures = 0;
-	int successes = 0;
 	dlist_iter placementIter;
 
 	dlist_foreach(placementIter, &shardEntry->placementConnections)
@@ -1095,51 +1041,11 @@ CheckShardPlacements(ConnectionShardHashEntry *shardEntry)
 
 		if (!connection || connection->remoteTransaction.transactionFailed)
 		{
-			placementEntry->failed = true;
-			failures++;
-		}
-		else
-		{
-			successes++;
+			return true;
 		}
 	}
 
-	/*
-	 * If there were any failures we want to bail on a commit in two situations:
-	 * there were no successes, or there was a failure with a reference table shard.
-	 * Ideally issues with a reference table will've errored out earlier,
-	 * but if not, we abort now to avoid an unhealthy reference table shard.
-	 */
-	if (failures > 0 &&
-		(successes == 0 || ReferenceTableShardId(shardEntry->key.shardId)))
-	{
-		return false;
-	}
-
-	/* mark all failed placements invalid */
-	dlist_foreach(placementIter, &shardEntry->placementConnections)
-	{
-		ConnectionPlacementHashEntry *placementEntry =
-			dlist_container(ConnectionPlacementHashEntry, shardNode, placementIter.cur);
-
-		if (placementEntry->failed)
-		{
-			uint64 shardId = shardEntry->key.shardId;
-			uint64 placementId = placementEntry->key.placementId;
-			ShardPlacement *shardPlacement = LoadShardPlacement(shardId, placementId);
-
-			/*
-			 * We only set shard state if it currently is SHARD_STATE_ACTIVE, which
-			 * prevents overwriting shard state if it was already set somewhere else.
-			 */
-			if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
-			{
-				MarkShardPlacementInactive(shardPlacement);
-			}
-		}
-	}
-
-	return true;
+	return false;
 }
 
 

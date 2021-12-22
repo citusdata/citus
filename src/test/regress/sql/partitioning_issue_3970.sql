@@ -46,7 +46,7 @@ ORDER BY 1,2,3;
 \c - - - :worker_1_port
 SELECT relname, conname, pg_catalog.pg_get_constraintdef(con.oid, true)
 FROM pg_constraint con JOIN pg_class rel ON (rel.oid=con.conrelid)
-WHERE relname LIKE 'part_table%'
+WHERE relname SIMILAR TO 'part_table%\_\d%'
 ORDER BY 1,2,3;
 
 \c - - - :master_port

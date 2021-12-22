@@ -144,7 +144,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET NULL;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -158,7 +158,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 
 (1 row)
 
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -173,7 +173,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON DELETE SET DEFAULT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -189,7 +189,7 @@ BEGIN;
 (1 row)
 
 COMMIT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -204,7 +204,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE SET NULL;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -219,7 +219,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE SET DEFAULT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -234,7 +234,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY(id) REFERENCES referenced_table(id) ON UPDATE CASCADE;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -253,7 +253,7 @@ ALTER TABLE referencing_table ADD COLUMN referencing int REFERENCES referenced_t
 ERROR:  cannot execute ADD COLUMN command with PRIMARY KEY, UNIQUE, FOREIGN and CHECK constraints
 DETAIL:  Adding a column with a constraint in one command is not supported because all constraints in Citus must have explicit names
 HINT:  You can issue each command separately such as ALTER TABLE referencing_table ADD COLUMN referencing data_type; ALTER TABLE referencing_table ADD CONSTRAINT constraint_name FOREIGN KEY (referencing) REFERENCES referenced_table(id) ON UPDATE CASCADE;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -273,7 +273,7 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCE
 ERROR:  cannot create foreign key constraint
 DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -292,7 +292,7 @@ ALTER TABLE referencing_table ADD COLUMN referencing_col int REFERENCES referenc
 ERROR:  cannot create foreign key constraint
 DETAIL:  Citus currently supports foreign key constraints only for "citus.shard_replication_factor = 1".
 HINT:  Please change "citus.shard_replication_factor to 1". To learn more about using foreign keys with other replication factors, please contact us at https://citusdata.com/about/contact_us.
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -308,7 +308,7 @@ SELECT create_distributed_table('referencing_table', 'ref_id');
 
 (1 row)
 
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -332,7 +332,7 @@ BEGIN;
 (1 row)
 
 COMMIT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -716,7 +716,7 @@ SELECT create_distributed_table('referencing_table', 'id');
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE;
 ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
     16
@@ -783,7 +783,7 @@ SELECT create_distributed_table('referencing_table', 'id');
 
 (1 row)
 
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
     16
@@ -825,7 +825,7 @@ BEGIN;
   ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCES referenced_table(test_column) ON DELETE CASCADE;
   ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (ref_id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
 COMMIT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
     16
@@ -892,7 +892,7 @@ BEGIN;
 
   ALTER TABLE referencing_table ADD CONSTRAINT foreign_key_2 FOREIGN KEY (ref_id) REFERENCES referenced_table2(test_column2) ON DELETE CASCADE;
 COMMIT;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
     16
@@ -937,7 +937,7 @@ ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (id) REFERENCE
 ALTER TABLE referencing_table2 ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id) REFERENCES referenced_table(test_column2) ON DELETE CASCADE;
 ALTER TABLE referencing_table2 ADD CONSTRAINT fkey_ref_to_dist FOREIGN KEY (id) REFERENCES referencing_table(id) ON DELETE CASCADE;
 COMMIT;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
     24
@@ -989,7 +989,7 @@ SELECT create_reference_table('referenced_table');
 
 (1 row)
 
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -1025,7 +1025,7 @@ SELECT create_distributed_table('referencing_referencing_table', 'id');
 (1 row)
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_ref FOREIGN KEY (ref_id, ref_id2) REFERENCES referenced_table(test_column, test_column2) ON DELETE CASCADE;
-SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.referencing%';
+SELECT COUNT(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.referencing%\d{2,}';
  count
 ---------------------------------------------------------------------
     16
@@ -1117,14 +1117,14 @@ SELECT create_distributed_table('test_table_2', 'id');
 
 (1 row)
 
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
 (1 row)
 
 ALTER TABLE test_table_2 DROP CONSTRAINT test_table_2_value_1_fkey;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -1154,7 +1154,7 @@ HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_m
   ALTER TABLE test_table_2 DROP CONSTRAINT test_table_2_value_1_fkey;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -1178,7 +1178,7 @@ SELECT create_distributed_table('test_table_2', 'id');
 (1 row)
 
 ALTER TABLE test_table_1 DROP CONSTRAINT test_table_1_pkey CASCADE;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -1203,7 +1203,7 @@ BEGIN;
 
   ALTER TABLE test_table_1 DROP CONSTRAINT test_table_1_pkey CASCADE;
 COMMIT;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -1226,7 +1226,7 @@ SELECT create_distributed_table('test_table_2', 'id');
 (1 row)
 
 ALTER TABLE test_table_2 DROP COLUMN value_1;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -1251,7 +1251,7 @@ BEGIN;
 
   ALTER TABLE test_table_2 DROP COLUMN value_1;
 COMMIT;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -1274,7 +1274,7 @@ SELECT create_distributed_table('test_table_2', 'id');
 (1 row)
 
 ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -1299,7 +1299,7 @@ BEGIN;
 
   ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
 COMMIT;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0
@@ -1332,7 +1332,7 @@ INSERT INTO test_table_2 VALUES (4,2147483648);
 ALTER TABLE test_table_2 ALTER COLUMN value_1 SET DATA TYPE int;
 ERROR:  integer out of range
 CONTEXT:  while executing command on localhost:xxxxx
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      8
@@ -1359,7 +1359,7 @@ BEGIN;
   ALTER TABLE test_table_2 ALTER COLUMN value_1 SET DATA TYPE bigint;
   ALTER TABLE test_table_1 DROP COLUMN id CASCADE;
 COMMIT;
-SELECT count(*) FROM table_fkeys_in_workers WHERE relid LIKE 'fkey_reference_table.%' AND refd_relid LIKE 'fkey_reference_table.%';
+SELECT count(*) FROM table_fkeys_in_workers WHERE relid SIMILAR TO 'fkey_reference_table.%\d{2,}' AND refd_relid SIMILAR TO 'fkey_reference_table.%\d{2,}';
  count
 ---------------------------------------------------------------------
      0

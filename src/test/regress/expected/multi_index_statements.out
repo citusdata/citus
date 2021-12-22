@@ -66,7 +66,7 @@ CREATE INDEX lineitem_partkey_desc_index ON public.lineitem (l_partkey DESC);
 CREATE INDEX lineitem_partial_index ON public.lineitem (l_shipdate)
 	WHERE l_shipdate < '1995-01-01';
 CREATE INDEX lineitem_colref_index ON public.lineitem (record_ne(lineitem.*, NULL));
-SET client_min_messages = ERROR; -- avoid version dependant warning about WAL
+SET client_min_messages = ERROR; -- avoid version dependent warning about WAL
 CREATE INDEX lineitem_orderkey_hash_index ON public.lineitem USING hash (l_partkey);
 CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range(a);
 CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range(a,b);
@@ -155,25 +155,25 @@ SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_t
 (19 rows)
 
 \c - - - :worker_1_port
-SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
+SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_%' ORDER BY relname LIMIT 1);
  count
 ---------------------------------------------------------------------
      9
 (1 row)
 
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash_%';
  count
 ---------------------------------------------------------------------
     56
 (1 row)
 
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range_%';
  count
 ---------------------------------------------------------------------
      6
 (1 row)
 
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append_%';
  count
 ---------------------------------------------------------------------
      0
@@ -255,16 +255,11 @@ DROP INDEX lineitem_orderkey_index, lineitem_partial_index;
 ERROR:  cannot drop multiple distributed objects in a single command
 HINT:  Try dropping each object in a separate DROP command.
 -- Verify that we can succesfully drop indexes
+DROP INDEX lineitem_orderkey_index;
+DROP INDEX lineitem_orderkey_index_new;
 DROP INDEX lineitem_partkey_desc_index;
 DROP INDEX lineitem_partial_index;
 DROP INDEX lineitem_colref_index;
--- Verify that we can drop distributed indexes with local indexes
-CREATE TABLE local_table(a int, b int);
-CREATE INDEX local_index ON local_table(a);
-CREATE INDEX local_index2 ON local_table(b);
-DROP INDEX lineitem_orderkey_index, local_index;
-DROP INDEX IF EXISTS lineitem_orderkey_index_new, local_index2, non_existing_index;
-NOTICE:  index "non_existing_index" does not exist, skipping
 -- Verify that we handle if exists statements correctly
 DROP INDEX non_existent_index;
 ERROR:  index "non_existent_index" does not exist
@@ -301,14 +296,15 @@ SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 (5 rows)
 
 \c - - - :worker_1_port
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
+SET citus.override_table_visibility TO FALSE;
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname SIMILAR TO 'lineitem%\d' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
     indrelid     |           indexrelid
 ---------------------------------------------------------------------
  lineitem_360000 | lineitem_l_orderkey_idx_360000
  lineitem_360000 | lineitem_l_shipdate_idx_360000
 (2 rows)
 
-SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
+SELECT * FROM pg_indexes WHERE tablename SIMILAR TO 'index_test_%\d' ORDER BY indexname;
        schemaname       |       tablename        |             indexname              | tablespace |                                                                        indexdef
 ---------------------------------------------------------------------
  multi_index_statements | index_test_hash_102082 | index_test_hash_a_idx_102082       |            | CREATE UNIQUE INDEX index_test_hash_a_idx_102082 ON multi_index_statements.index_test_hash_102082 USING btree (a)
@@ -413,6 +409,10 @@ CREATE INDEX ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creat
     ON test_index_creation1 USING btree
     (tenant_id, timeperiod);
 NOTICE:  identifier "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1" will be truncated to "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_c"
+DEBUG:  identifier "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1" will be truncated to "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_c"
+DETAIL:  from localhost:xxxxx
+DEBUG:  identifier "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1_ix_test_index_creation1" will be truncated to "ix_test_index_creation1_ix_test_index_creation1_ix_test_index_c"
+DETAIL:  from localhost:xxxxx
 RESET client_min_messages;
 CREATE TABLE test_index_creation1_p2020_09_26 PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-26 00:00:00') TO ('2020-09-27 00:00:00');
 CREATE TABLE test_index_creation1_p2020_09_27 PARTITION OF test_index_creation1 FOR VALUES FROM ('2020-09-27 00:00:00') TO ('2020-09-28 00:00:00');
@@ -522,7 +522,7 @@ SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text = 'child_index' 
 \c - - - :worker_1_port
 SET search_path TO multi_index_statements;
 -- show that child indices of partition shards also inherit from parent indices of parent shards
-SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index%' AND inhparent::regclass::text LIKE 'parent_index%';
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index\_%' AND inhparent::regclass::text LIKE 'parent_index\_%';
  count
 ---------------------------------------------------------------------
     16

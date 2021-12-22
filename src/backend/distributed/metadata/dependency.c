@@ -788,7 +788,7 @@ FollowNewSupportedDependencies(ObjectAddressCollector *collector,
 
 	/*
 	 * If the object is already distributed it is not a `new` object that needs to be
-	 * distributed before we create a dependant object
+	 * distributed before we create a dependent object
 	 */
 	if (IsObjectDistributed(&address))
 	{

@@ -1,6 +1,6 @@
 -- ===================================================================
 -- test recursive planning functionality for non-colocated subqueries
--- We prefered to use EXPLAIN almost all the queries here,
+-- We preferred to use EXPLAIN almost all the queries here,
 -- otherwise the execution time of so many repartition queries would
 -- be too high for the regression tests. Also, note that we're mostly
 -- interested in recurive planning side of the things, thus supressing

@@ -22,6 +22,8 @@
 #include "lib/stringinfo.h"
 #include "miscadmin.h"
 #include "storage/latch.h"
+#include "utils/builtins.h"
+#include "utils/fmgrprotos.h"
 #include "utils/palloc.h"
 
 
@@ -34,6 +36,7 @@ int RemoteCopyFlushThreshold = 8 * 1024 * 1024;
 
 /* GUC, determining whether statements sent to remote nodes are logged */
 bool LogRemoteCommands = false;
+char *GrepRemoteCommands = "";
 
 
 static bool ClearResultsInternal(MultiConnection *connection, bool raiseErrors,
@@ -328,7 +331,6 @@ ReportResultError(MultiConnection *connection, PGresult *result, int elevel)
 
 /* *INDENT-ON* */
 
-
 /*
  * LogRemoteCommand logs commands send to remote nodes if
  * citus.log_remote_commands wants us to do so.
@@ -341,10 +343,38 @@ LogRemoteCommand(MultiConnection *connection, const char *command)
 		return;
 	}
 
+	if (!CommandMatchesLogGrepPattern(command))
+	{
+		return;
+	}
+
 	ereport(NOTICE, (errmsg("issuing %s", ApplyLogRedaction(command)),
 					 errdetail("on server %s@%s:%d connectionId: %ld", connection->user,
 							   connection->hostname,
 							   connection->port, connection->connectionId)));
+}
+
+
+/*
+ * CommandMatchesLogGrepPattern returns true of the input command matches
+ * the pattern specified by citus.grep_remote_commands.
+ *
+ * If citus.grep_remote_commands set to an empty string, all commands are
+ * considered as a match.
+ */
+bool
+CommandMatchesLogGrepPattern(const char *command)
+{
+	if (GrepRemoteCommands && strnlen(GrepRemoteCommands, NAMEDATALEN) > 0)
+	{
+		Datum boolDatum =
+			DirectFunctionCall2(textlike, CStringGetTextDatum(command),
+								CStringGetTextDatum(GrepRemoteCommands));
+
+		return DatumGetBool(boolDatum);
+	}
+
+	return true;
 }
 
 

@@ -63,6 +63,7 @@ typedef struct
 	char partitionMethod;
 	uint32 colocationId;
 	char replicationModel;
+	bool autoConverted; /* table auto-added to metadata, valid for citus local tables */
 
 	/* pg_dist_shard metadata (variable-length ShardInterval array) for this table */
 	int shardIntervalArrayLength;
@@ -143,9 +144,11 @@ extern bool IsCitusTableTypeCacheEntry(CitusTableCacheEntry *tableEtnry,
 									   CitusTableType tableType);
 
 extern bool IsCitusTable(Oid relationId);
+extern bool IsCitusTableViaCatalog(Oid relationId);
 extern char PgDistPartitionViaCatalog(Oid relationId);
 extern List * LookupDistShardTuples(Oid relationId);
 extern char PartitionMethodViaCatalog(Oid relationId);
+extern Var * PartitionColumnViaCatalog(Oid relationId);
 extern bool IsCitusLocalTableByDistParams(char partitionMethod, char replicationModel);
 extern List * CitusTableList(void);
 extern ShardInterval * LoadShardInterval(uint64 shardId);
@@ -196,6 +199,7 @@ extern bool InstalledAndAvailableVersionsSame(void);
 extern bool MajorVersionsCompatible(char *leftVersion, char *rightVersion);
 extern void ErrorIfInconsistentShardIntervals(CitusTableCacheEntry *cacheEntry);
 extern void EnsureModificationsCanRun(void);
+extern void EnsureModificationsCanRunOnRelation(Oid relationId);
 extern char LookupDistributionMethod(Oid distributionMethodOid);
 extern bool RelationExists(Oid relationId);
 extern ShardInterval * TupleToShardInterval(HeapTuple heapTuple,

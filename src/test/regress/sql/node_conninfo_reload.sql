@@ -4,6 +4,7 @@ SET search_path TO node_conninfo_reload;
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.force_max_query_parallelization TO ON;
+SET citus.next_shard_id TO 278000;
 
 create table test(a int);
 select create_distributed_table('test', 'a');
@@ -170,5 +171,29 @@ show citus.node_conninfo;
 
 -- Should work
 select count(*) from test where a = 0;
+
+-- Test connecting all the shards
+ALTER SYSTEM SET citus.node_conninfo = 'sslmode=doesnotexist';
+BEGIN;
+ALTER TABLE test ADD COLUMN b INT;
+select pg_reload_conf();
+select pg_sleep(0.1); -- wait for config reload to apply
+show citus.node_conninfo;
+-- Should work since connections to the same shards that BEGIN is sent
+-- are reused.
+ALTER TABLE test ADD COLUMN c INT;
+COMMIT;
+
+-- Should fail now, when transaction is finished
+ALTER TABLE test ADD COLUMN d INT;
+
+-- Reset it again
+ALTER SYSTEM RESET citus.node_conninfo;
+select pg_reload_conf();
+select pg_sleep(0.1); -- wait for config reload to apply
+show citus.node_conninfo;
+
+-- Should work again
+ALTER TABLE test ADD COLUMN e INT;
 
 DROP SCHEMA node_conninfo_reload CASCADE;

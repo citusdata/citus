@@ -34,14 +34,12 @@
 #define PG_TABLE_SIZE_FUNCTION "pg_table_size(%s)"
 #define PG_RELATION_SIZE_FUNCTION "pg_relation_size(%s)"
 #define PG_TOTAL_RELATION_SIZE_FUNCTION "pg_total_relation_size(%s)"
-#define CSTORE_TABLE_SIZE_FUNCTION "cstore_table_size(%s)"
 #define WORKER_PARTITIONED_TABLE_SIZE_FUNCTION "worker_partitioned_table_size(%s)"
 #define WORKER_PARTITIONED_RELATION_SIZE_FUNCTION "worker_partitioned_relation_size(%s)"
 #define WORKER_PARTITIONED_RELATION_TOTAL_SIZE_FUNCTION \
 	"worker_partitioned_relation_total_size(%s)"
 
-#define SHARD_SIZES_COLUMN_COUNT 2
-#define UPDATE_SHARD_STATISTICS_COLUMN_COUNT 4
+#define SHARD_SIZES_COLUMN_COUNT (3)
 
 /* In-memory representation of a typed tuple in pg_dist_shard. */
 typedef struct ShardInterval
@@ -191,8 +189,7 @@ typedef enum SizeQueryType
 {
 	RELATION_SIZE, /* pg_relation_size() */
 	TOTAL_RELATION_SIZE, /* pg_total_relation_size() */
-	TABLE_SIZE, /* pg_table_size() */
-	CSTORE_TABLE_SIZE /* cstore_table_size() */
+	TABLE_SIZE /* pg_table_size() */
 } SizeQueryType;
 
 
@@ -204,12 +201,12 @@ extern Datum citus_relation_size(PG_FUNCTION_ARGS);
 /* Function declarations to read shard and shard placement data */
 extern uint32 TableShardReplicationFactor(Oid relationId);
 extern List * LoadShardIntervalList(Oid relationId);
+extern List * LoadUnsortedShardIntervalListViaCatalog(Oid relationId);
 extern ShardInterval * LoadShardIntervalWithLongestShardName(Oid relationId);
 extern int ShardIntervalCount(Oid relationId);
 extern List * LoadShardList(Oid relationId);
 extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
-extern bool NodeGroupHasLivePlacements(int32 groupId);
 extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
 extern List * ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId);
@@ -234,12 +231,10 @@ extern uint64 InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 									  int32 groupId);
 extern void InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 									  Var *distributionColumn, uint32 colocationId,
-									  char replicationModel);
+									  char replicationModel, bool autoConverted);
+extern void UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted);
 extern void DeletePartitionRow(Oid distributedRelationId);
 extern void DeleteShardRow(uint64 shardId);
-extern void UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement,
-												char shardState);
-extern void MarkShardPlacementInactive(ShardPlacement *shardPlacement);
 extern void UpdateShardPlacementState(uint64 placementId, char shardState);
 extern void UpdatePlacementGroupId(uint64 placementId, int groupId);
 extern void DeleteShardPlacementRow(uint64 placementId);
@@ -284,17 +279,18 @@ extern ShardInterval * DeformedDistShardTupleToShardInterval(Datum *datumArray,
 															 int32 intervalTypeMod);
 extern void GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
 								Oid *intervalTypeId, int32 *intervalTypeMod);
-extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds, bool
-												   useDistributedTransaction, bool
-												   useShardMinMaxQuery);
+extern List * SendShardStatisticsQueriesInParallel(List *citusTableIds,
+												   bool useDistributedTransaction);
 extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
 											   uint64 *availableBytes,
 											   uint64 *totalBytes);
 extern void ExecuteQueryViaSPI(char *query, int SPIOK);
 extern void EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId);
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
-extern void MarkSequenceListDistributedAndPropagateDependencies(List *sequenceList);
-extern void MarkSequenceDistributedAndPropagateDependencies(Oid sequenceOid);
+extern void MarkSequenceListDistributedAndPropagateWithDependencies(Oid relationId,
+																	List *sequenceList);
+extern void MarkSequenceDistributedAndPropagateWithDependencies(Oid relationId, Oid
+																sequenceOid);
 extern void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *dependentSequenceList,
 												  List *attnumList);

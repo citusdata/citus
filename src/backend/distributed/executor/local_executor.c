@@ -513,8 +513,14 @@ LogLocalCommand(Task *task)
 		return;
 	}
 
+	const char *command = TaskQueryString(task);
+	if (!CommandMatchesLogGrepPattern(command))
+	{
+		return;
+	}
+
 	ereport(NOTICE, (errmsg("executing the command locally: %s",
-							ApplyLogRedaction(TaskQueryString(task)))));
+							ApplyLogRedaction(command))));
 }
 
 
@@ -649,7 +655,7 @@ ExecuteLocalTaskPlan(PlannedStmt *taskPlan, char *queryString,
 	int localPlacementIndex = 0;
 
 	/*
-	 * Use the tupleStore provided by the scanState because it is shared accross
+	 * Use the tupleStore provided by the scanState because it is shared across
 	 * the other task executions and the adaptive executor.
 	 *
 	 * Also note that as long as the tupleDest is provided, local execution always

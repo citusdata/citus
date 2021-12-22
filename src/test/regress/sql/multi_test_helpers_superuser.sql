@@ -8,7 +8,7 @@ ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
 ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
 SELECT pg_reload_conf();
 
--- Verifies pg_dist_node and pg_dist_palcement in the given worker matches the ones in coordinator
+-- Verifies pg_dist_node and pg_dist_placement in the given worker matches the ones in coordinator
 CREATE OR REPLACE FUNCTION verify_metadata(hostname TEXT, port INTEGER, master_port INTEGER DEFAULT 57636)
     RETURNS BOOLEAN
     LANGUAGE sql
@@ -54,3 +54,14 @@ CREATE OR REPLACE FUNCTION pg_catalog.partition_task_list_results(resultIdPrefix
 CREATE OR REPLACE FUNCTION top_transaction_context_size() RETURNS BIGINT
 LANGUAGE C STRICT VOLATILE
 AS 'citus', $$top_transaction_context_size$$;
+
+CREATE OR REPLACE FUNCTION pg_catalog.citus_disable_node_and_wait(nodename text, nodeport integer, force bool DEFAULT false)
+    RETURNS void
+  LANGUAGE plpgsql
+AS $function$
+BEGIN
+
+  PERFORM pg_catalog.citus_disable_node(nodename, nodeport, force);
+  PERFORM public.wait_until_metadata_sync(30000);
+END;
+$function$;

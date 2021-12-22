@@ -5,6 +5,7 @@ from contextlib import closing
 import os
 import threading
 import common
+import inspect
 
 COORDINATOR_NAME = "coordinator"
 WORKER1 = "worker1"
@@ -53,6 +54,16 @@ next_port = 10200
 PORT_UPPER = 32768
 
 port_lock = threading.Lock()
+
+
+def should_include_config(class_name):
+
+    if inspect.isclass(class_name) and (
+        issubclass(class_name, CitusMXBaseClusterConfig)
+        or issubclass(class_name, CitusDefaultClusterConfig)
+    ):
+        return True
+    return False
 
 
 def find_free_port():
@@ -261,16 +272,6 @@ class CitusUnusualExecutorConfig(CitusMXBaseClusterConfig):
         }
 
 
-class CitusCacheManyConnectionsConfig(CitusMXBaseClusterConfig):
-    def __init__(self, arguments):
-        super().__init__(arguments)
-        self.new_settings = {
-            "citus.copy_switchover_threshold": "1B",
-            "citus.local_copy_flush_threshold": "1B",
-            "citus.remote_copy_flush_threshold": "1B",
-        }
-
-
 class CitusSmallCopyBuffersConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
@@ -305,7 +306,7 @@ class CitusSingleNodeSingleShardClusterConfig(CitusDefaultClusterConfig):
         common.coordinator_should_haveshards(self.bindir, self.coordinator_port())
 
 
-class CitusShardReplicationFactorClusterConfig(CitusDefaultClusterConfig):
+class CitusShardReplicationFactorClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_replication_factor": 2}
@@ -332,3 +333,4 @@ class PGUpgradeConfig(CitusBaseClusterConfig):
         self.old_datadir = self.temp_dir + "/oldData"
         self.new_datadir = self.temp_dir + "/newData"
         self.user = SUPER_USER_NAME
+        self.add_coordinator_to_metadata = True

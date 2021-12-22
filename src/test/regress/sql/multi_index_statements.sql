@@ -45,7 +45,7 @@ CREATE INDEX lineitem_partial_index ON public.lineitem (l_shipdate)
 
 CREATE INDEX lineitem_colref_index ON public.lineitem (record_ne(lineitem.*, NULL));
 
-SET client_min_messages = ERROR; -- avoid version dependant warning about WAL
+SET client_min_messages = ERROR; -- avoid version dependent warning about WAL
 CREATE INDEX lineitem_orderkey_hash_index ON public.lineitem USING hash (l_partkey);
 CREATE UNIQUE INDEX index_test_range_index_a ON index_test_range(a);
 CREATE UNIQUE INDEX index_test_range_index_a_b ON index_test_range(a,b);
@@ -107,10 +107,10 @@ DROP TABLE local_table;
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
-SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1);
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash%';
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range%';
-SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append%';
+SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_%' ORDER BY relname LIMIT 1);
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash_%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range_%';
+SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append_%';
 \c - - - :master_port
 SET search_path TO multi_index_statements, public;
 
@@ -159,16 +159,11 @@ REINDEX SYSTEM regression;
 DROP INDEX lineitem_orderkey_index, lineitem_partial_index;
 
 -- Verify that we can succesfully drop indexes
+DROP INDEX lineitem_orderkey_index;
+DROP INDEX lineitem_orderkey_index_new;
 DROP INDEX lineitem_partkey_desc_index;
 DROP INDEX lineitem_partial_index;
 DROP INDEX lineitem_colref_index;
-
--- Verify that we can drop distributed indexes with local indexes
-CREATE TABLE local_table(a int, b int);
-CREATE INDEX local_index ON local_table(a);
-CREATE INDEX local_index2 ON local_table(b);
-DROP INDEX lineitem_orderkey_index, local_index;
-DROP INDEX IF EXISTS lineitem_orderkey_index_new, local_index2, non_existing_index;
 
 -- Verify that we handle if exists statements correctly
 
@@ -193,8 +188,9 @@ DROP INDEX CONCURRENTLY lineitem_concurrently_index;
 SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem%' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
-SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
+SET citus.override_table_visibility TO FALSE;
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname SIMILAR TO 'lineitem%\d' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
+SELECT * FROM pg_indexes WHERE tablename SIMILAR TO 'index_test_%\d' ORDER BY indexname;
 
 -- create index that will conflict with master operations
 CREATE INDEX CONCURRENTLY ith_b_idx_102089 ON multi_index_statements.index_test_hash_102089(b);
@@ -335,7 +331,7 @@ SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text = 'child_index' 
 SET search_path TO multi_index_statements;
 
 -- show that child indices of partition shards also inherit from parent indices of parent shards
-SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index%' AND inhparent::regclass::text LIKE 'parent_index%';
+SELECT count(*) FROM pg_inherits WHERE inhrelid::regclass::text LIKE 'child_index\_%' AND inhparent::regclass::text LIKE 'parent_index\_%';
 
 \c - - - :master_port
 SET search_path TO multi_index_statements;

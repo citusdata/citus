@@ -21,7 +21,7 @@
  *   For COPY command, we use this fact to reserve connections to the remote nodes
  *   in the same order as the adaptive executor in order to prevent any resource
  *   starvations. We need to do this because COPY establishes connections when it
- *   recieves a tuple that targets a remote node. This is a valuable optimization
+ *   receives a tuple that targets a remote node. This is a valuable optimization
  *   to prevent unnecessary connection establishments, which are pretty expensive.
  *   Instead, COPY command can reserve connections upfront, and utilize them when
  *   they are actually needed.
@@ -118,9 +118,6 @@ citus_reserved_connection_stats(PG_FUNCTION_ARGS)
 
 	StoreAllReservedConnections(tupleStore, tupleDescriptor);
 
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupleStore);
-
 	PG_RETURN_VOID();
 }
 
@@ -191,7 +188,7 @@ InitializeLocallyReservedSharedConnections(void)
 	uint32 hashFlags = (HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT | HASH_COMPARE);
 
 	SessionLocalReservedConnections =
-		hash_create("citus session level reserved connectios (host,port,database,user)",
+		hash_create("citus session level reserved connections (host,port,database,user)",
 					64, &reservedConnectionInfo, hashFlags);
 }
 

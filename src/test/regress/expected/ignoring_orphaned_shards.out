@@ -129,6 +129,7 @@ SELECT * FROM create_distributed_table('rep1', 'id');
 -- Add the coordinator, so we can have a replicated shard
 SELECT 1 FROM citus_add_node('localhost', :master_port, 0);
 NOTICE:  Replicating reference table "ref" to the node localhost:xxxxx
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
  ?column?
 ---------------------------------------------------------------------
         1
@@ -249,10 +250,16 @@ SET LOCAL citus.log_local_commands TO ON;
 INSERT INTO rep1 VALUES (1);
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT lock_shard_resources(3, ARRAY[92448300])
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing INSERT INTO ignoring_orphaned_shards.rep1_92448300 (id) VALUES (1)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  executing the command locally: INSERT INTO ignoring_orphaned_shards.rep1_92448300 (id) VALUES (1)
 ROLLBACK;
+NOTICE:  issuing ROLLBACK
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing ROLLBACK
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 -- Cause the orphaned shard to be local
@@ -278,9 +285,11 @@ SET LOCAL citus.log_local_commands TO ON;
 INSERT INTO rep1 VALUES (1);
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing INSERT INTO ignoring_orphaned_shards.rep1_92448300 (id) VALUES (1)
+NOTICE:  issuing SELECT lock_shard_resources(3, ARRAY[92448300])
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing INSERT INTO ignoring_orphaned_shards.rep1_92448300 (id) VALUES (1)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing INSERT INTO ignoring_orphaned_shards.rep1_92448300 (id) VALUES (1)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx

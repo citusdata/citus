@@ -26,6 +26,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/distributed_planner.h"
@@ -71,6 +72,8 @@ static const int lock_mode_to_string_map_count = sizeof(lockmode_to_string_map) 
 /* local function forward declarations */
 static LOCKMODE IntToLockMode(int mode);
 static void LockReferencedReferenceShardResources(uint64 shardId, LOCKMODE lockMode);
+static bool AnyTableReplicated(List *shardIntervalList,
+							   List **replicatedShardIntervalList);
 static void LockShardListResources(List *shardIntervalList, LOCKMODE lockMode);
 static void LockShardListResourcesOnFirstWorker(LOCKMODE lockmode,
 												List *shardIntervalList);
@@ -183,20 +186,49 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 	int shardIdCount = ArrayObjectCount(shardIdArrayObject);
 	Datum *shardIdArrayDatum = DeconstructArrayObject(shardIdArrayObject);
 
+	/*
+	 * The executor calls this UDF for modification queries. So, any user
+	 * who has the the rights to modify this table are actually able
+	 * to call the UDF.
+	 *
+	 * So, at this point, we make sure that any malicious user who doesn't
+	 * have modification privileges to call this UDF.
+	 *
+	 * Update/Delete/Truncate commands already acquires ExclusiveLock
+	 * on the executor. However, for INSERTs, the user might have only
+	 * INSERTs granted, so add a special case for it.
+	 */
+	AclMode aclMask = ACL_UPDATE | ACL_DELETE | ACL_TRUNCATE;
+	if (lockMode == RowExclusiveLock)
+	{
+		aclMask |= ACL_INSERT;
+	}
+
 	for (int shardIdIndex = 0; shardIdIndex < shardIdCount; shardIdIndex++)
 	{
 		int64 shardId = DatumGetInt64(shardIdArrayDatum[shardIdIndex]);
 
 		/*
-		 * We don't want random users to block writes. The callers of this
-		 * function either operates on all the colocated placements, such
-		 * as shard moves, or requires superuser such as adding node.
-		 * In other words, the coordinator initiated operations has already
-		 * ensured table owner, we are preventing any malicious attempt to
-		 * use this function.
+		 * We don't want random users to block writes. If the current user
+		 * has privileges to modify the shard, then the user can already
+		 * acquire the lock. So, we allow.
 		 */
 		bool missingOk = true;
-		EnsureShardOwner(shardId, missingOk);
+		Oid relationId = LookupShardRelationFromCatalog(shardId, missingOk);
+
+		if (!OidIsValid(relationId) && missingOk)
+		{
+			/*
+			 * This could happen in two ways. First, a malicious user is trying
+			 * to acquire locks on non-existing shards. Second, the metadata has
+			 * not been synced (or not yet visible) to this node. In the second
+			 * case, there is no point in locking the shards because no other
+			 * transaction can be accessing the table.
+			 */
+			continue;
+		}
+
+		EnsureTablePermissions(relationId, aclMask);
 
 		LockShardResource(shardId, lockMode);
 	}
@@ -215,12 +247,27 @@ lock_shard_resources(PG_FUNCTION_ARGS)
 static void
 LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 {
+	if (!AllowModificationsFromWorkersToReplicatedTables)
+	{
+		/*
+		 * Allowing modifications from worker nodes for replicated tables requires
+		 * to serialize modifications, see AcquireExecutorShardLocksForExecution()
+		 * for the details.
+		 *
+		 * If the user opted for disabling modifications from the workers, we do not
+		 * need to acquire these remote locks. Returning early saves us from an additional
+		 * network round-trip.
+		 */
+		Assert(AnyTableReplicated(shardIntervalList, NULL));
+		return;
+	}
+
 	StringInfo lockCommand = makeStringInfo();
 	int processedShardIntervalCount = 0;
 	int totalShardIntervalCount = list_length(shardIntervalList);
 	WorkerNode *firstWorkerNode = GetFirstPrimaryWorkerNode();
 	int connectionFlags = 0;
-	const char *superuser = CurrentUserName();
+	const char *currentUser = CurrentUserName();
 
 	appendStringInfo(lockCommand, "SELECT lock_shard_resources(%d, ARRAY[", lockmode);
 
@@ -253,7 +300,7 @@ LockShardListResourcesOnFirstWorker(LOCKMODE lockmode, List *shardIntervalList)
 		->workerName,
 		firstWorkerNode
 		->workerPort,
-		superuser,
+		currentUser,
 		NULL);
 
 	/* the SELECT .. FOR UPDATE breaks if we lose the connection */
@@ -688,25 +735,78 @@ LockShardsInPlacementListMetadata(List *shardPlacementList, LOCKMODE lockMode)
 void
 SerializeNonCommutativeWrites(List *shardIntervalList, LOCKMODE lockMode)
 {
-	ShardInterval *firstShardInterval = (ShardInterval *) linitial(shardIntervalList);
-	int64 firstShardId = firstShardInterval->shardId;
+	if (shardIntervalList == NIL)
+	{
+		return;
+	}
 
-	if (ReferenceTableShardId(firstShardId))
+	List *replicatedShardList = NIL;
+	if (AnyTableReplicated(shardIntervalList, &replicatedShardList))
 	{
 		if (ClusterHasKnownMetadataWorkers() && !IsFirstWorkerNode())
 		{
-			LockShardListResourcesOnFirstWorker(lockMode, shardIntervalList);
+			LockShardListResourcesOnFirstWorker(lockMode, replicatedShardList);
 		}
 
-		/*
-		 * Referenced tables can cascade their changes to this table, and we
-		 * want to serialize changes to keep different replicas consistent.
-		 */
-		LockReferencedReferenceShardResources(firstShardId, lockMode);
+		ShardInterval *firstShardInterval =
+			(ShardInterval *) linitial(replicatedShardList);
+		if (ReferenceTableShardId(firstShardInterval->shardId))
+		{
+			/*
+			 * Referenced tables can cascade their changes to this table, and we
+			 * want to serialize changes to keep different replicas consistent.
+			 *
+			 * We currently only support foreign keys to reference tables, which are
+			 * single shard. So, getting the first shard should be sufficient here.
+			 */
+			LockReferencedReferenceShardResources(firstShardInterval->shardId, lockMode);
+		}
 	}
 
-
 	LockShardListResources(shardIntervalList, lockMode);
+}
+
+
+/*
+ * AnyTableReplicated iterates on the shard list and returns true
+ * if any of the shard is a replicated table. We qualify replicated
+ * tables as any reference table or any distributed table with
+ * replication factor > 1.
+ *
+ * If the optional replicatedShardIntervalList is passed, the function
+ * fills it with the replicated shard intervals.
+ */
+static bool
+AnyTableReplicated(List *shardIntervalList, List **replicatedShardIntervalList)
+{
+	if (replicatedShardIntervalList == NULL)
+	{
+		/* the caller is not interested in the replicatedShardIntervalList */
+		List *localList = NIL;
+		replicatedShardIntervalList = &localList;
+	}
+
+	*replicatedShardIntervalList = NIL;
+
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
+	{
+		int64 shardId = shardInterval->shardId;
+
+		Oid relationId = RelationIdForShard(shardId);
+		if (ReferenceTableShardId(shardId))
+		{
+			*replicatedShardIntervalList =
+				lappend(*replicatedShardIntervalList, LoadShardInterval(shardId));
+		}
+		else if (!SingleReplicatedTable(relationId))
+		{
+			*replicatedShardIntervalList =
+				lappend(*replicatedShardIntervalList, LoadShardInterval(shardId));
+		}
+	}
+
+	return list_length(*replicatedShardIntervalList) > 0;
 }
 
 
@@ -737,19 +837,25 @@ LockShardListResources(List *shardIntervalList, LOCKMODE lockMode)
 void
 LockRelationShardResources(List *relationShardList, LOCKMODE lockMode)
 {
-	/* lock shards in a consistent order to prevent deadlock */
-	relationShardList = SortList(relationShardList, CompareRelationShards);
+	if (relationShardList == NIL)
+	{
+		return;
+	}
 
+	List *shardIntervalList = NIL;
 	RelationShard *relationShard = NULL;
 	foreach_ptr(relationShard, relationShardList)
 	{
 		uint64 shardId = relationShard->shardId;
 
-		if (shardId != INVALID_SHARD_ID)
-		{
-			LockShardResource(shardId, lockMode);
-		}
+		ShardInterval *shardInterval = LoadShardInterval(shardId);
+
+		shardIntervalList = lappend(shardIntervalList, shardInterval);
 	}
+
+	/* lock shards in a consistent order to prevent deadlock */
+	shardIntervalList = SortList(shardIntervalList, CompareShardIntervalsById);
+	SerializeNonCommutativeWrites(shardIntervalList, lockMode);
 }
 
 
@@ -759,19 +865,29 @@ LockRelationShardResources(List *relationShardList, LOCKMODE lockMode)
  * shard resource lock on the colocated shard of the parent table.
  */
 void
-LockParentShardResourceIfPartition(uint64 shardId, LOCKMODE lockMode)
+LockParentShardResourceIfPartition(List *shardIntervalList, LOCKMODE lockMode)
 {
-	ShardInterval *shardInterval = LoadShardInterval(shardId);
-	Oid relationId = shardInterval->relationId;
+	List *parentShardIntervalList = NIL;
 
-	if (PartitionTable(relationId))
+	ShardInterval *shardInterval = NULL;
+	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		int shardIndex = ShardIndex(shardInterval);
-		Oid parentRelationId = PartitionParentOid(relationId);
-		uint64 parentShardId = ColocatedShardIdInRelation(parentRelationId, shardIndex);
+		Oid relationId = shardInterval->relationId;
 
-		LockShardResource(parentShardId, lockMode);
+		if (PartitionTable(relationId))
+		{
+			int shardIndex = ShardIndex(shardInterval);
+			Oid parentRelationId = PartitionParentOid(relationId);
+			uint64 parentShardId = ColocatedShardIdInRelation(parentRelationId,
+															  shardIndex);
+
+			ShardInterval *parentShardInterval = LoadShardInterval(parentShardId);
+			parentShardIntervalList = lappend(parentShardIntervalList,
+											  parentShardInterval);
+		}
 	}
+
+	LockShardListResources(parentShardIntervalList, lockMode);
 }
 
 

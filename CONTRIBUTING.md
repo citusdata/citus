@@ -50,7 +50,7 @@ why we ask this as well as instructions for how to proceed, see the
   sudo apt-get install -y postgresql-server-dev-14 postgresql-14 \
                           autoconf flex git libcurl4-gnutls-dev libicu-dev \
                           libkrb5-dev liblz4-dev libpam0g-dev libreadline-dev \
-                          libselinux1-dev libssl-dev libxslt-dev libzstd-dev \
+                          libselinux1-dev libssl-dev libxslt1-dev libzstd-dev \
                           make uuid-dev
   ```
 

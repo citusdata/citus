@@ -17,6 +17,15 @@ CREATE TABLE notices (
 SELECT create_distributed_table('notices', 'id');
 INSERT INTO notices VALUES (1, 'hello world');
 
+-- Create the necessary test utility function
+CREATE OR REPLACE FUNCTION master_metadata_snapshot()
+    RETURNS text[]
+    LANGUAGE C STRICT
+    AS 'citus';
+
+COMMENT ON FUNCTION master_metadata_snapshot()
+    IS 'commands to create the metadata snapshot';
+
 CREATE FUNCTION notice(text)
 RETURNS void
 LANGUAGE plpgsql AS $$
@@ -175,10 +184,6 @@ CREATE TABLE streaming_table(id macaddr);
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('streaming_table','id');
 
--- make sure that none of the active and primary nodes hasmetadata
--- at the start of the test
-select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
-
 -- if not paremeters are supplied, we'd see that function doesn't have
 -- distribution_argument_index and colocationid
 SELECT create_distributed_function('"eq_mi''xed_param_names"(macaddr, macaddr)');
@@ -187,10 +192,6 @@ WHERE objid = 'eq_mi''xed_param_names(macaddr, macaddr)'::regprocedure;
 
 -- also show that we can use the function
 SELECT * FROM run_command_on_workers($$SELECT function_tests."eq_mi'xed_param_names"('0123456789ab','ba9876543210');$$) ORDER BY 1,2;
-
--- make sure that none of the active and primary nodes hasmetadata
--- since the function doesn't have a parameter
-select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
 
 -- try to co-locate with a table that uses statement-based replication
 SELECT create_distributed_function('increment(int2)', '$1');
@@ -203,6 +204,8 @@ END;
 -- try to co-locate with a table that uses streaming replication
 SELECT create_distributed_function('dup(macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.dup('0123456789ab');$$) ORDER BY 1,2;
+
+SELECT public.wait_until_metadata_sync(30000);
 
 SELECT create_distributed_function('eq(macaddr,macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('012345689ab','0123456789ab');$$) ORDER BY 1,2;
@@ -346,9 +349,6 @@ ROLLBACK;
 -- make sure that none of the nodes have the function because we've rollbacked
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_with_param_names';$$);
 
--- make sure that none of the active and primary nodes hasmetadata
-select bool_or(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
-
 -- valid distribution with distribution_arg_name
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='val1');
 
@@ -360,6 +360,9 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_w
 
 -- valid distribution with distribution_arg_name -- case insensitive
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='VaL1');
+
+-- show that we are able to propagate objects with multiple item on address arrays
+SELECT * FROM (SELECT unnest(master_metadata_snapshot()) as metadata_command  order by 1) as innerResult WHERE metadata_command like '%distributed_object_data%';
 
 -- valid distribution with distribution_arg_index
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)','$1');
@@ -478,6 +481,204 @@ INSERT INTO test SELECT increment(3);
 SELECT * FROM test ORDER BY id;
 
 DROP TABLE test;
+
+-- verify that recreating distributed functions with TABLE params gets propagated to workers
+CREATE OR REPLACE FUNCTION func_with_return_table(int)
+RETURNS  TABLE (date date)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN query SELECT '2011-01-01'::date;
+END;
+$$;
+
+SELECT create_distributed_function('func_with_return_table(int)');
+
+CREATE OR REPLACE FUNCTION func_with_return_table(int)
+RETURNS  TABLE (date date)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN query SELECT '2011-01-02'::date;
+END;
+$$;
+
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc) from pg_proc where proname = 'func_with_return_table';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc)::text from pg_proc where proname = 'func_with_return_table')
+  as test;
+
+-- verify that recreating distributed functions with OUT params gets propagated to workers
+CREATE OR REPLACE FUNCTION func_with_out_param(a int, out b int)
+  RETURNS int
+LANGUAGE sql AS $$ select 1; $$;
+
+SELECT create_distributed_function('func_with_out_param(int)');
+
+SET client_min_messages TO ERROR;
+CREATE ROLE r1;
+SELECT 1 FROM run_command_on_workers($$CREATE ROLE r1;$$);
+GRANT EXECUTE ON FUNCTION func_with_out_param TO r1;
+SELECT 1 FROM run_command_on_workers($$GRANT EXECUTE ON FUNCTION func_with_out_param TO r1;$$);
+RESET client_min_messages;
+
+CREATE OR REPLACE FUNCTION func_with_out_param(a int, out b int)
+  RETURNS int
+LANGUAGE sql AS $$ select 2; $$;
+
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc, pg_proc.proowner) from pg_proc where proname = 'func_with_out_param';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc, pg_proc.proowner)::text from pg_proc where proname = 'func_with_out_param')
+  as test;
+
+-- verify that recreating distributed functions with INOUT params gets propagated to workers
+CREATE OR REPLACE FUNCTION func_with_inout_param(a int, inout b int)
+  RETURNS int
+LANGUAGE sql AS $$ select 1; $$;
+
+-- this should error out
+SELECT create_distributed_function('func_with_inout_param(int)');
+-- this should work
+SELECT create_distributed_function('func_with_inout_param(int,int)');
+
+CREATE OR REPLACE FUNCTION func_with_inout_param(a int, inout b int)
+  RETURNS int
+LANGUAGE sql AS $$ select 2; $$;
+
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc) from pg_proc where proname = 'func_with_inout_param';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc)::text from pg_proc where proname = 'func_with_inout_param')
+  as test;
+
+-- verify that recreating distributed functions with VARIADIC params gets propagated to workers
+CREATE OR REPLACE FUNCTION func_with_variadic_param(a int, variadic b int[])
+  RETURNS int
+LANGUAGE sql AS $$ select 1; $$;
+
+-- this should work
+SELECT create_distributed_function('func_with_variadic_param(int,int[])');
+
+CREATE OR REPLACE FUNCTION func_with_variadic_param(a int, variadic b int[])
+  RETURNS int
+LANGUAGE sql AS $$ select 2; $$;
+
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc) from pg_proc where proname = 'func_with_variadic_param';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc)::text from pg_proc where proname = 'func_with_variadic_param')
+  as test;
+
+-- verify that recreating distributed functions returning setof records gets propagated to workers
+CREATE OR REPLACE FUNCTION func_returning_setof_int(IN parm1 date, IN parm2 interval)
+  RETURNS SETOF integer AS
+$BODY$
+BEGIN
+    RETURN QUERY
+    SELECT 1;
+END;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+SELECT create_distributed_function('func_returning_setof_int(date,interval)');
+
+CREATE OR REPLACE FUNCTION func_returning_setof_int(IN parm1 date, IN parm2 interval)
+  RETURNS SETOF integer AS
+$BODY$
+BEGIN
+    RETURN QUERY
+    SELECT 2;
+
+END;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc) from pg_proc where proname = 'func_returning_setof_int';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc)::text from pg_proc where proname = 'func_returning_setof_int')
+  as test;
+
+-- verify that recreating distributed functions with variadic param returning setof records gets propagated to workers
+CREATE OR REPLACE FUNCTION func_returning_setof_int_with_variadic_param(IN parm1 date, VARIADIC parm2 int[])
+  RETURNS SETOF integer AS
+$BODY$
+BEGIN
+    RETURN QUERY
+    SELECT 1;
+END;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+SELECT create_distributed_function('func_returning_setof_int_with_variadic_param(date,int[])');
+
+CREATE OR REPLACE FUNCTION func_returning_setof_int_with_variadic_param(IN parm1 date, VARIADIC parm2 int[])
+  RETURNS SETOF integer AS
+$BODY$
+BEGIN
+    RETURN QUERY
+    SELECT 2;
+END;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc) from pg_proc where proname = 'func_returning_setof_int_with_variadic_param';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc)::text from pg_proc where proname = 'func_returning_setof_int_with_variadic_param')
+  as test;
+
+-- verify that recreating distributed procedures with out params gets propagated to workers
+CREATE OR REPLACE PROCEDURE proc_with_variadic_param(IN parm1 date, VARIADIC parm2 int[])
+  LANGUAGE SQL
+AS $$
+    SELECT 1;
+$$;
+
+-- this should error out
+SELECT create_distributed_function('proc_with_variadic_param(date)');
+-- this should work
+SELECT create_distributed_function('proc_with_variadic_param(date,int[])');
+
+CREATE OR REPLACE PROCEDURE proc_with_variadic_param(IN parm1 date, VARIADIC parm2 int[])
+  LANGUAGE SQL
+AS $$
+    SELECT 2;
+$$;
+
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc) from pg_proc where proname = 'proc_with_variadic_param';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc)::text from pg_proc where proname = 'proc_with_variadic_param')
+  as test;
+
+-- verify that recreating distributed procedures with INOUT param gets propagated to workers
+CREATE OR REPLACE PROCEDURE proc_with_inout_param(IN parm1 date, INOUT parm2 int)
+  LANGUAGE SQL
+AS $$
+    SELECT 1;
+$$;
+
+-- this should error out
+SELECT create_distributed_function('proc_with_inout_param(date)');
+-- this should work
+SELECT create_distributed_function('proc_with_inout_param(date,int)');
+
+CREATE OR REPLACE PROCEDURE proc_with_inout_param(IN parm1 date, INOUT parm2 int)
+  LANGUAGE SQL
+AS $$
+    SELECT 2;
+$$;
+
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc) from pg_proc where proname = 'proc_with_inout_param';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc)::text from pg_proc where proname = 'proc_with_inout_param')
+  as test;
 
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;

@@ -818,7 +818,9 @@ TRUNCATE collections_list;
 
 -- make sure that even if local execution is used, the sequence values
 -- are generated locally
+SET citus.enable_ddl_propagation TO OFF;
 ALTER SEQUENCE collections_list_key_seq NO MINVALUE NO MAXVALUE;
+RESET citus.enable_ddl_propagation;
 
 PREPARE serial_prepared_local AS INSERT INTO collections_list (collection_id) VALUES (0) RETURNING key, ser;
 

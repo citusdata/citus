@@ -65,6 +65,9 @@ s/"(raw_events_second_user_id_value_1_key_|agg_events_user_id_value_1_agg_key_)[
 # ignore WAL warnings
 /DEBUG: .+creating and filling new WAL file/d
 
+# normalize debug connection failure
+s/DEBUG:  connection to the remote node/WARNING:  connection to the remote node/g
+
 # normalize file names for partitioned files
 s/(task_[0-9]+\.)[0-9]+/\1xxxx/g
 s/(job_[0-9]+\/task_[0-9]+\/p_[0-9]+\.)[0-9]+/\1xxxx/g
@@ -119,6 +122,8 @@ s/(ERROR.*)pgsql_job_cache\/([0-9]+_[0-9]+_[0-9]+)\/(.*).data/\1pgsql_job_cache\
 
 # assign_distributed_transaction id params
 s/(NOTICE.*)assign_distributed_transaction_id\([0-9]+, [0-9]+, '.*'\)/\1assign_distributed_transaction_id\(xx, xx, 'xxxxxxx'\)/g
+s/(NOTICE.*)PREPARE TRANSACTION 'citus_[0-9]+_[0-9]+_[0-9]+_[0-9]+'/\1PREPARE TRANSACTION 'citus_xx_xx_xx_xx'/g
+s/(NOTICE.*)COMMIT PREPARED 'citus_[0-9]+_[0-9]+_[0-9]+_[0-9]+'/\1COMMIT PREPARED 'citus_xx_xx_xx_xx'/g
 
 # toast tables
 s/pg_toast_[0-9]+/pg_toast_xxxxx/g
@@ -197,9 +202,9 @@ s/citus_local_table_4_idx_[0-9]+/citus_local_table_4_idx_xxxxxx/g
 s/citus_local_table_4_[0-9]+/citus_local_table_4_xxxxxx/g
 s/ERROR:  cannot append to shardId [0-9]+/ERROR:  cannot append to shardId xxxxxx/g
 
-# hide warning/hint message that we get when executing create_citus_local_table
-/local tables that are added to metadata but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
-/Consider setting citus.enable_local_reference_table_foreign_keys to 'off' to disable this behavior$/d
+# hide notice/hint message that we get when converting local tables automatically
+/local tables that are added to metadata automatically by citus, but not chained with reference tables via foreign keys might be automatically converted back to postgres tables$/d
+/Executing citus_add_local_table_to_metadata(.*) prevents this for the given relation, and all of the connected relations$/d
 
 # normalize partitioned table shard constraint name errors for upgrade_partition_constraints_(before|after)
 s/^(ERROR:  child table is missing constraint "\w+)_([0-9])+"/\1_xxxxxx"/g
@@ -249,3 +254,5 @@ s/CREATE TABLESPACE test_tablespace LOCATION.*/CREATE TABLESPACE test_tablespace
 
 # columnar log for var correlation
 s/(.*absolute correlation \()([0,1]\.[0-9]+)(\) of var attribute [0-9]+ is smaller than.*)/\1X\.YZ\3/g
+
+s/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \([0-9]+, [0-9]+, [0-9]+, [0-9]+, [0-9]+\)\)/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \(xxxxxx, xxxxxx, xxxxxx, xxxxxx, xxxxxx\)\)/g

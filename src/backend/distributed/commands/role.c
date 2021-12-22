@@ -213,6 +213,15 @@ PreprocessAlterRoleSetStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	/*
+	 * Since roles need to be handled manually on community, we need to support such queries
+	 * by handling them locally on worker nodes
+	 */
+	if (!IsCoordinator())
+	{
+		return NIL;
+	}
+
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -630,7 +639,7 @@ GetRoleNameFromDbRoleSetting(HeapTuple tuple, TupleDesc DbRoleSettingDescription
 
 
 /*
- * MakeSetStatementArgs parses a configuraton value and creates an List of A_Const
+ * MakeSetStatementArgs parses a configuration value and creates an List of A_Const
  * Nodes with appropriate types.
  *
  * The allowed A_Const types are Integer, Float, and String.

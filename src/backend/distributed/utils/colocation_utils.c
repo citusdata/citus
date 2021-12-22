@@ -947,10 +947,11 @@ ColocationGroupTableList(uint32 colocationId, uint32 count)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		bool isNull = false;
-		Oid colocatedTableId = heap_getattr(heapTuple,
-											Anum_pg_dist_partition_logicalrelid,
-											tupleDescriptor, &isNull);
+		bool isNullArray[Natts_pg_dist_partition];
+		Datum datumArray[Natts_pg_dist_partition];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+		Oid colocatedTableId = DatumGetObjectId(
+			datumArray[Anum_pg_dist_partition_logicalrelid - 1]);
 
 		colocatedTableList = lappend_oid(colocatedTableList, colocatedTableId);
 		heapTuple = systable_getnext(scanDescriptor);
@@ -1116,7 +1117,6 @@ ColocatedTableId(Oid colocationId)
 {
 	Oid colocatedTableId = InvalidOid;
 	bool indexOK = true;
-	bool isNull = false;
 	ScanKeyData scanKey[1];
 	int scanKeyCount = 1;
 
@@ -1141,8 +1141,11 @@ ColocatedTableId(Oid colocationId)
 	HeapTuple heapTuple = systable_getnext(scanDescriptor);
 	while (HeapTupleIsValid(heapTuple))
 	{
-		colocatedTableId = heap_getattr(heapTuple, Anum_pg_dist_partition_logicalrelid,
-										tupleDescriptor, &isNull);
+		bool isNullArray[Natts_pg_dist_partition];
+		Datum datumArray[Natts_pg_dist_partition];
+		heap_deform_tuple(heapTuple, tupleDescriptor, datumArray, isNullArray);
+		colocatedTableId = DatumGetObjectId(
+			datumArray[Anum_pg_dist_partition_logicalrelid - 1]);
 
 		/*
 		 * Make sure the relation isn't dropped for the remainder of

@@ -29,7 +29,8 @@ CREATE TABLE lineitem_alter (
 	)
   WITH ( fillfactor = 80 );
 SELECT create_distributed_table('lineitem_alter', 'l_orderkey', 'append');
-\copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+SELECT master_create_empty_shard('lineitem_alter') AS shardid \gset
+copy lineitem_alter FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
 
 -- verify that the storage options made it to the table definitions
 SELECT relname, reloptions FROM pg_class WHERE relname = 'lineitem_alter';
@@ -65,7 +66,8 @@ ALTER TABLE lineitem_alter ALTER COLUMN float_column SET DEFAULT 1;
 ALTER TABLE lineitem_alter ALTER COLUMN int_column1 DROP DEFAULT;
 
 -- \copy to verify that default values take effect
-\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
 
 SELECT float_column, count(*) FROM lineitem_alter GROUP BY float_column;
 SELECT int_column1, count(*) FROM lineitem_alter GROUP BY int_column1;
@@ -80,7 +82,10 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP DEFAULT;
 
 -- \copy should fail because it will try to insert NULLs for a NOT NULL column
 -- Note, this operation will create a table on the workers but it won't be in the metadata
-\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+BEGIN;
+SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
+END;
 
 -- Verify that DROP NOT NULL works
 
@@ -88,7 +93,8 @@ ALTER TABLE lineitem_alter ALTER COLUMN int_column2 DROP NOT NULL;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.lineitem_alter'::regclass;
 
 -- \copy should succeed now
-\copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with delimiter '|'
+SELECT master_create_empty_shard('lineitem_alter') as shardid \gset
+copy lineitem_alter (l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment) FROM '@abs_srcdir@/data/lineitem.1.data' with (delimiter '|', append_to_shard :shardid);
 SELECT count(*) from lineitem_alter;
 
 -- Verify that SET DATA TYPE works
@@ -308,14 +314,15 @@ COMMIT;
 -- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
 
--- Now try with 2pc off
+-- Even if 1PC is picked for multi-shard commands
+-- Citus always uses 2PC for replication > 1
 SET citus.multi_shard_commit_protocol TO '1pc';
 BEGIN;
 CREATE INDEX single_index_2 ON single_shard_items(id);
 CREATE INDEX single_index_3 ON single_shard_items(name);
 COMMIT;
 
--- The block should have committed with a warning
+-- Nothing from the block should have committed
 SELECT indexname, tablename FROM pg_indexes WHERE tablename = 'single_shard_items' ORDER BY 1;
 
 \c - - - :worker_2_port
@@ -527,7 +534,6 @@ DROP TABLESPACE super_fast_ssd;
 
 -- Cleanup the table and its shards
 SET citus.enable_ddl_propagation to true;
-SELECT master_apply_delete_command('DELETE FROM lineitem_alter');
 DROP TABLE lineitem_alter;
 -- check that nothing's left over on workers, other than the leftover shard created
 -- during the unsuccessful COPY
@@ -553,19 +559,19 @@ CREATE TABLE logged_test(id int);
 ALTER TABLE logged_test SET UNLOGGED;
 SELECT create_distributed_table('logged_test', 'id');
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
 \c - - - :master_port
 
 -- verify SET LOGGED/UNLOGGED works after distributing the table
 ALTER TABLE logged_test SET LOGGED;
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
 \c - - - :master_port
 ALTER TABLE logged_test SET UNLOGGED;
 SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
 \c - - - :worker_1_port
-SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test*' ORDER BY relname;
+SELECT relname, CASE relpersistence WHEN 'u' THEN 'unlogged' WHEN 'p' then 'logged' ELSE 'unknown' END AS logged_info FROM pg_class WHERE relname ~ 'logged_test_' ORDER BY relname;
 \c - - - :master_port
 DROP TABLE logged_test;
 
@@ -577,7 +583,7 @@ SELECT create_distributed_table('hash_dist','id');
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relkind = 'r' AND relname LIKE 'hash_dist_%' ORDER BY relname;
 \c - - - :master_port
 
 -- verify that we can set and reset index storage parameters
@@ -585,14 +591,14 @@ ALTER INDEX hash_dist_pkey SET(fillfactor=40);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
 \c - - - :master_port
 
 ALTER INDEX hash_dist_pkey RESET(fillfactor);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'hash_dist_pkey';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'hash_dist_pkey_%' ORDER BY relname;
 \c - - - :master_port
 
 -- verify error message on ALTER INDEX, SET TABLESPACE is unsupported
@@ -605,7 +611,7 @@ CREATE UNIQUE INDEX another_index ON hash_dist(id) WITH (fillfactor=50);
 SELECT relname, reloptions FROM pg_class WHERE relname = 'another_index';
 
 \c - - - :worker_1_port
-SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index%' ORDER BY relname;
+SELECT relname, reloptions FROM pg_class WHERE relname LIKE 'another_index_%' ORDER BY relname;
 \c - - - :master_port
 
 -- get rid of the index

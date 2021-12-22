@@ -1,8 +1,7 @@
-test: turn_mx_off
-test: multi_cluster_management
-test: turn_mx_on
 test: multi_test_helpers multi_test_helpers_superuser multi_create_fdw
+test: multi_cluster_management
 test: multi_test_catalog_views
+test: replicated_table_disable_node
 
 # ----------
 # The following distributed tests depend on creating a partitioned table and
@@ -32,7 +31,7 @@ test: ensure_no_intermediate_data_leak
 # ----------
 # Tests for partitioning support
 # ----------
-test: multi_partitioning_utils replicated_partitioned_table
+test: multi_partitioning_utils multi_partitioning replicated_partitioned_table
 
 
 # ----------
@@ -52,19 +51,12 @@ test: set_operation_and_local_tables
 test: subqueries_deep subquery_view subquery_partitioning subqueries_not_supported
 test: subquery_in_targetlist subquery_in_where subquery_complex_target_list subquery_append
 test: subquery_prepared_statements
-test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins non_colocated_join_order
+test: non_colocated_leaf_subquery_joins non_colocated_subquery_joins
 test: cte_inline recursive_view_local_table values
 test: pg13 pg12
 # run pg14 sequentially as it syncs metadata
 test: pg14
 test: tableam drop_column_partitioned_table
-
-# mx-less tests
-test: check_mx
-test: turn_mx_off
-test: multi_partitioning
-test: undistribute_table
-test: turn_mx_on
 
 # ----------
 # Miscellaneous tests to check our query planning behavior
@@ -97,8 +89,9 @@ test: multi_dropped_column_aliases foreign_key_restriction_enforcement
 test: binary_protocol
 test: alter_table_set_access_method
 test: alter_distributed_table
-test: issue_5248
+test: issue_5248 issue_5099
 test: object_propagation_debug
+test: undistribute_table
 
 
 # ---------

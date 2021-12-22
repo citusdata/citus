@@ -108,9 +108,9 @@ SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND node
 \c - - - :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
-SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
-SELECT * FROM pg_dist_shard ORDER BY shardid;
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
+SELECT * FROM pg_dist_shard  WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
@@ -158,9 +158,9 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 \c - - - :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
-SELECT * FROM pg_dist_partition ORDER BY logicalrelid;
-SELECT * FROM pg_dist_shard ORDER BY shardid;
-SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
+SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
+SELECT * FROM pg_dist_shard_placement WHERE shardid IN (SELECT shardid FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%') ORDER BY shardid, nodename, nodeport;
 SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='mx_testing_schema.mx_test_table'::regclass;
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_testing_schema.mx_test_table_col_1_key'::regclass;
@@ -214,7 +214,6 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_1_port;
 -- Test DDL propagation in MX tables
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SET citus.shard_count = 5;
-SET citus.multi_shard_commit_protocol TO '2pc';
 CREATE SCHEMA mx_test_schema_1;
 CREATE SCHEMA mx_test_schema_2;
 
@@ -295,13 +294,12 @@ ORDER BY
 \d mx_test_schema_1.mx_table_1
 \d mx_test_schema_2.mx_table_2
 
-SELECT * FROM pg_dist_partition;
-SELECT * FROM pg_dist_shard;
+SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_test_schema%';
+SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_test_schema%';
 SELECT * FROM pg_dist_shard_placement ORDER BY shardid, nodename, nodeport;
 
 -- Check that CREATE INDEX statement is propagated
 \c - - - :master_port
-SET citus.multi_shard_commit_protocol TO '2pc';
 SET client_min_messages TO 'ERROR';
 CREATE INDEX mx_index_3 ON mx_test_schema_2.mx_table_2 USING hash (col1);
 ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1);
@@ -313,7 +311,6 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 
 -- Check that DROP INDEX statement is propagated
 \c - - - :master_port
-SET citus.multi_shard_commit_protocol TO '2pc';
 DROP INDEX mx_test_schema_2.mx_index_3;
 \c - - - :worker_1_port
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
@@ -321,7 +318,6 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 
 -- Check that ALTER TABLE statements are propagated
 \c - - - :master_port
-SET citus.multi_shard_commit_protocol TO '2pc';
 ALTER TABLE mx_test_schema_1.mx_table_1 ADD COLUMN col3 NUMERIC;
 ALTER TABLE mx_test_schema_1.mx_table_1 ALTER COLUMN col3 SET DATA TYPE INT;
 ALTER TABLE
@@ -338,7 +334,6 @@ SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_test_schema_1
 
 -- Check that foreign key constraint with NOT VALID works as well
 \c - - - :master_port
-SET citus.multi_shard_commit_protocol TO '2pc';
 ALTER TABLE mx_test_schema_1.mx_table_1 DROP CONSTRAINT mx_fk_constraint;
 ALTER TABLE
 	mx_test_schema_1.mx_table_1
@@ -537,8 +532,10 @@ DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 -- owner
 CREATE TABLE pg_dist_placement_temp AS SELECT * FROM pg_dist_placement;
 CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
+CREATE TABLE pg_dist_object_temp AS SELECT * FROM citus.pg_dist_object;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_partition;
+DELETE FROM citus.pg_dist_object;
 SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_remove_node('localhost', :worker_2_port);
 
@@ -578,8 +575,10 @@ DROP TABLE mx_table;
 \c - postgres - :master_port
 INSERT INTO pg_dist_placement SELECT * FROM pg_dist_placement_temp;
 INSERT INTO pg_dist_partition SELECT * FROM pg_dist_partition_temp;
+INSERT INTO citus.pg_dist_object SELECT * FROM pg_dist_object_temp ON CONFLICT ON CONSTRAINT pg_dist_object_pkey DO NOTHING;
 DROP TABLE pg_dist_placement_temp;
 DROP TABLE pg_dist_partition_temp;
+DROP TABLE pg_dist_object_temp;
 UPDATE pg_dist_placement
   SET groupid = (SELECT groupid FROM pg_dist_node WHERE nodeport = :worker_2_port)
   WHERE groupid = :old_worker_2_group;
@@ -750,8 +749,8 @@ SELECT create_reference_table('dist_table_2');
 ALTER TABLE dist_table_1 ADD COLUMN b int;
 
 SELECT master_add_node('localhost', :master_port, groupid => 0);
-SELECT master_disable_node('localhost', :worker_1_port);
-SELECT master_disable_node('localhost', :worker_2_port);
+SELECT citus_disable_node_and_wait('localhost', :worker_1_port);
+SELECT citus_disable_node_and_wait('localhost', :worker_2_port);
 SELECT master_remove_node('localhost', :worker_1_port);
 SELECT master_remove_node('localhost', :worker_2_port);
 
@@ -820,9 +819,41 @@ DROP TABLE mx_testing_schema.mx_test_table;
 DROP TABLE mx_ref;
 DROP TABLE dist_table_1, dist_table_2;
 
+SET client_min_messages TO ERROR;
+SET citus.enable_ddl_propagation TO off; -- for enterprise
+CREATE USER non_super_metadata_user;
+SET citus.enable_ddl_propagation TO on;
+RESET client_min_messages;
+SELECT run_command_on_workers('CREATE USER non_super_metadata_user');
+GRANT EXECUTE ON FUNCTION start_metadata_sync_to_node(text,int) TO non_super_metadata_user;
+GRANT EXECUTE ON FUNCTION stop_metadata_sync_to_node(text,int,bool) TO non_super_metadata_user;
+GRANT ALL ON pg_dist_node TO non_super_metadata_user;
+GRANT ALL ON pg_dist_local_group TO non_super_metadata_user;
+GRANT ALL ON SCHEMA citus TO non_super_metadata_user;
+GRANT INSERT ON ALL TABLES IN SCHEMA citus TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_testing_schema TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_testing_schema_2 TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_test_schema_1 TO non_super_metadata_user;
+GRANT USAGE ON SCHEMA mx_test_schema_2 TO non_super_metadata_user;
+SELECT run_command_on_workers('GRANT ALL ON pg_dist_node TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT ALL ON pg_dist_local_group TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT ALL ON SCHEMA citus TO non_super_metadata_user');
+SELECT run_command_on_workers('ALTER SEQUENCE user_defined_seq OWNER TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT ALL ON ALL TABLES IN SCHEMA citus TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_testing_schema TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_testing_schema_2 TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_test_schema_1 TO non_super_metadata_user');
+SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_test_schema_2 TO non_super_metadata_user');
+
+SET ROLE non_super_metadata_user;
+
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
+RESET ROLE;
+
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
-RESET citus.multi_shard_commit_protocol;
 
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;

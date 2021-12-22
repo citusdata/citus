@@ -1000,8 +1000,6 @@ worker_last_saved_explain_analyze(PG_FUNCTION_ARGS)
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, columnValues, columnNulls);
 	}
-
-	tuplestore_donestoring(tupleStore);
 	PG_RETURN_DATUM(0);
 }
 
@@ -1086,8 +1084,6 @@ worker_save_query_explain_analyze(PG_FUNCTION_ARGS)
 					  &planDuration, &executionDurationMillisec);
 
 	ExplainEndOutput(es);
-
-	tuplestore_donestoring(tupleStore);
 
 	/* save EXPLAIN ANALYZE result to be fetched later */
 	MemoryContext oldContext = MemoryContextSwitchTo(TopTransactionContext);

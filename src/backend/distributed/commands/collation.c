@@ -320,6 +320,8 @@ PreprocessRenameCollationStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	EnsureCoordinator();
+
 	/* fully qualify */
 	QualifyTreeNode((Node *) stmt);
 
@@ -455,7 +457,7 @@ AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok)
  * EnsureSequentialModeForCollationDDL makes sure that the current transaction is already in
  * sequential mode, or can still safely be put in sequential mode, it errors if that is
  * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the begining.
+ * sequential mode set from the beginning.
  *
  * As collations are node scoped objects there exists only 1 instance of the collation used by
  * potentially multiple shards. To make sure all shards in the transaction can interact
@@ -588,9 +590,12 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 	ObjectAddress collationAddress =
 		DefineCollationStmtObjectAddress(node, false);
 
-	EnsureDependenciesExistOnAllNodes(&collationAddress);
+	if (IsObjectDistributed(&collationAddress))
+	{
+		EnsureCoordinator();
+	}
 
-	MarkObjectDistributed(&collationAddress);
+	EnsureDependenciesExistOnAllNodes(&collationAddress);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, CreateCollationDDLsIdempotent(
 							   collationAddress.objectId));

@@ -1,4 +1,4 @@
-\set upgrade_test_old_citus_version `echo "$upgrade_test_old_citus_version"`
+\set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
 SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int >= 10 AND
        substring(:'upgrade_test_old_citus_version', 'v\d+\.(\d+)\.\d+')::int >= 0
 AS upgrade_test_old_citus_version_ge_10_0;
@@ -53,21 +53,26 @@ FROM (SELECT (columnar_storage_info(c.oid)).* t
 WHERE t.version_major != 2 and t.version_minor != 0;
 
 -- print metapage for two of the tables
-SELECT columnar_storage_info('columnar_table_1');
-SELECT columnar_storage_info('columnar_table_2');
+SELECT version_major, version_minor, reserved_stripe_id, reserved_row_number
+  FROM columnar_storage_info('columnar_table_1');
+SELECT version_major, version_minor, reserved_stripe_id, reserved_row_number
+  FROM columnar_storage_info('columnar_table_2');
 
 -- show that no_data_columnar_table also has metapage after upgrade
-SELECT columnar_storage_info('no_data_columnar_table');
+SELECT version_major, version_minor, reserved_stripe_id, reserved_row_number
+  FROM columnar_storage_info('no_data_columnar_table');
 
 -- table is already upgraded, make sure that upgrade_columnar_metapage is no-op
 SELECT citus_internal.upgrade_columnar_storage(c.oid)
 FROM pg_class c, pg_am a
 WHERE c.relam = a.oid AND amname = 'columnar' and relname = 'columnar_table_2';
 
-SELECT columnar_storage_info('columnar_table_2');
+SELECT version_major, version_minor, reserved_stripe_id, reserved_row_number
+  FROM columnar_storage_info('columnar_table_2');
 
 VACUUM FULL columnar_table_2;
 
 -- print metapage and stripe metadata after post-upgrade vacuum full
-SELECT columnar_storage_info('columnar_table_2');
+SELECT version_major, version_minor, reserved_stripe_id, reserved_row_number
+  FROM columnar_storage_info('columnar_table_2');
 SELECT * FROM columnar_table_stripe_info WHERE relname = 'columnar_table_2' ORDER BY stripe_num;

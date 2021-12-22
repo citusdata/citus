@@ -15,7 +15,7 @@ SET client_min_messages TO WARNING;
 SELECT 1 FROM citus_set_coordinator_host('localhost', :master_port);
 
 -- coordinator cannot be disabled
-SELECT 1 FROM master_disable_node('localhost', :master_port);
+SELECT 1 FROM citus_disable_node('localhost', :master_port);
 
 RESET client_min_messages;
 
@@ -109,6 +109,38 @@ SELECT count(*) FROM test;
 SELECT * FROM test ORDER BY x;
 UPDATE test SET y = y + 1 RETURNING *;
 WITH cte_1 AS (UPDATE test SET y = y - 1 RETURNING *) SELECT * FROM cte_1 ORDER BY 1,2;
+
+-- show that we can filter remote commands
+-- given that citus.grep_remote_commands, we log all commands
+SET citus.log_local_commands to true;
+SELECT count(*) FROM public.another_schema_table WHERE a = 1;
+
+-- grep matches all commands
+SET citus.grep_remote_commands TO "%%";
+SELECT count(*) FROM public.another_schema_table WHERE a = 1;
+
+-- only filter a specific shard for the local execution
+BEGIN;
+	SET LOCAL citus.grep_remote_commands TO "%90630515%";
+	SELECT count(*) FROM public.another_schema_table;
+	-- match nothing
+	SET LOCAL citus.grep_remote_commands TO '%nothing%';
+	SELECT count(*) FROM public.another_schema_table;
+COMMIT;
+
+-- only filter a specific shard for the remote execution
+BEGIN;
+	SET LOCAL citus.enable_local_execution TO FALSE;
+	SET LOCAL citus.grep_remote_commands TO '%90630515%';
+	SET LOCAL citus.log_remote_commands TO ON;
+	SELECT count(*) FROM public.another_schema_table;
+	-- match nothing
+	SET LOCAL citus.grep_remote_commands TO '%nothing%';
+	SELECT count(*) FROM public.another_schema_table;
+COMMIT;
+
+RESET citus.log_local_commands;
+RESET citus.grep_remote_commands;
 
 -- Test upsert with constraint
 CREATE TABLE upsert_test
@@ -365,6 +397,13 @@ BEGIN;
 	INSERT INTO test SELECT i,i FROM generate_series(0,100)i;
 ROLLBACK;
 
+-- master_create_empty_shard on coordinator
+BEGIN;
+CREATE TABLE append_table (a INT, b INT);
+SELECT create_distributed_table('append_table','a','append');
+SELECT master_create_empty_shard('append_table');
+END;
+
 -- alter table inside a tx block
 BEGIN;
 	ALTER TABLE test ADD COLUMN z single_node.new_type;
@@ -529,7 +568,7 @@ SELECT count(*) FROM local;
 SELECT * FROM local ORDER BY c;
 SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
--- Check repartion joins are supported
+-- Check repartition joins are supported
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
 SET citus.enable_single_hash_repartition_joins TO ON;
@@ -1015,6 +1054,8 @@ ALTER SYSTEM RESET citus.recover_2pc_interval;
 ALTER SYSTEM RESET citus.distributed_deadlock_detection_factor;
 ALTER SYSTEM RESET citus.local_shared_pool_size;
 SELECT pg_reload_conf();
+
+
 
 -- suppress notices
 SET client_min_messages TO error;

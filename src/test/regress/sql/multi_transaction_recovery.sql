@@ -70,7 +70,6 @@ SELECT count(*) FROM pg_tables WHERE tablename = 'should_commit';
 SET citus.force_max_query_parallelization TO ON;
 SET citus.shard_replication_factor TO 2;
 SET citus.shard_count TO 2;
-SET citus.multi_shard_commit_protocol TO '2pc';
 
 -- create_distributed_table may behave differently if shards
 -- created via the executor or not, so not checking its value
@@ -87,9 +86,10 @@ SELECT count(*) >= 4 FROM pg_dist_transaction;
 
 SELECT recover_prepared_transactions();
 
--- plain INSERT does not use 2PC
+-- plain INSERT uses 2PC
 INSERT INTO test_recovery VALUES ('hello');
 SELECT count(*) FROM pg_dist_transaction;
+SELECT recover_prepared_transactions();
 
 -- Aborted DDL commands should not write transaction recovery records
 BEGIN;

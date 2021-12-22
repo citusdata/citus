@@ -1,7 +1,7 @@
 SET search_path TO upgrade_basic, public, pg_catalog;
 BEGIN;
-
-SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' ORDER BY tablename;
+-- We have the tablename filter to avoid adding an alternative output for when the coordinator is in metadata vs when not
+SELECT * FROM pg_indexes WHERE schemaname = 'upgrade_basic' and tablename NOT LIKE 'r_%' ORDER BY tablename;
 
 SELECT nextval('pg_dist_shardid_seq') = MAX(shardid)+1 FROM pg_dist_shard;
 SELECT nextval('pg_dist_placement_placementid_seq') = MAX(placementid)+1 FROM pg_dist_placement;
@@ -99,22 +99,24 @@ INSERT INTO t3 VALUES (3, 33);
 SELECT * FROM t3 ORDER BY a;
 
 SELECT shardminvalue, shardmaxvalue FROM pg_dist_shard
-  WHERE logicalrelid = 't_append'::regclass
+  WHERE logicalrelid = 't_range'::regclass
   ORDER BY shardminvalue, shardmaxvalue;
 
-SELECT * FROM t_append ORDER BY id;
+SELECT * FROM t_range ORDER BY id;
 
-\copy t_append FROM STDIN DELIMITER ','
+SELECT master_create_empty_shard('t_range')  AS new_shard_id \gset
+UPDATE pg_dist_shard SET shardminvalue = '9', shardmaxvalue = '11' WHERE shardid = :new_shard_id;
+\copy t_range FROM STDIN with (DELIMITER ',')
 9,2
 10,3
 11,4
 \.
 
 SELECT shardminvalue, shardmaxvalue FROM pg_dist_shard
-  WHERE logicalrelid = 't_append'::regclass
+  WHERE logicalrelid = 't_range'::regclass
   ORDER BY shardminvalue, shardmaxvalue;
 
-SELECT * FROM t_append ORDER BY id;
+SELECT * FROM t_range ORDER BY id;
 
 
 ROLLBACK;

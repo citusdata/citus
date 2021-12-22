@@ -107,15 +107,9 @@ SELECT count(*) FROM history;
      2
 (1 row)
 
--- test we can not replicate MX tables
+-- test we can replicate MX tables
 SET citus.shard_replication_factor TO 1;
--- metadata sync will fail as we have a statement replicated table
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-ERROR:  relation "mcsp.history" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
--- use streaming replication to enable metadata syncing
-UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid IN
-	('history'::regclass);
+-- metadata sync will succeed even if we have rep > 1 tables
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
@@ -136,12 +130,5 @@ SELECT master_copy_shard_placement(
            do_repair := false,
            transfer_mode := 'block_writes');
 ERROR:  Table 'mx_table' is streaming replicated. Shards of streaming replicated tables cannot be copied
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-NOTICE:  dropping metadata on the node (localhost,57637)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 SET client_min_messages TO ERROR;
 DROP SCHEMA mcsp CASCADE;

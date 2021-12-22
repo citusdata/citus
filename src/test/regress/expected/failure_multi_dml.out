@@ -374,7 +374,7 @@ SELECT create_distributed_table('dml_test', 'id');
 
 COPY dml_test FROM STDIN WITH CSV;
 ---- test multiple statements against a single shard, but with two placements
--- fail at COMMIT (actually COMMIT this time, as no 2pc in use)
+-- fail at PREPARED COMMIT as we use 2PC
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -400,7 +400,27 @@ WARNING:  server closed the connection unexpectedly
 connection not open
 connection not open
 CONTEXT:  while executing command on localhost:xxxxx
---- should see all changes, but they only went to one placement (other is unhealthy)
+-- all changes should be committed because we injected
+-- the failure on the COMMIT time. And, we should not
+-- mark any placements as INVALID
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             1
+(1 row)
+
+SELECT shardid FROM pg_dist_shard_placement WHERE shardstate = 3;
+ shardid
+---------------------------------------------------------------------
+(0 rows)
+
+SET citus.task_assignment_policy TO "round-robin";
 SELECT * FROM dml_test ORDER BY id ASC;
  id |  name
 ---------------------------------------------------------------------
@@ -409,18 +429,15 @@ SELECT * FROM dml_test ORDER BY id ASC;
   5 | Epsilon
 (3 rows)
 
-SELECT shardid FROM pg_dist_shard_placement WHERE shardstate = 3;
- shardid
+SELECT * FROM dml_test ORDER BY id ASC;
+ id |  name
 ---------------------------------------------------------------------
-  103402
-(1 row)
+  3 | gamma
+  4 | Delta
+  5 | Epsilon
+(3 rows)
 
-SELECT citus.mitmproxy('conn.allow()');
- mitmproxy
----------------------------------------------------------------------
-
-(1 row)
-
+RESET citus.task_assignment_policy;
 -- drop table and recreate as reference table
 DROP TABLE dml_test;
 SET citus.shard_count = 2;

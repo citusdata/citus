@@ -179,12 +179,6 @@ static const struct config_enum_entry coordinator_aggregation_options[] = {
 	{ NULL, 0, false }
 };
 
-static const struct config_enum_entry shard_commit_protocol_options[] = {
-	{ "1pc", COMMIT_PROTOCOL_1PC, false },
-	{ "2pc", COMMIT_PROTOCOL_2PC, false },
-	{ NULL, 0, false }
-};
-
 static const struct config_enum_entry log_level_options[] = {
 	{ "off", CITUS_LOG_LEVEL_OFF, false },
 	{ "debug5", DEBUG5, false},
@@ -537,7 +531,7 @@ CreateRequiredDirectories(void)
 	const char *subdirs[] = {
 		"pg_foreign_file",
 		"pg_foreign_file/cached",
-		"base/" PG_JOB_CACHE_DIR
+		("base/" PG_JOB_CACHE_DIR)
 	};
 
 	for (int dirNo = 0; dirNo < lengthof(subdirs); dirNo++)
@@ -566,6 +560,23 @@ RegisterCitusConfigVariables(void)
 		false,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.allow_modifications_from_workers_to_replicated_tables",
+		gettext_noop("Enables modifications from workers to replicated "
+					 "tables such as reference tables or hash "
+					 "distributed tables with replication factor "
+					 "greater than 1."),
+		gettext_noop("Allowing modifications from the worker nodes "
+					 "requires extra locking which might decrease "
+					 "the throughput. Disabling this GUC skips the "
+					 "extra locking and prevents modifications from "
+					 "worker nodes."),
+		&AllowModificationsFromWorkersToReplicatedTables,
+		true,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1077,6 +1088,18 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.grep_remote_commands",
+		gettext_noop(
+			"Applies \"command\" like citus.grep_remote_commands, if returns "
+			"true, the command is logged."),
+		NULL,
+		&GrepRemoteCommands,
+		"",
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
 	DefineCustomIntVariable(
 		"citus.isolation_test_session_process_id",
 		NULL,
@@ -1342,20 +1365,6 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
-		"citus.multi_shard_commit_protocol",
-		gettext_noop("Sets the commit protocol for commands modifying multiple shards."),
-		gettext_noop("When a failure occurs during commands that modify multiple "
-					 "shards, two-phase commit is required to ensure data is never lost "
-					 "and this is the default. However, changing to 1pc may give small "
-					 "performance benefits."),
-		&MultiShardCommitProtocol,
-		COMMIT_PROTOCOL_2PC,
-		shard_commit_protocol_options,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomEnumVariable(
 		"citus.multi_shard_modify_mode",
 		gettext_noop("Sets the connection type for multi shard modify queries"),
 		NULL,
@@ -1433,7 +1442,7 @@ RegisterCitusConfigVariables(void)
 
 	DefineCustomBoolVariable(
 		"citus.override_table_visibility",
-		gettext_noop("Enables replacing occurencens of pg_catalog.pg_table_visible() "
+		gettext_noop("Enables replacing occurrrences of pg_catalog.pg_table_visible() "
 					 "with pg_catalog.citus_table_visible()"),
 		gettext_noop("When enabled, shards on the Citus MX worker (data) nodes would be "
 					 "filtered out by many psql commands to provide better user "
@@ -1599,21 +1608,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomIntVariable(
-		"citus.shard_max_size",
-		gettext_noop("Sets the maximum size a shard will grow before it gets split."),
-		gettext_noop("Shards store table and file data. When the source "
-					 "file's size for one shard exceeds this configuration "
-					 "value, the database ensures that either a new shard "
-					 "gets created, or the current one gets split. Note that "
-					 "shards read this configuration value at sharded table "
-					 "creation time, and later reuse the initially read value."),
-		&ShardMaxSize,
-		1048576, 256, INT_MAX, /* max allowed size not set to MAX_KILOBYTES on purpose */
-		PGC_USERSET,
-		GUC_UNIT_KB | GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomEnumVariable(
 		"citus.shard_placement_policy",
 		gettext_noop("Sets the policy to use when choosing nodes for shard placement."),
@@ -1641,21 +1635,6 @@ RegisterCitusConfigVariables(void)
 		1, 1, MAX_SHARD_REPLICATION_FACTOR,
 		PGC_USERSET,
 		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomEnumVariable(
-		"citus.single_shard_commit_protocol",
-		gettext_noop(
-			"Sets the commit protocol for commands modifying a single shards with multiple replicas."),
-		gettext_noop("When a failure occurs during commands that modify multiple "
-					 "replicas, two-phase commit is required to ensure data is never lost "
-					 "and this is the default. However, changing to 1pc may give small "
-					 "performance benefits."),
-		&SingleShardCommitProtocol,
-		COMMIT_PROTOCOL_2PC,
-		shard_commit_protocol_options,
-		PGC_USERSET,
-		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1720,6 +1699,17 @@ RegisterCitusConfigVariables(void)
 		PGC_USERSET,
 		GUC_STANDARD,
 		WarnIfDeprecatedExecutorUsed, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.use_citus_managed_tables",
+		gettext_noop("Allows new local tables to be accessed on workers"),
+		gettext_noop("Adds all newly created tables to Citus metadata by default, "
+					 "when enabled. Set to false by default."),
+		&AddAllLocalTablesToMetadata,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
 		"citus.use_secondary_nodes",

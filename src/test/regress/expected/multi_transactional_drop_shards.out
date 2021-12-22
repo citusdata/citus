@@ -3,6 +3,7 @@
 --
 -- Tests that check the metadata returned by the master node.
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1410000;
+ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 4230000;
 SET citus.shard_count TO 4;
 SET client_min_messages TO WARNING;
 -- test DROP TABLE(ergo citus_drop_all_shards) in transaction, then ROLLBACK
@@ -56,6 +57,7 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner
@@ -98,6 +100,7 @@ ORDER BY
 
 -- verify shards are dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_shards_*
       List of relations
  Schema | Name | Type | Owner
@@ -120,10 +123,10 @@ SELECT master_create_empty_shard('transactional_drop_shards');
 (1 row)
 
 BEGIN;
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
- master_apply_delete_command
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
+ citus_drop_all_shards
 ---------------------------------------------------------------------
-                           1
+                     1
 (1 row)
 
 ROLLBACK;
@@ -150,6 +153,7 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner
@@ -160,10 +164,10 @@ ORDER BY
 \c - - - :master_port
 -- test master_delete_protocol in transaction, then COMMIT
 BEGIN;
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
- master_apply_delete_command
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
+ citus_drop_all_shards
 ---------------------------------------------------------------------
-                           1
+                     1
 (1 row)
 
 COMMIT;
@@ -187,6 +191,7 @@ ORDER BY
 
 -- verify shards are dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_shards_*
       List of relations
  Schema | Name | Type | Owner
@@ -236,6 +241,7 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner
@@ -244,13 +250,13 @@ ORDER BY
 (1 row)
 
 \c - - - :master_port
--- test master_apply_delete_command in a transaction after insertion
+-- test citus_drop_all_shards in a transaction after insertion
 BEGIN;
 INSERT INTO transactional_drop_shards VALUES (1);
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
- master_apply_delete_command
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
+ citus_drop_all_shards
 ---------------------------------------------------------------------
-                           1
+                     1
 (1 row)
 
 ROLLBACK;
@@ -277,6 +283,7 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner
@@ -327,6 +334,7 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner
@@ -378,7 +386,8 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
-\dt transactional_drop_reference*
+SET citus.override_table_visibility TO false;
+\dt transactional_drop_reference_*
                         List of relations
  Schema |                 Name                 | Type  |  Owner
 ---------------------------------------------------------------------
@@ -386,9 +395,9 @@ ORDER BY
 (1 row)
 
 \c - - - :master_port
--- test master_apply_delete_command table with failing worker
+-- test citus_drop_all_shards table with failing worker
 \set VERBOSITY terse
-SELECT master_apply_delete_command('DELETE FROM transactional_drop_shards');
+SELECT citus_drop_all_shards('transactional_drop_shards','','');
 ERROR:  illegal value
 \set VERBOSITY default
 -- verify metadata is not deleted
@@ -414,6 +423,7 @@ ORDER BY
 
 -- verify shards are not dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_shards_*
                        List of relations
  Schema |               Name                | Type  |  Owner
@@ -488,6 +498,7 @@ ORDER BY
 
 -- verify shards and sequence are not dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_serial_*
                        List of relations
  Schema |               Name                | Type  |  Owner
@@ -504,9 +515,10 @@ ORDER BY
 
 \ds transactional_drop_serial_column2_seq
       List of relations
- Schema | Name | Type | Owner
+ Schema |                 Name                  |   Type   |  Owner
 ---------------------------------------------------------------------
-(0 rows)
+ public | transactional_drop_serial_column2_seq | sequence | postgres
+(1 row)
 
 \c - - - :master_port
 -- test DROP TABLE(ergo citus_drop_all_shards) in transaction, then COMMIT
@@ -540,6 +552,7 @@ ORDER BY
 
 -- verify shards and sequence are dropped
 \c - - - :worker_1_port
+SET citus.override_table_visibility TO false;
 \dt transactional_drop_serial_*
       List of relations
  Schema | Name | Type | Owner
@@ -656,7 +669,7 @@ ORDER BY
 \c - - - :master_port
 SET client_min_messages TO WARNING;
 -- try using the coordinator as a worker and then dropping the table
-SELECT 1 FROM master_add_node('localhost', :master_port);
+SELECT 1 FROM master_add_node('localhost', :master_port, groupid := 0);
  ?column?
 ---------------------------------------------------------------------
         1
@@ -679,12 +692,6 @@ SELECT master_remove_node('localhost', :master_port);
 
 -- clean the workspace
 DROP TABLE transactional_drop_shards, transactional_drop_reference;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 -- test DROP TABLE as a non-superuser in a transaction block
 CREATE USER try_drop_table WITH LOGIN;
 SELECT run_command_on_workers('CREATE USER try_drop_table WITH LOGIN');

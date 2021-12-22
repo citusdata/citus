@@ -147,6 +147,15 @@ PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	/*
+	 * Since access control needs to be handled manually on community, we need to support
+	 * such queries by handling them locally on worker nodes.
+	 */
+	if (!IsCoordinator())
+	{
+		return NIL;
+	}
+
 	List *originalObjects = stmt->objects;
 
 	stmt->objects = distributedSchemas;
@@ -176,6 +185,8 @@ PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
+	EnsureCoordinator();
 
 	/* fully qualify */
 	QualifyTreeNode(node);
@@ -253,7 +264,7 @@ FilterDistributedSchemas(List *schemas)
  * EnsureSequentialModeForSchemaDDL makes sure that the current transaction is already in
  * sequential mode, or can still safely be put in sequential mode, it errors if that is
  * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the begining.
+ * sequential mode set from the beginning.
  *
  * Copy-pasted from type.c
  */

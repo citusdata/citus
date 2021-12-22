@@ -3,37 +3,48 @@
 --
 -- This test checks that we can handle null min/max values in shard statistics
 -- and that we don't partition or join prune shards that have null values.
-SET client_min_messages TO DEBUG2;
+CREATE SCHEMA multi_null_minmax_value_pruning;
+SET search_path TO multi_null_minmax_value_pruning;
 SET citus.explain_all_tasks TO on;
--- to avoid differing explain output - executor doesn't matter,
--- because were testing pruning here.
--- Change configuration to treat lineitem and orders tables as large
 SET citus.log_multi_join_order to true;
 SET citus.enable_repartition_joins to ON;
-SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290000;
- shardminvalue | shardmaxvalue
+SET citus.next_shard_id = 290000;
+CREATE TABLE lineitem (LIKE public.lineitem);
+SELECT create_distributed_table('lineitem', 'l_orderkey', 'range');
+ create_distributed_table
 ---------------------------------------------------------------------
- 1             | 1000
+
 (1 row)
 
-SELECT shardminvalue, shardmaxvalue from pg_dist_shard WHERE shardid = 290001;
- shardminvalue | shardmaxvalue
+SELECT master_create_empty_shard('lineitem') as lineitem_shardid1 \gset
+SELECT master_create_empty_shard('lineitem') as lineitem_shardid2 \gset
+CREATE TABLE orders (LIKE public.orders);
+SELECT create_distributed_table('orders', 'o_orderkey', 'range');
+ create_distributed_table
 ---------------------------------------------------------------------
- 1             | 1000
+
 (1 row)
 
+SELECT master_create_empty_shard('orders') as orders_shardid1 \gset
+SELECT master_create_empty_shard('orders') as orders_shardid2 \gset
+SET client_min_messages TO DEBUG2;
+UPDATE pg_dist_shard SET shardminvalue = '1', shardmaxvalue = '6000' WHERE shardid = :lineitem_shardid1 OR shardid = :orders_shardid1;
+UPDATE pg_dist_shard SET shardminvalue = '6001', shardmaxvalue = '20000' WHERE shardid = :lineitem_shardid2 OR shardid = :orders_shardid2;
+UPDATE pg_dist_partition SET colocationid = 87091 WHERE logicalrelid = 'orders'::regclass OR logicalrelid = 'lineitem'::regclass;
 -- Check that partition and join pruning works when min/max values exist
 -- Adding l_orderkey = 1 to make the query not router executable
-SELECT coordinator_plan($Q$
+SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030 or l_orderkey = 1;
 $Q$);
-DEBUG:  Creating router plan
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
+DEBUG:  Router planner cannot handle multi-shard select queries
+CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
+LOG:  join order: [ "lineitem" ]
+CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   Task Count: 1
+   Task Count: 2
 (2 rows)
 
 EXPLAIN (COSTS FALSE)
@@ -41,8 +52,8 @@ SELECT sum(l_linenumber), avg(l_linenumber) FROM lineitem, orders
 	WHERE l_orderkey = o_orderkey;
 DEBUG:  Router planner cannot handle multi-shard select queries
 LOG:  join order: [ "lineitem" ][ local partition join "orders" ]
-DEBUG:  join prunable for intervals [-2147483648,-1] and [0,2147483647]
-DEBUG:  join prunable for intervals [0,2147483647] and [-2147483648,-1]
+DEBUG:  join prunable for intervals [1,6000] and [6001,20000]
+DEBUG:  join prunable for intervals [6001,20000] and [1,6000]
                                    QUERY PLAN
 ---------------------------------------------------------------------
  Aggregate
@@ -53,38 +64,36 @@ DEBUG:  join prunable for intervals [0,2147483647] and [-2147483648,-1]
                Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
                      ->  Hash Join
-                           Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
-                           ->  Seq Scan on lineitem_360000 lineitem
+                           Hash Cond: (orders.o_orderkey = lineitem.l_orderkey)
+                           ->  Seq Scan on orders_290002 orders
                            ->  Hash
-                                 ->  Seq Scan on orders_360002 orders
+                                 ->  Seq Scan on lineitem_290000 lineitem
          ->  Task
                Node: host=localhost port=xxxxx dbname=regression
                ->  Aggregate
                      ->  Hash Join
-                           Hash Cond: (lineitem.l_orderkey = orders.o_orderkey)
-                           ->  Seq Scan on lineitem_360001 lineitem
+                           Hash Cond: (orders.o_orderkey = lineitem.l_orderkey)
+                           ->  Seq Scan on orders_290003 orders
                            ->  Hash
-                                 ->  Seq Scan on orders_360003 orders
+                                 ->  Seq Scan on lineitem_290001 lineitem
 (20 rows)
 
 -- Now set the minimum value for a shard to null. Then check that we don't apply
 -- partition or join pruning for the shard with null min value. Since it is not
 -- supported with single-repartition join, dual-repartition has been used.
-UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = 290000;
-SELECT coordinator_plan($Q$
+UPDATE pg_dist_shard SET shardminvalue = NULL WHERE shardid = :lineitem_shardid1;
+SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
-DEBUG:  Distributed planning for a fast-path router query
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
-DEBUG:  Creating router plan
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
-DEBUG:  query has a single distribution column value: 9030
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
+DEBUG:  Router planner cannot handle multi-shard select queries
+CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
+LOG:  join order: [ "lineitem" ]
+CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   Task Count: 1
+   Task Count: 2
 (2 rows)
 
 EXPLAIN (COSTS FALSE)
@@ -137,21 +146,19 @@ DETAIL:  Creating dependency on merge taskId 12
 -- Next, set the maximum value for another shard to null. Then check that we
 -- don't apply partition or join pruning for this other shard either. Since it
 -- is not supported with single-repartition join, dual-repartition has been used.
-UPDATE pg_dist_shard SET shardmaxvalue = NULL WHERE shardid = 290001;
-SELECT coordinator_plan($Q$
+UPDATE pg_dist_shard SET shardmaxvalue = NULL WHERE shardid = :lineitem_shardid2;
+SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
-DEBUG:  Distributed planning for a fast-path router query
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
-DEBUG:  Creating router plan
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
-DEBUG:  query has a single distribution column value: 9030
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
+DEBUG:  Router planner cannot handle multi-shard select queries
+CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
+LOG:  join order: [ "lineitem" ]
+CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
-   Task Count: 1
+   Task Count: 2
 (2 rows)
 
 EXPLAIN (COSTS FALSE)
@@ -204,17 +211,13 @@ DETAIL:  Creating dependency on merge taskId 12
 -- Last, set the minimum value to 0 and check that we don't treat it as null. We
 -- should apply partition and join pruning for this shard now. Since it is not
 -- supported with single-repartition join, dual-repartition has been used.
-UPDATE pg_dist_shard SET shardminvalue = '0' WHERE shardid = 290000;
-SELECT coordinator_plan($Q$
+UPDATE pg_dist_shard SET shardminvalue = '0' WHERE shardid = :lineitem_shardid1;
+SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS FALSE)
 SELECT l_orderkey, l_linenumber, l_shipdate FROM lineitem WHERE l_orderkey = 9030;
 $Q$);
-DEBUG:  Distributed planning for a fast-path router query
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
 DEBUG:  Creating router plan
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
-DEBUG:  query has a single distribution column value: 9030
-CONTEXT:  PL/pgSQL function coordinator_plan(text) line XX at FOR over EXECUTE statement
+CONTEXT:  PL/pgSQL function public.coordinator_plan(text) line XX at FOR over EXECUTE statement
        coordinator_plan
 ---------------------------------------------------------------------
  Custom Scan (Citus Adaptive)
@@ -268,7 +271,8 @@ DETAIL:  Creating dependency on merge taskId 12
                Merge Task Count: 4
 (10 rows)
 
--- Set minimum and maximum values for two shards back to their original values
-UPDATE pg_dist_shard SET shardminvalue = '1' WHERE shardid = 290000;
-UPDATE pg_dist_shard SET shardmaxvalue = '14947' WHERE shardid = 290001;
-SET client_min_messages TO NOTICE;
+RESET client_min_messages;
+DROP SCHEMA multi_null_minmax_value_pruning CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table lineitem
+drop cascades to table orders

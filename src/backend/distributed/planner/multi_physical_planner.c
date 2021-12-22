@@ -211,7 +211,6 @@ static List * ReorderAndAssignTaskList(List *taskList,
 									   ReorderFunction reorderFunction);
 static int CompareTasksByShardId(const void *leftElement, const void *rightElement);
 static List * ActiveShardPlacementLists(List *taskList);
-static List * ActivePlacementList(List *placementList);
 static List * LeftRotateList(List *list, uint32 rotateCount);
 static List * FindDependentMergeTaskList(Task *sqlTask);
 static List * AssignDualHashTaskList(List *taskList);
@@ -5381,10 +5380,8 @@ ActiveShardPlacementLists(List *taskList)
 	{
 		Task *task = (Task *) lfirst(taskCell);
 		uint64 anchorShardId = task->anchorShardId;
-		List *shardPlacementList = ActiveShardPlacementList(anchorShardId);
+		List *activeShardPlacementList = ActiveShardPlacementList(anchorShardId);
 
-		/* filter out shard placements that reside in inactive nodes */
-		List *activeShardPlacementList = ActivePlacementList(shardPlacementList);
 		if (activeShardPlacementList == NIL)
 		{
 			ereport(ERROR,
@@ -5427,34 +5424,6 @@ CompareShardPlacements(const void *leftElement, const void *rightElement)
 	{
 		return 0;
 	}
-}
-
-
-/*
- * ActivePlacementList walks over shard placements in the given list, and finds
- * the corresponding worker node for each placement. The function then checks if
- * that worker node is active, and if it is, appends the placement to a new list.
- * The function last returns the new placement list.
- */
-static List *
-ActivePlacementList(List *placementList)
-{
-	List *activePlacementList = NIL;
-	ListCell *placementCell = NULL;
-
-	foreach(placementCell, placementList)
-	{
-		ShardPlacement *placement = (ShardPlacement *) lfirst(placementCell);
-
-		/* check if the worker node for this shard placement is active */
-		WorkerNode *workerNode = FindWorkerNode(placement->nodeName, placement->nodePort);
-		if (workerNode != NULL && workerNode->isActive)
-		{
-			activePlacementList = lappend(activePlacementList, placement);
-		}
-	}
-
-	return activePlacementList;
 }
 
 

@@ -4,7 +4,6 @@
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 225000;
 
-SET citus.multi_shard_commit_protocol = '2pc';
 SET citus.shard_count TO 2;
 
 -- this function is dropped in Citus10, added here for tests

@@ -632,8 +632,8 @@ static void CleanUpSessions(DistributedExecution *execution);
 
 static void LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan);
 static void AcquireExecutorShardLocksForExecution(DistributedExecution *execution);
+static bool ModifiedTableReplicated(List *taskList);
 static bool DistributedExecutionModifiesDatabase(DistributedExecution *execution);
-static bool IsMultiShardModification(RowModifyLevel modLevel, List *taskList);
 static bool TaskListModifiesDatabase(RowModifyLevel modLevel, List *taskList);
 static bool DistributedExecutionRequiresRollback(List *taskList);
 static bool TaskListRequires2PC(List *taskList);
@@ -691,7 +691,6 @@ static void ScheduleNextPlacementExecution(TaskPlacementExecution *placementExec
 										   bool succeeded);
 static bool CanFailoverPlacementExecutionToLocalExecution(TaskPlacementExecution *
 														  placementExecution);
-static bool ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution);
 static void PlacementExecutionReady(TaskPlacementExecution *placementExecution);
 static TaskExecutionState TaskExecutionStateMachine(ShardCommandExecution *
 													shardCommandExecution);
@@ -1198,7 +1197,7 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 		return xactProperties;
 	}
 
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
+	if (TaskListCannotBeExecutedInTransaction(taskList))
 	{
 		/*
 		 * We prefer to error on any failures for CREATE INDEX
@@ -1224,15 +1223,6 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 			 */
 			xactProperties.errorOnAnyFailure = true;
 			xactProperties.requires2PC = true;
-		}
-		else if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC &&
-				 IsMultiShardModification(modLevel, taskList))
-		{
-			/*
-			 * Even if we're not using 2PC, we prefer to error out
-			 * on any failures during multi shard modifications/DDLs.
-			 */
-			xactProperties.errorOnAnyFailure = true;
 		}
 	}
 	else if (InCoordinatedTransaction())
@@ -1327,17 +1317,6 @@ DistributedPlanModifiesDatabase(DistributedPlan *plan)
 
 
 /*
- * IsMultiShardModification returns true if the task list is a modification
- * across shards.
- */
-static bool
-IsMultiShardModification(RowModifyLevel modLevel, List *taskList)
-{
-	return list_length(taskList) > 1 && TaskListModifiesDatabase(modLevel, taskList);
-}
-
-
-/*
  *  TaskListModifiesDatabase is a helper function for DistributedExecutionModifiesDatabase and
  *  DistributedPlanModifiesDatabase.
  */
@@ -1376,17 +1355,17 @@ DistributedExecutionRequiresRollback(List *taskList)
 {
 	int taskCount = list_length(taskList);
 
-	if (MultiShardCommitProtocol == COMMIT_PROTOCOL_BARE)
-	{
-		return false;
-	}
-
 	if (taskCount == 0)
 	{
 		return false;
 	}
 
 	Task *task = (Task *) linitial(taskList);
+	if (task->cannotBeExecutedInTransction)
+	{
+		/* vacuum, create index concurrently etc. */
+		return false;
+	}
 
 	bool selectForUpdate = task->relationRowLockList != NIL;
 	if (selectForUpdate)
@@ -1416,34 +1395,12 @@ DistributedExecutionRequiresRollback(List *taskList)
 
 	if (list_length(task->taskPlacementList) > 1)
 	{
-		if (SingleShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-		{
-			/*
-			 * Adaptive executor opts to error out on queries if a placement is unhealthy,
-			 * not marking the placement itself unhealthy in the process.
-			 * Use 2PC to rollback placements before the unhealthy replica failed.
-			 */
-			return true;
-		}
-
 		/*
-		 * Some tasks don't set replicationModel thus we only
-		 * rely on the anchorShardId, not replicationModel.
-		 *
-		 * TODO: Do we ever need replicationModel in the Task structure?
-		 * Can't we always rely on anchorShardId?
+		 * Single DML/DDL tasks with replicated tables (including
+		 * reference and non-reference tables) should require
+		 * BEGIN/COMMIT/ROLLBACK.
 		 */
-		if (task->anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(
-				task->anchorShardId))
-		{
-			return true;
-		}
-
-		/*
-		 * Single DML/DDL tasks with replicated tables (non-reference)
-		 * should not require BEGIN/COMMIT/ROLLBACK.
-		 */
-		return false;
+		return true;
 	}
 
 	return false;
@@ -1451,12 +1408,7 @@ DistributedExecutionRequiresRollback(List *taskList)
 
 
 /*
- * TaskListRequires2PC determines whether the given task list requires 2PC
- * because the tasks provided operates on a reference table or there are multiple
- * tasks and the commit protocol is 2PC.
- *
- * Note that we currently do not generate tasks lists that involves multiple different
- * tables, thus we only check the first task in the list for reference tables.
+ * TaskListRequires2PC determines whether the given task list requires 2PC.
  */
 static bool
 TaskListRequires2PC(List *taskList)
@@ -1467,40 +1419,28 @@ TaskListRequires2PC(List *taskList)
 	}
 
 	Task *task = (Task *) linitial(taskList);
-	if (task->replicationModel == REPLICATION_MODEL_2PC)
+	if (ReadOnlyTask(task->taskType))
 	{
-		return true;
+		/* we do not trigger 2PC for ReadOnly queries */
+		return false;
+	}
+
+	bool singleTask = list_length(taskList) == 1;
+	if (singleTask && list_length(task->taskPlacementList) == 1)
+	{
+		/* we do not trigger 2PC for modifications that are:
+		 *    - single task
+		 *    - single placement
+		 */
+		return false;
 	}
 
 	/*
-	 * Some tasks don't set replicationModel thus we rely on
-	 * the anchorShardId as well replicationModel.
-	 *
-	 * TODO: Do we ever need replicationModel in the Task structure?
-	 * Can't we always rely on anchorShardId?
+	 * Otherwise, all modifications are done via 2PC. This includes:
+	 *    - Multi-shard commands irrespective of the replication factor
+	 *    - Single-shard commands that are targeting more than one replica
 	 */
-	uint64 anchorShardId = task->anchorShardId;
-	if (anchorShardId != INVALID_SHARD_ID && ReferenceTableShardId(anchorShardId))
-	{
-		return true;
-	}
-
-	bool multipleTasks = list_length(taskList) > 1;
-	if (!ReadOnlyTask(task->taskType) &&
-		multipleTasks && MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-	{
-		return true;
-	}
-
-	if (task->taskType == DDL_TASK)
-	{
-		if (MultiShardCommitProtocol == COMMIT_PROTOCOL_2PC)
-		{
-			return true;
-		}
-	}
-
-	return false;
+	return true;
 }
 
 
@@ -1526,6 +1466,27 @@ ReadOnlyTask(TaskType taskType)
 			return false;
 		}
 	}
+}
+
+
+/*
+ * TaskListCannotBeExecutedInTransaction returns true if any of the
+ * tasks in the input cannot be executed in a transaction. These are
+ * tasks like VACUUM or CREATE INDEX CONCURRENTLY etc.
+ */
+bool
+TaskListCannotBeExecutedInTransaction(List *taskList)
+{
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		if (task->cannotBeExecutedInTransction)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -1596,6 +1557,13 @@ LockPartitionsForDistributedPlan(DistributedPlan *distributedPlan)
  *
  * The second case prevents deadlocks due to out-of-order execution.
  *
+ * There are two GUCs that can override the default behaviors.
+ *  'citus.all_modifications_commutative' relaxes locking
+ *  that's done for the purpose of keeping replicas consistent.
+ *  'citus.enable_deadlock_prevention' relaxes locking done for
+ *  the purpose of avoiding deadlocks between concurrent
+ *  multi-shard commands.
+ *
  * We do not take executor shard locks for utility commands such as
  * TRUNCATE because the table locks already prevent concurrent access.
  */
@@ -1617,22 +1585,272 @@ AcquireExecutorShardLocksForExecution(DistributedExecution *execution)
 		return;
 	}
 
-	/*
-	 * When executing in sequential mode or only executing a single task, we
-	 * do not need multi-shard locks.
-	 */
-	if (list_length(taskList) == 1 || ShouldRunTasksSequentially(taskList))
+	bool requiresParallelExecutionLocks =
+		!(list_length(taskList) == 1 || ShouldRunTasksSequentially(taskList));
+
+	bool modifiedTableReplicated = ModifiedTableReplicated(taskList);
+	if (!modifiedTableReplicated && !requiresParallelExecutionLocks)
 	{
-		Task *task = NULL;
-		foreach_ptr(task, taskList)
+		/*
+		 * When a distributed query on tables with replication
+		 * factor == 1 and command hits only a single shard, we
+		 * rely on Postgres to handle the serialization of the
+		 * concurrent modifications on the workers.
+		 *
+		 * For reference tables, even if their placements are replicated
+		 * ones (e.g., single node), we acquire the distributed execution
+		 * locks to be consistent when new node(s) are added. So, they
+		 * do not return at this point.
+		 */
+		return;
+	}
+
+	/*
+	 * We first assume that all the remaining modifications are going to
+	 * be serialized. So, start with an ExclusiveLock and lower the lock level
+	 * as much as possible.
+	 */
+	int lockMode = ExclusiveLock;
+
+	/*
+	 * In addition to honouring commutativity rules, we currently only
+	 * allow a single multi-shard command on a shard at a time. Otherwise,
+	 * concurrent multi-shard commands may take row-level locks on the
+	 * shard placements in a different order and create a distributed
+	 * deadlock. This applies even when writes are commutative and/or
+	 * there is no replication. This can be relaxed via
+	 * EnableDeadlockPrevention.
+	 *
+	 * 1. If citus.all_modifications_commutative is set to true, then all locks
+	 * are acquired as RowExclusiveLock.
+	 *
+	 * 2. If citus.all_modifications_commutative is false, then only the shards
+	 * with more than one replicas are locked with ExclusiveLock. Otherwise, the
+	 * lock is acquired with ShareUpdateExclusiveLock.
+	 *
+	 * ShareUpdateExclusiveLock conflicts with itself such that only one
+	 * multi-shard modification at a time is allowed on a shard. It also conflicts
+	 * with ExclusiveLock, which ensures that updates/deletes/upserts are applied
+	 * in the same order on all placements. It does not conflict with
+	 * RowExclusiveLock, which is normally obtained by single-shard, commutative
+	 * writes.
+	 */
+	if (!modifiedTableReplicated && requiresParallelExecutionLocks)
+	{
+		/*
+		 * When there is no replication then we only need to prevent
+		 * concurrent multi-shard commands on the same shards. This is
+		 * because concurrent, parallel commands may modify the same
+		 * set of shards, but in different orders. The order of the
+		 * accesses might trigger distributed deadlocks that are not
+		 * possible to happen on non-distributed systems such
+		 * regular Postgres.
+		 *
+		 * As an example, assume that we have two queries: query-1 and query-2.
+		 * Both queries access shard-1 and shard-2. If query-1 first accesses to
+		 * shard-1 then shard-2, and query-2 accesses shard-2 then shard-1, these
+		 * two commands might block each other in case they modify the same rows
+		 * (e.g., cause distributed deadlocks).
+		 *
+		 * In either case, ShareUpdateExclusive has the desired effect, since
+		 * it conflicts with itself and ExclusiveLock (taken by non-commutative
+		 * writes).
+		 *
+		 * However, some users find this too restrictive, so we allow them to
+		 * reduce to a RowExclusiveLock when citus.enable_deadlock_prevention
+		 * is enabled, which lets multi-shard modifications run in parallel as
+		 * long as they all disable the GUC.
+		 */
+		lockMode =
+			EnableDeadlockPrevention ? ShareUpdateExclusiveLock : RowExclusiveLock;
+
+		if (!IsCoordinator())
 		{
-			AcquireExecutorShardLocks(task, modLevel);
+			/*
+			 * We also skip taking a heavy-weight lock when running a multi-shard
+			 * commands from workers, since we currently do not prevent concurrency
+			 * across workers anyway.
+			 */
+			lockMode = RowExclusiveLock;
 		}
 	}
-	else if (list_length(taskList) > 1)
+	else if (modifiedTableReplicated)
 	{
-		AcquireExecutorMultiShardLocks(taskList);
+		/*
+		 * When we are executing distributed queries on replicated tables, our
+		 * default behaviour is to prevent any concurrency. This is valid
+		 * for when parallel execution is happening or not.
+		 *
+		 * The reason is that we cannot control the order of the placement accesses
+		 * of two distributed queries to the same shards. The order of the accesses
+		 * might cause the replicas of the same shard placements diverge. This is
+		 * not possible to happen on non-distributed systems such regular Postgres.
+		 *
+		 * As an example, assume that we have two queries: query-1 and query-2.
+		 * Both queries only access the placements of shard-1, say p-1 and p-2.
+		 *
+		 * And, assume that these queries are non-commutative, such as:
+		 *  query-1: UPDATE table SET b = 1 WHERE key = 1;
+		 *  query-2: UPDATE table SET b = 2 WHERE key = 1;
+		 *
+		 * If query-1 accesses to p-1 then p-2, and query-2 accesses
+		 * p-2 then p-1, these two commands would leave the p-1 and p-2
+		 * diverged (e.g., the values for the column "b" would be different).
+		 *
+		 * The only exception to this rule is the single shard commutative
+		 * modifications, such as INSERTs. In that case, we can allow
+		 * concurrency among such backends, hence lowering the lock level
+		 * to RowExclusiveLock.
+		 */
+		if (!requiresParallelExecutionLocks && modLevel < ROW_MODIFY_NONCOMMUTATIVE)
+		{
+			lockMode = RowExclusiveLock;
+		}
 	}
+
+	if (AllModificationsCommutative)
+	{
+		/*
+		 * The mapping is overridden when all_modifications_commutative is set to true.
+		 * In that case, all modifications are treated as commutative, which can be used
+		 * to communicate that the application is only generating commutative
+		 * UPDATE/DELETE/UPSERT commands and exclusive locks are unnecessary. This
+		 * is irrespective of single-shard/multi-shard or replicated tables.
+		 */
+		lockMode = RowExclusiveLock;
+	}
+
+	/* now, iterate on the tasks and acquire the executor locks on the shards */
+	List *anchorShardIntervalList = NIL;
+	List *relationRowLockList = NIL;
+	List *requiresConsistentSnapshotRelationShardList = NIL;
+
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		ShardInterval *anchorShardInterval = LoadShardInterval(task->anchorShardId);
+		anchorShardIntervalList = lappend(anchorShardIntervalList, anchorShardInterval);
+
+		/* Acquire additional locks for SELECT .. FOR UPDATE on reference tables */
+		AcquireExecutorShardLocksForRelationRowLockList(task->relationRowLockList);
+
+		/*
+		 * Due to PG commit 5ee190f8ec37c1bbfb3061e18304e155d600bc8e we copy the
+		 * second parameter in pre-13.
+		 */
+		relationRowLockList =
+			list_concat(relationRowLockList,
+#if (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13)
+						list_copy(task->relationRowLockList));
+#else
+						task->relationRowLockList);
+#endif
+
+		/*
+		 * If the task has a subselect, then we may need to lock the shards from which
+		 * the query selects as well to prevent the subselects from seeing different
+		 * results on different replicas.
+		 */
+		if (RequiresConsistentSnapshot(task))
+		{
+			/*
+			 * ExclusiveLock conflicts with all lock types used by modifications
+			 * and therefore prevents other modifications from running
+			 * concurrently.
+			 */
+
+			/*
+			 * Due to PG commit 5ee190f8ec37c1bbfb3061e18304e155d600bc8e we copy the
+			 * second parameter in pre-13.
+			 */
+			requiresConsistentSnapshotRelationShardList =
+				list_concat(requiresConsistentSnapshotRelationShardList,
+#if (PG_VERSION_NUM >= PG_VERSION_12) && (PG_VERSION_NUM < PG_VERSION_13)
+
+							list_copy(task->relationShardList));
+#else
+							task->relationShardList);
+#endif
+		}
+	}
+
+	/*
+	 * Acquire the locks in a sorted way to avoid deadlocks due to lock
+	 * ordering across concurrent sessions.
+	 */
+	anchorShardIntervalList =
+		SortList(anchorShardIntervalList, CompareShardIntervalsById);
+
+	/*
+	 * If we are dealing with a partition we are also taking locks on parent table
+	 * to prevent deadlocks on concurrent operations on a partition and its parent.
+	 *
+	 * Note that this function currently does not acquire any remote locks as that
+	 * is necessary to control the concurrency across multiple nodes for replicated
+	 * tables. That is because Citus currently does not allow modifications to
+	 * partitions from any node other than the coordinator.
+	 */
+	LockParentShardResourceIfPartition(anchorShardIntervalList, lockMode);
+
+	/* Acquire distribution execution locks on the affected shards */
+	SerializeNonCommutativeWrites(anchorShardIntervalList, lockMode);
+
+	if (relationRowLockList != NIL)
+	{
+		/* Acquire additional locks for SELECT .. FOR UPDATE on reference tables */
+		AcquireExecutorShardLocksForRelationRowLockList(relationRowLockList);
+	}
+
+
+	if (requiresConsistentSnapshotRelationShardList != NIL)
+	{
+		/*
+		 * If the task has a subselect, then we may need to lock the shards from which
+		 * the query selects as well to prevent the subselects from seeing different
+		 * results on different replicas.
+		 *
+		 * ExclusiveLock conflicts with all lock types used by modifications
+		 * and therefore prevents other modifications from running
+		 * concurrently.
+		 */
+		LockRelationShardResources(requiresConsistentSnapshotRelationShardList,
+								   ExclusiveLock);
+	}
+}
+
+
+/*
+ * ModifiedTableReplicated iterates on the task list and returns true
+ * if any of the tasks' anchor shard is a replicated table. We qualify
+ * replicated tables as any reference table or any distributed table with
+ * replication factor > 1.
+ */
+static bool
+ModifiedTableReplicated(List *taskList)
+{
+	Task *task = NULL;
+	foreach_ptr(task, taskList)
+	{
+		int64 shardId = task->anchorShardId;
+
+		if (shardId == INVALID_SHARD_ID)
+		{
+			continue;
+		}
+
+		if (ReferenceTableShardId(shardId))
+		{
+			return true;
+		}
+
+		Oid relationId = RelationIdForShard(shardId);
+		if (!SingleReplicatedTable(relationId))
+		{
+			return true;
+		}
+	}
+
+	return false;
 }
 
 
@@ -3432,8 +3650,16 @@ ConnectionStateMachine(WorkerSession *session)
 				/*
 				 * The execution may have failed as a result of WorkerSessionFailed
 				 * or WorkerPoolFailed.
+				 *
+				 * Even if this execution has not failed -- but just a single session is
+				 * failed -- and an earlier execution in this transaction which marked
+				 * the remote transaction as critical, we should fail right away as the
+				 * transaction will fail anyway on PREPARE/COMMIT time.
 				 */
-				if (execution->failed ||
+				RemoteTransaction *transaction = &connection->remoteTransaction;
+
+				if (transaction->transactionCritical ||
+					execution->failed ||
 					(execution->transactionProperties->errorOnAnyFailure &&
 					 workerPool->failureState != WORKER_POOL_FAILED_OVER_TO_LOCAL))
 				{
@@ -3596,12 +3822,6 @@ HandleMultiConnectionSuccess(WorkerSession *session)
 static void
 Activate2PCIfModifyingTransactionExpandsToNewNode(WorkerSession *session)
 {
-	if (MultiShardCommitProtocol != COMMIT_PROTOCOL_2PC)
-	{
-		/* we don't need 2PC, so no need to continue */
-		return;
-	}
-
 	DistributedExecution *execution = session->workerPool->distributedExecution;
 	if (TransactionModifiedDistributedTable(execution) &&
 		DistributedExecutionModifiesDatabase(execution) &&
@@ -4722,20 +4942,6 @@ PlacementExecutionDone(TaskPlacementExecution *placementExecution, bool succeede
 	}
 	else
 	{
-		if (ShouldMarkPlacementsInvalidOnFailure(execution))
-		{
-			ShardPlacement *shardPlacement = placementExecution->shardPlacement;
-
-			/*
-			 * We only set shard state if it currently is SHARD_STATE_ACTIVE, which
-			 * prevents overwriting shard state if it was already set somewhere else.
-			 */
-			if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
-			{
-				MarkShardPlacementInactive(shardPlacement);
-			}
-		}
-
 		if (placementExecution->executionState == PLACEMENT_EXECUTION_NOT_READY)
 		{
 			/*
@@ -4913,30 +5119,6 @@ ScheduleNextPlacementExecution(TaskPlacementExecution *placementExecution, bool 
 			}
 		} while (nextPlacementExecution->executionState == PLACEMENT_EXECUTION_FAILED);
 	}
-}
-
-
-/*
- * ShouldMarkPlacementsInvalidOnFailure returns true if the failure
- * should trigger marking placements invalid.
- */
-static bool
-ShouldMarkPlacementsInvalidOnFailure(DistributedExecution *execution)
-{
-	if (!DistributedExecutionModifiesDatabase(execution) ||
-		execution->transactionProperties->errorOnAnyFailure)
-	{
-		/*
-		 * Failures that do not modify the database (e.g., mainly SELECTs) should
-		 * never lead to invalid placement.
-		 *
-		 * Failures that lead throwing error, no need to mark any placement
-		 * invalid.
-		 */
-		return false;
-	}
-
-	return true;
 }
 
 
@@ -5275,7 +5457,7 @@ RebuildWaitEventSetFlags(WaitEventSet *waitEventSet, List *sessionList)
  * ModifyWaitEvent may throw hard errors. For example, when the underlying
  * socket for a connection is closed by the remote server and already
  * reflected by the OS, however Citus hasn't had a chance to get this
- * information. In that case, if repliction factor is >1, Citus can
+ * information. In that case, if replication factor is >1, Citus can
  * failover to other nodes for executing the query. Even if replication
  * factor = 1, Citus can give much nicer errors.
  *

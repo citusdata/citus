@@ -5,14 +5,15 @@ CREATE TABLE append_table (key text, value int, extra int default 0);
 CREATE INDEX ON append_table (key);
 
 SELECT create_distributed_table('append_table', 'key', 'append');
-SELECT 1 FROM master_create_empty_shard('append_table');
-SELECT 1 FROM master_create_empty_shard('append_table');
+SELECT master_create_empty_shard('append_table') AS shardid1 \gset
+SELECT master_create_empty_shard('append_table') AS shardid2 \gset
+SELECT master_create_empty_shard('append_table') AS shardid3 \gset
 
 CREATE TABLE ref_table (value int);
 CREATE INDEX ON ref_table (value);
 SELECT create_reference_table('ref_table');
 
-\COPY append_table (key,value) FROM STDIN WITH CSV
+COPY append_table (key,value) FROM STDIN WITH (format 'csv', append_to_shard :shardid1);
 abc,234
 bcd,123
 bcd,234
@@ -21,7 +22,7 @@ def,456
 efg,234
 \.
 
-\COPY append_table (key,value) FROM STDIN WITH CSV
+COPY append_table (key,value) FROM STDIN WITH (format 'csv', append_to_shard :shardid2);
 abc,123
 efg,123
 hij,123
@@ -30,7 +31,7 @@ ijk,1
 jkl,0
 \.
 
-\COPY ref_table FROM STDIN WITH CSV
+COPY ref_table FROM STDIN WITH CSV;
 123
 234
 345
@@ -45,11 +46,11 @@ SELECT DISTINCT key FROM (SELECT key FROM append_table) sub ORDER BY 1 LIMIT 3;
 SELECT key, max(v) FROM (SELECT key, value + 1 AS v FROM append_table) sub GROUP BY key ORDER BY 1,2 LIMIT 3;
 SELECT v, max(key) FROM (SELECT key, value + 1 AS v FROM append_table) sub GROUP BY v ORDER BY 1,2 LIMIT 3;
 
-SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
-SELECT key, row_number() OVER (ORDER BY value PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (ORDER BY key, value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (PARTITION BY key ORDER BY key,value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
 
-SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
-SELECT key, row_number() OVER (PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (ORDER BY key, value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (PARTITION BY key ORDER BY key,value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
 
 -- try some joins in subqueries
 SELECT key, count(*) FROM (SELECT *, random() FROM append_table a JOIN append_table b USING (key)) u GROUP BY key ORDER BY 1,2 LIMIT 3;

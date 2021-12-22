@@ -45,12 +45,6 @@ ORDER BY logicalrelid;
  mx_table_2   | s        |       150000
 (2 rows)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 COPY mx_table (col_1, col_2) FROM STDIN WITH (FORMAT 'csv');
 INSERT INTO mx_ref_table VALUES (-37, 'morbi');
 INSERT INTO mx_ref_table VALUES (-78, 'sapien');
@@ -172,16 +166,6 @@ SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE lo
      5
 (1 row)
 
--- master_apply_delete_command
-SELECT master_apply_delete_command('DELETE FROM mx_table');
-ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
-SELECT count(*) FROM mx_table;
- count
----------------------------------------------------------------------
-     5
-(1 row)
-
 -- master_add_inactive_node
 SELECT 1 FROM master_add_inactive_node('localhost', 5432);
 ERROR:  operation is not allowed on this node
@@ -242,7 +226,7 @@ HINT:  Connect to the coordinator and run it again.
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
  hasmetadata
 ---------------------------------------------------------------------
- f
+ t
 (1 row)
 
 -- stop_metadata_sync_to_node
@@ -278,12 +262,12 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 (1 row)
 
 \c - - - :worker_2_port
-SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
+SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx\_%table%';
  worker_drop_distributed_table
 ---------------------------------------------------------------------
 (0 rows)
 
-SELECT count(*) FROM pg_dist_partition;
+SELECT count(*) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx\_%table%';
  count
 ---------------------------------------------------------------------
      0
@@ -353,47 +337,13 @@ CREATE TABLE some_table_with_sequence(a int, b BIGSERIAL, c BIGSERIAL);
 DROP TABLE some_table_with_sequence;
 CREATE SEQUENCE some_sequence;
 DROP SEQUENCE some_sequence;
--- Show that dropping the sequence of an MX table with cascade harms the table and shards
-BEGIN;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
- Column |  Type   |                        Modifiers
----------------------------------------------------------------------
- col_1  | integer |
- col_2  | text    |
- col_3  | bigint  | not null default nextval('mx_table_col_3_seq'::regclass)
-(3 rows)
-
--- suppress notice message caused by DROP ... CASCADE to prevent pg version difference
-SET client_min_messages TO 'WARNING';
+-- Show that dropping the sequence of an MX table is not supported on worker nodes
 DROP SEQUENCE mx_table_col_3_seq CASCADE;
-RESET client_min_messages;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
- Column |  Type   | Modifiers
----------------------------------------------------------------------
- col_1  | integer |
- col_2  | text    |
- col_3  | bigint  | not null
-(3 rows)
-
-ROLLBACK;
+ERROR:  operation is not allowed on this node
+HINT:  Connect to the coordinator and run it again.
 -- Cleanup
 \c - - - :master_port
 DROP TABLE mx_table;
 DROP TABLE mx_table_2;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-NOTICE:  dropping metadata on the node (localhost,57637)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-\c - - - :worker_1_port
-DELETE FROM pg_dist_node;
-SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
- worker_drop_distributed_table
----------------------------------------------------------------------
-(0 rows)
-
-\c - - - :master_port
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 RESET citus.shard_replication_factor;

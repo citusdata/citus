@@ -1,7 +1,8 @@
 -- ===================================================================
 -- create test functions
 -- ===================================================================
-
+CREATE SCHEMA metadata_test;
+SET search_path TO metadata_test;
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 540000;
 
@@ -196,10 +197,13 @@ SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 3);
 
 -- verify result of the get_shard_id_for_distribution_column
 \c - - - :worker_1_port
+SET search_path TO metadata_test;
+
 SELECT * FROM get_shardid_test_table1_540006;
 SELECT * FROM get_shardid_test_table1_540009;
 SELECT * FROM get_shardid_test_table1_540007;
 \c - - - :master_port
+SET search_path TO metadata_test;
 
 -- test non-existing value
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table1', 4);
@@ -217,9 +221,12 @@ SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', '{d, e, f
 
 -- verify result of the get_shard_id_for_distribution_column
 \c - - - :worker_1_port
+SET search_path TO metadata_test;
+
 SELECT * FROM get_shardid_test_table2_540013;
 SELECT * FROM get_shardid_test_table2_540011;
 \c - - - :master_port
+SET search_path TO metadata_test;
 
 -- test mismatching data type
 SELECT get_shard_id_for_distribution_column('get_shardid_test_table2', 'a');
@@ -355,4 +362,5 @@ ORDER BY
   types;$$);
 
 -- clear unnecessary tables;
-DROP TABLE get_shardid_test_table1, get_shardid_test_table2, get_shardid_test_table3, get_shardid_test_table4, get_shardid_test_table5, events_table_count;
+SET client_min_messages TO ERROR;
+DROP SCHEMA metadata_test CASCADE;

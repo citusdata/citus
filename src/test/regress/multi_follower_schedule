@@ -1,4 +1,3 @@
-test: turn_mx_off
 test: multi_follower_sanity_check
 test: follower_single_node
 test: multi_follower_select_statements
@@ -7,3 +6,4 @@ test: multi_follower_configure_followers
 
 # test that no tests leaked intermediate results. This should always be last
 test: ensure_no_intermediate_data_leak
+test: check_mx

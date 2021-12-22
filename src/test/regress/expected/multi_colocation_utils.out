@@ -337,13 +337,13 @@ SELECT find_shard_interval_index(1300016);
 (1 row)
 
 -- check external colocation API
-SELECT count(*) FROM pg_dist_partition WHERE colocationid = 4;
+SELECT count(*) FROM pg_dist_partition WHERE colocationid IN (4, 5);
  count
 ---------------------------------------------------------------------
      0
 (1 row)
 
-DELETE FROM pg_dist_colocation WHERE colocationid = 4;
+DELETE FROM pg_dist_colocation WHERE colocationid IN (4, 5);
 SET citus.shard_count = 2;
 CREATE TABLE table1_groupA ( id int );
 SELECT create_distributed_table('table1_groupA', 'id');
@@ -428,6 +428,7 @@ SELECT create_distributed_table('table_range', 'id', 'range');
 -- test foreign table creation
 CREATE FOREIGN TABLE table3_groupD ( id int ) SERVER fake_fdw_server;
 SELECT create_distributed_table('table3_groupD', 'id');
+NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
@@ -1356,3 +1357,4 @@ DROP TABLE range_table;
 DROP TABLE none;
 DROP TABLE ref;
 DROP TABLE local_table;
+DROP FOREIGN TABLE table3_groupD CASCADE;

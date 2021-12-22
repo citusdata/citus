@@ -33,8 +33,6 @@ FROM pg_dist_partition
 WHERE logicalrelid IN ('mx_table'::regclass, 'mx_table_2'::regclass)
 ORDER BY logicalrelid;
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-
 COPY mx_table (col_1, col_2) FROM STDIN WITH (FORMAT 'csv');
 -37, 'lorem'
 65536, 'ipsum'
@@ -118,10 +116,6 @@ SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_tabl
 SELECT citus_drop_all_shards('mx_table'::regclass, 'public', 'mx_table');
 SELECT count(*) FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement WHERE logicalrelid='mx_table'::regclass;
 
--- master_apply_delete_command
-SELECT master_apply_delete_command('DELETE FROM mx_table');
-SELECT count(*) FROM mx_table;
-
 -- master_add_inactive_node
 
 SELECT 1 FROM master_add_inactive_node('localhost', 5432);
@@ -170,8 +164,8 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 \c - - - :worker_2_port
-SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
-SELECT count(*) FROM pg_dist_partition;
+SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx\_%table%';
+SELECT count(*) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx\_%table%';
 SELECT count(*) FROM pg_dist_node;
 \c - - - :worker_1_port
 
@@ -216,25 +210,13 @@ DROP TABLE some_table_with_sequence;
 CREATE SEQUENCE some_sequence;
 DROP SEQUENCE some_sequence;
 
--- Show that dropping the sequence of an MX table with cascade harms the table and shards
-BEGIN;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
--- suppress notice message caused by DROP ... CASCADE to prevent pg version difference
-SET client_min_messages TO 'WARNING';
+-- Show that dropping the sequence of an MX table is not supported on worker nodes
 DROP SEQUENCE mx_table_col_3_seq CASCADE;
-RESET client_min_messages;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.mx_table'::regclass;
-ROLLBACK;
 
 -- Cleanup
 \c - - - :master_port
 DROP TABLE mx_table;
 DROP TABLE mx_table_2;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-\c - - - :worker_1_port
-DELETE FROM pg_dist_node;
-SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition;
-\c - - - :master_port
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 
 RESET citus.shard_replication_factor;

@@ -8,18 +8,9 @@ SELECT create_distributed_table('append_table', 'key', 'append');
 
 (1 row)
 
-SELECT 1 FROM master_create_empty_shard('append_table');
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-SELECT 1 FROM master_create_empty_shard('append_table');
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
+SELECT master_create_empty_shard('append_table') AS shardid1 \gset
+SELECT master_create_empty_shard('append_table') AS shardid2 \gset
+SELECT master_create_empty_shard('append_table') AS shardid3 \gset
 CREATE TABLE ref_table (value int);
 CREATE INDEX ON ref_table (value);
 SELECT create_reference_table('ref_table');
@@ -28,9 +19,9 @@ SELECT create_reference_table('ref_table');
 
 (1 row)
 
-\COPY append_table (key,value) FROM STDIN WITH CSV
-\COPY append_table (key,value) FROM STDIN WITH CSV
-\COPY ref_table FROM STDIN WITH CSV
+COPY append_table (key,value) FROM STDIN WITH (format 'csv', append_to_shard :shardid1);
+COPY append_table (key,value) FROM STDIN WITH (format 'csv', append_to_shard :shardid2);
+COPY ref_table FROM STDIN WITH CSV;
 -- exercise some optimizer pushdown features with subqueries
 SELECT count(*) FROM (SELECT random() FROM append_table) u;
  count
@@ -70,25 +61,31 @@ SELECT v, max(key) FROM (SELECT key, value + 1 AS v FROM append_table) sub GROUP
  124 | hij
 (3 rows)
 
-SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (ORDER BY key, value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
  key | row_number
 ---------------------------------------------------------------------
- abc |          6
- abc |          9
- bcd |          4
+ abc |          1
+ abc |          2
+ bcd |          3
 (3 rows)
 
-SELECT key, row_number() OVER (ORDER BY value PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
-ERROR:  syntax error at or near "PARTITION"
-SELECT key, row_number() OVER (ORDER BY value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (PARTITION BY key ORDER BY key,value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
  key | row_number
 ---------------------------------------------------------------------
- abc |          6
- abc |          9
- bcd |          4
+ abc |          1
+ abc |          2
+ bcd |          1
 (3 rows)
 
-SELECT key, row_number() OVER (PARTITION BY key) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+SELECT key, row_number() OVER (ORDER BY key, value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
+ key | row_number
+---------------------------------------------------------------------
+ abc |          1
+ abc |          2
+ bcd |          3
+(3 rows)
+
+SELECT key, row_number() OVER (PARTITION BY key ORDER BY key,value) FROM (SELECT key, value, random() FROM append_table) sub ORDER BY 1,2 LIMIT 3;
  key | row_number
 ---------------------------------------------------------------------
  abc |          1

@@ -353,7 +353,7 @@ create user notsuper;
 select run_command_on_workers($$create user notsuper$$);
 grant all on schema aggregate_support to notsuper;
 grant all on all tables in schema aggregate_support to notsuper;
-select run_command_on_workers($$
+select 1 from run_command_on_workers($$
 grant all on schema aggregate_support to notsuper;
 grant all on all tables in schema aggregate_support to notsuper;
 $$);

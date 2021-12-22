@@ -69,7 +69,6 @@
 /* Shard related configuration */
 int ShardCount = 32;
 int ShardReplicationFactor = 1; /* desired replication factor for shards */
-int ShardMaxSize = 1048576;     /* maximum size in KB one shard can grow to */
 int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
 int NextShardId = 0;
 int NextPlacementId = 0;
@@ -95,100 +94,13 @@ PG_FUNCTION_INFO_V1(master_stage_shard_placement_row);
 
 
 /*
- * master_get_table_metadata takes in a relation name, and returns partition
- * related metadata for the relation. These metadata are grouped and returned in
- * a tuple, and are used by the caller when creating new shards. The function
- * errors if given relation does not exist, or is not partitioned.
+ * master_get_table_metadata is a deprecated UDF.
  */
 Datum
 master_get_table_metadata(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
-
-	text *relationName = PG_GETARG_TEXT_P(0);
-	Oid relationId = ResolveRelationId(relationName, false);
-
-	Datum partitionKeyExpr = 0;
-	Datum partitionKey = 0;
-	TupleDesc metadataDescriptor = NULL;
-	Datum values[TABLE_METADATA_FIELDS];
-	bool isNulls[TABLE_METADATA_FIELDS];
-
-	/* find partition tuple for partitioned relation */
-	CitusTableCacheEntry *partitionEntry = GetCitusTableCacheEntry(relationId);
-
-	/* create tuple descriptor for return value */
-	TypeFuncClass resultTypeClass = get_call_result_type(fcinfo, NULL,
-														 &metadataDescriptor);
-	if (resultTypeClass != TYPEFUNC_COMPOSITE)
-	{
-		ereport(ERROR, (errmsg("return type must be a row type")));
-	}
-
-	/* form heap tuple for table metadata */
-	memset(values, 0, sizeof(values));
-	memset(isNulls, false, sizeof(isNulls));
-
-	char *partitionKeyString = partitionEntry->partitionKeyString;
-
-	/* reference tables do not have partition key */
-	if (partitionKeyString == NULL)
-	{
-		partitionKey = PointerGetDatum(NULL);
-		isNulls[3] = true;
-	}
-	else
-	{
-		/* get decompiled expression tree for partition key */
-		partitionKeyExpr =
-			PointerGetDatum(cstring_to_text(partitionEntry->partitionKeyString));
-		partitionKey = DirectFunctionCall2(pg_get_expr, partitionKeyExpr,
-										   ObjectIdGetDatum(relationId));
-	}
-
-	uint64 shardMaxSizeInBytes = (int64) ShardMaxSize * 1024L;
-
-	/* get storage type */
-	char shardStorageType = ShardStorageType(relationId);
-
-	values[0] = ObjectIdGetDatum(relationId);
-	values[1] = shardStorageType;
-	values[2] = partitionEntry->partitionMethod;
-	values[3] = partitionKey;
-	values[4] = Int32GetDatum(ShardReplicationFactor);
-	values[5] = Int64GetDatum(shardMaxSizeInBytes);
-	values[6] = Int32GetDatum(ShardPlacementPolicy);
-
-	HeapTuple metadataTuple = heap_form_tuple(metadataDescriptor, values, isNulls);
-	Datum metadataDatum = HeapTupleGetDatum(metadataTuple);
-
-	PG_RETURN_DATUM(metadataDatum);
-}
-
-
-/*
- * CStoreTable returns true if the given relationId belongs to a foreign cstore
- * table, otherwise it returns false.
- */
-bool
-CStoreTable(Oid relationId)
-{
-	bool cstoreTable = false;
-
-	char relationKind = get_rel_relkind(relationId);
-	if (relationKind == RELKIND_FOREIGN_TABLE)
-	{
-		ForeignTable *foreignTable = GetForeignTable(relationId);
-		ForeignServer *server = GetForeignServer(foreignTable->serverid);
-		ForeignDataWrapper *foreignDataWrapper = GetForeignDataWrapper(server->fdwid);
-
-		if (strncmp(foreignDataWrapper->fdwname, CSTORE_FDW_NAME, NAMEDATALEN) == 0)
-		{
-			cstoreTable = true;
-		}
-	}
-
-	return cstoreTable;
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("master_get_table_metadata is deprecated")));
 }
 
 
@@ -907,15 +819,7 @@ ShardStorageType(Oid relationId)
 	}
 	else if (relationType == RELKIND_FOREIGN_TABLE)
 	{
-		bool cstoreTable = CStoreTable(relationId);
-		if (cstoreTable)
-		{
-			shardStorageType = SHARD_STORAGE_COLUMNAR;
-		}
-		else
-		{
-			shardStorageType = SHARD_STORAGE_FOREIGN;
-		}
+		shardStorageType = SHARD_STORAGE_FOREIGN;
 	}
 	else
 	{

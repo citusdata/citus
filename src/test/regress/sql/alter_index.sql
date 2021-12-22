@@ -31,7 +31,7 @@ ORDER BY c.relname, a.attnum;
 \c - - - :worker_1_port
 SELECT c.relname, a.attstattarget
 FROM pg_attribute a
-JOIN pg_class c ON a.attrelid = c.oid AND c.relname LIKE 'test\_idx%'
+JOIN pg_class c ON a.attrelid = c.oid AND c.relname SIMILAR TO 'test\_idx%\_\d%'
 ORDER BY c.relname, a.attnum;
 \c - - - :master_port
 

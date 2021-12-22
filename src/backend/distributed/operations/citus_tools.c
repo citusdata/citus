@@ -11,23 +11,21 @@
  */
 
 #include "postgres.h"
-#include "funcapi.h"
-#include "libpq-fe.h"
-#include "miscadmin.h"
-
 
 #include "access/htup_details.h"
 #include "catalog/pg_type.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/multi_client_executor.h"
 #include "distributed/multi_server_executor.h"
 #include "distributed/remote_commands.h"
-#include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_protocol.h"
+#include "funcapi.h"
 #include "lib/stringinfo.h"
+#include "libpq-fe.h"
+#include "miscadmin.h"
 #include "utils/builtins.h"
-
-#include "distributed/multi_client_executor.h"
 
 
 PG_FUNCTION_INFO_V1(master_run_on_worker);
@@ -559,8 +557,5 @@ CreateTupleStore(TupleDesc tupleDescriptor,
 		pfree(nodeNameText);
 		pfree(resultText);
 	}
-
-	tuplestore_donestoring(tupleStore);
-
 	return tupleStore;
 }

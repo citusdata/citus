@@ -3,7 +3,7 @@
  * citus_dist_stat_activity.c
  *
  *	This file contains functions for monitoring the distributed transactions
- *	accross the cluster.
+ *	across the cluster.
  *
  * Copyright (c) Citus Data, Inc.
  *
@@ -1100,7 +1100,4 @@ ReturnCitusDistStats(List *citusStatsList, FunctionCallInfo fcinfo)
 
 		tuplestore_putvalues(tupleStore, tupleDesc, values, nulls);
 	}
-
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupleStore);
 }

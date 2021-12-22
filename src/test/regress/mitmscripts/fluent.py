@@ -3,7 +3,6 @@ from itertools import count
 import logging
 import re
 import os
-import pprint
 import signal
 import socket
 import struct
@@ -13,9 +12,7 @@ import traceback
 import queue
 
 from construct.lib import ListContainer
-from mitmproxy import ctx
-from mitmproxy.utils import strutils
-from mitmproxy.proxy.protocol import TlsLayer, RawTCPLayer
+from mitmproxy import ctx, tcp
 
 import structs
 
@@ -337,10 +334,10 @@ def listen_for_commands(fifoname):
         global connection_count
         result = ''
 
-        if recorder.command is 'reset':
+        if recorder.command == 'reset':
             result = ''
             connection_count = count()
-        elif recorder.command is not 'dump':
+        elif recorder.command != 'dump':
             # this should never happen
             raise Exception('Unrecognized command: {}'.format(recorder.command))
 
@@ -348,7 +345,7 @@ def listen_for_commands(fifoname):
         messages = all_items(captured_messages)
         messages = drop_terminate_messages(messages)
         for message in messages:
-            if recorder.command is 'reset':
+            if recorder.command == 'reset':
                 continue
             results.append(emit_message(message))
         result = '\n'.join(results)
@@ -424,19 +421,7 @@ def configure(updated):
         create_thread(fifoname)
 
 
-def next_layer(layer):
-    '''
-    mitmproxy wasn't really meant for intercepting raw tcp streams, it tries to wrap the
-    upsteam connection (the one to the worker) in a tls stream. This hook intercepts the
-    part where it creates the TlsLayer (it happens in root_context.py) and instead creates
-    a RawTCPLayer. That's the layer which calls our tcp_message hook
-    '''
-    if isinstance(layer, TlsLayer):
-        replacement = RawTCPLayer(layer.ctx)
-        layer.reply.send(replacement)
-
-
-def tcp_message(flow):
+def tcp_message(flow: tcp.TCPFlow):
     '''
     This callback is hit every time mitmproxy receives a packet. It's the main entrypoint
     into this script.

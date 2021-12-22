@@ -39,7 +39,7 @@ step "s1-table-size" { SELECT citus_total_relation_size('upsert_hash'); }
 step "s1-master-modify-multiple-shards" { DELETE FROM upsert_hash; }
 step "s1-create-non-distributed-table" { CREATE TABLE upsert_hash(id integer PRIMARY KEY, data text); }
 step "s1-select-count" { SELECT COUNT(*) FROM upsert_hash; }
-step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash%'''); }
+step "s1-show-indexes" { SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''upsert_hash\_%'''); }
 step "s1-show-columns" { SELECT run_command_on_workers('SELECT column_name FROM information_schema.columns WHERE table_name LIKE ''upsert_hash%'' AND column_name = ''new_column'' ORDER BY 1 LIMIT 1'); }
 step "s1-commit" { COMMIT; }
 

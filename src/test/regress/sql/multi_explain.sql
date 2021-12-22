@@ -98,8 +98,8 @@ SET LOCAL citus.enable_repartition_joins TO true;
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off) SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b;
 -- Confirm repartiton join in distributed subplan works
 EXPLAIN (COSTS off, ANALYZE on, TIMING off, SUMMARY off)
-WITH repartion AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
-SELECT count(*) from repartion;
+WITH repartition AS (SELECT count(*) FROM t1, t2 WHERE t1.a=t2.b)
+SELECT count(*) from repartition;
 END;
 DROP TABLE t1, t2;
 

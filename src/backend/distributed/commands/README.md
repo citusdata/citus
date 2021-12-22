@@ -23,7 +23,7 @@ they are often moved to files that are named after the command.
 | `table.c`                    | |
 | `transmit.c`                 | Implementation of `COPY` commands with `format transmit` set in the options. This format is used to transfer files from one node to another node |
 | `truncate.c`                 | Implementation of `TRUNCATE` commands on distributed tables |
-| `utility_hook.c`             | This is the entry point from postgres into the commands module of citus. It contains the implementation that gets registered in postgres' `ProcessUtility_hook` callback to extends the functionality of the original ProcessUtility. This code is used to route the incomming commands to their respective implementation in Citus |
+| `utility_hook.c`             | This is the entry point from postgres into the commands module of citus. It contains the implementation that gets registered in postgres' `ProcessUtility_hook` callback to extends the functionality of the original ProcessUtility. This code is used to route the incoming commands to their respective implementation in Citus |
 | `vacuum.c`                   | Implementation of `VACUUM` commands on distributed tables |
 
 # COPY

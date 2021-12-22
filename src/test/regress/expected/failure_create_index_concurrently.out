@@ -38,7 +38,7 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 -- verify index is not created
-SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
+SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test_%' $$)
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
@@ -153,7 +153,7 @@ SELECT citus.mitmproxy('conn.allow()');
 (1 row)
 
 -- verify index is not dropped at worker 2
-SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
+SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test_%' $$)
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------
@@ -186,7 +186,7 @@ NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table index_schema.index_test
 drop cascades to table index_schema.index_test_2
 -- verify index is not at worker 2 upon cleanup
-SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test%' $$)
+SELECT * FROM run_command_on_workers($$SELECT count(*) FROM pg_indexes WHERE indexname LIKE 'idx_index_test_%' $$)
 WHERE nodeport = :worker_2_proxy_port;
  nodename  | nodeport | success | result
 ---------------------------------------------------------------------

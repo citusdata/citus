@@ -76,13 +76,11 @@ static int GetFunctionColocationId(Oid functionOid, char *colocateWithName, Oid
 static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 												  distributionColumnType, Oid
 												  sourceRelationId);
-static void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
-										   int *distribution_argument_index,
-										   int *colocationId);
 static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
+static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
 static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
 											 bool missing_ok);
@@ -188,7 +186,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
 	const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
 	initStringInfo(&ddlCommand);
-	appendStringInfo(&ddlCommand, "%s;%s", createFunctionSQL, alterFunctionOwnerSQL);
+	appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_OBJECT_PROPAGATION,
+					 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_OBJECT_PROPAGATION);
 	SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(), ddlCommand.data);
 
 	MarkObjectDistributed(&functionAddress);
@@ -260,7 +259,7 @@ DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid,
 {
 	/*
 	 * cannot provide colocate_with without distribution_arg_name when the function
-	 * is not collocated with a reference table
+	 * is not colocated with a reference table
 	 */
 	if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0)
 	{
@@ -564,8 +563,9 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 /*
  * UpdateFunctionDistributionInfo gets object address of a function and
  * updates its distribution_argument_index and colocationId in pg_dist_object.
+ * Then update pg_dist_object on nodes with metadata if object propagation is on.
  */
-static void
+void
 UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 							   int *distribution_argument_index,
 							   int *colocationId)
@@ -638,6 +638,37 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 	systable_endscan(scanDescriptor);
 
 	table_close(pgDistObjectRel, NoLock);
+
+	if (EnableDependencyCreation)
+	{
+		List *objectAddressList = list_make1((ObjectAddress *) distAddress);
+		List *distArgumentIndexList = NIL;
+		List *colocationIdList = NIL;
+
+		if (distribution_argument_index == NULL)
+		{
+			distArgumentIndexList = list_make1_int(INVALID_DISTRIBUTION_ARGUMENT_INDEX);
+		}
+		else
+		{
+			distArgumentIndexList = list_make1_int(*distribution_argument_index);
+		}
+
+		if (colocationId == NULL)
+		{
+			colocationIdList = list_make1_int(INVALID_COLOCATION_ID);
+		}
+		else
+		{
+			colocationIdList = list_make1_int(*colocationId);
+		}
+
+		char *workerPgDistObjectUpdateCommand =
+			MarkObjectsDistributedCreateCommand(objectAddressList,
+												distArgumentIndexList,
+												colocationIdList);
+		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
+	}
 }
 
 
@@ -1093,7 +1124,7 @@ EnsureSequentialModeForFunctionDDL(void)
  * and triggers the metadata syncs if the node has not the metadata. Later,
  * maintenance daemon will sync the metadata to nodes.
  */
-static void
+void
 TriggerSyncMetadataToPrimaryNodes(void)
 {
 	List *workerList = ActivePrimaryNonCoordinatorNodeList(ShareLock);
@@ -1298,7 +1329,11 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 	FunctionParameter *funcParam = NULL;
 	foreach_ptr(funcParam, stmt->parameters)
 	{
-		objectWithArgs->objargs = lappend(objectWithArgs->objargs, funcParam->argType);
+		if (ShouldAddFunctionSignature(funcParam->mode))
+		{
+			objectWithArgs->objargs = lappend(objectWithArgs->objargs,
+											  funcParam->argType);
+		}
 	}
 
 	return FunctionToObjectAddress(objectType, objectWithArgs, missing_ok);
@@ -1487,7 +1522,7 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString,
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
+		 * extension should therefore not be propagated here.
 		 */
 		return NIL;
 	}
@@ -1588,7 +1623,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 	{
 		/*
 		 * extensions should be created separately on the workers, types cascading from an
-		 * extension should therefor not be propagated here.
+		 * extension should therefore not be propagated here.
 		 */
 		return NIL;
 	}
@@ -1855,8 +1890,7 @@ ObjectWithArgsFromOid(Oid funcOid)
 
 	for (int i = 0; i < numargs; i++)
 	{
-		if (argModes == NULL ||
-			argModes[i] != PROARGMODE_OUT || argModes[i] != PROARGMODE_TABLE)
+		if (argModes == NULL || ShouldAddFunctionSignature(argModes[i]))
 		{
 			objargs = lappend(objargs, makeTypeNameFromOid(argTypes[i], -1));
 		}
@@ -1866,6 +1900,35 @@ ObjectWithArgsFromOid(Oid funcOid)
 	ReleaseSysCache(proctup);
 
 	return objectWithArgs;
+}
+
+
+/*
+ * ShouldAddFunctionSignature takes a FunctionParameterMode and returns true if it should
+ * be included in the function signature. Returns false otherwise.
+ */
+static bool
+ShouldAddFunctionSignature(FunctionParameterMode mode)
+{
+	/* only input parameters should be added to the generated signature */
+	switch (mode)
+	{
+		case FUNC_PARAM_IN:
+		case FUNC_PARAM_INOUT:
+		case FUNC_PARAM_VARIADIC:
+		{
+			return true;
+		}
+
+		case FUNC_PARAM_OUT:
+		case FUNC_PARAM_TABLE:
+		{
+			return false;
+		}
+
+		default:
+			return true;
+	}
 }
 
 

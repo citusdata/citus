@@ -8,7 +8,7 @@ SELECT substring(:'server_version', '\d+')::int > 13 AS server_version_above_thi
 
 create schema pg14;
 set search_path to pg14;
-
+SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 980000;
 SET citus.shard_count TO 2;
 
@@ -29,7 +29,6 @@ create index idx on dist(a);
 
 set citus.log_remote_commands to on;
 -- make sure that we send the tablespace option
-SET citus.multi_shard_commit_protocol TO '1pc';
 SET citus.multi_shard_modify_mode TO 'sequential';
 reindex(TABLESPACE test_tablespace) index idx;
 reindex(TABLESPACE test_tablespace, verbose) index idx;
@@ -609,6 +608,37 @@ set enable_nestloop=t;
 set enable_hashjoin=f;
 set enable_mergejoin=f;
 select * from nummultirange_test natural join nummultirange_test2 order by nmr;
+
+-- verify that recreating distributed procedures with OUT param gets propagated to workers
+CREATE OR REPLACE PROCEDURE proc_with_out_param(IN parm1 date, OUT parm2 int)
+  LANGUAGE SQL
+AS $$
+    SELECT 1;
+$$;
+
+-- this should error out
+SELECT create_distributed_function('proc_with_out_param(date,int)');
+-- this should work
+SELECT create_distributed_function('proc_with_out_param(date)');
+
+SET client_min_messages TO ERROR;
+CREATE ROLE r1;
+SELECT 1 FROM run_command_on_workers($$CREATE ROLE r1;$$);
+GRANT EXECUTE ON PROCEDURE proc_with_out_param TO r1;
+SELECT 1 FROM run_command_on_workers($$GRANT EXECUTE ON PROCEDURE proc_with_out_param TO r1;$$);
+RESET client_min_messages;
+
+CREATE OR REPLACE PROCEDURE proc_with_out_param(IN parm1 date, OUT parm2 int)
+  LANGUAGE SQL
+AS $$
+    SELECT 2;
+$$;
+
+SELECT count(*) FROM
+  (SELECT result FROM
+    run_command_on_workers($$select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc, pg_proc.proowner) from pg_proc where proname = 'proc_with_out_param';$$)
+    UNION  select row(pg_proc.pronargs, pg_proc.proargtypes, pg_proc.prosrc, pg_proc.proowner)::text from pg_proc where proname = 'proc_with_out_param')
+  as test;
 
 set client_min_messages to error;
 drop schema pg14 cascade;

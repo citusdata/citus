@@ -44,7 +44,8 @@ SELECT citus.mitmproxy('conn.delay(500)');
 (1 row)
 
 ALTER TABLE products ADD CONSTRAINT p_key PRIMARY KEY(product_no);
-ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
+WARNING:  could not establish connection after 400 ms
+ERROR:  connection to the remote node localhost:xxxxx failed
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -140,14 +141,6 @@ SELECT count(*) FROM products;
      0
 (1 row)
 
--- use OFFSET 1 to prevent printing the line where source
--- is the worker, and LIMIT 1 in case there were multiple connections
-SELECT citus.dump_network_traffic() ORDER BY 1 LIMIT 1 OFFSET 1;
-        dump_network_traffic
----------------------------------------------------------------------
- (1,coordinator,"[initial message]")
-(1 row)
-
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -174,9 +167,9 @@ SELECT citus.mitmproxy('conn.delay(500)');
 SELECT count(*) FROM single_replicatated;
 ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 SET citus.force_max_query_parallelization TO OFF;
--- one similar test, but this time on modification queries
+-- one similar test, and this time on modification queries
 -- to see that connection establishement failures could
--- mark placement INVALID
+-- fail the transaction (but not mark any placements as INVALID)
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------
@@ -190,7 +183,7 @@ FROM
 	pg_dist_shard_placement
 WHERE
 	shardstate = 3 AND
-	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
+	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'single_replicatated'::regclass);
  invalid_placement_count
 ---------------------------------------------------------------------
                        0
@@ -202,7 +195,8 @@ SELECT citus.mitmproxy('conn.delay(500)');
 
 (1 row)
 
-INSERT INTO products VALUES (100, '100', 100);
+INSERT INTO single_replicatated VALUES (100);
+ERROR:  could not establish any connections to the node localhost:xxxxx after 400 ms
 COMMIT;
 SELECT
 	count(*) as invalid_placement_count
@@ -210,28 +204,229 @@ FROM
 	pg_dist_shard_placement
 WHERE
 	shardstate = 3 AND
-	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'products'::regclass);
+	shardid IN (SELECT shardid from pg_dist_shard where logicalrelid = 'single_replicatated'::regclass);
  invalid_placement_count
 ---------------------------------------------------------------------
-                       1
+                       0
 (1 row)
 
--- show that INSERT went through
-SELECT count(*) FROM products WHERE product_no = 100;
+-- show that INSERT failed
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) FROM single_replicatated WHERE key = 100;
  count
 ---------------------------------------------------------------------
-     1
+     0
 (1 row)
 
 RESET client_min_messages;
 -- verify get_global_active_transactions works when a timeout happens on a connection
 SELECT get_global_active_transactions();
-WARNING:  could not establish connection after 400 ms
-WARNING:  connection to the remote node localhost:xxxxx failed
  get_global_active_transactions
 ---------------------------------------------------------------------
 (0 rows)
 
+-- tests for connectivity checks
+SET client_min_messages TO ERROR;
+-- kill the connection after authentication is ok
+SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
+ citus_check_connection_to_node
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- cancel the connection after authentication is ok
+SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+-- kill the connection after connectivity check query is sent
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT 1$").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
+ citus_check_connection_to_node
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- cancel the connection after connectivity check query is sent
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT 1$").cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+-- kill the connection after connectivity check command is complete
+SELECT citus.mitmproxy('conn.onCommandComplete(command="SELECT 1").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
+ citus_check_connection_to_node
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- cancel the connection after connectivity check command is complete
+SELECT citus.mitmproxy('conn.onCommandComplete(command="SELECT 1").cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
+ERROR:  canceling statement due to user request
+-- verify that the checks are not successful when timeouts happen on a connection
+SELECT citus.mitmproxy('conn.delay(500)');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_connection_to_node('localhost', :worker_2_proxy_port);
+ citus_check_connection_to_node
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- tests for citus_check_cluster_node_health
+-- kill all connectivity checks that originate from this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_check_connection_to_node").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |          9060 | localhost   |        9060 |
+ localhost     |          9060 | localhost   |       57637 |
+ localhost     |         57637 | localhost   |        9060 | t
+ localhost     |         57637 | localhost   |       57637 | t
+(4 rows)
+
+-- suggested summary queries for connectivity checks
+SELECT bool_and(coalesce(result, false)) FROM citus_check_cluster_node_health();
+ bool_and
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT result, count(*) FROM citus_check_cluster_node_health() GROUP BY result ORDER BY 1;
+ result | count
+---------------------------------------------------------------------
+ t      |     2
+        |     2
+(2 rows)
+
+-- cancel all connectivity checks that originate from this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_check_connection_to_node").cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ERROR:  canceling statement due to user request
+-- kill all but first connectivity checks that originate from this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_check_connection_to_node").after(1).kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |          9060 | localhost   |        9060 | t
+ localhost     |          9060 | localhost   |       57637 |
+ localhost     |         57637 | localhost   |        9060 | t
+ localhost     |         57637 | localhost   |       57637 | t
+(4 rows)
+
+-- cancel all but first connectivity checks that originate from this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT citus_check_connection_to_node").after(1).cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ERROR:  canceling statement due to user request
+-- kill all connections to this node
+SELECT citus.mitmproxy('conn.onAuthenticationOk().kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |          9060 | localhost   |        9060 |
+ localhost     |          9060 | localhost   |       57637 |
+ localhost     |         57637 | localhost   |        9060 | f
+ localhost     |         57637 | localhost   |       57637 | t
+(4 rows)
+
+-- cancel all connections to this node
+SELECT citus.mitmproxy('conn.onAuthenticationOk().cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ERROR:  canceling statement due to user request
+-- kill connection checks to this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT 1$").kill()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ from_nodename | from_nodeport | to_nodename | to_nodeport | result
+---------------------------------------------------------------------
+ localhost     |          9060 | localhost   |        9060 | f
+ localhost     |          9060 | localhost   |       57637 | t
+ localhost     |         57637 | localhost   |        9060 | f
+ localhost     |         57637 | localhost   |       57637 | t
+(4 rows)
+
+-- cancel connection checks to this node
+SELECT citus.mitmproxy('conn.onQuery(query="^SELECT 1$").cancel(' || pg_backend_pid() || ')');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM citus_check_cluster_node_health();
+ERROR:  canceling statement due to user request
+RESET client_min_messages;
 SELECT citus.mitmproxy('conn.allow()');
  mitmproxy
 ---------------------------------------------------------------------

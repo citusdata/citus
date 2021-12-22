@@ -68,6 +68,35 @@ SELECT alter_table_set_access_method('events_2021_jan', 'columnar');
 
 VACUUM (FREEZE, ANALYZE) events_2021_jan;
 
+-- add some replicated tables
+SET citus.shard_replication_factor TO 2;
+
+-- test for hybrid partitioned table (columnar+heap)
+CREATE TABLE events_replicated(ts timestamptz, i int, n numeric, s text)
+  PARTITION BY RANGE (ts);
+
+CREATE TABLE events_replicated_2021_jan PARTITION OF events_replicated
+  FOR VALUES FROM ('2021-01-01') TO ('2021-02-01');
+
+CREATE TABLE events_replicated_2021_feb PARTITION OF events_replicated
+  FOR VALUES FROM ('2021-02-01') TO ('2021-03-01');
+
+INSERT INTO events_replicated SELECT
+    '2021-01-01'::timestamptz + '0.45 seconds'::interval * g,
+    g,
+    g*pi(),
+    'number: ' || g::text
+    FROM generate_series(1,1000) g;
+
+VACUUM (FREEZE, ANALYZE) events_2021_feb;
+
+SELECT create_distributed_table('events_replicated', 'ts');
+SELECT alter_table_set_access_method('events_replicated_2021_jan', 'columnar');
+
+CREATE TABLE distributed_table_replicated_1(col int unique, b tt2);
+SELECT create_distributed_table('distributed_table_replicated_1', 'col');
+CREATE INDEX indrep1 ON distributed_table_replicated_1(b);
+
 -- sync metadata
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
@@ -152,21 +181,6 @@ SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nod
 SELECT hasmetadata, metadatasynced, shouldhaveshards FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
 
 \c - - - :master_port
--- verify that mx workers are updated when disabling/activating nodes
-SELECT citus_disable_node('localhost', :worker_1_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
-
-\c - - - :worker_2_port
-SELECT nodeport, isactive FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
-
-\c - - - :master_port
-SET client_min_messages TO ERROR;
-SELECT citus_activate_node('localhost', :worker_1_port);
-
-\c - - - :worker_2_port
-SELECT nodeport, isactive FROM pg_dist_node WHERE nodeport IN (:worker_1_port, :worker_2_port) ORDER BY nodeport;
-
-\c - - - :master_port
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 SET search_path TO "start_stop_metadata_sync";
@@ -230,6 +244,15 @@ BEGIN;
 	SELECT create_distributed_table('test_table', 'a');
 ROLLBACK;
 
+-- this is safe because start_metadata_sync_to_node already switches to
+-- sequential execution
+BEGIN;
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+	SET LOCAL citus.shard_replication_factor TO 2;
+	CREATE TABLE test_table_rep(a int);
+	SELECT create_distributed_table('test_table_rep', 'a');
+ROLLBACK;
+
 -- multi-shard commands are allowed with start_metadata_sync
 -- as long as the start_metadata_sync_to_node executed
 -- when it is OK to switch to sequential execution
@@ -247,6 +270,26 @@ BEGIN;
 	-- sync at the end of the tx
 	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 ROLLBACK;
+
+-- multi-shard commands are allowed with start_metadata_sync
+-- as long as the start_metadata_sync_to_node executed
+-- when it is OK to switch to sequential execution
+BEGIN;
+	-- sync at the start of the tx
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+	SET citus.multi_shard_modify_mode TO sequential;
+	SET LOCAL citus.shard_replication_factor TO 2;
+	CREATE TABLE test_table(a int);
+	SELECT create_distributed_table('test_table', 'a');
+	ALTER TABLE test_table ADD COLUMN B INT;
+	INSERT INTO test_table SELECT i,i From generate_series(0,100)i;
+	SELECT count(*) FROM test_table;
+	ALTER TABLE distributed_table_3 ADD COLUMN new_col INT DEFAULT 15;
+	SELECT count(*) FROM distributed_table_3;
+	-- sync at the end of the tx
+	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ROLLBACK;
+
 
 -- cleanup
 \c - - - :master_port

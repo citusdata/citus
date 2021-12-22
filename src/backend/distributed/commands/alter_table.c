@@ -1190,7 +1190,7 @@ CreateDistributedTableLike(TableConversionState *con)
 		 * at this moment, but that's going to be the table in pg_dist_partition.
 		 */
 		Oid parentRelationId = PartitionParentOid(originalRelationId);
-		Var *parentDistKey = DistPartitionKey(parentRelationId);
+		Var *parentDistKey = DistPartitionKeyOrError(parentRelationId);
 		char *parentDistKeyColumnName =
 			ColumnToColumnName(parentRelationId, nodeToString(parentDistKey));
 
@@ -1223,7 +1223,10 @@ CreateCitusTableLike(TableConversionState *con)
 	}
 	else if (IsCitusTableType(con->relationId, CITUS_LOCAL_TABLE))
 	{
-		CreateCitusLocalTable(con->newRelationId, false);
+		CitusTableCacheEntry *entry = GetCitusTableCacheEntry(con->relationId);
+		bool autoConverted = entry->autoConverted;
+		bool cascade = false;
+		CreateCitusLocalTable(con->newRelationId, cascade, autoConverted);
 
 		/*
 		 * creating Citus local table adds a shell table on top

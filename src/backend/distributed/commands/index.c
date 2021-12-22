@@ -24,6 +24,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/deparser.h"
 #include "distributed/distributed_planner.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -71,6 +72,7 @@ static void RangeVarCallbackForReindexIndex(const RangeVar *rel, Oid relOid, Oid
 											oldRelOid,
 											void *arg);
 static void ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement);
+static void ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement);
 static List * DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt);
 
 
@@ -463,9 +465,8 @@ GenerateCreateIndexDDLJob(IndexStmt *createIndexStatement, const char *createInd
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
 	ddlJob->targetRelationId = CreateIndexStmtGetRelationId(createIndexStatement);
-	ddlJob->concurrentIndexCmd = createIndexStatement->concurrent;
 	ddlJob->startNewTransaction = createIndexStatement->concurrent;
-	ddlJob->commandString = createIndexCommand;
+	ddlJob->metadataSyncCommand = createIndexCommand;
 	ddlJob->taskList = CreateIndexTaskList(createIndexStatement);
 
 	return ddlJob;
@@ -598,11 +599,9 @@ PreprocessReindexStmt(Node *node, const char *reindexCommand,
 
 			DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 			ddlJob->targetRelationId = relationId;
-			ddlJob->concurrentIndexCmd = IsReindexWithParam_compat(reindexStatement,
-																   "concurrently");
 			ddlJob->startNewTransaction = IsReindexWithParam_compat(reindexStatement,
 																	"concurrently");
-			ddlJob->commandString = reindexCommand;
+			ddlJob->metadataSyncCommand = reindexCommand;
 			ddlJob->taskList = CreateReindexTaskList(relationId, reindexStatement);
 
 			ddlJobs = list_make1(ddlJob);
@@ -679,21 +678,9 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		bool isCitusRelation = IsCitusTable(relationId);
 		if (isCitusRelation)
 		{
-			if (OidIsValid(distributedIndexId))
-			{
-				/*
-				 * We already have a distributed index in the list, and Citus
-				 * currently only support dropping a single distributed index.
-				 */
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot drop multiple distributed objects in "
-									   "a single command"),
-								errhint("Try dropping each object in a separate DROP "
-										"command.")));
-			}
-
 			distributedIndexId = indexId;
 			distributedRelationId = relationId;
+			break;
 		}
 	}
 
@@ -701,13 +688,14 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 	{
 		DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 
+		ErrorIfUnsupportedDropIndexStmt(dropIndexStatement);
+
 		if (AnyForeignKeyDependsOnIndex(distributedIndexId))
 		{
 			MarkInvalidateForeignKeyGraph();
 		}
 
 		ddlJob->targetRelationId = distributedRelationId;
-		ddlJob->concurrentIndexCmd = dropIndexStatement->concurrent;
 
 		/*
 		 * We do not want DROP INDEX CONCURRENTLY to commit locally before
@@ -715,7 +703,7 @@ PreprocessDropIndexStmt(Node *node, const char *dropIndexCommand,
 		 * to be able to repeat the DROP INDEX later.
 		 */
 		ddlJob->startNewTransaction = false;
-		ddlJob->commandString = dropIndexCommand;
+		ddlJob->metadataSyncCommand = dropIndexCommand;
 		ddlJob->taskList = DropIndexTaskList(distributedRelationId, distributedIndexId,
 											 dropIndexStatement);
 
@@ -866,6 +854,7 @@ CreateIndexTaskList(IndexStmt *indexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction = indexStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 
@@ -910,6 +899,8 @@ CreateReindexTaskList(Oid relationId, ReindexStmt *reindexStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction =
+			IsReindexWithParam_compat(reindexStmt, "concurrently");
 
 		taskList = lappend(taskList, task);
 
@@ -1161,6 +1152,26 @@ ErrorIfUnsupportedIndexStmt(IndexStmt *createIndexStatement)
 
 
 /*
+ * ErrorIfUnsupportedDropIndexStmt checks if the corresponding drop index statement is
+ * supported for distributed tables and errors out if it is not.
+ */
+static void
+ErrorIfUnsupportedDropIndexStmt(DropStmt *dropIndexStatement)
+{
+	Assert(dropIndexStatement->removeType == OBJECT_INDEX);
+
+	if (list_length(dropIndexStatement->objects) > 1)
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg("cannot drop multiple distributed objects in a "
+							   "single command"),
+						errhint("Try dropping each object in a separate DROP "
+								"command.")));
+	}
+}
+
+
+/*
  * DropIndexTaskList builds a list of tasks to execute a DROP INDEX command
  * against a specified distributed table.
  */
@@ -1205,6 +1216,7 @@ DropIndexTaskList(Oid relationId, Oid indexId, DropStmt *dropStmt)
 		task->dependentTaskList = NULL;
 		task->anchorShardId = shardId;
 		task->taskPlacementList = ActiveShardPlacementList(shardId);
+		task->cannotBeExecutedInTransction = dropStmt->concurrent;
 
 		taskList = lappend(taskList, task);
 

@@ -12,6 +12,7 @@ SET citus.next_shard_id TO 4213581;
 
 SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 2;
+SET citus.max_adaptive_executor_pool_size TO 1; -- have more consistent number of connections running
 CREATE TABLE replicated_source_table(a int, b int);
 SELECT create_distributed_table('replicated_source_table', 'a');
 INSERT INTO replicated_source_table SELECT i, i*i FROM generate_series(1, 10) i;

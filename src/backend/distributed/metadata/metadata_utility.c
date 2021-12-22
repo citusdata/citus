@@ -80,26 +80,18 @@ static bool DistributedTableSizeOnWorker(WorkerNode *workerNode, Oid relationId,
 										 SizeQueryType sizeQueryType, bool failOnError,
 										 uint64 *tableSize);
 static List * ShardIntervalsOnWorkerGroup(WorkerNode *workerNode, Oid relationId);
-static char * GenerateShardStatisticsQueryForShardList(List *shardIntervalList, bool
-													   useShardMinMaxQuery);
+static char * GenerateShardStatisticsQueryForShardList(List *shardIntervalList);
 static char * GetWorkerPartitionedSizeUDFNameBySizeQueryType(SizeQueryType sizeQueryType);
 static char * GetSizeQueryBySizeQueryType(SizeQueryType sizeQueryType);
 static char * GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode,
-													 List *citusTableIds, bool
-													 useShardMinMaxQuery);
-static List * GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds,
-											   bool useShardMinMaxQuery);
+													 List *citusTableIds);
+static List * GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds);
 static void ErrorIfNotSuitableToGetSize(Oid relationId);
 static List * OpenConnectionToNodes(List *workerNodeList);
 static void ReceiveShardNameAndSizeResults(List *connectionList,
 										   Tuplestorestate *tupleStore,
 										   TupleDesc tupleDescriptor);
-static void AppendShardSizeMinMaxQuery(StringInfo selectQuery, uint64 shardId,
-									   ShardInterval *
-									   shardInterval, char *shardName,
-									   char *quotedShardName);
-static void AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval,
-								 char *quotedShardName);
+static void AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval);
 
 static HeapTuple CreateDiskSpaceTuple(TupleDesc tupleDesc, uint64 availableBytes,
 									  uint64 totalBytes);
@@ -245,19 +237,13 @@ citus_shard_sizes(PG_FUNCTION_ARGS)
 	/* we don't need a distributed transaction here */
 	bool useDistributedTransaction = false;
 
-	/* we only want the shard sizes here so useShardMinMaxQuery parameter is false */
-	bool useShardMinMaxQuery = false;
-	List *connectionList = SendShardStatisticsQueriesInParallel(allCitusTableIds,
-																useDistributedTransaction,
-																useShardMinMaxQuery);
+	List *connectionList =
+		SendShardStatisticsQueriesInParallel(allCitusTableIds, useDistributedTransaction);
 
 	TupleDesc tupleDescriptor = NULL;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
 
 	ReceiveShardNameAndSizeResults(connectionList, tupleStore, tupleDescriptor);
-
-	/* clean up and return the tuplestore */
-	tuplestore_donestoring(tupleStore);
 
 	PG_RETURN_VOID();
 }
@@ -276,12 +262,6 @@ citus_total_relation_size(PG_FUNCTION_ARGS)
 	bool failOnError = PG_GETARG_BOOL(1);
 
 	SizeQueryType sizeQueryType = TOTAL_RELATION_SIZE;
-
-	if (CStoreTable(relationId))
-	{
-		sizeQueryType = CSTORE_TABLE_SIZE;
-	}
-
 	uint64 tableSize = 0;
 
 	if (!DistributedTableSize(relationId, sizeQueryType, failOnError, &tableSize))
@@ -306,12 +286,6 @@ citus_table_size(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
 	SizeQueryType sizeQueryType = TABLE_SIZE;
-
-	if (CStoreTable(relationId))
-	{
-		sizeQueryType = CSTORE_TABLE_SIZE;
-	}
-
 	uint64 tableSize = 0;
 
 	if (!DistributedTableSize(relationId, sizeQueryType, failOnError, &tableSize))
@@ -336,12 +310,6 @@ citus_relation_size(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 	bool failOnError = true;
 	SizeQueryType sizeQueryType = RELATION_SIZE;
-
-	if (CStoreTable(relationId))
-	{
-		sizeQueryType = CSTORE_TABLE_SIZE;
-	}
-
 	uint64 relationSize = 0;
 
 	if (!DistributedTableSize(relationId, sizeQueryType, failOnError, &relationSize))
@@ -360,15 +328,12 @@ citus_relation_size(PG_FUNCTION_ARGS)
  * to available nodes. It returns the connection list.
  */
 List *
-SendShardStatisticsQueriesInParallel(List *citusTableIds, bool useDistributedTransaction,
-									 bool
-									 useShardMinMaxQuery)
+SendShardStatisticsQueriesInParallel(List *citusTableIds, bool useDistributedTransaction)
 {
 	List *workerNodeList = ActivePrimaryNodeList(NoLock);
 
 	List *shardSizesQueryList = GenerateShardStatisticsQueryList(workerNodeList,
-																 citusTableIds,
-																 useShardMinMaxQuery);
+																 citusTableIds);
 
 	List *connectionList = OpenConnectionToNodes(workerNodeList);
 	FinishConnectionListEstablishment(connectionList);
@@ -433,20 +398,18 @@ OpenConnectionToNodes(List *workerNodeList)
 
 /*
  * GenerateShardStatisticsQueryList generates a query per node that will return:
- * - all shard_name, shard_size pairs from the node (if includeShardMinMax is false)
- * - all shard_id, shard_minvalue, shard_maxvalue, shard_size quartuples from the node (if true)
+ * shard_id, shard_name, shard_size for all shard placements on the node
  */
 static List *
-GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds, bool
-								 useShardMinMaxQuery)
+GenerateShardStatisticsQueryList(List *workerNodeList, List *citusTableIds)
 {
 	List *shardStatisticsQueryList = NIL;
 	WorkerNode *workerNode = NULL;
 	foreach_ptr(workerNode, workerNodeList)
 	{
-		char *shardStatisticsQuery = GenerateAllShardStatisticsQueryForNode(workerNode,
-																			citusTableIds,
-																			useShardMinMaxQuery);
+		char *shardStatisticsQuery =
+			GenerateAllShardStatisticsQueryForNode(workerNode, citusTableIds);
+
 		shardStatisticsQueryList = lappend(shardStatisticsQueryList,
 										   shardStatisticsQuery);
 	}
@@ -497,12 +460,13 @@ ReceiveShardNameAndSizeResults(List *connectionList, Tuplestorestate *tupleStore
 			memset(values, 0, sizeof(values));
 			memset(isNulls, false, sizeof(isNulls));
 
-			char *tableName = PQgetvalue(result, rowIndex, 0);
+			/* format is [0] shard id, [1] shard name, [2] size */
+			char *tableName = PQgetvalue(result, rowIndex, 1);
 			Datum resultStringDatum = CStringGetDatum(tableName);
 			Datum textDatum = DirectFunctionCall1(textin, resultStringDatum);
 
 			values[0] = textDatum;
-			values[1] = ParseIntField(result, rowIndex, 1);
+			values[1] = ParseIntField(result, rowIndex, 2);
 
 			tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 		}
@@ -861,11 +825,6 @@ GetSizeQueryBySizeQueryType(SizeQueryType sizeQueryType)
 			return PG_TOTAL_RELATION_SIZE_FUNCTION;
 		}
 
-		case CSTORE_TABLE_SIZE:
-		{
-			return CSTORE_TABLE_SIZE_FUNCTION;
-		}
-
 		case TABLE_SIZE:
 		{
 			return PG_TABLE_SIZE_FUNCTION;
@@ -881,12 +840,10 @@ GetSizeQueryBySizeQueryType(SizeQueryType sizeQueryType)
 
 /*
  * GenerateAllShardStatisticsQueryForNode generates a query that returns:
- * - all shard_name, shard_size pairs for the given node (if useShardMinMaxQuery is false)
- * - all shard_id, shard_minvalue, shard_maxvalue, shard_size quartuples (if true)
+ * shard_id, shard_name, shard_size for all shard placements on the node
  */
 static char *
-GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableIds, bool
-									   useShardMinMaxQuery)
+GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableIds)
 {
 	StringInfo allShardStatisticsQuery = makeStringInfo();
 
@@ -904,61 +861,32 @@ GenerateAllShardStatisticsQueryForNode(WorkerNode *workerNode, List *citusTableI
 			List *shardIntervalsOnNode = ShardIntervalsOnWorkerGroup(workerNode,
 																	 relationId);
 			char *shardStatisticsQuery =
-				GenerateShardStatisticsQueryForShardList(shardIntervalsOnNode,
-														 useShardMinMaxQuery);
+				GenerateShardStatisticsQueryForShardList(shardIntervalsOnNode);
 			appendStringInfoString(allShardStatisticsQuery, shardStatisticsQuery);
 			relation_close(relation, AccessShareLock);
 		}
 	}
 
 	/* Add a dummy entry so that UNION ALL doesn't complain */
-	if (useShardMinMaxQuery)
-	{
-		/* 0 for shard_id, NULL for min, NULL for text, 0 for shard_size */
-		appendStringInfo(allShardStatisticsQuery,
-						 "SELECT 0::bigint, NULL::text, NULL::text, 0::bigint;");
-	}
-	else
-	{
-		/* NULL for shard_name, 0 for shard_size */
-		appendStringInfo(allShardStatisticsQuery, "SELECT NULL::text, 0::bigint;");
-	}
+	appendStringInfo(allShardStatisticsQuery, "SELECT 0::bigint, NULL::text, 0::bigint;");
+
 	return allShardStatisticsQuery->data;
 }
 
 
 /*
- * GenerateShardStatisticsQueryForShardList generates one of the two types of queries:
- * - SELECT shard_name - shard_size (if useShardMinMaxQuery is false)
- * - SELECT shard_id, shard_minvalue, shard_maxvalue, shard_size (if true)
+ * GenerateShardStatisticsQueryForShardList generates a query that returns:
+ * SELECT shard_id, shard_name, shard_size for all shards in the list
  */
 static char *
-GenerateShardStatisticsQueryForShardList(List *shardIntervalList, bool
-										 useShardMinMaxQuery)
+GenerateShardStatisticsQueryForShardList(List *shardIntervalList)
 {
 	StringInfo selectQuery = makeStringInfo();
 
 	ShardInterval *shardInterval = NULL;
 	foreach_ptr(shardInterval, shardIntervalList)
 	{
-		uint64 shardId = shardInterval->shardId;
-		Oid schemaId = get_rel_namespace(shardInterval->relationId);
-		char *schemaName = get_namespace_name(schemaId);
-		char *shardName = get_rel_name(shardInterval->relationId);
-		AppendShardIdToName(&shardName, shardId);
-
-		char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
-		char *quotedShardName = quote_literal_cstr(shardQualifiedName);
-
-		if (useShardMinMaxQuery)
-		{
-			AppendShardSizeMinMaxQuery(selectQuery, shardId, shardInterval, shardName,
-									   quotedShardName);
-		}
-		else
-		{
-			AppendShardSizeQuery(selectQuery, shardInterval, quotedShardName);
-		}
+		AppendShardSizeQuery(selectQuery, shardInterval);
 		appendStringInfo(selectQuery, " UNION ALL ");
 	}
 
@@ -967,49 +895,24 @@ GenerateShardStatisticsQueryForShardList(List *shardIntervalList, bool
 
 
 /*
- * AppendShardSizeMinMaxQuery appends a query in the following form to selectQuery
- * SELECT shard_id, shard_minvalue, shard_maxvalue, shard_size
- */
-static void
-AppendShardSizeMinMaxQuery(StringInfo selectQuery, uint64 shardId,
-						   ShardInterval *shardInterval, char *shardName,
-						   char *quotedShardName)
-{
-	if (IsCitusTableType(shardInterval->relationId, APPEND_DISTRIBUTED))
-	{
-		/* fill in the partition column name */
-		const uint32 unusedTableId = 1;
-		Var *partitionColumn = PartitionColumn(shardInterval->relationId,
-											   unusedTableId);
-		char *partitionColumnName = get_attname(shardInterval->relationId,
-												partitionColumn->varattno, false);
-		appendStringInfo(selectQuery,
-						 "SELECT " UINT64_FORMAT
-						 " AS shard_id, min(%s)::text AS shard_minvalue, max(%s)::text AS shard_maxvalue, pg_relation_size(%s) AS shard_size FROM %s ",
-						 shardId, partitionColumnName,
-						 partitionColumnName,
-						 quotedShardName, shardName);
-	}
-	else
-	{
-		/* we don't need to update min/max for non-append distributed tables because they don't change */
-		appendStringInfo(selectQuery,
-						 "SELECT " UINT64_FORMAT
-						 " AS shard_id, NULL::text AS shard_minvalue, NULL::text AS shard_maxvalue, pg_relation_size(%s) AS shard_size ",
-						 shardId, quotedShardName);
-	}
-}
-
-
-/*
  * AppendShardSizeQuery appends a query in the following form to selectQuery
- * SELECT shard_name, shard_size
+ * SELECT shard_id, shard_name, shard_size
  */
 static void
-AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval,
-					 char *quotedShardName)
+AppendShardSizeQuery(StringInfo selectQuery, ShardInterval *shardInterval)
 {
-	appendStringInfo(selectQuery, "SELECT %s AS shard_name, ", quotedShardName);
+	uint64 shardId = shardInterval->shardId;
+	Oid schemaId = get_rel_namespace(shardInterval->relationId);
+	char *schemaName = get_namespace_name(schemaId);
+	char *shardName = get_rel_name(shardInterval->relationId);
+
+	AppendShardIdToName(&shardName, shardId);
+
+	char *shardQualifiedName = quote_qualified_identifier(schemaName, shardName);
+	char *quotedShardName = quote_literal_cstr(shardQualifiedName);
+
+	appendStringInfo(selectQuery, "SELECT " UINT64_FORMAT " AS shard_id, ", shardId);
+	appendStringInfo(selectQuery, "%s AS shard_name, ", quotedShardName);
 	appendStringInfo(selectQuery, PG_RELATION_SIZE_FUNCTION, quotedShardName);
 }
 
@@ -1167,6 +1070,44 @@ LoadShardIntervalList(Oid relationId)
 
 
 /*
+ * LoadUnsortedShardIntervalListViaCatalog returns a list of shard intervals related for a
+ * given distributed table. The function returns an empty list if no shards can be found
+ * for the given relation.
+ *
+ * This function does not use CitusTableCache and instead reads from catalog tables
+ * directly.
+ */
+List *
+LoadUnsortedShardIntervalListViaCatalog(Oid relationId)
+{
+	List *shardIntervalList = NIL;
+	List *distShardTuples = LookupDistShardTuples(relationId);
+	Relation distShardRelation = table_open(DistShardRelationId(), AccessShareLock);
+	TupleDesc distShardTupleDesc = RelationGetDescr(distShardRelation);
+	Oid intervalTypeId = InvalidOid;
+	int32 intervalTypeMod = -1;
+
+	char partitionMethod = PartitionMethodViaCatalog(relationId);
+	Var *partitionColumn = PartitionColumnViaCatalog(relationId);
+	GetIntervalTypeInfo(partitionMethod, partitionColumn, &intervalTypeId,
+						&intervalTypeMod);
+
+	HeapTuple distShardTuple = NULL;
+	foreach_ptr(distShardTuple, distShardTuples)
+	{
+		ShardInterval *interval = TupleToShardInterval(distShardTuple,
+													   distShardTupleDesc,
+													   intervalTypeId,
+													   intervalTypeMod);
+		shardIntervalList = lappend(shardIntervalList, interval);
+	}
+	table_close(distShardRelation, AccessShareLock);
+
+	return shardIntervalList;
+}
+
+
+/*
  * LoadShardIntervalWithLongestShardName is a utility function that returns
  * the shard interaval with the largest shardId for the given relationId. Note
  * that largest shardId implies longest shard name.
@@ -1312,26 +1253,6 @@ ShardLength(uint64 shardId)
 
 
 /*
- * NodeGroupHasLivePlacements returns true if there is any placement
- * on the given node group which is not a SHARD_STATE_TO_DELETE placement.
- */
-bool
-NodeGroupHasLivePlacements(int32 groupId)
-{
-	List *shardPlacements = AllShardPlacementsOnNodeGroup(groupId);
-	GroupShardPlacement *placement = NULL;
-	foreach_ptr(placement, shardPlacements)
-	{
-		if (placement->shardState != SHARD_STATE_TO_DELETE)
-		{
-			return true;
-		}
-	}
-	return false;
-}
-
-
-/*
  * NodeGroupHasShardPlacements returns whether any active shards are placed on the group
  */
 bool
@@ -1409,7 +1330,17 @@ ActiveShardPlacementList(uint64 shardId)
 	ShardPlacement *shardPlacement = NULL;
 	foreach_ptr(shardPlacement, shardPlacementList)
 	{
-		if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
+		WorkerNode *workerNode =
+			FindWorkerNode(shardPlacement->nodeName, shardPlacement->nodePort);
+
+		/*
+		 * We have already resolved the placement to node, so would have
+		 * errored out earlier.
+		 */
+		Assert(workerNode != NULL);
+
+		if (shardPlacement->shardState == SHARD_STATE_ACTIVE &&
+			workerNode->isActive)
 		{
 			activePlacementList = lappend(activePlacementList, shardPlacement);
 		}
@@ -1744,7 +1675,7 @@ InsertShardPlacementRow(uint64 shardId, uint64 placementId,
 void
 InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 						  Var *distributionColumn, uint32 colocationId,
-						  char replicationModel)
+						  char replicationModel, bool autoConverted)
 {
 	char *distributionColumnString = NULL;
 
@@ -1764,6 +1695,7 @@ InsertIntoPgDistPartition(Oid relationId, char distributionMethod,
 		CharGetDatum(distributionMethod);
 	newValues[Anum_pg_dist_partition_colocationid - 1] = UInt32GetDatum(colocationId);
 	newValues[Anum_pg_dist_partition_repmodel - 1] = CharGetDatum(replicationModel);
+	newValues[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
 
 	/* set partkey column to NULL for reference tables */
 	if (distributionMethod != DISTRIBUTE_BY_NONE)
@@ -1958,63 +1890,6 @@ DeleteShardPlacementRow(uint64 placementId)
 
 
 /*
- * UpdatePartitionShardPlacementStates gets a shard placement which is asserted to belong
- * to partitioned table. The function goes over the corresponding placements of its
- * partitions, and sets their state to the input shardState.
- */
-void
-UpdatePartitionShardPlacementStates(ShardPlacement *parentShardPlacement, char shardState)
-{
-	ShardInterval *parentShardInterval =
-		LoadShardInterval(parentShardPlacement->shardId);
-	Oid partitionedTableOid = parentShardInterval->relationId;
-
-	/* this function should only be called for partitioned tables */
-	Assert(PartitionedTable(partitionedTableOid));
-
-	List *partitionList = PartitionList(partitionedTableOid);
-	Oid partitionOid = InvalidOid;
-	foreach_oid(partitionOid, partitionList)
-	{
-		uint64 partitionShardId =
-			ColocatedShardIdInRelation(partitionOid, parentShardInterval->shardIndex);
-
-		ShardPlacement *partitionPlacement =
-			ShardPlacementOnGroupIncludingOrphanedPlacements(
-				parentShardPlacement->groupId, partitionShardId);
-
-		/* the partition should have a placement with the same group */
-		Assert(partitionPlacement != NULL);
-
-		UpdateShardPlacementState(partitionPlacement->placementId, shardState);
-	}
-}
-
-
-/*
- * MarkShardPlacementInactive is a wrapper around UpdateShardPlacementState where
- * the state is set to SHARD_STATE_INACTIVE. It also marks partitions of the
- * shard placements as inactive if shardPlacement belongs to a partitioned table.
- */
-void
-MarkShardPlacementInactive(ShardPlacement *shardPlacement)
-{
-	UpdateShardPlacementState(shardPlacement->placementId, SHARD_STATE_INACTIVE);
-
-	/*
-	 * In case the shard belongs to a partitioned table, we make sure to update
-	 * the states of its partitions. Repairing shards already ensures to recreate
-	 * all the partitions.
-	 */
-	ShardInterval *shardInterval = LoadShardInterval(shardPlacement->shardId);
-	if (PartitionedTable(shardInterval->relationId))
-	{
-		UpdatePartitionShardPlacementStates(shardPlacement, SHARD_STATE_INACTIVE);
-	}
-}
-
-
-/*
  * UpdateShardPlacementState sets the shardState for the placement identified
  * by placementId.
  */
@@ -2123,6 +1998,56 @@ UpdatePlacementGroupId(uint64 placementId, int groupId)
 
 	systable_endscan(scanDescriptor);
 	table_close(pgDistPlacement, NoLock);
+}
+
+
+/*
+ * UpdatePgDistPartitionAutoConverted sets the autoConverted for the partition identified
+ * by citusTableId.
+ */
+void
+UpdatePgDistPartitionAutoConverted(Oid citusTableId, bool autoConverted)
+{
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	bool indexOK = true;
+	Datum values[Natts_pg_dist_partition];
+	bool isnull[Natts_pg_dist_partition];
+	bool replace[Natts_pg_dist_partition];
+
+	Relation pgDistPartition = table_open(DistPartitionRelationId(), RowExclusiveLock);
+	TupleDesc tupleDescriptor = RelationGetDescr(pgDistPartition);
+	ScanKeyInit(&scanKey[0], Anum_pg_dist_partition_logicalrelid,
+				BTEqualStrategyNumber, F_OIDEQ, ObjectIdGetDatum(citusTableId));
+
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistPartition,
+													DistPartitionLogicalRelidIndexId(),
+													indexOK,
+													NULL, scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	if (!HeapTupleIsValid(heapTuple))
+	{
+		ereport(ERROR, (errmsg("could not find valid entry for citus table with oid: %u",
+							   citusTableId)));
+	}
+
+	memset(replace, 0, sizeof(replace));
+
+	values[Anum_pg_dist_partition_autoconverted - 1] = BoolGetDatum(autoConverted);
+	isnull[Anum_pg_dist_partition_autoconverted - 1] = false;
+	replace[Anum_pg_dist_partition_autoconverted - 1] = true;
+
+	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
+
+	CatalogTupleUpdate(pgDistPartition, &heapTuple->t_self, heapTuple);
+
+	CitusInvalidateRelcacheByRelid(citusTableId);
+
+	CommandCounterIncrement();
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistPartition, NoLock);
 }
 
 

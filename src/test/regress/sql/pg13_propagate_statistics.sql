@@ -38,8 +38,16 @@ WHERE stxnamespace IN (
 	FROM pg_namespace
 	WHERE nspname IN ('statistics''TestTarget')
 )
+AND stxname SIMILAR TO '%\_\d+'
 ORDER BY stxstattarget, stxrelid::regclass ASC;
 
 \c - - - :master_port
+-- the first one should log a notice that says statistics object does not exist
+ALTER STATISTICS IF EXISTS stats_that_doesnt_exists SET STATISTICS 0;
+-- these three should error out as ALTER STATISTICS syntax doesn't support these with IF EXISTS clause
+-- if output of any of these three changes, we should support them and update the test output here
+ALTER STATISTICS IF EXISTS stats_that_doesnt_exists RENAME TO this_should_error_out;
+ALTER STATISTICS IF EXISTS stats_that_doesnt_exists OWNER TO CURRENT_USER;
+ALTER STATISTICS IF EXISTS stats_that_doesnt_exists SET SCHEMA "statistics'Test";
 SET client_min_messages TO WARNING;
 DROP SCHEMA "statistics'TestTarget" CASCADE;

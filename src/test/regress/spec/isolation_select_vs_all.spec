@@ -9,8 +9,10 @@ setup
 	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
 	SET citus.shard_replication_factor TO 1;
+	SET citus.next_shard_id TO 6780300;
 	CREATE TABLE select_append(id integer, data text, int_data int);
 	SELECT create_distributed_table('select_append', 'id', 'append');
+	SELECT master_create_empty_shard('select_append');
 }
 
 // drop distributed table
@@ -22,7 +24,7 @@ teardown
 
 // session 1
 session "s1"
-step "s1-initialize" { COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH CSV; }
+step "s1-initialize" { COPY select_append FROM PROGRAM 'echo 0, a, 0 && echo 1, b, 1 && echo 2, c, 2 && echo 3, d, 3 && echo 4, e, 4' WITH (format 'csv', append_to_shard 6780300); }
 step "s1-begin" { BEGIN; }
 
 step "s1-disable-binary-protocol" {
@@ -49,7 +51,6 @@ step "s1-ddl-drop-column" { ALTER TABLE select_append DROP new_column; }
 step "s1-ddl-rename-column" { ALTER TABLE select_append RENAME data TO new_column; }
 step "s1-table-size" { SELECT citus_total_relation_size('select_append'); }
 step "s1-master-modify-multiple-shards" { DELETE FROM select_append; }
-step "s1-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM select_append WHERE id <= 4;'); }
 step "s1-master-drop-all-shards" { SELECT citus_drop_all_shards('select_append'::regclass, 'public', 'append_copy'); }
 step "s1-create-non-distributed-table" { CREATE TABLE select_append(id integer, data text, int_data int); }
 step "s1-distribute-table" { SELECT create_distributed_table('select_append', 'id', 'append'); }
@@ -81,7 +82,6 @@ step "s2-ddl-drop-column" { ALTER TABLE select_append DROP new_column; }
 step "s2-ddl-rename-column" { ALTER TABLE select_append RENAME data TO new_column; }
 step "s2-table-size" { SELECT citus_total_relation_size('select_append'); }
 step "s2-master-modify-multiple-shards" { DELETE FROM select_append; }
-step "s2-master-apply-delete-command" { SELECT master_apply_delete_command('DELETE FROM select_append WHERE id <= 4;'); }
 step "s2-master-drop-all-shards" { SELECT citus_drop_all_shards('select_append'::regclass, 'public', 'append_copy'); }
 step "s2-distribute-table" { SELECT create_distributed_table('select_append', 'id', 'append'); }
 
@@ -111,7 +111,6 @@ permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-router-select" "s
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-ddl-rename-column" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-table-size" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-router-select" "s2-master-modify-multiple-shards" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s2-master-apply-delete-command" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s2-master-drop-all-shards" "s1-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-router-select" "s2-distribute-table" "s1-commit" "s1-select-count"
 
@@ -129,7 +128,6 @@ permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s1-ddl-drop-column" 
 permutation "s1-initialize" "s1-begin" "s1-ddl-rename-column" "s2-router-select" "s1-commit" "s1-select-count" "s1-show-columns"
 permutation "s1-initialize" "s1-begin" "s1-table-size" "s2-router-select" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-master-modify-multiple-shards" "s2-router-select" "s1-commit" "s1-select-count"
-permutation "s1-initialize" "s1-begin" "s1-master-apply-delete-command" "s1-commit" "s1-select-count"
 permutation "s1-initialize" "s1-begin" "s1-master-drop-all-shards" "s1-commit" "s1-select-count"
 permutation "s1-drop" "s1-create-non-distributed-table" "s1-begin" "s1-distribute-table" "s2-router-select" "s1-commit" "s1-select-count"
 

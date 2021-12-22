@@ -112,6 +112,12 @@ SELECT create_distributed_table('customer_append', 'c_custkey', 'append');
 
 (1 row)
 
+SELECT master_create_empty_shard('customer_append');
+ master_create_empty_shard
+---------------------------------------------------------------------
+                    360006
+(1 row)
+
 CREATE TABLE nation (
 	n_nationkey integer not null,
 	n_name char(25) not null,
@@ -153,6 +159,12 @@ SELECT create_distributed_table('part_append', 'p_partkey', 'append');
  create_distributed_table
 ---------------------------------------------------------------------
 
+(1 row)
+
+SELECT master_create_empty_shard('part_append');
+ master_create_empty_shard
+---------------------------------------------------------------------
+                    360009
 (1 row)
 
 CREATE TABLE supplier

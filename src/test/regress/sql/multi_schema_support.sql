@@ -8,7 +8,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1190000;
 CREATE SCHEMA test_schema_support;
 
 
--- test master_append_table_to_shard with schema
+-- test COPY with schema
 -- create local table to append
 CREATE TABLE public.nation_local(
     n_nationkey integer not null,
@@ -33,10 +33,17 @@ CREATE TABLE test_schema_support.nation_append(
     n_comment varchar(152)
 );
 SELECT master_create_distributed_table('test_schema_support.nation_append', 'n_nationkey', 'append');
-SELECT master_create_empty_shard('test_schema_support.nation_append');
+SELECT master_create_empty_shard('test_schema_support.nation_append') as simple_shardid \gset
 
 -- append table to shard
-SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
+copy test_schema_support.nation_append FROM STDIN with (append_to_shard :simple_shardid, delimiter '|');
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
+1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
+3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5|ETHIOPIA|0|ven packages wake quickly. regu
+\.
 
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM test_schema_support.nation_append;
@@ -49,23 +56,45 @@ CREATE TABLE test_schema_support."nation._'append" (
     n_comment varchar(152));
 
 SELECT master_create_distributed_table('test_schema_support."nation._''append"', 'n_nationkey', 'append');
-SELECT master_create_empty_shard('test_schema_support."nation._''append"');
+SELECT master_create_empty_shard('test_schema_support."nation._''append"') as special_shardid \gset
 
-SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
+copy test_schema_support."nation._'append" FROM STDIN with (append_to_shard :special_shardid, delimiter '|');
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
+1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
+3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5|ETHIOPIA|0|ven packages wake quickly. regu
+\.
 
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM test_schema_support."nation._'append";
 
--- test master_append_table_to_shard with schema with search_path is set
+-- test COPY with schema with search_path is set
 SET search_path TO test_schema_support;
 
-SELECT master_append_table_to_shard(1190000, 'public.nation_local', 'localhost', :master_port);
+copy nation_append FROM STDIN with (append_to_shard :simple_shardid, delimiter '|');
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
+1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
+3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5|ETHIOPIA|0|ven packages wake quickly. regu
+\.
 
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM nation_append;
 
 -- test with search_path is set and shard name contains special characters
-SELECT master_append_table_to_shard(1190001, 'nation_local', 'localhost', :master_port);
+copy "nation._'append" FROM STDIN with (append_to_shard :special_shardid, delimiter '|');
+0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
+1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
+2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
+3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
+4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
+5|ETHIOPIA|0|ven packages wake quickly. regu
+\.
+
 
 -- verify table actually appended to shard
 SELECT COUNT(*) FROM "nation._'append";
@@ -82,9 +111,10 @@ CREATE TABLE nation_append_search_path(
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT master_create_distributed_table('nation_append_search_path', 'n_nationkey', 'append');
+SELECT create_distributed_table('nation_append_search_path', 'n_nationkey', 'append');
+SELECT master_create_empty_shard('nation_append_search_path') AS shardid \gset
 
-\copy nation_append_search_path FROM STDIN with delimiter '|';
+copy nation_append_search_path FROM STDIN with (delimiter '|', append_to_shard :shardid);
 0|ALGERIA|0|haggle. carefully final deposits detect slyly agai
 1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
 2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
@@ -100,8 +130,11 @@ CREATE TABLE test_schema_support.nation_hash(
     n_regionkey integer not null,
     n_comment varchar(152)
 );
-SELECT master_create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', 'hash');
-SELECT master_create_worker_shards('test_schema_support.nation_hash', 4, 2);
+
+SET citus.shard_replication_factor TO 2;
+SELECT create_distributed_table('test_schema_support.nation_hash', 'n_nationkey', shard_count:=4);
+
+RESET citus.shard_replication_factor;
 
 
 -- test cursors
@@ -509,37 +542,6 @@ SELECT master_copy_shard_placement(1190000, 'localhost', :worker_2_port, 'localh
 -- verify shardstate
 SELECT shardstate, nodename, nodeport FROM pg_dist_shard_placement WHERE shardid = 1190000 ORDER BY nodeport;
 
-
--- test master_apply_delete_command with schemas
-SET search_path TO public;
-SELECT master_apply_delete_command('DELETE FROM test_schema_support.nation_append') ;
-
--- verify shard is dropped
-\c - - - :worker_1_port
-\d test_schema_support.nation_append_119*
-
-\c - - - :master_port
-
--- test with search_path is set
-SET search_path TO test_schema_support;
-
-\copy nation_append FROM STDIN with delimiter '|';
-0|ALGERIA|0| haggle. carefully final deposits detect slyly agai
-1|ARGENTINA|1|al foxes promise slyly according to the regular accounts. bold requests alon
-2|BRAZIL|1|y alongside of the pending deposits. carefully special packages are about the ironic forges. slyly special
-3|CANADA|1|eas hang ironic, silent packages. slyly regular packages are furiously over the tithes. fluffily bold
-4|EGYPT|4|y above the carefully unusual theodolites. final dugouts are quickly across the furiously regular d
-5|ETHIOPIA|0|ven packages wake quickly. regu
-\.
-
-SELECT master_apply_delete_command('DELETE FROM nation_append') ;
-
--- verify shard is dropped
-\c - - - :worker_1_port
-\d test_schema_support.nation_append_119*
-
-\c - - - :master_port
-
 -- check joins of tables which are in schemas other than public
 -- we create new tables with replication factor of 1
 -- so that we guarantee to have repartitions when necessary
@@ -788,6 +790,7 @@ SELECT * FROM new_schema.table_set_schema;
 
 DROP SCHEMA new_schema CASCADE;
 
+SET citus.next_shard_id TO 1195000;
 
 -- test ALTER TABLE SET SCHEMA when a search path is set
 CREATE SCHEMA old_schema;
@@ -822,6 +825,8 @@ SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
     GROUP BY table_schema;
 \c - - - :master_port
 SELECT * FROM new_schema.table_set_schema;
+
+SET citus.next_shard_id TO 1196000;
 
 SET search_path to public;
 DROP SCHEMA old_schema CASCADE;
@@ -892,6 +897,8 @@ SELECT create_reference_table('schema_with_user.test_table');
 \dn schema_with_user
 
 \c - - - :master_port
+
+SET citus.next_shard_id TO 1197000;
 
 -- we do not use run_command_on_coordinator_and_workers here because when there is CASCADE, it causes deadlock
 DROP OWNED BY "test-user" CASCADE;
@@ -1018,9 +1025,11 @@ BEGIN;
 ROLLBACK;
 
 -- Clean up the created schema
+SET client_min_messages TO WARNING;
 DROP SCHEMA run_test_schema CASCADE;
 DROP SCHEMA test_schema_support_join_1 CASCADE;
 DROP SCHEMA test_schema_support_join_2 CASCADE;
 DROP SCHEMA "Citus'Teen123" CASCADE;
 DROP SCHEMA "CiTUS.TEEN2" CASCADE;
 DROP SCHEMA bar CASCADE;
+DROP SCHEMA test_schema_support CASCADE;

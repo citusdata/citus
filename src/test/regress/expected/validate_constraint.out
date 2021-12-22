@@ -121,6 +121,8 @@ FROM constraint_validations_in_workers
 ORDER BY 1, 2;
               name              | validated
 ---------------------------------------------------------------------
+ validatable_constraint         | t
+ validatable_constraint         | t
  validatable_constraint_8000009 | t
  validatable_constraint_8000010 | t
  validatable_constraint_8000011 | t
@@ -129,7 +131,7 @@ ORDER BY 1, 2;
  validatable_constraint_8000014 | t
  validatable_constraint_8000015 | t
  validatable_constraint_8000016 | t
-(8 rows)
+(10 rows)
 
 DROP TABLE constrained_table;
 DROP TABLE referenced_table CASCADE;

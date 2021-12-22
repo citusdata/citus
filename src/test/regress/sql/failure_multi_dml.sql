@@ -210,7 +210,7 @@ COPY dml_test FROM STDIN WITH CSV;
 
 ---- test multiple statements against a single shard, but with two placements
 
--- fail at COMMIT (actually COMMIT this time, as no 2pc in use)
+-- fail at PREPARED COMMIT as we use 2PC
 SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").kill()');
 
 BEGIN;
@@ -221,14 +221,19 @@ UPDATE dml_test SET name = 'alpha' WHERE id = 1;
 UPDATE dml_test SET name = 'gamma' WHERE id = 3;
 COMMIT;
 
---- should see all changes, but they only went to one placement (other is unhealthy)
-SELECT * FROM dml_test ORDER BY id ASC;
+-- all changes should be committed because we injected
+-- the failure on the COMMIT time. And, we should not
+-- mark any placements as INVALID
+SELECT citus.mitmproxy('conn.allow()');
+SELECT recover_prepared_transactions();
 SELECT shardid FROM pg_dist_shard_placement WHERE shardstate = 3;
 
-SELECT citus.mitmproxy('conn.allow()');
+SET citus.task_assignment_policy TO "round-robin";
+SELECT * FROM dml_test ORDER BY id ASC;
+SELECT * FROM dml_test ORDER BY id ASC;
+RESET citus.task_assignment_policy;
 
 -- drop table and recreate as reference table
-
 DROP TABLE dml_test;
 SET citus.shard_count = 2;
 SET citus.shard_replication_factor = 1;

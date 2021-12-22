@@ -4543,7 +4543,9 @@ if test "${with_lz4+set}" = set; then :
   withval=$with_lz4;
   case $withval in
     yes)
-      :
+
+$as_echo "#define HAVE_CITUS_LIBLZ4 1" >>confdefs.h
+
       ;;
     no)
       :
@@ -4555,6 +4557,8 @@ if test "${with_lz4+set}" = set; then :
 
 else
   with_lz4=yes
+
+$as_echo "#define HAVE_CITUS_LIBLZ4 1" >>confdefs.h
 
 fi
 

@@ -317,7 +317,7 @@ BEGIN;
   SET client_min_messages TO ERROR;
   SELECT remove_local_tables_from_metadata();
 
-  -- should not see any citus local tables
+  -- should see only citus local tables that are not converted automatically
   SELECT logicalrelid::regclass::text FROM pg_dist_partition, pg_tables
   WHERE tablename=logicalrelid::regclass::text AND
         schemaname='citus_local_tables_test_schema' AND
@@ -419,8 +419,7 @@ BEGIN;
   SELECT count(*) FROM pg_locks where relation='citus_local_table_4'::regclass;
 COMMIT;
 
--- hide first column (relationId) as it might change
-SELECT part_storage_type, part_method, part_key, part_replica_count, part_max_size, part_placement_policy FROM master_get_table_metadata('citus_local_table_4');
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'citus_local_table_4'::regclass;
 SELECT master_get_table_ddl_events('citus_local_table_4');
 
 SELECT column_to_column_name(logicalrelid, partkey)
@@ -458,11 +457,6 @@ ROLLBACK;
 SELECT update_distributed_table_colocation('citus_local_table_4', colocate_with => 'none');
 
 SELECT master_create_empty_shard('citus_local_table_4');
-SELECT master_apply_delete_command('DELETE FROM citus_local_table_4');
-
-CREATE TABLE postgres_local_table (a int);
-SELECT master_append_table_to_shard(shardId, 'postgres_local_table', 'localhost', :master_port)
-FROM (SELECT shardid FROM pg_dist_shard WHERE logicalrelid='citus_local_table_4'::regclass) as shardid;
 
 -- return true
 SELECT citus_table_is_visible('citus_local_table_4'::regclass::oid);
@@ -477,11 +471,12 @@ FROM (SELECT tableName FROM pg_catalog.pg_tables WHERE tablename LIKE 'citus_loc
 -- cannot create a citus local table from a catalog table
 SELECT citus_add_local_table_to_metadata('pg_class');
 
+-- testing foreign key connection between citus local tables,
+-- using the GUC use_citus_managed_tables to add tables to metadata
+SET citus.use_citus_managed_tables TO ON;
 CREATE TABLE referencing_table(a int);
-SELECT citus_add_local_table_to_metadata('referencing_table');
-
 CREATE TABLE referenced_table(a int UNIQUE);
-SELECT citus_add_local_table_to_metadata('referenced_table');
+RESET citus.use_citus_managed_tables;
 
 ALTER TABLE referencing_table ADD CONSTRAINT fkey_cl_to_cl FOREIGN KEY (a) REFERENCES referenced_table(a);
 
