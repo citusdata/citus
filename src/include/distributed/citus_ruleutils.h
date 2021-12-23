@@ -65,6 +65,7 @@ extern char * generate_relation_name(Oid relid, List *namespaces);
 extern char * generate_qualified_relation_name(Oid relid);
 extern char * generate_operator_name(Oid operid, Oid arg1, Oid arg2);
 extern List * getOwnedSequences_internal(Oid relid, AttrNumber attnum, char deptype);
+extern void AppendOptionListToString(StringInfo stringData, List *options);
 
 
 #endif /* CITUS_RULEUTILS_H */
