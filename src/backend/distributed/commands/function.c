@@ -83,6 +83,7 @@ static void EnsureSequentialModeForFunctionDDL(void);
 static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
+static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
 static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
 											 bool missing_ok);
@@ -1298,7 +1299,11 @@ CreateFunctionStmtObjectAddress(Node *node, bool missing_ok)
 	FunctionParameter *funcParam = NULL;
 	foreach_ptr(funcParam, stmt->parameters)
 	{
-		objectWithArgs->objargs = lappend(objectWithArgs->objargs, funcParam->argType);
+		if (ShouldAddFunctionSignature(funcParam->mode))
+		{
+			objectWithArgs->objargs = lappend(objectWithArgs->objargs,
+											  funcParam->argType);
+		}
 	}
 
 	return FunctionToObjectAddress(objectType, objectWithArgs, missing_ok);
@@ -1855,8 +1860,7 @@ ObjectWithArgsFromOid(Oid funcOid)
 
 	for (int i = 0; i < numargs; i++)
 	{
-		if (argModes == NULL ||
-			argModes[i] != PROARGMODE_OUT || argModes[i] != PROARGMODE_TABLE)
+		if (argModes == NULL || ShouldAddFunctionSignature(argModes[i]))
 		{
 			objargs = lappend(objargs, makeTypeNameFromOid(argTypes[i], -1));
 		}
@@ -1866,6 +1870,35 @@ ObjectWithArgsFromOid(Oid funcOid)
 	ReleaseSysCache(proctup);
 
 	return objectWithArgs;
+}
+
+
+/*
+ * ShouldAddFunctionSignature takes a FunctionParameterMode and returns true if it should
+ * be included in the function signature. Returns false otherwise.
+ */
+static bool
+ShouldAddFunctionSignature(FunctionParameterMode mode)
+{
+	/* only input parameters should be added to the generated signature */
+	switch (mode)
+	{
+		case FUNC_PARAM_IN:
+		case FUNC_PARAM_INOUT:
+		case FUNC_PARAM_VARIADIC:
+		{
+			return true;
+		}
+
+		case FUNC_PARAM_OUT:
+		case FUNC_PARAM_TABLE:
+		{
+			return false;
+		}
+
+		default:
+			return true;
+	}
 }
 
 
