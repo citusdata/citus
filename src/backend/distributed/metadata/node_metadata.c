@@ -863,20 +863,13 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 	{
 		EnsureNoModificationsHaveBeenDone();
 
-		if (ShouldPropagate() && !NodeIsCoordinator(newWorkerNode))
+		Assert(ShouldPropagate());
+		if (!NodeIsCoordinator(newWorkerNode))
 		{
+			ClearDistributedObjectsWithMetadataFromNode(newWorkerNode);
 			PropagateNodeWideObjects(newWorkerNode);
 			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
 										   newWorkerNode->workerPort);
-		}
-		else if (!NodeIsCoordinator(newWorkerNode))
-		{
-			ereport(WARNING, (errmsg("citus.enable_object_propagation is off, not "
-									 "creating distributed objects on worker"),
-							  errdetail("distributed objects are only kept in sync when "
-										"citus.enable_object_propagation is set to on. "
-										"Newly activated nodes will not get these "
-										"objects created")));
 		}
 
 		if (ReplicateReferenceTablesOnActivate)
@@ -890,12 +883,14 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 		 * We prefer this because otherwise node activation might fail within
 		 * transaction blocks.
 		 */
-		if (ClusterHasDistributedFunctionWithDistArgument())
+		// TODO: Doesn't make sense to have that here as we won't handle placement metadata
+		// with maintenance daemon anymore
+		/* if (ClusterHasDistributedFunctionWithDistArgument())
 		{
 			SetWorkerColumnLocalOnly(newWorkerNode, Anum_pg_dist_node_hasmetadata,
 									 BoolGetDatum(true));
 			TriggerMetadataSyncOnCommit();
-		}
+		}*/
 	}
 }
 
@@ -1180,33 +1175,13 @@ ActivateNode(char *nodeName, int nodePort)
 	DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
 													forceRemoteDelete);
 
-	/*
-	* Since coordinator node already has both objects and related metadata
-	* we don't need to recreate them.
-	*/
-	if (NodeIsPrimary(workerNode))
-	{
-		if (workerNode->groupId != COORDINATOR_GROUP_ID)
-		{
-			/* TODO: Consider calling function below according to other states like primary/secondary */
-			/* Should we check syncMetadata always on as well? */
-			ClearDistributedObjectsWithMetadataFromNode(workerNode);
-			SetUpDistributedTableWithDependencies(workerNode);
-
-		}
-		else if (ReplicateReferenceTablesOnActivate)
-		{
-			// We only need to replicate reference table to the coordinator node
-			ReplicateAllReferenceTablesToNode(workerNode->workerName,
-												workerNode->workerPort);
-		}
-	}
+	SetUpDistributedTableWithDependencies(workerNode);
 
 	if (syncMetadata)
 	{
 		StartMetadataSyncToNode(nodeName, nodePort);
 
-		if (workerNode->groupId != COORDINATOR_GROUP_ID)
+		if (!NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode))
 		{
 			SetUpMultipleDistributedTableIntegrations(workerNode);
 			SetUpObjectMetadata(workerNode);

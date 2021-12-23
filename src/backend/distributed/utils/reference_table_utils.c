@@ -329,8 +329,7 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 /*
  * ReplicateShardToNode function replicates given shard to the given worker node
  * in a separate transaction. If the worker already has
- * a replica of the shard this is a no-op. This function also modifies metadata
- * by inserting/updating related rows in pg_dist_placement.
+ * a replica of the shard this is a no-op.
  *
  * IMPORTANT: This should only be used to replicate shards of a reference
  * table.
@@ -371,17 +370,13 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 							nodePort)));
 
 	EnsureNoModificationsHaveBeenDone();
-	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort, tableOwner,
+	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
 											  ddlCommandList);
 	int32 groupId = GroupForNode(nodeName, nodePort);
 
 	uint64 placementId = GetNextPlacementId();
 	InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE, 0,
 							groupId);
-
-	// Since having a duplicate on pg_dist_placement can cause issue, we don't add
-	// it to all nodes here. Caller of this function must propagate pg_dist_placement to
-	// other nodes if it is required.
 }
 
 
@@ -544,6 +539,8 @@ ReferenceTableReplicationFactor(void)
  * table to update the replication factor column when necessary. This function
  * skips reference tables if that node already has healthy placement of that
  * reference table to prevent unnecessary data transfer.
+ * 
+ * TODO: Make is static and updatr comment
  */
 void
 ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
@@ -583,18 +580,6 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 			LockShardDistributionMetadata(shardId, ExclusiveLock);
 
 			ReplicateShardToNode(shardInterval, nodeName, nodePort);
-		}
-
-		/* create foreign constraints between reference tables */
-		foreach_ptr(shardInterval, referenceShardIntervalList)
-		{
-			char *tableOwner = TableOwner(shardInterval->relationId);
-			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
-
-			SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName,
-																	nodePort,
-																	tableOwner,
-																	commandList);
 		}
 	}
 }
