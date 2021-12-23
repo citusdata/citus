@@ -97,7 +97,9 @@ ORDER BY 1;
  function citus_shard_allowed_on_node_true(bigint,integer)
  function citus_shard_cost_1(bigint)
  function citus_shard_cost_by_disk_size(bigint)
+ function citus_shard_indexes_on_worker()
  function citus_shard_sizes()
+ function citus_shards_on_worker()
  function citus_stat_statements()
  function citus_stat_statements_reset()
  function citus_table_is_visible(oid)
@@ -264,5 +266,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(248 rows)
+(250 rows)
 

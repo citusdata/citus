@@ -5,6 +5,8 @@
 
 #include "udfs/citus_check_connection_to_node/11.0-1.sql"
 #include "udfs/citus_check_cluster_node_health/11.0-1.sql"
+#include "udfs/citus_shards_on_worker/11.0-1.sql"
+#include "udfs/citus_shard_indexes_on_worker/11.0-1.sql"
 
 #include "udfs/citus_internal_add_object_metadata/11.0-1.sql"
 #include "udfs/citus_run_local_command/11.0-1.sql"

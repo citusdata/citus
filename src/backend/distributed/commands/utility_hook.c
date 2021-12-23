@@ -66,6 +66,7 @@
 #include "distributed/resource_lock.h"
 #include "distributed/transmit.h"
 #include "distributed/version_compat.h"
+#include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
 #include "foreign/foreign.h"
 #include "lib/stringinfo.h"

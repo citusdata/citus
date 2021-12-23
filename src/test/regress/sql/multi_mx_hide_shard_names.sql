@@ -31,28 +31,18 @@ SELECT create_distributed_table('test_table', 'id');
 
 -- first show that the views does not show
 -- any shards on the coordinator as expected
-SELECT * FROM citus_shards_on_worker;
-SELECT * FROM citus_shard_indexes_on_worker;
+SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'mx_hide_shard_names';
+SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'mx_hide_shard_names';
 
 -- now show that we see the shards, but not the
 -- indexes as there are no indexes
-\c - - - :worker_1_port
+\c postgresql://postgres@localhost::worker_1_port/regression?application_name=psql
 SET search_path TO 'mx_hide_shard_names';
-SELECT * FROM citus_shards_on_worker ORDER BY 2;
-SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
+SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
+SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
 
--- also show that nested calls to pg_table_is_visible works fine
--- if both of the calls to the pg_table_is_visible haven't been
--- replaced, we would get 0 rows in the output
-SELECT
-	pg_table_is_visible((SELECT
-								"t1"."Name"::regclass
-						 FROM
-						 	citus_shards_on_worker as t1
-						 WHERE
-						 	NOT pg_table_is_visible("t1"."Name"::regclass)
-						 LIMIT
-						 	1));
+-- shards are hidden when using psql as application_name
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 
 -- now create an index
 \c - - - :master_port
@@ -61,19 +51,68 @@ CREATE INDEX test_index ON mx_hide_shard_names.test_table(id);
 
 -- now show that we see the shards, and the
 -- indexes as well
-\c - - - :worker_1_port
+\c postgresql://postgres@localhost::worker_1_port/regression?application_name=psql
 SET search_path TO 'mx_hide_shard_names';
-SELECT * FROM citus_shards_on_worker ORDER BY 2;
-SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
+SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
+SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
+
+-- shards are hidden when using psql as application_name
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- changing application_name reveals the shards
+SET application_name TO '';
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+RESET application_name;
+
+-- shards are hidden again after GUCs are reset
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- changing application_name in transaction reveals the shards
+BEGIN;
+SET LOCAL application_name TO '';
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+ROLLBACK;
+
+-- shards are hidden again after GUCs are reset
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- now with session-level GUC, but ROLLBACK;
+BEGIN;
+SET application_name TO '';
+ROLLBACK;
+
+-- shards are hidden again after GUCs are reset
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+
+-- we should hide correctly based on application_name with savepoints
+BEGIN;
+SAVEPOINT s1;
+SET application_name TO '';
+-- changing application_name reveals the shards
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+ROLLBACK TO SAVEPOINT s1;
+-- shards are hidden again after GUCs are reset
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+ROLLBACK;
+
+-- changing citus.hide_shards_from_app_name_prefixes reveals the shards
+BEGIN;
+SET LOCAL citus.hide_shards_from_app_name_prefixes TO 'notpsql';
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
+ROLLBACK;
+
+-- shards are hidden again after GUCs are reset
+SELECT relname FROM pg_catalog.pg_class WHERE relnamespace = 'mx_hide_shard_names'::regnamespace ORDER BY relname;
 
 -- we should be able to select from the shards directly if we
 -- know the name of the tables
 SELECT count(*) FROM test_table_1130000;
 
--- disable the config so that table becomes visible
+-- shards on the search_path still match pg_table_is_visible
 SELECT pg_table_is_visible('test_table_1130000'::regclass);
-SET citus.override_table_visibility TO FALSE;
-SELECT pg_table_is_visible('test_table_1130000'::regclass);
+
+-- shards on the search_path do not match citus_table_is_visible
+SELECT citus_table_is_visible('test_table_1130000'::regclass);
 
 \c - - - :master_port
 -- make sure that we're resilient to the edge cases
@@ -95,7 +134,7 @@ SET search_path TO 'mx_hide_shard_names';
 -- name already exists :)
 CREATE TABLE test_table_2_1130000(id int, time date);
 
-SELECT * FROM citus_shards_on_worker ORDER BY 2;
+SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
 
 \d
 
@@ -111,14 +150,10 @@ CREATE INDEX test_index ON mx_hide_shard_names_2.test_table(id);
 
 \c - - - :worker_1_port
 SET search_path TO 'mx_hide_shard_names';
-SELECT * FROM citus_shards_on_worker ORDER BY 2;
-SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
-SET search_path TO 'mx_hide_shard_names_2';
-SELECT * FROM citus_shards_on_worker ORDER BY 2;
-SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
-SET search_path TO 'mx_hide_shard_names_2, mx_hide_shard_names';
-SELECT * FROM citus_shards_on_worker ORDER BY 2;
-SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
+SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
+SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'mx_hide_shard_names' ORDER BY 2;
+SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'mx_hide_shard_names_2' ORDER BY 2;
+SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'mx_hide_shard_names_2' ORDER BY 2;
 
 -- now try very long table names
 \c - - - :master_port
@@ -137,7 +172,7 @@ SELECT create_distributed_table('too_long_12345678901234567890123456789012345678
 
 \c - - - :worker_1_port
 SET search_path TO 'mx_hide_shard_names_3';
-SELECT * FROM citus_shards_on_worker ORDER BY 2;
+SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'mx_hide_shard_names_3' ORDER BY 2;
 \d
 
 
@@ -159,8 +194,8 @@ SELECT create_distributed_table('"CiTuS.TeeN"."TeeNTabLE.1!?!"', 'TeNANt_Id');
 
 \c - - - :worker_1_port
 SET search_path TO "CiTuS.TeeN";
-SELECT * FROM citus_shards_on_worker ORDER BY 2;
-SELECT * FROM citus_shard_indexes_on_worker ORDER BY 2;
+SELECT * FROM citus_shards_on_worker WHERE "Schema" = 'CiTuS.TeeN' ORDER BY 2;
+SELECT * FROM citus_shard_indexes_on_worker WHERE "Schema" = 'CiTuS.TeeN' ORDER BY 2;
 
 \d
 \di
