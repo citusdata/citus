@@ -59,19 +59,19 @@ USER citus
 
 # build postgres versions separately for effective parrallelism and caching of already built versions when changing only certain versions
 FROM base AS pg12
-RUN pgenv build 12.8
+RUN pgenv build 12.9
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
 RUN make -C .pgenv/src/postgresql-*/ clean
 
 FROM base AS pg13
-RUN pgenv build 13.4
+RUN pgenv build 13.5
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
 RUN make -C .pgenv/src/postgresql-*/ clean
 
 FROM base AS pg14
-RUN pgenv build 14beta3
+RUN pgenv build 14.1
 RUN rm .pgenv/src/*.tar*
 # TODO remove excessive artifacts for smaller images
 RUN make -C .pgenv/src/postgresql-*/ clean
@@ -79,13 +79,13 @@ RUN make -C .pgenv/src/postgresql-*/ clean
 # assemble the final container by copying over the artifacts from separately build containers
 FROM base AS devcontainer
 COPY --from=pg12 /home/citus/.pgenv/src /home/citus/.pgenv/src
-COPY --from=pg12 /home/citus/.pgenv/pgsql-12.8 /home/citus/.pgenv/pgsql-12.8
+COPY --from=pg12 /home/citus/.pgenv/pgsql-12.9 /home/citus/.pgenv/pgsql-12.9
 
 COPY --from=pg13 /home/citus/.pgenv/src /home/citus/.pgenv/src
-COPY --from=pg13 /home/citus/.pgenv/pgsql-13.4 /home/citus/.pgenv/pgsql-13.4
+COPY --from=pg13 /home/citus/.pgenv/pgsql-13.5 /home/citus/.pgenv/pgsql-13.5
 
 COPY --from=pg14 /home/citus/.pgenv/src /home/citus/.pgenv/src
-COPY --from=pg14 /home/citus/.pgenv/pgsql-14beta3 /home/citus/.pgenv/pgsql-14beta3
+COPY --from=pg14 /home/citus/.pgenv/pgsql-14.1 /home/citus/.pgenv/pgsql-14.1
 
 # add some common tools to the final container
 # bin directory for user tools
@@ -110,4 +110,4 @@ RUN sudo chown citus:citus /data
 COPY --chown=citus:citus .psqlrc .
 
 # sets default pg version
-RUN pgenv switch 13.4
+RUN pgenv switch 14.1
