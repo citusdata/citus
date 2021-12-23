@@ -36,7 +36,7 @@
 #include "optimizer/pathnode.h"
 
 
-static uint32 attributeEquivalenceId = 1;
+static uint32 AttributeEquivalenceId = 1;
 
 
 /*
@@ -292,7 +292,7 @@ SafeToPushdownUnionSubquery(Query *originalQuery,
 		palloc0(sizeof(AttributeEquivalenceClass));
 	ListCell *relationRestrictionCell = NULL;
 
-	attributeEquivalence->equivalenceId = attributeEquivalenceId++;
+	attributeEquivalence->equivalenceId = AttributeEquivalenceId++;
 
 	/*
 	 * Ensure that the partition column is in the same place across all
@@ -617,7 +617,7 @@ GenerateAllAttributeEquivalences(PlannerRestrictionContext *plannerRestrictionCo
 		plannerRestrictionContext->joinRestrictionContext;
 
 	/* reset the equivalence id counter per call to prevent overflows */
-	attributeEquivalenceId = 1;
+	AttributeEquivalenceId = 1;
 
 	List *relationRestrictionAttributeEquivalenceList =
 		GenerateAttributeEquivalencesForRelationRestrictions(relationRestrictionContext);
@@ -801,7 +801,7 @@ AttributeEquivalenceClassForEquivalenceClass(EquivalenceClass *plannerEqClass,
 	ListCell *equivilanceMemberCell = NULL;
 	PlannerInfo *plannerInfo = relationRestriction->plannerInfo;
 
-	attributeEquivalence->equivalenceId = attributeEquivalenceId++;
+	attributeEquivalence->equivalenceId = AttributeEquivalenceId++;
 
 	foreach(equivilanceMemberCell, plannerEqClass->ec_members)
 	{
@@ -1183,7 +1183,7 @@ GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext *
 
 			AttributeEquivalenceClass *attributeEquivalence = palloc0(
 				sizeof(AttributeEquivalenceClass));
-			attributeEquivalence->equivalenceId = attributeEquivalenceId++;
+			attributeEquivalence->equivalenceId = AttributeEquivalenceId++;
 
 			AddToAttributeEquivalenceClass(attributeEquivalence,
 										   joinRestriction->plannerInfo, leftVar);
