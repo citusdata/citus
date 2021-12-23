@@ -10,4 +10,7 @@
         "ms-vscode.cpptools",
         "ms-vsliveshare.vsliveshare",
     ],
+    "mounts": [
+        "type=volume,target=/data",
+    ]
 }
