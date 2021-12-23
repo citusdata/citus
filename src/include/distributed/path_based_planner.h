@@ -7,6 +7,7 @@
 
 #include "nodes/parsenodes.h"
 #include "nodes/pathnodes.h"
+#include "optimizer/paths.h"
 
 typedef List *(*optimizeFn)(PlannerInfo *root, Path *originalPath);
 
@@ -47,5 +48,8 @@ extern void PathBasedPlannedUpperPathHook(PlannerInfo *root,
 										  void *extra);
 
 extern PathComparison PathBasedPlannerComparePath(Path *new_path, Path *old_path);
+extern List * PathBasedMeritListHook(Path *path);
+
+extern add_path_merit_list_hook_type prev_add_path_merit_list_hook;
 
 #endif //CITUS_PATH_BASED_PLANNER_H

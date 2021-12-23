@@ -2502,6 +2502,30 @@ PathTreeWalker(Node *node, bool (*walker)(), void *context)
 			return false;
 		}
 
+		case T_MaterialPath:
+		{
+			MaterialPath *path = castNode(MaterialPath, node);
+			if (walker(path->subpath, context))
+				return true;
+			return false;
+		}
+
+		case T_SortPath:
+		{
+			SortPath *path = castNode(SortPath, node);
+			if (walker(path->subpath, context))
+				return true;
+			return false;
+		}
+
+		case T_ProjectionPath:
+		{
+			ProjectionPath *path = castNode(ProjectionPath, node);
+			if (walker(path->subpath, context))
+				return true;
+			return false;
+		}
+
 		/* paths not having nesting */
 		case T_Path:
 		case T_IndexPath:
@@ -2533,8 +2557,13 @@ ColocationGroupsForPathWalker(Node *node, ColocationGroups *context)
 	DistributedUnionPath *collect = NULL;
 	if (IsDistributedUnion((Path *) node, false, &collect))
 	{
+		int colocationId = (int) collect->colocationId;
+		if (colocationId == -1)
+		{
+			colocationId = 0;
+		}
 		context->colocationIds = bms_add_member(context->colocationIds,
-												(int) collect->colocationId);
+												colocationId);
 		return false;
 	}
 
@@ -2550,24 +2579,77 @@ ColocationGroupsForPath(Path *node)
 	return context.colocationIds;
 }
 
+
+typedef struct ColocationGroupsList
+{
+	/* configuration */
+	bool unique;
+	bool sorted;
+
+	/* output */
+	List *list;
+} ColocationGroupsList;
+
+static bool ColocationGroupsForPathListWalker(Node *node, ColocationGroupsList *context);
+static bool
+ColocationGroupsForPathListWalker(Node *node, ColocationGroupsList *context)
+{
+	if (node == NULL)
+		return false;
+
+	DistributedUnionPath *collect = NULL;
+	if (IsDistributedUnion((Path *) node, false, &collect))
+	{
+		int colocationId = (int) collect->colocationId;
+		if (!context->unique || !list_member_int(context->list, colocationId))
+			context->list = lappend_int(context->list, colocationId);
+
+		return false;
+	}
+
+	return PathTreeWalker(node, ColocationGroupsForPathListWalker, context);
+}
+
+
+
+static List *
+ColocationGroupsForPathList(Path *node)
+{
+	ColocationGroupsList context = { .unique =  true, .sorted =  true };
+	ColocationGroupsForPathListWalker((Node *)node, &context);
+
+	if (context.sorted)
+		list_sort(context.list, list_int_cmp);
+
+	return context.list;
+}
+
 PathComparison
 PathBasedPlannerComparePath(Path *new_path, Path *old_path)
 {
+	if (PlanAllPaths)
+	{
+		return PATH_DIFFERENT;
+	}
+
 	if (!UseCustomPath)
 	{
 		return PATH_EQUAL;
 	}
 
-	Bitmapset *newColocationIds = ColocationGroupsForPath(new_path);
-	Bitmapset *oldColocationIds = ColocationGroupsForPath(old_path);
+	return PATH_EQUAL;
+}
 
-	BMS_Comparison cmp = bms_subset_compare(newColocationIds, oldColocationIds);
+add_path_merit_list_hook_type prev_add_path_merit_list_hook = NULL;
+List *
+PathBasedMeritListHook(Path *path)
+{
+	List *merits = NIL;
+	if (prev_add_path_merit_list_hook)
+	{
+		merits = prev_add_path_merit_list_hook(path);
+	}
 
-	bms_free(newColocationIds);
-	bms_free(oldColocationIds);
-
-	if (cmp == BMS_EQUAL)
-		return PATH_EQUAL;
-
-	return PATH_DIFFERENT;
+	List *colocationIds = ColocationGroupsForPathList(path);
+	return lappend(merits, colocationIds);
 }
