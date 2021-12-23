@@ -46,6 +46,13 @@ extern void QualifyRenameCollationStmt(Node *stmt);
 extern void QualifyAlterCollationSchemaStmt(Node *stmt);
 extern void QualifyAlterCollationOwnerStmt(Node *stmt);
 
+/* forward declarations for deparse_foreign_server_stmts.c */
+extern char * DeparseCreateForeignServerStmt(Node *node);
+extern char * DeparseAlterForeignServerStmt(Node *node);
+extern char * DeparseAlterForeignServerRenameStmt(Node *node);
+extern char * DeparseAlterForeignServerOwnerStmt(Node *node);
+extern char * DeparseDropForeignServerStmt(Node *node);
+
 /* forward declarations for deparse_table_stmts.c */
 extern char * DeparseAlterTableSchemaStmt(Node *stmt);
 extern char * DeparseAlterTableStmt(Node *node);

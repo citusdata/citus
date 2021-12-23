@@ -66,7 +66,7 @@ SELECT name FROM r1 WHERE id = 2;
 
 -- verify a connection attempt was made to the intercepted node, this would have cause the
 -- connection to have been delayed and thus caused a timeout
-SELECT citus.dump_network_traffic();
+SELECT * FROM citus.dump_network_traffic() WHERE conn=0;
 
 SELECT citus.mitmproxy('conn.allow()');
 

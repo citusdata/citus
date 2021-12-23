@@ -924,14 +924,6 @@ if (!$conninfo)
                     '-c', "CREATE FOREIGN DATA WRAPPER $fdw HANDLER $fdws{$fdw};")) == 0
                 or die "Could not create foreign data wrapper $fdw on worker";
         }
-
-        foreach my $fdwServer (keys %fdwServers)
-        {
-            system(catfile($bindir, "psql"),
-                    ('-X', '-h', $host, '-p', $port, '-U', $user, "-d", "regression",
-                    '-c', "CREATE SERVER $fdwServer FOREIGN DATA WRAPPER $fdwServers{$fdwServer};")) == 0
-                or die "Could not create server $fdwServer on worker";
-        }
     }
 }
 else
@@ -957,14 +949,6 @@ else
                 ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbname,
                     '-c', "SELECT run_command_on_workers('CREATE FOREIGN DATA WRAPPER $fdw HANDLER $fdws{$fdw};');")) == 0
             or die "Could not create foreign data wrapper $fdw on worker";
-    }
-
-    foreach my $fdwServer (keys %fdwServers)
-    {
-        system(catfile($bindir, "psql"),
-                ('-X', '-h', $host, '-p', $masterPort, '-U', $user, "-d", $dbname,
-                    '-c', "SELECT run_command_on_workers('CREATE SERVER $fdwServer FOREIGN DATA WRAPPER $fdwServers{$fdwServer};');")) == 0
-            or die "Could not create server $fdwServer on worker";
     }
 }
 

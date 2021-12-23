@@ -62,6 +62,15 @@ RETURNS fdw_handler
 AS 'citus'
 LANGUAGE C STRICT;
 CREATE FOREIGN DATA WRAPPER fake_fdw_1 HANDLER fake_fdw_handler;
+SELECT run_command_on_workers($$
+    CREATE FOREIGN DATA WRAPPER fake_fdw_1 HANDLER fake_fdw_handler;
+$$);
+              run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE FOREIGN DATA WRAPPER")
+ (localhost,57638,t,"CREATE FOREIGN DATA WRAPPER")
+(2 rows)
+
 CREATE SERVER fake_fdw_server_1 FOREIGN DATA WRAPPER fake_fdw_1;
 CREATE FOREIGN TABLE foreign_table (
   key int,

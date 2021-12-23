@@ -797,7 +797,7 @@ CreateExtensionDDLCommand(const ObjectAddress *extensionAddress)
 
 
 /*
- * RecreateEnumStmt returns a parsetree for a CREATE EXTENSION statement that would
+ * RecreateExtensionStmt returns a parsetree for a CREATE EXTENSION statement that would
  * recreate the given extension on a new node.
  */
 static Node *
