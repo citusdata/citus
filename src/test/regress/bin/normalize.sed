@@ -258,15 +258,7 @@ s/(.*absolute correlation \()([0,1]\.[0-9]+)(\) of var attribute [0-9]+ is small
 s/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \([0-9]+, [0-9]+, [0-9]+, [0-9]+, [0-9]+\)\)/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupid, placementid\)  AS \(VALUES \(xxxxxx, xxxxxx, xxxxxx, xxxxxx, xxxxxx\)\)/g
 
 # libpq version alignment on test images
-s/ERROR:  connection not open/ERROR:  server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request\.\nconnection not open/g
-/CONTEXT:  COPY test_table_2, line 1: "1,2"/d
-/^ERROR:  connection not open$/ {
-        s/.*/ERROR:  server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request\.\nconnection not open/g
-}
 
-/^WARNING:  connection not open$/ {
-        s/.*/WARNING:  server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request\.\nconnection not open/g
-}
 
 # used for failure_connection_establishment select removal
 /^-- use OFFSET 1 to prevent printing the line where source$/ {
