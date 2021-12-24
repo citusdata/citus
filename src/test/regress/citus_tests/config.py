@@ -161,6 +161,7 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
         new_settings = {
             "client_min_messages": "WARNING",
             "citus.sort_returning": True,
+            "citus.use_citus_managed_tables": True,
         }
         self.settings.update(new_settings)
         self.add_coordinator_to_metadata = True
