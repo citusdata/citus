@@ -686,8 +686,7 @@ MetadataCreateCommands(void)
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  metadataCommand);
 
-		char relationKind = get_rel_relkind(relationId);
-		if (relationKind != RELKIND_FOREIGN_TABLE)
+		if (!IsForeignTable(relationId))
 		{
 			/* add the truncate trigger command after the table became distributed */
 			char *truncateTriggerCreateCommand =
@@ -848,8 +847,7 @@ GetDistributedTableDDLEvents(Oid relationId)
 	commandList = lappend(commandList, metadataCommand);
 
 	/* commands to create the truncate trigger of the table */
-	char relationKind = get_rel_relkind(relationId);
-	if (relationKind != RELKIND_FOREIGN_TABLE)
+	if (!IsForeignTable(relationId))
 	{
 		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
 		commandList = lappend(commandList, truncateTriggerCreateCommand);
