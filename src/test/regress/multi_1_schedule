@@ -189,8 +189,11 @@ test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactio
 test: multi_modifying_xacts
 test: check_mx
 test: turn_mx_off
+# !!!! foreign table bug
 test: multi_generate_ddl_commands multi_repair_shards
+# !!!! foreign table bug 
 test: multi_create_shards
+# !!!! bunu bence direk approvelamaliyiz
 test: multi_transaction_recovery
 test: turn_mx_on
 
@@ -255,6 +258,7 @@ test: multi_truncate
 # ----------
 test: check_mx
 test: turn_mx_off
+# !!!! foreign table bug
 test: multi_colocation_utils
 test: turn_mx_on
 test: multi_colocated_shard_transfer
@@ -274,13 +278,17 @@ test: multi_foreign_key_relation_graph
 # Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
 # and rerun some of the tests.
 # --------
-test: check_mx
 test: add_coordinator
 test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
+test: check_mx
 test: turn_mx_off
+# !!!! foreign table bug
 test: citus_local_tables
-test: multi_row_router_insert mixed_relkind_tests
+# !!!! başka bir bug anlamadım
+test: multi_row_router_insert
+# !!!! foreign table bug
+test: mixed_relkind_tests
 test: turn_mx_on
 test: multi_reference_table citus_local_tables_queries
 test: citus_local_table_triggers
