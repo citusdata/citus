@@ -39,7 +39,6 @@
 #include "distributed/reference_table_utils.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/worker_shard_visibility.h"
-#include "foreign/foreign.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"

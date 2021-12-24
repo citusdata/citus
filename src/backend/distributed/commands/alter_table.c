@@ -186,7 +186,6 @@ static void DropIndexesNotSupportedByColumnar(Oid relationId,
 static char * GetIndexAccessMethodName(Oid indexId);
 static void DropConstraintRestrict(Oid relationId, Oid constraintId);
 static void DropIndexRestrict(Oid indexId);
-static bool IsForeignTable(Oid relationId);
 static void EnsureTableNotReferencing(Oid relationId, char conversionType);
 static void EnsureTableNotReferenced(Oid relationId, char conversionType);
 static void EnsureTableNotForeign(Oid relationId);
@@ -985,17 +984,6 @@ EnsureTableNotReferenced(Oid relationId, char conversionType)
 								   get_rel_name(relationId))));
 		}
 	}
-}
-
-
-/*
- * IsForeignTable takes a relation id and returns true if it's a foreign table.
- * Returns false otherwise.
- */
-static bool
-IsForeignTable(Oid relationId)
-{
-	return get_rel_relkind(relationId) == RELKIND_FOREIGN_TABLE;
 }
 
 
