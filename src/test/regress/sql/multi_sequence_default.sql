@@ -10,9 +10,6 @@ SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA sequence_default;
 SET search_path = sequence_default, public;
 
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-
 -- test both distributed and citus local tables
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 -- Cannot add a column involving DEFAULT nextval('..') because the table is not empty
@@ -58,12 +55,14 @@ ALTER SEQUENCE seq_0_local_table AS bigint;
 BEGIN;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+CREATE SEQUENCE seq_13;
+CREATE SEQUENCE seq_13_local_table;
 CREATE TABLE seq_test_13 (x int, y int);
 CREATE TABLE seq_test_13_local_table (x int, y int);
 SELECT create_distributed_table('seq_test_13','x');
 SELECT citus_add_local_table_to_metadata('seq_test_13_local_table');
-ALTER TABLE seq_test_0 ADD COLUMN z int DEFAULT nextval('seq_13');
-ALTER TABLE seq_test_0_local_table ADD COLUMN z int DEFAULT nextval('seq_13_local_table');
+ALTER TABLE seq_test_13 ADD COLUMN z int DEFAULT nextval('seq_13');
+ALTER TABLE seq_test_13_local_table ADD COLUMN z int DEFAULT nextval('seq_13_local_table');
 
 ALTER SEQUENCE seq_13 INCREMENT BY 2;
 ALTER SEQUENCE seq_13_local_table INCREMENT BY 2;
