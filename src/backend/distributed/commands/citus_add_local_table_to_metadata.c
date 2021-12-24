@@ -75,8 +75,6 @@ static char * GetDropTriggerCommand(Oid relationId, char *triggerName);
 static char * GetRenameShardIndexCommand(Oid indexOid, uint64 shardId);
 static char * GetRenameShardStatsCommand(char *statSchema, char *statsName,
 										 char *statsNameWithShardId);
-static void RenameShardRelationForeignServerIfForeignTable(Oid shardRelationId,
-														   uint64 shardId);
 static void RenameShardRelationNonTruncateTriggers(Oid shardRelationId, uint64 shardId);
 static char * GetRenameShardTriggerCommand(Oid shardRelationId, char *triggerName,
 										   uint64 shardId);
@@ -694,7 +692,6 @@ ConvertLocalTableToShard(Oid relationId)
 	RenameShardRelationConstraints(relationId, shardId);
 	RenameShardRelationIndexes(relationId, shardId);
 	RenameShardRelationStatistics(relationId, shardId);
-	RenameShardRelationForeignServerIfForeignTable(relationId, shardId);
 
 	/*
 	 * We do not create truncate triggers on shard relation. This is
@@ -912,37 +909,6 @@ GetRenameShardStatsCommand(char *statSchema, char *statsName, char *statsNameWit
 					 qualifiedStatsName, quotedStatsNameWithShardId);
 
 	return renameCommand->data;
-}
-
-
-/*
- * RenameShardRelationForeignServerIfForeignTable appends given shardId to the end
- * of the name of shard relation foreign servers, and executes the rename command.
- * This function is only for foreign tables.
- */
-static void
-RenameShardRelationForeignServerIfForeignTable(Oid shardRelationId, uint64 shardId)
-{
-	char relationKind = get_rel_relkind(shardRelationId);
-	if (relationKind != RELKIND_FOREIGN_TABLE)
-	{
-		return;
-	}
-
-	ForeignTable *foreignTable = GetForeignTable(shardRelationId);
-	ForeignServer *foreignServer = GetForeignServer(foreignTable->serverid);
-
-	char *serverName = pstrdup(foreignServer->servername);
-	const char *quotedServerName = quote_identifier(serverName);
-	char *serverNameWithShardId = pstrdup(foreignServer->servername);
-	AppendShardIdToName(&serverNameWithShardId, shardId);
-
-	StringInfo renameCommand = makeStringInfo();
-
-	appendStringInfo(renameCommand, "ALTER SERVER %s RENAME TO %s;",
-					 quotedServerName, serverNameWithShardId);
-
-	ExecuteAndLogUtilityCommand(renameCommand->data);
 }
 
 
