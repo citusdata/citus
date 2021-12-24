@@ -48,11 +48,12 @@ SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
 \d seq_0_local_table
 -- cannot alter a sequence used in a distributed table
 -- since the metadata is synced to workers
+ALTER SEQUENCE seq_0 AS bigint;
+ALTER SEQUENCE seq_0_local_table AS bigint;
+
 BEGIN;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-ALTER SEQUENCE seq_0 AS bigint;
-ALTER SEQUENCE seq_0_local_table AS bigint;
 ALTER SEQUENCE seq_0 INCREMENT BY 2;
 ALTER SEQUENCE seq_0_local_table INCREMENT BY 2;
 \d seq_0
