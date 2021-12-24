@@ -10,7 +10,6 @@ SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA sequence_default;
 SET search_path = sequence_default, public;
 
-BEGIN;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
@@ -62,6 +61,7 @@ ALTER SEQUENCE seq_0_local_table INCREMENT BY 2;
 
 -- check that we can add serial pseudo-type columns
 -- when metadata is not synced to workers
+BEGIN;
 TRUNCATE seq_test_0;
 ALTER TABLE seq_test_0 ADD COLUMN w00 smallserial;
 ALTER TABLE seq_test_0 ADD COLUMN w01 serial2;
