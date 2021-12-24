@@ -242,13 +242,13 @@ test: multi_schema_support
 # ----------
 # multi_function_evaluation tests edge-cases in master-side function pre-evaluation
 # ----------
-test: check_mx
-test: turn_mx_off
 test: multi_function_evaluation
 
 # ----------
 # multi_truncate tests truncate functionality for distributed tables
 # ----------
+test: check_mx
+test: turn_mx_off
 test: multi_truncate
 
 # ----------

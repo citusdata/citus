@@ -131,4 +131,5 @@ SELECT master_copy_shard_placement(
            transfer_mode := 'block_writes');
 ERROR:  Table 'mx_table' is streaming replicated. Shards of streaming replicated tables cannot be copied
 SET client_min_messages TO ERROR;
+DROP TABLE mcsp.history;
 DROP SCHEMA mcsp CASCADE;
