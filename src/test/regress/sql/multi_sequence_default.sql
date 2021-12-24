@@ -53,15 +53,26 @@ SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
 ALTER SEQUENCE seq_0 AS bigint;
 ALTER SEQUENCE seq_0_local_table AS bigint;
 
-ALTER SEQUENCE seq_0 INCREMENT BY 2;
-ALTER SEQUENCE seq_0_local_table INCREMENT BY 2;
-\d seq_0
-\d seq_0_local_table
+-- we can change other things like increment
+-- if metadata is not synced to workers
+BEGIN;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+CREATE TABLE seq_test_13 (x int, y int);
+CREATE TABLE seq_test_13_local_table (x int, y int);
+SELECT create_distributed_table('seq_test_13','x');
+SELECT citus_add_local_table_to_metadata('seq_test_13_local_table');
+ALTER TABLE seq_test_0 ADD COLUMN z int DEFAULT nextval('seq_13');
+ALTER TABLE seq_test_0_local_table ADD COLUMN z int DEFAULT nextval('seq_13_local_table');
+
+ALTER SEQUENCE seq_13 INCREMENT BY 2;
+ALTER SEQUENCE seq_13_local_table INCREMENT BY 2;
+\d seq_13
+\d seq_13_local_table
 
 
 -- check that we can add serial pseudo-type columns
 -- when metadata is not synced to workers
-BEGIN;
 TRUNCATE seq_test_0;
 ALTER TABLE seq_test_0 ADD COLUMN w00 smallserial;
 ALTER TABLE seq_test_0 ADD COLUMN w01 serial2;
