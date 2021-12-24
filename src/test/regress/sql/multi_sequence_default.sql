@@ -46,20 +46,33 @@ SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
 -- in this case column z is of type int
 \d seq_0
 \d seq_0_local_table
--- cannot change the type of a sequence used in a distributed table
--- even if metadata is not synced to workers
+-- cannot alter a sequence used in a distributed table
+-- since the metadata is synced to workers
 ALTER SEQUENCE seq_0 AS bigint;
 ALTER SEQUENCE seq_0_local_table AS bigint;
+
 -- we can change other things like increment
 -- if metadata is not synced to workers
-ALTER SEQUENCE seq_0 INCREMENT BY 2;
-ALTER SEQUENCE seq_0_local_table INCREMENT BY 2;
-\d seq_0
-\d seq_0_local_table
+BEGIN;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
+CREATE SEQUENCE seq_13;
+CREATE SEQUENCE seq_13_local_table;
+CREATE TABLE seq_test_13 (x int, y int);
+CREATE TABLE seq_test_13_local_table (x int, y int);
+SELECT create_distributed_table('seq_test_13','x');
+SELECT citus_add_local_table_to_metadata('seq_test_13_local_table');
+ALTER TABLE seq_test_13 ADD COLUMN z int DEFAULT nextval('seq_13');
+ALTER TABLE seq_test_13_local_table ADD COLUMN z int DEFAULT nextval('seq_13_local_table');
+
+ALTER SEQUENCE seq_13 INCREMENT BY 2;
+ALTER SEQUENCE seq_13_local_table INCREMENT BY 2;
+\d seq_13
+\d seq_13_local_table
 
 
 -- check that we can add serial pseudo-type columns
--- when metadata is not yet synced to workers
+-- when metadata is not synced to workers
 TRUNCATE seq_test_0;
 ALTER TABLE seq_test_0 ADD COLUMN w00 smallserial;
 ALTER TABLE seq_test_0 ADD COLUMN w01 serial2;
@@ -75,6 +88,8 @@ ALTER TABLE seq_test_0_local_table ADD COLUMN w10 serial;
 ALTER TABLE seq_test_0_local_table ADD COLUMN w11 serial4;
 ALTER TABLE seq_test_0_local_table ADD COLUMN w20 bigserial;
 ALTER TABLE seq_test_0_local_table ADD COLUMN w21 serial8;
+
+ROLLBACK;
 
 -- check alter column type precaution
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE bigint;
@@ -468,6 +483,5 @@ DROP TABLE sequence_default.seq_test_7_par;
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA sequence_default CASCADE;
 SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT master_remove_node('localhost', :master_port);
 SET search_path TO public;
