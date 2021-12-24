@@ -10,6 +10,9 @@ SET citus.shard_replication_factor TO 1;
 CREATE SCHEMA sequence_default;
 SET search_path = sequence_default, public;
 
+BEGIN;
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 -- test both distributed and citus local tables
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
@@ -51,9 +54,6 @@ SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
 ALTER SEQUENCE seq_0 AS bigint;
 ALTER SEQUENCE seq_0_local_table AS bigint;
 
-BEGIN;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 ALTER SEQUENCE seq_0 INCREMENT BY 2;
 ALTER SEQUENCE seq_0_local_table INCREMENT BY 2;
 \d seq_0
