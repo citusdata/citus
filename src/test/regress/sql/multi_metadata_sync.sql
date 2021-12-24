@@ -5,6 +5,9 @@
 -- Tests for metadata snapshot functions, metadata syncing functions and propagation of
 -- metadata changes to MX tables.
 
+-- Turn metadata sync off at first
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
 ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 1310000;
 SET citus.replicate_reference_tables_on_activate TO off;
@@ -674,7 +677,9 @@ FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
 WHERE logicalrelid='mx_ref'::regclass;
 
 \c - - - :master_port
+SET client_min_messages TO ERROR;
 SELECT master_add_node('localhost', :worker_2_port);
+RESET client_min_messages;
 
 SELECT shardid, nodename, nodeport
 FROM pg_dist_shard NATURAL JOIN pg_dist_shard_placement
@@ -859,3 +864,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
+
+-- Turn metadata sync back on at the end
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
