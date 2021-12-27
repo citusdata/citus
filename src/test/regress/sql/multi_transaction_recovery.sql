@@ -207,6 +207,7 @@ SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :
 
 -- for the following test, ensure that 6 and 7 go to different shards on different workers
 SELECT count(DISTINCT nodeport) FROM pg_dist_shard_placement WHERE shardid IN (get_shard_id_for_distribution_column('test_2pcskip', 6),get_shard_id_for_distribution_column('test_2pcskip', 7));
+SELECT recover_prepared_transactions();
 -- only two of the connections will perform a write (INSERT)
 SET citus.force_max_query_parallelization TO ON;
 BEGIN;

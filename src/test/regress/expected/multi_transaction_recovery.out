@@ -371,7 +371,7 @@ COMMIT;
 SELECT COUNT(*) FROM pg_dist_transaction;
  count
 ---------------------------------------------------------------------
-     1
+     2
 (1 row)
 
 SELECT recover_prepared_transactions();
@@ -391,6 +391,12 @@ SELECT count(DISTINCT nodeport) FROM pg_dist_shard_placement WHERE shardid IN (g
  count
 ---------------------------------------------------------------------
      2
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             0
 (1 row)
 
 -- only two of the connections will perform a write (INSERT)
