@@ -206,12 +206,15 @@ SELECT * FROM test_local_truncate;
 
 -- Undistribute table
 SELECT citus_drop_all_shards('test_local_truncate', 'public', 'test_local_truncate');
+CREATE TABLE temp_pg_dist_partition_row AS SELECT * FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regclass;
 DELETE FROM pg_dist_partition WHERE logicalrelid = 'test_local_truncate'::regclass;
 
 -- Ensure local data is truncated
 SELECT * FROM test_local_truncate;
 
+INSERT INTO pg_dist_partition SELECT * FROM temp_pg_dist_partition_row;
 DROP TABLE test_local_truncate;
+DROP TABLE temp_pg_dist_partition_row;
 
 -- Truncate local data, but roll back
 CREATE TABLE test_local_truncate (x int, y int);
