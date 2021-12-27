@@ -193,9 +193,9 @@ test: turn_mx_off
 test: multi_generate_ddl_commands multi_repair_shards
 # !!!! foreign table bug 
 test: multi_create_shards
-test: turn_mx_on
 # !!!! bunu bence direk approvelamaliyiz
 test: multi_transaction_recovery
+test: turn_mx_on
 
 test: local_dist_join_modifications
 test: local_table_join
