@@ -581,5 +581,15 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 
 			ReplicateShardToNode(shardInterval, nodeName, nodePort);
 		}
+
+		/* create foreign constraints between reference tables */
+		foreach_ptr(shardInterval, referenceShardIntervalList)
+		{
+			char *tableOwner = TableOwner(shardInterval->relationId);
+			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
+
+			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
+													  commandList);
+		}
 	}
 }

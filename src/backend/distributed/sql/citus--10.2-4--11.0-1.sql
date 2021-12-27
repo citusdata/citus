@@ -29,3 +29,17 @@ BEGIN
 	END IF;
 END;
 $$;
+
+CREATE FUNCTION worker_drop_distributed_table_only(table_name text)
+    RETURNS VOID
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$worker_drop_distributed_table_only$$;
+COMMENT ON FUNCTION worker_drop_distributed_table_only(table_name text)
+    IS 'drop the distributed table only without the metadata';
+
+CREATE FUNCTION worker_drop_distributed_table_metadata_only(table_oid oid)
+    RETURNS VOID
+    LANGUAGE C STRICT
+    AS 'MODULE_PATHNAME', $$worker_drop_distributed_table_metadata_only$$;
+COMMENT ON FUNCTION worker_drop_distributed_table_metadata_only(table_oid oid)
+    IS 'drops the metadata of the given table oid';

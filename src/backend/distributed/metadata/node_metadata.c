@@ -110,7 +110,8 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpObjectMetadata(WorkerNode *workerNode);
-static void ClearDistributedObjectsWithMetadataFromNode(WorkerNode *workerNode);
+static void ClearDistributedObjectsAndIntegrationsFromNode(WorkerNode *workerNode);
+static void ClearDistributedTablesFromNode(WorkerNode *workerNode);
 static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
 static void SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -814,11 +815,33 @@ DistributedObjectMetadataSyncCommandList(void)
 
 
 /*
- * ClearDistributedObjectsWithMetadataFromNode clears all the distributed objects and related
- * metadata from the given worker node.
+ * ClearDistributedTablesFromNode clear (shell) distributed tables from the given node.
  */
 static void
-ClearDistributedObjectsWithMetadataFromNode(WorkerNode *workerNode)
+ClearDistributedTablesFromNode(WorkerNode *workerNode)
+{
+	List *clearDistributedTablesCommandList = NIL;
+
+	clearDistributedTablesCommandList = lappend(clearDistributedTablesCommandList,
+										REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND);
+
+	clearDistributedTablesCommandList = list_concat(list_make1(DISABLE_DDL_PROPAGATION),
+												clearDistributedTablesCommandList);
+	clearDistributedTablesCommandList = list_concat(clearDistributedTablesCommandList, list_make1(
+													ENABLE_DDL_PROPAGATION));
+
+	SendCommandListToWorkerOutsideTransaction(workerNode->workerName,
+											  workerNode->workerPort,
+											  CitusExtensionOwnerName(),
+											  clearDistributedTablesCommandList);
+}
+
+
+/*
+ * ClearDistributedObjectsAndIntegrationsFromNode clears all the distributed objects, metadata and partition hierarchy from the given node.
+ */
+static void
+ClearDistributedObjectsAndIntegrationsFromNode(WorkerNode *workerNode)
 {
 	List *clearDistTableInfoCommandList = NIL;
 	List *detachPartitionCommandList = DetachPartitionCommandList();
@@ -827,7 +850,7 @@ ClearDistributedObjectsWithMetadataFromNode(WorkerNode *workerNode)
 												detachPartitionCommandList);
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
-											REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
+		REMOVE_ALL_CLUSTERED_TABLES_METADATA_ONLY_COMMAND);
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
 											DELETE_ALL_DISTRIBUTED_OBJECTS);
@@ -839,9 +862,9 @@ ClearDistributedObjectsWithMetadataFromNode(WorkerNode *workerNode)
 
 	char *currentUser = CurrentUserName();
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
-															workerNode->workerPort,
-															currentUser,
-															clearDistTableInfoCommandList);
+									 					    workerNode->workerPort,
+											  				currentUser,
+											  				clearDistTableInfoCommandList);
 }
 
 
@@ -866,7 +889,7 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 		Assert(ShouldPropagate());
 		if (!NodeIsCoordinator(newWorkerNode))
 		{
-			ClearDistributedObjectsWithMetadataFromNode(newWorkerNode);
+			ClearDistributedTablesFromNode(newWorkerNode);
 			PropagateNodeWideObjects(newWorkerNode);
 			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
 										   newWorkerNode->workerPort);
@@ -923,10 +946,10 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
 		/* send commands to new workers*/
-		SendMetadataCommandListToWorkerInCoordinatedTransaction(newWorkerNode->workerName,
-																newWorkerNode->workerPort,
-																CitusExtensionOwnerName(),
-																ddlCommands);
+		SendCommandListToWorkerOutsideTransaction(newWorkerNode->workerName,
+												  newWorkerNode->workerPort,
+												  CitusExtensionOwnerName(),
+												  ddlCommands);
 	}
 }
 
@@ -1168,9 +1191,9 @@ ActivateNode(char *nodeName, int nodePort)
 	}
 
 	/*
-	 * Delete replicated table placements from the coordinator's metadata,
-	 * including remote ones.
-	 */
+	* Delete replicated table placements from the coordinator's metadata,
+	* including remote ones.
+	*/
 	bool forceRemoteDelete = true;
 	DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
 													forceRemoteDelete);
@@ -1183,6 +1206,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 		if (!NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode))
 		{
+			ClearDistributedObjectsAndIntegrationsFromNode(workerNode);
 			SetUpMultipleDistributedTableIntegrations(workerNode);
 			SetUpObjectMetadata(workerNode);
 		}

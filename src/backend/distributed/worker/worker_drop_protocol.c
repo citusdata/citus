@@ -31,6 +31,8 @@
 
 
 PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
+PG_FUNCTION_INFO_V1(worker_drop_distributed_table_only);
+PG_FUNCTION_INFO_V1(worker_drop_distributed_table_metadata_only);
 
 
 /*
@@ -129,6 +131,133 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 		performDeletion(&distributedTableObject, DROP_CASCADE,
 						PERFORM_DELETION_INTERNAL);
 	}
+
+	/* iterate over shardList to delete the corresponding rows */
+	uint64 *shardIdPointer = NULL;
+	foreach_ptr(shardIdPointer, shardList)
+	{
+		uint64 shardId = *shardIdPointer;
+
+		List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
+		ShardPlacement *placement = NULL;
+		foreach_ptr(placement, shardPlacementList)
+		{
+			/* delete the row from pg_dist_placement */
+			DeleteShardPlacementRow(placement->placementId);
+		}
+
+		/* delete the row from pg_dist_shard */
+		DeleteShardRow(shardId);
+	}
+
+	/* delete the row from pg_dist_partition */
+	DeletePartitionRow(relationId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_drop_distributed_table_only drops the distributed table with the given oid.
+ */
+Datum
+worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	text *relationName = PG_GETARG_TEXT_P(0);
+	Oid relationId = ResolveRelationId(relationName, true);
+
+	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
+	char relationKind = '\0';
+
+	if (!OidIsValid(relationId))
+	{
+		ereport(NOTICE, (errmsg("relation %s does not exist, skipping",
+								text_to_cstring(relationName))));
+		PG_RETURN_VOID();
+	}
+
+	EnsureTableOwner(relationId);
+
+	/* first check the relation type */
+	Relation distributedRelation = relation_open(relationId, AccessShareLock);
+	relationKind = distributedRelation->rd_rel->relkind;
+	EnsureRelationKindSupported(relationId);
+
+	/* close the relation since we do not need anymore */
+	relation_close(distributedRelation, AccessShareLock);
+
+	/* prepare distributedTableObject for dropping the table */
+	distributedTableObject.classId = RelationRelationId;
+	distributedTableObject.objectId = relationId;
+	distributedTableObject.objectSubId = 0;
+
+	/* Drop dependent sequences from pg_dist_object */
+	#if PG_VERSION_NUM >= PG_VERSION_13
+	List *ownedSequences = getOwnedSequences(relationId);
+	#else
+	List *ownedSequences = getOwnedSequences(relationId, InvalidAttrNumber);
+	#endif
+
+	Oid ownedSequenceOid = InvalidOid;
+	foreach_oid(ownedSequenceOid, ownedSequences)
+	{
+		ObjectAddress ownedSequenceAddress = { 0 };
+		ObjectAddressSet(ownedSequenceAddress, RelationRelationId, ownedSequenceOid);
+		UnmarkObjectDistributed(&ownedSequenceAddress);
+	}
+
+	/* drop the server for the foreign relations */
+	if (relationKind == RELKIND_FOREIGN_TABLE)
+	{
+		ObjectAddresses *objects = new_object_addresses();
+		ObjectAddress foreignServerObject = { InvalidOid, InvalidOid, 0 };
+		ForeignTable *foreignTable = GetForeignTable(relationId);
+		Oid serverId = foreignTable->serverid;
+
+		/* prepare foreignServerObject for dropping the server */
+		foreignServerObject.classId = ForeignServerRelationId;
+		foreignServerObject.objectId = serverId;
+		foreignServerObject.objectSubId = 0;
+
+		/* add the addresses that are going to be dropped */
+		add_exact_object_address(&distributedTableObject, objects);
+		add_exact_object_address(&foreignServerObject, objects);
+
+		/* drop both the table and the server */
+		performMultipleDeletions(objects, DROP_RESTRICT,
+								 PERFORM_DELETION_INTERNAL);
+	}
+	else if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
+	{
+		/*
+		 * If the table is owned by an extension, we cannot drop it, nor should we
+		 * until the user runs DROP EXTENSION. Therefore, we skip dropping the
+		 * table and only delete the metadata.
+		 *
+		 * We drop the table with cascade since other tables may be referring to it.
+		 */
+		performDeletion(&distributedTableObject, DROP_CASCADE,
+						PERFORM_DELETION_INTERNAL);
+	}
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * worker_drop_distributed_table_metadata_only removes the associated rows from pg_dist_partition, 
+ * pg_dist_shard and pg_dist_placement for the given relation.
+ */
+Datum
+worker_drop_distributed_table_metadata_only(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	Oid relationId = PG_GETARG_OID(0);
+
+	List *shardList = LoadShardList(relationId);
 
 	/* iterate over shardList to delete the corresponding rows */
 	uint64 *shardIdPointer = NULL;
