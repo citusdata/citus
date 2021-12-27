@@ -106,4 +106,5 @@ SELECT master_copy_shard_placement(
            transfer_mode := 'block_writes');
 
 SET client_min_messages TO ERROR;
+DROP TABLE mcsp.history;
 DROP SCHEMA mcsp CASCADE;
