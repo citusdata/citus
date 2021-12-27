@@ -199,7 +199,7 @@ BEGIN;
 SET LOCAL citus.defer_drop_after_shard_move TO OFF;
 SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_1_port, 'localhost', :worker_2_port);
 COMMIT;
-SELECT COUNT(*) FROM pg_dist_transaction;
+SELECT * FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
 
 SELECT citus_move_shard_placement((SELECT * FROM selected_shard), 'localhost', :worker_2_port, 'localhost', :worker_1_port);
@@ -217,7 +217,7 @@ INSERT INTO test_2pcskip VALUES (7);
 SELECT count(*) FROM test_2pcskip;
 COMMIT;
 
-SELECT count(*) FROM pg_dist_transaction;
+SELECT * FROM pg_dist_transaction;
 SELECT recover_prepared_transactions();
 
 -- only two of the connections will perform a write (INSERT)
