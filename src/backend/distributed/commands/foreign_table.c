@@ -53,11 +53,11 @@ PreprocessAlterForeignTableSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-    /* skip if it is a regular Postgres table */
-    if (!IsCitusTable(relationId))
-    {
-        return NIL;
-    }
+	/* skip if it is a regular Postgres table */
+	if (!IsCitusTable(relationId))
+	{
+		return NIL;
+	}
 
 	EnsureCoordinator();
 

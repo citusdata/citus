@@ -18,7 +18,8 @@
 #include "nodes/nodes.h"
 #include "utils/builtins.h"
 
-static void AppendAlterForeignTableSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt);
+static void AppendAlterForeignTableSchemaStmt(StringInfo buf,
+											  AlterObjectSchemaStmt *stmt);
 
 
 char *
@@ -26,7 +27,7 @@ DeparseAlterForeignTableSchemaStmt(Node *node)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 
-    Assert(stmt->objectType == OBJECT_FOREIGN_TABLE);
+	Assert(stmt->objectType == OBJECT_FOREIGN_TABLE);
 
 	StringInfoData str;
 	initStringInfo(&str);
@@ -44,6 +45,6 @@ AppendAlterForeignTableSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 												 stmt->relation->relname);
 
 	appendStringInfo(buf, "ALTER FOREIGN TABLE %s%s SET SCHEMA %s",
-                     stmt->missing_ok ? "IF EXISTS ":"",
+					 stmt->missing_ok ? "IF EXISTS " : "",
 					 tableName, quote_identifier(stmt->newschema));
 }
