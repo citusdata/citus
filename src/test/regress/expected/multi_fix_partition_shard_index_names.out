@@ -564,7 +564,7 @@ NOTICE:  issuing CREATE INDEX i4 ON parent_table(dist_col);
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing CREATE  INDEX   i4_915000 ON  fix_idx_names.parent_table_915000 USING btree (dist_col )
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.i4_915000'::regclass, 'fix_idx_names.p1_915001', 'p1_dist_col_idx3_915001')
+NOTICE:  issuing SELECT pg_catalog.citus_run_local_command($$SELECT worker_fix_partition_shard_index_names('fix_idx_names.i4_915000'::regclass, 'fix_idx_names.p1_915001', 'p1_dist_col_idx3_915001')$$)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -594,7 +594,7 @@ NOTICE:  issuing ALTER TABLE parent_table ADD CONSTRAINT pkey_cst PRIMARY KEY (d
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (915000, 'fix_idx_names', 'ALTER TABLE parent_table ADD CONSTRAINT pkey_cst PRIMARY KEY (dist_col, partition_col);')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.pkey_cst_915000'::regclass, 'fix_idx_names.p1_915001', 'p1_pkey_915001')
+NOTICE:  issuing SELECT pg_catalog.citus_run_local_command($$SELECT worker_fix_partition_shard_index_names('fix_idx_names.pkey_cst_915000'::regclass, 'fix_idx_names.p1_915001', 'p1_pkey_915001')$$)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -623,7 +623,7 @@ NOTICE:  issuing ALTER TABLE parent_table ADD CONSTRAINT unique_cst UNIQUE (dist
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_shard_ddl_command (915000, 'fix_idx_names', 'ALTER TABLE parent_table ADD CONSTRAINT unique_cst UNIQUE (dist_col, partition_col);')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.unique_cst_915000'::regclass, 'fix_idx_names.p1_915001', 'p1_dist_col_partition_col_key_915001')
+NOTICE:  issuing SELECT pg_catalog.citus_run_local_command($$SELECT worker_fix_partition_shard_index_names('fix_idx_names.unique_cst_915000'::regclass, 'fix_idx_names.p1_915001', 'p1_dist_col_partition_col_key_915001')$$)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
@@ -700,17 +700,7 @@ NOTICE:  issuing ALTER TABLE parent_table ATTACH PARTITION p2 FOR VALUES FROM ('
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing SELECT worker_apply_inter_shard_ddl_command (915000, 'fix_idx_names', 915002, 'fix_idx_names', 'ALTER TABLE parent_table ATTACH PARTITION p2 FOR VALUES FROM (''2019-01-01'') TO (''2020-01-01'');')
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.i1_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_idx_915002')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.i2_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_idx1_915002')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.i3_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_idx2_915002')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.i4_renamed_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_idx3_915002')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.pkey_cst_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_pkey_915002')
-DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
-NOTICE:  issuing SELECT worker_fix_partition_shard_index_names('fix_idx_names.unique_cst_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_partition_col_key_915002')
+NOTICE:  issuing SELECT pg_catalog.citus_run_local_command($$SELECT worker_fix_partition_shard_index_names('fix_idx_names.i1_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_idx_915002');SELECT worker_fix_partition_shard_index_names('fix_idx_names.i2_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_idx1_915002');SELECT worker_fix_partition_shard_index_names('fix_idx_names.i3_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_idx2_915002');SELECT worker_fix_partition_shard_index_names('fix_idx_names.i4_renamed_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_idx3_915002');SELECT worker_fix_partition_shard_index_names('fix_idx_names.pkey_cst_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_pkey_915002');SELECT worker_fix_partition_shard_index_names('fix_idx_names.unique_cst_915000'::regclass, 'fix_idx_names.p2_915002', 'p2_dist_col_partition_col_key_915002')$$)
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
 NOTICE:  issuing PREPARE TRANSACTION 'citus_xx_xx_xx_xx'
 DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
