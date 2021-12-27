@@ -89,6 +89,14 @@ static DistributeObjectOps Any_AlterExtensionContents = {
 	.address = NULL,
 	.markDistributed = false,
 };
+static DistributeObjectOps Any_AlterForeignServer = {
+	.deparse = DeparseAlterForeignServerStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterForeignServerStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
 static DistributeObjectOps Any_AlterFunction = {
 	.deparse = DeparseAlterFunctionStmt,
 	.qualify = QualifyAlterFunctionStmt,
@@ -176,6 +184,14 @@ static DistributeObjectOps Any_CreatePolicy = {
 	.postprocess = NULL,
 	.address = NULL,
 	.markDistributed = false,
+};
+static DistributeObjectOps Any_CreateForeignServer = {
+	.deparse = DeparseCreateForeignServerStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessCreateForeignServerStmt,
+	.postprocess = PostprocessCreateForeignServerStmt,
+	.address = CreateForeignServerStmtObjectAddress,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateStatistics = {
 	.deparse = DeparseCreateStatisticsStmt,
@@ -295,6 +311,30 @@ static DistributeObjectOps Extension_Drop = {
 	.preprocess = PreprocessDropExtensionStmt,
 	.postprocess = NULL,
 	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps ForeignServer_Drop = {
+	.deparse = DeparseDropForeignServerStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessDropForeignServerStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps ForeignServer_Rename = {
+	.deparse = DeparseAlterForeignServerRenameStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessRenameForeignServerStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps ForeignServer_AlterOwner = {
+	.deparse = DeparseAlterForeignServerOwnerStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessAlterForeignServerOwnerStmt,
+	.postprocess = PostprocessAlterForeignServerOwnerStmt,
+	.address = AlterForeignServerOwnerStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps ForeignTable_AlterTable = {
@@ -675,6 +715,11 @@ GetDistributeObjectOps(Node *node)
 			return &Any_AlterFunction;
 		}
 
+		case T_AlterForeignServerStmt:
+		{
+			return &Any_AlterForeignServer;
+		}
+
 		case T_AlterObjectDependsStmt:
 		{
 			AlterObjectDependsStmt *stmt = castNode(AlterObjectDependsStmt, node);
@@ -787,6 +832,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_DATABASE:
 				{
 					return &Database_AlterOwner;
+				}
+
+				case OBJECT_FOREIGN_SERVER:
+				{
+					return &ForeignServer_AlterOwner;
 				}
 
 				case OBJECT_FUNCTION:
@@ -915,6 +965,11 @@ GetDistributeObjectOps(Node *node)
 			return &Any_CreateFunction;
 		}
 
+		case T_CreateForeignServerStmt:
+		{
+			return &Any_CreateForeignServer;
+		}
+
 		case T_CreatePolicyStmt:
 		{
 			return &Any_CreatePolicy;
@@ -975,6 +1030,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_FUNCTION:
 				{
 					return &Function_Drop;
+				}
+
+				case OBJECT_FOREIGN_SERVER:
+				{
+					return &ForeignServer_Drop;
 				}
 
 				case OBJECT_INDEX:
@@ -1079,6 +1139,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Rename;
+				}
+
+				case OBJECT_FOREIGN_SERVER:
+				{
+					return &ForeignServer_Rename;
 				}
 
 				case OBJECT_FUNCTION:

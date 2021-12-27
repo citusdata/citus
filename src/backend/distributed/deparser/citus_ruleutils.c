@@ -77,7 +77,6 @@
 
 static void deparse_index_columns(StringInfo buffer, List *indexParameterList,
 								  List *deparseContext);
-static void AppendOptionListToString(StringInfo stringData, List *options);
 static void AppendStorageParametersToString(StringInfo stringBuffer,
 											List *optionList);
 static void simple_quote_literal(StringInfo buf, const char *val);
@@ -1056,7 +1055,7 @@ generate_qualified_relation_name(Oid relid)
  * AppendOptionListToString converts the option list to its textual format, and
  * appends this text to the given string buffer.
  */
-static void
+void
 AppendOptionListToString(StringInfo stringBuffer, List *optionList)
 {
 	if (optionList != NIL)
