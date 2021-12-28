@@ -155,6 +155,7 @@ NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 SELECT undistribute_table('foreign_table');
 NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
 NOTICE:  creating a new table for undistribute_table.foreign_table
+NOTICE:  server "fake_fdw_server" already exists, skipping
 NOTICE:  dropping the old undistribute_table.foreign_table
 NOTICE:  renaming the new table to undistribute_table.foreign_table
  undistribute_table
