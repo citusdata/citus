@@ -532,18 +532,19 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		CreateReferenceTableShard(relationId);
 	}
 
+	CreateShellTableOnWorkers(relationId);
 	if (ShouldSyncTableMetadata(relationId))
 	{
-		CreateShellTableOnWorkers(relationId);
-
-		/* TODO: Consider partitioned tables */
-		// TODO: Should we really check? or don't allow
-		if (EnableDependencyCreation)
-		{
-			MarkObjectDistributed(&tableAddress);
-		}
-
+		MarkObjectDistributed(&tableAddress);
 		CreateTableMetadataOnWorkers(relationId);
+	}
+	else
+	{
+		// Mark the table as distributed only locally
+		bool prevDependencyCreationValue = EnableDependencyCreation;
+		SetLocalEnableDependencyCreation(false);
+		MarkObjectDistributed(&tableAddress);
+		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
 	}
 
 	/*
