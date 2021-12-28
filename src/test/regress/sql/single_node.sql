@@ -78,16 +78,6 @@ SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
 SELECT 1 FROM citus_set_coordinator_host('127.0.0.1');
 
 -- adding workers with specific IP is ok now
-select * from pg_dist_partition;
-select * from citus_tables;
-\c - - - :worker_1_port
-SET search_path TO single_node;
-\d
-select * from pg_dist_partition;
-
-\c - - - :master_port
-SET search_path TO single_node;
-
 set citus.log_remote_commands to true;
 SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
 SELECT 1 FROM master_remove_node('127.0.0.1', :worker_1_port);
