@@ -677,7 +677,7 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			 */
 			if (relKind == RELKIND_COMPOSITE_TYPE ||
 				relKind == RELKIND_RELATION ||
-				relKind == RELKIND_PARTITIONED_TABLE || /* TODO: Should check for normal tables? */
+				relKind == RELKIND_PARTITIONED_TABLE ||
 				relKind == RELKIND_SEQUENCE)
 			{
 				return true;

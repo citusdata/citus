@@ -59,8 +59,6 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	/* collect all dependencies in creation order and get their ddl commands */
 	List *dependencies = GetDependenciesForObject(target);
 
-	/* TODO: Might add check for PG (not Citus) tables */
-
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
@@ -257,7 +255,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 												  tableDDLCommand));
 					}
 
-					/* TODO: May need to move sequence dependencies to ActiveNode directly */
+					/* TODO: May need to move sequence dependencies to ActivateNode directly */
 					List *sequenceDependencyCommandList = SequenceDependencyCommandList(
 						dependency->objectId);
 					commandList = list_concat(commandList, sequenceDependencyCommandList);
