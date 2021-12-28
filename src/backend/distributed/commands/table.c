@@ -1054,7 +1054,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				 */
 				Assert(IsCitusTable(rightRelationId));
 			}
-			else if (attachedRelationKind == RELKIND_RELATION)
+			else if (attachedRelationKind == RELKIND_RELATION ||
+					 attachedRelationKind == RELKIND_FOREIGN_TABLE)
 			{
 				Assert(list_length(commandList) <= 1);
 

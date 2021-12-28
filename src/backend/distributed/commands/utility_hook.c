@@ -662,6 +662,15 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		PostprocessCreateTableStmt(createStatement, queryString);
 	}
 
+	if (IsA(parsetree, CreateForeignTableStmt))
+	{
+		CreateForeignTableStmt *createForeignTableStmt =
+			(CreateForeignTableStmt *) parsetree;
+		CreateStmt *createTableStmt = (CreateStmt *) &(createForeignTableStmt->base);
+
+		PostprocessCreateTableStmt(createTableStmt, queryString);
+	}
+
 	/* after local command has completed, finish by executing worker DDLJobs, if any */
 	if (ddlJobs != NIL)
 	{
