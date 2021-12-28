@@ -431,6 +431,8 @@ ALTER TABLE foreign_table DROP COLUMN id;
 SELECT * FROM foreign_table;
 -- test undistributing
 SELECT undistribute_table('foreign_table');
+SELECT * FROM foreign_table;
+SELECT * FROM foreign_table_test;
 
 --verify
 SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;

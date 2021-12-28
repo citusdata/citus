@@ -806,11 +806,24 @@ SELECT * FROM foreign_table;
 SELECT undistribute_table('foreign_table');
 NOTICE:  creating a new table for citus_local_tables_mx.foreign_table
 NOTICE:  extension "postgres_fdw" already exists, skipping
+NOTICE:  server "foreign_server" already exists, skipping
 NOTICE:  dropping the old citus_local_tables_mx.foreign_table
 NOTICE:  renaming the new table to citus_local_tables_mx.foreign_table
  undistribute_table
 ---------------------------------------------------------------------
 
+(1 row)
+
+SELECT * FROM foreign_table;
+   data
+---------------------------------------------------------------------
+ text_test
+(1 row)
+
+SELECT * FROM foreign_table_test;
+ id |   data
+---------------------------------------------------------------------
+  1 | text_test
 (1 row)
 
 --verify
