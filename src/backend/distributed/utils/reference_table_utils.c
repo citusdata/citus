@@ -539,7 +539,7 @@ ReferenceTableReplicationFactor(void)
  * table to update the replication factor column when necessary. This function
  * skips reference tables if that node already has healthy placement of that
  * reference table to prevent unnecessary data transfer.
- * 
+ *
  * TODO: Make is static and updatr comment
  */
 void

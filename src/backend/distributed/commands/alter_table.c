@@ -1354,8 +1354,8 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 		changeDependencyFor(RelationRelationId, sequenceOid,
 							RelationRelationId, sourceId, targetId);
 
-		// Changing the dependency for sequence will prevent PG to have
-		// sequence within drop trigger
+		/* Changing the dependency for sequence will prevent PG to have */
+		/* sequence within drop trigger */
 		if (conversionType == UNDISTRIBUTE_TABLE)
 		{
 			ObjectAddress sequenceAddress = { 0 };

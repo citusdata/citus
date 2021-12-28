@@ -249,7 +249,7 @@ worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_drop_distributed_table_metadata_only removes the associated rows from pg_dist_partition, 
+ * worker_drop_distributed_table_metadata_only removes the associated rows from pg_dist_partition,
  * pg_dist_shard and pg_dist_placement for the given relation.
  */
 Datum

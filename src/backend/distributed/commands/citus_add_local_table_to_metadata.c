@@ -1250,7 +1250,7 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 	}
 	else
 	{
-		// Mark the table as distributed only locally
+		/* Mark the table as distributed only locally */
 		bool prevDependencyCreationValue = EnableDependencyCreation;
 		SetLocalEnableDependencyCreation(false);
 		MarkObjectDistributed(&relationAddress);

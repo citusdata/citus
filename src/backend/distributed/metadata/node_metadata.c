@@ -823,12 +823,13 @@ ClearDistributedTablesFromNode(WorkerNode *workerNode)
 	List *clearDistributedTablesCommandList = NIL;
 
 	clearDistributedTablesCommandList = lappend(clearDistributedTablesCommandList,
-										REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND);
+												REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND);
 
 	clearDistributedTablesCommandList = list_concat(list_make1(DISABLE_DDL_PROPAGATION),
-												clearDistributedTablesCommandList);
-	clearDistributedTablesCommandList = list_concat(clearDistributedTablesCommandList, list_make1(
-													ENABLE_DDL_PROPAGATION));
+													clearDistributedTablesCommandList);
+	clearDistributedTablesCommandList = list_concat(clearDistributedTablesCommandList,
+													list_make1(
+														ENABLE_DDL_PROPAGATION));
 
 	SendCommandListToWorkerOutsideTransaction(workerNode->workerName,
 											  workerNode->workerPort,
@@ -850,7 +851,7 @@ ClearDistributedObjectsAndIntegrationsFromNode(WorkerNode *workerNode)
 												detachPartitionCommandList);
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
-		REMOVE_ALL_CLUSTERED_TABLES_METADATA_ONLY_COMMAND);
+											REMOVE_ALL_CLUSTERED_TABLES_METADATA_ONLY_COMMAND);
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
 											DELETE_ALL_DISTRIBUTED_OBJECTS);
@@ -862,9 +863,9 @@ ClearDistributedObjectsAndIntegrationsFromNode(WorkerNode *workerNode)
 
 	char *currentUser = CurrentUserName();
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
-									 					    workerNode->workerPort,
-											  				currentUser,
-											  				clearDistTableInfoCommandList);
+															workerNode->workerPort,
+															currentUser,
+															clearDistTableInfoCommandList);
 }
 
 
@@ -906,14 +907,15 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 		 * We prefer this because otherwise node activation might fail within
 		 * transaction blocks.
 		 */
-		// TODO: Doesn't make sense to have that here as we won't handle placement metadata
-		// with maintenance daemon anymore
+		/* TODO: Doesn't make sense to have that here as we won't handle placement metadata */
+		/* with maintenance daemon anymore */
+
 		/* if (ClusterHasDistributedFunctionWithDistArgument())
-		{
-			SetWorkerColumnLocalOnly(newWorkerNode, Anum_pg_dist_node_hasmetadata,
-									 BoolGetDatum(true));
-			TriggerMetadataSyncOnCommit();
-		}*/
+		 * {
+		 *  SetWorkerColumnLocalOnly(newWorkerNode, Anum_pg_dist_node_hasmetadata,
+		 *                           BoolGetDatum(true));
+		 *  TriggerMetadataSyncOnCommit();
+		 * }*/
 	}
 }
 
@@ -1191,9 +1193,9 @@ ActivateNode(char *nodeName, int nodePort)
 	}
 
 	/*
-	* Delete replicated table placements from the coordinator's metadata,
-	* including remote ones.
-	*/
+	 * Delete replicated table placements from the coordinator's metadata,
+	 * including remote ones.
+	 */
 	bool forceRemoteDelete = true;
 	DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
 													forceRemoteDelete);

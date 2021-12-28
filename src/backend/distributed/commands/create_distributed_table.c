@@ -540,7 +540,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	}
 	else
 	{
-		// Mark the table as distributed only locally
+		/* Mark the table as distributed only locally */
 		bool prevDependencyCreationValue = EnableDependencyCreation;
 		SetLocalEnableDependencyCreation(false);
 		MarkObjectDistributed(&tableAddress);

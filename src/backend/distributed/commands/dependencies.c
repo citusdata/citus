@@ -242,7 +242,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				if (IsCitusTable(relationId) && !IsTableOwnedByExtension(relationId))
 				{
 					/* skip table metadata creation when the Citus table is owned by an extension */
-					// TODO: Check sequence next val type
+					/* TODO: Check sequence next val type */
 					List *commandList = NIL;
 					List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 																		  WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
@@ -266,7 +266,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 			if (relKind == RELKIND_SEQUENCE)
 			{
-				// TODO: Check user name for different scenarios
+				/* TODO: Check user name for different scenarios */
 				char *userName = GetUserNameFromId(GetUserId(), false);
 				return DDLCommandsForSequence(dependency->objectId, userName);
 			}
@@ -403,7 +403,8 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
 	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
-	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, CitusExtensionOwnerName(), ddlCommands);
+	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
+											  CitusExtensionOwnerName(), ddlCommands);
 }
 
 
