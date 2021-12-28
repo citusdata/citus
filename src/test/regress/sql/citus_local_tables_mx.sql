@@ -403,11 +403,28 @@ CREATE FOREIGN TABLE foreign_table (
 --verify
 SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
 
+CREATE TABLE parent_for_foreign_tables (
+    project_id integer
+) PARTITION BY HASH (project_id);
+
+CREATE SERVER IF NOT EXISTS srv1 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'otherdb1',host 'localhost', port '5432');
+CREATE SERVER IF NOT EXISTS srv2 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'otherdb2', host 'localhost', port '5432');
+CREATE SERVER IF NOT EXISTS srv3 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'otherdb3', host 'localhost', port '5432');
+
+CREATE FOREIGN TABLE foreign_partition_1 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 0) SERVER srv1;
+CREATE FOREIGN TABLE foreign_partition_2 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 1) SERVER srv2;
+CREATE FOREIGN TABLE foreign_partition_3 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 2) SERVER srv3;
+
+SELECT partmethod, repmodel FROM pg_dist_partition
+    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
+
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
 SELECT * FROM foreign_table;
 SELECT * FROM foreign_table_test;
 ALTER TABLE foreign_table DROP COLUMN id;
+SELECT partmethod, repmodel FROM pg_dist_partition
+    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
 \c - - - :master_port
 SET search_path TO citus_local_tables_mx;
 ALTER TABLE foreign_table DROP COLUMN id;
