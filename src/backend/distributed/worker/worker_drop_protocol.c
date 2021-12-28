@@ -98,6 +98,8 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 		UnmarkObjectDistributed(&ownedSequenceAddress);
 	}
 
+	UnmarkObjectDistributed(&distributedTableObject);
+
 	/* drop the server for the foreign relations */
 	if (relationKind == RELKIND_FOREIGN_TABLE)
 	{
