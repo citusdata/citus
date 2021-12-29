@@ -191,8 +191,8 @@ test: check_mx
 test: turn_mx_off
 test: multi_generate_ddl_commands multi_repair_shards
 test: multi_create_shards
-test: multi_transaction_recovery
 test: turn_mx_on
+test: multi_transaction_recovery
 
 test: local_dist_join_modifications
 test: local_table_join
