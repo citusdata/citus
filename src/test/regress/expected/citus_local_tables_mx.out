@@ -802,11 +802,15 @@ SELECT * FROM foreign_table;
  text_test
 (1 row)
 
+-- test alter user mapping
+ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'nonexistiniguser');
+-- should fail
+SELECT * FROM foreign_table;
+ERROR:  could not connect to server "foreign_server"
+ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'postgres');
 -- test undistributing
 SELECT undistribute_table('foreign_table');
 NOTICE:  creating a new table for citus_local_tables_mx.foreign_table
-NOTICE:  extension "postgres_fdw" already exists, skipping
-NOTICE:  server "foreign_server" already exists, skipping
 NOTICE:  dropping the old citus_local_tables_mx.foreign_table
 NOTICE:  renaming the new table to citus_local_tables_mx.foreign_table
  undistribute_table

@@ -429,6 +429,11 @@ SELECT partmethod, repmodel FROM pg_dist_partition
 SET search_path TO citus_local_tables_mx;
 ALTER TABLE foreign_table DROP COLUMN id;
 SELECT * FROM foreign_table;
+-- test alter user mapping
+ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'nonexistiniguser');
+-- should fail
+SELECT * FROM foreign_table;
+ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'postgres');
 -- test undistributing
 SELECT undistribute_table('foreign_table');
 SELECT * FROM foreign_table;
