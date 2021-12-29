@@ -8,6 +8,8 @@
 
 #include "udfs/citus_internal_add_object_metadata/11.0-1.sql"
 #include "udfs/citus_run_local_command/11.0-1.sql"
+#include "udfs/worker_drop_sequence_dependency/11.0-1.sql"
+
 
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);

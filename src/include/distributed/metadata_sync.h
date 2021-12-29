@@ -67,8 +67,11 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
 #define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"
 #define DELETE_ALL_DISTRIBUTED_OBJECTS "TRUNCATE citus.pg_dist_object"
-#define REMOVE_ALL_CLUSTERED_TABLES_COMMAND \
+#define REMOVE_ALL_CITUS_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"
+#define BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
+	"SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition"
+
 #define DISABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'off'"
 #define ENABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'on'"
 #define DISABLE_OBJECT_PROPAGATION "SET citus.enable_object_propagation TO 'off'"
