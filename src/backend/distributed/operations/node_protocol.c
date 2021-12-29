@@ -576,20 +576,6 @@ GetPreLoadTableCreationCommands(Oid relationId,
 
 	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
-	if (IsForeignTable(relationId))
-	{
-		char *extensionDef = pg_get_extensiondef_string(relationId);
-		char *serverDef = pg_get_serverdef_string(relationId);
-
-		if (extensionDef != NULL)
-		{
-			tableDDLEventList = lappend(tableDDLEventList,
-										makeTableDDLCommandString(extensionDef));
-		}
-		tableDDLEventList = lappend(tableDDLEventList,
-									makeTableDDLCommandString(serverDef));
-	}
-
 	/* fetch table schema and column option definitions */
 	char *tableSchemaDef = pg_get_tableschemadef_string(relationId,
 														includeSequenceDefaults,
