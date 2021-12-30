@@ -614,18 +614,6 @@ SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
 			ReplicateAllReferenceTablesToNode(newWorkerNode->workerName,
 											  newWorkerNode->workerPort);
 		}
-
-		/*
-		 * Let the maintenance daemon do the hard work of syncing the metadata.
-		 * We prefer this because otherwise node activation might fail within
-		 * transaction blocks.
-		 */
-		if (ClusterHasDistributedFunctionWithDistArgument())
-		{
-			SetWorkerColumnLocalOnly(newWorkerNode, Anum_pg_dist_node_hasmetadata,
-									 BoolGetDatum(true));
-			TriggerMetadataSyncOnCommit();
-		}
 	}
 }
 
@@ -893,7 +881,7 @@ ActivateNode(char *nodeName, int nodePort)
 		 * not fail just because the current metadata is not synced.
 		 */
 		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-						BoolGetDatum(isActive));
+						BoolGetDatum(true));
 	}
 
 	SetUpDistributedTableDependencies(workerNode);

@@ -67,6 +67,7 @@
 	(strncmp(arg, prefix, strlen(prefix)) == 0)
 
 /* forward declaration for helper functions*/
+static void ErrorIfAnyNodeDoesNotHaveMetadata(void);
 static char * GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace);
 static char * GetFunctionAlterOwnerCommand(const RegProcedure funcOid);
 static int GetDistributionArgIndex(Oid functionOid, char *distributionArgumentName,
@@ -77,7 +78,6 @@ static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 												  distributionColumnType, Oid
 												  sourceRelationId);
 static void EnsureSequentialModeForFunctionDDL(void);
-static void TriggerSyncMetadataToPrimaryNodes(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
@@ -194,6 +194,13 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	if (distributionArgumentName != NULL)
 	{
+		/*
+		 * Prior to Citus 11, this code was triggering metadata
+		 * syncing. However, with Citus 11+, we expect the metadata
+		 * has already been synced.
+		 */
+		ErrorIfAnyNodeDoesNotHaveMetadata();
+
 		DistributeFunctionWithDistributionArgument(funcOid, distributionArgumentName,
 												   distributionArgumentOid,
 												   colocateWithTableName,
@@ -206,10 +213,45 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	}
 	else if (colocatedWithReferenceTable)
 	{
+		/*
+		 * Prior to Citus 11, this code was triggering metadata
+		 * syncing. However, with Citus 11+, we expect the metadata
+		 * has already been synced.
+		 */
+		ErrorIfAnyNodeDoesNotHaveMetadata();
+
 		DistributeFunctionColocatedWithReferenceTable(&functionAddress);
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * ErrorIfAnyNodeDoesNotHaveMetadata throws error if any
+ * of the worker nodes does not have the metadata.
+ */
+static void
+ErrorIfAnyNodeDoesNotHaveMetadata(void)
+{
+	List *workerNodeList =
+		ActivePrimaryNonCoordinatorNodeList(ShareLock);
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		if (!workerNode->hasMetadata)
+		{
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							errmsg("cannot process the distributed function "
+								   "since the node %s:%d does not have metadata "
+								   "synced and this command requires all the nodes "
+								   "have the metadata sycned", workerNode->workerName,
+								   workerNode->workerPort),
+							errhint("To sync the metadata execute: "
+									"SELECT enable_citus_mx_for_pre_citus11();")));
+		}
+	}
 }
 
 
@@ -238,13 +280,6 @@ DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
 	/* record the distribution argument and colocationId */
 	UpdateFunctionDistributionInfo(functionAddress, &distributionArgumentIndex,
 								   &colocationId);
-
-	/*
-	 * Once we have at least one distributed function/procedure with distribution
-	 * argument, we sync the metadata to nodes so that the function/procedure
-	 * delegation can be handled locally on the nodes.
-	 */
-	TriggerSyncMetadataToPrimaryNodes();
 }
 
 
@@ -293,13 +328,6 @@ DistributeFunctionColocatedWithReferenceTable(const ObjectAddress *functionAddre
 	int *distributionArgumentIndex = NULL;
 	UpdateFunctionDistributionInfo(functionAddress, distributionArgumentIndex,
 								   &colocationId);
-
-	/*
-	 * Once we have at least one distributed function/procedure that reads
-	 * from a reference table, we sync the metadata to nodes so that the
-	 * function/procedure delegation can be handled locally on the nodes.
-	 */
-	TriggerSyncMetadataToPrimaryNodes();
 }
 
 
@@ -1116,47 +1144,6 @@ EnsureSequentialModeForFunctionDDL(void)
 						 "commands see the type correctly we need to make sure to "
 						 "use only one connection for all future commands")));
 	SetLocalMultiShardModifyModeToSequential();
-}
-
-
-/*
- * TriggerSyncMetadataToPrimaryNodes iterates over the active primary nodes,
- * and triggers the metadata syncs if the node has not the metadata. Later,
- * maintenance daemon will sync the metadata to nodes.
- */
-void
-TriggerSyncMetadataToPrimaryNodes(void)
-{
-	List *workerList = ActivePrimaryNonCoordinatorNodeList(ShareLock);
-	bool triggerMetadataSync = false;
-
-	WorkerNode *workerNode = NULL;
-	foreach_ptr(workerNode, workerList)
-	{
-		/* if already has metadata, no need to do it again */
-		if (!workerNode->hasMetadata)
-		{
-			/*
-			 * Let the maintanince deamon do the hard work of syncing the metadata. We prefer
-			 * this because otherwise node activation might fail withing transaction blocks.
-			 */
-			LockRelationOid(DistNodeRelationId(), ExclusiveLock);
-			SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_hasmetadata,
-									 BoolGetDatum(true));
-
-			triggerMetadataSync = true;
-		}
-		else if (!workerNode->metadataSynced)
-		{
-			triggerMetadataSync = true;
-		}
-	}
-
-	/* let the maintanince deamon know about the metadata sync */
-	if (triggerMetadataSync)
-	{
-		TriggerMetadataSyncOnCommit();
-	}
 }
 
 

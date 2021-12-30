@@ -17,23 +17,12 @@ BEGIN
 END;
 $proc$;
 
--- set sync intervals to less than 15s so wait_until_metadata_sync never times out
-ALTER SYSTEM SET citus.metadata_sync_interval TO 3000;
-ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 500;
-SELECT pg_reload_conf();
-
-CREATE OR REPLACE FUNCTION wait_until_metadata_sync(timeout INTEGER DEFAULT 15000)
-    RETURNS void
-    LANGUAGE C STRICT
-    AS 'citus';
-
 -- procedures are distributed by text arguments, when run in isolation it is not guaranteed a table actually exists.
 CREATE TABLE colocation_table(id text);
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('colocation_table','id');
 
 SELECT create_distributed_function('raise_info(text)', '$1', colocate_with := 'colocation_table');
-SELECT wait_until_metadata_sync(30000);
 
 SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');$$) ORDER BY 1,2;
 SELECT public.verify_function_is_same_on_workers('procedure_tests.raise_info(text)');
@@ -94,5 +83,3 @@ SELECT run_command_on_workers($$DROP SCHEMA procedure_tests2 CASCADE;$$);
 DROP USER procedureuser;
 SELECT run_command_on_workers($$DROP USER procedureuser;$$);
 
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
