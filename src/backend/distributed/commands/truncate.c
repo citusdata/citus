@@ -272,8 +272,8 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("truncating distributed foreign tables is "
 								   "currently unsupported"),
-							errhint("Use citus_drop_all_shards to remove "
-									"foreign table's shards.")));
+							errhint("Consider undistributing table before TRUNCATE, "
+									"and then distribute or add to metadata again")));
 		}
 	}
 }
