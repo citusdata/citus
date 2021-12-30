@@ -811,10 +811,8 @@ ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'nonexis
 SELECT * FROM foreign_table;
 ERROR:  could not connect to server "foreign_server"
 ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'postgres');
---should error out
-TRUNCATE foreign_table;
-ERROR:  truncating distributed foreign tables is currently unsupported
 -- test undistributing
+DELETE FROM foreign_table;
 SELECT undistribute_table('foreign_table');
 NOTICE:  creating a new table for citus_local_tables_mx.foreign_table
 NOTICE:  dropping the old citus_local_tables_mx.foreign_table
@@ -824,7 +822,6 @@ NOTICE:  renaming the new table to citus_local_tables_mx.foreign_table
 
 (1 row)
 
-TRUNCATE foreign_table;
 SELECT create_distributed_table('foreign_table','data');
  create_distributed_table
 ---------------------------------------------------------------------

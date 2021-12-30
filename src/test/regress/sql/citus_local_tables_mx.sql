@@ -438,11 +438,9 @@ ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'nonexis
 -- should fail
 SELECT * FROM foreign_table;
 ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'postgres');
---should error out
-TRUNCATE foreign_table;
 -- test undistributing
+DELETE FROM foreign_table;
 SELECT undistribute_table('foreign_table');
-TRUNCATE foreign_table;
 SELECT create_distributed_table('foreign_table','data');
 SELECT undistribute_table('foreign_table');
 SELECT create_reference_table('foreign_table');
