@@ -1239,22 +1239,14 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 		CreateTruncateTrigger(relationId);
 	}
 
-	CreateShellTableOnWorkers(relationId);
-
-	ObjectAddress relationAddress = { 0 };
-	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
 	if (ShouldSyncTableMetadata(relationId))
 	{
+		CreateShellTableOnWorkers(relationId);
 		CreateTableMetadataOnWorkers(relationId);
+
+		ObjectAddress relationAddress = { 0 };
+		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
 		MarkObjectDistributed(&relationAddress);
-	}
-	else
-	{
-		/* Mark the table as distributed only locally */
-		bool prevDependencyCreationValue = EnableDependencyCreation;
-		SetLocalEnableDependencyCreation(false);
-		MarkObjectDistributed(&relationAddress);
-		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
 	}
 
 	/*

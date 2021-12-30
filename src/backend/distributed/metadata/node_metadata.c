@@ -908,6 +908,7 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 		 * transaction blocks.
 		 */
 		/* TODO: Doesn't make sense to have that here as we won't handle placement metadata */
+		// TODO: Metadatasynced olmayan worker varsa patla (Onder'in PRinda gidebilir)
 		/* with maintenance daemon anymore */
 
 		/* if (ClusterHasDistributedFunctionWithDistArgument())

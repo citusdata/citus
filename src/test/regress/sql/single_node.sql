@@ -4,6 +4,10 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 90630500;
 
+table pg_dist_node;
+table pg_dist_partition;
+\d
+
 -- Ensure tuple data in explain analyze output is the same on all PG versions
 SET citus.enable_binary_protocol = TRUE;
 

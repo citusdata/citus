@@ -532,19 +532,16 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		CreateReferenceTableShard(relationId);
 	}
 
-	CreateShellTableOnWorkers(relationId);
 	if (ShouldSyncTableMetadata(relationId))
 	{
+		CreateShellTableOnWorkers(relationId);
 		MarkObjectDistributed(&tableAddress);
 		CreateTableMetadataOnWorkers(relationId);
 	}
 	else
 	{
-		/* Mark the table as distributed only locally */
-		bool prevDependencyCreationValue = EnableDependencyCreation;
-		SetLocalEnableDependencyCreation(false);
-		MarkObjectDistributed(&tableAddress);
-		SetLocalEnableDependencyCreation(prevDependencyCreationValue);
+		// sync etmedigimizi ignore ediyoruz commenti, ozellikle append dist tablolar icin
+		// backward compatible olarak calisacak, sync de yapsak gitmicek
 	}
 
 	/*
@@ -602,11 +599,15 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
  * If any other distributed table uses the input sequence, it checks whether
  * the types of the columns using the sequence match. If they don't, it errors out.
  * Otherwise, the condition is ensured.
+ * Since the owner relation id may not have been distributed yet, we need to check it
+ * in addition all citus tables as well.
  */
 void
-EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId)
+EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId, Oid ownerRelationId)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
+	citusTableIdList = lappend_oid(citusTableIdList, ownerRelationId);
+	
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
@@ -750,7 +751,7 @@ EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceLis
 		 * that sequence is supported
 		 */
 		Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
-		EnsureSequenceTypeSupported(sequenceOid, seqTypId);
+		EnsureSequenceTypeSupported(sequenceOid, seqTypId, relationId);
 
 		/*
 		 * Alter the sequence's data type in the coordinator if needed.

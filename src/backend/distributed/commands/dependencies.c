@@ -236,7 +236,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				return NIL;
 			}
 
-			if (relKind == RELKIND_RELATION)
+			if (relKind == RELKIND_RELATION || relKind == RELKIND_PARTITIONED_TABLE)
 			{
 				Oid relationId = dependency->objectId;
 				if (IsCitusTable(relationId) && !IsTableOwnedByExtension(relationId))
@@ -255,7 +255,6 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 												  tableDDLCommand));
 					}
 
-					/* TODO: May need to move sequence dependencies to ActivateNode directly */
 					List *sequenceDependencyCommandList = SequenceDependencyCommandList(
 						dependency->objectId);
 					commandList = list_concat(commandList, sequenceDependencyCommandList);

@@ -12,6 +12,7 @@ SET search_path = sequence_default, public;
 
 
 -- test both distributed and citus local tables
+table pg_dist_node;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 -- Cannot add a column involving DEFAULT nextval('..') because the table is not empty
 CREATE SEQUENCE seq_0;
@@ -91,7 +92,6 @@ CREATE TABLE seq_test_4 (x int, y int);
 SELECT create_distributed_table('seq_test_4','x');
 CREATE SEQUENCE seq_4;
 ALTER TABLE seq_test_4 ADD COLUMN a bigint DEFAULT nextval('seq_4');
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SEQUENCE seq_4 CASCADE;
 TRUNCATE seq_test_4;
 CREATE SEQUENCE seq_4;
@@ -366,7 +366,7 @@ SELECT create_reference_table('seq_test_10');
 INSERT INTO seq_test_10 VALUES (0);
 CREATE TABLE seq_test_11 (col0 int, col1 bigint DEFAULT nextval('seq_11'::text));
 -- works but doesn't create seq_11 in the workers
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
 -- works because there is no dependency created between seq_11 and seq_test_10
 SELECT create_distributed_table('seq_test_11', 'col1');
 -- insertion from workers fails
