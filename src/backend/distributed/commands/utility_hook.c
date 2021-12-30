@@ -914,7 +914,7 @@ ShouldAddNewTableToMetadata(Node *parsetree)
 	}
 	else
 	{
-		/* if the command is not CREATE (FOREIGN) TABLE, we can early return false */
+		/* if the command is not CREATE [FOREIGN] TABLE, we can early return false */
 		return false;
 	}
 
