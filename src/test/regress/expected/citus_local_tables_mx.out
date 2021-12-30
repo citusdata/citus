@@ -824,16 +824,48 @@ NOTICE:  renaming the new table to citus_local_tables_mx.foreign_table
 
 (1 row)
 
-SELECT * FROM foreign_table;
-   data
+TRUNCATE foreign_table;
+SELECT create_distributed_table('foreign_table','data');
+ create_distributed_table
 ---------------------------------------------------------------------
- text_test
+
+(1 row)
+
+SELECT undistribute_table('foreign_table');
+NOTICE:  creating a new table for citus_local_tables_mx.foreign_table
+NOTICE:  dropping the old citus_local_tables_mx.foreign_table
+NOTICE:  renaming the new table to citus_local_tables_mx.foreign_table
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_reference_table('foreign_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT undistribute_table('foreign_table');
+NOTICE:  creating a new table for citus_local_tables_mx.foreign_table
+NOTICE:  dropping the old citus_local_tables_mx.foreign_table
+NOTICE:  renaming the new table to citus_local_tables_mx.foreign_table
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO foreign_table_test VALUES (1, 'testt');
+SELECT * FROM foreign_table;
+ data
+---------------------------------------------------------------------
+ testt
 (1 row)
 
 SELECT * FROM foreign_table_test;
- id |   data
+ id | data
 ---------------------------------------------------------------------
-  1 | text_test
+  1 | testt
 (1 row)
 
 --verify
