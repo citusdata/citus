@@ -1,9 +1,13 @@
 ![Citus Banner](/citus-readme-banner.png)
 
-[![Slack Status](http://slack.citusdata.com/badge.svg)](https://slack.citusdata.com)
 [![Latest Docs](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://docs.citusdata.com/)
-[![Code Coverage](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)](https://app.codecov.io/gh/citusdata/citus)
 [![Stack Overflow](https://img.shields.io/badge/Stack%20Overflow-%20-545353?logo=Stack%20Overflow)](https://stackoverflow.com/questions/tagged/citus)
+[![Slack Status](http://slack.citusdata.com/badge.svg)](https://citus-public.slack.com/)
+[![Code Coverage](https://codecov.io/gh/citusdata/citus/branch/master/graph/badge.svg)](https://app.codecov.io/gh/citusdata/citus)
+[![Twitter](https://img.shields.io/twitter/follow/citusdata.svg?label=Follow%20@citusdata)](https://twitter.com/intent/follow?screen_name=citusdata)
+
+[![Citus Deb Packages](https://img.shields.io/badge/deb-packagecloud.io-844fec.svg)](https://packagecloud.io/app/citusdata/community/search?q=&filter=debs)
+[![Citus Rpm Packages](https://img.shields.io/badge/rpm-packagecloud.io-844fec.svg)](https://packagecloud.io/app/citusdata/community/search?q=&filter=rpms)
 
 ## What is Citus?
 
