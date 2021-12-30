@@ -35,14 +35,14 @@ PreprocessAlterForeignTableSchemaStmt(Node *node, const char *queryString,
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
 	Assert(stmt->objectType == OBJECT_FOREIGN_TABLE);
 
-	if (!ShouldPropagate())
+	if (!ShouldPropagate() || stmt->relation == NULL)
 	{
 		return NIL;
 	}
 
-	Oid relationId = RangeVarGetRelid(stmt->relation,
-									  AccessExclusiveLock,
-									  stmt->missing_ok);
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+	Oid relationId = address.objectId;
 
 	/*
 	 * If the table does not exist, don't do anything here to allow PostgreSQL
@@ -63,12 +63,12 @@ PreprocessAlterForeignTableSchemaStmt(Node *node, const char *queryString,
 
 	QualifyTreeNode((Node *) stmt);
 
-	char *sql = DeparseTreeNode(node);
+	char *sql = DeparseTreeNode((Node *) stmt);
 
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
+	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
+	ddlJob->targetRelationId = relationId;
+	ddlJob->metadataSyncCommand = sql;
+	ddlJob->taskList = DDLTaskList(relationId, ddlJob->metadataSyncCommand);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return list_make1(ddlJob);
 }

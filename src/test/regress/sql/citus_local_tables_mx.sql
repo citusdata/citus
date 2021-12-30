@@ -418,15 +418,19 @@ CREATE FOREIGN TABLE foreign_partition_3 PARTITION OF parent_for_foreign_tables 
 SELECT partmethod, repmodel FROM pg_dist_partition
     WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
 
+ALTER FOREIGN TABLE foreign_table SET SCHEMA public;
+
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
-SELECT * FROM foreign_table;
+SELECT * FROM public.foreign_table;
 SELECT * FROM foreign_table_test;
-ALTER TABLE foreign_table DROP COLUMN id;
+-- should error out
+ALTER FOREIGN TABLE public.foreign_table DROP COLUMN id;
 SELECT partmethod, repmodel FROM pg_dist_partition
     WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
 \c - - - :master_port
 SET search_path TO citus_local_tables_mx;
+ALTER FOREIGN TABLE public.foreign_table SET SCHEMA citus_local_tables_mx;
 ALTER TABLE foreign_table DROP COLUMN id;
 SELECT * FROM foreign_table;
 -- test alter user mapping
