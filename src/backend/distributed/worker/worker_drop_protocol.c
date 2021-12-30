@@ -45,7 +45,7 @@ static long deleteDependencyRecordsForSpecific(Oid classId, Oid objectId, char d
 /*
  * worker_drop_distributed_table drops the distributed table with the given oid,
  * then, removes the associated rows from pg_dist_partition, pg_dist_shard and
- * pg_dist_placement. The function also drops the server for foreign tables.
+ * pg_dist_placement.
  *
  * Note that drop fails if any dependent objects are present for any of the
  * distributed tables. Also, shard placements of the distributed tables are
@@ -64,7 +64,6 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	Oid relationId = ResolveRelationId(relationName, true);
 
 	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
-	char relationKind = '\0';
 
 	if (!OidIsValid(relationId))
 	{
@@ -79,7 +78,7 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 
 	/* first check the relation type */
 	Relation distributedRelation = relation_open(relationId, AccessShareLock);
-	relationKind = distributedRelation->rd_rel->relkind;
+
 	EnsureRelationKindSupported(relationId);
 
 	/* close the relation since we do not need anymore */
@@ -105,28 +104,7 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 		UnmarkObjectDistributed(&ownedSequenceAddress);
 	}
 
-	/* drop the server for the foreign relations */
-	if (relationKind == RELKIND_FOREIGN_TABLE)
-	{
-		ObjectAddresses *objects = new_object_addresses();
-		ObjectAddress foreignServerObject = { InvalidOid, InvalidOid, 0 };
-		ForeignTable *foreignTable = GetForeignTable(relationId);
-		Oid serverId = foreignTable->serverid;
-
-		/* prepare foreignServerObject for dropping the server */
-		foreignServerObject.classId = ForeignServerRelationId;
-		foreignServerObject.objectId = serverId;
-		foreignServerObject.objectSubId = 0;
-
-		/* add the addresses that are going to be dropped */
-		add_exact_object_address(&distributedTableObject, objects);
-		add_exact_object_address(&foreignServerObject, objects);
-
-		/* drop both the table and the server */
-		performMultipleDeletions(objects, DROP_CASCADE,
-								 PERFORM_DELETION_INTERNAL);
-	}
-	else if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
+	if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
 	{
 		/*
 		 * If the table is owned by an extension, we cannot drop it, nor should we
