@@ -825,7 +825,7 @@ ClearDistributedTablesFromNode(WorkerNode *workerNode)
 	List *detachPartitionCommandList = DetachPartitionCommandList();
 
 	clearDistributedTablesCommandList = list_concat(clearDistributedTablesCommandList,
-												detachPartitionCommandList);
+													detachPartitionCommandList);
 
 	clearDistributedTablesCommandList = lappend(clearDistributedTablesCommandList,
 												REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND);
@@ -908,8 +908,10 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 		 * We prefer this because otherwise node activation might fail within
 		 * transaction blocks.
 		 */
+
 		/* TODO: Doesn't make sense to have that here as we won't handle placement metadata */
-		// TODO: Metadatasynced olmayan worker varsa patla (Onder'in PRinda gidebilir)
+		/* TODO: Metadatasynced olmayan worker varsa patla (Onder'in PRinda gidebilir) */
+
 		/* with maintenance daemon anymore */
 
 		/* if (ClusterHasDistributedFunctionWithDistArgument())

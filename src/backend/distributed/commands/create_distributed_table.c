@@ -540,8 +540,8 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	}
 	else
 	{
-		// sync etmedigimizi ignore ediyoruz commenti, ozellikle append dist tablolar icin
-		// backward compatible olarak calisacak, sync de yapsak gitmicek
+		/* sync etmedigimizi ignore ediyoruz commenti, ozellikle append dist tablolar icin */
+		/* backward compatible olarak calisacak, sync de yapsak gitmicek */
 	}
 
 	/*
@@ -607,7 +607,7 @@ EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId, Oid ownerRelationId)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
 	citusTableIdList = lappend_oid(citusTableIdList, ownerRelationId);
-	
+
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
