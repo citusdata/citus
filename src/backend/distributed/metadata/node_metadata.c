@@ -1200,9 +1200,12 @@ ActivateNode(char *nodeName, int nodePort)
 	 * Delete replicated table placements from the coordinator's metadata,
 	 * including remote ones.
 	 */
-	bool forceRemoteDelete = true;
-	DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
-													forceRemoteDelete);
+	if (syncMetadata && !NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode))
+	{
+		bool forceRemoteDelete = true;
+		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
+														forceRemoteDelete);
+	}
 
 	SetUpDistributedTableWithDependencies(workerNode);
 
