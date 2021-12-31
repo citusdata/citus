@@ -110,7 +110,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpObjectMetadata(WorkerNode *workerNode);
-static void ClearDistributedObjectsAndIntegrationsFromNode(WorkerNode *workerNode);
+static void ClearDistributedObjectsFromNode(WorkerNode *workerNode);
 static void ClearDistributedTablesFromNode(WorkerNode *workerNode);
 static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
 static void SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode);
@@ -822,6 +822,11 @@ ClearDistributedTablesFromNode(WorkerNode *workerNode)
 {
 	List *clearDistributedTablesCommandList = NIL;
 
+	List *detachPartitionCommandList = DetachPartitionCommandList();
+
+	clearDistributedTablesCommandList = list_concat(clearDistributedTablesCommandList,
+												detachPartitionCommandList);
+
 	clearDistributedTablesCommandList = lappend(clearDistributedTablesCommandList,
 												REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND);
 
@@ -839,16 +844,12 @@ ClearDistributedTablesFromNode(WorkerNode *workerNode)
 
 
 /*
- * ClearDistributedObjectsAndIntegrationsFromNode clears all the distributed objects, metadata and partition hierarchy from the given node.
+ * ClearDistributedObjectsFromNode clears all the distributed objects, metadata and partition hierarchy from the given node.
  */
 static void
-ClearDistributedObjectsAndIntegrationsFromNode(WorkerNode *workerNode)
+ClearDistributedObjectsFromNode(WorkerNode *workerNode)
 {
 	List *clearDistTableInfoCommandList = NIL;
-	List *detachPartitionCommandList = DetachPartitionCommandList();
-
-	clearDistTableInfoCommandList = list_concat(clearDistTableInfoCommandList,
-												detachPartitionCommandList);
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
 											REMOVE_ALL_CLUSTERED_TABLES_METADATA_ONLY_COMMAND);
@@ -1209,7 +1210,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 		if (!NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode))
 		{
-			ClearDistributedObjectsAndIntegrationsFromNode(workerNode);
+			ClearDistributedObjectsFromNode(workerNode);
 			SetUpMultipleDistributedTableIntegrations(workerNode);
 			SetUpObjectMetadata(workerNode);
 		}
