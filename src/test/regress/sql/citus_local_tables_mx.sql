@@ -453,6 +453,29 @@ SELECT * FROM foreign_table_test;
 --verify
 SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
 
+CREATE SERVER foreign_server_local
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server_local
+        OPTIONS (user 'postgres');
+CREATE FOREIGN TABLE foreign_table_local (
+        id integer NOT NULL,
+        data text
+)
+        SERVER foreign_server_local
+        OPTIONS (schema_name 'citus_local_tables_mx', table_name 'foreign_table_test');
+
+CREATE TABLE dist_tbl(a int);
+INSERT INTO dist_tbl VALUES (1);
+SELECT create_distributed_table('dist_tbl','a');
+SELECT * FROM dist_tbl d JOIN foreign_table_local f ON d.a=f.id;
+
+CREATE TABLE ref_tbl(a int);
+INSERT INTO ref_tbl VALUES (1);
+SELECT create_reference_table('ref_tbl');
+SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id;
+
 -- cleanup at exit
 set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;
