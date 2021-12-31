@@ -726,7 +726,7 @@ $$);
 
 -- test adding foreign table to metadata with the guc
 SET citus.use_citus_managed_tables TO ON;
-CREATE TABLE foreign_table_test (id integer NOT NULL, data text);
+CREATE TABLE foreign_table_test (id integer NOT NULL, data text, a bigserial);
 INSERT INTO foreign_table_test VALUES (1, 'text_test');
 CREATE EXTENSION postgres_fdw;
 CREATE SERVER foreign_server
@@ -737,7 +737,8 @@ CREATE USER MAPPING FOR CURRENT_USER
         OPTIONS (user 'postgres');
 CREATE FOREIGN TABLE foreign_table (
         id integer NOT NULL,
-        data text
+        data text,
+        a bigserial
 )
         SERVER foreign_server
         OPTIONS (schema_name 'citus_local_tables_mx', table_name 'foreign_table_test');
@@ -771,15 +772,15 @@ ALTER FOREIGN TABLE foreign_table SET SCHEMA public;
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
 SELECT * FROM public.foreign_table;
- id |   data
+ id |   data    | a
 ---------------------------------------------------------------------
-  1 | text_test
+  1 | text_test | 1
 (1 row)
 
 SELECT * FROM foreign_table_test;
- id |   data
+ id |   data    | a
 ---------------------------------------------------------------------
-  1 | text_test
+  1 | text_test | 1
 (1 row)
 
 -- should error out
@@ -800,9 +801,9 @@ SET search_path TO citus_local_tables_mx;
 ALTER FOREIGN TABLE public.foreign_table SET SCHEMA citus_local_tables_mx;
 ALTER TABLE foreign_table DROP COLUMN id;
 SELECT * FROM foreign_table;
-   data
+   data    | a
 ---------------------------------------------------------------------
- text_test
+ text_test | 1
 (1 row)
 
 -- test alter user mapping
@@ -854,15 +855,15 @@ NOTICE:  renaming the new table to citus_local_tables_mx.foreign_table
 
 INSERT INTO foreign_table_test VALUES (1, 'testt');
 SELECT * FROM foreign_table;
- data
+ data  | a
 ---------------------------------------------------------------------
- testt
+ testt | 2
 (1 row)
 
 SELECT * FROM foreign_table_test;
- id | data
+ id | data  | a
 ---------------------------------------------------------------------
-  1 | testt
+  1 | testt | 2
 (1 row)
 
 --verify

@@ -384,7 +384,7 @@ $$);
 
 -- test adding foreign table to metadata with the guc
 SET citus.use_citus_managed_tables TO ON;
-CREATE TABLE foreign_table_test (id integer NOT NULL, data text);
+CREATE TABLE foreign_table_test (id integer NOT NULL, data text, a bigserial);
 INSERT INTO foreign_table_test VALUES (1, 'text_test');
 CREATE EXTENSION postgres_fdw;
 CREATE SERVER foreign_server
@@ -395,7 +395,8 @@ CREATE USER MAPPING FOR CURRENT_USER
         OPTIONS (user 'postgres');
 CREATE FOREIGN TABLE foreign_table (
         id integer NOT NULL,
-        data text
+        data text,
+        a bigserial
 )
         SERVER foreign_server
         OPTIONS (schema_name 'citus_local_tables_mx', table_name 'foreign_table_test');
