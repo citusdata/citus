@@ -510,6 +510,10 @@ citus_disable_node(PG_FUNCTION_ARGS)
 								 workerNode->workerName,
 								 nodePort)));
 		}
+
+		bool forceRemoteDelete = false;
+		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
+														forceRemoteDelete);
 	}
 
 	TransactionModifiedNodeMetadata = true;
@@ -1180,11 +1184,22 @@ ActivateNode(char *nodeName, int nodePort)
 		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
 	}
 
+	/*
+	 * Delete replicated table placements from the coordinator's metadata,
+	 * including remote ones if the node is inactive primary worker node.
+	 */
+	if (!NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode) && !workerNode->isActive)
+	{
+;		bool forceRemoteDelete = true;
+		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
+														forceRemoteDelete);
+	}
+
 	workerNode =
 		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
 								 BoolGetDatum(isActive));
-	bool syncMetadata =
-		EnableMetadataSyncByDefault && NodeIsPrimary(workerNode);
+
+	bool syncMetadata = EnableMetadataSyncByDefault && NodeIsPrimary(workerNode);
 
 	if (syncMetadata)
 	{
@@ -1194,17 +1209,6 @@ ActivateNode(char *nodeName, int nodePort)
 		 */
 		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
 						BoolGetDatum(isActive));
-	}
-
-	/*
-	 * Delete replicated table placements from the coordinator's metadata,
-	 * including remote ones.
-	 */
-	if (syncMetadata && !NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode))
-	{
-		bool forceRemoteDelete = true;
-		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
-														forceRemoteDelete);
 	}
 
 	SetUpDistributedTableWithDependencies(workerNode);

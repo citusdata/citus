@@ -107,7 +107,7 @@ DROP TABLE local_table;
 -- Verify that all indexes got created on the master node and one of the workers
 SELECT * FROM pg_indexes WHERE tablename = 'lineitem' or tablename like 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
-SELECT * FROM pg_indexes WHERE tablename LIKE 'lineitem_%';
+SELECT count(*) FROM pg_indexes WHERE tablename = (SELECT relname FROM pg_class WHERE relname LIKE 'lineitem_%' ORDER BY relname LIMIT 1);
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_hash_%';
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_range_%';
 SELECT count(*) FROM pg_indexes WHERE tablename LIKE 'index_test_append_%';
@@ -189,7 +189,7 @@ SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (
 SELECT * FROM pg_indexes WHERE tablename LIKE 'index_test_%' ORDER BY indexname;
 \c - - - :worker_1_port
 SET citus.override_table_visibility TO FALSE;
-SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname SIMILAR TO 'lineitem_360000' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
+SELECT indrelid::regclass, indexrelid::regclass FROM pg_index WHERE indrelid = (SELECT relname FROM pg_class WHERE relname SIMILAR TO 'lineitem%\d' ORDER BY relname LIMIT 1)::regclass AND NOT indisprimary AND indexrelid::regclass::text NOT LIKE 'lineitem_time_index%' ORDER BY 1,2;
 SELECT * FROM pg_indexes WHERE tablename SIMILAR TO 'index_test_%\d' ORDER BY indexname;
 
 -- create index that will conflict with master operations

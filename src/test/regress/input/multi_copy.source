@@ -468,8 +468,10 @@ SELECT shardid, nodename, nodeport
 -- disable the first node
 SET client_min_messages TO ERROR;
 \set VERBOSITY terse
+table pg_dist_node;
 SELECT master_disable_node('localhost', :worker_1_port);
 SELECT public.wait_until_metadata_sync(30000);
+table pg_dist_node;
 
 RESET client_min_messages;
 \set VERBOSITY default
@@ -481,6 +483,7 @@ SET citus.shard_replication_factor TO 1;
 -- add two new shards and verify they are created at the other node
 SELECT master_create_empty_shard('numbers_append') AS shardid1 \gset
 SELECT master_create_empty_shard('numbers_append') AS shardid2 \gset
+table pg_dist_node;
 
 COPY numbers_append FROM STDIN WITH (FORMAT 'csv', append_to_shard :shardid1);
 5,7
@@ -497,8 +500,16 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- add the node back
-SET client_min_messages TO ERROR;
+table pg_dist_node;
+\c - - - :worker_1_port
+table pg_dist_node;
+table pg_dist_placement;
+table pg_dist_shard;
+table pg_dist_shard_placement;
+\c - - - :master_port
+set citus.log_remote_commands to true;
 SELECT 1 FROM master_activate_node('localhost', :worker_1_port);
+reset citus.log_remote_commands;
 RESET client_min_messages;
 RESET citus.shard_replication_factor;
 -- add two new shards and verify they are created at both workers
