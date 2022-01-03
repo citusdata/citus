@@ -420,16 +420,18 @@ SELECT partmethod, repmodel FROM pg_dist_partition
     WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
 
 ALTER FOREIGN TABLE foreign_table SET SCHEMA public;
+ALTER FOREIGN TABLE public.foreign_table RENAME TO foreign_table_newname;
 
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
-SELECT * FROM public.foreign_table;
+SELECT * FROM public.foreign_table_newname;
 SELECT * FROM foreign_table_test;
 -- should error out
-ALTER FOREIGN TABLE public.foreign_table DROP COLUMN id;
+ALTER FOREIGN TABLE public.foreign_table_newname DROP COLUMN id;
 SELECT partmethod, repmodel FROM pg_dist_partition
     WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
 \c - - - :master_port
+ALTER FOREIGN TABLE foreign_table_newname RENAME TO foreign_table;
 SET search_path TO citus_local_tables_mx;
 ALTER FOREIGN TABLE public.foreign_table SET SCHEMA citus_local_tables_mx;
 ALTER TABLE foreign_table DROP COLUMN id;
