@@ -421,6 +421,8 @@ SELECT partmethod, repmodel FROM pg_dist_partition
 
 ALTER FOREIGN TABLE foreign_table SET SCHEMA public;
 ALTER FOREIGN TABLE public.foreign_table RENAME TO foreign_table_newname;
+ALTER FOREIGN TABLE public.foreign_table_newname RENAME COLUMN id TO id_test;
+ALTER TABLE foreign_table_test RENAME COLUMN id TO id_test;
 
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
@@ -434,6 +436,8 @@ SELECT partmethod, repmodel FROM pg_dist_partition
 ALTER FOREIGN TABLE foreign_table_newname RENAME TO foreign_table;
 SET search_path TO citus_local_tables_mx;
 ALTER FOREIGN TABLE public.foreign_table SET SCHEMA citus_local_tables_mx;
+ALTER FOREIGN TABLE foreign_table RENAME COLUMN id_test TO id;
+ALTER TABLE foreign_table_test RENAME COLUMN id_test TO id;
 ALTER TABLE foreign_table DROP COLUMN id;
 SELECT * FROM foreign_table;
 -- test alter user mapping
