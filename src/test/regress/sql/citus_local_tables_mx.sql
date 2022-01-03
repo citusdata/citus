@@ -422,9 +422,10 @@ SELECT partmethod, repmodel FROM pg_dist_partition
 ALTER FOREIGN TABLE foreign_table SET SCHEMA public;
 ALTER FOREIGN TABLE public.foreign_table RENAME TO foreign_table_newname;
 ALTER FOREIGN TABLE public.foreign_table_newname RENAME COLUMN id TO id_test;
-ALTER FOREIGN TABLE public.foreign_table_newname ADD dummy_col bigint;
+ALTER FOREIGN TABLE public.foreign_table_newname ADD dummy_col bigint NOT NULL DEFAULT 1;
+ALTER FOREIGN TABLE public.foreign_table_newname ALTER dummy_col TYPE int; 
 ALTER TABLE foreign_table_test RENAME COLUMN id TO id_test;
-ALTER TABLE foreign_table_test ADD dummy_col bigint;
+ALTER TABLE foreign_table_test ADD dummy_col int NOT NULL DEFAULT 1;
 
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
