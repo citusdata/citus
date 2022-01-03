@@ -422,7 +422,9 @@ SELECT partmethod, repmodel FROM pg_dist_partition
 ALTER FOREIGN TABLE foreign_table SET SCHEMA public;
 ALTER FOREIGN TABLE public.foreign_table RENAME TO foreign_table_newname;
 ALTER FOREIGN TABLE public.foreign_table_newname RENAME COLUMN id TO id_test;
+ALTER FOREIGN TABLE public.foreign_table_newname ADD dummy_col bigint;
 ALTER TABLE foreign_table_test RENAME COLUMN id TO id_test;
+ALTER TABLE foreign_table_test ADD dummy_col bigint;
 
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
@@ -439,6 +441,8 @@ ALTER FOREIGN TABLE public.foreign_table SET SCHEMA citus_local_tables_mx;
 ALTER FOREIGN TABLE IF EXISTS foreign_table RENAME COLUMN id_test TO id;
 ALTER TABLE foreign_table_test RENAME COLUMN id_test TO id;
 ALTER TABLE foreign_table DROP COLUMN id;
+ALTER FOREIGN TABLE foreign_table DROP COLUMN dummy_col;
+ALTER TABLE foreign_table_test DROP COLUMN dummy_col;
 SELECT * FROM foreign_table;
 -- test alter user mapping
 ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'nonexistiniguser');
