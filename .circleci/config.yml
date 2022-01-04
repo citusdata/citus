@@ -6,10 +6,20 @@ orbs:
 parameters:
   image_suffix:
     type: string
-    default: "-v2021_10_27"
-
+    default: '-v2021_10_27'
+  pg12_version:
+    type: string
+    default: '12.8'
+  pg13_version:
+    type: string
+    default: '13.4'
+  pg14_version:
+    type: string
+    default: '14.0'
+  upgrade_pg_versions:
+    type: string
+    default: '12.8-13.4-14.0'
 jobs:
-
   build:
     description: Build the citus extension
     parameters:
@@ -47,40 +57,22 @@ jobs:
           command: citus_indent --check
       - run:
           name: 'Fix whitespace'
-          command: ci/editorconfig.sh
-      - run:
-          name: 'Check if whitespace fixing changed anything, install editorconfig if it did'
-          command: git diff --exit-code
+          command: ci/editorconfig.sh && git diff --exit-code
       - run:
           name: 'Remove useless declarations'
-          command: ci/remove_useless_declarations.sh
-      - run:
-          name: 'Check if changed'
-          command: git diff --cached --exit-code
+          command: ci/remove_useless_declarations.sh && git diff --cached --exit-code
       - run:
           name: 'Normalize test output'
-          command: ci/normalize_expected.sh
-      - run:
-          name: 'Check if changed'
-          command: git diff --exit-code
+          command: ci/normalize_expected.sh && git diff --exit-code
       - run:
           name: 'Check for C-style comments in migration files'
-          command: ci/disallow_c_comments_in_migrations.sh
+          command: ci/disallow_c_comments_in_migrations.sh && git diff --exit-code
       - run:
-          name: 'Check if changed'
-          command: git diff --exit-code
-      - run:
-          name: 'Check for comments that start with # character in spec files'
-          command: ci/disallow_hash_comments_in_spec_files.sh
-      - run:
-          name: 'Check if changed'
-          command: git diff --exit-code
+          name: 'Check for comment--cached ns that start with # character in spec files'
+          command: ci/disallow_hash_comments_in_spec_files.sh && git diff --exit-code
       - run:
           name: 'Check for gitignore entries .for source files'
-          command: ci/fix_gitignore.sh
-      - run:
-          name: 'Check if changed'
-          command: git diff --exit-code
+          command: ci/fix_gitignore.sh && git diff --exit-code
       - run:
           name: 'Check for lengths of changelog entries'
           command: ci/disallow_long_changelog_entries.sh
@@ -180,11 +172,9 @@ jobs:
       - store_artifacts:
           name: 'Save regressions'
           path: src/test/regress/regression.diffs
-          when: on_fail
       - store_artifacts:
           name: 'Save core dumps'
           path: /tmp/core_dumps
-          when: on_fail
       - store_artifacts:
           name: 'Save pg_upgrade logs for newData dir'
           path: /tmp/pg_upgrade_newData_logs
@@ -267,17 +257,16 @@ jobs:
           name: 'Save core dumps'
           path: /tmp/core_dumps
       - store_artifacts:
-          name: "Save logfiles"
+          name: 'Save logfiles'
           path: src/test/regress/tmp_citus_test/logfiles
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
-
 
   test-citus-upgrade:
     description: Runs citus upgrade tests
     parameters:
       pg_major:
-        description: "postgres major version"
+        description: 'postgres major version'
         type: integer
       image:
         description: 'docker image to use as for the tests'
@@ -348,11 +337,9 @@ jobs:
       - store_artifacts:
           name: 'Save regressions'
           path: src/test/regress/regression.diffs
-          when: on_fail
       - store_artifacts:
           name: 'Save core dumps'
           path: /tmp/core_dumps
-          when: on_fail
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,upgrade'
 
@@ -360,7 +347,7 @@ jobs:
     description: Runs the common tests of citus
     parameters:
       pg_major:
-        description: "postgres major version"
+        description: 'postgres major version'
         type: integer
       image:
         description: 'docker image to use as for the tests'
@@ -370,7 +357,7 @@ jobs:
         description: 'docker image tag to use'
         type: string
       make:
-        description: "make target"
+        description: 'make target'
         type: string
     docker:
       - image: '<< parameters.image >>:<< parameters.image_tag >><< pipeline.parameters.image_suffix >>'
@@ -416,18 +403,15 @@ jobs:
       - store_artifacts:
           name: 'Save regressions'
           path: src/test/regress/regression.diffs
-          when: on_fail
       - store_artifacts:
           name: 'Save mitmproxy output (failure test specific)'
           path: src/test/regress/proxy.output
       - store_artifacts:
           name: 'Save results'
           path: src/test/regress/results/
-          when: on_fail
       - store_artifacts:
           name: 'Save core dumps'
           path: /tmp/core_dumps
-          when: on_fail
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,<< parameters.make >>'
           when: always
@@ -436,7 +420,7 @@ jobs:
     description: Runs tap tests for citus
     parameters:
       pg_major:
-        description: "postgres major version"
+        description: 'postgres major version'
         type: integer
       image:
         description: 'docker image to use as for the tests'
@@ -449,7 +433,7 @@ jobs:
         description: 'name of the tap test suite to run'
         type: string
       make:
-        description: "make target"
+        description: 'make target'
         type: string
         default: installcheck
     docker:
@@ -488,18 +472,16 @@ jobs:
       - store_artifacts:
           name: 'Save tap logs'
           path: /home/circleci/project/src/test/recovery/tmp_check/log
-          when: on_fail
       - store_artifacts:
           name: 'Save core dumps'
           path: /tmp/core_dumps
-          when: on_fail
       - codecov/upload:
           flags: 'test_<< parameters.pg_major >>,tap_<< parameters.suite >>_<< parameters.make >>'
           when: always
 
   check-merge-to-enterprise:
     docker:
-      - image: citus/extbuilder:13.4
+      - image: citus/extbuilder:<< pipeline.parameters.pg13_version >>
     working_directory: /home/circleci/project
     steps:
       - checkout
@@ -541,7 +523,6 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-
       - check-merge-to-enterprise:
           filters:
             branches:
@@ -551,15 +532,15 @@ workflows:
       - build:
           name: build-12
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
       - build:
           name: build-13
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
       - build:
           name: build-14
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
 
       - check-style
       - check-sql-snapshots
@@ -567,266 +548,266 @@ workflows:
       - test-citus:
           name: 'test-12_check-multi'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-multi
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-multi-1'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-multi-1
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-mx'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-multi-mx
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-vanilla'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-vanilla
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-isolation'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-isolation
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-worker'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-worker
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-operations'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-operations
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-follower-cluster'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-follower-cluster
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-columnar'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-columnar
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-columnar-isolation'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-columnar-isolation
           requires: [build-12]
       - tap-test-citus:
           name: 'test_12_tap-recovery'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           suite: recovery
           requires: [build-12]
       - test-citus:
           name: 'test-12_check-failure'
           pg_major: 12
           image: citus/failtester
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           make: check-failure
           requires: [build-12]
 
       - test-citus:
           name: 'test-13_check-multi'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-multi
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-multi-1'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-multi-1
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-mx'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-multi-mx
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-vanilla'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-vanilla
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-isolation'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-isolation
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-worker'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-worker
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-operations'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-operations
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-follower-cluster'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-follower-cluster
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-columnar'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-columnar
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-columnar-isolation'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-columnar-isolation
           requires: [build-13]
       - tap-test-citus:
           name: 'test_13_tap-recovery'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           suite: recovery
           requires: [build-13]
       - test-citus:
           name: 'test-13_check-failure'
           pg_major: 13
           image: citus/failtester
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           make: check-failure
           requires: [build-13]
 
       - test-citus:
           name: 'test-14_check-multi'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-multi
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-multi-1'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-multi-1
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-mx'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-multi-mx
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-vanilla'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-vanilla
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-isolation'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-isolation
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-worker'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-worker
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-operations'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-operations
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-follower-cluster'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-follower-cluster
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-columnar'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-columnar
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-columnar-isolation'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-columnar-isolation
           requires: [build-14]
       - tap-test-citus:
           name: 'test_14_tap-recovery'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           suite: recovery
           requires: [build-14]
       - test-citus:
           name: 'test-14_check-failure'
           pg_major: 14
           image: citus/failtester
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           make: check-failure
           requires: [build-14]
 
       - test-arbitrary-configs:
           name: 'test-12_check-arbitrary-configs'
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           requires: [build-12]
       - test-arbitrary-configs:
           name: 'test-13_check-arbitrary-configs'
           pg_major: 13
-          image_tag: '13.4'
+          image_tag: '<< pipeline.parameters.pg13_version >>'
           requires: [build-13]
       - test-arbitrary-configs:
           name: 'test-14_check-arbitrary-configs'
           pg_major: 14
-          image_tag: '14.0'
+          image_tag: '<< pipeline.parameters.pg14_version >>'
           requires: [build-14]
 
       - test-pg-upgrade:
           name: 'test-12-13_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 13
-          image_tag: '12.8-13.4-14.0'
-          requires: [build-12,build-13]
+          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
+          requires: [build-12, build-13]
 
       - test-pg-upgrade:
           name: 'test-12-14_check-pg-upgrade'
           old_pg_major: 12
           new_pg_major: 14
-          image_tag: '12.8-13.4-14.0'
-          requires: [build-12,build-14]
+          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
+          requires: [build-12, build-14]
 
       - test-pg-upgrade:
           name: 'test-13-14_check-pg-upgrade'
           old_pg_major: 13
           new_pg_major: 14
-          image_tag: '12.8-13.4-14.0'
-          requires: [build-13,build-14]
+          image_tag: '<< pipeline.parameters.upgrade_pg_versions >>'
+          requires: [build-13, build-14]
 
       - test-citus-upgrade:
           name: test-12_check-citus-upgrade
           pg_major: 12
-          image_tag: '12.8'
+          image_tag: '<< pipeline.parameters.pg12_version >>'
           requires: [build-12]
 
       - ch_benchmark:

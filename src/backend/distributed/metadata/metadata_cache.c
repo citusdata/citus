@@ -4373,6 +4373,13 @@ GetIntervalTypeInfo(char partitionMethod, Var *partitionColumn,
 		case DISTRIBUTE_BY_APPEND:
 		case DISTRIBUTE_BY_RANGE:
 		{
+			/* we need a valid partition column Var in this case */
+			if (partitionColumn == NULL)
+			{
+				ereport(ERROR, (errcode(ERRCODE_INTERNAL_ERROR),
+								errmsg("unexpected partition column value: null"),
+								errdetail("Please report this to the Citus core team.")));
+			}
 			*intervalTypeId = partitionColumn->vartype;
 			*intervalTypeMod = partitionColumn->vartypmod;
 			break;

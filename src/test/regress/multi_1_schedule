@@ -26,6 +26,7 @@ test: multi_cluster_management
 # below tests are placed right after multi_cluster_management as we do
 # remove/add node operations and we do not want any preexisting objects
 test: non_super_user_object_metadata
+test: propagate_foreign_servers
 test: alter_role_propagation
 test: propagate_extension_commands
 test: escape_extension_name
@@ -34,11 +35,9 @@ test: alter_database_owner
 
 test: multi_test_catalog_views
 test: multi_table_ddl
-test: check_mx
 test: multi_sequence_default
 test: turn_mx_off
 test: multi_name_lengths
-test: turn_mx_on
 test: multi_name_resolution
 test: multi_metadata_access
 test: multi_metadata_attributes
@@ -193,8 +192,8 @@ test: check_mx
 test: turn_mx_off
 # test: multi_generate_ddl_commands multi_repair_shards
 test: multi_create_shards
-test: multi_transaction_recovery
 test: turn_mx_on
+test: multi_transaction_recovery
 
 test: local_dist_join_modifications
 test: local_table_join
@@ -231,10 +230,7 @@ test: multi_drop_extension
 # multi_metadata_sync tests the propagation of mx-related metadata changes to metadata workers
 # multi_unsupported_worker_operations tests that unsupported operations error out on metadata workers
 # ----------
-test: check_mx
-test: turn_mx_off
 test: multi_metadata_sync
-test: turn_mx_on
 test: multi_unsupported_worker_operations
 
 # ----------
@@ -247,8 +243,6 @@ test: multi_schema_support
 # ----------
 # multi_function_evaluation tests edge-cases in master-side function pre-evaluation
 # ----------
-test: check_mx
-test: turn_mx_off
 test: multi_function_evaluation
 
 # ----------
@@ -260,6 +254,8 @@ test: multi_truncate
 # multi_colocation_utils tests utility functions written for co-location feature & internal API
 # multi_colocated_shard_transfer tests master_copy_shard_placement with colocated tables.
 # ----------
+test: check_mx
+test: turn_mx_off
 test: multi_colocation_utils
 test: turn_mx_on
 test: multi_colocated_shard_transfer

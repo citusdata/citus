@@ -225,6 +225,27 @@ extern Oid GetReferencedTableId(Oid foreignKeyId);
 extern Oid GetReferencingTableId(Oid foreignKeyId);
 extern bool RelationInvolvedInAnyNonInheritedForeignKeys(Oid relationId);
 
+/* foreign_server.c - forward declarations */
+extern List * PreprocessCreateForeignServerStmt(Node *node, const char *queryString,
+												ProcessUtilityContext
+												processUtilityContext);
+extern List * PreprocessAlterForeignServerStmt(Node *node, const char *queryString,
+											   ProcessUtilityContext processUtilityContext);
+extern List * PreprocessRenameForeignServerStmt(Node *node, const char *queryString,
+												ProcessUtilityContext
+												processUtilityContext);
+extern List * PreprocessAlterForeignServerOwnerStmt(Node *node, const char *queryString,
+													ProcessUtilityContext
+													processUtilityContext);
+extern List * PreprocessDropForeignServerStmt(Node *node, const char *queryString,
+											  ProcessUtilityContext
+											  processUtilityContext);
+extern List * PostprocessCreateForeignServerStmt(Node *node, const char *queryString);
+extern List * PostprocessAlterForeignServerOwnerStmt(Node *node, const char *queryString);
+extern ObjectAddress CreateForeignServerStmtObjectAddress(Node *node, bool missing_ok);
+extern ObjectAddress AlterForeignServerOwnerStmtObjectAddress(Node *node, bool
+															  missing_ok);
+extern List * GetForeignServerCreateDDLCommand(Oid serverId);
 
 /* function.c - forward declarations */
 extern List * PreprocessCreateFunctionStmt(Node *stmt, const char *queryString,

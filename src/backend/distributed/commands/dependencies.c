@@ -326,6 +326,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			return CreateExtensionDDLCommand(dependency);
 		}
 
+		case OCLASS_FOREIGN_SERVER:
+		{
+			return GetForeignServerCreateDDLCommand(dependency->objectId);
+		}
+
 		default:
 		{
 			break;

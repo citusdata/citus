@@ -7,6 +7,7 @@
 #include "udfs/citus_check_cluster_node_health/11.0-1.sql"
 
 #include "udfs/citus_internal_add_object_metadata/11.0-1.sql"
+#include "udfs/citus_run_local_command/11.0-1.sql"
 
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);
@@ -43,3 +44,16 @@ CREATE FUNCTION worker_drop_distributed_table_metadata_only(table_oid oid)
     AS 'MODULE_PATHNAME', $$worker_drop_distributed_table_metadata_only$$;
 COMMENT ON FUNCTION worker_drop_distributed_table_metadata_only(table_oid oid)
     IS 'drops the metadata of the given table oid';
+-- Here we keep track of partitioned tables that exists before Citus 11
+-- where we need to call fix_all_partition_shard_index_names() before
+-- metadata is synced. Note that after citus-11, we automatically
+-- adjust the indexes so we only need to fix existing indexes
+DO LANGUAGE plpgsql
+$$
+DECLARE
+  partitioned_table_exists bool :=false;
+BEGIN
+      SELECT count(*) > 0 INTO partitioned_table_exists FROM pg_dist_partition p JOIN pg_class c ON p.logicalrelid = c.oid WHERE c.relkind = 'p';
+      UPDATE pg_dist_node_metadata SET metadata=jsonb_set(metadata, '{partitioned_citus_table_exists_pre_11}', to_jsonb(partitioned_table_exists), true);
+END;
+$$;

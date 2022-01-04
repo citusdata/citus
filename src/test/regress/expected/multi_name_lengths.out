@@ -219,8 +219,9 @@ NOTICE:  identifier "append_zero_shard_table_12345678901234567890123456789012345
 -- Verify that CREATE INDEX on already distributed table has proper shard names.
 CREATE INDEX tmp_idx_12345678901234567890123456789012345678901234567890 ON name_lengths(col2);
 \c - - :public_worker_1_host :worker_1_port
+SET citus.override_table_visibility TO FALSE;
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
-    relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
+    relname SIMILAR TO 'tmp_idx_%\_\d{6}' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
                              relname                             | Column |  Type   | Definition
 ---------------------------------------------------------------------
  tmp_idx_123456789012345678901234567890123456789_5e470afa_225003 | col2   | integer | col2
@@ -237,8 +238,9 @@ ALTER INDEX tmp_idx_123456789012345678901234567890123456789012345678901234567890
 NOTICE:  identifier "tmp_idx_123456789012345678901234567890123456789012345678901234567890" will be truncated to "tmp_idx_1234567890123456789012345678901234567890123456789012345"
 NOTICE:  identifier "tmp_idx_newname_123456789012345678901234567890123456789012345678901234567890" will be truncated to "tmp_idx_newname_12345678901234567890123456789012345678901234567"
 \c - - :public_worker_1_host :worker_1_port
+SET citus.override_table_visibility TO FALSE;
 SELECT "relname", "Column", "Type", "Definition" FROM index_attrs WHERE
-    relname LIKE 'tmp_idx_%' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
+    relname SIMILAR TO 'tmp_idx_%\_\d{6}' ORDER BY 1 DESC, 2 DESC, 3 DESC, 4 DESC;
                              relname                             | Column |  Type   | Definition
 ---------------------------------------------------------------------
  tmp_idx_newname_1234567890123456789012345678901_c54e849b_225003 | col2   | integer | col2
@@ -337,6 +339,7 @@ SELECT create_distributed_table('sneaky_name_lengths', 'col1', 'hash');
 (1 row)
 
 \c - - :public_worker_1_host :worker_1_port
+SET citus.override_table_visibility TO FALSE;
 SELECT c1.relname AS unique_index_name
 FROM pg_class c1
     JOIN pg_index i ON i.indexrelid = c1.oid
@@ -369,6 +372,7 @@ SELECT create_distributed_table('too_long_12345678901234567890123456789012345678
 (1 row)
 
 \c - - :public_worker_1_host :worker_1_port
+SET citus.override_table_visibility TO FALSE;
 \dt *225000000000*
                                       List of relations
  Schema |                              Name                               | Type  |  Owner
@@ -401,7 +405,8 @@ WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!0
 (1 row)
 
 \c - - :public_worker_1_host :worker_1_port
-\dt public.elephant_*
+SET citus.override_table_visibility TO FALSE;
+\dt public.elephant_*[0-9]+
                               List of relations
  Schema |                      Name                       | Type  |  Owner
 ---------------------------------------------------------------------
@@ -409,7 +414,7 @@ WHERE logicalrelid = U&'elephant_!0441!043B!043E!043D!0441!043B!043E!043D!0441!0
  public | elephant_слонслонслонсло_c8b737c2_2250000000003 | table | postgres
 (2 rows)
 
-\di public.elephant_*
+\di public.elephant_*[0-9]+
                                                        List of relations
  Schema |                      Name                       | Type  |  Owner   |                      Table
 ---------------------------------------------------------------------

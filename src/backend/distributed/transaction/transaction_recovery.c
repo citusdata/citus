@@ -183,7 +183,7 @@ RecoverWorkerTransactions(WorkerNode *workerNode)
 	 * distributed transactions.
 	 *
 	 * We could avoid this by temporarily blocking new prepared transactions
-	 * from being created by taking an ExlusiveLock on pg_dist_transaction.
+	 * from being created by taking an ExclusiveLock on pg_dist_transaction.
 	 * However, this hurts write performance, so instead we avoid blocking
 	 * by consulting the list of active distributed transactions, and follow
 	 * a carefully chosen order to avoid race conditions:

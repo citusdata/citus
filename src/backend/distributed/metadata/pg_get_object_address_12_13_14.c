@@ -456,6 +456,14 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 			break;
 		}
 
+		case OBJECT_FOREIGN_SERVER:
+		{
+			idToCheck = addr->objectId;
+			aclMaskResult = pg_foreign_server_aclmask(idToCheck, userId, ACL_USAGE,
+													  ACLMASK_ANY);
+			break;
+		}
+
 		case OBJECT_SEQUENCE:
 		{
 			idToCheck = addr->objectId;

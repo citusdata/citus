@@ -613,6 +613,11 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			return true;
 		}
 
+		case OCLASS_FOREIGN_SERVER:
+		{
+			return true;
+		}
+
 		case OCLASS_ROLE:
 		{
 			/*

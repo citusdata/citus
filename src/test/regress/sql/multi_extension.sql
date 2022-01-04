@@ -420,8 +420,30 @@ INSERT INTO pg_dist_shard (logicalrelid, shardid, shardstorage) VALUES ('pg_dist
 ALTER EXTENSION citus UPDATE TO '11.0-1';
 DELETE FROM pg_dist_shard WHERE shardid = 1;
 
+-- partitioned table count is tracked on Citus 11 upgrade
+CREATE TABLE e_transactions(order_id varchar(255) NULL, transaction_id int) PARTITION BY LIST(transaction_id);
+CREATE TABLE orders_2020_07_01
+PARTITION OF e_transactions FOR VALUES IN (1,2,3);
+INSERT INTO pg_dist_partition VALUES ('e_transactions'::regclass,'h', NULL, 7, 's');
+
+SELECT
+	(metadata->>'partitioned_citus_table_exists_pre_11')::boolean as partitioned_citus_table_exists_pre_11,
+	(metadata->>'partitioned_citus_table_exists_pre_11') IS NULL as is_null
+FROM
+	pg_dist_node_metadata;
+
 -- Test downgrade to 10.2-4 from 11.0-1
 ALTER EXTENSION citus UPDATE TO '11.0-1';
+
+SELECT
+	(metadata->>'partitioned_citus_table_exists_pre_11')::boolean as partitioned_citus_table_exists_pre_11,
+	(metadata->>'partitioned_citus_table_exists_pre_11') IS NULL as is_null
+FROM
+	pg_dist_node_metadata;
+
+DELETE FROM pg_dist_partition WHERE logicalrelid = 'e_transactions'::regclass;
+DROP TABLE e_transactions;
+
 ALTER EXTENSION citus UPDATE TO '10.2-4';
 -- Should be empty result since upgrade+downgrade should be a no-op
 SELECT * FROM multi_extension.print_extension_changes();

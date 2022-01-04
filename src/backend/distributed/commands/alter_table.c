@@ -1190,7 +1190,7 @@ CreateDistributedTableLike(TableConversionState *con)
 		 * at this moment, but that's going to be the table in pg_dist_partition.
 		 */
 		Oid parentRelationId = PartitionParentOid(originalRelationId);
-		Var *parentDistKey = DistPartitionKey(parentRelationId);
+		Var *parentDistKey = DistPartitionKeyOrError(parentRelationId);
 		char *parentDistKeyColumnName =
 			ColumnToColumnName(parentRelationId, nodeToString(parentDistKey));
 
