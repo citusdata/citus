@@ -666,7 +666,7 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	{
 		CreateForeignTableStmt *createForeignTableStmt =
 			(CreateForeignTableStmt *) parsetree;
-		CreateStmt *createTableStmt = (CreateStmt *) &(createForeignTableStmt->base);
+		CreateStmt *createTableStmt = (CreateStmt *) (&createForeignTableStmt->base);
 
 		PostprocessCreateTableStmt(createTableStmt, queryString);
 	}
