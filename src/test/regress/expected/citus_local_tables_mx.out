@@ -772,22 +772,30 @@ ALTER FOREIGN TABLE foreign_table SET SCHEMA public;
 ALTER FOREIGN TABLE public.foreign_table RENAME TO foreign_table_newname;
 ALTER FOREIGN TABLE public.foreign_table_newname RENAME COLUMN id TO id_test;
 ALTER FOREIGN TABLE public.foreign_table_newname ADD dummy_col bigint NOT NULL DEFAULT 1;
+ALTER FOREIGN TABLE public.foreign_table_newname ALTER dummy_col DROP DEFAULT;
+ALTER FOREIGN TABLE public.foreign_table_newname ALTER dummy_col SET DEFAULT 2;
 ALTER FOREIGN TABLE public.foreign_table_newname ALTER dummy_col TYPE int;
 ALTER TABLE foreign_table_test RENAME COLUMN id TO id_test;
 ALTER TABLE foreign_table_test ADD dummy_col int NOT NULL DEFAULT 1;
+INSERT INTO public.foreign_table_newname VALUES (2, 'test_2');
+INSERT INTO foreign_table_test VALUES (3, 'test_3');
 \c - - - :worker_1_port
 SET search_path TO citus_local_tables_mx;
 SELECT * FROM public.foreign_table_newname;
  id_test |   data    | a | dummy_col
 ---------------------------------------------------------------------
        1 | text_test | 1 |         1
-(1 row)
+       2 | test_2    | 1 |         2
+       3 | test_3    | 2 |         1
+(3 rows)
 
 SELECT * FROM foreign_table_test;
  id_test |   data    | a | dummy_col
 ---------------------------------------------------------------------
        1 | text_test | 1 |         1
-(1 row)
+       2 | test_2    | 1 |         2
+       3 | test_3    | 2 |         1
+(3 rows)
 
 -- should error out
 ALTER FOREIGN TABLE public.foreign_table_newname DROP COLUMN id;
@@ -815,7 +823,9 @@ SELECT * FROM foreign_table;
    data    | a
 ---------------------------------------------------------------------
  text_test | 1
-(1 row)
+ test_2    | 1
+ test_3    | 2
+(3 rows)
 
 -- test alter user mapping
 ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'nonexistiniguser');
@@ -868,13 +878,13 @@ INSERT INTO foreign_table_test VALUES (1, 'testt');
 SELECT * FROM foreign_table;
  data  | a
 ---------------------------------------------------------------------
- testt | 2
+ testt | 3
 (1 row)
 
 SELECT * FROM foreign_table_test;
  id | data  | a
 ---------------------------------------------------------------------
-  1 | testt | 2
+  1 | testt | 3
 (1 row)
 
 --verify
