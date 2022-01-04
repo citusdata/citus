@@ -453,6 +453,11 @@ ALTER TABLE foreign_table_test RENAME COLUMN id_test TO id;
 ALTER TABLE foreign_table DROP COLUMN id;
 ALTER FOREIGN TABLE foreign_table DROP COLUMN dummy_col;
 ALTER TABLE foreign_table_test DROP COLUMN dummy_col;
+ALTER FOREIGN TABLE foreign_table OPTIONS (DROP schema_name, SET table_name 'notable');
+
+SELECT run_command_on_workers($$SELECT f.ftoptions FROM pg_foreign_table f JOIN pg_class c ON f.ftrelid=c.oid WHERE c.relname = 'foreign_table';$$);
+
+ALTER FOREIGN TABLE foreign_table OPTIONS (ADD schema_name 'citus_local_tables_mx', SET table_name 'foreign_table_test');
 SELECT * FROM foreign_table;
 -- test alter user mapping
 ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'nonexistiniguser');

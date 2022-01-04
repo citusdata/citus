@@ -2952,6 +2952,16 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+			case AT_GenericOptions:
+			{
+				if (IsForeignTable(relationId))
+				{
+					break;
+				}
+			}
+
+			/* fallthrough */
+
 			default:
 			{
 				ereport(ERROR,

@@ -835,6 +835,15 @@ ALTER TABLE foreign_table_test RENAME COLUMN id_test TO id;
 ALTER TABLE foreign_table DROP COLUMN id;
 ALTER FOREIGN TABLE foreign_table DROP COLUMN dummy_col;
 ALTER TABLE foreign_table_test DROP COLUMN dummy_col;
+ALTER FOREIGN TABLE foreign_table OPTIONS (DROP schema_name, SET table_name 'notable');
+SELECT run_command_on_workers($$SELECT f.ftoptions FROM pg_foreign_table f JOIN pg_class c ON f.ftrelid=c.oid WHERE c.relname = 'foreign_table';$$);
+          run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,{table_name=notable})
+ (localhost,57638,t,{table_name=notable})
+(2 rows)
+
+ALTER FOREIGN TABLE foreign_table OPTIONS (ADD schema_name 'citus_local_tables_mx', SET table_name 'foreign_table_test');
 SELECT * FROM foreign_table;
    data    | a
 ---------------------------------------------------------------------
