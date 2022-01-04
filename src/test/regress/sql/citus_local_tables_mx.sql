@@ -433,7 +433,7 @@ INSERT INTO foreign_table_test VALUES (3, 'test_3');
 
 ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO pg_monitor;
 SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c on r.oid=c.relowner where relname = 'foreign_table_newname';$$);
-ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO CURRENT_ROLE;
+ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO postgres;
 SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c on r.oid=c.relowner where relname = 'foreign_table_newname';$$);
 
 \c - - - :worker_1_port

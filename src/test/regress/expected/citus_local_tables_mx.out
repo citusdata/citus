@@ -787,7 +787,7 @@ SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c
  (localhost,57638,t,pg_monitor)
 (2 rows)
 
-ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO CURRENT_ROLE;
+ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO postgres;
 SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c on r.oid=c.relowner where relname = 'foreign_table_newname';$$);
     run_command_on_workers
 ---------------------------------------------------------------------
