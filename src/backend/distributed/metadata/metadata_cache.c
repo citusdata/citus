@@ -833,7 +833,12 @@ ResolveGroupShardPlacement(GroupShardPlacement *groupShardPlacement,
 
 	ShardPlacement *shardPlacement = CitusMakeNode(ShardPlacement);
 	int32 groupId = groupShardPlacement->groupId;
-	WorkerNode *workerNode = LookupNodeForGroup(groupId);
+	WorkerNode *workerNode = LookupNodeForGroup(groupId, true);
+
+	if (workerNode == NULL)
+	{
+		return NULL;
+	}
 
 	/* copy everything into shardPlacement but preserve the header */
 	CitusNode header = shardPlacement->type;
@@ -929,7 +934,7 @@ LookupNodeByNodeIdOrError(uint32 nodeId)
  * appropriate error message.
  */
 WorkerNode *
-LookupNodeForGroup(int32 groupId)
+LookupNodeForGroup(int32 groupId, bool checkExistence)
 {
 	bool foundAnyNodes = false;
 
@@ -954,8 +959,18 @@ LookupNodeForGroup(int32 groupId)
 
 	if (!foundAnyNodes)
 	{
-		ereport(ERROR, (errmsg("there is a shard placement in node group %d but "
-							   "there are no nodes in that group", groupId)));
+		if (checkExistence)
+		{
+			ereport(NOTICE, (errmsg("there is a shard placement in node group %d but "
+						"there are no nodes in that group", groupId)));
+
+			return NULL;
+		}
+		else
+		{
+			ereport(ERROR, (errmsg("there is a shard placement in node group %d but "
+						"there are no nodes in that group", groupId)));
+		}
 	}
 
 	switch (ReadFromSecondaries)
@@ -1013,6 +1028,11 @@ ShardPlacementListIncludingOrphanedPlacements(uint64 shardId)
 		ShardPlacement *shardPlacement = ResolveGroupShardPlacement(groupShardPlacement,
 																	tableEntry,
 																	shardIndex);
+
+		if (shardPlacement == NULL)
+		{
+			return NULL;
+		}
 
 		placementList = lappend(placementList, shardPlacement);
 	}

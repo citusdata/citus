@@ -2187,7 +2187,7 @@ LookupTaskPlacementHostAndPort(ShardPlacement *taskPlacement, char **nodeName,
 		 * there were changes in pg_dist_node and we will get those invalidations
 		 * in LookupNodeForGroup.
 		 */
-		WorkerNode *workerNode = LookupNodeForGroup(taskPlacement->groupId);
+		WorkerNode *workerNode = LookupNodeForGroup(taskPlacement->groupId, false);
 		*nodeName = workerNode->workerName;
 		*nodePort = workerNode->workerPort;
 	}

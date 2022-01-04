@@ -455,7 +455,7 @@ CoordinatorNodeIfAddedAsWorkerOrError()
 {
 	ErrorIfCoordinatorNotAddedAsWorkerNode();
 
-	WorkerNode *coordinatorNode = LookupNodeForGroup(COORDINATOR_GROUP_ID);
+	WorkerNode *coordinatorNode = LookupNodeForGroup(COORDINATOR_GROUP_ID, false);
 
 	WorkerNode *coordinatorNodeCopy = palloc0(sizeof(WorkerNode));
 	*coordinatorNodeCopy = *coordinatorNode;

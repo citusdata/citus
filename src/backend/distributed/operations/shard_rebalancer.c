@@ -391,7 +391,7 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 			 placementIndex++)
 		{
 			GroupShardPlacement *groupPlacement = &placementArray[placementIndex];
-			WorkerNode *worker = LookupNodeForGroup(groupPlacement->groupId);
+			WorkerNode *worker = LookupNodeForGroup(groupPlacement->groupId, false);
 			ShardPlacement *placement = CitusMakeNode(ShardPlacement);
 			placement->shardId = groupPlacement->shardId;
 			placement->shardLength = groupPlacement->shardLength;

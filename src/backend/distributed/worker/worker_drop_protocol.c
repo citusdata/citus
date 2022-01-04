@@ -268,6 +268,12 @@ worker_drop_distributed_table_metadata_only(PG_FUNCTION_ARGS)
 		uint64 shardId = *shardIdPointer;
 
 		List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
+		if (shardPlacementList == NULL)
+		{
+			ereport(NOTICE, (errmsg("placement for relation with oid %d does not exist, skipping", relationId)));
+			PG_RETURN_VOID();
+		}
+
 		ShardPlacement *placement = NULL;
 		foreach_ptr(placement, shardPlacementList)
 		{
