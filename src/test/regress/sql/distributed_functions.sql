@@ -1,7 +1,9 @@
 SET citus.next_shard_id TO 20020000;
 
+SET client_min_messages TO ERROR;
 CREATE USER functionuser;
-SELECT run_command_on_workers($$CREATE USER functionuser;$$);
+SELECT 1 FROM run_command_on_workers($$CREATE USER functionuser;$$);
+RESET client_min_messages;
 
 CREATE SCHEMA function_tests AUTHORIZATION functionuser;
 CREATE SCHEMA function_tests2 AUTHORIZATION functionuser;
@@ -692,8 +694,9 @@ DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
 \c - - - :master_port
 
+SET client_min_messages TO ERROR;
 DROP USER functionuser;
-SELECT run_command_on_workers($$DROP USER functionuser$$);
+SELECT 1 FROM run_command_on_workers($$DROP USER functionuser$$);
 
 -- sync metadata again
 SELECT start_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
