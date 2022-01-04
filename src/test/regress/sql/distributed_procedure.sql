@@ -1,7 +1,9 @@
 SET citus.next_shard_id TO 20030000;
 
+SET client_min_messages TO ERROR;
 CREATE USER procedureuser;
-SELECT run_command_on_workers($$CREATE USER procedureuser;$$);
+SELECT 1 FROM run_command_on_workers($$CREATE USER procedureuser;$$);
+RESET client_min_messages;
 
 CREATE SCHEMA procedure_tests AUTHORIZATION procedureuser;
 CREATE SCHEMA procedure_tests2 AUTHORIZATION procedureuser;
@@ -81,5 +83,5 @@ SELECT run_command_on_workers($$DROP SCHEMA procedure_tests CASCADE;$$);
 DROP SCHEMA procedure_tests2 CASCADE;
 SELECT run_command_on_workers($$DROP SCHEMA procedure_tests2 CASCADE;$$);
 DROP USER procedureuser;
-SELECT run_command_on_workers($$DROP USER procedureuser;$$);
+SELECT 1 FROM run_command_on_workers($$DROP USER procedureuser;$$);
 
