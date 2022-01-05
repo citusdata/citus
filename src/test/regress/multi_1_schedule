@@ -278,8 +278,9 @@ test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
 test: turn_mx_off
 test: citus_local_tables
-test: multi_row_router_insert mixed_relkind_tests
+test: mixed_relkind_tests
 test: turn_mx_on
+test: multi_row_router_insert
 test: multi_reference_table citus_local_tables_queries
 test: citus_local_table_triggers
 test: coordinator_shouldhaveshards
