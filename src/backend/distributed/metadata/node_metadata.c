@@ -510,10 +510,6 @@ citus_disable_node(PG_FUNCTION_ARGS)
 								 workerNode->workerName,
 								 nodePort)));
 		}
-
-		bool forceRemoteDelete = false;
-		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
-														forceRemoteDelete);
 	}
 
 	TransactionModifiedNodeMetadata = true;
@@ -1190,7 +1186,7 @@ ActivateNode(char *nodeName, int nodePort)
 	 */
 	if (!NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode) && !workerNode->isActive)
 	{
-;		bool forceRemoteDelete = true;
+		bool forceRemoteDelete = true;
 		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
 														forceRemoteDelete);
 	}
@@ -1212,6 +1208,7 @@ ActivateNode(char *nodeName, int nodePort)
 	}
 
 	SetUpDistributedTableWithDependencies(workerNode);
+	SetUpMultipleDistributedTableIntegrations(workerNode);
 
 	if (syncMetadata)
 	{
@@ -1220,7 +1217,6 @@ ActivateNode(char *nodeName, int nodePort)
 		if (!NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode))
 		{
 			ClearDistributedObjectsFromNode(workerNode);
-			SetUpMultipleDistributedTableIntegrations(workerNode);
 			SetUpObjectMetadata(workerNode);
 		}
 	}

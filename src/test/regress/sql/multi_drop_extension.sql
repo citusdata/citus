@@ -76,10 +76,8 @@ CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name tex
     AS 'citus', $$master_create_worker_shards$$
     LANGUAGE C STRICT;
 -- re-add the nodes to the cluster
-set citus.log_remote_commands to true;
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
-reset citus.log_remote_commands;
 
 -- verify that a table can be created after the extension has been dropped and recreated
 CREATE TABLE testtableddl(somecol int, distributecol text NOT NULL);

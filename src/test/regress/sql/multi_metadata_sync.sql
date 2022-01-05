@@ -6,6 +6,12 @@
 -- metadata changes to MX tables.
 
 -- Turn metadata sync off at first
+\c - - - :worker_1_port
+table pg_dist_partition;
+table pg_dist_node;
+
+\c - - - :master_port
+
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
@@ -47,18 +53,14 @@ COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regcla
                                                                distribution_method citus.distribution_type)
     IS 'define the table distribution functions';
 
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
-                                                                  replication_factor integer DEFAULT 2)
-    RETURNS void
-    AS 'citus', $$master_create_worker_shards$$
-    LANGUAGE C STRICT;
-
 -- Create a test table with constraints and SERIAL and default from user defined sequence
 CREATE SEQUENCE user_defined_seq;
 CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL, col_4 BIGINT DEFAULT nextval('user_defined_seq'));
-SELECT master_create_distributed_table('mx_test_table', 'col_1', 'hash');
-SELECT master_create_worker_shards('mx_test_table', 8, 1);
+set citus.shard_count to 8;
+set citus.shard_replication_factor to 1;
+SELECT create_distributed_table('mx_test_table', 'col_1');
+reset citus.shard_count;
+reset citus.shard_replication_factor;
 
 -- Set the replication model of the test table to streaming replication so that it is
 -- considered as an MX table
@@ -87,7 +89,7 @@ UPDATE pg_dist_partition SET partmethod='r' WHERE logicalrelid='non_mx_test_tabl
 SELECT unnest(master_metadata_snapshot()) order by 1;
 
 
--- Test start_metadata_sync_to_node UDF
+-- Test start_metadata_sync_to_node and citus_activate_node UDFs
 
 -- Ensure that hasmetadata=false for all nodes
 SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
@@ -103,12 +105,27 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
 -- Add a node to another cluster to make sure it's also synced
 SELECT master_add_secondary_node('localhost', 8889, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
 
--- Run start_metadata_sync_to_node and check that it marked hasmetadata for that worker
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+\c - - - :worker_1_port
+table pg_dist_partition;
+table pg_dist_node;
+table pg_dist_shard;
+table pg_dist_shard_placement;
+
+\c - - - :master_port
+-- Run start_metadata_sync_to_node and citus_activate_node and check that it marked hasmetadata for that worker
+table pg_dist_partition;
+\d
+set citus.log_remote_commands to true;
+set citus.worker_min_messages to debug5;
+SELECT citus_activate_node('localhost', :worker_1_port);
+reset citus.log_remote_commands;
+reset citus.worker_min_messages;
+
 SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
 
 -- Check that the metadata has been copied to the worker
 \c - - - :worker_1_port
+table pg_dist_partition;
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
@@ -126,7 +143,7 @@ SELECT * FROM pg_dist_colocation ORDER BY colocationid;
 -- Make sure that truncate trigger has been set for the MX table on worker
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
--- Make sure that start_metadata_sync_to_node considers foreign key constraints
+-- Make sure that citus_activate_node considers foreign key constraints
 \c - - - :master_port
 
 -- Since we're superuser, we can set the replication model to 'streaming' to
@@ -142,7 +159,7 @@ CREATE TABLE mx_testing_schema_2.fk_test_2 (col1 int, col2 int, col3 text,
 SELECT create_distributed_table('mx_testing_schema.fk_test_1', 'col1');
 SELECT create_distributed_table('mx_testing_schema_2.fk_test_2', 'col1');
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
 
 -- Check that foreign key metadata exists on the worker
 \c - - - :worker_1_port
@@ -154,10 +171,10 @@ DROP TABLE mx_testing_schema.fk_test_1;
 
 RESET citus.shard_replication_factor;
 
--- Check that repeated calls to start_metadata_sync_to_node has no side effects
+-- Check that repeated calls to citus_activate_node has no side effects
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
 \c - - - :worker_1_port
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
@@ -171,10 +188,11 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_testing_schema.mx_index'::regclass;
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
--- Make sure that start_metadata_sync_to_node can be called inside a transaction and rollbacked
+-- Make sure that citus_activate_node can be called inside a transaction and rollbacked
 \c - - - :master_port
 BEGIN;
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT citus_activate_node('localhost', :worker_2_port);
 ROLLBACK;
 
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
@@ -182,7 +200,7 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 -- Check that the distributed table can be queried from the worker
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
 
 CREATE TABLE mx_query_test (a int, b text, c int);
 SELECT create_distributed_table('mx_query_test', 'a');
@@ -441,7 +459,7 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 -- sync table with serial column after create_distributed_table
 CREATE TABLE mx_table_with_small_sequence(a int, b SERIAL, c SMALLSERIAL);
 SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
 DROP TABLE mx_table_with_small_sequence;
 
 -- Show that create_distributed_table works with a serial column
@@ -486,7 +504,7 @@ SELECT nextval('mx_table_with_sequence_c_seq');
 
 -- Check that adding a new metadata node sets the sequence space correctly
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT citus_activate_node('localhost', :worker_2_port);
 
 \c - - - :worker_2_port
 SELECT groupid FROM pg_dist_local_group;
@@ -531,7 +549,7 @@ DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 \c - - - :master_port
 
 -- Remove a node so that shards and sequences won't be created on table creation. Therefore,
--- we can test that start_metadata_sync_to_node can actually create the sequence with proper
+-- we can test that citus_activate_node can actually create the sequence with proper
 -- owner
 CREATE TABLE pg_dist_placement_temp AS SELECT * FROM pg_dist_placement;
 CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
@@ -557,7 +575,7 @@ SELECT create_distributed_table('mx_table', 'a');
 
 \c - postgres - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT citus_activate_node('localhost', :worker_2_port);
 
 \c - mx_user - :worker_1_port
 SELECT nextval('mx_table_b_seq');
@@ -771,7 +789,7 @@ SELECT pg_reload_conf();
 UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
 
 SELECT master_add_node('localhost', :worker_2_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT citus_activate_node('localhost', :worker_2_port);
 
 CREATE SEQUENCE mx_test_sequence_0;
 CREATE SEQUENCE mx_test_sequence_1;
@@ -865,6 +883,8 @@ ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
 
--- Turn metadata sync back on at the end
+-- Turn metadata sync back on and ativate them at the end
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_2_port);
