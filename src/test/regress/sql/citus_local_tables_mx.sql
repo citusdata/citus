@@ -525,6 +525,16 @@ INSERT INTO ref_tbl VALUES (1);
 SELECT create_reference_table('ref_tbl');
 SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id;
 
+SELECT citus_add_local_table_to_metadata('foreign_table_local');
+
+\c - - - :worker_1_port
+SET search_path TO citus_local_tables_mx;
+SELECT * FROM dist_tbl d JOIN foreign_table_local f ON d.a=f.id;
+SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id;
+\c - - - :master_port
+
+SET search_path TO citus_local_tables_mx;
+
 -- cleanup at exit
 set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;
