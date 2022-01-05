@@ -16,10 +16,8 @@
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
 test: multi_extension
-test: turn_mx_off
 test: single_node
 test: single_node_truncate
-test: turn_mx_on
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 
