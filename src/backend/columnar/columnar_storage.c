@@ -38,6 +38,7 @@
 
 #include "safe_lib.h"
 
+#include "access/generic_xlog.h"
 #include "catalog/storage.h"
 #include "miscadmin.h"
 #include "storage/bufmgr.h"
@@ -699,9 +700,12 @@ WriteToBlock(Relation rel, BlockNumber blockno, uint32 offset, char *buf,
 			 uint32 len, bool clear)
 {
 	Buffer buffer = ReadBuffer(rel, blockno);
+	GenericXLogState *state = GenericXLogStart(rel);
+
 	LockBuffer(buffer, BUFFER_LOCK_EXCLUSIVE);
 
-	Page page = BufferGetPage(buffer);
+	Page page = GenericXLogRegisterBuffer(state, buffer, GENERIC_XLOG_FULL_IMAGE);
+
 	PageHeader phdr = (PageHeader) page;
 	if (PageIsNew(page) || clear)
 	{
@@ -734,28 +738,10 @@ WriteToBlock(Relation rel, BlockNumber blockno, uint32 offset, char *buf,
 		phdr->pd_lower = offset;
 	}
 
-	START_CRIT_SECTION();
-
 	memcpy_s(page + phdr->pd_lower, phdr->pd_upper - phdr->pd_lower, buf, len);
 	phdr->pd_lower += len;
 
-	MarkBufferDirty(buffer);
-
-	if (RelationNeedsWAL(rel))
-	{
-		XLogBeginInsert();
-
-		/*
-		 * Since columnar will mostly write whole pages we force the transmission of the
-		 * whole image in the buffer
-		 */
-		XLogRegisterBuffer(0, buffer, REGBUF_FORCE_IMAGE);
-
-		XLogRecPtr recptr = XLogInsert(RM_GENERIC_ID, 0);
-		PageSetLSN(page, recptr);
-	}
-
-	END_CRIT_SECTION();
+	GenericXLogFinish(state);
 
 	UnlockReleaseBuffer(buffer);
 }
