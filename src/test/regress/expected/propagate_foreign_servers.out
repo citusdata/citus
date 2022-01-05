@@ -15,6 +15,26 @@ SET citus.enable_ddl_propagation TO ON;
 CREATE SERVER foreign_server_dependent_schema
         FOREIGN DATA WRAPPER postgres_fdw
         OPTIONS (host 'test');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text
+)
+        SERVER foreign_server_dependent_schema
+        OPTIONS (schema_name 'test_dependent_schema', table_name 'foreign_table_test');
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+SELECT citus_add_local_table_to_metadata('foreign_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER TABLE foreign_table OWNER TO pg_monitor;
 SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
@@ -38,6 +58,14 @@ SELECT run_command_on_workers(
  (localhost,57638,t,t)
 (2 rows)
 
+-- verify the owner is altered on workers
+SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c on r.oid=c.relowner where relname = 'foreign_table';$$);
+     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,pg_monitor)
+ (localhost,57638,t,pg_monitor)
+(2 rows)
+
 CREATE SERVER foreign_server_to_drop
         FOREIGN DATA WRAPPER postgres_fdw
         OPTIONS (host 'test');
@@ -45,6 +73,13 @@ CREATE SERVER foreign_server_to_drop
 DROP SERVER foreign_server_dependent_schema, foreign_server_to_drop;
 ERROR:  cannot drop distributed server with other servers
 HINT:  Try dropping each object in a separate DROP command
+DROP FOREIGN TABLE foreign_table;
+SELECT citus_remove_node('localhost', :master_port);
+ citus_remove_node
+---------------------------------------------------------------------
+
+(1 row)
+
 SET client_min_messages TO ERROR;
 DROP SCHEMA test_dependent_schema CASCADE;
 RESET client_min_messages;
