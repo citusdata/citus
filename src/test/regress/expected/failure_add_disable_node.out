@@ -74,8 +74,8 @@ ORDER BY 1, 2;
 (1 row)
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
  shardid | shardstate
 ---------------------------------------------------------------------
@@ -91,8 +91,8 @@ ORDER BY 1, 2;
 (1 row)
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
  shardid | shardstate
 ---------------------------------------------------------------------
@@ -120,8 +120,8 @@ ORDER BY 1, 2;
 (1 row)
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
  shardid | shardstate
 ---------------------------------------------------------------------
@@ -157,8 +157,8 @@ ORDER BY 1, 2;
 (1 row)
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
  shardid | shardstate
 ---------------------------------------------------------------------
@@ -181,8 +181,8 @@ SELECT master_remove_node('localhost', :worker_2_proxy_port);
 (1 row)
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
  shardid | shardstate
 ---------------------------------------------------------------------
@@ -212,8 +212,8 @@ ORDER BY 1, 2;
 (2 rows)
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
  shardid | shardstate
 ---------------------------------------------------------------------

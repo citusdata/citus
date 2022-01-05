@@ -37,8 +37,8 @@ SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
 
 -- verify node is not activated
@@ -46,8 +46,8 @@ SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
 
 -- fail create schema command
@@ -60,8 +60,8 @@ SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
 
 BEGIN;
@@ -81,8 +81,8 @@ SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
 
 -- test master_add_inactive_node
@@ -93,8 +93,8 @@ SELECT master_add_inactive_node('localhost', :worker_2_proxy_port);
 SELECT master_remove_node('localhost', :worker_2_proxy_port);
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
 
 -- reset cluster to original state
@@ -106,8 +106,8 @@ SELECT * FROM master_get_active_worker_nodes()
 ORDER BY 1, 2;
 
 SELECT shardid, shardstate
-FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid)
-WHERE s.logicalrelid = 'user_table'::regclass
+FROM pg_dist_placement p JOIN pg_dist_shard s USING (shardid) JOIN pg_dist_node n USING(groupid)
+WHERE s.logicalrelid = 'user_table'::regclass AND n.isactive
 ORDER BY placementid;
 
 SELECT citus.mitmproxy('conn.allow()');
