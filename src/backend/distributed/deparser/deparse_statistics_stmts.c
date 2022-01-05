@@ -14,6 +14,7 @@
 
 #include "distributed/pg_version_constants.h"
 
+#include "catalog/namespace.h"
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"

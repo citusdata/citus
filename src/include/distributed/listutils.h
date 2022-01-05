@@ -16,9 +16,9 @@
 #include "c.h"
 
 #include "nodes/pg_list.h"
+#include "pg_version_compat.h"
 #include "utils/array.h"
 #include "utils/hsearch.h"
-#include "distributed/version_compat.h"
 
 
 /*
