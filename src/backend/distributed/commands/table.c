@@ -1762,7 +1762,7 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 							   ProcessUtilityContext processUtilityContext)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
-	Assert(stmt->objectType == OBJECT_TABLE);
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
 	if (stmt->relation == NULL)
 	{

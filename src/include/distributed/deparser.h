@@ -53,9 +53,6 @@ extern char * DeparseAlterForeignServerRenameStmt(Node *node);
 extern char * DeparseAlterForeignServerOwnerStmt(Node *node);
 extern char * DeparseDropForeignServerStmt(Node *node);
 
-/* forward declarations for deparse_foreign_table_stmts.c */
-extern char * DeparseAlterForeignTableSchemaStmt(Node *node);
-
 /* forward declarations for deparse_table_stmts.c */
 extern char * DeparseAlterTableSchemaStmt(Node *stmt);
 extern char * DeparseAlterTableStmt(Node *node);

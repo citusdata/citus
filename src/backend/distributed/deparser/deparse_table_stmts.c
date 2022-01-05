@@ -30,7 +30,7 @@ DeparseAlterTableSchemaStmt(Node *node)
 	StringInfoData str = { 0 };
 	initStringInfo(&str);
 
-	Assert(stmt->objectType == OBJECT_TABLE);
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
 	AppendAlterTableSchemaStmt(&str, stmt);
 	return str.data;
@@ -40,8 +40,8 @@ DeparseAlterTableSchemaStmt(Node *node)
 static void
 AppendAlterTableSchemaStmt(StringInfo buf, AlterObjectSchemaStmt *stmt)
 {
-	Assert(stmt->objectType == OBJECT_TABLE);
-	appendStringInfo(buf, "ALTER TABLE ");
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
+	appendStringInfo(buf, "ALTER %sTABLE ", stmt->objectType == OBJECT_FOREIGN_TABLE ? "FOREIGN ":"");
 	if (stmt->missing_ok)
 	{
 		appendStringInfo(buf, "IF EXISTS ");

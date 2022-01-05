@@ -337,14 +337,6 @@ static DistributeObjectOps ForeignServer_AlterOwner = {
 	.address = AlterForeignServerOwnerStmtObjectAddress,
 	.markDistributed = false,
 };
-static DistributeObjectOps ForeignTable_AlterObjectSchema = {
-	.deparse = DeparseAlterForeignTableSchemaStmt,
-	.qualify = QualifyAlterTableSchemaStmt,
-	.preprocess = PreprocessAlterForeignTableSchemaStmt,
-	.postprocess = PostprocessAlterTableSchemaStmt,
-	.address = AlterTableSchemaStmtObjectAddress,
-	.markDistributed = false,
-};
 static DistributeObjectOps ForeignTable_AlterTable = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -780,11 +772,6 @@ GetDistributeObjectOps(Node *node)
 					return &Extension_AlterObjectSchema;
 				}
 
-				case OBJECT_FOREIGN_TABLE:
-				{
-					return &ForeignTable_AlterObjectSchema;
-				}
-
 				case OBJECT_FUNCTION:
 				{
 					return &Function_AlterObjectSchema;
@@ -810,6 +797,7 @@ GetDistributeObjectOps(Node *node)
 					return &Statistics_AlterObjectSchema;
 				}
 
+				case OBJECT_FOREIGN_TABLE:
 				case OBJECT_TABLE:
 				{
 					return &Table_AlterObjectSchema;
