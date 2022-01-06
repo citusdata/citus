@@ -10,6 +10,7 @@
 
 #include "postgres.h"
 
+#include "distributed/backend_data.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
@@ -232,6 +233,10 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	 */
 	char nodePortString[12] = "";
 
+	StringInfo applicationName = makeStringInfo();
+	appendStringInfo(applicationName, "%s%ld", CITUS_APPLICATION_NAME_PREFIX,
+					 GetGlobalPID());
+
 	/*
 	 * This function has three sections:
 	 *   - Initialize the keywords and values (to be copied later) of global parameters
@@ -260,7 +265,7 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		key->database,
 		key->user,
 		GetDatabaseEncodingName(),
-		CITUS_APPLICATION_NAME
+		applicationName->data
 	};
 
 	/*

@@ -14,6 +14,25 @@
 #include "udfs/worker_drop_sequence_dependency/11.0-1.sql"
 #include "udfs/worker_drop_shell_table/11.0-1.sql"
 
+#include "udfs/get_all_active_transactions/11.0-1.sql"
+#include "udfs/get_global_active_transactions/11.0-1.sql"
+
+#include "udfs/citus_worker_stat_activity/11.0-1.sql"
+
+CREATE VIEW citus.citus_worker_stat_activity AS
+SELECT * FROM pg_catalog.citus_worker_stat_activity();
+ALTER VIEW citus.citus_worker_stat_activity SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.citus_worker_stat_activity TO PUBLIC;
+
+#include "udfs/citus_dist_stat_activity/11.0-1.sql"
+
+CREATE VIEW citus.citus_dist_stat_activity AS
+SELECT * FROM pg_catalog.citus_dist_stat_activity();
+ALTER VIEW citus.citus_dist_stat_activity SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.citus_dist_stat_activity TO PUBLIC;
+
+-- we have to recreate this view because recreated citus_dist_stat_activity that this view depends
+#include "udfs/citus_lock_waits/11.0-1.sql"
 
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);
