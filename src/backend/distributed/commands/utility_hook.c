@@ -675,10 +675,10 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		/*
 		 * Error out with a hint if the foreign table is using postgres_fdw and
 		 * the option table_name is not provided.
-         * Citus relays all the Citus local foreign table logic to the placement of the
-         * Citus local table. If table_name is NOT provided, Citus would try to talk to
+		 * Citus relays all the Citus local foreign table logic to the placement of the
+		 * Citus local table. If table_name is NOT provided, Citus would try to talk to
 		 * the foreign postgres table over the shard's table name, which would not exist
-		 * on the remote server.  
+		 * on the remote server.
 		 */
 		if (ServerUsesPostgresFDW(createForeignTableStmt->servername))
 		{
@@ -997,7 +997,8 @@ ErrorIfOptionListHasNoTableName(List *optionList)
 		}
 	}
 
-	ereport(ERROR, (errmsg("table_name option must be provided when using postgres_fdw with Citus"),
+	ereport(ERROR, (errmsg(
+						"table_name option must be provided when using postgres_fdw with Citus"),
 					errhint("Provide the option \"table_name\" with value target table's"
 							" name")));
 }
