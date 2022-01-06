@@ -898,8 +898,16 @@ MetadataDropCommands(void)
 	dropSnapshotCommandList = list_concat(dropSnapshotCommandList,
 										  detachPartitionCommandList);
 
+	/*
+	 * We are re-creating the metadata, so not lose track of the
+	 * sequences by preventing them dropped via DROP TABLE.
+	 */
+	dropSnapshotCommandList =
+		lappend(dropSnapshotCommandList,
+				BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
-									  REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
+									  REMOVE_ALL_CITUS_TABLES_COMMAND);
 
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList, DELETE_ALL_NODES);
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList,

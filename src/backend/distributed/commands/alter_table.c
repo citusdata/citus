@@ -1372,6 +1372,21 @@ ReplaceTable(Oid sourceId, Oid targetId, List *justBeforeDropCommands,
 															schemaName, targetName);
 			SendCommandToWorkersWithMetadata(workerChangeSequenceDependencyCommand);
 		}
+		else if (ShouldSyncTableMetadata(sourceId))
+		{
+			/*
+			 * We are converting a citus local table to a distributed/reference table,
+			 * so we should prevent dropping the sequence on the table. Otherwise, we'd
+			 * lose track of the previous changes in the sequence.
+			 */
+			StringInfo command = makeStringInfo();
+
+			appendStringInfo(command,
+							 "SELECT pg_catalog.worker_drop_sequence_dependency('%s');",
+							 quote_qualified_identifier(schemaName, sourceName));
+
+			SendCommandToWorkersWithMetadata(command->data);
+		}
 	}
 
 	char *justBeforeDropCommand = NULL;
