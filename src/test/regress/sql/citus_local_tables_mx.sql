@@ -381,5 +381,7 @@ SELECT run_command_on_workers(
 $$
 SELECT count(*) FROM pg_catalog.pg_tables WHERE tablename='citus_local_table_4'
 $$);
+
 -- cleanup at exit
+set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;

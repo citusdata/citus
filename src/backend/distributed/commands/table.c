@@ -648,7 +648,7 @@ List *
 PostprocessAlterTableSchemaStmt(Node *node, const char *queryString)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
-	Assert(stmt->objectType == OBJECT_TABLE);
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
 	/*
 	 * We will let Postgres deal with missing_ok
@@ -1054,7 +1054,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 				 */
 				Assert(IsCitusTable(rightRelationId));
 			}
-			else if (attachedRelationKind == RELKIND_RELATION)
+			else if (attachedRelationKind == RELKIND_RELATION ||
+					 attachedRelationKind == RELKIND_FOREIGN_TABLE)
 			{
 				Assert(list_length(commandList) <= 1);
 
@@ -1761,7 +1762,7 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 							   ProcessUtilityContext processUtilityContext)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
-	Assert(stmt->objectType == OBJECT_TABLE);
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
 	if (stmt->relation == NULL)
 	{
@@ -2951,6 +2952,16 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 				break;
 			}
 
+			case AT_GenericOptions:
+			{
+				if (IsForeignTable(relationId))
+				{
+					break;
+				}
+			}
+
+			/* fallthrough */
+
 			default:
 			{
 				ereport(ERROR,
@@ -3326,7 +3337,7 @@ ObjectAddress
 AlterTableSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
-	Assert(stmt->objectType == OBJECT_TABLE);
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
 	const char *tableName = stmt->relation->relname;
 	Oid tableOid = InvalidOid;

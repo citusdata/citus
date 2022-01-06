@@ -797,6 +797,7 @@ GetDistributeObjectOps(Node *node)
 					return &Statistics_AlterObjectSchema;
 				}
 
+				case OBJECT_FOREIGN_TABLE:
 				case OBJECT_TABLE:
 				{
 					return &Table_AlterObjectSchema;
