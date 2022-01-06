@@ -1,3 +1,7 @@
+\set VERBOSITY terse
+SET citus.next_shard_id TO 1508000;
+SET citus.shard_replication_factor TO 1;
+SET citus.enable_local_execution TO ON;
 CREATE SCHEMA foreign_tables_schema_mx;
 SET search_path TO foreign_tables_schema_mx;
 -- test adding foreign table to metadata with the guc
@@ -92,7 +96,6 @@ SELECT * FROM foreign_table_test;
 -- should error out
 ALTER FOREIGN TABLE public.foreign_table_newname DROP COLUMN id;
 ERROR:  operation is not allowed on this node
-HINT:  Connect to the coordinator and run it again.
 SELECT partmethod, repmodel FROM pg_dist_partition
     WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
  partmethod | repmodel
@@ -134,7 +137,6 @@ ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'nonexis
 -- should fail
 SELECT * FROM foreign_table;
 ERROR:  could not connect to server "foreign_server"
-DETAIL:  connection to server at "localhost" (127.0.0.1), port 57636 failed: FATAL:  role "nonexistiniguser" does not exist
 ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'postgres');
 -- test undistributing
 DELETE FROM foreign_table;
@@ -250,8 +252,6 @@ INSERT INTO dist_tbl VALUES (1);
 SELECT create_distributed_table('dist_tbl','a');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$foreign_tables_schema_mx.dist_tbl$$)
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -268,8 +268,6 @@ INSERT INTO ref_tbl VALUES (1);
 SELECT create_reference_table('ref_tbl');
 NOTICE:  Copying data from local table...
 NOTICE:  copying the data has completed
-DETAIL:  The local data in the table is no longer visible, but is still on disk.
-HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$foreign_tables_schema_mx.ref_tbl$$)
  create_reference_table
 ---------------------------------------------------------------------
 

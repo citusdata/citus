@@ -1,3 +1,9 @@
+\set VERBOSITY terse
+
+SET citus.next_shard_id TO 1508000;
+SET citus.shard_replication_factor TO 1;
+SET citus.enable_local_execution TO ON;
+
 CREATE SCHEMA foreign_tables_schema_mx;
 SET search_path TO foreign_tables_schema_mx;
 
