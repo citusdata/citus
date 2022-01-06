@@ -994,8 +994,8 @@ ErrorIfOptionListHasNoTableName(List *optionList)
 	}
 
 	ereport(ERROR, (errmsg("table_name option must be provided when using postgres_fdw"),
-			 		errhint("Provide the option \"table_name\" with value target table's"
-					 		" name")));
+					errhint("Provide the option \"table_name\" with value target table's"
+							" name")));
 }
 
 
