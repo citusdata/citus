@@ -201,6 +201,9 @@ static bool workerNodeHashValid = false;
 /* default value is -1, for coordinator it's 0 and for worker nodes > 0 */
 static int32 LocalGroupId = -1;
 
+/* default value is -1, increases with every node starting from 1 */
+static int32 LocalNodeId = -1;
+
 /* built first time through in InitializeDistCache */
 static ScanKeyData DistPartitionScanKey[1];
 static ScanKeyData DistShardScanKey[1];
@@ -3615,6 +3618,56 @@ GetLocalGroupId(void)
 	table_close(pgDistLocalGroupId, AccessShareLock);
 
 	return groupId;
+}
+
+
+/*
+ * GetNodeId returns the node identifier of the local node.
+ */
+int32
+GetLocalNodeId(void)
+{
+	InitializeCaches();
+
+	/*
+	 * Already set the node id, no need to read the heap again.
+	 */
+	if (LocalNodeId != -1)
+	{
+		return LocalNodeId;
+	}
+
+	uint32 nodeId = -1;
+
+	int32 localGroupId = GetLocalGroupId();
+
+	bool includeNodesFromOtherClusters = false;
+	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		if (workerNode->groupId == localGroupId &&
+			workerNode->isActive)
+		{
+			nodeId = workerNode->nodeId;
+			break;
+		}
+	}
+
+	if (nodeId == -1)
+	{
+		elog(DEBUG1, "there is no active node with group id '%d' on pg_dist_node",
+			 localGroupId);
+		if (IsCoordinator())
+		{
+			nodeId = 0;
+		}
+	}
+
+	LocalNodeId = nodeId;
+
+	return nodeId;
 }
 
 

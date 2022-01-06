@@ -36,7 +36,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
@@ -73,7 +73,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  must be owner of table test
 ROLLBACK;
@@ -85,7 +85,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_update_relation_colocation ('test'::regclass, 10);
 ERROR:  must be owner of table test
 ROLLBACK;
@@ -99,7 +99,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
  citus_internal_add_partition_metadata
 ---------------------------------------------------------------------
@@ -121,7 +121,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 's');
 ERROR:  Metadata syncing is only allowed for hash, reference and local tables:X
 ROLLBACK;
@@ -133,7 +133,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'non_existing_col', 0, 's');
 ERROR:  column "non_existing_col" of relation "test_2" does not exist
 ROLLBACK;
@@ -145,7 +145,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-		SET application_name to 'citus';
+		SET application_name to 'citus gpid=10000000001';
 		SELECT citus_internal_add_partition_metadata (NULL, 'h', 'non_existing_col', 0, 's');
 ERROR:  relation cannot be NULL
 ROLLBACK;
@@ -157,7 +157,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', -1, 's');
 ERROR:  Metadata syncing is only allowed for valid colocation id values.
 ROLLBACK;
@@ -169,7 +169,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 'X');
 ERROR:  Metadata syncing is only allowed for hash, reference and local tables:X
 ROLLBACK;
@@ -181,7 +181,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
  citus_internal_add_partition_metadata
@@ -200,7 +200,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 0, 's');
  citus_internal_add_partition_metadata
@@ -219,7 +219,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', NULL, 0, 's');
 ERROR:  Distribution column cannot be NULL for relation "test_2"
@@ -252,7 +252,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 's');
  citus_internal_add_partition_metadata
 ---------------------------------------------------------------------
@@ -268,7 +268,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_update_placement_metadata(1420007, 10000, 11111);
 ERROR:  could not find valid entry for shard xxxxx
@@ -298,7 +298,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'X', 'col_1', 0, 's');
 ERROR:  role "non_existing_user" does not exist
 ROLLBACK;
@@ -329,7 +329,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_ref'::regclass, 'n', 'col_1', 0, 's');
 ERROR:  Reference or local tables cannot have distribution columns
 ROLLBACK;
@@ -341,7 +341,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 'A');
 ERROR:  Metadata syncing is only allowed for known replication models.
 ROLLBACK;
@@ -353,7 +353,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_ref'::regclass, 'n', NULL, 0, 'c');
 ERROR:  Local or references tables can only have 's' or 't' as the replication model.
 ROLLBACK;
@@ -368,7 +368,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('super_user_table'::regclass, 'h', 'col_1', 0, 's');
  citus_internal_add_partition_metadata
 ---------------------------------------------------------------------
@@ -387,7 +387,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('super_user_table'::regclass, 1420000::bigint, 't'::"char", '-2147483648'::text, '-1610612737'::text))
@@ -402,7 +402,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '-2147483648'::text, '-1610612737'::text))
@@ -417,7 +417,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test_2'::regclass, 'h', 'col_1', 250, 's');
  citus_internal_add_partition_metadata
 ---------------------------------------------------------------------
@@ -445,7 +445,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_update_relation_colocation ('test_2'::regclass, 1231231232);
  citus_internal_update_relation_colocation
 ---------------------------------------------------------------------
@@ -461,7 +461,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, -1, 't'::"char", '-2147483648'::text, '-1610612737'::text))
@@ -476,7 +476,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000, 'X'::"char", '-2147483648'::text, '-1610612737'::text))
@@ -491,7 +491,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000, 't'::"char", NULL, '-1610612737'::text))
@@ -506,7 +506,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", 'non-int'::text, '-1610612737'::text))
@@ -521,7 +521,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '-1610612737'::text, '-2147483648'::text))
@@ -536,7 +536,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '10'::text, '20'::text),
@@ -554,7 +554,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
- SET application_name to 'citus';
+ SET application_name to 'citus gpid=10000000001';
  \set VERBOSITY terse
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
    AS (VALUES ('non_existing_type', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
@@ -569,7 +569,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
 		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], -100, 0, false))
@@ -583,7 +583,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
 		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], -1, -1, false))
@@ -598,7 +598,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
- SET application_name to 'citus';
+ SET application_name to 'citus gpid=10000000001';
  \set VERBOSITY terse
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
    AS (VALUES ('role', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
@@ -614,7 +614,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
- SET application_name to 'citus';
+ SET application_name to 'citus gpid=10000000001';
  \set VERBOSITY terse
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
    AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], 0, NULL::int, false))
@@ -635,7 +635,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	CREATE TABLE publication_test_table(id int);
 	CREATE PUBLICATION publication_test FOR TABLE publication_test_table;
@@ -653,7 +653,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-    SET application_name to 'citus';
+    SET application_name to 'citus gpid=10000000001';
     \set VERBOSITY terse
     CREATE FUNCTION distribution_test_function(int) RETURNS int
     AS $$ SELECT $1 $$
@@ -674,7 +674,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	UPDATE pg_dist_partition SET partmethod = 'X';
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
@@ -693,7 +693,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '10'::text, '20'::text))
@@ -720,7 +720,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_2'::regclass, 1420000::bigint, 't'::"char", '11'::text, '20'::text),
@@ -751,7 +751,7 @@ BEGIN;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
 ERROR:  cannot colocate tables test_2 and test_3
 ROLLBACK;
@@ -763,7 +763,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_3'::regclass, 1420009::bigint, 't'::"char", '21'::text, '30'::text),
@@ -790,7 +790,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_ref'::regclass, 1420003::bigint, 't'::"char", '-1610612737'::text, NULL))
@@ -805,7 +805,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_ref'::regclass, 1420006::bigint, 't'::"char", NULL, NULL),
@@ -821,7 +821,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('test_ref'::regclass, 1420006::bigint, 't'::"char", NULL, NULL))
@@ -842,7 +842,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)
 		AS (VALUES ('super_user_table'::regclass, 1420007::bigint, 't'::"char", '11'::text, '20'::text))
@@ -864,7 +864,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
 		(VALUES (-10, 1, 0::bigint, 1::int, 1500000::bigint))
@@ -879,7 +879,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
 		(VALUES (1420000, 1, 0::bigint, 1::int, -10))
@@ -894,7 +894,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
 		(VALUES (1430100, 1, 0::bigint, 1::int, 10))
@@ -909,7 +909,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
 		(VALUES (1420000, 10, 0::bigint, 1::int, 1500000))
@@ -924,7 +924,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
 		(VALUES ( 1420000, 1, 0::bigint, 123123123::int, 1500000))
@@ -952,7 +952,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
 		(VALUES (1420000, 1, 0::bigint, get_node_id(), 1500000),
@@ -968,7 +968,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
 		(VALUES (1420007, 1, 0::bigint, get_node_id(), 1500000))
@@ -983,7 +983,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH placement_data(shardid, shardstate, shardlength, groupid, placementid) AS
 		(VALUES (1420000, 1, 0::bigint, get_node_id(), 1500000),
@@ -1024,7 +1024,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	SELECT citus_internal_update_relation_colocation('test_2'::regclass, 251);
  citus_internal_update_relation_colocation
 ---------------------------------------------------------------------
@@ -1041,7 +1041,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_update_placement_metadata(1420000, get_node_id(), get_node_id()+1000);
 ERROR:  Node with group id 1014 for shard placement xxxxx does not exist
@@ -1054,7 +1054,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_update_placement_metadata(1420000, get_node_id()+10000, get_node_id());
 ERROR:  Active placement for shard xxxxx is not found on group:14
@@ -1067,7 +1067,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_update_placement_metadata(0, get_node_id(), get_node_id()+1);
 ERROR:  Shard id does not exists: 0
@@ -1080,7 +1080,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_update_placement_metadata(213123123123, get_node_id(), get_node_id()+1);
 ERROR:  Shard id does not exists: 213123123123
@@ -1093,7 +1093,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_update_placement_metadata(1420007, get_node_id(), get_node_id()+1);
 ERROR:  must be owner of table super_user_table
@@ -1106,7 +1106,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(shardid)
 		AS (VALUES (1420007))
@@ -1115,7 +1115,7 @@ ERROR:  must be owner of table super_user_table
 ROLLBACK;
 -- the user only allowed to delete shards in a distributed transaction
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(shardid)
 		AS (VALUES (1420007))
@@ -1130,7 +1130,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(shardid)
 		AS (VALUES (1420100))
@@ -1157,7 +1157,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	WITH shard_data(shardid)
 		AS (VALUES (1420000))
@@ -1191,7 +1191,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	-- with an ugly trick, update the repmodel
 	-- so that making two tables colocated fails
 	UPDATE pg_dist_partition SET repmodel = 't'
@@ -1206,7 +1206,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	-- with an ugly trick, update the vartype of table from int to bigint
 	-- so that making two tables colocated fails
 	UPDATE pg_dist_partition SET partkey = '{VAR :varno 1 :varattno 1 :vartype 20 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1}'
@@ -1221,7 +1221,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	-- with an ugly trick, update the partmethod of the table to not-valid
 	-- so that making two tables colocated fails
 	UPDATE pg_dist_partition SET partmethod = ''
@@ -1236,7 +1236,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	-- with an ugly trick, update the partmethod of the table to not-valid
 	-- so that making two tables colocated fails
 	UPDATE pg_dist_partition SET partmethod = 'a'
@@ -1254,7 +1254,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_add_partition_metadata ('test_5'::regclass, 'h', 'int_col', 500, 's');
  citus_internal_add_partition_metadata
@@ -1277,7 +1277,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 (1 row)
 
-	SET application_name to 'citus';
+	SET application_name to 'citus gpid=10000000001';
 	\set VERBOSITY terse
 	SELECT citus_internal_add_partition_metadata ('test_7'::regclass, 'h', 'text_col', 500, 's');
  citus_internal_add_partition_metadata

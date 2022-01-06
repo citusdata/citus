@@ -19,6 +19,7 @@
 
 #include "access/hash.h"
 #include "commands/dbcommands.h"
+#include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
 #include "distributed/error_codes.h"
@@ -1448,7 +1449,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 bool
 IsCitusInitiatedRemoteBackend(void)
 {
-	return application_name && strcmp(application_name, CITUS_APPLICATION_NAME) == 0;
+	return ExtractGlobalPID() != 0;
 }
 
 

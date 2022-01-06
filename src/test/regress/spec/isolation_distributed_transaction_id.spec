@@ -54,7 +54,8 @@ step "s1-verify-current-xact-is-on-worker"
 	    get_current_transaction_id() as xact,
 	    run_command_on_workers($$
 	        SELECT row(initiator_node_identifier, transaction_number)
-            FROM get_all_active_transactions();
+            FROM get_all_active_transactions()
+			WHERE datid != 0;
         $$) as remote
     ORDER BY remote.nodeport ASC;
 }

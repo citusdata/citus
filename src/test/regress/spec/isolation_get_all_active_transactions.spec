@@ -71,32 +71,32 @@ session "s3"
 step "s3-as-admin"
 {
 	-- Admin should be able to see all transactions
-	SELECT count(*) FROM get_all_active_transactions();
-	SELECT count(*) FROM get_global_active_transactions();
+	SELECT count(*) FROM get_all_active_transactions() WHERE datid != 0;
+	SELECT count(*) FROM get_global_active_transactions() WHERE datid != 0;
 }
 
 step "s3-as-user-1"
 {
 	-- User should only be able to see its own transactions
 	SET ROLE test_user_1;
-	SELECT count(*) FROM get_all_active_transactions();
-	SELECT count(*) FROM get_global_active_transactions();
+	SELECT count(*) FROM get_all_active_transactions() WHERE datid != 0;
+	SELECT count(*) FROM get_global_active_transactions() WHERE datid != 0;
 }
 
 step "s3-as-readonly"
 {
 	-- Other user should not see transactions
 	SET ROLE test_readonly;
-	SELECT count(*) FROM get_all_active_transactions();
-	SELECT count(*) FROM get_global_active_transactions();
+	SELECT count(*) FROM get_all_active_transactions() WHERE datid != 0;
+	SELECT count(*) FROM get_global_active_transactions() WHERE datid != 0;
 }
 
 step "s3-as-monitor"
 {
 	-- Monitor should see all transactions
 	SET ROLE test_monitor;
-	SELECT count(*) FROM get_all_active_transactions();
-	SELECT count(*) FROM get_global_active_transactions();
+	SELECT count(*) FROM get_all_active_transactions() WHERE datid != 0;
+	SELECT count(*) FROM get_global_active_transactions() WHERE datid != 0;
 }
 
 permutation "s1-grant" "s1-begin-insert" "s2-begin-insert" "s3-as-admin" "s3-as-user-1" "s3-as-readonly" "s3-as-monitor" "s1-commit" "s2-commit"

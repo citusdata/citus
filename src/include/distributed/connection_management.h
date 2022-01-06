@@ -28,8 +28,8 @@
 /* used for libpq commands that get an error buffer. Postgres docs recommend 256. */
 #define ERROR_BUFFER_SIZE 256
 
-/* application name used for internal connections in Citus */
-#define CITUS_APPLICATION_NAME "citus"
+/* application name prefix used for internal connections in Citus */
+#define CITUS_APPLICATION_NAME_PREFIX "citus gpid="
 
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */

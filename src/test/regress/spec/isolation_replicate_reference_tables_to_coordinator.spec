@@ -106,8 +106,8 @@ step "s2-sleep"
 step "s2-active-transactions"
 {
 	-- Admin should be able to see all transactions
-	SELECT count(*) FROM get_all_active_transactions();
-	SELECT count(*) FROM get_global_active_transactions();
+	SELECT count(*) FROM get_all_active_transactions() WHERE datid != 0;
+	SELECT count(*) FROM get_global_active_transactions() WHERE datid != 0;
 }
 
 // we disable the daemon during the regression tests in order to get consistent results

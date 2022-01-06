@@ -1,0 +1,99 @@
+Parsed test spec with 2 sessions
+
+starting permutation: s1-begin s1-select s2-citus_dist_stat_activity s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-select:
+    SELECT * FROM dist_table;
+
+a|b
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-citus_dist_stat_activity:
+    SELECT global_pid != 0 FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%';
+
+?column?
+---------------------------------------------------------------------
+t
+(1 row)
+
+step s1-commit:
+    COMMIT;
+
+
+starting permutation: s1-begin s1-select s2-citus_worker_stat_activity s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-select:
+    SELECT * FROM dist_table;
+
+a|b
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-citus_worker_stat_activity:
+    SELECT count(*) FROM citus_worker_stat_activity() WHERE global_pid IN (
+        SELECT global_pid FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%'
+    );
+
+count
+---------------------------------------------------------------------
+    2
+(1 row)
+
+step s1-commit:
+    COMMIT;
+
+
+starting permutation: s1-begin s1-select s2-get_all_active_transactions s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-select:
+    SELECT * FROM dist_table;
+
+a|b
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-get_all_active_transactions:
+    SELECT count(*) FROM get_all_active_transactions() WHERE global_pid IN (
+        SELECT global_pid FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%'
+    );
+
+count
+---------------------------------------------------------------------
+    1
+(1 row)
+
+step s1-commit:
+    COMMIT;
+
+
+starting permutation: s1-begin s1-select s2-get_global_active_transactions s1-commit
+step s1-begin:
+    BEGIN;
+
+step s1-select:
+    SELECT * FROM dist_table;
+
+a|b
+---------------------------------------------------------------------
+(0 rows)
+
+step s2-get_global_active_transactions:
+    SELECT count(*) FROM get_global_active_transactions() WHERE global_pid IN (
+        SELECT global_pid FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%'
+    );
+
+count
+---------------------------------------------------------------------
+    3
+(1 row)
+
+step s1-commit:
+    COMMIT;
+

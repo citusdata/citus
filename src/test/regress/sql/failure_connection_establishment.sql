@@ -124,7 +124,7 @@ SELECT count(*) FROM single_replicatated WHERE key = 100;
 RESET client_min_messages;
 
 -- verify get_global_active_transactions works when a timeout happens on a connection
-SELECT get_global_active_transactions();
+SELECT * FROM get_global_active_transactions() WHERE datid != 0;
 
 -- tests for connectivity checks
 SET client_min_messages TO ERROR;
