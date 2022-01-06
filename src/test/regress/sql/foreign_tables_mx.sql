@@ -56,6 +56,13 @@ ALTER TABLE foreign_table_test ADD dummy_col int NOT NULL DEFAULT 1;
 INSERT INTO public.foreign_table_newname VALUES (2, 'test_2');
 INSERT INTO foreign_table_test VALUES (3, 'test_3');
 
+ALTER FOREIGN TABLE public.foreign_table_newname ADD CONSTRAINT check_c check(id_test < 1000);
+ALTER FOREIGN TABLE public.foreign_table_newname DROP constraint check_c;
+
+ALTER FOREIGN TABLE public.foreign_table_newname ADD CONSTRAINT check_c_2 check(id_test < 1000) NOT VALID;
+ALTER FOREIGN TABLE public.foreign_table_newname VALIDATE CONSTRAINT check_c_2;
+ALTER FOREIGN TABLE public.foreign_table_newname DROP constraint IF EXISTS check_c_2;
+
 ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO pg_monitor;
 SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c on r.oid=c.relowner where relname = 'foreign_table_newname';$$);
 ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO postgres;
