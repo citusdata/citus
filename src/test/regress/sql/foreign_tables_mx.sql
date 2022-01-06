@@ -63,6 +63,40 @@ ALTER FOREIGN TABLE public.foreign_table_newname ADD CONSTRAINT check_c_2 check(
 ALTER FOREIGN TABLE public.foreign_table_newname VALIDATE CONSTRAINT check_c_2;
 ALTER FOREIGN TABLE public.foreign_table_newname DROP constraint IF EXISTS check_c_2;
 
+-- trigger test
+CREATE TABLE distributed_table(value int);
+SELECT create_distributed_table('distributed_table', 'value');
+
+CREATE FUNCTION insert_42() RETURNS trigger AS $insert_42$
+BEGIN
+    INSERT INTO distributed_table VALUES (42);
+    RETURN NEW;
+END;
+$insert_42$ LANGUAGE plpgsql;
+
+
+CREATE TRIGGER insert_42_trigger
+AFTER DELETE ON public.foreign_table_newname
+FOR EACH ROW EXECUTE FUNCTION insert_42();
+
+-- do the same pattern from the workers as well
+INSERT INTO public.foreign_table_newname VALUES (99, 'test_2');
+delete from public.foreign_table_newname where id_test = 99;
+select * from distributed_table ;
+
+-- disable trigger
+alter foreign table public.foreign_table_newname disable trigger insert_42_trigger;
+INSERT INTO public.foreign_table_newname VALUES (99, 'test_2');
+delete from public.foreign_table_newname where id_test = 99;
+-- should not insert again as trigger disabled
+select * from distributed_table ;
+
+DROP TRIGGER insert_42_trigger ON public.foreign_table_newname;
+
+-- should throw errors
+select alter_table_set_access_method('public.foreign_table_newname', 'columnar');  
+select alter_distributed_table('public.foreign_table_newname', shard_count:=4);
+
 ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO pg_monitor;
 SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c on r.oid=c.relowner where relname = 'foreign_table_newname';$$);
 ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO postgres;
