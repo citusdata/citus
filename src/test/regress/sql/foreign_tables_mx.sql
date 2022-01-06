@@ -37,9 +37,9 @@ CREATE SERVER IF NOT EXISTS srv1 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbna
 CREATE SERVER IF NOT EXISTS srv2 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'regression', host 'localhost', port :'master_port');
 CREATE SERVER IF NOT EXISTS srv3 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'regression', host 'localhost', port :'master_port');
 
-CREATE FOREIGN TABLE foreign_partition_1 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 0) SERVER srv1;
-CREATE FOREIGN TABLE foreign_partition_2 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 1) SERVER srv2;
-CREATE FOREIGN TABLE foreign_partition_3 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 2) SERVER srv3;
+CREATE FOREIGN TABLE foreign_partition_1 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 0) SERVER srv1 OPTIONS (table_name 'dummy');
+CREATE FOREIGN TABLE foreign_partition_2 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 1) SERVER srv2 OPTIONS (table_name 'dummy');
+CREATE FOREIGN TABLE foreign_partition_3 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 2) SERVER srv3 OPTIONS (table_name 'dummy');
 
 SELECT partmethod, repmodel FROM pg_dist_partition
     WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
@@ -216,4 +216,13 @@ SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id;
 \c - - - :master_port
 
 SET search_path TO foreign_tables_schema_mx;
+
+-- should error out because doesn't have a table_name field
+CREATE FOREIGN TABLE foreign_table_local_fails (
+        id integer NOT NULL,
+        data text
+)
+        SERVER foreign_server_local
+        OPTIONS (schema_name 'foreign_tables_schema_mx');
+
 DROP FOREIGN TABLE foreign_table_local;
