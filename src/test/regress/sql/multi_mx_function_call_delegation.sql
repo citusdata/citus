@@ -67,9 +67,21 @@ BEGIN
     x := (select case groupid when 0 then 'F' else 'S' end from pg_dist_local_group);
 END;$$;
 
+-- function which internally uses COPY protocol without remote execution
+CREATE FUNCTION mx_call_func_copy(x int)
+RETURNS bool
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO multi_mx_function_call_delegation.mx_call_dist_table_1
+    SELECT s,s FROM generate_series(100, 110) s;
+
+    RETURN true;
+END;$$;
+
 -- Test that undistributed functions have no issue executing
 select multi_mx_function_call_delegation.mx_call_func(2, 0);
 select multi_mx_function_call_delegation.mx_call_func_custom_types('S', 'A');
+select multi_mx_function_call_delegation.mx_call_copy(2);
 select squares(4);
 
 -- Same for unqualified name
@@ -79,6 +91,7 @@ select mx_call_func(2, 0);
 select create_distributed_function('mx_call_func(int,int)');
 select create_distributed_function('mx_call_func_bigint(bigint,bigint)');
 select create_distributed_function('mx_call_func_custom_types(mx_call_enum,mx_call_enum)');
+select create_distributed_function('mx_call_func_copy(int)');
 select create_distributed_function('squares(int)');
 
 
@@ -249,9 +262,14 @@ select mx_call_func(floor(random())::int, 2);
 
 -- test forms we don't distribute
 select * from mx_call_func(2, 0);
-select mx_call_func(2, 0) from mx_call_dist_table_1;
 select mx_call_func(2, 0) where mx_call_func(0, 2) = 0;
 select mx_call_func(2, 0), mx_call_func(0, 2);
+
+-- we do not delegate the call, but do push down the query
+-- that result in remote execution from workers
+select mx_call_func(id, 0) from mx_call_dist_table_1;
+select mx_call_func(2, 0) from mx_call_dist_table_1 where id = 3;
+select mx_call_func_copy(2) from mx_call_dist_table_1 where id = 3;
 
 DO $$ BEGIN perform mx_call_func_tbl(40); END; $$;
 SELECT * FROM mx_call_dist_table_1 WHERE id >= 40 ORDER BY id, val;

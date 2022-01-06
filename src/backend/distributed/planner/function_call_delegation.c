@@ -58,6 +58,10 @@ struct ParamWalkerContext
 static bool contain_param_walker(Node *node, void *context);
 
 
+/* global variable keeping track of whether we are in a delegated function call */
+bool InDelegatedFunctionCall = false;
+
+
 /*
  * contain_param_walker scans node for Param nodes.
  * Ignore the return value, instead check context afterwards.
@@ -112,15 +116,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	}
 
 	int32 localGroupId = GetLocalGroupId();
-	if (localGroupId != COORDINATOR_GROUP_ID && IsCitusInitiatedRemoteBackend())
-	{
-		/*
-		 * Do not delegate from workers if it is initiated by Citus already.
-		 * It means that this function has already been delegated to this node.
-		 */
-		return NULL;
-	}
-
 	if (localGroupId == GROUP_ID_UPGRADING)
 	{
 		/* do not delegate while upgrading */
@@ -216,6 +211,27 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 	else
 	{
 		ereport(DEBUG4, (errmsg("function is distributed")));
+	}
+
+	if (IsCitusInitiatedRemoteBackend())
+	{
+		/*
+		 * We are planning a call to a distributed function within a Citus backend,
+		 * that means that this is the delegated call.
+		 */
+		InDelegatedFunctionCall = true;
+		return NULL;
+	}
+
+	if (localGroupId != COORDINATOR_GROUP_ID)
+	{
+		/*
+		 * We are calling a distributed function on a worker node. We currently
+		 * only delegate from the coordinator.
+		 *
+		 * TODO: remove this restriction.
+		 */
+		return NULL;
 	}
 
 	/*

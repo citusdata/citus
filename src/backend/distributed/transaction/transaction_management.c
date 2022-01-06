@@ -23,6 +23,7 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/function_call_delegation.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
@@ -550,6 +551,7 @@ ResetGlobalVariables()
 	ShouldCoordinatedTransactionUse2PC = false;
 	TransactionModifiedNodeMetadata = false;
 	MetadataSyncOnCommit = false;
+	InDelegatedFunctionCall = false;
 	ResetWorkerErrorIndication();
 }
 

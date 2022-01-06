@@ -392,6 +392,13 @@ BEGIN
     RETURN NEW;
 END;
 $insert_100$ LANGUAGE plpgsql;
+CREATE TABLE local_table (value int);
+CREATE FUNCTION insert_100_local() RETURNS trigger AS $insert_100$
+BEGIN
+    INSERT INTO local_table VALUES (100);
+    RETURN NEW;
+END;
+$insert_100$ LANGUAGE plpgsql;
 BEGIN;
     CREATE TRIGGER insert_100_trigger
     AFTER TRUNCATE ON another_citus_local_table
@@ -416,6 +423,7 @@ NOTICE:  executing the command locally: SELECT value FROM citus_local_table_trig
 (2 rows)
 
 ROLLBACK;
+-- cannot perform remote execution from a trigger on a Citus local table
 BEGIN;
     -- update should actually update something to test ON UPDATE CASCADE logic
     INSERT INTO another_citus_local_table VALUES (600);
@@ -436,11 +444,70 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
     FOR EACH STATEMENT EXECUTE FUNCTION insert_100();')
     UPDATE another_citus_local_table SET value=value-1;;
 NOTICE:  executing the command locally: UPDATE citus_local_table_triggers.another_citus_local_table_1507009 another_citus_local_table SET value = (value OPERATOR(pg_catalog.-) 1)
-NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.reference_table_1507010 (value) VALUES (100)
-NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.reference_table_1507010 (value) VALUES (100)
+ERROR:  cannot execute a distributed query from a query on a shard
+ROLLBACK;
+-- can perform regular execution from a trigger on a Citus local table
+BEGIN;
+    -- update should actually update something to test ON UPDATE CASCADE logic
+    INSERT INTO another_citus_local_table VALUES (600);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.another_citus_local_table_1507009 (value) VALUES (600)
+    INSERT INTO citus_local_table VALUES (600);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.citus_local_table_1507001 (value) VALUES (600)
+    CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON another_citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507009, 'citus_local_table_triggers', 'CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON another_citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();')
+    CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507001, 'citus_local_table_triggers', 'CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();')
+    UPDATE another_citus_local_table SET value=value-1;;
+NOTICE:  executing the command locally: UPDATE citus_local_table_triggers.another_citus_local_table_1507009 another_citus_local_table SET value = (value OPERATOR(pg_catalog.-) 1)
     -- we should see two rows with "100"
-    SELECT * FROM reference_table;
-NOTICE:  executing the command locally: SELECT value FROM citus_local_table_triggers.reference_table_1507010 reference_table
+    SELECT * FROM local_table;
+ value
+---------------------------------------------------------------------
+   100
+   100
+(2 rows)
+
+ROLLBACK;
+-- can perform local execution from a trigger on a Citus local table
+BEGIN;
+	SELECT citus_add_local_table_to_metadata('local_table');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+    -- update should actually update something to test ON UPDATE CASCADE logic
+    INSERT INTO another_citus_local_table VALUES (600);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.another_citus_local_table_1507009 (value) VALUES (600)
+    INSERT INTO citus_local_table VALUES (600);
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.citus_local_table_1507001 (value) VALUES (600)
+    CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON another_citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507009, 'citus_local_table_triggers', 'CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON another_citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();')
+    CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507001, 'citus_local_table_triggers', 'CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();')
+    UPDATE another_citus_local_table SET value=value-1;;
+NOTICE:  executing the command locally: UPDATE citus_local_table_triggers.another_citus_local_table_1507009 another_citus_local_table SET value = (value OPERATOR(pg_catalog.-) 1)
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.local_table_1507011 (value) VALUES (100)
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.local_table_1507011 (value) VALUES (100)
+    -- we should see two rows with "100"
+    SELECT * FROM local_table;
+NOTICE:  executing the command locally: SELECT value FROM citus_local_table_triggers.local_table_1507011 local_table
  value
 ---------------------------------------------------------------------
    100
@@ -456,11 +523,11 @@ CREATE TABLE par_another_citus_local_table_1 PARTITION OF par_another_citus_loca
 ALTER TABLE par_another_citus_local_table ADD CONSTRAINT fkey_self FOREIGN KEY(val) REFERENCES par_another_citus_local_table(val);
 ALTER TABLE par_citus_local_table ADD CONSTRAINT fkey_c_to_c FOREIGN KEY(val) REFERENCES par_another_citus_local_table(val) ON UPDATE CASCADE;
 SELECT citus_add_local_table_to_metadata('par_another_citus_local_table', cascade_via_foreign_keys=>true);
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1507011, 'citus_local_table_triggers', 1507012, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.par_another_citus_local_table ATTACH PARTITION citus_local_table_triggers.par_another_citus_local_table_1 FOR VALUES FROM (1) TO (10000);')
-NOTICE:  executing the command locally: SELECT pg_catalog.citus_run_local_command($$SELECT worker_fix_partition_shard_index_names('citus_local_table_triggers.par_another_citus_local_table_val_key_1507011'::regclass, 'citus_local_table_triggers.par_another_citus_local_table_1_1507012', 'par_another_citus_local_table_1_val_key_1507012')$$)
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1507013, 'citus_local_table_triggers', 1507014, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.par_citus_local_table ATTACH PARTITION citus_local_table_triggers.par_citus_local_table_1 FOR VALUES FROM (1) TO (10000);')
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1507011, 'citus_local_table_triggers', 1507011, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.par_another_citus_local_table ADD CONSTRAINT fkey_self FOREIGN KEY (val) REFERENCES citus_local_table_triggers.par_another_citus_local_table(val)')
-NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1507013, 'citus_local_table_triggers', 1507011, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.par_citus_local_table ADD CONSTRAINT fkey_c_to_c FOREIGN KEY (val) REFERENCES citus_local_table_triggers.par_another_citus_local_table(val) ON UPDATE CASCADE')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1507012, 'citus_local_table_triggers', 1507013, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.par_another_citus_local_table ATTACH PARTITION citus_local_table_triggers.par_another_citus_local_table_1 FOR VALUES FROM (1) TO (10000);')
+NOTICE:  executing the command locally: SELECT pg_catalog.citus_run_local_command($$SELECT worker_fix_partition_shard_index_names('citus_local_table_triggers.par_another_citus_local_table_val_key_1507012'::regclass, 'citus_local_table_triggers.par_another_citus_local_table_1_1507013', 'par_another_citus_local_table_1_val_key_1507013')$$)
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1507014, 'citus_local_table_triggers', 1507015, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.par_citus_local_table ATTACH PARTITION citus_local_table_triggers.par_citus_local_table_1 FOR VALUES FROM (1) TO (10000);')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1507012, 'citus_local_table_triggers', 1507012, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.par_another_citus_local_table ADD CONSTRAINT fkey_self FOREIGN KEY (val) REFERENCES citus_local_table_triggers.par_another_citus_local_table(val)')
+NOTICE:  executing the command locally: SELECT worker_apply_inter_shard_ddl_command (1507014, 'citus_local_table_triggers', 1507012, 'citus_local_table_triggers', 'ALTER TABLE citus_local_table_triggers.par_citus_local_table ADD CONSTRAINT fkey_c_to_c FOREIGN KEY (val) REFERENCES citus_local_table_triggers.par_another_citus_local_table(val) ON UPDATE CASCADE')
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
@@ -489,7 +556,7 @@ BEGIN;
     TRUNCATE par_another_citus_local_table CASCADE;
 NOTICE:  truncate cascades to table "par_citus_local_table"
 NOTICE:  truncate cascades to table "par_citus_local_table_1"
-NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.par_reference_table_1507015 (val) VALUES (100)
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.par_reference_table_1507016 (val) VALUES (100)
 NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_triggers.par_another_citus_local_table_xxxxx CASCADE
 NOTICE:  truncate cascades to table "par_citus_local_table_xxxxx"
 NOTICE:  truncate cascades to table "par_citus_local_table_1_xxxxx"
@@ -497,12 +564,12 @@ NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_trigger
 NOTICE:  truncate cascades to table "par_citus_local_table_xxxxx"
 NOTICE:  truncate cascades to table "par_citus_local_table_1_xxxxx"
 NOTICE:  truncate cascades to table "par_another_citus_local_table_xxxxx"
-NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.par_reference_table_1507015 (val) VALUES (100)
+NOTICE:  executing the command locally: INSERT INTO citus_local_table_triggers.par_reference_table_1507016 (val) VALUES (100)
 NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_triggers.par_citus_local_table_xxxxx CASCADE
 NOTICE:  executing the command locally: TRUNCATE TABLE citus_local_table_triggers.par_citus_local_table_1_xxxxx CASCADE
     -- we should see two rows with "100"
     SELECT * FROM par_reference_table;
-NOTICE:  executing the command locally: SELECT val FROM citus_local_table_triggers.par_reference_table_1507015 par_reference_table
+NOTICE:  executing the command locally: SELECT val FROM citus_local_table_triggers.par_reference_table_1507016 par_reference_table
  val
 ---------------------------------------------------------------------
  100
@@ -512,4 +579,4 @@ NOTICE:  executing the command locally: SELECT val FROM citus_local_table_trigge
 ROLLBACK;
 -- cleanup at exit
 DROP SCHEMA citus_local_table_triggers, "interesting!schema" CASCADE;
-NOTICE:  drop cascades to 20 other objects
+NOTICE:  drop cascades to 22 other objects

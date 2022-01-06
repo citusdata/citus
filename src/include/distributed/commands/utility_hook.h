@@ -18,6 +18,7 @@
 #include "tcop/utility.h"
 
 #include "distributed/coordinator_protocol.h"
+#include "distributed/function_call_delegation.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_transaction.h"
 
@@ -37,6 +38,7 @@ extern bool EnableAlterRolePropagation;
 extern bool EnableAlterRoleSetPropagation;
 extern bool EnableAlterDatabaseOwner;
 extern int UtilityHookLevel;
+extern bool InDelegatedProcedureCall;
 
 
 /*
