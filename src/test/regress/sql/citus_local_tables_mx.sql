@@ -450,7 +450,7 @@ SET search_path TO citus_local_tables_mx;
 ALTER FOREIGN TABLE public.foreign_table SET SCHEMA citus_local_tables_mx;
 ALTER FOREIGN TABLE IF EXISTS foreign_table RENAME COLUMN id_test TO id;
 ALTER TABLE foreign_table_test RENAME COLUMN id_test TO id;
-ALTER TABLE foreign_table DROP COLUMN id;
+ALTER FOREIGN TABLE foreign_table DROP COLUMN id;
 ALTER FOREIGN TABLE foreign_table DROP COLUMN dummy_col;
 ALTER TABLE foreign_table_test DROP COLUMN dummy_col;
 ALTER FOREIGN TABLE foreign_table OPTIONS (DROP schema_name, SET table_name 'notable');
