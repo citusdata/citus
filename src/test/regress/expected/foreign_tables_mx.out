@@ -417,7 +417,7 @@ CREATE FOREIGN TABLE foreign_table_local_fails (
 )
         SERVER foreign_server_local
         OPTIONS (schema_name 'foreign_tables_schema_mx');
-ERROR:  table_name option must be provided when using postgres_fdw
+ERROR:  table_name option must be provided when using postgres_fdw with Citus
 DROP FOREIGN TABLE foreign_table_local;
 -- cleanup at exit
 set client_min_messages to error;
