@@ -27,7 +27,7 @@ CREATE FOREIGN TABLE foreign_table (
         OPTIONS (schema_name 'foreign_tables_schema_mx', table_name 'foreign_table_test');
 
 --verify
-SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass ORDER BY logicalrelid;
 
 CREATE TABLE parent_for_foreign_tables (
     project_id integer
@@ -42,7 +42,8 @@ CREATE FOREIGN TABLE foreign_partition_2 PARTITION OF parent_for_foreign_tables 
 CREATE FOREIGN TABLE foreign_partition_3 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 2) SERVER srv3 OPTIONS (table_name 'dummy');
 
 SELECT partmethod, repmodel FROM pg_dist_partition
-    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
+    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass)
+    ORDER BY logicalrelid;
 
 ALTER FOREIGN TABLE foreign_table SET SCHEMA public;
 ALTER FOREIGN TABLE public.foreign_table RENAME TO foreign_table_newname;
@@ -82,14 +83,14 @@ FOR EACH ROW EXECUTE FUNCTION insert_42();
 -- do the same pattern from the workers as well
 INSERT INTO public.foreign_table_newname VALUES (99, 'test_2');
 delete from public.foreign_table_newname where id_test = 99;
-select * from distributed_table ;
+select * from distributed_table ORDER BY value;
 
 -- disable trigger
 alter foreign table public.foreign_table_newname disable trigger insert_42_trigger;
 INSERT INTO public.foreign_table_newname VALUES (99, 'test_2');
 delete from public.foreign_table_newname where id_test = 99;
 -- should not insert again as trigger disabled
-select * from distributed_table ;
+select * from distributed_table ORDER BY value;
 
 DROP TRIGGER insert_42_trigger ON public.foreign_table_newname;
 
@@ -104,12 +105,13 @@ SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c
 
 \c - - - :worker_1_port
 SET search_path TO foreign_tables_schema_mx;
-SELECT * FROM public.foreign_table_newname;
-SELECT * FROM foreign_table_test;
+SELECT * FROM public.foreign_table_newname ORDER BY id_test;
+SELECT * FROM foreign_table_test ORDER BY id_test;
 -- should error out
 ALTER FOREIGN TABLE public.foreign_table_newname DROP COLUMN id;
 SELECT partmethod, repmodel FROM pg_dist_partition
-    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
+    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass)
+    ORDER BY logicalrelid;
 \c - - - :master_port
 ALTER FOREIGN TABLE foreign_table_newname RENAME TO foreign_table;
 SET search_path TO foreign_tables_schema_mx;
@@ -124,11 +126,11 @@ ALTER FOREIGN TABLE foreign_table OPTIONS (DROP schema_name, SET table_name 'not
 SELECT run_command_on_workers($$SELECT f.ftoptions FROM pg_foreign_table f JOIN pg_class c ON f.ftrelid=c.oid WHERE c.relname = 'foreign_table';$$);
 
 ALTER FOREIGN TABLE foreign_table OPTIONS (ADD schema_name 'foreign_tables_schema_mx', SET table_name 'foreign_table_test');
-SELECT * FROM foreign_table;
+SELECT * FROM foreign_table ORDER BY a;
 -- test alter user mapping
 ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'nonexistiniguser');
 -- should fail
-SELECT * FROM foreign_table;
+SELECT * FROM foreign_table ORDER BY a;
 ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'postgres');
 -- test undistributing
 DELETE FROM foreign_table;
@@ -139,8 +141,8 @@ SELECT create_reference_table('foreign_table');
 SELECT undistribute_table('foreign_table');
 
 INSERT INTO foreign_table_test VALUES (1, 'testt');
-SELECT * FROM foreign_table;
-SELECT * FROM foreign_table_test;
+SELECT * FROM foreign_table ORDER BY a;
+SELECT * FROM foreign_table_test ORDER BY a;
 
 DROP TABLE parent_for_foreign_tables;
 
@@ -155,7 +157,8 @@ SELECT citus_add_local_table_to_metadata('parent_for_foreign_tables');
 CREATE FOREIGN TABLE foreign_partition_3 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 2) SERVER srv2 OPTIONS (schema_name 'foreign_tables_schema_mx', table_name 'foreign_table_test');
 
 SELECT partmethod, repmodel FROM pg_dist_partition
-    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
+    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass)
+    ORDER BY logicalrelid;
 
 CREATE USER MAPPING FOR CURRENT_USER
         SERVER srv1
@@ -164,25 +167,26 @@ CREATE USER MAPPING FOR CURRENT_USER
         SERVER srv2
         OPTIONS (user 'postgres');
 
-SELECT * FROM parent_for_foreign_tables;
-SELECT * FROM foreign_partition_1;
-SELECT * FROM foreign_partition_2;
-SELECT * FROM foreign_partition_3;
+SELECT * FROM parent_for_foreign_tables ORDER BY id;
+SELECT * FROM foreign_partition_1 ORDER BY id;
+SELECT * FROM foreign_partition_2 ORDER BY id;
+SELECT * FROM foreign_partition_3 ORDER BY id;
 
 \c - - - :worker_1_port
 SET search_path TO foreign_tables_schema_mx;
 SELECT partmethod, repmodel FROM pg_dist_partition
-    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
+    WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass)
+    ORDER BY logicalrelid;
 
-SELECT * FROM parent_for_foreign_tables;
-SELECT * FROM foreign_partition_1;
-SELECT * FROM foreign_partition_2;
-SELECT * FROM foreign_partition_3;
+SELECT * FROM parent_for_foreign_tables ORDER BY id;
+SELECT * FROM foreign_partition_1 ORDER BY id;
+SELECT * FROM foreign_partition_2 ORDER BY id;
+SELECT * FROM foreign_partition_3 ORDER BY id;
 \c - - - :master_port
 
 SET search_path TO foreign_tables_schema_mx;
 --verify
-SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass;
+SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign_table'::regclass ORDER BY logicalrelid;
 
 CREATE SERVER foreign_server_local
         FOREIGN DATA WRAPPER postgres_fdw
@@ -200,19 +204,19 @@ CREATE FOREIGN TABLE foreign_table_local (
 CREATE TABLE dist_tbl(a int);
 INSERT INTO dist_tbl VALUES (1);
 SELECT create_distributed_table('dist_tbl','a');
-SELECT * FROM dist_tbl d JOIN foreign_table_local f ON d.a=f.id;
+SELECT * FROM dist_tbl d JOIN foreign_table_local f ON d.a=f.id ORDER BY f.id;
 
 CREATE TABLE ref_tbl(a int);
 INSERT INTO ref_tbl VALUES (1);
 SELECT create_reference_table('ref_tbl');
-SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id;
+SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id ORDER BY f.id;
 
 SELECT citus_add_local_table_to_metadata('foreign_table_local');
 
 \c - - - :worker_1_port
 SET search_path TO foreign_tables_schema_mx;
-SELECT * FROM dist_tbl d JOIN foreign_table_local f ON d.a=f.id;
-SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id;
+SELECT * FROM dist_tbl d JOIN foreign_table_local f ON d.a=f.id ORDER BY f.id;
+SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id ORDER BY f.id;
 \c - - - :master_port
 
 SET search_path TO foreign_tables_schema_mx;
