@@ -458,6 +458,7 @@ StartupCitusBackend(void)
 	InitializeMaintenanceDaemonBackend();
 	InitializeBackendData();
 	RegisterConnectionCleanup();
+	AssignGlobalPID();
 }
 
 
