@@ -94,7 +94,7 @@ select * from distributed_table ;
 DROP TRIGGER insert_42_trigger ON public.foreign_table_newname;
 
 -- should throw errors
-select alter_table_set_access_method('public.foreign_table_newname', 'columnar');  
+select alter_table_set_access_method('public.foreign_table_newname', 'columnar');
 select alter_distributed_table('public.foreign_table_newname', shard_count:=4);
 
 ALTER FOREIGN TABLE public.foreign_table_newname OWNER TO pg_monitor;
