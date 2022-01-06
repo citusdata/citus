@@ -534,6 +534,7 @@ SELECT * FROM ref_tbl d JOIN foreign_table_local f ON d.a=f.id;
 \c - - - :master_port
 
 SET search_path TO citus_local_tables_mx;
+DROP FOREIGN TABLE foreign_table_local;
 
 -- cleanup at exit
 set client_min_messages to error;
