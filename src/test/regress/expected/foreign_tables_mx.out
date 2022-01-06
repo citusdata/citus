@@ -32,9 +32,9 @@ SELECT partmethod, repmodel FROM pg_dist_partition WHERE logicalrelid = 'foreign
 CREATE TABLE parent_for_foreign_tables (
     project_id integer
 ) PARTITION BY HASH (project_id);
-CREATE SERVER IF NOT EXISTS srv1 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'otherdb1',host 'localhost', port '5432');
-CREATE SERVER IF NOT EXISTS srv2 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'otherdb2', host 'localhost', port '5432');
-CREATE SERVER IF NOT EXISTS srv3 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'otherdb3', host 'localhost', port '5432');
+CREATE SERVER IF NOT EXISTS srv1 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'regression', host 'localhost', port :'master_port');
+CREATE SERVER IF NOT EXISTS srv2 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'regression', host 'localhost', port :'master_port');
+CREATE SERVER IF NOT EXISTS srv3 FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'regression', host 'localhost', port :'master_port');
 CREATE FOREIGN TABLE foreign_partition_1 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 0) SERVER srv1;
 CREATE FOREIGN TABLE foreign_partition_2 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 1) SERVER srv2;
 CREATE FOREIGN TABLE foreign_partition_3 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 2) SERVER srv3;
@@ -193,18 +193,17 @@ SELECT * FROM foreign_table_test;
 (1 row)
 
 DROP TABLE parent_for_foreign_tables;
-CREATE TABLE parent_for_foreign_tables (
-    project_id integer
-) PARTITION BY HASH (project_id);
-CREATE FOREIGN TABLE foreign_partition_1 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 0) SERVER srv1;
-CREATE FOREIGN TABLE foreign_partition_2 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 1) SERVER srv2;
+CREATE TABLE parent_for_foreign_tables (id integer NOT NULL, data text, a bigserial)
+    PARTITION BY HASH (id);
+CREATE FOREIGN TABLE foreign_partition_1 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 0) SERVER srv1 OPTIONS (schema_name 'foreign_tables_schema_mx', table_name 'foreign_table_test');
+CREATE FOREIGN TABLE foreign_partition_2 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 1) SERVER srv2 OPTIONS (schema_name 'foreign_tables_schema_mx', table_name 'foreign_table_test');
 SELECT citus_add_local_table_to_metadata('parent_for_foreign_tables');
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
-CREATE FOREIGN TABLE foreign_partition_3 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 2) SERVER srv3;
+CREATE FOREIGN TABLE foreign_partition_3 PARTITION OF parent_for_foreign_tables FOR VALUES WITH (modulus 3, remainder 2) SERVER srv2 OPTIONS (schema_name 'foreign_tables_schema_mx', table_name 'foreign_table_test');
 SELECT partmethod, repmodel FROM pg_dist_partition
     WHERE logicalrelid IN ('parent_for_foreign_tables'::regclass, 'foreign_partition_1'::regclass, 'foreign_partition_2'::regclass, 'foreign_partition_3'::regclass);
  partmethod | repmodel
@@ -214,6 +213,38 @@ SELECT partmethod, repmodel FROM pg_dist_partition
  n          | s
  n          | s
 (4 rows)
+
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER srv1
+        OPTIONS (user 'postgres');
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER srv2
+        OPTIONS (user 'postgres');
+SELECT * FROM parent_for_foreign_tables;
+ id | data  | a
+---------------------------------------------------------------------
+  1 | testt | 3
+  1 | testt | 3
+  1 | testt | 3
+(3 rows)
+
+SELECT * FROM foreign_partition_1;
+ id | data  | a
+---------------------------------------------------------------------
+  1 | testt | 3
+(1 row)
+
+SELECT * FROM foreign_partition_2;
+ id | data  | a
+---------------------------------------------------------------------
+  1 | testt | 3
+(1 row)
+
+SELECT * FROM foreign_partition_3;
+ id | data  | a
+---------------------------------------------------------------------
+  1 | testt | 3
+(1 row)
 
 \c - - - :worker_1_port
 SET search_path TO foreign_tables_schema_mx;
@@ -226,6 +257,32 @@ SELECT partmethod, repmodel FROM pg_dist_partition
  n          | s
  n          | s
 (4 rows)
+
+SELECT * FROM parent_for_foreign_tables;
+ id | data  | a
+---------------------------------------------------------------------
+  1 | testt | 3
+  1 | testt | 3
+  1 | testt | 3
+(3 rows)
+
+SELECT * FROM foreign_partition_1;
+ id | data  | a
+---------------------------------------------------------------------
+  1 | testt | 3
+(1 row)
+
+SELECT * FROM foreign_partition_2;
+ id | data  | a
+---------------------------------------------------------------------
+  1 | testt | 3
+(1 row)
+
+SELECT * FROM foreign_partition_3;
+ id | data  | a
+---------------------------------------------------------------------
+  1 | testt | 3
+(1 row)
 
 \c - - - :master_port
 SET search_path TO foreign_tables_schema_mx;
