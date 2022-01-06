@@ -1184,6 +1184,9 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 /*
  * set_indexsafe_procflags sets PROC_IN_SAFE_IC flag in MyProc->statusFlags.
  *
+ * The flag is reset automatically at transaction end, so it must be set
+ * for each transaction.
+ *
  * Copied from pg/src/backend/commands/indexcmds.c
  * Also see pg commit c98763bf51bf610b3ee7e209fc76c3ff9a6b3163.
  */
