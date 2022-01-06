@@ -230,3 +230,7 @@ CREATE FOREIGN TABLE foreign_table_local_fails (
         OPTIONS (schema_name 'foreign_tables_schema_mx');
 
 DROP FOREIGN TABLE foreign_table_local;
+
+-- cleanup at exit
+set client_min_messages to error;
+DROP SCHEMA foreign_tables_schema_mx CASCADE;
