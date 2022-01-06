@@ -1005,7 +1005,8 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                       | function citus_disable_node(text,integer,boolean) void
                                                                       | function citus_internal_add_object_metadata(text,text[],text[],integer,integer) void
                                                                       | function citus_run_local_command(text) void
-(9 rows)
+                                                                      | function worker_drop_sequence_dependency(text) void
+(10 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

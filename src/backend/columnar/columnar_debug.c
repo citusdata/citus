@@ -17,7 +17,6 @@
 #include "catalog/pg_type.h"
 #include "distributed/pg_version_constants.h"
 #include "distributed/tuplestore.h"
-#include "distributed/version_compat.h"
 #include "miscadmin.h"
 #include "storage/fd.h"
 #include "storage/smgr.h"
@@ -26,6 +25,7 @@
 #include "utils/rel.h"
 #include "utils/tuplestore.h"
 
+#include "pg_version_compat.h"
 #include "columnar/columnar.h"
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_version_compat.h"

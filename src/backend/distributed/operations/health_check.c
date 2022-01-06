@@ -16,8 +16,10 @@
 #include "distributed/argutils.h"
 #include "distributed/listutils.h"
 #include "distributed/lock_graph.h"
+#include "distributed/metadata_cache.h"
 #include "distributed/remote_commands.h"
 #include "distributed/tuplestore.h"
+#include "distributed/worker_manager.h"
 #include "utils/builtins.h"
 
 /* simple query to run on workers to check connectivity */

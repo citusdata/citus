@@ -136,13 +136,26 @@ SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, met
        0 | localhost |    57636 | t        | t                | t           | t
 (1 row)
 
--- cannot add workers with specific IP as long as I have a placeholder coordinator record
-SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+BEGIN;
+	-- we should not enable MX for this temporary node just because
+	-- it'd spawn a bg worker targeting this node
+	-- and that changes the connection count specific tests
+	-- here
+	SET LOCAL citus.enable_metadata_sync_by_default TO OFF;
+	-- cannot add workers with specific IP as long as I have a placeholder coordinator record
+	SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
 ERROR:  cannot add a worker node when the coordinator hostname is set to localhost
 DETAIL:  Worker nodes need to be able to connect to the coordinator to transfer data.
 HINT:  Use SELECT citus_set_coordinator_host('<hostname>') to configure the coordinator hostname
--- adding localhost workers is ok
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+COMMIT;
+BEGIN;
+	-- we should not enable MX for this temporary node just because
+	-- it'd spawn a bg worker targeting this node
+	-- and that changes the connection count specific tests
+	-- here
+	SET LOCAL citus.enable_metadata_sync_by_default TO OFF;
+	-- adding localhost workers is ok
+	SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 NOTICE:  shards are still on the coordinator after adding the new node
 HINT:  Use SELECT rebalance_table_shards(); to balance shards data between workers and coordinator or SELECT citus_drain_node('localhost',57636); to permanently move shards away from the coordinator.
  ?column?
@@ -150,6 +163,8 @@ HINT:  Use SELECT rebalance_table_shards(); to balance shards data between worke
         1
 (1 row)
 
+COMMIT;
+-- we don't need this node anymore
 SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
@@ -163,8 +178,14 @@ SELECT 1 FROM citus_set_coordinator_host('127.0.0.1');
         1
 (1 row)
 
--- adding workers with specific IP is ok now
-SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+BEGIN;
+	-- we should not enable MX for this temporary node just because
+	-- it'd spawn a bg worker targeting this node
+	-- and that changes the connection count specific tests
+	-- here
+	SET LOCAL citus.enable_metadata_sync_by_default TO OFF;
+	-- adding workers with specific IP is ok now
+	SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
 NOTICE:  shards are still on the coordinator after adding the new node
 HINT:  Use SELECT rebalance_table_shards(); to balance shards data between workers and coordinator or SELECT citus_drain_node('127.0.0.1',57636); to permanently move shards away from the coordinator.
  ?column?
@@ -172,6 +193,8 @@ HINT:  Use SELECT rebalance_table_shards(); to balance shards data between worke
         1
 (1 row)
 
+COMMIT;
+-- we don't need this node anymore
 SELECT 1 FROM master_remove_node('127.0.0.1', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------

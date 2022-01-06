@@ -2162,3 +2162,14 @@ TableOwner(Oid relationId)
 
 	return GetUserNameFromId(userId, false);
 }
+
+
+/*
+ * IsForeignTable takes a relation id and returns true if it's a foreign table.
+ * Returns false otherwise.
+ */
+bool
+IsForeignTable(Oid relationId)
+{
+	return get_rel_relkind(relationId) == RELKIND_FOREIGN_TABLE;
+}

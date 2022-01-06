@@ -64,8 +64,6 @@
 #include "utils/ruleutils.h"
 #include "utils/varlena.h"
 
-#include "columnar/columnar_tableam.h"
-
 /* Shard related configuration */
 int ShardCount = 32;
 int ShardReplicationFactor = 1; /* desired replication factor for shards */
@@ -80,6 +78,10 @@ static void GatherIndexAndConstraintDefinitionListExcludingReplicaIdentity(Form_
 																		   int indexFlags);
 static Datum WorkerNodeGetDatum(WorkerNode *workerNode, TupleDesc tupleDescriptor);
 
+static char * CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
+											   const ColumnarOptions *options);
+static char * GetTableDDLCommandColumnar(void *context);
+static TableDDLCommand * ColumnarGetTableOptionsDDL(Oid relationId);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_get_table_metadata);
@@ -574,22 +576,6 @@ GetPreLoadTableCreationCommands(Oid relationId,
 
 	PushOverrideEmptySearchPath(CurrentMemoryContext);
 
-	/* if foreign table, fetch extension and server definitions */
-	char tableType = get_rel_relkind(relationId);
-	if (tableType == RELKIND_FOREIGN_TABLE)
-	{
-		char *extensionDef = pg_get_extensiondef_string(relationId);
-		char *serverDef = pg_get_serverdef_string(relationId);
-
-		if (extensionDef != NULL)
-		{
-			tableDDLEventList = lappend(tableDDLEventList,
-										makeTableDDLCommandString(extensionDef));
-		}
-		tableDDLEventList = lappend(tableDDLEventList,
-									makeTableDDLCommandString(serverDef));
-	}
-
 	/* fetch table schema and column option definitions */
 	char *tableSchemaDef = pg_get_tableschemadef_string(relationId,
 														includeSequenceDefaults,
@@ -1017,4 +1003,119 @@ GetTableDDLCommand(TableDDLCommand *command)
 
 	/* unreachable: compiler should warn/error when not all cases are covered above */
 	ereport(ERROR, (errmsg("unsupported TableDDLCommand: %d", command->type)));
+}
+
+
+/*
+ * CitusCreateAlterColumnarTableSet generates a portable
+ */
+static char *
+CitusCreateAlterColumnarTableSet(char *qualifiedRelationName,
+								 const ColumnarOptions *options)
+{
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	appendStringInfo(&buf,
+					 "SELECT alter_columnar_table_set(%s, "
+					 "chunk_group_row_limit => %d, "
+					 "stripe_row_limit => %lu, "
+					 "compression_level => %d, "
+					 "compression => %s);",
+					 quote_literal_cstr(qualifiedRelationName),
+					 options->chunkRowCount,
+					 options->stripeRowCount,
+					 options->compressionLevel,
+					 quote_literal_cstr(CompressionTypeStr(options->compressionType)));
+
+	return buf.data;
+}
+
+
+/*
+ * GetTableDDLCommandColumnar is an internal function used to turn a
+ * ColumnarTableDDLContext stored on the context of a TableDDLCommandFunction into a sql
+ * command that will be executed against a table. The resulting command will set the
+ * options of the table to the same options as the relation on the coordinator.
+ */
+static char *
+GetTableDDLCommandColumnar(void *context)
+{
+	ColumnarTableDDLContext *tableDDLContext = (ColumnarTableDDLContext *) context;
+
+	char *qualifiedShardName = quote_qualified_identifier(tableDDLContext->schemaName,
+														  tableDDLContext->relationName);
+
+	return CitusCreateAlterColumnarTableSet(qualifiedShardName,
+											&tableDDLContext->options);
+}
+
+
+/*
+ * GetShardedTableDDLCommandColumnar is an internal function used to turn a
+ * ColumnarTableDDLContext stored on the context of a TableDDLCommandFunction into a sql
+ * command that will be executed against a shard. The resulting command will set the
+ * options of the shard to the same options as the relation the shard is based on.
+ */
+char *
+GetShardedTableDDLCommandColumnar(uint64 shardId, void *context)
+{
+	ColumnarTableDDLContext *tableDDLContext = (ColumnarTableDDLContext *) context;
+
+	/*
+	 * AppendShardId is destructive of the original cahr *, given we want to serialize
+	 * more than once we copy it before appending the shard id.
+	 */
+	char *relationName = pstrdup(tableDDLContext->relationName);
+	AppendShardIdToName(&relationName, shardId);
+
+	char *qualifiedShardName = quote_qualified_identifier(tableDDLContext->schemaName,
+														  relationName);
+
+	return CitusCreateAlterColumnarTableSet(qualifiedShardName,
+											&tableDDLContext->options);
+}
+
+
+/*
+ * ColumnarGetCustomTableOptionsDDL returns a TableDDLCommand representing a command that
+ * will apply the passed columnar options to the relation identified by relationId on a
+ * new table or shard.
+ */
+TableDDLCommand *
+ColumnarGetCustomTableOptionsDDL(char *schemaName, char *relationName,
+								 ColumnarOptions options)
+{
+	ColumnarTableDDLContext *context = (ColumnarTableDDLContext *) palloc0(
+		sizeof(ColumnarTableDDLContext));
+
+	/* build the context */
+	context->schemaName = schemaName;
+	context->relationName = relationName;
+	context->options = options;
+
+	/* create TableDDLCommand based on the context build above */
+	return makeTableDDLCommandFunction(
+		GetTableDDLCommandColumnar,
+		GetShardedTableDDLCommandColumnar,
+		context);
+}
+
+
+/*
+ * ColumnarGetTableOptionsDDL returns a TableDDLCommand representing a command that will
+ * apply the columnar options currently applicable to the relation identified by
+ * relationId on a new table or shard.
+ */
+static TableDDLCommand *
+ColumnarGetTableOptionsDDL(Oid relationId)
+{
+	Oid namespaceId = get_rel_namespace(relationId);
+	char *schemaName = get_namespace_name(namespaceId);
+	char *relationName = get_rel_name(relationId);
+
+	ColumnarOptions options = { 0 };
+	ReadColumnarOptions(relationId, &options);
+
+	return ColumnarGetCustomTableOptionsDDL(schemaName, relationName, options);
 }

@@ -103,8 +103,6 @@ CREATE FOREIGN TABLE remote_engagements (
 SET citus.shard_count TO 1;
 SET citus.shard_replication_factor TO 2;
 SELECT create_distributed_table('remote_engagements', 'id', 'hash');
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
 
