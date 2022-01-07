@@ -1148,9 +1148,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 */
 			if (ActiveSnapshotSet())
 			{
-				Snapshot activeSnapshot = GetActiveSnapshot();
 				PopActiveSnapshot();
-				UnregisterSnapshot(activeSnapshot);
 			}
 
 			CommitTransactionCommand();
@@ -1195,9 +1193,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			/* similar to pg >= 14 case, pop the active snapshot if exists */
 			if (ActiveSnapshotSet())
 			{
-				Snapshot activeSnapshot = GetActiveSnapshot();
 				PopActiveSnapshot();
-				UnregisterSnapshot(activeSnapshot);
 			}
 
 			CommitTransactionCommand();
