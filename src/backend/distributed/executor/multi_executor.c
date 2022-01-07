@@ -21,9 +21,11 @@
 #include "distributed/citus_custom_scan.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_executor.h"
 #include "distributed/insert_select_planner.h"
 #include "distributed/listutils.h"
+#include "distributed/local_executor.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/multi_executor.h"
 #include "distributed/combine_query_planner.h"
@@ -718,4 +720,47 @@ ExecutorBoundParams(void)
 {
 	Assert(ExecutorLevel > 0);
 	return executorBoundParams;
+}
+
+
+/*
+ * EnsureRemoteTaskExecutionAllowed ensures that we do not perform remote
+ * execution from within a task. That could happen when the user calls
+ * a function in a query that gets pushed down to the worker, and the
+ * function performs a query on a distributed table.
+ */
+void
+EnsureRemoteTaskExecutionAllowed(void)
+{
+	if (!InTaskExecution())
+	{
+		/* we are not within a task, distributed execution is allowed */
+		return;
+	}
+
+	ereport(ERROR, (errmsg("cannot execute a distributed query from a query on a "
+						   "shard")));
+}
+
+
+/*
+ * InTaskExecution determines whether we are currently in a task execution.
+ */
+bool
+InTaskExecution(void)
+{
+	if (LocalExecutorLevel > 0)
+	{
+		/* in a local task */
+		return true;
+	}
+
+	/*
+	 * Normally, any query execution within a citus-initiated backend
+	 * is considered a task execution, but an exception is when we
+	 * are in a delegated function/procedure call.
+	 */
+	return IsCitusInitiatedRemoteBackend() &&
+		   !InDelegatedFunctionCall &&
+		   !InDelegatedProcedureCall;
 }

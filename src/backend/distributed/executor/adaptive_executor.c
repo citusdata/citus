@@ -1290,6 +1290,12 @@ StartDistributedExecution(DistributedExecution *execution)
 		 */
 		RecordParallelRelationAccessForTaskList(execution->remoteAndLocalTaskList);
 	}
+
+	/* make sure we are not doing remote execution from within a task */
+	if (execution->remoteTaskList != NIL)
+	{
+		EnsureRemoteTaskExecutionAllowed();
+	}
 }
 
 

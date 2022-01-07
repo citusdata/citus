@@ -227,10 +227,20 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 										   params, queryEnv, dest, completionTag);
 
 			StoredProcedureLevel -= 1;
+
+			if (InDelegatedProcedureCall && StoredProcedureLevel == 0)
+			{
+				InDelegatedProcedureCall = false;
+			}
 		}
 		PG_CATCH();
 		{
 			StoredProcedureLevel -= 1;
+
+			if (InDelegatedProcedureCall && StoredProcedureLevel == 0)
+			{
+				InDelegatedProcedureCall = false;
+			}
 			PG_RE_THROW();
 		}
 		PG_END_TRY();

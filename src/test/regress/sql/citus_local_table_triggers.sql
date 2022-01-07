@@ -268,6 +268,15 @@ BEGIN
 END;
 $insert_100$ LANGUAGE plpgsql;
 
+CREATE TABLE local_table (value int);
+
+CREATE FUNCTION insert_100_local() RETURNS trigger AS $insert_100$
+BEGIN
+    INSERT INTO local_table VALUES (100);
+    RETURN NEW;
+END;
+$insert_100$ LANGUAGE plpgsql;
+
 BEGIN;
     CREATE TRIGGER insert_100_trigger
     AFTER TRUNCATE ON another_citus_local_table
@@ -282,7 +291,7 @@ BEGIN;
     SELECT * FROM reference_table;
 ROLLBACK;
 
-
+-- cannot perform remote execution from a trigger on a Citus local table
 BEGIN;
     -- update should actually update something to test ON UPDATE CASCADE logic
     INSERT INTO another_citus_local_table VALUES (600);
@@ -297,8 +306,46 @@ BEGIN;
     FOR EACH STATEMENT EXECUTE FUNCTION insert_100();
 
     UPDATE another_citus_local_table SET value=value-1;;
+ROLLBACK;
+
+-- can perform regular execution from a trigger on a Citus local table
+BEGIN;
+    -- update should actually update something to test ON UPDATE CASCADE logic
+    INSERT INTO another_citus_local_table VALUES (600);
+    INSERT INTO citus_local_table VALUES (600);
+
+    CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON another_citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();
+
+    CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();
+
+    UPDATE another_citus_local_table SET value=value-1;;
     -- we should see two rows with "100"
-    SELECT * FROM reference_table;
+    SELECT * FROM local_table;
+ROLLBACK;
+
+-- can perform local execution from a trigger on a Citus local table
+BEGIN;
+	SELECT citus_add_local_table_to_metadata('local_table');
+
+    -- update should actually update something to test ON UPDATE CASCADE logic
+    INSERT INTO another_citus_local_table VALUES (600);
+    INSERT INTO citus_local_table VALUES (600);
+
+    CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON another_citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();
+
+    CREATE TRIGGER insert_100_trigger
+    AFTER UPDATE ON citus_local_table
+    FOR EACH STATEMENT EXECUTE FUNCTION insert_100_local();
+
+    UPDATE another_citus_local_table SET value=value-1;;
+    -- we should see two rows with "100"
+    SELECT * FROM local_table;
 ROLLBACK;
 
 -- test on partitioned citus local tables
