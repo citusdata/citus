@@ -12,6 +12,8 @@ SELECT citus.clear_network_traffic();
 
 SET citus.shard_count = 2;
 SET citus.shard_replication_factor = 2;
+-- this test is designed such that no modification lock is acquired
+SET citus.allow_modifications_from_workers_to_replicated_tables TO false;
 CREATE TABLE select_test (key int, value text);
 SELECT create_distributed_table('select_test', 'key');
  create_distributed_table
@@ -60,6 +62,12 @@ ERROR:  connection to the remote node localhost:xxxxx failed with the following 
 	This probably means the server terminated abnormally
 	before or while processing the request.
 COMMIT;
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
 TRUNCATE select_test;
 -- now the same tests with query cancellation
 -- put data in shard for which mitm node is first placement
@@ -94,6 +102,12 @@ WHERE shardid IN (
  shardstate
 ---------------------------------------------------------------------
           1
+(1 row)
+
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
 (1 row)
 
 TRUNCATE select_test;
