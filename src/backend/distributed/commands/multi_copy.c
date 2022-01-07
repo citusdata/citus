@@ -3340,6 +3340,7 @@ InitializeCopyShardState(CopyShardState *shardState,
 {
 	ListCell *placementCell = NULL;
 	int failedPlacementCount = 0;
+	bool hasRemoteCopy = false;
 
 	MemoryContext localContext =
 		AllocSetContextCreateExtended(CurrentMemoryContext,
@@ -3383,6 +3384,8 @@ InitializeCopyShardState(CopyShardState *shardState,
 			continue;
 		}
 
+		hasRemoteCopy = true;
+
 		MultiConnection *connection =
 			CopyGetPlacementConnection(connectionStateHash, placement,
 									   colocatedIntermediateResult);
@@ -3425,6 +3428,11 @@ InitializeCopyShardState(CopyShardState *shardState,
 	if (failedPlacementCount == list_length(activePlacementList))
 	{
 		ereport(ERROR, (errmsg("could not connect to any active placements")));
+	}
+
+	if (hasRemoteCopy)
+	{
+		EnsureRemoteTaskExecutionAllowed();
 	}
 
 	/*

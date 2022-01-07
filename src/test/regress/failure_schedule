@@ -16,12 +16,9 @@ test: failure_add_disable_node
 test: failure_copy_to_reference
 test: failure_copy_on_hash
 test: failure_create_reference_table
-test: check_mx
-test: turn_mx_off
 test: failure_create_distributed_table_non_empty
 test: failure_create_table
 test: failure_single_select
-test: turn_mx_on
 
 test: failure_multi_shard_update_delete
 test: failure_cte_subquery

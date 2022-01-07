@@ -66,16 +66,10 @@ ALTER FOREIGN TABLE public.foreign_table_newname ADD CONSTRAINT check_c_2 check(
 ALTER FOREIGN TABLE public.foreign_table_newname VALIDATE CONSTRAINT check_c_2;
 ALTER FOREIGN TABLE public.foreign_table_newname DROP constraint IF EXISTS check_c_2;
 -- trigger test
-CREATE TABLE distributed_table(value int);
-SELECT create_distributed_table('distributed_table', 'value');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
+CREATE TABLE table42(value int);
 CREATE FUNCTION insert_42() RETURNS trigger AS $insert_42$
 BEGIN
-    INSERT INTO distributed_table VALUES (42);
+    INSERT INTO table42 VALUES (42);
     RETURN NEW;
 END;
 $insert_42$ LANGUAGE plpgsql;
@@ -85,7 +79,7 @@ FOR EACH ROW EXECUTE FUNCTION insert_42();
 -- do the same pattern from the workers as well
 INSERT INTO public.foreign_table_newname VALUES (99, 'test_2');
 delete from public.foreign_table_newname where id_test = 99;
-select * from distributed_table ORDER BY value;
+select * from table42 ORDER BY value;
  value
 ---------------------------------------------------------------------
     42
@@ -96,7 +90,7 @@ alter foreign table public.foreign_table_newname disable trigger insert_42_trigg
 INSERT INTO public.foreign_table_newname VALUES (99, 'test_2');
 delete from public.foreign_table_newname where id_test = 99;
 -- should not insert again as trigger disabled
-select * from distributed_table ORDER BY value;
+select * from table42 ORDER BY value;
  value
 ---------------------------------------------------------------------
     42
@@ -199,36 +193,11 @@ NOTICE:  renaming the new table to foreign_tables_schema_mx.foreign_table
 
 (1 row)
 
+-- both should error out
 SELECT create_distributed_table('foreign_table','data');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT undistribute_table('foreign_table');
-NOTICE:  creating a new table for foreign_tables_schema_mx.foreign_table
-NOTICE:  dropping the old foreign_tables_schema_mx.foreign_table
-NOTICE:  renaming the new table to foreign_tables_schema_mx.foreign_table
- undistribute_table
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  foreign tables cannot be distributed
 SELECT create_reference_table('foreign_table');
- create_reference_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT undistribute_table('foreign_table');
-NOTICE:  creating a new table for foreign_tables_schema_mx.foreign_table
-NOTICE:  dropping the old foreign_tables_schema_mx.foreign_table
-NOTICE:  renaming the new table to foreign_tables_schema_mx.foreign_table
- undistribute_table
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  foreign tables cannot be distributed
 INSERT INTO foreign_table_test VALUES (1, 'testt');
 SELECT * FROM foreign_table ORDER BY a;
  data  | a

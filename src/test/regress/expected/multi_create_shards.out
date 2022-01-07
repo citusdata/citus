@@ -149,44 +149,6 @@ SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'throwaway%' AND relkind = 'r';
      0
 (1 row)
 
--- test foreign table creation
-CREATE FOREIGN TABLE foreign_table_to_distribute
-(
-	name text,
-	id bigint
-)
-SERVER fake_fdw_server;
-SET citus.shard_count TO 16;
-SET citus.shard_replication_factor TO 1;
-SELECT create_distributed_table('foreign_table_to_distribute', 'id', 'hash');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
-	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass
-	ORDER BY (shardminvalue::integer) ASC;
- shardstorage | shardminvalue | shardmaxvalue
----------------------------------------------------------------------
- f            | -2147483648   | -1879048193
- f            | -1879048192   | -1610612737
- f            | -1610612736   | -1342177281
- f            | -1342177280   | -1073741825
- f            | -1073741824   | -805306369
- f            | -805306368    | -536870913
- f            | -536870912    | -268435457
- f            | -268435456    | -1
- f            | 0             | 268435455
- f            | 268435456     | 536870911
- f            | 536870912     | 805306367
- f            | 805306368     | 1073741823
- f            | 1073741824    | 1342177279
- f            | 1342177280    | 1610612735
- f            | 1610612736    | 1879048191
- f            | 1879048192    | 2147483647
-(16 rows)
-
 -- test shard creation using weird shard count
 CREATE TABLE weird_shard_count
 (
@@ -216,11 +178,3 @@ SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size
   613566759
 (7 rows)
 
--- cleanup foreign table, related shards and shard placements
-DELETE FROM pg_dist_shard_placement
-	WHERE shardid IN (SELECT shardid FROM pg_dist_shard
-					   WHERE logicalrelid = 'foreign_table_to_distribute'::regclass);
-DELETE FROM pg_dist_shard
-	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass;
-DELETE FROM pg_dist_partition
-	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass;
