@@ -72,7 +72,8 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 	/* we don't extend names in extension or schema commands */
 	NodeTag nodeType = nodeTag(parseTree);
 	if (nodeType == T_CreateExtensionStmt || nodeType == T_CreateSchemaStmt ||
-		nodeType == T_CreateSeqStmt || nodeType == T_AlterSeqStmt)
+		nodeType == T_CreateSeqStmt || nodeType == T_AlterSeqStmt ||
+		nodeType == T_CreateForeignServerStmt)
 	{
 		return;
 	}
@@ -276,30 +277,7 @@ RelayEventExtendNames(Node *parseTree, char *schemaName, uint64 shardId)
 			break;
 		}
 
-		case T_CreateForeignServerStmt:
-		{
-			CreateForeignServerStmt *serverStmt = (CreateForeignServerStmt *) parseTree;
-			char **serverName = &(serverStmt->servername);
-
-			AppendShardIdToName(serverName, shardId);
-			break;
-		}
-
 		case T_CreateForeignTableStmt:
-		{
-			CreateForeignTableStmt *createStmt = (CreateForeignTableStmt *) parseTree;
-			char **serverName = &(createStmt->servername);
-
-			AppendShardIdToName(serverName, shardId);
-
-			/*
-			 * Since CreateForeignTableStmt inherits from CreateStmt and any change
-			 * performed on CreateStmt should be done here too, we simply *fall
-			 * through* to avoid code repetition.
-			 */
-		}
-
-		/* fallthrough */
 		case T_CreateStmt:
 		{
 			CreateStmt *createStmt = (CreateStmt *) parseTree;

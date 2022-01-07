@@ -247,6 +247,13 @@ extern ObjectAddress AlterForeignServerOwnerStmtObjectAddress(Node *node, bool
 															  missing_ok);
 extern List * GetForeignServerCreateDDLCommand(Oid serverId);
 
+
+/* foreign_table.c - forward declarations */
+extern List * PreprocessAlterForeignTableSchemaStmt(Node *node, const char *queryString,
+													ProcessUtilityContext
+													processUtilityContext);
+
+
 /* function.c - forward declarations */
 extern List * PreprocessCreateFunctionStmt(Node *stmt, const char *queryString,
 										   ProcessUtilityContext processUtilityContext);

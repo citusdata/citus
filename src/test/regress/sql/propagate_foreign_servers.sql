@@ -12,6 +12,16 @@ SET citus.enable_ddl_propagation TO ON;
 CREATE SERVER foreign_server_dependent_schema
         FOREIGN DATA WRAPPER postgres_fdw
         OPTIONS (host 'test');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text
+)
+        SERVER foreign_server_dependent_schema
+        OPTIONS (schema_name 'test_dependent_schema', table_name 'foreign_table_test');
+
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
+SELECT citus_add_local_table_to_metadata('foreign_table');
+ALTER TABLE foreign_table OWNER TO pg_monitor;
 
 SELECT 1 FROM citus_add_node('localhost', :worker_1_port);
 
@@ -21,12 +31,17 @@ SELECT run_command_on_workers(
 SELECT run_command_on_workers(
         $$SELECT COUNT(*)=1 FROM pg_foreign_server WHERE srvname = 'foreign_server_dependent_schema';$$);
 
+-- verify the owner is altered on workers
+SELECT run_command_on_workers($$select r.rolname from pg_roles r join pg_class c on r.oid=c.relowner where relname = 'foreign_table';$$);
+
 CREATE SERVER foreign_server_to_drop
         FOREIGN DATA WRAPPER postgres_fdw
         OPTIONS (host 'test');
 
 --should error
 DROP SERVER foreign_server_dependent_schema, foreign_server_to_drop;
+DROP FOREIGN TABLE foreign_table;
+SELECT citus_remove_node('localhost', :master_port);
 
 SET client_min_messages TO ERROR;
 DROP SCHEMA test_dependent_schema CASCADE;

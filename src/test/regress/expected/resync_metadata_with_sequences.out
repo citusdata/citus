@@ -1,0 +1,356 @@
+CREATE SCHEMA resync_metadata_with_sequences;
+SET search_path TO resync_metadata_with_sequences;
+CREATE TABLE test_serial(a bigserial PRIMARY KEY);
+SELECT create_distributed_table('test_serial', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SEQUENCE myseq;
+CREATE TABLE test_sequence(a bigint DEFAULT nextval('myseq'));
+SELECT create_distributed_table('test_sequence', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE SEQUENCE myseq_ref;
+CREATE TABLE test_serial_ref(a bigserial PRIMARY KEY, b bigint DEFAULT nextval('myseq_ref'));
+SELECT create_reference_table('test_serial_ref');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_serial_ref VALUES(DEFAULT) RETURNING *;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+(1 row)
+
+INSERT INTO test_serial_ref VALUES(DEFAULT) RETURNING *;
+ a | b
+---------------------------------------------------------------------
+ 2 | 2
+(1 row)
+
+SET client_min_messages TO ERROR;
+SELECT 1 FROM citus_add_node('localhost', :master_port, groupid:=0);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+CREATE SEQUENCE myseq_locl_to_dist;
+CREATE TABLE test_local_to_dist(a bigserial PRIMARY KEY, b bigint DEFAULT nextval('myseq_locl_to_dist'));
+SELECT citus_add_local_table_to_metadata('test_local_to_dist');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+ a | b
+---------------------------------------------------------------------
+ 1 | 1
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+ a | b
+---------------------------------------------------------------------
+ 2 | 2
+(1 row)
+
+SET citus.shard_replication_factor TO 1;
+CREATE SEQUENCE other_id_seq;
+CREATE TABLE sensors(
+measureid bigserial,
+other_id bigint DEFAULT nextval('other_id_seq'),
+eventdatetime date) PARTITION BY RANGE(eventdatetime);
+CREATE TABLE sensors_old PARTITION OF sensors FOR VALUES FROM ('2000-01-01') TO ('2020-01-01');
+CREATE TABLE sensors_2020_01_01 PARTITION OF sensors FOR VALUES FROM ('2020-01-01') TO ('2020-02-01');
+CREATE TABLE sensors_news PARTITION OF sensors FOR VALUES FROM ('2020-05-01') TO ('2025-01-01');
+SELECT create_distributed_table('sensors', 'measureid', colocate_with:='none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path tO resync_metadata_with_sequences;
+INSERT INTO test_serial VALUES(DEFAULT) RETURNING *;
+        a
+---------------------------------------------------------------------
+ 3940649673949185
+(1 row)
+
+INSERT INTO test_serial VALUES(DEFAULT) RETURNING *;
+        a
+---------------------------------------------------------------------
+ 3940649673949186
+(1 row)
+
+INSERT into test_sequence VALUES(DEFAULT) RETURNING *;
+        a
+---------------------------------------------------------------------
+ 3940649673949185
+(1 row)
+
+INSERT into test_sequence VALUES(DEFAULT) RETURNING *;
+        a
+---------------------------------------------------------------------
+ 3940649673949186
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949185 | 3940649673949185
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949186 | 3940649673949186
+(1 row)
+
+INSERT INTO test_serial_ref VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949185 | 3940649673949185
+(1 row)
+
+INSERT INTO test_serial_ref VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949186 | 3940649673949186
+(1 row)
+
+INSERT INTO sensors VALUES (DEFAULT, DEFAULT, '2010-01-01') RETURNING *;
+    measureid     |     other_id     | eventdatetime
+---------------------------------------------------------------------
+ 3940649673949185 | 3940649673949185 | 01-01-2010
+(1 row)
+
+INSERT INTO sensors_news VALUES (DEFAULT, DEFAULT, '2021-01-01') RETURNING *;
+    measureid     |     other_id     | eventdatetime
+---------------------------------------------------------------------
+ 3940649673949186 | 3940649673949186 | 01-01-2021
+(1 row)
+
+\c - - - :master_port
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path tO resync_metadata_with_sequences;
+-- can continue inserting with the existing sequence/serial
+INSERT INTO test_serial VALUES(DEFAULT) RETURNING *;
+        a
+---------------------------------------------------------------------
+ 3940649673949187
+(1 row)
+
+INSERT INTO test_serial VALUES(DEFAULT) RETURNING *;
+        a
+---------------------------------------------------------------------
+ 3940649673949188
+(1 row)
+
+INSERT into test_sequence VALUES(DEFAULT) RETURNING *;
+        a
+---------------------------------------------------------------------
+ 3940649673949187
+(1 row)
+
+INSERT into test_sequence VALUES(DEFAULT) RETURNING *;
+        a
+---------------------------------------------------------------------
+ 3940649673949188
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949187 | 3940649673949187
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949188 | 3940649673949188
+(1 row)
+
+INSERT INTO test_serial_ref VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949187 | 3940649673949187
+(1 row)
+
+INSERT INTO test_serial_ref VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949188 | 3940649673949188
+(1 row)
+
+INSERT INTO sensors VALUES (DEFAULT, DEFAULT, '2010-01-01') RETURNING *;
+    measureid     |     other_id     | eventdatetime
+---------------------------------------------------------------------
+ 3940649673949187 | 3940649673949187 | 01-01-2010
+(1 row)
+
+INSERT INTO sensors_news VALUES (DEFAULT, DEFAULT, '2021-01-01') RETURNING *;
+    measureid     |     other_id     | eventdatetime
+---------------------------------------------------------------------
+ 3940649673949188 | 3940649673949188 | 01-01-2021
+(1 row)
+
+\c - - - :master_port
+SET search_path tO resync_metadata_with_sequences;
+SELECT create_distributed_table('test_local_to_dist', 'a', colocate_with:='none');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$resync_metadata_with_sequences.test_local_to_dist$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+ a | b
+---------------------------------------------------------------------
+ 3 | 3
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+ a | b
+---------------------------------------------------------------------
+ 4 | 4
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path tO resync_metadata_with_sequences;
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949189 | 3940649673949189
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949190 | 3940649673949190
+(1 row)
+
+\c - - - :master_port
+SET search_path tO resync_metadata_with_sequences;
+SELECT alter_distributed_table('test_local_to_dist', shard_count:=6);
+NOTICE:  creating a new table for resync_metadata_with_sequences.test_local_to_dist
+NOTICE:  moving the data of resync_metadata_with_sequences.test_local_to_dist
+NOTICE:  dropping the old resync_metadata_with_sequences.test_local_to_dist
+NOTICE:  renaming the new table to resync_metadata_with_sequences.test_local_to_dist
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET citus.shard_replication_factor TO 1;
+SELECT alter_distributed_table('sensors', shard_count:=5);
+NOTICE:  converting the partitions of resync_metadata_with_sequences.sensors
+NOTICE:  creating a new table for resync_metadata_with_sequences.sensors_old
+NOTICE:  moving the data of resync_metadata_with_sequences.sensors_old
+NOTICE:  dropping the old resync_metadata_with_sequences.sensors_old
+NOTICE:  renaming the new table to resync_metadata_with_sequences.sensors_old
+NOTICE:  creating a new table for resync_metadata_with_sequences.sensors_2020_01_01
+NOTICE:  moving the data of resync_metadata_with_sequences.sensors_2020_01_01
+NOTICE:  dropping the old resync_metadata_with_sequences.sensors_2020_01_01
+NOTICE:  renaming the new table to resync_metadata_with_sequences.sensors_2020_01_01
+NOTICE:  creating a new table for resync_metadata_with_sequences.sensors_news
+NOTICE:  moving the data of resync_metadata_with_sequences.sensors_news
+NOTICE:  dropping the old resync_metadata_with_sequences.sensors_news
+NOTICE:  renaming the new table to resync_metadata_with_sequences.sensors_news
+NOTICE:  creating a new table for resync_metadata_with_sequences.sensors
+NOTICE:  dropping the old resync_metadata_with_sequences.sensors
+NOTICE:  renaming the new table to resync_metadata_with_sequences.sensors
+ alter_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+ a | b
+---------------------------------------------------------------------
+ 5 | 5
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+ a | b
+---------------------------------------------------------------------
+ 6 | 6
+(1 row)
+
+INSERT INTO sensors VALUES (DEFAULT, DEFAULT, '2010-01-01') RETURNING *;
+ measureid | other_id | eventdatetime
+---------------------------------------------------------------------
+         1 |        1 | 01-01-2010
+(1 row)
+
+INSERT INTO sensors_news VALUES (DEFAULT, DEFAULT, '2021-01-01') RETURNING *;
+ measureid | other_id | eventdatetime
+---------------------------------------------------------------------
+         2 |        2 | 01-01-2021
+(1 row)
+
+\c - - - :worker_1_port
+SET search_path tO resync_metadata_with_sequences;
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949191 | 3940649673949191
+(1 row)
+
+INSERT INTO test_local_to_dist VALUES(DEFAULT) RETURNING *;
+        a         |        b
+---------------------------------------------------------------------
+ 3940649673949192 | 3940649673949192
+(1 row)
+
+INSERT INTO sensors VALUES (DEFAULT, DEFAULT, '2010-01-01') RETURNING *;
+    measureid     |     other_id     | eventdatetime
+---------------------------------------------------------------------
+ 3940649673949189 | 3940649673949189 | 01-01-2010
+(1 row)
+
+INSERT INTO sensors_news VALUES (DEFAULT, DEFAULT, '2021-01-01') RETURNING *;
+    measureid     |     other_id     | eventdatetime
+---------------------------------------------------------------------
+ 3940649673949190 | 3940649673949190 | 01-01-2021
+(1 row)
+
+\c - - - :master_port
+SET search_path tO resync_metadata_with_sequences;
+DROP TABLE test_serial, test_sequence;
+\c - - - :worker_1_port
+SET search_path tO resync_metadata_with_sequences;
+-- show that we only have the sequences left after
+-- dropping the tables (e.g., bigserial is dropped)
+select count(*) from pg_sequences where schemaname ilike '%resync_metadata_with_sequences%';
+ count
+---------------------------------------------------------------------
+     7
+(1 row)
+
+\c - - - :master_port
+SET client_min_messages TO ERROR;
+SELECT 1 FROM citus_remove_node('localhost', :master_port);
+ ?column?
+---------------------------------------------------------------------
+        1
+(1 row)
+
+DROP SCHEMA resync_metadata_with_sequences CASCADE;
