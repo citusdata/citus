@@ -3419,7 +3419,8 @@ WarnUnsupportedIfForeignDistributedTable(Oid relationId)
 		IsCitusTable(relationId) && !IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
 		DistributedForeignTableWarningPrompted = true;
-		ereport(WARNING, (errmsg("support for distributed foreign tables are deprecated"),
+		ereport(WARNING, (errmsg("support for distributed foreign tables are deprecated, "
+								 "please use Citus managed local tables"),
 						  (errdetail("Foreign tables can be added to metadata using UDF: "
 									 "citus_add_local_table_to_metadata()"))));
 	}
