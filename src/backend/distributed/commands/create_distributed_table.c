@@ -540,8 +540,10 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	}
 	else
 	{
-		/* sync etmedigimizi ignore ediyoruz commenti, ozellikle append dist tablolar icin */
-		/* backward compatible olarak calisacak, sync de yapsak gitmicek */
+		/*
+		 * Ignore the tables we won't sync their metadata (most importantly append
+		 * distributed tables). We won't create shell table for them.
+		 */
 	}
 
 	/*
