@@ -135,10 +135,10 @@ ALTER USER MAPPING FOR postgres SERVER foreign_server OPTIONS (SET user 'postgre
 -- test undistributing
 DELETE FROM foreign_table;
 SELECT undistribute_table('foreign_table');
+
+-- both should error out
 SELECT create_distributed_table('foreign_table','data');
-SELECT undistribute_table('foreign_table');
 SELECT create_reference_table('foreign_table');
-SELECT undistribute_table('foreign_table');
 
 INSERT INTO foreign_table_test VALUES (1, 'testt');
 SELECT * FROM foreign_table ORDER BY a;

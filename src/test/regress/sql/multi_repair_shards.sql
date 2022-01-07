@@ -80,29 +80,3 @@ UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :newshardid AND grou
 
 -- get the data from the second placement
 SELECT * FROM customer_engagements;
-
--- now do the same test over again with a foreign table
-CREATE FOREIGN TABLE remote_engagements (
-	id integer,
-	created_at date,
-	event_data text
-) SERVER fake_fdw_server;
-
--- distribute the table
--- create a single shard on the first worker
-SET citus.shard_count TO 1;
-SET citus.shard_replication_factor TO 2;
-SELECT create_distributed_table('remote_engagements', 'id', 'hash');
-
--- get the newshardid
-SELECT shardid as remotenewshardid FROM pg_dist_shard WHERE logicalrelid = 'remote_engagements'::regclass
-\gset
-
--- now, update the second placement as unhealthy
-UPDATE pg_dist_placement SET shardstate = 3 WHERE shardid = :remotenewshardid AND groupid = :worker_2_group;
-
--- oops! we don't support repairing shards backed by foreign tables
-SELECT master_copy_shard_placement(:remotenewshardid, 'localhost', :worker_1_port, 'localhost', :worker_2_port);
-
--- clean-up
-DROP FOREIGN TABLE remote_engagements CASCADE;
