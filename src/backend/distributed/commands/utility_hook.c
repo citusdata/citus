@@ -74,9 +74,6 @@
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#if PG_VERSION_NUM >= 140000
-#include "utils/snapmgr.h"
-#endif
 #include "utils/syscache.h"
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
