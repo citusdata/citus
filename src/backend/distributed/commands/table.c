@@ -784,8 +784,6 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		return NIL;
 	}
 
-	WarnUnsupportedIfForeignDistributedTable(leftRelationId);
-
 	/*
 	 * The PostgreSQL parser dispatches several commands into the node type
 	 * AlterTableStmt, from ALTER INDEX to ALTER SEQUENCE or ALTER VIEW. Here
@@ -1789,8 +1787,6 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
-
-	WarnUnsupportedIfForeignDistributedTable(relationId);
 
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
