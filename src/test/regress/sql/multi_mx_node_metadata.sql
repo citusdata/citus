@@ -286,8 +286,18 @@ SELECT verify_metadata('localhost', :worker_1_port),
 -- Don't drop the reference table so it has shards on the nodes being disabled
 DROP TABLE dist_table_1, dist_table_2;
 
-SELECT pg_catalog.citus_disable_node_and_wait('localhost', :worker_2_port);
-SELECT verify_metadata('localhost', :worker_1_port);
+SELECT pg_catalog.citus_disable_node('localhost', :worker_2_port);
+SELECT wait_until_metadata_sync(30000);
+
+-- show that node metadata is the same
+-- note that we cannot use verify_metadata here
+-- because there are several shards/placements
+-- in the metadata that are manually modified on the coordinator
+-- not on the worker, and pg_catalog.citus_disable_node does
+-- not sync the metadata
+SELECT result FROM run_command_on_workers($$SELECT jsonb_agg(row_to_json(row(pg_dist_node.*))) FROM pg_dist_node$$) WHERE nodeport=:worker_1_port
+EXCEPT
+SELECT jsonb_agg(row_to_json(row(pg_dist_node.*)))::text FROM pg_dist_node;
 
 SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
 SELECT verify_metadata('localhost', :worker_1_port);

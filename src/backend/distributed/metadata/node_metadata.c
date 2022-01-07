@@ -496,16 +496,6 @@ citus_disable_node(PG_FUNCTION_ARGS)
 								 workerNode->workerName,
 								 nodePort)));
 		}
-
-		/*
-		 * Delete replicated table placements from the coordinator's metadata,
-		 * but not remotely. That is because one more more of the remote
-		 * nodes might be down. Instead, we let the background worker
-		 * to sync the metadata when possible.
-		 */
-		bool forceRemoteDelete = false;
-		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
-														forceRemoteDelete);
 	}
 
 	TransactionModifiedNodeMetadata = true;
@@ -515,6 +505,12 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	 * active nodes get the metadata updates. We defer this operation to the
 	 * background worker to make it possible disabling nodes when multiple nodes
 	 * are down.
+	 *
+	 * Note that the active placements reside on the active nodes. Hence, when
+	 * Citus finds active placements, it filters out the placements that are on
+	 * the disabled nodes. That's why, we don't have to change/sync placement
+	 * metadata at this point. Instead, we defer that to citus_activate_node()
+	 * where we expect all nodes up and running.
 	 */
 	if (UnsetMetadataSyncedForAll())
 	{
@@ -866,6 +862,22 @@ ActivateNode(char *nodeName, int nodePort)
 	if (workerNode == NULL)
 	{
 		ereport(ERROR, (errmsg("node at \"%s:%u\" does not exist", nodeName, nodePort)));
+	}
+
+	/*
+	 * Delete existing reference and replicated table placements on the
+	 * given groupId if the group has been disabled earlier (e.g., isActive
+	 * set to false).
+	 *
+	 * Sync the metadata changes to all existing metadata nodes irrespective
+	 * of the current nodes' metadata sync state. We expect all nodes up
+	 * and running when another node is activated.
+	 */
+	if (!workerNode->isActive && NodeIsPrimary(workerNode))
+	{
+		bool localOnly = false;
+		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
+														localOnly);
 	}
 
 	workerNode =
@@ -1353,9 +1365,9 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		 * Delete reference table placements so they are not taken into account
 		 * for the check if there are placements after this.
 		 */
-		bool forceRemoteDelete = true;
+		bool localOnly = false;
 		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
-														forceRemoteDelete);
+														localOnly);
 
 		/*
 		 * Secondary nodes are read-only, never 2PC is used.
