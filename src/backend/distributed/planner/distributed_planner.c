@@ -321,10 +321,7 @@ NeedsDistributedPlanning(Query *query)
 
 	List *allRTEs = ExtractRangeTableEntryList(query);
 
-	/* redundant parameter for here */
-	bool *maybeHasForeignDistributedTable = false;
-
-	return ListContainsDistributedTableRTE(allRTEs, maybeHasForeignDistributedTable);
+	return ListContainsDistributedTableRTE(allRTEs, NULL);
 }
 
 
@@ -351,7 +348,8 @@ ListContainsDistributedTableRTE(List *rangeTableList,
 
 		if (IsCitusTable(rangeTableEntry->relid))
 		{
-			if (IsForeignTable(rangeTableEntry->relid))
+			if (maybeHasForeignDistributedTable != NULL &&
+				IsForeignTable(rangeTableEntry->relid))
 			{
 				*maybeHasForeignDistributedTable = true;
 			}
