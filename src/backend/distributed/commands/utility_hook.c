@@ -1194,6 +1194,15 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 * will already be in the hash table, hence we won't be holding any snapshots.
 			 */
 			WarmUpConnParamsHash();
+
+            /* similar to pg >= 14 case, pop the active snapshot if exists */
+			if (ActiveSnapshotSet())
+			{
+				Snapshot activeSnapshot = GetActiveSnapshot();
+				PopActiveSnapshot();
+				UnregisterSnapshot(activeSnapshot);
+			}
+
 			CommitTransactionCommand();
 			StartTransactionCommand();
 #endif
