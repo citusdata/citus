@@ -225,9 +225,6 @@ CREATE FOREIGN TABLE foreign_table (
 -- observe that we do not create fdw server for shell table, both shard relation
 -- & shell relation points to the same same server object
 SELECT citus_add_local_table_to_metadata('foreign_table');
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-NOTICE:  server "fake_fdw_server" already exists, skipping
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 

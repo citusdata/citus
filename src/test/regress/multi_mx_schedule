@@ -49,6 +49,7 @@ test: local_shard_copy
 test: undistribute_table_cascade_mx
 test: citus_local_tables_mx
 test: citus_local_tables_queries_mx
+test: foreign_tables_mx
 test: multi_mx_transaction_recovery
 test: multi_mx_modifying_xacts
 test: multi_mx_explain

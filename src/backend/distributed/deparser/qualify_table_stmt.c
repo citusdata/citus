@@ -29,7 +29,7 @@ void
 QualifyAlterTableSchemaStmt(Node *node)
 {
 	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
-	Assert(stmt->objectType == OBJECT_TABLE);
+	Assert(stmt->objectType == OBJECT_TABLE || stmt->objectType == OBJECT_FOREIGN_TABLE);
 
 	if (stmt->relation->schemaname == NULL)
 	{
