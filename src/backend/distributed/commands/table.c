@@ -54,6 +54,7 @@
 /* controlled via GUC, should be accessed via GetEnableLocalReferenceForeignKeys() */
 bool EnableLocalReferenceForeignKeys = true;
 
+static bool DistributedForeignTableWarningPrompted = false;
 
 /* Local functions forward declarations for unsupported command checks */
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
@@ -3418,9 +3419,10 @@ MakeNameListFromRangeVar(const RangeVar *rel)
 void
 WarnUnsupportedIfForeignDistributedTable(Oid relationId)
 {
-	if (IsForeignTable(relationId) && IsCitusTable(relationId) && !IsCitusTableType(
-			relationId, CITUS_LOCAL_TABLE))
+	if (!DistributedForeignTableWarningPrompted && IsForeignTable(relationId) &&
+		IsCitusTable(relationId) && !IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
+		DistributedForeignTableWarningPrompted = true;
 		ereport(WARNING, (errmsg("support for distributed foreign tables are deprecated"),
 						  (errdetail("Foreign tables can be added to metadata using UDF: "
 									 "citus_add_local_table_to_metadata()"))));

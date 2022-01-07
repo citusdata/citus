@@ -23,6 +23,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
 #include "distributed/cte_inline.h"
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
@@ -336,6 +337,7 @@ ListContainsDistributedTableRTE(List *rangeTableList)
 
 		if (IsCitusTable(rangeTableEntry->relid))
 		{
+			WarnUnsupportedIfForeignDistributedTable(rangeTableEntry->relid);
 			return true;
 		}
 	}
