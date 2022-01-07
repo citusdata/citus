@@ -54,7 +54,6 @@
 /* controlled via GUC, should be accessed via GetEnableLocalReferenceForeignKeys() */
 bool EnableLocalReferenceForeignKeys = true;
 
-
 /* Local functions forward declarations for unsupported command checks */
 static void PostprocessCreateTableStmtForeignKeys(CreateStmt *createStatement);
 static void PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement,
@@ -1786,6 +1785,7 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
 	ddlJob->targetRelationId = relationId;

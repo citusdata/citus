@@ -199,36 +199,11 @@ NOTICE:  renaming the new table to foreign_tables_schema_mx.foreign_table
 
 (1 row)
 
+-- both should error out
 SELECT create_distributed_table('foreign_table','data');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT undistribute_table('foreign_table');
-NOTICE:  creating a new table for foreign_tables_schema_mx.foreign_table
-NOTICE:  dropping the old foreign_tables_schema_mx.foreign_table
-NOTICE:  renaming the new table to foreign_tables_schema_mx.foreign_table
- undistribute_table
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  foreign tables cannot be distributed
 SELECT create_reference_table('foreign_table');
- create_reference_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT undistribute_table('foreign_table');
-NOTICE:  creating a new table for foreign_tables_schema_mx.foreign_table
-NOTICE:  dropping the old foreign_tables_schema_mx.foreign_table
-NOTICE:  renaming the new table to foreign_tables_schema_mx.foreign_table
- undistribute_table
----------------------------------------------------------------------
-
-(1 row)
-
+ERROR:  foreign tables cannot be distributed
 INSERT INTO foreign_table_test VALUES (1, 'testt');
 SELECT * FROM foreign_table ORDER BY a;
  data  | a

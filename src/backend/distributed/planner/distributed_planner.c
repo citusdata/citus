@@ -23,6 +23,7 @@
 #include "distributed/citus_nodefuncs.h"
 #include "distributed/citus_nodes.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
 #include "distributed/cte_inline.h"
 #include "distributed/function_call_delegation.h"
 #include "distributed/insert_select_planner.h"
@@ -71,7 +72,8 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-static bool ListContainsDistributedTableRTE(List *rangeTableList);
+static bool ListContainsDistributedTableRTE(List *rangeTableList,
+											bool *maybeHasForeignDistributedTable);
 static bool IsUpdateOrDelete(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
@@ -123,6 +125,7 @@ static PlannedStmt * PlanDistributedStmt(DistributedPlanningContext *planContext
 										 int rteIdCounter);
 static RTEListProperties * GetRTEListProperties(List *rangeTableList);
 static List * TranslatedVars(PlannerInfo *root, int relationIndex);
+static void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 
 
 /* Distributed planner hook */
@@ -149,10 +152,18 @@ distributed_planner(Query *parse,
 	}
 	else if (CitusHasBeenLoaded())
 	{
-		needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
+		bool maybeHasForeignDistributedTable = false;
+		needsDistributedPlanning =
+			ListContainsDistributedTableRTE(rangeTableList,
+											&maybeHasForeignDistributedTable);
 		if (needsDistributedPlanning)
 		{
 			fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
+
+			if (maybeHasForeignDistributedTable)
+			{
+				WarnIfListHasForeignDistributedTable(rangeTableList);
+			}
 		}
 	}
 
@@ -311,17 +322,19 @@ NeedsDistributedPlanning(Query *query)
 
 	List *allRTEs = ExtractRangeTableEntryList(query);
 
-	return ListContainsDistributedTableRTE(allRTEs);
+	return ListContainsDistributedTableRTE(allRTEs, NULL);
 }
 
 
 /*
  * ListContainsDistributedTableRTE gets a list of range table entries
  * and returns true if there is at least one distributed relation range
- * table entry in the list.
+ * table entry in the list. The boolean maybeHasForeignDistributedTable
+ * variable is set to true if the list contains a foreign table.
  */
 static bool
-ListContainsDistributedTableRTE(List *rangeTableList)
+ListContainsDistributedTableRTE(List *rangeTableList,
+								bool *maybeHasForeignDistributedTable)
 {
 	ListCell *rangeTableCell = NULL;
 
@@ -336,6 +349,12 @@ ListContainsDistributedTableRTE(List *rangeTableList)
 
 		if (IsCitusTable(rangeTableEntry->relid))
 		{
+			if (maybeHasForeignDistributedTable != NULL &&
+				IsForeignTable(rangeTableEntry->relid))
+			{
+				*maybeHasForeignDistributedTable = true;
+			}
+
 			return true;
 		}
 	}
@@ -2407,4 +2426,38 @@ GetRTEListProperties(List *rangeTableList)
 										rteListProperties->hasCitusLocalTable);
 
 	return rteListProperties;
+}
+
+
+/*
+ * WarnIfListHasForeignDistributedTable iterates the given list and logs a WARNING
+ * if the given relation is a distributed foreign table.
+ * We do that because now we only support Citus Local Tables for foreign tables.
+ */
+static void
+WarnIfListHasForeignDistributedTable(List *rangeTableList)
+{
+	static bool DistributedForeignTableWarningPrompted = false;
+
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, rangeTableList)
+	{
+		if (DistributedForeignTableWarningPrompted)
+		{
+			return;
+		}
+
+		Oid relationId = rangeTableEntry->relid;
+		if (IsForeignTable(relationId) && IsCitusTable(relationId) &&
+			!IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+		{
+			DistributedForeignTableWarningPrompted = true;
+			ereport(WARNING, (errmsg(
+								  "support for distributed foreign tables are deprecated, "
+								  "please use Citus managed local tables"),
+							  (errdetail(
+								   "Foreign tables can be added to metadata using UDF: "
+								   "citus_add_local_table_to_metadata()"))));
+		}
+	}
 }

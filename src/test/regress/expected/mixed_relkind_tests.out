@@ -62,13 +62,6 @@ SELECT create_distributed_table('partitioned_distributed_table', 'a');
 
 CREATE VIEW view_on_part_dist AS SELECT * FROM partitioned_distributed_table;
 CREATE MATERIALIZED VIEW mat_view_on_part_dist AS SELECT * FROM partitioned_distributed_table;
-CREATE FOREIGN TABLE foreign_distributed_table (a int, b int) SERVER fake_fdw_server;
-SELECT create_distributed_table('foreign_distributed_table', 'a');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
 -- and insert some data
 INSERT INTO postgres_local_table SELECT * FROM generate_series(0, 5);
 INSERT INTO partitioned_postgres_local_table SELECT * FROM generate_series(0, 5);
@@ -144,12 +137,6 @@ SELECT * FROM unlogged_distributed_table UNION SELECT 1,1 ORDER BY 1,2;
  4 | 5
  5 | 6
 (7 rows)
-
-SELECT * from foreign_distributed_table UNION SELECT 1,1 ORDER BY 1,2;
- a | b
----------------------------------------------------------------------
- 1 | 1
-(1 row)
 
 SELECT 1 UNION SELECT * FROM citus_local_table ORDER BY 1;
  ?column?
@@ -378,17 +365,6 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
    455
 (1 row)
 
-SELECT COUNT(*) FROM
-  (SELECT *, random() FROM unlogged_distributed_table) AS foo,
-  (SELECT *, random() FROM foreign_distributed_table) AS bar
-WHERE foo.a = bar.b;
-DEBUG:  generating subplan XXX_1 for subquery SELECT a, b, random() AS random FROM mixed_relkind_tests.foreign_distributed_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT unlogged_distributed_table.a, unlogged_distributed_table.b, random() AS random FROM mixed_relkind_tests.unlogged_distributed_table) foo, (SELECT intermediate_result.a, intermediate_result.b, intermediate_result.random FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer, random double precision)) bar WHERE (foo.a OPERATOR(pg_catalog.=) bar.b)
- count
----------------------------------------------------------------------
-     0
-(1 row)
-
 UPDATE partitioned_distributed_table SET b = foo.a FROM citus_local_table AS foo;
 DEBUG:  Wrapping relation "citus_local_table" "foo" to a subquery
 DEBUG:  generating subplan XXX_1 for subquery SELECT a FROM mixed_relkind_tests.citus_local_table foo WHERE true
@@ -484,15 +460,6 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS c
  count
 ---------------------------------------------------------------------
   1014
-(1 row)
-
-WITH cte_1 AS MATERIALIZED (SELECT * FROM foreign_distributed_table)
-  SELECT COUNT(*) FROM cte_1 JOIN foreign_distributed_table USING (a);
-DEBUG:  generating subplan XXX_1 for CTE cte_1: SELECT a, b FROM mixed_relkind_tests.foreign_distributed_table
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM ((SELECT intermediate_result.a, intermediate_result.b FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(a integer, b integer)) cte_1 JOIN mixed_relkind_tests.foreign_distributed_table USING (a))
- count
----------------------------------------------------------------------
-     0
 (1 row)
 
 WITH cte_1 AS MATERIALIZED (SELECT * FROM partitioned_distributed_table)
@@ -658,37 +625,10 @@ $Q$);
          Task Count: 4
 (4 rows)
 
-SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
-SELECT a, COUNT(*) OVER (PARTITION BY a) FROM foreign_distributed_table ORDER BY 1,2;
-$Q$);
-               coordinator_plan
----------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.a, remote_scan.count
-   ->  Custom Scan (Citus Adaptive)
-         Task Count: 4
-(4 rows)
-
 -- pull to coordinator WINDOW
 SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS OFF)
 SELECT a, COUNT(*) OVER (PARTITION BY a+1) FROM partitioned_distributed_table ORDER BY 1,2;
-$Q$);
-                  coordinator_plan
----------------------------------------------------------------------
- Sort
-   Sort Key: remote_scan.a, (count(*) OVER (?))
-   ->  WindowAgg
-         ->  Sort
-               Sort Key: remote_scan.worker_column_2
-               ->  Custom Scan (Citus Adaptive)
-                     Task Count: 4
-(7 rows)
-
-SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
-SELECT a, COUNT(*) OVER (PARTITION BY a+1) FROM foreign_distributed_table ORDER BY 1,2;
 $Q$);
                   coordinator_plan
 ---------------------------------------------------------------------
@@ -733,14 +673,6 @@ SET client_min_messages TO ERROR;
 BEGIN;
   ALTER TABLE partitioned_distributed_table DROP COLUMN b CASCADE;
   SELECT * FROM partitioned_distributed_table;
- a
----------------------------------------------------------------------
-(0 rows)
-
-COMMIT;
-BEGIN;
-  ALTER TABLE foreign_distributed_table DROP COLUMN b CASCADE;
-  SELECT * FROM foreign_distributed_table;
  a
 ---------------------------------------------------------------------
 (0 rows)
