@@ -65,16 +65,14 @@ ALTER FOREIGN TABLE public.foreign_table_newname VALIDATE CONSTRAINT check_c_2;
 ALTER FOREIGN TABLE public.foreign_table_newname DROP constraint IF EXISTS check_c_2;
 
 -- trigger test
-CREATE TABLE distributed_table(value int);
-SELECT create_distributed_table('distributed_table', 'value');
+CREATE TABLE table42(value int);
 
 CREATE FUNCTION insert_42() RETURNS trigger AS $insert_42$
 BEGIN
-    INSERT INTO distributed_table VALUES (42);
+    INSERT INTO table42 VALUES (42);
     RETURN NEW;
 END;
 $insert_42$ LANGUAGE plpgsql;
-
 
 CREATE TRIGGER insert_42_trigger
 AFTER DELETE ON public.foreign_table_newname
@@ -83,14 +81,14 @@ FOR EACH ROW EXECUTE FUNCTION insert_42();
 -- do the same pattern from the workers as well
 INSERT INTO public.foreign_table_newname VALUES (99, 'test_2');
 delete from public.foreign_table_newname where id_test = 99;
-select * from distributed_table ORDER BY value;
+select * from table42 ORDER BY value;
 
 -- disable trigger
 alter foreign table public.foreign_table_newname disable trigger insert_42_trigger;
 INSERT INTO public.foreign_table_newname VALUES (99, 'test_2');
 delete from public.foreign_table_newname where id_test = 99;
 -- should not insert again as trigger disabled
-select * from distributed_table ORDER BY value;
+select * from table42 ORDER BY value;
 
 DROP TRIGGER insert_42_trigger ON public.foreign_table_newname;
 

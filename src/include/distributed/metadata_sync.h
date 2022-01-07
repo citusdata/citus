@@ -36,7 +36,8 @@ extern List * MetadataCreateCommands(void);
 extern List * MetadataDropCommands(void);
 extern char * MarkObjectsDistributedCreateCommand(List *addresses,
 												  List *distributionArgumentIndexes,
-												  List *colocationIds);
+												  List *colocationIds,
+												  List *forcePushdowns);
 extern char * DistributionCreateCommand(CitusTableCacheEntry *cacheEntry);
 extern char * DistributionDeleteCommand(const char *schemaName,
 										const char *tableName);

@@ -161,9 +161,11 @@
 #include "distributed/shared_connection_stats.h"
 #include "distributed/subplan_execution.h"
 #include "distributed/transaction_management.h"
+#include "distributed/transaction_identifier.h"
 #include "distributed/tuple_destination.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/backend_data.h"
 #include "lib/ilist.h"
 #include "portability/instr_time.h"
 #include "storage/fd.h"
@@ -1289,6 +1291,12 @@ StartDistributedExecution(DistributedExecution *execution)
 		 * shards are moved away.
 		 */
 		RecordParallelRelationAccessForTaskList(execution->remoteAndLocalTaskList);
+	}
+
+	/* make sure we are not doing remote execution from within a task */
+	if (execution->remoteTaskList != NIL)
+	{
+		EnsureRemoteTaskExecutionAllowed();
 	}
 }
 

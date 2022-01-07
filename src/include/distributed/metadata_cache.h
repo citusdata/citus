@@ -115,6 +115,7 @@ typedef struct DistObjectCacheEntry
 
 	int distributionArgIndex;
 	int colocationId;
+	bool forcePushdown;
 } DistObjectCacheEntry;
 
 typedef enum

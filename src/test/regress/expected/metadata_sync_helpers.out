@@ -556,9 +556,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
  SET application_name to 'citus';
  \set VERBOSITY terse
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)
-   AS (VALUES ('non_existing_type', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0))
- SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid) FROM distributed_object_data;
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown)
+   AS (VALUES ('non_existing_type', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
+ SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown) FROM distributed_object_data;
 ERROR:  unrecognized object type "non_existing_type"
 ROLLBACK;
 -- check the sanity of distributionArgumentIndex and colocationId
@@ -571,9 +571,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus';
 	\set VERBOSITY terse
-	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)
-		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], -100, 0))
-	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid) FROM distributed_object_data;
+	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown)
+		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], -100, 0, false))
+	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown) FROM distributed_object_data;
 ERROR:  distribution_argument_index must be between 0 and 100
 ROLLBACK;
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
@@ -585,9 +585,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
 	SET application_name to 'citus';
 	\set VERBOSITY terse
-	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)
-		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], -1, -1))
-	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid) FROM distributed_object_data;
+	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown)
+		AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], -1, -1, false))
+	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown) FROM distributed_object_data;
 ERROR:  colocationId must be a positive number
 ROLLBACK;
 -- check with non-existing object
@@ -600,9 +600,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
  SET application_name to 'citus';
  \set VERBOSITY terse
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)
-   AS (VALUES ('role', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0))
- SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid) FROM distributed_object_data;
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown)
+   AS (VALUES ('role', ARRAY['non_existing_user']::text[], ARRAY[]::text[], -1, 0, false))
+ SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown) FROM distributed_object_data;
 ERROR:  role "non_existing_user" does not exist
 ROLLBACK;
 -- since citus_internal_add_object_metadata is strict function returns NULL
@@ -616,9 +616,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 
  SET application_name to 'citus';
  \set VERBOSITY terse
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)
-   AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], 0, NULL::int))
- SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid) FROM distributed_object_data;
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown)
+   AS (VALUES ('role', ARRAY['metadata_sync_helper_role']::text[], ARRAY[]::text[], 0, NULL::int, false))
+ SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown) FROM distributed_object_data;
  citus_internal_add_object_metadata
 ---------------------------------------------------------------------
 
@@ -640,9 +640,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	CREATE TABLE publication_test_table(id int);
 	CREATE PUBLICATION publication_test FOR TABLE publication_test_table;
 	SET ROLE metadata_sync_helper_role;
-	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)
-		AS (VALUES ('publication', ARRAY['publication_test']::text[], ARRAY[]::text[], -1, 0))
-	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid) FROM distributed_object_data;
+	WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown)
+		AS (VALUES ('publication', ARRAY['publication_test']::text[], ARRAY[]::text[], -1, 0, false))
+	SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown) FROM distributed_object_data;
 ERROR:  Object type 29 can not be distributed by Citus
 ROLLBACK;
 -- Show that citus_internal_add_object_metadata checks the priviliges
@@ -659,9 +659,9 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
     AS $$ SELECT $1 $$
     LANGUAGE SQL;
     SET ROLE metadata_sync_helper_role;
-    WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)
-        AS (VALUES ('function', ARRAY['distribution_test_function']::text[], ARRAY['integer']::text[], -1, 0))
-    SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid) FROM distributed_object_data;
+    WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown)
+        AS (VALUES ('function', ARRAY['distribution_test_function']::text[], ARRAY['integer']::text[], -1, 0, false))
+    SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_pushdown) FROM distributed_object_data;
 ERROR:  must be owner of function distribution_test_function
 ROLLBACK;
 -- we do not allow wrong partmethod

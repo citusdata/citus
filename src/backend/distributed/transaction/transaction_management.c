@@ -23,6 +23,7 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/distributed_planner.h"
+#include "distributed/function_call_delegation.h"
 #include "distributed/hash_helpers.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
@@ -38,10 +39,13 @@
 #include "distributed/subplan_execution.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
+#include "distributed/commands.h"
 #include "utils/hsearch.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
+#include "utils/datum.h"
 #include "storage/fd.h"
+#include "nodes/print.h"
 
 
 CoordinatedTransactionState CurrentCoordinatedTransactionState = COORD_TRANS_NONE;
@@ -102,6 +106,18 @@ MemoryContext CommitContext = NULL;
  */
 bool ShouldCoordinatedTransactionUse2PC = false;
 
+/*
+ * Distribution function argument (along with colocationId) when delegated
+ * using forcePushdown flag.
+ */
+AllowedDistributionColumn *AllowedDistributionColumnValue = NULL;
+
+/*
+ * Flag indicating if a distributed forcePushdown function is executed in
+ * the current transaction.
+ */
+bool ShouldAllowRestricted2PC = false;
+
 /* if disabled, distributed statements in a function may run as separate transactions */
 bool FunctionOpensTransactionBlock = true;
 
@@ -118,10 +134,10 @@ static void CoordinatedSubTransactionCallback(SubXactEvent event, SubTransaction
 static void AdjustMaxPreparedTransactions(void);
 static void PushSubXact(SubTransactionId subId);
 static void PopSubXact(SubTransactionId subId);
-static bool MaybeExecutingUDF(void);
 static void ResetGlobalVariables(void);
 static bool SwallowErrors(void (*func)(void));
 static void ForceAllInProgressConnectionsToClose(void);
+static void EnsurePrepareTransactionIsAllowed(void);
 
 
 /*
@@ -182,6 +198,17 @@ InCoordinatedTransaction(void)
 {
 	return CurrentCoordinatedTransactionState != COORD_TRANS_NONE &&
 		   CurrentCoordinatedTransactionState != COORD_TRANS_IDLE;
+}
+
+
+/*
+ * Returns true if a distributed forcePushdown function is executed in
+ * the current transaction.
+ */
+bool
+GetInForceDelegatedFuncExecution()
+{
+	return ShouldAllowRestricted2PC;
 }
 
 
@@ -459,12 +486,7 @@ CoordinatedTransactionCallback(XactEvent event, void *arg)
 		case XACT_EVENT_PARALLEL_PRE_COMMIT:
 		case XACT_EVENT_PRE_PREPARE:
 		{
-			if (InCoordinatedTransaction())
-			{
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								errmsg("cannot use 2PC in transactions involving "
-									   "multiple servers")));
-			}
+			EnsurePrepareTransactionIsAllowed();
 			break;
 		}
 	}
@@ -550,7 +572,10 @@ ResetGlobalVariables()
 	ShouldCoordinatedTransactionUse2PC = false;
 	TransactionModifiedNodeMetadata = false;
 	MetadataSyncOnCommit = false;
+	InDelegatedFunctionCall = false;
 	ResetWorkerErrorIndication();
+	AllowedDistributionColumnValue = NULL;
+	ShouldAllowRestricted2PC = false;
 }
 
 
@@ -784,7 +809,7 @@ IsMultiStatementTransaction(void)
  * If the planner is being called from the executor, then we may also be in
  * a UDF.
  */
-static bool
+bool
 MaybeExecutingUDF(void)
 {
 	return ExecutorLevel > 1 || (ExecutorLevel == 1 && PlannerLevel > 0);
@@ -800,4 +825,41 @@ void
 TriggerMetadataSyncOnCommit(void)
 {
 	MetadataSyncOnCommit = true;
+}
+
+
+/*
+ * Function raises an exception, if the current backend started a coordinated
+ * transaction and got a PREPARE event to become a participant in a 2PC
+ * transaction coordinated by another node.
+ */
+static void
+EnsurePrepareTransactionIsAllowed(void)
+{
+	if (!InCoordinatedTransaction())
+	{
+		/* If the backend has not started a coordinated transaction */
+		return;
+	}
+
+	if (GetInForceDelegatedFuncExecution())
+	{
+		/*
+		 * If a distributed forcePushdown function is executed in the
+		 * current coordinated transaction, allow restricted 2PC
+		 */
+		return;
+	}
+
+	if (IsCitusInitiatedRemoteBackend())
+	{
+		/*
+		 * If this is a Citus-initiated backend
+		 */
+		return;
+	}
+
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					errmsg("cannot use 2PC in transactions involving "
+						   "multiple servers")));
 }
