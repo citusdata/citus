@@ -127,3 +127,12 @@ BEGIN
   END LOOP;
   RETURN false;
 END; $$ language plpgsql;
+
+CREATE OR REPLACE FUNCTION pg_waitpid(p_pid integer)
+RETURNS VOID AS $$
+BEGIN
+  WHILE EXISTS (SELECT * FROM pg_stat_activity WHERE pid=p_pid)
+  LOOP
+    PERFORM pg_sleep(0.001);
+  END LOOP;
+END; $$ language plpgsql;

@@ -68,12 +68,7 @@ SELECT pg_backend_pid() AS val INTO old_backend_pid;
 \c - - - :master_port
 
 -- wait until old backend to expire to make sure that temp table cleanup is complete
-DO $$ BEGIN
-  WHILE EXISTS (SELECT * FROM pg_stat_activity WHERE pid IN (SELECT val FROM old_backend_pid))
-  LOOP
-    PERFORM pg_sleep(0.001);
-  END LOOP;
-END $$;
+SELECT columnar_test_helpers.pg_waitpid(val) FROM old_backend_pid;
 
 DROP TABLE old_backend_pid;
 
