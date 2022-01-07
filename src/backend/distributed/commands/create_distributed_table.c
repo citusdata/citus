@@ -1895,7 +1895,7 @@ ErrorIfForeignTable(Oid relationOid)
 	{
 		char *relname = get_rel_name(relationOid);
 		char *qualifiedRelname = generate_qualified_relation_name(relationOid);
-		ereport(ERROR, (errmsg("foreign tables cannot be distributed"), 
+		ereport(ERROR, (errmsg("foreign tables cannot be distributed"),
 						(errhint("Can add foreign table \"%s\" to metadata by running: "
 								 "SELECT citus_add_local_table_to_metadata($$%s$$);",
 								 relname, qualifiedRelname))));
