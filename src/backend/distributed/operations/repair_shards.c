@@ -112,7 +112,7 @@ PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(citus_move_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
 
-bool DeferShardDeleteOnMove = false;
+bool DeferShardDeleteOnMove = true;
 
 double DesiredPercentFreeAfterMove = 10;
 bool CheckAvailableSpaceBeforeMove = true;

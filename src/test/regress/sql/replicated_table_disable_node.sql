@@ -18,12 +18,17 @@ INSERT INTO ref SELECT i,i FROM generate_series(0,10)i;
 SELECT citus_disable_node('localhost', :worker_2_port, true);
 SELECT public.wait_until_metadata_sync();
 
--- the placement should be removed both from the coordinator
+-- the active placement should NOT be removed from the coordinator
 -- and from the workers
-SELECT count(*) FROM pg_dist_placement WHERE shardid IN (101500, 101501, 101502);
+SELECT count(*) FROM pg_dist_placement p JOIN pg_dist_node n USING(groupid)
+	WHERE n.isactive AND n.noderole = 'primary'
+		  AND p.shardid IN (101500, 101501, 101502);
 
 \c - - - :worker_1_port
-SELECT count(*) FROM pg_dist_placement WHERE shardid IN (101500, 101501, 101502);
+SELECT count(*) FROM pg_dist_placement p JOIN pg_dist_node n USING(groupid)
+	WHERE n.isactive AND n.noderole = 'primary'
+		  AND p.shardid IN (101500, 101501, 101502);
+
 SET search_path TO disable_node_with_replicated_tables;
 
 -- should be able to ingest data from both the worker and the coordinator
