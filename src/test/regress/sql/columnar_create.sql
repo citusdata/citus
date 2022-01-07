@@ -63,7 +63,19 @@ INSERT INTO columnar_temp SELECT i FROM generate_series(1,5) i;
 SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS columnar_temp_storage_id
 FROM pg_class WHERE relname='columnar_temp' \gset
 
+SELECT pg_backend_pid() AS val INTO old_backend_pid;
+
 \c - - - :master_port
+
+-- wait until old backend to expire to make sure that temp table cleanup is complete
+DO $$ BEGIN
+  WHILE EXISTS (SELECT * FROM pg_stat_activity WHERE pid IN (SELECT val FROM old_backend_pid))
+  LOOP
+    PERFORM pg_sleep(0.001);
+  END LOOP;
+END $$;
+
+DROP TABLE old_backend_pid;
 
 -- show that temporary table itself and it's metadata is removed
 SELECT COUNT(*)=0 FROM pg_class WHERE relname='columnar_temp';
