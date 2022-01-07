@@ -113,6 +113,8 @@ PreprocessRenameStmt(Node *node, const char *renameCommand,
 		return NIL;
 	}
 
+	WarnUnsupportedIfForeignDistributedTable(tableRelationId);
+
 	/*
 	 * We might ERROR out on some commands, but only for Citus tables.
 	 * That's why this test comes this late in the function.

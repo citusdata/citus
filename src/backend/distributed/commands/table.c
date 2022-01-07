@@ -783,6 +783,8 @@ PreprocessAlterTableStmt(Node *node, const char *alterTableCommand,
 		return NIL;
 	}
 
+	WarnUnsupportedIfForeignDistributedTable(leftRelationId);
+
 	/*
 	 * The PostgreSQL parser dispatches several commands into the node type
 	 * AlterTableStmt, from ALTER INDEX to ALTER SEQUENCE or ALTER VIEW. Here
@@ -1786,6 +1788,9 @@ PreprocessAlterTableSchemaStmt(Node *node, const char *queryString,
 	{
 		return NIL;
 	}
+
+	WarnUnsupportedIfForeignDistributedTable(relationId);
+
 	DDLJob *ddlJob = palloc0(sizeof(DDLJob));
 	QualifyTreeNode((Node *) stmt);
 	ddlJob->targetRelationId = relationId;
@@ -3401,5 +3406,22 @@ MakeNameListFromRangeVar(const RangeVar *rel)
 	{
 		Assert(rel->relname != NULL);
 		return list_make1(makeString(rel->relname));
+	}
+}
+
+
+/*
+ * WarnUnsupportedIfForeignDistributedTable gets a relationId and logs a WARNING
+ * if the given relation is a distributed foreign table.
+ * We do that because now we only support Citus Local Tables for foreign tables.
+ */
+void
+WarnUnsupportedIfForeignDistributedTable(Oid relationId)
+{
+	if (IsForeignTable(relationId) && IsCitusTable(relationId) && !IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	{
+		ereport(WARNING, (errmsg("support for distributed foreign tables are deprecated"),
+						 (errdetail("Foreign tables can be added to metadata using UDF: "
+						 			"citus_add_local_table_to_metadata()"))));
 	}
 }

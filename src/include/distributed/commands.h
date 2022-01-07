@@ -455,6 +455,7 @@ extern void ErrorIfUnsupportedConstraint(Relation relation, char distributionMet
 extern ObjectAddress AlterTableSchemaStmtObjectAddress(Node *stmt,
 													   bool missing_ok);
 extern List * MakeNameListFromRangeVar(const RangeVar *rel);
+extern void WarnUnsupportedIfForeignDistributedTable(Oid relationId);
 extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 extern bool ConstrTypeUsesIndex(ConstrType constrType);
 
