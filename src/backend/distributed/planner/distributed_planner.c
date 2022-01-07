@@ -72,7 +72,8 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-static bool ListContainsDistributedTableRTE(List *rangeTableList, bool *maybeHasForeignDistributedTable);
+static bool ListContainsDistributedTableRTE(List *rangeTableList,
+											bool *maybeHasForeignDistributedTable);
 static bool IsUpdateOrDelete(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
@@ -151,7 +152,9 @@ distributed_planner(Query *parse,
 	else if (CitusHasBeenLoaded())
 	{
 		bool maybeHasForeignDistributedTable = false;
-		needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList, &maybeHasForeignDistributedTable);
+		needsDistributedPlanning =
+			ListContainsDistributedTableRTE(rangeTableList,
+											&maybeHasForeignDistributedTable);
 		if (needsDistributedPlanning)
 		{
 			fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
@@ -332,7 +335,8 @@ NeedsDistributedPlanning(Query *query)
  * variable is set to true if the list contains a foreign table.
  */
 static bool
-ListContainsDistributedTableRTE(List *rangeTableList, bool *maybeHasForeignDistributedTable)
+ListContainsDistributedTableRTE(List *rangeTableList,
+								bool *maybeHasForeignDistributedTable)
 {
 	ListCell *rangeTableCell = NULL;
 
