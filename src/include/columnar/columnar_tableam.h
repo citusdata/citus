@@ -60,8 +60,6 @@ extern TableScanDesc columnar_beginscan_extended(Relation relation, Snapshot sna
 extern int64 ColumnarScanChunkGroupsFiltered(ColumnarScanDesc columnarScanDesc);
 extern bool ColumnarSupportsIndexAM(char *indexAMName);
 extern bool IsColumnarTableAmTable(Oid relationId);
-extern TableDDLCommand * ColumnarGetTableOptionsDDL(Oid relationId);
-extern char * GetShardedTableDDLCommandColumnar(uint64 shardId, void *context);
 
 
 #endif /* COLUMNAR_TABLEAM_H */

@@ -156,7 +156,7 @@ SELECT * FROM test_matview;
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'events%' ORDER BY logicalrelid::text;
-        logicalrelid        | partmethod |                                                          partkey                                                           | colocationid | repmodel | autoconverted
+        logicalrelid        | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
  events                     | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |      1390012 | s        | f
  events_2021_feb            | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |      1390012 | s        | f

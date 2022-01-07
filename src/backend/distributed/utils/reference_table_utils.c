@@ -422,7 +422,7 @@ CreateReferenceTableColocationId()
  * all placements from pg_dist_placement table for given group.
  */
 void
-DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool forceRemoteDelete)
+DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool localOnly)
 {
 	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
 	List *replicatedMetadataSyncedDistributedTableList =
@@ -459,7 +459,7 @@ DeleteAllReplicatedTablePlacementsFromNodeGroup(int32 groupId, bool forceRemoteD
 
 			DeleteShardPlacementRow(placement->placementId);
 
-			if (forceRemoteDelete)
+			if (!localOnly)
 			{
 				resetStringInfo(deletePlacementCommand);
 				appendStringInfo(deletePlacementCommand,

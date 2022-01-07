@@ -1,14 +1,14 @@
 SET citus.next_shard_id TO 20020000;
+SET client_min_messages TO ERROR;
 CREATE USER functionuser;
-NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
-HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
-SELECT run_command_on_workers($$CREATE USER functionuser;$$);
-      run_command_on_workers
+SELECT 1 FROM run_command_on_workers($$CREATE USER functionuser;$$);
+ ?column?
 ---------------------------------------------------------------------
- (localhost,57637,t,"CREATE ROLE")
- (localhost,57638,t,"CREATE ROLE")
+        1
+        1
 (2 rows)
 
+RESET client_min_messages;
 CREATE SCHEMA function_tests AUTHORIZATION functionuser;
 CREATE SCHEMA function_tests2 AUTHORIZATION functionuser;
 SET search_path TO function_tests;
@@ -242,12 +242,6 @@ SELECT * FROM run_command_on_workers($$SELECT function_tests.dup('0123456789ab')
  localhost |    57637 | t       | (01:23:45:67:89:ab,"01:23:45:67:89:ab is text")
  localhost |    57638 | t       | (01:23:45:67:89:ab,"01:23:45:67:89:ab is text")
 (2 rows)
-
-SELECT public.wait_until_metadata_sync(30000);
- wait_until_metadata_sync
----------------------------------------------------------------------
-
-(1 row)
 
 SELECT create_distributed_function('eq(macaddr,macaddr)', '$1', colocate_with := 'streaming_table');
  create_distributed_function
@@ -586,13 +580,6 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', dist
 
 (1 row)
 
--- make sure that the primary nodes are now metadata synced
-select bool_and(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
- bool_and
----------------------------------------------------------------------
- t
-(1 row)
-
 -- make sure that both of the nodes have the function because we've succeeded
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_with_param_names';$$);
  run_command_on_workers
@@ -610,7 +597,7 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', dist
 
 -- show that we are able to propagate objects with multiple item on address arrays
 SELECT * FROM (SELECT unnest(master_metadata_snapshot()) as metadata_command  order by 1) as innerResult WHERE metadata_command like '%distributed_object_data%';
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                metadata_command
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   metadata_command
 ---------------------------------------------------------------------
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid)  AS (VALUES ('type', ARRAY['public.usage_access_type']::text[], ARRAY[]::text[], -1, 0), ('type', ARRAY['function_tests.dup_result']::text[], ARRAY[]::text[], -1, 0), ('function', ARRAY['public', 'usage_access_func']::text[], ARRAY['public.usage_access_type', 'integer[]']::text[], -1, 0), ('function', ARRAY['public', 'usage_access_func_third']::text[], ARRAY['integer', 'integer[]']::text[], 0, 50), ('function', ARRAY['function_tests', 'notice']::text[], ARRAY['pg_catalog.text']::text[], -1, 0), ('function', ARRAY['function_tests', 'dup']::text[], ARRAY['pg_catalog.macaddr']::text[], 0, 52), ('function', ARRAY['function_tests', 'eq_with_param_names']::text[], ARRAY['pg_catalog.macaddr', 'pg_catalog.macaddr']::text[], 0, 52), ('function', ARRAY['function_tests', 'eq_mi''xed_param_names']::text[], ARRAY['pg_catalog.macaddr', 'pg_catalog.macaddr']::text[], -1, 0), ('function', ARRAY['function_tests', 'agg_sfunc']::text[], ARRAY['integer', 'integer']::text[], -1, 0), ('function', ARRAY['function_tests', 'agg_invfunc']::text[], ARRAY['integer', 'integer']::text[], -1, 0), ('function', ARRAY['function_tests', 'agg_finalfunc']::text[], ARRAY['integer', 'integer']::text[], -1, 0), ('aggregate', ARRAY['function_tests', 'my_rank']::text[], ARRAY['pg_catalog."any"']::text[], -1, 0), ('function', ARRAY['function_tests', 'agg_names_sfunc']::text[], ARRAY['function_tests.dup_result', 'function_tests.dup_result', 'function_tests.dup_result']::text[], -1, 0), ('function', ARRAY['function_tests', 'agg_names_finalfunc']::text[], ARRAY['function_tests.dup_result']::text[], -1, 0), ('aggregate', ARRAY['function_tests', 'agg_names']::text[], ARRAY['function_tests.dup_result', 'function_tests.dup_result']::text[], -1, 0), ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0), ('server', ARRAY['fake_fdw_server']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_testing_schema_2']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_test_schema_1']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['mx_test_schema_2']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['schema_colocation']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['function_tests']::text[], ARRAY[]::text[], -1, 0), ('schema', ARRAY['function_tests2']::text[], ARRAY[]::text[], -1, 0), ('extension', ARRAY['plpgsql']::text[], ARRAY[]::text[], -1, 0)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int) FROM distributed_object_data;
 (1 row)
@@ -635,12 +622,6 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1'
 ERROR:  cannot colocate function "eq_with_param_names" and table "replicated_table_func_test"
 DETAIL:  Citus currently only supports colocating function with distributed tables that are created using streaming replication model.
 HINT:  When distributing tables make sure that citus.shard_replication_factor = 1
-SELECT public.wait_until_metadata_sync(30000);
- wait_until_metadata_sync
----------------------------------------------------------------------
-
-(1 row)
-
 -- a function can be colocated with a different distribution argument type
 -- as long as there is a coercion path
 SET citus.shard_replication_factor TO 1;
@@ -767,13 +748,6 @@ SET citus.shard_count TO 55;
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1');
 ERROR:  cannot distribute the function "eq_with_param_names" since there is no table to colocate with
 HINT:  Provide a distributed table via "colocate_with" option to create_distributed_function()
--- sync metadata to workers for consistent results when clearing objects
-SELECT public.wait_until_metadata_sync(30000);
- wait_until_metadata_sync
----------------------------------------------------------------------
-
-(1 row)
-
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 4;
 CREATE TABLE test (id int, name text);
@@ -1115,11 +1089,20 @@ SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
 \c - - - :master_port
+SET client_min_messages TO ERROR;
 DROP USER functionuser;
-SELECT run_command_on_workers($$DROP USER functionuser$$);
-     run_command_on_workers
+SELECT 1 FROM run_command_on_workers($$DROP USER functionuser$$);
+ ?column?
 ---------------------------------------------------------------------
- (localhost,57637,t,"DROP ROLE")
- (localhost,57638,t,"DROP ROLE")
+        1
+        1
+(2 rows)
+
+-- sync metadata again
+SELECT start_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+
 (2 rows)
 

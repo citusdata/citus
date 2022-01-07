@@ -67,18 +67,43 @@ SELECT create_distributed_table('test','x');
 
 SELECT groupid, nodename, nodeport, isactive, shouldhaveshards, hasmetadata, metadatasynced FROM pg_dist_node;
 
--- cannot add workers with specific IP as long as I have a placeholder coordinator record
-SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+BEGIN;
+	-- we should not enable MX for this temporary node just because
+	-- it'd spawn a bg worker targeting this node
+	-- and that changes the connection count specific tests
+	-- here
+	SET LOCAL citus.enable_metadata_sync_by_default TO OFF;
+	-- cannot add workers with specific IP as long as I have a placeholder coordinator record
+	SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+COMMIT;
 
--- adding localhost workers is ok
-SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+BEGIN;
+	-- we should not enable MX for this temporary node just because
+	-- it'd spawn a bg worker targeting this node
+	-- and that changes the connection count specific tests
+	-- here
+	SET LOCAL citus.enable_metadata_sync_by_default TO OFF;
+	-- adding localhost workers is ok
+	SELECT 1 FROM master_add_node('localhost', :worker_1_port);
+COMMIT;
+
+-- we don't need this node anymore
 SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
 
 -- set the coordinator host to something different than localhost
 SELECT 1 FROM citus_set_coordinator_host('127.0.0.1');
 
--- adding workers with specific IP is ok now
-SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+BEGIN;
+	-- we should not enable MX for this temporary node just because
+	-- it'd spawn a bg worker targeting this node
+	-- and that changes the connection count specific tests
+	-- here
+	SET LOCAL citus.enable_metadata_sync_by_default TO OFF;
+	-- adding workers with specific IP is ok now
+	SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
+COMMIT;
+
+-- we don't need this node anymore
 SELECT 1 FROM master_remove_node('127.0.0.1', :worker_1_port);
 
 -- set the coordinator host back to localhost for the remainder of tests

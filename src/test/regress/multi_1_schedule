@@ -16,10 +16,8 @@
 # Tests around schema changes, these are run first, so there's no preexisting objects.
 # ---
 test: multi_extension
-test: turn_mx_off
 test: single_node
 test: single_node_truncate
-test: turn_mx_on
 test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 
@@ -280,8 +278,9 @@ test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
 test: turn_mx_off
 test: citus_local_tables
-test: multi_row_router_insert mixed_relkind_tests
+test: mixed_relkind_tests
 test: turn_mx_on
+test: multi_row_router_insert
 test: multi_reference_table citus_local_tables_queries
 test: citus_local_table_triggers
 test: coordinator_shouldhaveshards
@@ -326,8 +325,12 @@ test: ssl_by_default
 test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value
 test: check_mx
 test: distributed_functions distributed_functions_conflict
-test: distributed_collations distributed_collations_conflict
+test: distributed_collations
 test: distributed_procedure
+
+# blocked on #5583
+test: turn_mx_off
+test: distributed_collations_conflict
 test: turn_mx_on
 
 # ---------

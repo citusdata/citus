@@ -566,8 +566,11 @@ GetDistributedTableMetadataEvents(Oid relationId)
 	commandList = lappend(commandList, metadataCommand);
 
 	/* commands to create the truncate trigger of the table */
-	char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
-	commandList = lappend(commandList, truncateTriggerCreateCommand);
+	if (!IsForeignTable(relationId))
+	{
+		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
+		commandList = lappend(commandList, truncateTriggerCreateCommand);
+	}
 
 	/* commands to insert pg_dist_shard & pg_dist_placement entries */
 	List *shardIntervalList = LoadShardIntervalList(relationId);

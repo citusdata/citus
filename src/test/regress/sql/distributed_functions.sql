@@ -1,7 +1,9 @@
 SET citus.next_shard_id TO 20020000;
 
+SET client_min_messages TO ERROR;
 CREATE USER functionuser;
-SELECT run_command_on_workers($$CREATE USER functionuser;$$);
+SELECT 1 FROM run_command_on_workers($$CREATE USER functionuser;$$);
+RESET client_min_messages;
 
 CREATE SCHEMA function_tests AUTHORIZATION functionuser;
 CREATE SCHEMA function_tests2 AUTHORIZATION functionuser;
@@ -205,8 +207,6 @@ END;
 SELECT create_distributed_function('dup(macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.dup('0123456789ab');$$) ORDER BY 1,2;
 
-SELECT public.wait_until_metadata_sync(30000);
-
 SELECT create_distributed_function('eq(macaddr,macaddr)', '$1', colocate_with := 'streaming_table');
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('012345689ab','0123456789ab');$$) ORDER BY 1,2;
 SELECT public.verify_function_is_same_on_workers('function_tests.eq(macaddr,macaddr)');
@@ -352,9 +352,6 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_w
 -- valid distribution with distribution_arg_name
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='val1');
 
--- make sure that the primary nodes are now metadata synced
-select bool_and(hasmetadata) from pg_dist_node WHERE isactive AND  noderole = 'primary';
-
 -- make sure that both of the nodes have the function because we've succeeded
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_with_param_names';$$);
 
@@ -372,8 +369,6 @@ SET citus.shard_replication_factor TO 2;
 CREATE TABLE replicated_table_func_test (a macaddr);
 SELECT create_distributed_table('replicated_table_func_test', 'a');
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1', colocate_with:='replicated_table_func_test');
-
-SELECT public.wait_until_metadata_sync(30000);
 
 -- a function can be colocated with a different distribution argument type
 -- as long as there is a coercion path
@@ -440,10 +435,6 @@ SELECT create_distributed_function('add_polygons(polygon,polygon)', '$1', coloca
 -- default colocation group
 SET citus.shard_count TO 55;
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1');
-
--- sync metadata to workers for consistent results when clearing objects
-SELECT public.wait_until_metadata_sync(30000);
-
 
 SET citus.shard_replication_factor TO 1;
 SET citus.shard_count TO 4;
@@ -703,5 +694,9 @@ DROP SCHEMA function_tests CASCADE;
 DROP SCHEMA function_tests2 CASCADE;
 \c - - - :master_port
 
+SET client_min_messages TO ERROR;
 DROP USER functionuser;
-SELECT run_command_on_workers($$DROP USER functionuser$$);
+SELECT 1 FROM run_command_on_workers($$DROP USER functionuser$$);
+
+-- sync metadata again
+SELECT start_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isactive AND noderole = 'primary';

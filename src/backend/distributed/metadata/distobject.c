@@ -317,53 +317,6 @@ IsObjectDistributed(const ObjectAddress *address)
 
 
 /*
- * ClusterHasDistributedFunctionWithDistArgument returns true if there
- * is at least one distributed function in the cluster with distribution
- * argument index set.
- */
-bool
-ClusterHasDistributedFunctionWithDistArgument(void)
-{
-	bool foundDistributedFunction = false;
-
-	HeapTuple pgDistObjectTup = NULL;
-
-	Relation pgDistObjectRel = table_open(DistObjectRelationId(), AccessShareLock);
-
-	TupleDesc tupleDescriptor = RelationGetDescr(pgDistObjectRel);
-
-	SysScanDesc pgDistObjectScan =
-		systable_beginscan(pgDistObjectRel, InvalidOid, false, NULL, 0, NULL);
-	while (HeapTupleIsValid(pgDistObjectTup = systable_getnext(pgDistObjectScan)))
-	{
-		Form_pg_dist_object pg_dist_object =
-			(Form_pg_dist_object) GETSTRUCT(pgDistObjectTup);
-
-		if (pg_dist_object->classid == ProcedureRelationId)
-		{
-			bool distArgumentIsNull =
-				heap_attisnull(pgDistObjectTup,
-							   Anum_pg_dist_object_distribution_argument_index,
-							   tupleDescriptor);
-
-			/* we found one distributed function that has an distribution argument */
-			if (!distArgumentIsNull)
-			{
-				foundDistributedFunction = true;
-
-				break;
-			}
-		}
-	}
-
-	systable_endscan(pgDistObjectScan);
-	relation_close(pgDistObjectRel, AccessShareLock);
-
-	return foundDistributedFunction;
-}
-
-
-/*
  * GetDistributedObjectAddressList returns a list of ObjectAddresses that contains all
  * distributed objects as marked in pg_dist_object
  */

@@ -428,8 +428,6 @@ SELECT create_distributed_table('table_range', 'id', 'range');
 -- test foreign table creation
 CREATE FOREIGN TABLE table3_groupD ( id int ) SERVER fake_fdw_server;
 SELECT create_distributed_table('table3_groupD', 'id');
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
 

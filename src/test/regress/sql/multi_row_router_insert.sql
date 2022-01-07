@@ -37,7 +37,7 @@ CREATE OR REPLACE FUNCTION square(a INT) RETURNS INT AS $$
 BEGIN
     RETURN a*a;
 END; $$ LANGUAGE PLPGSQL STABLE;
-
+SELECT create_distributed_function('square(int)');
 CREATE TABLE citus_local_table(a int, b int DEFAULT square(10));
 SELECT citus_add_local_table_to_metadata('citus_local_table');
 

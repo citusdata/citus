@@ -112,7 +112,7 @@ PG_FUNCTION_INFO_V1(master_copy_shard_placement);
 PG_FUNCTION_INFO_V1(citus_move_shard_placement);
 PG_FUNCTION_INFO_V1(master_move_shard_placement);
 
-bool DeferShardDeleteOnMove = false;
+bool DeferShardDeleteOnMove = true;
 
 double DesiredPercentFreeAfterMove = 10;
 bool CheckAvailableSpaceBeforeMove = true;
@@ -319,7 +319,6 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 	foreach(colocatedTableCell, colocatedTableList)
 	{
 		Oid colocatedTableId = lfirst_oid(colocatedTableCell);
-		char relationKind = '\0';
 
 		/* check that user has owner rights in all co-located tables */
 		EnsureTableOwner(colocatedTableId);
@@ -332,8 +331,7 @@ citus_move_shard_placement(PG_FUNCTION_ARGS)
 		 */
 		LockRelationOid(colocatedTableId, ShareUpdateExclusiveLock);
 
-		relationKind = get_rel_relkind(colocatedTableId);
-		if (relationKind == RELKIND_FOREIGN_TABLE)
+		if (IsForeignTable(relationId))
 		{
 			char *relationName = get_rel_name(colocatedTableId);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -659,7 +657,6 @@ RepairShardPlacement(int64 shardId, const char *sourceNodeName, int32 sourceNode
 	ShardInterval *shardInterval = LoadShardInterval(shardId);
 	Oid distributedTableId = shardInterval->relationId;
 
-	char relationKind = get_rel_relkind(distributedTableId);
 	char *tableOwner = TableOwner(shardInterval->relationId);
 
 	/* prevent table from being dropped */
@@ -667,7 +664,7 @@ RepairShardPlacement(int64 shardId, const char *sourceNodeName, int32 sourceNode
 
 	EnsureTableOwner(distributedTableId);
 
-	if (relationKind == RELKIND_FOREIGN_TABLE)
+	if (IsForeignTable(distributedTableId))
 	{
 		char *relationName = get_rel_name(distributedTableId);
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -872,8 +869,7 @@ EnsureTableListSuitableForReplication(List *tableIdList)
 	Oid tableId = InvalidOid;
 	foreach_oid(tableId, tableIdList)
 	{
-		char relationKind = get_rel_relkind(tableId);
-		if (relationKind == RELKIND_FOREIGN_TABLE)
+		if (IsForeignTable(tableId))
 		{
 			char *relationName = get_rel_name(tableId);
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -1462,7 +1458,7 @@ RecreateTableDDLCommandList(Oid relationId)
 																   relationName);
 
 	StringInfo dropCommand = makeStringInfo();
-	char relationKind = get_rel_relkind(relationId);
+
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
 
 	/* build appropriate DROP command based on relation kind */
@@ -1471,7 +1467,7 @@ RecreateTableDDLCommandList(Oid relationId)
 		appendStringInfo(dropCommand, DROP_REGULAR_TABLE_COMMAND,
 						 qualifiedRelationName);
 	}
-	else if (relationKind == RELKIND_FOREIGN_TABLE)
+	else if (IsForeignTable(relationId))
 	{
 		appendStringInfo(dropCommand, DROP_FOREIGN_TABLE_COMMAND,
 						 qualifiedRelationName);

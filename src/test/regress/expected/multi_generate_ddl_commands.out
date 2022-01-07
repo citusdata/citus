@@ -172,8 +172,6 @@ CREATE FOREIGN TABLE foreign_table (
 	full_name text not null default ''
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 SELECT create_distributed_table('foreign_table', 'id');
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
 
@@ -200,13 +198,11 @@ order by table_name;
 
 \c - - :master_host :master_port
 SELECT master_get_table_ddl_events('renamed_foreign_table_with_long_name_12345678901234567890123456789012345678901234567890');
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
                                                                                                         master_get_table_ddl_events
 ---------------------------------------------------------------------
- CREATE SERVER IF NOT EXISTS fake_fdw_server FOREIGN DATA WRAPPER fake_fdw
  CREATE FOREIGN TABLE public.renamed_foreign_table_with_long_name_12345678901234567890123456 (id bigint NOT NULL, rename_name character(8) DEFAULT ''::text NOT NULL) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true')
  ALTER TABLE public.renamed_foreign_table_with_long_name_12345678901234567890123456 OWNER TO postgres
-(3 rows)
+(2 rows)
 
 -- propagating views is not supported
 CREATE VIEW local_view AS SELECT * FROM simple_table;

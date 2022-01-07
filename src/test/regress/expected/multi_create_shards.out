@@ -159,8 +159,6 @@ SERVER fake_fdw_server;
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 SELECT create_distributed_table('foreign_table_to_distribute', 'id', 'hash');
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
 

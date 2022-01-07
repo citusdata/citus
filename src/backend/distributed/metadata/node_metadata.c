@@ -519,6 +519,12 @@ citus_disable_node(PG_FUNCTION_ARGS)
 	 * active nodes get the metadata updates. We defer this operation to the
 	 * background worker to make it possible disabling nodes when multiple nodes
 	 * are down.
+	 *
+	 * Note that the active placements reside on the active nodes. Hence, when
+	 * Citus finds active placements, it filters out the placements that are on
+	 * the disabled nodes. That's why, we don't have to change/sync placement
+	 * metadata at this point. Instead, we defer that to citus_activate_node()
+	 * where we expect all nodes up and running.
 	 */
 	if (UnsetMetadataSyncedForAll())
 	{
@@ -903,24 +909,6 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 			ReplicateAllReferenceTablesToNode(newWorkerNode->workerName,
 											  newWorkerNode->workerPort);
 		}
-
-		/*
-		 * Let the maintenance daemon do the hard work of syncing the metadata.
-		 * We prefer this because otherwise node activation might fail within
-		 * transaction blocks.
-		 */
-
-		/* TODO: Doesn't make sense to have that here as we won't handle placement metadata */
-		/* TODO: Metadatasynced olmayan worker varsa patla (Onder'in PRinda gidebilir) */
-
-		/* with maintenance daemon anymore */
-
-		/* if (ClusterHasDistributedFunctionWithDistArgument())
-		 * {
-		 *  SetWorkerColumnLocalOnly(newWorkerNode, Anum_pg_dist_node_hasmetadata,
-		 *                           BoolGetDatum(true));
-		 *  TriggerMetadataSyncOnCommit();
-		 * }*/
 	}
 }
 
@@ -1182,14 +1170,19 @@ ActivateNode(char *nodeName, int nodePort)
 	}
 
 	/*
-	 * Delete replicated table placements from the coordinator's metadata,
-	 * including remote ones if the node is inactive primary worker node.
+	 * Delete existing reference and replicated table placements on the
+	 * given groupId if the group has been disabled earlier (e.g., isActive
+	 * set to false).
+	 *
+	 * Sync the metadata changes to all existing metadata nodes irrespective
+	 * of the current nodes' metadata sync state. We expect all nodes up
+	 * and running when another node is activated.
 	 */
-	if (!NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode) && !workerNode->isActive)
+	if (!workerNode->isActive && NodeIsPrimary(workerNode))
 	{
-		bool forceRemoteDelete = true;
+		bool localOnly = false;
 		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
-														forceRemoteDelete);
+														localOnly);
 	}
 
 	workerNode =
@@ -1205,7 +1198,7 @@ ActivateNode(char *nodeName, int nodePort)
 		 * not fail just because the current metadata is not synced.
 		 */
 		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-						BoolGetDatum(isActive));
+						BoolGetDatum(true));
 	}
 
 	SetUpDistributedTableWithDependencies(workerNode);
@@ -1733,9 +1726,9 @@ RemoveNodeFromCluster(char *nodeName, int32 nodePort)
 		 * Delete reference table placements so they are not taken into account
 		 * for the check if there are placements after this.
 		 */
-		bool forceRemoteDelete = true;
+		bool localOnly = false;
 		DeleteAllReplicatedTablePlacementsFromNodeGroup(workerNode->groupId,
-														forceRemoteDelete);
+														localOnly);
 
 		/*
 		 * Secondary nodes are read-only, never 2PC is used.
