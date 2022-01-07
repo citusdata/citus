@@ -149,6 +149,8 @@ extern void ExtractParametersFromParamList(ParamListInfo paramListInfo,
 										   const char ***parameterValues, bool
 										   useOriginalCustomTypeOids);
 extern ParamListInfo ExecutorBoundParams(void);
+extern void EnsureRemoteTaskExecutionAllowed(void);
+extern bool InTaskExecution(void);
 
 
 #endif /* MULTI_EXECUTOR_H */

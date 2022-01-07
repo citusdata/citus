@@ -113,6 +113,12 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 		elog(ERROR, "failed to connect to %s:%d", nodeNameString, (int) nodePort);
 	}
 
+	/* pretend we are a regular client to avoid citus-initiated backend checks */
+	const char *setAppName =
+		"SET application_name TO run_commands_on_session_level_connection_to_node";
+
+	ExecuteCriticalRemoteCommand(singleConnection, setAppName);
+
 	PG_RETURN_VOID();
 }
 

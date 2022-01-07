@@ -289,6 +289,12 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             1
+(1 row)
+
 SELECT count(*) FROM pg_dist_shard;
  count
 ---------------------------------------------------------------------
@@ -421,7 +427,7 @@ COMMIT;
 SELECT recover_prepared_transactions();
  recover_prepared_transactions
 ---------------------------------------------------------------------
-                             4
+                             0
 (1 row)
 
 SELECT citus.mitmproxy('conn.allow()');

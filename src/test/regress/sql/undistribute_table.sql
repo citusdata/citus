@@ -52,20 +52,6 @@ SELECT undistribute_table('referencing_table');
 
 DROP TABLE referenced_table, referencing_table;
 
--- test distributed foreign tables
--- we expect errors
--- and we need metadata sync off for foreign tables
-SELECT stop_metadata_sync_to_node(nodename, nodeport) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
-CREATE FOREIGN TABLE foreign_table (
-  id bigint not null,
-  full_name text not null default ''
-) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
-SELECT create_distributed_table('foreign_table', 'id');
-SELECT undistribute_table('foreign_table');
-
-DROP FOREIGN TABLE foreign_table;
-SELECT start_metadata_sync_to_node(nodename, nodeport) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
-
 -- test partitioned tables
 CREATE TABLE partitioned_table (id INT, a INT) PARTITION BY RANGE (id);
 CREATE TABLE partitioned_table_1_5 PARTITION OF partitioned_table FOR VALUES FROM (1) TO (5);

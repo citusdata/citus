@@ -129,6 +129,7 @@ static void DoCopyFromLocalTableIntoShards(Relation distributedRelation,
 										   TupleTableSlot *slot,
 										   EState *estate);
 static void ErrorIfTemporaryTable(Oid relationId);
+static void ErrorIfForeignTable(Oid relationOid);
 
 /* exports for SQL callable functions */
 PG_FUNCTION_INFO_V1(master_create_distributed_table);
@@ -333,6 +334,7 @@ EnsureCitusTableCanBeCreated(Oid relationOid)
 	EnsureRelationExists(relationOid);
 	EnsureTableOwner(relationOid);
 	ErrorIfTemporaryTable(relationOid);
+	ErrorIfForeignTable(relationOid);
 
 	/*
 	 * We should do this check here since the codes in the following lines rely
@@ -1879,4 +1881,23 @@ DistributionColumnUsesGeneratedStoredColumn(TupleDesc relationDesc,
 	}
 
 	return false;
+}
+
+
+/*
+ * ErrorIfForeignTable errors out if the relation with given relationOid
+ * is a foreign table.
+ */
+static void
+ErrorIfForeignTable(Oid relationOid)
+{
+	if (IsForeignTable(relationOid))
+	{
+		char *relname = get_rel_name(relationOid);
+		char *qualifiedRelname = generate_qualified_relation_name(relationOid);
+		ereport(ERROR, (errmsg("foreign tables cannot be distributed"),
+						(errhint("Can add foreign table \"%s\" to metadata by running: "
+								 "SELECT citus_add_local_table_to_metadata($$%s$$);",
+								 relname, qualifiedRelname))));
+	}
 }
