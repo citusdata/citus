@@ -3425,3 +3425,24 @@ WarnUnsupportedIfForeignDistributedTable(Oid relationId)
 									 "citus_add_local_table_to_metadata()"))));
 	}
 }
+
+
+/*
+ * WarnIfListHasForeignDistributedTable iterates the given list and calls
+ * WarnUnsupportedIfForeignDistributedTable for each relation, which logs
+ * a WARNING message if it's a distributed foreign table.
+ */
+void
+WarnIfListHasForeignDistributedTable(List *rangeTableList)
+{
+	RangeTblEntry *rangeTableEntry = NULL;
+	foreach_ptr(rangeTableEntry, rangeTableList)
+	{
+		if (DistributedForeignTableWarningPrompted)
+		{
+			return;
+		}
+
+		WarnUnsupportedIfForeignDistributedTable(rangeTableEntry->relid);
+	}
+}

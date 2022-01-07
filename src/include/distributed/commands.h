@@ -456,6 +456,7 @@ extern ObjectAddress AlterTableSchemaStmtObjectAddress(Node *stmt,
 													   bool missing_ok);
 extern List * MakeNameListFromRangeVar(const RangeVar *rel);
 extern void WarnUnsupportedIfForeignDistributedTable(Oid relationId);
+extern void WarnIfListHasForeignDistributedTable(List *rangeTableList);
 extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 extern bool ConstrTypeUsesIndex(ConstrType constrType);
 

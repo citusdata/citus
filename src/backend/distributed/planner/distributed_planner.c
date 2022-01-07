@@ -72,7 +72,7 @@ static uint64 NextPlanId = 1;
 /* keep track of planner call stack levels */
 int PlannerLevel = 0;
 
-static bool ListContainsDistributedTableRTE(List *rangeTableList);
+static bool ListContainsDistributedTableRTE(List *rangeTableList, bool *maybeHasForeignDistributedTable);
 static bool IsUpdateOrDelete(Query *query);
 static PlannedStmt * CreateDistributedPlannedStmt(
 	DistributedPlanningContext *planContext);
@@ -150,10 +150,16 @@ distributed_planner(Query *parse,
 	}
 	else if (CitusHasBeenLoaded())
 	{
-		needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList);
+		bool maybeHasForeignDistributedTable = false;
+		needsDistributedPlanning = ListContainsDistributedTableRTE(rangeTableList, &maybeHasForeignDistributedTable);
 		if (needsDistributedPlanning)
 		{
 			fastPathRouterQuery = FastPathRouterQuery(parse, &distributionKeyValue);
+
+			if (maybeHasForeignDistributedTable)
+			{
+				WarnIfListHasForeignDistributedTable(rangeTableList);
+			}
 		}
 	}
 
@@ -312,17 +318,21 @@ NeedsDistributedPlanning(Query *query)
 
 	List *allRTEs = ExtractRangeTableEntryList(query);
 
-	return ListContainsDistributedTableRTE(allRTEs);
+	/* redundant parameter for here */
+	bool *maybeHasForeignDistributedTable = false;
+
+	return ListContainsDistributedTableRTE(allRTEs, maybeHasForeignDistributedTable);
 }
 
 
 /*
  * ListContainsDistributedTableRTE gets a list of range table entries
  * and returns true if there is at least one distributed relation range
- * table entry in the list.
+ * table entry in the list. The boolean maybeHasForeignDistributedTable
+ * variable is set to true if the list contains a foreign table.
  */
 static bool
-ListContainsDistributedTableRTE(List *rangeTableList)
+ListContainsDistributedTableRTE(List *rangeTableList, bool *maybeHasForeignDistributedTable)
 {
 	ListCell *rangeTableCell = NULL;
 
@@ -337,7 +347,11 @@ ListContainsDistributedTableRTE(List *rangeTableList)
 
 		if (IsCitusTable(rangeTableEntry->relid))
 		{
-			WarnUnsupportedIfForeignDistributedTable(rangeTableEntry->relid);
+			if (IsForeignTable(rangeTableEntry->relid))
+			{
+				*maybeHasForeignDistributedTable = true;
+			}
+
 			return true;
 		}
 	}
