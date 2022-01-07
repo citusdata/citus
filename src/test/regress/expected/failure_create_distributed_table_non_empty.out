@@ -872,6 +872,18 @@ SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_
      4
 (1 row)
 
+SELECT citus.mitmproxy('conn.allow()');
+ mitmproxy
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT recover_prepared_transactions();
+ recover_prepared_transactions
+---------------------------------------------------------------------
+                             2
+(1 row)
+
 DROP TABLE test_table;
 CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);

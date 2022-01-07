@@ -4,6 +4,9 @@ SELECT citus.clear_network_traffic();
 SET citus.shard_count = 2;
 SET citus.shard_replication_factor = 2;
 
+-- this test is designed such that no modification lock is acquired
+SET citus.allow_modifications_from_workers_to_replicated_tables TO false;
+
 CREATE TABLE select_test (key int, value text);
 SELECT create_distributed_table('select_test', 'key');
 
@@ -22,6 +25,8 @@ BEGIN;
 INSERT INTO select_test VALUES (3, 'more data');
 SELECT * FROM select_test WHERE key = 3;
 COMMIT;
+
+SELECT citus.mitmproxy('conn.allow()');
 
 TRUNCATE select_test;
 
@@ -47,6 +52,8 @@ SELECT DISTINCT shardstate FROM  pg_dist_shard_placement
 WHERE shardid IN (
   SELECT shardid FROM pg_dist_shard WHERE logicalrelid = 'select_test'::regclass
 );
+
+SELECT citus.mitmproxy('conn.allow()');
 TRUNCATE select_test;
 
 -- cancel the second query

@@ -99,6 +99,7 @@ SELECT citus.mitmproxy('conn.onCommandComplete(command="PREPARE TRANSACTION").ki
 SELECT create_distributed_table('test_table','id',colocate_with=>'temp_table');
 
 SELECT citus.mitmproxy('conn.allow()');
+SELECT recover_prepared_transactions();
 SELECT count(*) FROM pg_dist_shard;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.tables WHERE table_schema = 'failure_create_table' and table_name LIKE 'test_table%' ORDER BY 1$$);
 
