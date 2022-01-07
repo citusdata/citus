@@ -1134,32 +1134,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 		 */
 		if (ddlJob->startNewTransaction)
 		{
-#if PG_VERSION_NUM >= 140000
-
-			/*
-			 * Since it is not certain whether the code-path that we followed
-			 * until reaching here caused grabbing any snapshots or not, we
-			 * need to pop the active snapshot if we had any, to ensure not
-			 * leaking any snapshots.
-			 *
-			 * For example, EnsureCoordinator might return without grabbing
-			 * any snapshots if we didn't receive any invalidation messages
-			 * but the otherwise is also possible.
-			 */
-			if (ActiveSnapshotSet())
-			{
-				PopActiveSnapshot();
-			}
-
-			CommitTransactionCommand();
-			StartTransactionCommand();
-
-			/*
-			 * Tell other backends to ignore us, even if we grab any
-			 * snapshots via adaptive executor.
-			 */
-			set_indexsafe_procflags();
-#else
+#if PG_VERSION_NUM < 140000
 
 			/*
 			 * Older versions of postgres doesn't have PROC_IN_SAFE_IC flag
@@ -1189,8 +1164,18 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 * will already be in the hash table, hence we won't be holding any snapshots.
 			 */
 			WarmUpConnParamsHash();
+#endif
 
-			/* similar to pg >= 14 case, pop the active snapshot if exists */
+			/*
+			 * Since it is not certain whether the code-path that we followed
+			 * until reaching here caused grabbing any snapshots or not, we
+			 * need to pop the active snapshot if we had any, to ensure not
+			 * leaking any snapshots.
+			 *
+			 * For example, EnsureCoordinator might return without grabbing
+			 * any snapshots if we didn't receive any invalidation messages
+			 * but the otherwise is also possible.
+			 */
 			if (ActiveSnapshotSet())
 			{
 				PopActiveSnapshot();
@@ -1198,6 +1183,14 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 
 			CommitTransactionCommand();
 			StartTransactionCommand();
+
+#if PG_VERSION_NUM >= 140000
+
+			/*
+			 * Tell other backends to ignore us, even if we grab any
+			 * snapshots via adaptive executor.
+			 */
+			set_indexsafe_procflags();
 #endif
 		}
 
