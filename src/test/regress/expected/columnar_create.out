@@ -77,18 +77,17 @@ INSERT INTO columnar_temp SELECT i FROM generate_series(1,5) i;
 SELECT columnar_test_helpers.columnar_relation_storageid(oid) AS columnar_temp_storage_id
 FROM pg_class WHERE relname='columnar_temp' \gset
 \c - - - :master_port
--- Show that temporary table itself and it's metadata is removed, or
--- table isn't dropped yet and metadata records do also persist.
---
--- This might happen since \c doesn't guarantee immediate cleanup of
--- all the resources.
-SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_storage_id)=q.pg_class_has_table
-FROM (
-  SELECT count(*)!=0 AS pg_class_has_table FROM pg_class WHERE relname='columnar_temp'
-) q;
+-- show that temporary table itself and it's metadata is removed
+SELECT COUNT(*)=0 FROM pg_class WHERE relname='columnar_temp';
  ?column?
 ---------------------------------------------------------------------
  t
+(1 row)
+
+SELECT columnar_test_helpers.columnar_metadata_has_storage_id(:columnar_temp_storage_id);
+ columnar_metadata_has_storage_id
+---------------------------------------------------------------------
+ f
 (1 row)
 
 -- connect to another session and create a temp table with same name
