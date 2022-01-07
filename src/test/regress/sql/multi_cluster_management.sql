@@ -79,7 +79,6 @@ SELECT master_get_active_worker_nodes();
 SELECT citus_disable_node('localhost.noexist', 2345);
 
 -- drop the table without leaving a shard placement behind (messes up other tests)
--- TODO: Replication ref table multiple times
 SELECT master_activate_node('localhost', :worker_2_port);
 
 DROP TABLE test_reference_table, cluster_management_test;

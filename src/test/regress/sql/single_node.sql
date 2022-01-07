@@ -4,10 +4,6 @@ SET citus.shard_count TO 4;
 SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 90630500;
 
-table pg_dist_node;
-table pg_dist_partition;
-\d
-
 -- Ensure tuple data in explain analyze output is the same on all PG versions
 SET citus.enable_binary_protocol = TRUE;
 
@@ -82,10 +78,8 @@ SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
 SELECT 1 FROM citus_set_coordinator_host('127.0.0.1');
 
 -- adding workers with specific IP is ok now
-set citus.log_remote_commands to true;
 SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
 SELECT 1 FROM master_remove_node('127.0.0.1', :worker_1_port);
-reset citus.log_remote_commands;
 
 -- set the coordinator host back to localhost for the remainder of tests
 SELECT 1 FROM citus_set_coordinator_host('localhost');

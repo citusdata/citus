@@ -895,6 +895,7 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 			PropagateNodeWideObjects(newWorkerNode);
 			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
 										   newWorkerNode->workerPort);
+			SetUpMultipleDistributedTableIntegrations(newWorkerNode);
 		}
 
 		if (ReplicateReferenceTablesOnActivate)
@@ -1208,7 +1209,6 @@ ActivateNode(char *nodeName, int nodePort)
 	}
 
 	SetUpDistributedTableWithDependencies(workerNode);
-	SetUpMultipleDistributedTableIntegrations(workerNode);
 
 	if (syncMetadata)
 	{
