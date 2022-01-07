@@ -1192,7 +1192,7 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 */
 			WarmUpConnParamsHash();
 
-            /* similar to pg >= 14 case, pop the active snapshot if exists */
+			/* similar to pg >= 14 case, pop the active snapshot if exists */
 			if (ActiveSnapshotSet())
 			{
 				Snapshot activeSnapshot = GetActiveSnapshot();
