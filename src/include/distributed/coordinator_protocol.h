@@ -21,6 +21,7 @@
 #include "nodes/pg_list.h"
 #include "distributed/metadata_utility.h"
 
+#include "columnar/columnar.h"
 
 /*
  * In our distributed database, we need a mechanism to make remote procedure
@@ -181,6 +182,17 @@ struct TableDDLCommand
 	};
 };
 
+/*
+ * ColumnarTableDDLContext holds the instance variable for the TableDDLCommandFunction
+ * instance described below.
+ */
+typedef struct ColumnarTableDDLContext
+{
+	char *schemaName;
+	char *relationName;
+	ColumnarOptions options;
+} ColumnarTableDDLContext;
+
 /* make functions for TableDDLCommand */
 extern TableDDLCommand * makeTableDDLCommandString(char *commandStr);
 extern TableDDLCommand * makeTableDDLCommandFunction(TableDDLFunction function,
@@ -190,7 +202,11 @@ extern TableDDLCommand * makeTableDDLCommandFunction(TableDDLFunction function,
 
 extern char * GetShardedTableDDLCommand(TableDDLCommand *command, uint64 shardId,
 										char *schemaName);
+extern char * GetShardedTableDDLCommandColumnar(uint64 shardId, void *context);
 extern char * GetTableDDLCommand(TableDDLCommand *command);
+extern TableDDLCommand * ColumnarGetCustomTableOptionsDDL(char *schemaName,
+														  char *relationName,
+														  ColumnarOptions options);
 
 
 /* Config variables managed via guc.c */

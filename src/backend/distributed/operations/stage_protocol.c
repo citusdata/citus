@@ -105,7 +105,6 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	char storageType = SHARD_STORAGE_TABLE;
 
 	Oid relationId = ResolveRelationId(relationNameText, false);
-	char relationKind = get_rel_relkind(relationId);
 
 	EnsureTablePermissions(relationId, ACL_INSERT);
 	CheckDistributedTable(relationId);
@@ -127,7 +126,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	/* set the storage type of foreign tables to 'f' */
-	if (relationKind == RELKIND_FOREIGN_TABLE)
+	if (IsForeignTable(relationId))
 	{
 		storageType = SHARD_STORAGE_FOREIGN;
 	}

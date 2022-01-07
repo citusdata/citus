@@ -49,6 +49,7 @@ test: local_shard_copy
 test: undistribute_table_cascade_mx
 test: citus_local_tables_mx
 test: citus_local_tables_queries_mx
+test: foreign_tables_mx
 test: multi_mx_transaction_recovery
 test: multi_mx_modifying_xacts
 test: multi_mx_explain
@@ -57,6 +58,7 @@ test: multi_mx_insert_select_repartition
 test: locally_execute_intermediate_results
 test: multi_mx_alter_distributed_table
 test: update_colocation_mx
+test: resync_metadata_with_sequences
 
 # should be executed sequentially because it modifies metadata
 test: local_shard_execution_dropped_column

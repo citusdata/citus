@@ -145,15 +145,20 @@ CREATE FOREIGN TABLE foreign_table (
   full_name text not null default ''
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 SELECT create_distributed_table('foreign_table', 'id');
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT undistribute_table('foreign_table');
-ERROR:  cannot complete operation because it is a foreign table
+NOTICE:  creating a new table for undistribute_table.foreign_table
+NOTICE:  dropping the old undistribute_table.foreign_table
+NOTICE:  renaming the new table to undistribute_table.foreign_table
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
 DROP FOREIGN TABLE foreign_table;
 SELECT start_metadata_sync_to_node(nodename, nodeport) FROM pg_dist_node WHERE isactive = 't' and noderole = 'primary';
  start_metadata_sync_to_node

@@ -62,18 +62,6 @@ typedef struct ColumnarOptions
 } ColumnarOptions;
 
 
-/*
- * ColumnarTableDDLContext holds the instance variable for the TableDDLCommandFunction
- * instance described below.
- */
-typedef struct ColumnarTableDDLContext
-{
-	char *schemaName;
-	char *relationName;
-	ColumnarOptions options;
-} ColumnarTableDDLContext;
-
-
 /* ColumnChunkSkipNode contains statistics for a ColumnChunkData. */
 typedef struct ColumnChunkSkipNode
 {
@@ -209,10 +197,15 @@ typedef struct ColumnarReadState ColumnarReadState;
 struct ColumnarWriteState;
 typedef struct ColumnarWriteState ColumnarWriteState;
 
+/* GUCs */
 extern int columnar_compression;
 extern int columnar_stripe_row_limit;
 extern int columnar_chunk_group_row_limit;
 extern int columnar_compression_level;
+
+/* called when the user changes options on the given relation */
+typedef void (*ColumnarTableSetOptions_hook_type)(Oid relid, ColumnarOptions options);
+extern ColumnarTableSetOptions_hook_type ColumnarTableSetOptions_hook;
 
 extern void columnar_init_gucs(void);
 

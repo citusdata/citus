@@ -679,21 +679,24 @@ MetadataCreateCommands(void)
 	/* after all tables are created, create the metadata */
 	foreach_ptr(cacheEntry, propagatedTableList)
 	{
-		Oid clusteredTableId = cacheEntry->relationId;
+		Oid relationId = cacheEntry->relationId;
 
 		/* add the table metadata command first*/
 		char *metadataCommand = DistributionCreateCommand(cacheEntry);
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  metadataCommand);
 
-		/* add the truncate trigger command after the table became distributed */
-		char *truncateTriggerCreateCommand =
-			TruncateTriggerCreateCommand(cacheEntry->relationId);
-		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-											  truncateTriggerCreateCommand);
+		if (!IsForeignTable(relationId))
+		{
+			/* add the truncate trigger command after the table became distributed */
+			char *truncateTriggerCreateCommand =
+				TruncateTriggerCreateCommand(cacheEntry->relationId);
+			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+												  truncateTriggerCreateCommand);
+		}
 
 		/* add the pg_dist_shard{,placement} entries */
-		List *shardIntervalList = LoadShardIntervalList(clusteredTableId);
+		List *shardIntervalList = LoadShardIntervalList(relationId);
 		List *shardCreateCommandList = ShardListInsertCommand(shardIntervalList);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
@@ -844,8 +847,11 @@ GetDistributedTableDDLEvents(Oid relationId)
 	commandList = lappend(commandList, metadataCommand);
 
 	/* commands to create the truncate trigger of the table */
-	char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
-	commandList = lappend(commandList, truncateTriggerCreateCommand);
+	if (!IsForeignTable(relationId))
+	{
+		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
+		commandList = lappend(commandList, truncateTriggerCreateCommand);
+	}
 
 	/* commands to insert pg_dist_shard & pg_dist_placement entries */
 	List *shardIntervalList = LoadShardIntervalList(relationId);
@@ -898,8 +904,16 @@ MetadataDropCommands(void)
 	dropSnapshotCommandList = list_concat(dropSnapshotCommandList,
 										  detachPartitionCommandList);
 
+	/*
+	 * We are re-creating the metadata, so not lose track of the
+	 * sequences by preventing them dropped via DROP TABLE.
+	 */
+	dropSnapshotCommandList =
+		lappend(dropSnapshotCommandList,
+				BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList,
-									  REMOVE_ALL_CLUSTERED_TABLES_COMMAND);
+									  REMOVE_ALL_CITUS_TABLES_COMMAND);
 
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList, DELETE_ALL_NODES);
 	dropSnapshotCommandList = lappend(dropSnapshotCommandList,

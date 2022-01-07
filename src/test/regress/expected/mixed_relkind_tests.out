@@ -64,8 +64,6 @@ CREATE VIEW view_on_part_dist AS SELECT * FROM partitioned_distributed_table;
 CREATE MATERIALIZED VIEW mat_view_on_part_dist AS SELECT * FROM partitioned_distributed_table;
 CREATE FOREIGN TABLE foreign_distributed_table (a int, b int) SERVER fake_fdw_server;
 SELECT create_distributed_table('foreign_distributed_table', 'a');
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
-NOTICE:  foreign-data wrapper "fake_fdw" does not have an extension defined
  create_distributed_table
 ---------------------------------------------------------------------
 
