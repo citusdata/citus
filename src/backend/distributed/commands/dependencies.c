@@ -236,7 +236,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				return NIL;
 			}
 
-			if (relKind == RELKIND_RELATION || relKind == RELKIND_PARTITIONED_TABLE)
+			if (relKind == RELKIND_RELATION || relKind == RELKIND_PARTITIONED_TABLE || relKind == RELKIND_FOREIGN_TABLE)
 			{
 				Oid relationId = dependency->objectId;
 				if (IsCitusTable(relationId) && !IsTableOwnedByExtension(relationId))

@@ -683,6 +683,7 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			if (relKind == RELKIND_COMPOSITE_TYPE ||
 				relKind == RELKIND_RELATION ||
 				relKind == RELKIND_PARTITIONED_TABLE ||
+				relKind == RELKIND_FOREIGN_TABLE ||
 				relKind == RELKIND_SEQUENCE)
 			{
 				return true;

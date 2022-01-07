@@ -12,7 +12,6 @@ SET search_path = sequence_default, public;
 
 
 -- test both distributed and citus local tables
-table pg_dist_node;
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId => 0);
 -- Cannot add a column involving DEFAULT nextval('..') because the table is not empty
 CREATE SEQUENCE seq_0;
@@ -52,43 +51,17 @@ SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
 ALTER SEQUENCE seq_0 AS bigint;
 ALTER SEQUENCE seq_0_local_table AS bigint;
 
--- we can change other things like increment
--- if metadata is not synced to workers
+-- we can't change sequences as we mark them as distributed
+-- even if metadata sync is stopped
 BEGIN;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 CREATE SEQUENCE seq_13;
-CREATE SEQUENCE seq_13_local_table;
 CREATE TABLE seq_test_13 (x int, y int);
-CREATE TABLE seq_test_13_local_table (x int, y int);
 SELECT create_distributed_table('seq_test_13','x');
-SELECT citus_add_local_table_to_metadata('seq_test_13_local_table');
 ALTER TABLE seq_test_13 ADD COLUMN z int DEFAULT nextval('seq_13');
-ALTER TABLE seq_test_13_local_table ADD COLUMN z int DEFAULT nextval('seq_13_local_table');
 
 ALTER SEQUENCE seq_13 INCREMENT BY 2;
-ALTER SEQUENCE seq_13_local_table INCREMENT BY 2;
-\d seq_13
-\d seq_13_local_table
-
-
--- check that we can add serial pseudo-type columns
--- when metadata is not synced to workers
-TRUNCATE seq_test_0;
-ALTER TABLE seq_test_0 ADD COLUMN w00 smallserial;
-ALTER TABLE seq_test_0 ADD COLUMN w01 serial2;
-ALTER TABLE seq_test_0 ADD COLUMN w10 serial;
-ALTER TABLE seq_test_0 ADD COLUMN w11 serial4;
-ALTER TABLE seq_test_0 ADD COLUMN w20 bigserial;
-ALTER TABLE seq_test_0 ADD COLUMN w21 serial8;
-
-TRUNCATE seq_test_0_local_table;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w00 smallserial;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w01 serial2;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w10 serial;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w11 serial4;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w20 bigserial;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w21 serial8;
 
 ROLLBACK;
 

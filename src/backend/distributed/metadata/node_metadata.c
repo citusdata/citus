@@ -696,10 +696,13 @@ SetUpObjectMetadata(WorkerNode *workerNode)
 											  metadataCommand);
 
 		/* add the truncate trigger command after the table became distributed */
-		char *truncateTriggerCreateCommand =
-			TruncateTriggerCreateCommand(cacheEntry->relationId);
-		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-											  truncateTriggerCreateCommand);
+		if (!IsForeignTable(clusteredTableId))
+		{
+			char *truncateTriggerCreateCommand =
+				TruncateTriggerCreateCommand(clusteredTableId);
+			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+												truncateTriggerCreateCommand);
+		}
 
 		/* add the pg_dist_shard{,placement} entries */
 		List *shardIntervalList = LoadShardIntervalList(clusteredTableId);
