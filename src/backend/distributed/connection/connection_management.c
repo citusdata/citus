@@ -57,9 +57,7 @@ static int ConnectionHashCompare(const void *a, const void *b, Size keysize);
 static void StartConnectionEstablishment(MultiConnection *connectionn,
 										 ConnectionHashKey *key);
 static MultiConnection * FindAvailableConnection(dlist_head *connections, uint32 flags);
-#ifdef USE_ASSERT_CHECKING
-static void AssertSingleMetadataConnectionExists(dlist_head *connections);
-#endif
+static void ErrorIfMultipleMetadataConnectionExists(dlist_head *connections);
 static void FreeConnParamsHashEntryFields(ConnParamsHashEntry *entry);
 static void AfterXactHostConnectionHandling(ConnectionHashEntry *entry, bool isCommit);
 static bool ShouldShutdownConnection(MultiConnection *connection, const int
@@ -421,6 +419,8 @@ StartNodeUserDatabaseConnection(uint32 flags, const char *hostname, int32 port,
 static MultiConnection *
 FindAvailableConnection(dlist_head *connections, uint32 flags)
 {
+	List *metadataConnectionCandidateList = NIL;
+
 	dlist_iter iter;
 	dlist_foreach(iter, connections)
 	{
@@ -474,52 +474,40 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 		{
 			/*
 			 * The caller requested a metadata connection, and this is not the
+			 * metadata connection. Still, this is a candidate for becoming a
 			 * metadata connection.
 			 */
+			metadataConnectionCandidateList =
+				lappend(metadataConnectionCandidateList, connection);
 			continue;
-		}
-		else
-		{
-			/*
-			 * Now that we found metadata connection. We do some sanity
-			 * checks.
-			 */
-			#ifdef USE_ASSERT_CHECKING
-			AssertSingleMetadataConnectionExists(connections);
-			#endif
-
-			/*
-			 * Connection is in use for an ongoing operation. Metadata
-			 * connection cannot be claimed exclusively.
-			 */
-			if (connection->claimedExclusively)
-			{
-				ereport(ERROR, (errmsg("metadata connections cannot be "
-									   "claimed exclusively")));
-			}
 		}
 
 		return connection;
 	}
 
-	if ((flags & REQUIRE_METADATA_CONNECTION) && !dlist_is_empty(connections))
+	if ((flags & REQUIRE_METADATA_CONNECTION) &&
+		list_length(metadataConnectionCandidateList) > 0)
 	{
 		/*
-		 * Caller asked a metadata connection, and we couldn't find in the
-		 * above list. So, we pick the first connection as the metadata
-		 * connection.
+		 * Caller asked a metadata connection, and we couldn't find a connection
+		 * that has already been used for metadata operations.
+		 *
+		 * So, we pick the first connection as the metadata connection.
 		 */
 		MultiConnection *metadataConnection =
-			dlist_container(MultiConnection, connectionNode,
-							dlist_head_node(connections));
+			linitial(metadataConnectionCandidateList);
 
+		Assert(!metadataConnection->claimedExclusively);
 
 		/* remember that we use this connection for metadata operations */
 		metadataConnection->useForMetadataOperations = true;
 
-		#ifdef USE_ASSERT_CHECKING
-		AssertSingleMetadataConnectionExists(connections);
-		#endif
+		/*
+		 * We cannot have multiple metadata connections. If we see
+		 * this error, it is likely that there is a bug in connection
+		 * management.
+		 */
+		ErrorIfMultipleMetadataConnectionExists(connections);
 
 		return metadataConnection;
 	}
@@ -528,14 +516,12 @@ FindAvailableConnection(dlist_head *connections, uint32 flags)
 }
 
 
-#ifdef USE_ASSERT_CHECKING
-
 /*
- * AssertSingleMetadataConnectionExists throws an error if the
+ * ErrorIfMultipleMetadataConnectionExists throws an error if the
  * input connection dlist contains more than one metadata connections.
  */
 static void
-AssertSingleMetadataConnectionExists(dlist_head *connections)
+ErrorIfMultipleMetadataConnectionExists(dlist_head *connections)
 {
 	bool foundMetadataConnection = false;
 	dlist_iter iter;
@@ -555,9 +541,6 @@ AssertSingleMetadataConnectionExists(dlist_head *connections)
 		}
 	}
 }
-
-
-#endif /* USE_ASSERT_CHECKING */
 
 
 /*
