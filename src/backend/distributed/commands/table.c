@@ -3418,10 +3418,11 @@ MakeNameListFromRangeVar(const RangeVar *rel)
 void
 WarnUnsupportedIfForeignDistributedTable(Oid relationId)
 {
-	if (IsForeignTable(relationId) && IsCitusTable(relationId) && !IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
+	if (IsForeignTable(relationId) && IsCitusTable(relationId) && !IsCitusTableType(
+			relationId, CITUS_LOCAL_TABLE))
 	{
 		ereport(WARNING, (errmsg("support for distributed foreign tables are deprecated"),
-						 (errdetail("Foreign tables can be added to metadata using UDF: "
-						 			"citus_add_local_table_to_metadata()"))));
+						  (errdetail("Foreign tables can be added to metadata using UDF: "
+									 "citus_add_local_table_to_metadata()"))));
 	}
 }
