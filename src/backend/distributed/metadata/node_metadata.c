@@ -110,6 +110,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpObjectMetadata(WorkerNode *workerNode);
+static void AdjustSequenceLimits(WorkerNode *workerNode);
 static void ClearDistributedObjectsFromNode(WorkerNode *workerNode);
 static void ClearDistributedTablesFromNode(WorkerNode *workerNode);
 static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
@@ -735,6 +736,49 @@ SetUpObjectMetadata(WorkerNode *workerNode)
 
 
 /*
+ * AdjustSequenceLimits adjusts the limits of sequences on the given node
+ */
+static void
+AdjustSequenceLimits(WorkerNode *workerNode)
+{
+	List *distributedTableList = CitusTableList();
+	List *propagatedTableList = NIL;
+	List *metadataSnapshotCommandList = NIL;
+
+	/* create the list of tables whose metadata will be created */
+	CitusTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
+	{
+		if (ShouldSyncTableMetadata(cacheEntry->relationId))
+		{
+			propagatedTableList = lappend(propagatedTableList, cacheEntry);
+		}
+	}
+
+	/* after all tables are created, create the metadata */
+	foreach_ptr(cacheEntry, propagatedTableList)
+	{
+		Oid relationId = cacheEntry->relationId;
+
+		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  workerSequenceDDLCommands);
+	}
+
+	metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION,
+										metadataSnapshotCommandList);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  ENABLE_DDL_PROPAGATION);
+
+	char *currentUser = CurrentUserName();
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+															workerNode->workerPort,
+															currentUser,
+															metadataSnapshotCommandList);
+}
+
+
+/*
  * DistributedObjectMetadataSyncCommandList returns the necessary commands to create
  * pg_dist_object entries on the new node.
  */
@@ -1214,6 +1258,7 @@ ActivateNode(char *nodeName, int nodePort)
 		{
 			ClearDistributedObjectsFromNode(workerNode);
 			SetUpObjectMetadata(workerNode);
+			AdjustSequenceLimits(workerNode);
 		}
 	}
 

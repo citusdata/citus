@@ -51,23 +51,12 @@ SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
 ALTER SEQUENCE seq_0 AS bigint;
 ALTER SEQUENCE seq_0_local_table AS bigint;
 
--- we can't change sequences as we mark them as distributed
--- even if metadata sync is stopped
-BEGIN;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-CREATE SEQUENCE seq_13;
-CREATE TABLE seq_test_13 (x int, y int);
-SELECT create_distributed_table('seq_test_13','x');
-ALTER TABLE seq_test_13 ADD COLUMN z int DEFAULT nextval('seq_13');
-
-ALTER SEQUENCE seq_13 INCREMENT BY 2;
-
-ROLLBACK;
-
 -- check alter column type precaution
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE bigint;
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE smallint;
+
+-- TODO: Sequences stay there after rollback!
+-- TODO: Talk with Onder about adjusting sequence limit
 
 ALTER TABLE seq_test_0_local_table ALTER COLUMN z TYPE bigint;
 ALTER TABLE seq_test_0_local_table ALTER COLUMN z TYPE smallint;

@@ -467,11 +467,10 @@ SELECT shardid, nodename, nodeport
 
 -- disable the first node
 SET client_min_messages TO ERROR;
+DROP FOREIGN TABLE foreign_table_to_distribute;
 \set VERBOSITY terse
-table pg_dist_node;
 SELECT master_disable_node('localhost', :worker_1_port);
 SELECT public.wait_until_metadata_sync(30000);
-table pg_dist_node;
 
 RESET client_min_messages;
 \set VERBOSITY default
@@ -483,7 +482,6 @@ SET citus.shard_replication_factor TO 1;
 -- add two new shards and verify they are created at the other node
 SELECT master_create_empty_shard('numbers_append') AS shardid1 \gset
 SELECT master_create_empty_shard('numbers_append') AS shardid2 \gset
-table pg_dist_node;
 
 COPY numbers_append FROM STDIN WITH (FORMAT 'csv', append_to_shard :shardid1);
 5,7
