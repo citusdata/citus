@@ -858,7 +858,9 @@ ActivateNode(char *nodeName, int nodePort)
 	 * propagation.
 	 *
 	 * In order to have a fully transactional semantics with add/activate
-	 * node operations, we require superuser. With that, we can guarantee
+	 * node operations, we require superuser. Note that for creating
+	 * non-owned objects, we already require a superuser connection.
+	 * By ensuring the current user to be a superuser, we can guarantee
 	 * to send all commands within the same remote transaction.
 	 */
 	EnsureSuperUser();
