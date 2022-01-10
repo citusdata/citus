@@ -45,8 +45,9 @@ static StringInfo CopyShardPlacementToWorkerNodeQuery(
 	ShardPlacement *sourceShardPlacement,
 	WorkerNode *workerNode,
 	char transferMode);
-static void ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName,
-								 int nodePort);
+static void ReplicateReferenceTableShardToNode(ShardInterval *shardInterval,
+											   char *nodeName,
+											   int nodePort);
 static bool AnyRelationsModifiedInTransaction(List *relationIdList);
 static List * ReplicatedMetadataSyncedDistributedTableList(void);
 
@@ -336,7 +337,8 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
  * table.
  */
 static void
-ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
+ReplicateReferenceTableShardToNode(ShardInterval *shardInterval, char *nodeName,
+								   int nodePort)
 {
 	uint64 shardId = shardInterval->shardId;
 
@@ -351,8 +353,6 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
 																 nodeName, nodePort);
-	char *tableOwner = TableOwner(shardInterval->relationId);
-
 	if (targetPlacement != NULL)
 	{
 		if (targetPlacement->shardState == SHARD_STATE_ACTIVE)
@@ -370,9 +370,11 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 							get_rel_name(shardInterval->relationId), nodeName,
 							nodePort)));
 
-	EnsureNoModificationsHaveBeenDone();
-	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
-											  ddlCommandList);
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort,
+															CurrentUserName(),
+															ddlCommandList);
 	int32 groupId = GroupForNode(nodeName, nodePort);
 
 	uint64 placementId = GetNextPlacementId();
@@ -587,17 +589,19 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 
 			LockShardDistributionMetadata(shardId, ExclusiveLock);
 
-			ReplicateShardToNode(shardInterval, nodeName, nodePort);
+			ReplicateReferenceTableShardToNode(shardInterval, nodeName, nodePort);
 		}
 
 		/* create foreign constraints between reference tables */
 		foreach_ptr(shardInterval, referenceShardIntervalList)
 		{
-			char *tableOwner = TableOwner(shardInterval->relationId);
 			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
 
-			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
-													  commandList);
+			/* send commands to new workers, the current user should be a superuser */
+			Assert(superuser());
+			SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort,
+																	CurrentUserName(),
+																	commandList);
 		}
 	}
 }
