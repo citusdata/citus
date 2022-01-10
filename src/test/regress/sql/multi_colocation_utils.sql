@@ -71,26 +71,34 @@ CREATE TABLE table1_group1 ( id int );
 SELECT master_create_distributed_table('table1_group1', 'id', 'hash');
 SELECT master_create_worker_shards('table1_group1', 4, 2);
 
+select last_value from pg_dist_colocationid_seq ;
+
 CREATE TABLE table2_group1 ( id int );
 SELECT master_create_distributed_table('table2_group1', 'id', 'hash');
 SELECT master_create_worker_shards('table2_group1', 4, 2);
-
+table pg_dist_colocation;
+table pg_dist_partition;
 CREATE TABLE table3_group2 ( id int );
 SELECT master_create_distributed_table('table3_group2', 'id', 'hash');
 SELECT master_create_worker_shards('table3_group2', 4, 2);
+select last_value from pg_dist_colocationid_seq ;
 
 CREATE TABLE table4_group2 ( id int );
 SELECT master_create_distributed_table('table4_group2', 'id', 'hash');
 SELECT master_create_worker_shards('table4_group2', 4, 2);
+select last_value from pg_dist_colocationid_seq ;
 
 CREATE TABLE table5_groupX ( id int );
 SELECT master_create_distributed_table('table5_groupX', 'id', 'hash');
 SELECT master_create_worker_shards('table5_groupX', 4, 2);
-
+table pg_dist_colocation;
+table pg_dist_partition;
 CREATE TABLE table6_append ( id int );
 SELECT master_create_distributed_table('table6_append', 'id', 'append');
-SELECT master_create_empty_shard('table6_append');
-SELECT master_create_empty_shard('table6_append');
+SELECT master_create_empty_shard('table6_append');select last_value from pg_dist_colocationid_seq ;
+
+SELECT master_create_empty_shard('table6_append');select last_value from pg_dist_colocationid_seq ;
+
 
 
 -- make table1_group1 and table2_group1 co-located manually
@@ -100,7 +108,8 @@ SELECT colocation_test_colocate_tables('table1_group1', 'table2_group1');
 SELECT get_table_colocation_id('table1_group1');
 SELECT get_table_colocation_id('table5_groupX');
 SELECT get_table_colocation_id('table6_append');
-
+table pg_dist_colocation;
+table pg_dist_partition;
 -- check self table co-location
 SELECT tables_colocated('table1_group1', 'table1_group1');
 SELECT tables_colocated('table5_groupX', 'table5_groupX');
@@ -115,7 +124,8 @@ SELECT tables_colocated('table1_group1', 'table3_group2');
 -- check table co-location with invalid co-location group
 SELECT tables_colocated('table1_group1', 'table5_groupX');
 SELECT tables_colocated('table1_group1', 'table6_append');
-
+table pg_dist_colocation;
+table pg_dist_partition;
 -- check self shard co-location
 SELECT shards_colocated(1300000, 1300000);
 SELECT shards_colocated(1300016, 1300016);
@@ -129,7 +139,8 @@ SELECT shards_colocated(1300000, 1300001);
 
 -- check shard co-location with different co-location group
 SELECT shards_colocated(1300000, 1300005);
-
+table pg_dist_colocation;
+table pg_dist_partition;
 -- check shard co-location with invalid co-location group
 SELECT shards_colocated(1300000, 1300016);
 SELECT shards_colocated(1300000, 1300020);
@@ -150,7 +161,8 @@ SELECT find_shard_interval_index(1300001);
 SELECT find_shard_interval_index(1300002);
 SELECT find_shard_interval_index(1300003);
 SELECT find_shard_interval_index(1300016);
-
+table pg_dist_colocation;
+table pg_dist_partition;
 -- check external colocation API
 
 SELECT count(*) FROM pg_dist_partition WHERE colocationid IN (4, 5);
@@ -180,8 +192,12 @@ UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='table2_groupB'::re
 SET citus.shard_replication_factor to DEFAULT;
 
 -- change partition column type
+table pg_dist_colocation;
+table pg_dist_partition;
+set citus.log_remote_commands to true;
 CREATE TABLE table1_groupC ( id text );
 SELECT create_distributed_table('table1_groupC', 'id');
+reset citus.log_remote_commands;
 
 CREATE TABLE table2_groupC ( id text );
 SELECT create_distributed_table('table2_groupC', 'id');

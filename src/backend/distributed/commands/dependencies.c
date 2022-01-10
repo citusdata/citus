@@ -58,7 +58,6 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 
 	/* collect all dependencies in creation order and get their ddl commands */
 	List *dependencies = GetDependenciesForObject(target);
-
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
@@ -265,9 +264,8 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 			if (relKind == RELKIND_SEQUENCE)
 			{
-				/* TODO: Check user name for different scenarios */
-				char *userName = GetUserNameFromId(GetUserId(), false);
-				return DDLCommandsForSequence(dependency->objectId, userName);
+				char *sequenceOwnerName = TableOwner(dependency->objectId);
+				return DDLCommandsForSequence(dependency->objectId, sequenceOwnerName);
 			}
 
 			/* if this relation is not supported, break to the error at the end */

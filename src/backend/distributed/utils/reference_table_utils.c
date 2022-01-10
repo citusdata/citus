@@ -377,6 +377,15 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	uint64 placementId = GetNextPlacementId();
 	InsertShardPlacementRow(shardId, placementId, SHARD_STATE_ACTIVE, 0,
 							groupId);
+
+	if (ShouldSyncTableMetadata(shardInterval->relationId))
+	{
+		char *placementCommand = PlacementUpsertCommand(shardId, placementId,
+														SHARD_STATE_ACTIVE, 0,
+														groupId);
+
+		SendCommandToWorkersWithMetadata(placementCommand);
+	}
 }
 
 

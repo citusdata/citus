@@ -189,13 +189,12 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
 -- Make sure that citus_activate_node can be called inside a transaction and rollbacked
-\c - - - :master_port
-BEGIN;
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
-SELECT citus_activate_node('localhost', :worker_2_port);
-ROLLBACK;
+--\c - - - :master_port
+--BEGIN;
+--SELECT citus_activate_node('localhost', :worker_2_port);
+--ROLLBACK;
 
-SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
+--SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 
 -- Check that the distributed table can be queried from the worker
 \c - - - :master_port
@@ -575,7 +574,6 @@ SELECT create_distributed_table('mx_table', 'a');
 
 \c - postgres - :master_port
 SELECT master_add_node('localhost', :worker_2_port);
-SELECT citus_activate_node('localhost', :worker_2_port);
 
 \c - mx_user - :worker_1_port
 SELECT nextval('mx_table_b_seq');
@@ -789,7 +787,6 @@ SELECT pg_reload_conf();
 UPDATE pg_dist_node SET metadatasynced=true WHERE nodeport=:worker_1_port;
 
 SELECT master_add_node('localhost', :worker_2_port);
-SELECT citus_activate_node('localhost', :worker_2_port);
 
 CREATE SEQUENCE mx_test_sequence_0;
 CREATE SEQUENCE mx_test_sequence_1;
@@ -883,8 +880,6 @@ ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
 
--- Turn metadata sync back on and ativate them at the end
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
+-- Activate them at the end
 SELECT citus_activate_node('localhost', :worker_1_port);
 SELECT citus_activate_node('localhost', :worker_2_port);
