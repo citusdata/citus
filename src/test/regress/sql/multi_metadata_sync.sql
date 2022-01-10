@@ -6,10 +6,6 @@
 -- metadata changes to MX tables.
 
 -- Turn metadata sync off at first
-\c - - - :worker_1_port
-table pg_dist_partition;
-table pg_dist_node;
-
 \c - - - :master_port
 
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
@@ -105,27 +101,14 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
 -- Add a node to another cluster to make sure it's also synced
 SELECT master_add_secondary_node('localhost', 8889, 'localhost', :worker_1_port, nodecluster => 'second-cluster');
 
-\c - - - :worker_1_port
-table pg_dist_partition;
-table pg_dist_node;
-table pg_dist_shard;
-table pg_dist_shard_placement;
-
 \c - - - :master_port
 -- Run start_metadata_sync_to_node and citus_activate_node and check that it marked hasmetadata for that worker
-table pg_dist_partition;
-\d
-set citus.log_remote_commands to true;
-set citus.worker_min_messages to debug5;
 SELECT citus_activate_node('localhost', :worker_1_port);
-reset citus.log_remote_commands;
-reset citus.worker_min_messages;
 
 SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
 
 -- Check that the metadata has been copied to the worker
 \c - - - :worker_1_port
-table pg_dist_partition;
 SELECT * FROM pg_dist_local_group;
 SELECT * FROM pg_dist_node ORDER BY nodeid;
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
@@ -189,12 +172,12 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table'::regclass;
 
 -- Make sure that citus_activate_node can be called inside a transaction and rollbacked
---\c - - - :master_port
---BEGIN;
---SELECT citus_activate_node('localhost', :worker_2_port);
---ROLLBACK;
+\c - - - :master_port
+BEGIN;
+SELECT citus_activate_node('localhost', :worker_2_port);
+ROLLBACK;
 
---SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
+SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 
 -- Check that the distributed table can be queried from the worker
 \c - - - :master_port

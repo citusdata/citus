@@ -350,7 +350,6 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 	List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
 	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
 																 nodeName, nodePort);
-	char *tableOwner = TableOwner(shardInterval->relationId);
 
 	if (targetPlacement != NULL)
 	{
@@ -370,8 +369,7 @@ ReplicateShardToNode(ShardInterval *shardInterval, char *nodeName, int nodePort)
 							nodePort)));
 
 	EnsureNoModificationsHaveBeenDone();
-	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
-											  ddlCommandList);
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort, CitusExtensionOwnerName(), ddlCommandList);
 	int32 groupId = GroupForNode(nodeName, nodePort);
 
 	uint64 placementId = GetNextPlacementId();
@@ -594,11 +592,9 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 		/* create foreign constraints between reference tables */
 		foreach_ptr(shardInterval, referenceShardIntervalList)
 		{
-			char *tableOwner = TableOwner(shardInterval->relationId);
 			List *commandList = CopyShardForeignConstraintCommandList(shardInterval);
 
-			SendCommandListToWorkerOutsideTransaction(nodeName, nodePort, tableOwner,
-													  commandList);
+			SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort, CitusExtensionOwnerName(), commandList);
 		}
 	}
 }

@@ -653,14 +653,13 @@ SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode)
 		}
 	}
 
-	char *currentUser = CurrentUserName();
 	multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION,
 												multipleTableIntegrationCommandList);
 	multipleTableIntegrationCommandList = lappend(multipleTableIntegrationCommandList,
 												  ENABLE_DDL_PROPAGATION);
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
-															currentUser,
+															CitusExtensionOwnerName(),
 															multipleTableIntegrationCommandList);
 }
 
@@ -889,10 +888,10 @@ ClearDistributedTablesFromNode(WorkerNode *workerNode)
 													list_make1(
 														ENABLE_DDL_PROPAGATION));
 
-	SendCommandListToWorkerOutsideTransaction(workerNode->workerName,
-											  workerNode->workerPort,
-											  CitusExtensionOwnerName(),
-											  clearDistributedTablesCommandList);
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+															workerNode->workerPort,
+															CitusExtensionOwnerName(),
+															clearDistributedTablesCommandList);
 }
 
 
@@ -905,7 +904,13 @@ ClearDistributedObjectsFromNode(WorkerNode *workerNode)
 	List *clearDistTableInfoCommandList = NIL;
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
-											REMOVE_ALL_CLUSTERED_TABLES_METADATA_ONLY_COMMAND);
+											DELETE_ALL_PARTITIONS);
+
+	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
+											DELETE_ALL_SHARDS);
+
+	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
+											DELETE_ALL_PLACEMENTS);
 
 	clearDistTableInfoCommandList = lappend(clearDistTableInfoCommandList,
 											DELETE_ALL_DISTRIBUTED_OBJECTS);
@@ -988,10 +993,10 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
 		/* send commands to new workers*/
-		SendCommandListToWorkerOutsideTransaction(newWorkerNode->workerName,
-												  newWorkerNode->workerPort,
-												  CitusExtensionOwnerName(),
-												  ddlCommands);
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(newWorkerNode->workerName,
+																newWorkerNode->workerPort,
+																CitusExtensionOwnerName(),
+																ddlCommands);
 	}
 }
 
@@ -1202,6 +1207,8 @@ static int
 ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
+
+	EnsureSuperUser();
 
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);

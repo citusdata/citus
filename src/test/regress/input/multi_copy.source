@@ -498,9 +498,7 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- add the node back
-DROP FOREIGN TABLE foreign_table_to_distribute;
 SELECT 1 FROM master_activate_node('localhost', :worker_1_port);
-reset citus.log_remote_commands;
 RESET client_min_messages;
 RESET citus.shard_replication_factor;
 -- add two new shards and verify they are created at both workers
