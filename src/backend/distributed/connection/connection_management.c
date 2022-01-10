@@ -36,6 +36,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_log_messages.h"
 #include "mb/pg_wchar.h"
+#include "pg_config.h"
 #include "portability/instr_time.h"
 #include "storage/ipc.h"
 #include "utils/hsearch.h"
@@ -1155,6 +1156,8 @@ StartConnectionEstablishment(MultiConnection *connection, ConnectionHashKey *key
 }
 
 
+#if PG_VERSION_NUM < 140000
+
 /*
  * WarmUpConnParamsHash warms up the ConnParamsHash by loading all the
  * conn params for active primary nodes.
@@ -1174,6 +1177,9 @@ WarmUpConnParamsHash(void)
 		FindOrCreateConnParamsEntry(&key);
 	}
 }
+
+
+#endif
 
 
 /*
