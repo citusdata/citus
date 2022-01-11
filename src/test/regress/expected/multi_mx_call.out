@@ -131,6 +131,12 @@ BEGIN
     y := x;
     x := (select case groupid when 0 then 'F' else 'S' end from pg_dist_local_group);
 END;$$;
+CREATE PROCEDURE mx_call_proc_copy(x int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO multi_mx_call.mx_call_dist_table_1
+    SELECT s,s FROM generate_series(100, 110) s;
+END;$$;
 -- Test that undistributed procedures have no issue executing
 call multi_mx_call.mx_call_proc(2, 0);
  y
@@ -144,6 +150,7 @@ call multi_mx_call.mx_call_proc_custom_types('S', 'A');
  F | S
 (1 row)
 
+call multi_mx_call.mx_call_proc_copy(2);
 -- Same for unqualified names
 call mx_call_proc(2, 0);
  y
@@ -171,6 +178,12 @@ select create_distributed_function('mx_call_proc_bigint(bigint,bigint)');
 (1 row)
 
 select create_distributed_function('mx_call_proc_custom_types(mx_call_enum,mx_call_enum)');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+select create_distributed_function('mx_call_proc_copy(int)');
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -206,6 +219,12 @@ DEBUG:  stored procedure does not have co-located tables
  F | S
 (1 row)
 
+call multi_mx_call.mx_call_proc_copy(2);
+DEBUG:  stored procedure does not have co-located tables
+DEBUG:  Collecting INSERT ... SELECT results on coordinator
+CONTEXT:  SQL statement "INSERT INTO multi_mx_call.mx_call_dist_table_1
+    SELECT s,s FROM generate_series(100, 110) s"
+PL/pgSQL function mx_call_proc_copy(integer) line XX at SQL statement
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
  colocate_proc_with_table
@@ -220,6 +239,12 @@ select colocate_proc_with_table('mx_call_proc_bigint', 'mx_call_dist_table_bigin
 (1 row)
 
 select colocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
+ colocate_proc_with_table
+---------------------------------------------------------------------
+
+(1 row)
+
+select colocate_proc_with_table('mx_call_proc_copy', 'mx_call_dist_table_1'::regclass, 0);
  colocate_proc_with_table
 ---------------------------------------------------------------------
 
@@ -253,6 +278,8 @@ DEBUG:  pushing down the procedure
  S | S
 (1 row)
 
+call mx_call_proc_copy(2);
+DEBUG:  pushing down the procedure
 -- Test implicit cast of int to bigint
 call mx_call_proc_bigint(4, 2);
 DEBUG:  pushing down the procedure
@@ -398,18 +425,51 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
 CALL multi_mx_call.mx_call_proc_tx(20);
 DEBUG:  pushing down the procedure
 SELECT id, val FROM mx_call_dist_table_1 ORDER BY id, val;
- id | val
+ id  | val
 ---------------------------------------------------------------------
-  3 |   1
-  3 |   5
-  4 |   5
-  6 |   5
-  9 |   2
- 10 |  -2
- 11 |   3
- 20 |  -2
- 21 |   3
-(9 rows)
+   3 |   1
+   3 |   5
+   4 |   5
+   6 |   5
+   9 |   2
+  10 |  -2
+  11 |   3
+  20 |  -2
+  21 |   3
+ 100 |  98
+ 100 |  98
+ 100 |  98
+ 101 |  99
+ 101 |  99
+ 101 |  99
+ 102 | 100
+ 102 | 100
+ 102 | 100
+ 103 | 101
+ 103 | 101
+ 103 | 101
+ 104 | 102
+ 104 | 102
+ 104 | 102
+ 105 | 103
+ 105 | 103
+ 105 | 103
+ 106 | 104
+ 106 | 104
+ 106 | 104
+ 107 | 105
+ 107 | 105
+ 107 | 105
+ 108 | 106
+ 108 | 106
+ 108 | 106
+ 109 | 107
+ 109 | 107
+ 109 | 107
+ 110 | 108
+ 110 | 108
+ 110 | 108
+(42 rows)
 
 -- Show that function delegation works from worker nodes as well
 \c - - - :worker_1_port
@@ -539,4 +599,4 @@ PL/pgSQL function mx_call_proc(integer,integer) line XX at assignment
 reset client_min_messages;
 \set VERBOSITY terse
 drop schema multi_mx_call cascade;
-NOTICE:  drop cascades to 13 other objects
+NOTICE:  drop cascades to 14 other objects

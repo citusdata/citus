@@ -202,10 +202,6 @@ SELECT create_distributed_table('table_append', 'id', 'append');
 CREATE TABLE table_range ( id int );
 SELECT create_distributed_table('table_range', 'id', 'range');
 
--- test foreign table creation
-CREATE FOREIGN TABLE table3_groupD ( id int ) SERVER fake_fdw_server;
-SELECT create_distributed_table('table3_groupD', 'id');
-
 -- check metadata
 SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
@@ -290,8 +286,8 @@ CREATE TABLE table_bigint ( id bigint );
 SELECT create_distributed_table('table_bigint', 'id', colocate_with => 'table1_groupE');
 -- check worker table schemas
 \c - - - :worker_1_port
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_groupE_1300062'::regclass;
-SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_colocation.table4_groupE_1300064'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='public.table3_groupE_1300054'::regclass;
+SELECT "Column", "Type", "Modifiers" FROM table_desc WHERE relid='schema_colocation.table4_groupE_1300056'::regclass;
 
 \c - - - :master_port
 SET citus.next_shard_id TO 1300080;

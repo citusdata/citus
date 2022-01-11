@@ -304,6 +304,10 @@ BEGIN;
 SELECT create_distributed_table('test_table', 'id');
 COMMIT;
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
+
+SELECT citus.mitmproxy('conn.allow()');
+SELECT recover_prepared_transactions();
+
 DROP TABLE test_table;
 CREATE TABLE test_table(id int, value_1 int);
 INSERT INTO test_table VALUES (1,1),(2,2),(3,3),(4,4);
@@ -314,7 +318,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^COMMIT").cancel(' ||  pg_backend_pi
 BEGIN;
 SELECT create_distributed_table('test_table', 'id');
 COMMIT;
+
 SELECT citus.mitmproxy('conn.allow()');
+
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
 DROP TABLE test_table;
 CREATE TABLE test_table(id int, value_1 int);

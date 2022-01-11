@@ -24,6 +24,7 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/deparse_shard_query.h"
+#include "distributed/function_call_delegation.h"
 #include "distributed/metadata_utility.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_executor.h"
@@ -46,9 +47,10 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
-static bool CallFuncExprRemotely(CallStmt *callStmt,
-								 DistObjectCacheEntry *procedure,
-								 FuncExpr *funcExpr, DestReceiver *dest);
+
+/* global variable tracking whether we are in a delegated procedure call */
+bool InDelegatedProcedureCall = false;
+
 
 /*
  * CallDistributedProcedureRemotely calls a stored procedure on the worker if possible.
@@ -61,28 +63,21 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 
 	DistObjectCacheEntry *procedure = LookupDistObjectCacheEntry(ProcedureRelationId,
 																 functionId, 0);
-
-	/*
-	 * If procedure is not distributed or already delegated from another
-	 * node, do not call the procedure remotely.
-	 */
-	if (procedure == NULL || !procedure->isDistributed ||
-		IsCitusInitiatedRemoteBackend())
+	if (procedure == NULL || !procedure->isDistributed)
 	{
 		return false;
 	}
 
-	return CallFuncExprRemotely(callStmt, procedure, funcExpr, dest);
-}
+	if (IsCitusInitiatedRemoteBackend())
+	{
+		/*
+		 * We are in a citus-initiated backend handling a CALL to a distributed
+		 * procedure. That means that this is the delegated call.
+		 */
+		InDelegatedProcedureCall = true;
+		return false;
+	}
 
-
-/*
- * CallFuncExprRemotely calls a procedure of function on the worker if possible.
- */
-static bool
-CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
-					 FuncExpr *funcExpr, DestReceiver *dest)
-{
 	if (IsMultiStatementTransaction())
 	{
 		ereport(DEBUG1, (errmsg("cannot push down CALL in multi-statement transaction")));
@@ -102,6 +97,7 @@ CallFuncExprRemotely(CallStmt *callStmt, DistObjectCacheEntry *procedure,
 								"be constant expressions")));
 		return false;
 	}
+
 	CitusTableCacheEntry *distTable = GetCitusTableCacheEntry(colocatedRelationId);
 	Var *partitionColumn = distTable->partitionColumn;
 	bool colocatedWithReferenceTable = false;

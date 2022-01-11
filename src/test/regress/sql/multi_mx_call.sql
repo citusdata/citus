@@ -100,9 +100,18 @@ BEGIN
     x := (select case groupid when 0 then 'F' else 'S' end from pg_dist_local_group);
 END;$$;
 
+CREATE PROCEDURE mx_call_proc_copy(x int)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO multi_mx_call.mx_call_dist_table_1
+    SELECT s,s FROM generate_series(100, 110) s;
+END;$$;
+
+
 -- Test that undistributed procedures have no issue executing
 call multi_mx_call.mx_call_proc(2, 0);
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
+call multi_mx_call.mx_call_proc_copy(2);
 
 -- Same for unqualified names
 call mx_call_proc(2, 0);
@@ -112,6 +121,7 @@ call mx_call_proc_custom_types('S', 'A');
 select create_distributed_function('mx_call_proc(int,int)');
 select create_distributed_function('mx_call_proc_bigint(bigint,bigint)');
 select create_distributed_function('mx_call_proc_custom_types(mx_call_enum,mx_call_enum)');
+select create_distributed_function('mx_call_proc_copy(int)');
 
 -- We still don't route them to the workers, because they aren't
 -- colocated with any distributed tables.
@@ -119,16 +129,19 @@ SET client_min_messages TO DEBUG1;
 call multi_mx_call.mx_call_proc(2, 0);
 call mx_call_proc_bigint(4, 2);
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
+call multi_mx_call.mx_call_proc_copy(2);
 
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass, 1);
 select colocate_proc_with_table('mx_call_proc_bigint', 'mx_call_dist_table_bigint'::regclass, 1);
 select colocate_proc_with_table('mx_call_proc_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
+select colocate_proc_with_table('mx_call_proc_copy', 'mx_call_dist_table_1'::regclass, 0);
 
 call multi_mx_call.mx_call_proc(2, 0);
 call multi_mx_call.mx_call_proc_custom_types('S', 'A');
 call mx_call_proc(2, 0);
 call mx_call_proc_custom_types('S', 'A');
+call mx_call_proc_copy(2);
 
 -- Test implicit cast of int to bigint
 call mx_call_proc_bigint(4, 2);

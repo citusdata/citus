@@ -992,10 +992,11 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
 		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
-		/* send commands to new workers*/
+		/* send commands to new workers, the current user should be a superuser */
+		Assert(superuser());
 		SendMetadataCommandListToWorkerInCoordinatedTransaction(newWorkerNode->workerName,
 																newWorkerNode->workerPort,
-																CitusExtensionOwnerName(),
+																CurrentUserName(),
 																ddlCommands);
 	}
 }
@@ -1208,6 +1209,17 @@ ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
 
+	/*
+	 * We currently require the object propagation to happen via superuser,
+	 * see #5139. While activating a node, we sync both metadata and object
+	 * propagation.
+	 *
+	 * In order to have a fully transactional semantics with add/activate
+	 * node operations, we require superuser. Note that for creating
+	 * non-owned objects, we already require a superuser connection.
+	 * By ensuring the current user to be a superuser, we can guarantee
+	 * to send all commands within the same remote transaction.
+	 */
 	EnsureSuperUser();
 
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */

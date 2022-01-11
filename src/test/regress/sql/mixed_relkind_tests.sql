@@ -47,9 +47,6 @@ SELECT create_distributed_table('partitioned_distributed_table', 'a');
 CREATE VIEW view_on_part_dist AS SELECT * FROM partitioned_distributed_table;
 CREATE MATERIALIZED VIEW mat_view_on_part_dist AS SELECT * FROM partitioned_distributed_table;
 
-CREATE FOREIGN TABLE foreign_distributed_table (a int, b int) SERVER fake_fdw_server;
-SELECT create_distributed_table('foreign_distributed_table', 'a');
-
 -- and insert some data
 INSERT INTO postgres_local_table SELECT * FROM generate_series(0, 5);
 INSERT INTO partitioned_postgres_local_table SELECT * FROM generate_series(0, 5);
@@ -65,7 +62,6 @@ SELECT * FROM partitioned_distributed_table UNION SELECT 1, * FROM postgres_loca
 SELECT * FROM partitioned_distributed_table UNION SELECT * FROM unlogged_distributed_table ORDER BY 1,2;
 SELECT *, 1 FROM postgres_local_table UNION SELECT * FROM unlogged_distributed_table ORDER BY 1,2;
 SELECT * FROM unlogged_distributed_table UNION SELECT 1,1 ORDER BY 1,2;
-SELECT * from foreign_distributed_table UNION SELECT 1,1 ORDER BY 1,2;
 SELECT 1 UNION SELECT * FROM citus_local_table ORDER BY 1;
 
 SELECT * FROM view_on_part_dist UNION SELECT 1,1 ORDER BY 1,2;
@@ -117,11 +113,6 @@ SELECT COUNT(*) FROM
   (SELECT *, random() FROM partitioned_distributed_table) AS bar
 WHERE foo.a = bar.b;
 
-SELECT COUNT(*) FROM
-  (SELECT *, random() FROM unlogged_distributed_table) AS foo,
-  (SELECT *, random() FROM foreign_distributed_table) AS bar
-WHERE foo.a = bar.b;
-
 UPDATE partitioned_distributed_table SET b = foo.a FROM citus_local_table AS foo;
 UPDATE partitioned_distributed_table SET b = foo.a FROM postgres_local_table AS foo;
 UPDATE partitioned_distributed_table SET a = foo.a FROM postgres_local_table AS foo WHERE foo.a = partitioned_distributed_table.a;
@@ -160,9 +151,6 @@ WITH cte_1 AS MATERIALIZED (SELECT * FROM partitioned_distributed_table)
 
 WITH cte_1 AS MATERIALIZED (SELECT * FROM partitioned_distributed_table)
   SELECT COUNT(*) FROM cte_1 JOIN partitioned_distributed_table USING (a);
-
-WITH cte_1 AS MATERIALIZED (SELECT * FROM foreign_distributed_table)
-  SELECT COUNT(*) FROM cte_1 JOIN foreign_distributed_table USING (a);
 
 WITH cte_1 AS MATERIALIZED (SELECT * FROM partitioned_distributed_table)
   SELECT COUNT(*) FROM cte_1 JOIN partitioned_distributed_table USING (b);
@@ -245,20 +233,10 @@ EXPLAIN (COSTS OFF)
 SELECT a, COUNT(*) OVER (PARTITION BY a) FROM partitioned_distributed_table ORDER BY 1,2;
 $Q$);
 
-SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
-SELECT a, COUNT(*) OVER (PARTITION BY a) FROM foreign_distributed_table ORDER BY 1,2;
-$Q$);
-
 -- pull to coordinator WINDOW
 SELECT public.coordinator_plan($Q$
 EXPLAIN (COSTS OFF)
 SELECT a, COUNT(*) OVER (PARTITION BY a+1) FROM partitioned_distributed_table ORDER BY 1,2;
-$Q$);
-
-SELECT public.coordinator_plan($Q$
-EXPLAIN (COSTS OFF)
-SELECT a, COUNT(*) OVER (PARTITION BY a+1) FROM foreign_distributed_table ORDER BY 1,2;
 $Q$);
 
 -- FOR UPDATE
@@ -274,11 +252,6 @@ SET client_min_messages TO ERROR;
 BEGIN;
   ALTER TABLE partitioned_distributed_table DROP COLUMN b CASCADE;
   SELECT * FROM partitioned_distributed_table;
-COMMIT;
-
-BEGIN;
-  ALTER TABLE foreign_distributed_table DROP COLUMN b CASCADE;
-  SELECT * FROM foreign_distributed_table;
 COMMIT;
 
 -- cleanup at exit

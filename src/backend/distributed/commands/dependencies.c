@@ -404,7 +404,12 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
 	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
-	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort, CitusExtensionOwnerName(), ddlCommands);
+	/* send commands to new workers, the current user should a superuser */
+	Assert(superuser());
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName,
+															nodePort,
+															CurrentUserName(),
+															ddlCommands);
 }
 
 

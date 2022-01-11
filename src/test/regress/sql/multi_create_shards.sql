@@ -106,22 +106,6 @@ SELECT sort_names('sumedh', 'jason', 'ozgun');
 
 SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'throwaway%' AND relkind = 'r';
 
--- test foreign table creation
-CREATE FOREIGN TABLE foreign_table_to_distribute
-(
-	name text,
-	id bigint
-)
-SERVER fake_fdw_server;
-
-SET citus.shard_count TO 16;
-SET citus.shard_replication_factor TO 1;
-SELECT create_distributed_table('foreign_table_to_distribute', 'id', 'hash');
-
-SELECT shardstorage, shardminvalue, shardmaxvalue FROM pg_dist_shard
-	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass
-	ORDER BY (shardminvalue::integer) ASC;
-
 -- test shard creation using weird shard count
 CREATE TABLE weird_shard_count
 (
@@ -137,14 +121,3 @@ SELECT shardmaxvalue::integer - shardminvalue::integer AS shard_size
 	FROM pg_dist_shard
 	WHERE logicalrelid = 'weird_shard_count'::regclass
 	ORDER BY shardminvalue::integer ASC;
-
--- cleanup foreign table, related shards and shard placements
-DELETE FROM pg_dist_shard_placement
-	WHERE shardid IN (SELECT shardid FROM pg_dist_shard
-					   WHERE logicalrelid = 'foreign_table_to_distribute'::regclass);
-
-DELETE FROM pg_dist_shard
-	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass;
-
-DELETE FROM pg_dist_partition
-	WHERE logicalrelid = 'foreign_table_to_distribute'::regclass;

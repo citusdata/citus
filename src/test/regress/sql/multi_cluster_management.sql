@@ -122,9 +122,14 @@ SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_
 
 -- show that non-admin role can not activate a node
 SET ROLE node_metadata_user;
+SET citus.enable_object_propagation TO off; -- prevent master activate node to actually connect for this test
+SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 BEGIN;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
-SELECT 1 FROM master_activate_node('localhost', :worker_2_port);
+SELECT 1 FROM master_remove_node('localhost', :worker_2_port);
+SELECT 1 FROM master_add_secondary_node('localhost', :worker_2_port + 2, 'localhost', :worker_1_port);
+SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_node WHERE nodeport = :worker_2_port;
+SELECT nodename, nodeport, noderole FROM pg_dist_node ORDER BY nodeport;
 ABORT;
 
 \c - postgres - :master_port
