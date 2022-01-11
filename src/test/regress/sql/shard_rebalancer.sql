@@ -860,6 +860,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           FROM pg_class c
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
+          AND c.oid NOT IN (SELECT logicalrelid FROM pg_dist_partition)
   ) a
 WHERE table_schema = 'public'
 ) a ORDER BY table_name;
@@ -875,6 +876,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           FROM pg_class c
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
+          AND c.oid NOT IN (SELECT logicalrelid FROM pg_dist_partition)
   ) a
 WHERE table_schema = 'public'
 ) a ORDER BY table_name;
@@ -921,6 +923,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           FROM pg_class c
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
+          AND c.oid NOT IN (SELECT logicalrelid FROM pg_dist_partition)
   ) a
 WHERE table_schema = 'public'
 ) a ORDER BY table_name;
@@ -936,6 +939,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           FROM pg_class c
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
+          AND c.oid NOT IN (SELECT logicalrelid FROM pg_dist_partition)
   ) a
 WHERE table_schema = 'public'
 ) a ORDER BY table_name;
@@ -962,6 +966,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           FROM pg_class c
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
+          AND c.oid NOT IN (SELECT logicalrelid FROM pg_dist_partition)
   ) a
 WHERE table_schema = 'public'
 ) a ORDER BY table_name;
@@ -977,6 +982,7 @@ SELECT table_schema, table_name, row_estimate, total_bytes
           FROM pg_class c
           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE relkind = 'r'
+          AND c.oid NOT IN (SELECT logicalrelid FROM pg_dist_partition)
   ) a
 WHERE table_schema = 'public'
 ) a ORDER BY table_name;
