@@ -241,7 +241,6 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				if (IsCitusTable(relationId) && !IsTableOwnedByExtension(relationId))
 				{
 					/* skip table metadata creation when the Citus table is owned by an extension */
-					/* TODO: Check sequence next val type */
 					List *commandList = NIL;
 					List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 																		  WORKER_NEXTVAL_SEQUENCE_DEFAULTS);

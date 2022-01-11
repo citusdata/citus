@@ -40,12 +40,6 @@ CREATE FUNCTION worker_drop_distributed_table_only(table_name text)
 COMMENT ON FUNCTION worker_drop_distributed_table_only(table_name text)
     IS 'drop the distributed table only without the metadata';
 
-CREATE FUNCTION worker_drop_distributed_table_metadata_only(table_oid oid)
-    RETURNS VOID
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$worker_drop_distributed_table_metadata_only$$;
-COMMENT ON FUNCTION worker_drop_distributed_table_metadata_only(table_oid oid)
-    IS 'drops the metadata of the given table oid';
 -- Here we keep track of partitioned tables that exists before Citus 11
 -- where we need to call fix_all_partition_shard_index_names() before
 -- metadata is synced. Note that after citus-11, we automatically

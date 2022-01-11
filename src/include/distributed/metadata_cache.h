@@ -211,7 +211,7 @@ extern bool HasAnyNodes(void);
 extern HTAB * GetWorkerNodeHash(void);
 extern WorkerNode * LookupNodeByNodeId(uint32 nodeId);
 extern WorkerNode * LookupNodeByNodeIdOrError(uint32 nodeId);
-extern WorkerNode * LookupNodeForGroup(int32 groupId, bool checkExistence);
+extern WorkerNode * LookupNodeForGroup(int32 groupId);
 
 /* namespace oids */
 extern Oid CitusCatalogNamespaceId(void);

@@ -77,8 +77,6 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 #define DELETE_ALL_PARTITIONS "TRUNCATE pg_dist_partition CASCADE"
 #define REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND \
 	"SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition"
-#define REMOVE_ALL_CLUSTERED_TABLES_METADATA_ONLY_COMMAND \
-	"SELECT worker_drop_distributed_table_metadata_only(logicalrelid::oid) FROM pg_dist_partition"
 #define REMOVE_ALL_CITUS_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"
 #define BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \

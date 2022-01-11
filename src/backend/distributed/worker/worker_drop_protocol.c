@@ -35,7 +35,6 @@
 
 PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 PG_FUNCTION_INFO_V1(worker_drop_distributed_table_only);
-PG_FUNCTION_INFO_V1(worker_drop_distributed_table_metadata_only);
 PG_FUNCTION_INFO_V1(worker_drop_sequence_dependency);
 
 
@@ -230,49 +229,6 @@ worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
 		performDeletion(&distributedTableObject, DROP_CASCADE,
 						PERFORM_DELETION_INTERNAL);
 	}
-
-	PG_RETURN_VOID();
-}
-
-
-/*
- * worker_drop_distributed_table_metadata_only removes the associated rows from pg_dist_partition,
- * pg_dist_shard and pg_dist_placement for the given relation.
- */
-Datum
-worker_drop_distributed_table_metadata_only(PG_FUNCTION_ARGS)
-{
-	CheckCitusVersion(ERROR);
-
-	Oid relationId = PG_GETARG_OID(0);
-
-	List *shardList = LoadShardList(relationId);
-
-	/* iterate over shardList to delete the corresponding rows */
-	uint64 *shardIdPointer = NULL;
-	foreach_ptr(shardIdPointer, shardList)
-	{
-		uint64 shardId = *shardIdPointer;
-
-		List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
-		if (shardPlacementList == NULL)
-		{
-			ereport(WARNING, (errmsg("placement for relation with oid %d does not exist, skipping", relationId)));
-		}
-
-		ShardPlacement *placement = NULL;
-		foreach_ptr(placement, shardPlacementList)
-		{
-			/* delete the row from pg_dist_placement */
-			DeleteShardPlacementRow(placement->placementId);
-		}
-
-		/* delete the row from pg_dist_shard */
-		DeleteShardRow(shardId);
-	}
-
-	/* delete the row from pg_dist_partition */
-	DeletePartitionRow(relationId);
 
 	PG_RETURN_VOID();
 }
