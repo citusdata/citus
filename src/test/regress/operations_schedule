@@ -2,9 +2,7 @@ test: multi_test_helpers multi_test_helpers_superuser
 test: multi_cluster_management
 test: multi_test_catalog_views
 test: shard_rebalancer_unit
-test: turn_mx_off
 test: shard_rebalancer
-test: turn_mx_on
 test: foreign_key_to_reference_shard_rebalance
 test: multi_move_mx
 test: shard_move_deferred_delete
