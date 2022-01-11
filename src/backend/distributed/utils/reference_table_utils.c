@@ -330,7 +330,8 @@ upgrade_to_reference_table(PG_FUNCTION_ARGS)
 /*
  * ReplicateShardToNode function replicates given shard to the given worker node
  * in a separate transaction. If the worker already has
- * a replica of the shard this is a no-op.
+ * a replica of the shard this is a no-op. This function also modifies metadata
+ * by inserting/updating related rows in pg_dist_placement.
  *
  * IMPORTANT: This should only be used to replicate shards of a reference
  * table.
@@ -550,8 +551,6 @@ ReferenceTableReplicationFactor(void)
  * table to update the replication factor column when necessary. This function
  * skips reference tables if that node already has healthy placement of that
  * reference table to prevent unnecessary data transfer.
- *
- * TODO: Make is static and updatr comment
  */
 void
 ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
