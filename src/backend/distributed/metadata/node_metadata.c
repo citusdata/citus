@@ -695,7 +695,7 @@ SetUpObjectMetadata(WorkerNode *workerNode)
 			char *truncateTriggerCreateCommand =
 				TruncateTriggerCreateCommand(clusteredTableId);
 			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-												truncateTriggerCreateCommand);
+												  truncateTriggerCreateCommand);
 		}
 
 		/* add the pg_dist_shard{,placement} entries */
@@ -1225,7 +1225,7 @@ ActivateNode(char *nodeName, int nodePort)
 		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
 								 BoolGetDatum(isActive));
 
-	// TODO: Once all tests will be enabled for MX, we can remove sync by default check
+	/* TODO: Once all tests will be enabled for MX, we can remove sync by default check */
 	bool syncMetadata = EnableMetadataSyncByDefault && NodeIsPrimary(workerNode);
 
 	if (syncMetadata)

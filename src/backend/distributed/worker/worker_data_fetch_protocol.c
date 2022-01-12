@@ -474,14 +474,15 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	RangeVar *sequenceRange = makeRangeVar(sequenceSchema, sequenceName, -1);
 
 	Oid sequenceRelationId = RangeVarGetRelid(sequenceRange, AccessShareLock, true);
-											  
+
 	if (sequenceRelationId != InvalidOid)
 	{
 		Form_pg_sequence pgSequenceForm = pg_get_sequencedef(sequenceRelationId);
 		if (pgSequenceForm->seqtypid != sequenceTypeId)
 		{
 			StringInfo dropSequenceString = makeStringInfo();
-			char *qualifiedSequenceName = quote_qualified_identifier(sequenceSchema, sequenceName);
+			char *qualifiedSequenceName = quote_qualified_identifier(sequenceSchema,
+																	 sequenceName);
 			appendStringInfoString(dropSequenceString, "DROP SEQUENCE ");
 			appendStringInfoString(dropSequenceString, qualifiedSequenceName);
 			appendStringInfoString(dropSequenceString, ";");
@@ -495,7 +496,7 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	CommandCounterIncrement();
 
 	sequenceRelationId = RangeVarGetRelid(createSequenceStatement->sequence,
-											  AccessShareLock, false);
+										  AccessShareLock, false);
 	Assert(sequenceRelationId != InvalidOid);
 
 	AlterSequenceMinMax(sequenceRelationId, sequenceSchema, sequenceName, sequenceTypeId);

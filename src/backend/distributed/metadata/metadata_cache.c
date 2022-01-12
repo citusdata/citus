@@ -955,7 +955,7 @@ LookupNodeForGroup(int32 groupId)
 	if (!foundAnyNodes)
 	{
 		ereport(ERROR, (errmsg("there is a shard placement in node group %d but "
-					"there are no nodes in that group", groupId)));
+							   "there are no nodes in that group", groupId)));
 	}
 
 	switch (ReadFromSecondaries)
