@@ -87,6 +87,11 @@ BEGIN;
 	SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 COMMIT;
 
+-- After adding and removing non-metadata synced worker node, shell table
+-- can stay on the remote node. So we are deleting it manually.
+-- TODO: Update the test once sync by default guc will be removed
+SELECT run_command_on_workers($$DROP TABLE single_node.test$$);
+
 -- we don't need this node anymore
 SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
 

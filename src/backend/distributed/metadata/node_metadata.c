@@ -110,9 +110,9 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SetUpObjectMetadata(WorkerNode *workerNode);
-static void AdjustSequenceLimits(WorkerNode *workerNode);
 static void ClearDistributedObjectsFromNode(WorkerNode *workerNode);
 static void ClearDistributedTablesFromNode(WorkerNode *workerNode);
+static void UpdatePgDistLocalGroupOnNode(WorkerNode *workerNode);
 static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
 static void SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode);
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -246,12 +246,6 @@ citus_add_node(PG_FUNCTION_ARGS)
 	NodeMetadata nodeMetadata = DefaultNodeMetadata();
 	bool nodeAlreadyExists = false;
 	nodeMetadata.groupId = PG_GETARG_INT32(2);
-
-	if (!EnableDependencyCreation)
-	{
-		ereport(ERROR, (errmsg("citus.enable_object_propagation must be on to "
-							   "add node")));
-	}
 
 	/*
 	 * During tests this function is called before nodeRole and nodeCluster have been
@@ -735,49 +729,6 @@ SetUpObjectMetadata(WorkerNode *workerNode)
 
 
 /*
- * AdjustSequenceLimits adjusts the limits of sequences on the given node
- */
-static void
-AdjustSequenceLimits(WorkerNode *workerNode)
-{
-	List *distributedTableList = CitusTableList();
-	List *propagatedTableList = NIL;
-	List *metadataSnapshotCommandList = NIL;
-
-	/* create the list of tables whose metadata will be created */
-	CitusTableCacheEntry *cacheEntry = NULL;
-	foreach_ptr(cacheEntry, distributedTableList)
-	{
-		if (ShouldSyncTableMetadata(cacheEntry->relationId))
-		{
-			propagatedTableList = lappend(propagatedTableList, cacheEntry);
-		}
-	}
-
-	/* after all tables are created, create the metadata */
-	foreach_ptr(cacheEntry, propagatedTableList)
-	{
-		Oid relationId = cacheEntry->relationId;
-
-		List *workerSequenceDDLCommands = SequenceDDLCommandsForTable(relationId);
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  workerSequenceDDLCommands);
-	}
-
-	metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION,
-										metadataSnapshotCommandList);
-	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-										  ENABLE_DDL_PROPAGATION);
-
-	char *currentUser = CurrentUserName();
-	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
-															workerNode->workerPort,
-															currentUser,
-															metadataSnapshotCommandList);
-}
-
-
-/*
  * DistributedObjectMetadataSyncCommandList returns the necessary commands to create
  * pg_dist_object entries on the new node.
  */
@@ -867,6 +818,24 @@ DistributedObjectMetadataSyncCommandList(void)
 
 
 /*
+ * UpdatePgDistLocalGroupOnNode updates the pg_dist_local_group on the given node
+ */
+static void
+UpdatePgDistLocalGroupOnNode(WorkerNode *workerNode)
+{
+	/* generate and add the local group id's update query */
+	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
+
+	List *localGroupIdUpdateCommandList = list_make1(localGroupIdUpdateCommand);
+
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
+															workerNode->workerPort,
+															CitusExtensionOwnerName(),
+															localGroupIdUpdateCommandList);
+}
+
+
+/*
  * ClearDistributedTablesFromNode clear (shell) distributed tables from the given node.
  */
 static void
@@ -951,6 +920,7 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 		{
 			ClearDistributedTablesFromNode(newWorkerNode);
 			PropagateNodeWideObjects(newWorkerNode);
+			UpdatePgDistLocalGroupOnNode(newWorkerNode);
 			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
 										   newWorkerNode->workerPort);
 			SetUpMultipleDistributedTableIntegrations(newWorkerNode);
@@ -1034,12 +1004,6 @@ citus_activate_node(PG_FUNCTION_ARGS)
 {
 	text *nodeNameText = PG_GETARG_TEXT_P(0);
 	int32 nodePort = PG_GETARG_INT32(1);
-
-	if (!EnableDependencyCreation)
-	{
-		ereport(ERROR, (errmsg("citus.enable_object_propagation must be on to "
-							   "activate node")));
-	}
 
 	WorkerNode *workerNode = ModifiableWorkerNode(text_to_cstring(nodeNameText),
 												  nodePort);
@@ -1222,6 +1186,12 @@ ActivateNode(char *nodeName, int nodePort)
 	 */
 	EnsureSuperUser();
 
+	if (!EnableDependencyCreation)
+	{
+		ereport(ERROR, (errmsg("citus.enable_object_propagation must be on to "
+							   "add an active node")));
+	}
+
 	/* take an exclusive lock on pg_dist_node to serialize pg_dist_node changes */
 	LockRelationOid(DistNodeRelationId(), ExclusiveLock);
 
@@ -1255,6 +1225,7 @@ ActivateNode(char *nodeName, int nodePort)
 		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
 								 BoolGetDatum(isActive));
 
+	// TODO: Once all tests will be enabled for MX, we can remove sync by default check
 	bool syncMetadata = EnableMetadataSyncByDefault && NodeIsPrimary(workerNode);
 
 	if (syncMetadata)
@@ -1273,11 +1244,10 @@ ActivateNode(char *nodeName, int nodePort)
 	{
 		StartMetadataSyncToNode(nodeName, nodePort);
 
-		if (!NodeIsCoordinator(workerNode) && NodeIsPrimary(workerNode))
+		if (!NodeIsCoordinator(workerNode))
 		{
 			ClearDistributedObjectsFromNode(workerNode);
 			SetUpObjectMetadata(workerNode);
-			AdjustSequenceLimits(workerNode);
 		}
 	}
 

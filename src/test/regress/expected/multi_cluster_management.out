@@ -256,7 +256,6 @@ SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_
 ERROR:  permission denied for function master_update_node
 -- try to manipulate node metadata via privileged user
 SET ROLE node_metadata_user;
-SET citus.enable_object_propagation TO off; -- prevent master activate node to actually connect for this test
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 ERROR:  operation is not allowed
 HINT:  Run the command with a superuser.
@@ -474,8 +473,7 @@ SELECT run_command_on_workers('DELETE FROM pg_dist_node WHERE nodeport=' || :'wo
 (1 row)
 
 SELECT * FROM cluster_management_test;
-NOTICE:  there is a shard placement in node group 6 but there are no nodes in that group
-ERROR:  no active placements were found for shard 1220001
+ERROR:  there is a shard placement in node group 6 but there are no nodes in that group
 -- clean-up
 SELECT * INTO old_placements FROM pg_dist_placement WHERE groupid = :worker_2_group;
 DELETE FROM pg_dist_placement WHERE groupid = :worker_2_group;

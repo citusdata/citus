@@ -467,7 +467,6 @@ SELECT shardid, nodename, nodeport
 
 -- disable the first node
 SET client_min_messages TO ERROR;
-DROP FOREIGN TABLE foreign_table_to_distribute;
 \set VERBOSITY terse
 SELECT master_disable_node('localhost', :worker_1_port);
 SELECT public.wait_until_metadata_sync(30000);

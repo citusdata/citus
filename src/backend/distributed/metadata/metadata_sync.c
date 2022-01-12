@@ -86,7 +86,6 @@ char *EnableManualMetadataChangesForUser = "";
 static List * GetDistributedTableMetadataEvents(Oid relationId);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
-static char * LocalGroupIdUpdateCommand(int32 groupId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
@@ -1188,7 +1187,7 @@ PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
  * LocalGroupIdUpdateCommand creates the SQL command required to set the local group id
  * of a worker and returns the command in a string.
  */
-static char *
+char *
 LocalGroupIdUpdateCommand(int32 groupId)
 {
 	StringInfo updateCommand = makeStringInfo();

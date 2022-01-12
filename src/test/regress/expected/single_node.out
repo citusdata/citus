@@ -164,6 +164,15 @@ HINT:  Use SELECT rebalance_table_shards(); to balance shards data between worke
 (1 row)
 
 COMMIT;
+-- After adding and removing non-metadata synced worker node, shell table
+-- can stay on the remote node. So we are deleting it manually.
+-- TODO: Update the test once sync by default guc will be removed
+SELECT run_command_on_workers($$DROP TABLE single_node.test$$);
+      run_command_on_workers      
+----------------------------------
+ (localhost,57637,t,"DROP TABLE")
+(1 row)
+
 -- we don't need this node anymore
 SELECT 1 FROM master_remove_node('localhost', :worker_1_port);
  ?column?

@@ -35,6 +35,7 @@
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -45,6 +46,7 @@
 
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_relation.h"
 #include "storage/lmgr.h"
@@ -461,18 +463,38 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 						" SEQUENCE command string")));
 	}
 
+	/*
+	 * If sequence with the same name exist for different type, it must have been
+	 * stayed on that node after a rollbacked create_distributed_table operation.
+	 * We must drop it first to create the sequence with the correct type.
+	 */
+	CreateSeqStmt *createSequenceStatement = (CreateSeqStmt *) commandNode;
+	char *sequenceName = createSequenceStatement->sequence->relname;
+	char *sequenceSchema = createSequenceStatement->sequence->schemaname;
+	RangeVar *sequenceRange = makeRangeVar(sequenceSchema, sequenceName, -1);
+
+	Oid sequenceRelationId = RangeVarGetRelid(sequenceRange, AccessShareLock, true);
+											  
+	if (sequenceRelationId != InvalidOid)
+	{
+		Form_pg_sequence pgSequenceForm = pg_get_sequencedef(sequenceRelationId);
+		if (pgSequenceForm->seqtypid != sequenceTypeId)
+		{
+			StringInfo dropSequenceString = makeStringInfo();
+			char *qualifiedSequenceName = quote_qualified_identifier(sequenceSchema, sequenceName);
+			appendStringInfoString(dropSequenceString, "DROP SEQUENCE ");
+			appendStringInfoString(dropSequenceString, qualifiedSequenceName);
+			appendStringInfoString(dropSequenceString, ";");
+			ExecuteQueryViaSPI(dropSequenceString->data, SPI_OK_UTILITY);
+		}
+	}
+
 	/* run the CREATE SEQUENCE command */
 	ProcessUtilityParseTree(commandNode, commandString, PROCESS_UTILITY_QUERY, NULL,
 							None_Receiver, NULL);
 	CommandCounterIncrement();
 
-	CreateSeqStmt *createSequenceStatement = (CreateSeqStmt *) commandNode;
-
-	char *sequenceName = createSequenceStatement->sequence->relname;
-	char *sequenceSchema = createSequenceStatement->sequence->schemaname;
-	createSequenceStatement = (CreateSeqStmt *) commandNode;
-
-	Oid sequenceRelationId = RangeVarGetRelid(createSequenceStatement->sequence,
+	sequenceRelationId = RangeVarGetRelid(createSequenceStatement->sequence,
 											  AccessShareLock, false);
 	Assert(sequenceRelationId != InvalidOid);
 

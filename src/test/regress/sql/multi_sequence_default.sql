@@ -55,9 +55,6 @@ ALTER SEQUENCE seq_0_local_table AS bigint;
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE bigint;
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE smallint;
 
--- TODO: Sequences stay there after rollback!
--- TODO: Talk with Onder about adjusting sequence limit
-
 ALTER TABLE seq_test_0_local_table ALTER COLUMN z TYPE bigint;
 ALTER TABLE seq_test_0_local_table ALTER COLUMN z TYPE smallint;
 

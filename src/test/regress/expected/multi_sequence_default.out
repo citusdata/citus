@@ -130,72 +130,6 @@ ALTER SEQUENCE seq_0 AS bigint;
 ERROR:  Altering a distributed sequence is currently not supported.
 ALTER SEQUENCE seq_0_local_table AS bigint;
 ERROR:  Altering a distributed sequence is currently not supported.
--- we can change other things like increment
--- if metadata is not synced to workers
-BEGIN;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-NOTICE:  dropping metadata on the node (localhost,57637)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-NOTICE:  dropping metadata on the node (localhost,57638)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-CREATE SEQUENCE seq_13;
-CREATE SEQUENCE seq_13_local_table;
-CREATE TABLE seq_test_13 (x int, y int);
-CREATE TABLE seq_test_13_local_table (x int, y int);
-SELECT create_distributed_table('seq_test_13','x');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT citus_add_local_table_to_metadata('seq_test_13_local_table');
- citus_add_local_table_to_metadata
----------------------------------------------------------------------
-
-(1 row)
-
-ALTER TABLE seq_test_13 ADD COLUMN z int DEFAULT nextval('seq_13');
-ALTER TABLE seq_test_13_local_table ADD COLUMN z int DEFAULT nextval('seq_13_local_table');
-ALTER SEQUENCE seq_13 INCREMENT BY 2;
-ALTER SEQUENCE seq_13_local_table INCREMENT BY 2;
-\d seq_13
-                  Sequence "sequence_default.seq_13"
-  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
----------------------------------------------------------------------
- integer |     1 |       1 | 2147483647 |         2 | no      |     1
-
-\d seq_13_local_table
-            Sequence "sequence_default.seq_13_local_table"
-  Type   | Start | Minimum |  Maximum   | Increment | Cycles? | Cache
----------------------------------------------------------------------
- integer |     1 |       1 | 2147483647 |         2 | no      |     1
-
--- check that we can add serial pseudo-type columns
--- when metadata is not synced to workers
-TRUNCATE seq_test_0;
-ALTER TABLE seq_test_0 ADD COLUMN w00 smallserial;
-ALTER TABLE seq_test_0 ADD COLUMN w01 serial2;
-ALTER TABLE seq_test_0 ADD COLUMN w10 serial;
-ALTER TABLE seq_test_0 ADD COLUMN w11 serial4;
-ALTER TABLE seq_test_0 ADD COLUMN w20 bigserial;
-ALTER TABLE seq_test_0 ADD COLUMN w21 serial8;
-TRUNCATE seq_test_0_local_table;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w00 smallserial;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w01 serial2;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w10 serial;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w11 serial4;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w20 bigserial;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w21 serial8;
-ROLLBACK;
 -- check alter column type precaution
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE bigint;
 ERROR:  cannot execute ALTER COLUMN TYPE .. command because the column involves a default coming from a sequence
@@ -216,12 +150,6 @@ SELECT create_distributed_table('seq_test_4','x');
 
 CREATE SEQUENCE seq_4;
 ALTER TABLE seq_test_4 ADD COLUMN a bigint DEFAULT nextval('seq_4');
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 DROP SEQUENCE seq_4 CASCADE;
 NOTICE:  drop cascades to default value for column a of table seq_test_4
 TRUNCATE seq_test_4;
@@ -770,10 +698,10 @@ SELECT create_reference_table('seq_test_10');
 INSERT INTO seq_test_10 VALUES (0);
 CREATE TABLE seq_test_11 (col0 int, col1 bigint DEFAULT nextval('seq_11'::text));
 -- works but doesn't create seq_11 in the workers
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT citus_activate_node('localhost', :worker_1_port);
+ citus_activate_node 
 ---------------------------------------------------------------------
-
+                   1
 (1 row)
 
 -- works because there is no dependency created between seq_11 and seq_test_10
@@ -812,10 +740,10 @@ SELECT create_distributed_table('seq_test_12', 'col0');
 
 (1 row)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT citus_activate_node('localhost', :worker_1_port);
+ citus_activate_node
 ---------------------------------------------------------------------
-
+                   1
 (1 row)
 
 INSERT INTO seq_test_12 VALUES ('hello0') RETURNING *;
@@ -918,10 +846,10 @@ ERROR:  nextval: reached maximum value of sequence "seq_14" (32767)
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT citus_activate_node('localhost', :worker_1_port);
+ citus_activate_node
 ---------------------------------------------------------------------
-
+                   1
 (1 row)
 
 SELECT undistribute_table('seq_test_12');
