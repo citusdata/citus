@@ -82,7 +82,7 @@
 /* managed via a GUC */
 char *EnableManualMetadataChangesForUser = "";
 
-
+static void EnsureSequentialModeMetadataOperations(void);
 static List * GetDistributedTableMetadataEvents(Oid relationId);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
@@ -101,6 +101,7 @@ static GrantStmt * GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 													  char *permission,
 													  bool withGrantOption);
 
+static void SetLocalEnableDependencyCreation(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);

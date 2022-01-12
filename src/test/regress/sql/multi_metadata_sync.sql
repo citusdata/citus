@@ -6,8 +6,6 @@
 -- metadata changes to MX tables.
 
 -- Turn metadata sync off at first
-\c - - - :master_port
-
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 
