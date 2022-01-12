@@ -251,24 +251,6 @@ SELECT count(*) > 0 FROM pg_dist_node;
  f
 (1 row)
 
-SELECT count(*) > 0 FROM pg_dist_shard;
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
 SELECT * FROM distributed_table_1;
@@ -286,24 +268,6 @@ BEGIN;
 COMMIT;
 \c - - - :worker_1_port
 SELECT count(*) > 0 FROM pg_dist_node;
- ?column?
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT count(*) > 0 FROM pg_dist_shard;
- ?column?
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
- ?column?
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
  ?column?
 ---------------------------------------------------------------------
  t
@@ -455,24 +419,6 @@ NOTICE:  dropping metadata on the node (localhost,57637)
 COMMIT;
 \c - - - :worker_1_port
 SELECT count(*) > 0 FROM pg_dist_node;
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
-SELECT count(*) > 0 FROM pg_dist_shard;
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
  ?column?
 ---------------------------------------------------------------------
  f
