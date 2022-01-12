@@ -23,6 +23,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "miscadmin.h"
 #include "storage/lmgr.h"
 #include "utils/lsyscache.h"
 #include "miscadmin.h"
