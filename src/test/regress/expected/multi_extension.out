@@ -508,6 +508,7 @@ NOTICE:  create_citus_local_table is deprecated in favour of citus_add_local_tab
 
 (1 row)
 
+  RESET citus.enable_object_propagation;
   -- downgrade from 9.5-1 to 9.4-1 should fail as we have a citus local table
   ALTER EXTENSION citus UPDATE TO '9.4-1';
 ERROR:  citus local tables are introduced in Citus 9.5
