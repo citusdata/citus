@@ -4302,7 +4302,7 @@ WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%
 
 -- should work properly - no names clashes
 SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node 
+ citus_activate_node
 ---------------------------------------------------------------------
                    1
 (1 row)
