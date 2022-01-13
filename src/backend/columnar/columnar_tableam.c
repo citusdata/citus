@@ -2095,7 +2095,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		IndexStmt *indexStmt = (IndexStmt *) parsetree;
 
 		Relation rel = relation_openrv(indexStmt->relation,
-		indexStmt->concurrent ? ShareUpdateExclusiveLock : ShareLock);
+									   indexStmt->concurrent ? ShareUpdateExclusiveLock :
+									   ShareLock);
 
 		if (rel->rd_tableam == GetColumnarTableAmRoutine())
 		{

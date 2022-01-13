@@ -53,7 +53,7 @@ columnar_store_memory_stats(PG_FUNCTION_ARGS)
 					   INT8OID, -1, 0);
 	TupleDescInitEntry(tupleDescriptor, (AttrNumber) 3, "WriteStateContext",
 					   INT8OID, -1, 0);
-	
+
 	tupleDescriptor = BlessTupleDesc(tupleDescriptor);
 
 	MemoryContextCounters transactionCounters = { 0 };
@@ -69,7 +69,7 @@ columnar_store_memory_stats(PG_FUNCTION_ARGS)
 		Int64GetDatum(transactionCounters.totalspace),
 		Int64GetDatum(writeStateCounters.totalspace)
 	};
-	
+
 	HeapTuple tuple = heap_form_tuple(tupleDescriptor, values, nulls);
 
 	PG_RETURN_DATUM(HeapTupleGetDatum(tuple));
