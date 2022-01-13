@@ -75,8 +75,8 @@ $$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION columnar_store_memory_stats(
                   OUT TopMemoryContext BIGINT,
-		  OUT TopTransactionContext BIGINT,
-		  OUT WriteStateContext BIGINT)
+		          OUT TopTransactionContext BIGINT,
+		          OUT WriteStateContext BIGINT)
     RETURNS RECORD
     LANGUAGE C STRICT VOLATILE
     AS 'citus', $$columnar_store_memory_stats$$;
