@@ -32,20 +32,20 @@ SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to truncate pg_dist_node in the worker
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").cancel(' || :pid || ')');
-SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").kill()');
-SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
 -- Failure to populate pg_dist_node in the worker
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT INTO pg_dist_node").cancel(' || :pid || ')');
-SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 SELECT citus.mitmproxy('conn.onQuery(query="^INSERT INTO pg_dist_node").kill()');
-SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
 -- Verify that coordinator knows worker does not have valid metadata
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
 
--- Verify we can sync metadata after unsuccessful attempts
+-- Verify we can activate node after unsuccessful attempts
 SELECT citus.mitmproxy('conn.allow()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
@@ -70,12 +70,6 @@ SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET groupid").kill()');
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
--- Failure to drop all tables in pg_dist_partition
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").cancel(' || :pid || ')');
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").kill()');
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
-
 -- Failure to truncate pg_dist_node in the worker
 SELECT citus.mitmproxy('conn.onQuery(query="^TRUNCATE pg_dist_node CASCADE").cancel(' || :pid || ')');
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
@@ -87,7 +81,7 @@ SELECT count(*) FROM pg_dist_node;
 
 \c - - - :master_port
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
--- Verify we can drop metadata after unsuccessful attempts
+-- Verify we can stop metadata sync after unsuccessful attempts
 SELECT citus.mitmproxy('conn.allow()');
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
@@ -98,7 +92,7 @@ SELECT count(*) FROM pg_dist_node;
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
 
 -- turn metadata sync back on
-SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_2_proxy_port);
 
 SET SEARCH_PATH = mx_metadata_sync;
 DROP TABLE t1;
