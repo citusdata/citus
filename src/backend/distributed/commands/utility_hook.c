@@ -1201,6 +1201,15 @@ ExecuteDistributedDDLJob(DDLJob *ddlJob)
 			 * snapshots via adaptive executor.
 			 */
 			set_indexsafe_procflags();
+
+			/*
+			 * We should not have any CREATE INDEX commands go through the
+			 * local backend as we signaled other backends that this backend
+			 * is executing a "safe" index command (PROC_IN_SAFE_IC), which
+			 * is NOT true, we are only faking postgres based on the reasoning
+			 * given above.
+			 */
+			Assert(localExecutionSupported == false);
 #endif
 		}
 
