@@ -164,7 +164,8 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 \c - - - :worker_2_port
-SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx\_%table%';
+-- Since stop_metadata_sync_to_node deletes only pg_dist_node entries,
+-- it is expected to observe tuplels in pg_dist_partition
 SELECT count(*) FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx\_%table%';
 SELECT count(*) FROM pg_dist_node;
 \c - - - :worker_1_port
