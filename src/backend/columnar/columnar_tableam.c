@@ -54,7 +54,6 @@
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
-#include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
@@ -2098,7 +2097,8 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		IndexStmt *indexStmt = (IndexStmt *) parsetree;
 
 		Relation rel = relation_openrv(indexStmt->relation,
-									   GetCreateIndexRelationLockMode(indexStmt));
+		indexStmt->concurrent ? ShareUpdateExclusiveLock : ShareLock);
+
 		if (rel->rd_tableam == GetColumnarTableAmRoutine())
 		{
 			CheckCitusVersion(ERROR);
