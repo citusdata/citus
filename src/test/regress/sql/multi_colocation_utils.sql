@@ -1,6 +1,6 @@
 
 SET citus.next_shard_id TO 1300000;
-ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 4;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 7;
 
 -- ===================================================================
 -- create test utility function
