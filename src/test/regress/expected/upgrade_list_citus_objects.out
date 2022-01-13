@@ -204,6 +204,7 @@ ORDER BY 1;
  function worker_create_schema(bigint,text)
  function worker_create_truncate_trigger(regclass)
  function worker_drop_distributed_table(text)
+ function worker_drop_distributed_table_only(text)
  function worker_drop_sequence_dependency(text)
  function worker_fetch_foreign_file(text,text,bigint,text[],integer[])
  function worker_fetch_partition_file(bigint,integer,integer,integer,text,integer)
@@ -264,5 +265,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(248 rows)
+(249 rows)
 
