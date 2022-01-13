@@ -4304,7 +4304,7 @@ WHERE schemaname = 'partitioning_schema' AND tablename ilike '%part_table_with_%
 SELECT citus_activate_node('localhost', :worker_1_port);
  citus_activate_node
 ---------------------------------------------------------------------
-                   16
+                   1
 (1 row)
 
 \c - - - :worker_1_port
