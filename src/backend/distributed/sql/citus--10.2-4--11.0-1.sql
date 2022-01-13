@@ -9,6 +9,7 @@
 #include "udfs/citus_internal_add_object_metadata/11.0-1.sql"
 #include "udfs/citus_run_local_command/11.0-1.sql"
 #include "udfs/worker_drop_sequence_dependency/11.0-1.sql"
+#include "udfs/worker_drop_distributed_table_only/11.0-1.sql"
 
 
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
@@ -32,13 +33,6 @@ BEGIN
 	END IF;
 END;
 $$;
-
-CREATE FUNCTION worker_drop_distributed_table_only(table_name text)
-    RETURNS VOID
-    LANGUAGE C STRICT
-    AS 'MODULE_PATHNAME', $$worker_drop_distributed_table_only$$;
-COMMENT ON FUNCTION worker_drop_distributed_table_only(table_name text)
-    IS 'drop the distributed table only without the metadata';
 
 -- Here we keep track of partitioned tables that exists before Citus 11
 -- where we need to call fix_all_partition_shard_index_names() before

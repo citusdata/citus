@@ -46,3 +46,4 @@ DROP FUNCTION pg_catalog.citus_check_cluster_node_health ();
 DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer);
 DROP FUNCTION pg_catalog.citus_run_local_command(text);
 DROP FUNCTION pg_catalog.worker_drop_sequence_dependency(text);
+DROP FUNCTION pg_catalog.worker_drop_distributed_table_only(table_name text);
