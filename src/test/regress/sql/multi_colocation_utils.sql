@@ -178,10 +178,8 @@ UPDATE pg_dist_partition SET repmodel='c' WHERE logicalrelid='table2_groupB'::re
 SET citus.shard_replication_factor to DEFAULT;
 
 -- change partition column type
-set citus.log_remote_commands to true;
 CREATE TABLE table1_groupC ( id text );
 SELECT create_distributed_table('table1_groupC', 'id');
-reset citus.log_remote_commands;
 
 CREATE TABLE table2_groupC ( id text );
 SELECT create_distributed_table('table2_groupC', 'id');
@@ -549,8 +547,7 @@ DROP TABLE range_table;
 DROP TABLE none;
 DROP TABLE ref;
 DROP TABLE local_table;
-DROP FOREIGN TABLE table3_groupD CASCADE;
 
--- Resync remote nodes as well
+-- Reactivate remote nodes as well
 SELECT citus_activate_node('localhost', :worker_1_port);
 SELECT citus_activate_node('localhost', :worker_2_port);
