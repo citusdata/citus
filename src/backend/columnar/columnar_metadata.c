@@ -42,7 +42,6 @@
 #include "commands/defrem.h"
 #include "commands/sequence.h"
 #include "commands/trigger.h"
-#include "distributed/metadata_cache.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
