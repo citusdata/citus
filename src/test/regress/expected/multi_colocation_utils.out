@@ -1,5 +1,7 @@
 SET citus.next_shard_id TO 1300000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 4;
+-- Delete orphaned entries from pg_dist_colocation
+DELETE FROM pg_dist_colocation where colocationid = 5 or colocationid = 6;
 -- ===================================================================
 -- create test utility function
 -- ===================================================================

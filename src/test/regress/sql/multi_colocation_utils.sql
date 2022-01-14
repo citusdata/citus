@@ -1,6 +1,9 @@
 
 SET citus.next_shard_id TO 1300000;
-ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 7;
+ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 4;
+
+-- Delete orphaned entries from pg_dist_colocation
+DELETE FROM pg_dist_colocation where colocationid = 5 or colocationid = 6;
 
 -- ===================================================================
 -- create test utility function
@@ -547,7 +550,3 @@ DROP TABLE range_table;
 DROP TABLE none;
 DROP TABLE ref;
 DROP TABLE local_table;
-
--- Reactivate remote nodes as well
-SELECT citus_activate_node('localhost', :worker_1_port);
-SELECT citus_activate_node('localhost', :worker_2_port);
