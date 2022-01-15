@@ -1,23 +1,12 @@
 setup
 {
-  SELECT citus_internal.replace_isolation_tester_func();
-  SELECT citus_internal.refresh_isolation_tester_prepared_statement();
-
-  SELECT master_add_node('localhost', 57636);
-
-  CREATE TABLE ref_table(a int primary key);
-  SELECT create_reference_table('ref_table');
-  INSERT INTO ref_table VALUES (1), (3), (5), (7);
-
-  CREATE TABLE dist_table(a int, b int);
-  SELECT create_distributed_table('dist_table', 'a');
+  //SELECT citus_internal.replace_isolation_tester_func();
+  //SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 }
 
 teardown
 {
-  SELECT citus_internal.restore_isolation_tester_func();
-  DROP TABLE ref_table, dist_table;
-  SELECT master_remove_node('localhost', 57636);
+  // SELECT citus_internal.restore_isolation_tester_func();
 }
 
 session "s1"
@@ -123,7 +112,7 @@ step "deadlock-checker-call"
 
 // verify that locks on the placement of the reference table on the coordinator is
 // taken into account when looking for distributed deadlocks
-permutation "s1-begin" "s2-begin" "s1-update-dist-table" "s2-lock-ref-table-placement-on-coordinator" "s1-lock-ref-table-placement-on-coordinator" "s2-update-dist-table" "deadlock-checker-call" "s1-end" "s2-end"
+// permutation "s1-begin" "s2-begin" "s1-update-dist-table" "s2-lock-ref-table-placement-on-coordinator" "s1-lock-ref-table-placement-on-coordinator" "s2-update-dist-table" "deadlock-checker-call" "s1-end" "s2-end"
 
 // verify that *_dist_stat_activity() functions return the correct result when query
 // has a task on the coordinator.
