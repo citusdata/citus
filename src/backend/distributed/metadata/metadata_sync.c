@@ -82,6 +82,7 @@
 /* managed via a GUC */
 char *EnableManualMetadataChangesForUser = "";
 
+
 static void EnsureSequentialModeMetadataOperations(void);
 static List * GetDistributedTableMetadataEvents(Oid relationId);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
@@ -100,7 +101,6 @@ static GrantStmt * GenerateGrantOnSchemaStmtForRights(Oid roleOid,
 													  Oid schemaOid,
 													  char *permission,
 													  bool withGrantOption);
-
 static void SetLocalEnableDependencyCreation(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
@@ -1917,6 +1917,56 @@ CreateTableMetadataOnWorkers(Oid relationId)
 	{
 		SendCommandToWorkersWithMetadata(command);
 	}
+}
+
+
+/*
+ * DetachPartitionCommandList returns list of DETACH commands to detach partitions
+ * of all distributed tables. This function is used for detaching partitions in MX
+ * workers before DROPping distributed partitioned tables in them. Thus, we are
+ * disabling DDL propagation to the beginning of the commands (we are also enabling
+ * DDL propagation at the end of command list to swtich back to original state). As
+ * an extra step, if there are no partitions to DETACH, this function simply returns
+ * empty list to not disable/enable DDL propagation for nothing.
+ */
+List *
+DetachPartitionCommandList(void)
+{
+	List *detachPartitionCommandList = NIL;
+	List *distributedTableList = CitusTableList();
+
+	/* we iterate over all distributed partitioned tables and DETACH their partitions */
+	CitusTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
+	{
+		if (!PartitionedTable(cacheEntry->relationId))
+		{
+			continue;
+		}
+
+		List *partitionList = PartitionList(cacheEntry->relationId);
+		List *detachCommands =
+			GenerateDetachPartitionCommandRelationIdList(partitionList);
+		detachPartitionCommandList = list_concat(detachPartitionCommandList,
+												 detachCommands);
+	}
+
+	if (list_length(detachPartitionCommandList) == 0)
+	{
+		return NIL;
+	}
+
+	detachPartitionCommandList = lcons(DISABLE_DDL_PROPAGATION,
+									   detachPartitionCommandList);
+
+	/*
+	 * We probably do not need this but as an extra precaution, we are enabling
+	 * DDL propagation to switch back to original state.
+	 */
+	detachPartitionCommandList = lappend(detachPartitionCommandList,
+										 ENABLE_DDL_PROPAGATION);
+
+	return detachPartitionCommandList;
 }
 
 

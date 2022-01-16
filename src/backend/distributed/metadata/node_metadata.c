@@ -92,7 +92,6 @@ typedef struct NodeMetadata
 } NodeMetadata;
 
 /* local function forward declarations */
-static List * DetachPartitionCommandList(void);
 static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static void ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode);
@@ -1174,56 +1173,6 @@ ActivateNode(char *nodeName, int nodePort)
 	Assert(newWorkerNode->nodeId == workerNode->nodeId);
 
 	return newWorkerNode->nodeId;
-}
-
-
-/*
- * DetachPartitionCommandList returns list of DETACH commands to detach partitions
- * of all distributed tables. This function is used for detaching partitions in MX
- * workers before DROPping distributed partitioned tables in them. Thus, we are
- * disabling DDL propagation to the beginning of the commands (we are also enabling
- * DDL propagation at the end of command list to swtich back to original state). As
- * an extra step, if there are no partitions to DETACH, this function simply returns
- * empty list to not disable/enable DDL propagation for nothing.
- */
-static List *
-DetachPartitionCommandList(void)
-{
-	List *detachPartitionCommandList = NIL;
-	List *distributedTableList = CitusTableList();
-
-	/* we iterate over all distributed partitioned tables and DETACH their partitions */
-	CitusTableCacheEntry *cacheEntry = NULL;
-	foreach_ptr(cacheEntry, distributedTableList)
-	{
-		if (!PartitionedTable(cacheEntry->relationId))
-		{
-			continue;
-		}
-
-		List *partitionList = PartitionList(cacheEntry->relationId);
-		List *detachCommands =
-			GenerateDetachPartitionCommandRelationIdList(partitionList);
-		detachPartitionCommandList = list_concat(detachPartitionCommandList,
-												 detachCommands);
-	}
-
-	if (list_length(detachPartitionCommandList) == 0)
-	{
-		return NIL;
-	}
-
-	detachPartitionCommandList = lcons(DISABLE_DDL_PROPAGATION,
-									   detachPartitionCommandList);
-
-	/*
-	 * We probably do not need this but as an extra precaution, we are enabling
-	 * DDL propagation to switch back to original state.
-	 */
-	detachPartitionCommandList = lappend(detachPartitionCommandList,
-										 ENABLE_DDL_PROPAGATION);
-
-	return detachPartitionCommandList;
 }
 
 

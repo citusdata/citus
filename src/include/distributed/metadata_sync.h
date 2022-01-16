@@ -56,6 +56,7 @@ extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int sha
 extern char * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateShellTableOnWorkers(Oid relationId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
+extern List * DetachPartitionCommandList(void);
 extern BackgroundWorkerHandle * SpawnSyncMetadataToNodes(Oid database, Oid owner);
 extern void SyncMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
