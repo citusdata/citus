@@ -28,7 +28,7 @@ typedef enum
 } MetadataSyncResult;
 
 /* Functions declarations for metadata syncing */
-extern void StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort);
+extern void SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort);
 extern bool ClusterHasKnownMetadataWorkers(void);
 extern char * LocalGroupIdUpdateCommand(int32 groupId);
 extern bool ShouldSyncTableMetadata(Oid relationId);

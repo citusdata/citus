@@ -651,9 +651,12 @@ SetUpMultipleDistributedTableIntegrations(WorkerNode *workerNode)
 												multipleTableIntegrationCommandList);
 	multipleTableIntegrationCommandList = lappend(multipleTableIntegrationCommandList,
 												  ENABLE_DDL_PROPAGATION);
+
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
-															CitusExtensionOwnerName(),
+															CurrentUserName(),
 															multipleTableIntegrationCommandList);
 }
 
@@ -720,10 +723,11 @@ SetUpObjectMetadata(WorkerNode *workerNode)
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 										  ENABLE_DDL_PROPAGATION);
 
-	char *currentUser = CurrentUserName();
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
-															currentUser,
+															CurrentUserName(),
 															metadataSnapshotCommandList);
 }
 
@@ -828,9 +832,11 @@ UpdatePgDistLocalGroupOnNode(WorkerNode *workerNode)
 
 	List *localGroupIdUpdateCommandList = list_make1(localGroupIdUpdateCommand);
 
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
-															CitusExtensionOwnerName(),
+															CurrentUserName(),
 															localGroupIdUpdateCommandList);
 }
 
@@ -857,9 +863,11 @@ ClearDistributedTablesFromNode(WorkerNode *workerNode)
 													list_make1(
 														ENABLE_DDL_PROPAGATION));
 
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
 	SendMetadataCommandListToWorkerInCoordinatedTransaction(workerNode->workerName,
 															workerNode->workerPort,
-															CitusExtensionOwnerName(),
+															CurrentUserName(),
 															clearDistributedTablesCommandList);
 }
 
@@ -1242,7 +1250,7 @@ ActivateNode(char *nodeName, int nodePort)
 
 	if (syncMetadata)
 	{
-		StartMetadataSyncToNode(nodeName, nodePort);
+		SyncNodeMetadataToNode(nodeName, nodePort);
 
 		if (!NodeIsCoordinator(workerNode))
 		{

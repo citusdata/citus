@@ -158,18 +158,18 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	char *nodeNameString = text_to_cstring(nodeName);
 
-	StartMetadataSyncToNode(nodeNameString, nodePort);
+	SyncNodeMetadataToNode(nodeNameString, nodePort);
 
 	PG_RETURN_VOID();
 }
 
 
 /*
- * StartMetadataSyncToNode is the internal API for
+ * SyncNodeMetadataToNode is the internal API for
  * start_metadata_sync_to_node().
  */
 void
-StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort)
+SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
 {
 	char *escapedNodeName = quote_literal_cstr(nodeNameString);
 
