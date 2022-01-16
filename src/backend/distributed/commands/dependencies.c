@@ -368,12 +368,12 @@ GetCitusTableDDLCommandList(Oid relationId)
 
 
 /*
- * ReplicateAllDependenciesToNode replicate all previously marked objects to a worker
- * node. The function also sets clusterHasDistributedFunction if there are any
- * distributed functions.
+ * ReplicateAllDependenciesToNodeCommandList returns commands to replicate all
+ * previously marked objects to a worker node. The function also sets
+ * clusterHasDistributedFunction if there are any distributed functions.
  */
-void
-ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
+List *
+ReplicateAllDependenciesToNodeCommandList(const char *nodeName, int nodePort)
 {
 	List *ddlCommands = NIL;
 
@@ -412,22 +412,12 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 		ddlCommands = list_concat(ddlCommands,
 								  GetDependencyCreateDDLCommands(dependency));
 	}
-	if (list_length(ddlCommands) <= 0)
-	{
-		/* no commands to replicate dependencies to the new worker */
-		return;
-	}
 
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
 	ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
 	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
-	/* send commands to new workers, the current user should a superuser */
-	Assert(superuser());
-	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName,
-															nodePort,
-															CurrentUserName(),
-															ddlCommands);
+	return ddlCommands;
 }
 
 
