@@ -1775,35 +1775,34 @@ CreateShellTableOnWorkers(Oid relationId)
 {
 	/* if the table is owned by an extension we don't create */
 	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
-
-	if (!tableOwnedByExtension)
+	if (tableOwnedByExtension)
 	{
-		List *commandList = NIL;
-		IncludeSequenceDefaults includeSequenceDefaults =
-			WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
+		return;
+	}
 
-		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-															  includeSequenceDefaults);
-		TableDDLCommand *tableDDLCommand = NULL;
-		foreach_ptr(tableDDLCommand, tableDDLCommands)
-		{
-			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
-		}
+	List *commandList = NIL;
+	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
-		/* command to associate sequences with table */
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
-		commandList = list_concat(commandList, sequenceDependencyCommandList);
+	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+														  includeSequenceDefaults);
+	TableDDLCommand *tableDDLCommand = NULL;
+	foreach_ptr(tableDDLCommand, tableDDLCommands)
+	{
+		Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+		commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+	}
 
-		/* prevent recursive propagation */
-		SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	/* command to associate sequences with table */
+	List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
+	commandList = list_concat(commandList, sequenceDependencyCommandList);
 
-		/* send the commands one by one */
-		const char *command = NULL;
-		foreach_ptr(command, commandList)
-		{
-			SendCommandToWorkersWithMetadata(command);
-		}
+	/* prevent recursive propagation */
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+	const char *command = NULL;
+	foreach_ptr(command, commandList)
+	{
+		SendCommandToWorkersWithMetadata(command);
 	}
 }
 
