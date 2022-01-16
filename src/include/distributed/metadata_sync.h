@@ -69,10 +69,10 @@ extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 											  attnum);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
-#define DELETE_ALL_NODES "DELETE FROM pg_dist_node CASCADE"
+#define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"
 #define DELETE_ALL_PLACEMENTS "DELETE FROM pg_dist_placement CASCADE"
 #define DELETE_ALL_SHARDS "DELETE FROM pg_dist_shard CASCADE"
-#define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM citus.pg_dist_object"
+#define DELETE_ALL_DISTRIBUTED_OBJECTS "TRUNCATE citus.pg_dist_object"
 #define DELETE_ALL_PARTITIONS "DELETE FROM pg_dist_partition CASCADE"
 #define REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND \
 	"SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition"
