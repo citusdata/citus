@@ -1487,7 +1487,7 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(table,"{myschema,t1}",{})   
+(table,"{myschema,t1}",{})
 (table,"{myschema,t2}",{})
 (6 rows)
 
@@ -1706,7 +1706,7 @@ pg_identify_object_as_address
 (schema,{myschema},{})
 (schema,{myschema2},{})
 (schema,{public},{})
-(table,"{myschema,t1}",{})   
+(table,"{myschema,t1}",{})
 (table,"{myschema2,t2}",{})
 (7 rows)
 
