@@ -32,6 +32,7 @@
 #include "nodes/makefuncs.h"
 #include "optimizer/plancat.h"
 #include "pgstat.h"
+#include "safe_lib.h"
 #include "storage/bufmgr.h"
 #include "storage/bufpage.h"
 #include "storage/bufmgr.h"
@@ -48,16 +49,12 @@
 #include "utils/relcache.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
-
 #include "columnar/columnar.h"
 #include "columnar/columnar_customscan.h"
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
-#include "distributed/commands.h"
-#include "distributed/commands/utility_hook.h"
 #include "distributed/listutils.h"
-#include "distributed/metadata_cache.h"
 
 /*
  * Timing parameters for truncate locking heuristics.
@@ -2098,7 +2095,9 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 		IndexStmt *indexStmt = (IndexStmt *) parsetree;
 
 		Relation rel = relation_openrv(indexStmt->relation,
-									   GetCreateIndexRelationLockMode(indexStmt));
+									   indexStmt->concurrent ? ShareUpdateExclusiveLock :
+									   ShareLock);
+
 		if (rel->rd_tableam == GetColumnarTableAmRoutine())
 		{
 			CheckCitusVersion(ERROR);
