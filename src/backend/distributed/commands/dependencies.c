@@ -32,7 +32,7 @@ typedef bool (*AddressPredicate)(const ObjectAddress *);
 
 static int ObjectAddressComparator(const void *a, const void *b);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
-static List *GetCitusTableDDLCommandList(Oid relationId);
+static List * GetCitusTableDDLCommandList(Oid relationId);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
 
