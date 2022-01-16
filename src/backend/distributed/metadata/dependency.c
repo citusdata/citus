@@ -121,6 +121,7 @@ typedef struct ViewDependencyNode
 }ViewDependencyNode;
 
 
+static List * GetRelationSequenceDependencyList(Oid relationId);
 static List * GetRelationTriggerFunctionDepencyList(Oid relationId);
 static List * GetRelationStatsSchemaDependencyList(Oid relationId);
 static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid objectId);
@@ -996,23 +997,11 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			result = list_concat(result, statisticsSchemaDependencyList);
 
 			/*
-			 * Add the dependent sequences for the relations
+			 * Get the dependent sequences for tables (both as serial columns and
+			 * columns have nextval with existing sequences) and expand dependency list
+			 * with them.
 			 */
-			List *attnumList = NIL;
-			List *dependentSequenceList = NIL;
-			List *sequenceDependencyList = NIL;
-
-			GetDependentSequencesWithRelation(relationId, &attnumList,
-											  &dependentSequenceList, 0);
-
-			ListCell *dependentSequenceCell = NULL;
-			foreach(dependentSequenceCell, dependentSequenceList)
-			{
-				Oid sequenceOid = lfirst_oid(dependentSequenceCell);
-				DependencyDefinition *dependency = CreateObjectAddressDependencyDef(
-					RelationRelationId, sequenceOid);
-				sequenceDependencyList = lappend(sequenceDependencyList, dependency);
-			}
+			List *sequenceDependencyList = GetRelationSequenceDependencyList(relationId);
 
 			result = list_concat(result, sequenceDependencyList);
 		}
@@ -1024,6 +1013,32 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 		}
 	}
 	return result;
+}
+
+
+/*
+ * GetRelationSequenceDependencyList returns the sequence dependency definition
+ * list for the given relation.
+ */
+static List *
+GetRelationSequenceDependencyList(Oid relationId)
+{
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
+	List *sequenceDependencyList = NIL;
+
+	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+
+	ListCell *dependentSequenceCell = NULL;
+	foreach(dependentSequenceCell, dependentSequenceList)
+	{
+		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
+		DependencyDefinition *dependency = CreateObjectAddressDependencyDef(
+			RelationRelationId, sequenceOid);
+		sequenceDependencyList = lappend(sequenceDependencyList, dependency);
+	}
+
+	return sequenceDependencyList;
 }
 
 
