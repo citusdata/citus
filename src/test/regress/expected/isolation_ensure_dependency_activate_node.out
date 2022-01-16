@@ -118,7 +118,8 @@ pg_identify_object_as_address
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(table,"{public,t1}",{})
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -310,7 +311,8 @@ pg_identify_object_as_address
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(table,"{public,t1}",{})
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -502,7 +504,8 @@ pg_identify_object_as_address
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(table,"{public,t1}",{})
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -690,7 +693,8 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -884,7 +888,8 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1078,7 +1083,8 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1272,7 +1278,8 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1480,7 +1487,9 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})   
+(table,"{myschema,t2}",{})
+(6 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1697,7 +1706,9 @@ pg_identify_object_as_address
 (schema,{myschema},{})
 (schema,{myschema2},{})
 (schema,{public},{})
-(5 rows)
+(table,"{myschema,t1}",{})   
+(table,"{myschema2,t2}",{})
+(7 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2251,8 +2262,9 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
+(table,"{myschema,t1}",{})
 (type,{myschema.tt1},{})
-(5 rows)
+(6 rows)
 
 count
 ---------------------------------------------------------------------
