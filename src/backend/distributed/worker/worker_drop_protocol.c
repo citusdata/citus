@@ -156,9 +156,6 @@ worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
 	text *relationName = PG_GETARG_TEXT_P(0);
 	Oid relationId = ResolveRelationId(relationName, true);
 
-	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
-	char relationKind = '\0';
-
 	if (!OidIsValid(relationId))
 	{
 		ereport(NOTICE, (errmsg("relation %s does not exist, skipping",
@@ -170,13 +167,14 @@ worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
 
 	/* first check the relation type */
 	Relation distributedRelation = relation_open(relationId, AccessShareLock);
-	relationKind = distributedRelation->rd_rel->relkind;
+	char relationKind = distributedRelation->rd_rel->relkind;
 	EnsureRelationKindSupported(relationId);
 
 	/* close the relation since we do not need anymore */
 	relation_close(distributedRelation, AccessShareLock);
 
 	/* prepare distributedTableObject for dropping the table */
+	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
 	distributedTableObject.classId = RelationRelationId;
 	distributedTableObject.objectId = relationId;
 	distributedTableObject.objectSubId = 0;
