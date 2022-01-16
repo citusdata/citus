@@ -722,29 +722,6 @@ MetadataSetupCommandList()
 
 
 /*
- * RecreateDistributedTablesWithDependenciesCommandList return command list to recreate
- * distributed tables with command list.
- */
-static List *
-RecreateDistributedTablesWithDependenciesCommandList(WorkerNode *workerNode)
-{
-	List *commandList = NIL;
-
-	commandList = list_concat(commandList, DetachPartitionCommandList());
-	commandList = list_concat(commandList, ClearShellTablesCommandList());
-	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
-	commandList = list_concat(commandList, list_make1(LocalGroupIdUpdateCommand(
-														  workerNode->groupId)));
-	commandList = list_concat(commandList, ReplicateAllDependenciesToNodeCommandList(
-								  workerNode->workerName, workerNode->workerPort));
-	commandList = list_concat(commandList,
-							  MultipleDistributedTableIntegrationsCommandList());
-
-	return commandList;
-}
-
-
-/*
  * ClearShellTablesCommandList returns the command list to clear (shell) distributed
  * tables from the given node.
  */
@@ -766,23 +743,57 @@ ClearShellTablesCommandList()
 
 
 /*
- * ResyncMetadataCommandList returns the command list to resync all the
- * distributed table related metadata.
+ * PropagateNodeWideObjectsCommandList is called during node activation to
+ * propagate any object that should be propagated for every node. These are
+ * generally not linked to any distributed object but change system wide behaviour.
  */
 static List *
-ResyncMetadataCommandList()
+PropagateNodeWideObjectsCommandList()
 {
-	List *resyncMetadataCommandList = NIL;
+	/* collect all commands */
+	List *ddlCommands = NIL;
 
-	List *clearMetadataCommandList = ClearMetadataCommandList();
-	resyncMetadataCommandList = list_concat(resyncMetadataCommandList,
-											clearMetadataCommandList);
+	if (EnableAlterRoleSetPropagation)
+	{
+		/*
+		 * Get commands for database and postgres wide settings. Since these settings are not
+		 * linked to any role that can be distributed we need to distribute them seperately
+		 */
+		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
+		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
+	}
 
-	List *setupMetadataCommandList = MetadataSetupCommandList();
-	resyncMetadataCommandList = list_concat(resyncMetadataCommandList,
-											setupMetadataCommandList);
+	if (list_length(ddlCommands) > 0)
+	{
+		/* if there are command wrap them in enable_ddl_propagation off */
+		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
+		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
+	}
 
-	return resyncMetadataCommandList;
+	return ddlCommands;
+}
+
+
+/*
+ * RecreateDistributedTablesWithDependenciesCommandList return command list to recreate
+ * distributed tables with command list.
+ */
+static List *
+RecreateDistributedTablesWithDependenciesCommandList(WorkerNode *workerNode)
+{
+	List *commandList = NIL;
+
+	commandList = list_concat(commandList, DetachPartitionCommandList());
+	commandList = list_concat(commandList, ClearShellTablesCommandList());
+	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
+	commandList = list_concat(commandList, list_make1(LocalGroupIdUpdateCommand(
+														  workerNode->groupId)));
+	commandList = list_concat(commandList, ReplicateAllDependenciesToNodeCommandList(
+								  workerNode->workerName, workerNode->workerPort));
+	commandList = list_concat(commandList,
+							  MultipleDistributedTableIntegrationsCommandList());
+
+	return commandList;
 }
 
 
@@ -813,6 +824,27 @@ ClearMetadataCommandList()
 													ENABLE_DDL_PROPAGATION));
 
 	return clearDistTableInfoCommandList;
+}
+
+
+/*
+ * ResyncMetadataCommandList returns the command list to resync all the
+ * distributed table related metadata.
+ */
+static List *
+ResyncMetadataCommandList()
+{
+	List *resyncMetadataCommandList = NIL;
+
+	List *clearMetadataCommandList = ClearMetadataCommandList();
+	resyncMetadataCommandList = list_concat(resyncMetadataCommandList,
+											clearMetadataCommandList);
+
+	List *setupMetadataCommandList = MetadataSetupCommandList();
+	resyncMetadataCommandList = list_concat(resyncMetadataCommandList,
+											setupMetadataCommandList);
+
+	return resyncMetadataCommandList;
 }
 
 
@@ -856,38 +888,6 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 											  newWorkerNode->workerPort);
 		}
 	}
-}
-
-
-/*
- * PropagateNodeWideObjectsCommandList is called during node activation to
- * propagate any object that should be propagated for every node. These are
- * generally not linked to any distributed object but change system wide behaviour.
- */
-static List *
-PropagateNodeWideObjectsCommandList()
-{
-	/* collect all commands */
-	List *ddlCommands = NIL;
-
-	if (EnableAlterRoleSetPropagation)
-	{
-		/*
-		 * Get commands for database and postgres wide settings. Since these settings are not
-		 * linked to any role that can be distributed we need to distribute them seperately
-		 */
-		List *alterRoleSetCommands = GenerateAlterRoleSetCommandForRole(InvalidOid);
-		ddlCommands = list_concat(ddlCommands, alterRoleSetCommands);
-	}
-
-	if (list_length(ddlCommands) > 0)
-	{
-		/* if there are command wrap them in enable_ddl_propagation off */
-		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
-		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
-	}
-
-	return ddlCommands;
 }
 
 
