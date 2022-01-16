@@ -167,7 +167,6 @@ worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
 
 	/* first check the relation type */
 	Relation distributedRelation = relation_open(relationId, AccessShareLock);
-	char relationKind = distributedRelation->rd_rel->relkind;
 	EnsureRelationKindSupported(relationId);
 
 	/* close the relation since we do not need anymore */
@@ -194,28 +193,7 @@ worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
 		UnmarkObjectDistributed(&ownedSequenceAddress);
 	}
 
-	/* drop the server for the foreign relations */
-	if (relationKind == RELKIND_FOREIGN_TABLE)
-	{
-		ObjectAddresses *objects = new_object_addresses();
-		ObjectAddress foreignServerObject = { InvalidOid, InvalidOid, 0 };
-		ForeignTable *foreignTable = GetForeignTable(relationId);
-		Oid serverId = foreignTable->serverid;
-
-		/* prepare foreignServerObject for dropping the server */
-		foreignServerObject.classId = ForeignServerRelationId;
-		foreignServerObject.objectId = serverId;
-		foreignServerObject.objectSubId = 0;
-
-		/* add the addresses that are going to be dropped */
-		add_exact_object_address(&distributedTableObject, objects);
-		add_exact_object_address(&foreignServerObject, objects);
-
-		/* drop both the table and the server */
-		performMultipleDeletions(objects, DROP_RESTRICT,
-								 PERFORM_DELETION_INTERNAL);
-	}
-	else if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
+	if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
 	{
 		/*
 		 * If the table is owned by an extension, we cannot drop it, nor should we

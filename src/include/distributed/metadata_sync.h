@@ -34,6 +34,7 @@ extern char * LocalGroupIdUpdateCommand(int32 groupId);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
 extern List * MetadataCreateCommands(void);
+extern List * DistributedObjectMetadataSyncCommandList(void);
 extern List * MetadataDropCommands(void);
 extern char * MarkObjectsDistributedCreateCommand(List *addresses,
 												  List *distributionArgumentIndexes,
