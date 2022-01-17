@@ -23,6 +23,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "miscadmin.h"
 #include "storage/lmgr.h"
 #include "utils/lsyscache.h"
 
@@ -368,8 +369,12 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	/* since we are executing ddl commands lets disable propagation, primarily for mx */
 	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
 
-	SendCommandListToWorkerOutsideTransaction(nodeName, nodePort,
-											  CitusExtensionOwnerName(), ddlCommands);
+	/* send commands to new workers, the current user should a superuser */
+	Assert(superuser());
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName,
+															nodePort,
+															CurrentUserName(),
+															ddlCommands);
 }
 
 

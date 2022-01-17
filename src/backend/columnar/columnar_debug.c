@@ -10,13 +10,13 @@
 
 #include "postgres.h"
 
+#include "funcapi.h"
 #include "pg_config.h"
 #include "access/nbtree.h"
 #include "access/table.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_type.h"
 #include "distributed/pg_version_constants.h"
-#include "distributed/tuplestore.h"
 #include "miscadmin.h"
 #include "storage/fd.h"
 #include "storage/smgr.h"
@@ -54,6 +54,8 @@ columnar_store_memory_stats(PG_FUNCTION_ARGS)
 	TupleDescInitEntry(tupleDescriptor, (AttrNumber) 3, "WriteStateContext",
 					   INT8OID, -1, 0);
 
+	tupleDescriptor = BlessTupleDesc(tupleDescriptor);
+
 	MemoryContextCounters transactionCounters = { 0 };
 	MemoryContextCounters topCounters = { 0 };
 	MemoryContextCounters writeStateCounters = { 0 };
@@ -68,9 +70,9 @@ columnar_store_memory_stats(PG_FUNCTION_ARGS)
 		Int64GetDatum(writeStateCounters.totalspace)
 	};
 
-	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
-	tuplestore_putvalues(tupleStore, tupleDescriptor, values, nulls);
-	PG_RETURN_DATUM(0);
+	HeapTuple tuple = heap_form_tuple(tupleDescriptor, values, nulls);
+
+	PG_RETURN_DATUM(HeapTupleGetDatum(tuple));
 }
 
 

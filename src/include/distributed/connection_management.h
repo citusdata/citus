@@ -16,6 +16,7 @@
 #include "distributed/transaction_management.h"
 #include "distributed/remote_transaction.h"
 #include "lib/ilist.h"
+#include "pg_config.h"
 #include "portability/instr_time.h"
 #include "utils/guc.h"
 #include "utils/hsearch.h"
@@ -283,5 +284,7 @@ extern void MarkConnectionConnected(MultiConnection *connection);
 extern double MillisecondsPassedSince(instr_time moment);
 extern long MillisecondsToTimeout(instr_time start, long msAfterStart);
 
+#if PG_VERSION_NUM < 140000
 extern void WarmUpConnParamsHash(void);
+#endif
 #endif /* CONNECTION_MANAGMENT_H */
