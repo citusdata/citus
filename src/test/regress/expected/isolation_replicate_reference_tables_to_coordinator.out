@@ -90,10 +90,7 @@ query                                |query_hostname  |query_hostport|distribute
 
     update ref_table set a = a + 1;
 |coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-
-    update ref_table set a = a + 1;
-|localhost       |         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-(2 rows)
+(1 row)
 
 step s2-view-worker:
 	SELECT query, query_hostname, query_hostport, distributed_query_host_name,
@@ -108,9 +105,7 @@ query                                                                         |q
 ---------------------------------------------------------------------
 UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
 UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-(4 rows)
+(2 rows)
 
 step s2-end:
     END;
@@ -146,12 +141,12 @@ step s2-active-transactions:
 
 count
 ---------------------------------------------------------------------
-    2
+    1
 (1 row)
 
 count
 ---------------------------------------------------------------------
-    6
+    3
 (1 row)
 
 step s1-end:
