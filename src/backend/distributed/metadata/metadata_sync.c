@@ -251,7 +251,7 @@ SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
  * visible on all connections used by the transaction, meaning we can only use 1
  * connection per node.
  */
-void
+static void
 EnsureSequentialModeMetadataOperations(void)
 {
 	if (!IsTransactionBlock())
@@ -445,7 +445,7 @@ ShouldSyncTableMetadataInternal(bool hashDistributed, bool citusTableWithNoDistK
  * SyncNodeMetadataSnapshotToNode does the following:
  *  1. Sets the localGroupId on the worker so the worker knows which tuple in
  *     pg_dist_node represents itself.
- *  2. Recreates the distributed metadata on the given worker.
+ *  2. Recreates the node metadata on the given worker.
  * If raiseOnError is true, it errors out if synchronization fails.
  */
 static bool
