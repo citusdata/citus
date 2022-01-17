@@ -120,7 +120,7 @@ typedef struct ViewDependencyNode
 }ViewDependencyNode;
 
 
-static List * GetRelationTriggerFunctionDepencyList(Oid relationId);
+static List * GetRelationTriggerFunctionDependencyList(Oid relationId);
 static List * GetRelationStatsSchemaDependencyList(Oid relationId);
 static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid objectId);
 static List * CreateObjectAddressDependencyDefList(Oid classId, List *objectIdList);
@@ -972,7 +972,7 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			 */
 			Oid relationId = target.objectId;
 			List *triggerFunctionDepencyList =
-				GetRelationTriggerFunctionDepencyList(relationId);
+				GetRelationTriggerFunctionDependencyList(relationId);
 			result = list_concat(result, triggerFunctionDepencyList);
 
 			/*
@@ -1011,11 +1011,11 @@ GetRelationStatsSchemaDependencyList(Oid relationId)
 
 
 /*
- * GetRelationTriggerFunctionDepencyList returns a list of DependencyDefinition
+ * GetRelationTriggerFunctionDependencyList returns a list of DependencyDefinition
  * objects for the functions that triggers of the relation with relationId depends.
  */
 static List *
-GetRelationTriggerFunctionDepencyList(Oid relationId)
+GetRelationTriggerFunctionDependencyList(Oid relationId)
 {
 	List *dependencyList = NIL;
 
