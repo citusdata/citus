@@ -19,15 +19,6 @@ CREATE TABLE notices (
 SELECT create_distributed_table('notices', 'id');
 INSERT INTO notices VALUES (1, 'hello world');
 
--- Create the necessary test utility function
-CREATE OR REPLACE FUNCTION master_metadata_snapshot()
-    RETURNS text[]
-    LANGUAGE C STRICT
-    AS 'citus';
-
-COMMENT ON FUNCTION master_metadata_snapshot()
-    IS 'commands to create the metadata snapshot';
-
 CREATE FUNCTION notice(text)
 RETURNS void
 LANGUAGE plpgsql AS $$

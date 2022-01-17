@@ -20,20 +20,20 @@ SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id \gset
 SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id \gset
 
 -- Create the necessary test utility function
-CREATE FUNCTION master_metadata_snapshot()
+CREATE FUNCTION activate_node_snapshot()
     RETURNS text[]
     LANGUAGE C STRICT
     AS 'citus';
 
-COMMENT ON FUNCTION master_metadata_snapshot()
-    IS 'commands to create the metadata snapshot';
+COMMENT ON FUNCTION activate_node_snapshot()
+    IS 'commands to activate node snapshot';
 
 -- Show that none of the existing tables are qualified to be MX tables
 SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 
 -- Show that, with no MX tables, metadata snapshot contains only the delete commands,
 -- pg_dist_node entries and reference tables
-SELECT unnest(master_metadata_snapshot()) order by 1;
+SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- this function is dropped in Citus10, added here for tests
 CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
@@ -61,26 +61,26 @@ reset citus.shard_replication_factor;
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='mx_test_table'::regclass;
 
 -- Show that the created MX table is included in the metadata snapshot
-SELECT unnest(master_metadata_snapshot()) order by 1;
+SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- Show that CREATE INDEX commands are included in the metadata snapshot
 CREATE INDEX mx_index ON mx_test_table(col_2);
-SELECT unnest(master_metadata_snapshot()) order by 1;
+SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- Show that schema changes are included in the metadata snapshot
 CREATE SCHEMA mx_testing_schema;
 ALTER TABLE mx_test_table SET SCHEMA mx_testing_schema;
-SELECT unnest(master_metadata_snapshot()) order by 1;
+SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- Show that append distributed tables are not included in the metadata snapshot
 CREATE TABLE non_mx_test_table (col_1 int, col_2 text);
 SELECT master_create_distributed_table('non_mx_test_table', 'col_1', 'append');
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='non_mx_test_table'::regclass;
-SELECT unnest(master_metadata_snapshot()) order by 1;
+SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- Show that range distributed tables are not included in the metadata snapshot
 UPDATE pg_dist_partition SET partmethod='r' WHERE logicalrelid='non_mx_test_table'::regclass;
-SELECT unnest(master_metadata_snapshot()) order by 1;
+SELECT unnest(activate_node_snapshot()) order by 1;
 
 
 -- Test start_metadata_sync_to_node and citus_activate_node UDFs
@@ -784,7 +784,7 @@ ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('mx_test_sequence_1');
 ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
 ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('mx_test_sequence_1');
 
-SELECT unnest(master_metadata_snapshot()) order by 1;
+SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- shouldn't work since test_table is MX
 ALTER TABLE test_table ADD COLUMN id3 bigserial;

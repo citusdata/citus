@@ -107,12 +107,9 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static List * ResyncMetadataCommandList();
 static List * MetadataSetupCommandList();
 static List * ClearMetadataCommandList();
 static List * ClearShellTablesCommandList();
-static List * RecreateDistributedTablesWithDependenciesCommandList(
-	WorkerNode *workerNode);
 static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
 static List * MultipleDistributedTableIntegrationsCommandList();
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -778,7 +775,7 @@ PropagateNodeWideObjectsCommandList()
  * RecreateDistributedTablesWithDependenciesCommandList return command list to recreate
  * distributed tables with command list.
  */
-static List *
+List *
 RecreateDistributedTablesWithDependenciesCommandList(WorkerNode *workerNode)
 {
 	List *commandList = NIL;
@@ -788,8 +785,10 @@ RecreateDistributedTablesWithDependenciesCommandList(WorkerNode *workerNode)
 	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
 	commandList = list_concat(commandList, list_make1(LocalGroupIdUpdateCommand(
 														  workerNode->groupId)));
-	commandList = list_concat(commandList, ReplicateAllDependenciesToNodeCommandList(
-								  workerNode->workerName, workerNode->workerPort));
+	commandList = list_concat(commandList,
+							  ReplicateAllDependenciesToNodeCommandList(
+								  workerNode->workerName,
+								  workerNode->workerPort));
 	commandList = list_concat(commandList,
 							  MultipleDistributedTableIntegrationsCommandList());
 
@@ -831,8 +830,8 @@ ClearMetadataCommandList()
  * ResyncMetadataCommandList returns the command list to resync all the
  * distributed table related metadata.
  */
-static List *
-ResyncMetadataCommandList()
+List *
+ResyncMetadataCommandList(void)
 {
 	List *resyncMetadataCommandList = NIL;
 
@@ -876,8 +875,7 @@ SetUpDistributedTableWithDependencies(WorkerNode *newWorkerNode)
 			Assert(superuser());
 			SendMetadataCommandListToWorkerInCoordinatedTransaction(
 				newWorkerNode->workerName,
-				newWorkerNode->
-				workerPort,
+				newWorkerNode->workerPort,
 				CurrentUserName(),
 				commandList);
 		}

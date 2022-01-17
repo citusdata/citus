@@ -20,6 +20,7 @@
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_sync.h"
 #include "distributed/remote_commands.h"
+#include "distributed/worker_manager.h"
 #include "postmaster/postmaster.h"
 #include "miscadmin.h"
 #include "storage/latch.h"
@@ -28,45 +29,63 @@
 
 
 /* declarations for dynamic loading */
-PG_FUNCTION_INFO_V1(master_metadata_snapshot);
+PG_FUNCTION_INFO_V1(activate_node_snapshot);
 PG_FUNCTION_INFO_V1(wait_until_metadata_sync);
 PG_FUNCTION_INFO_V1(trigger_metadata_sync);
 PG_FUNCTION_INFO_V1(raise_error_in_metadata_sync);
 
 
 /*
- * master_metadata_snapshot prints all the queries that are required
- * to generate a metadata snapshot.
+ * activate_node_snapshot prints all the queries that are required
+ * to activate a node.
  */
 Datum
-master_metadata_snapshot(PG_FUNCTION_ARGS)
+activate_node_snapshot(PG_FUNCTION_ARGS)
 {
+	/*
+	 * Activate node commands are created using the given worker node,
+	 * so we are using first primary worker node just for test purposes.
+	 */
+	WorkerNode *dummyWorkerNode = GetFirstPrimaryWorkerNode();
+
+	List *recreateTablesCommands = RecreateDistributedTablesWithDependenciesCommandList(
+		dummyWorkerNode);
 	List *dropSnapshotCommands = MetadataDropCommands();
 	List *createSnapshotCommands = MetadataCreateCommands();
-	List *snapshotCommandList = NIL;
-	int snapshotCommandIndex = 0;
+	List *metadataUpdateCommandList = ResyncMetadataCommandList();
+	List *activateNodeCommandList = NIL;
+	int activateNodeCommandIndex = 0;
 	Oid ddlCommandTypeId = TEXTOID;
 
-	snapshotCommandList = list_concat(snapshotCommandList, dropSnapshotCommands);
-	snapshotCommandList = list_concat(snapshotCommandList, createSnapshotCommands);
+	activateNodeCommandList = list_concat(activateNodeCommandList,
+										  recreateTablesCommands);
+	activateNodeCommandList = list_concat(activateNodeCommandList, dropSnapshotCommands);
+	activateNodeCommandList = list_concat(activateNodeCommandList,
+										  createSnapshotCommands);
+	activateNodeCommandList = list_concat(activateNodeCommandList,
+										  metadataUpdateCommandList);
 
-	int snapshotCommandCount = list_length(snapshotCommandList);
-	Datum *snapshotCommandDatumArray = palloc0(snapshotCommandCount * sizeof(Datum));
+	int activateNodeCommandCount = list_length(activateNodeCommandList);
+	Datum *activateNodeCommandDatumArray = palloc0(activateNodeCommandCount *
+												   sizeof(Datum));
 
-	const char *metadataSnapshotCommand = NULL;
-	foreach_ptr(metadataSnapshotCommand, snapshotCommandList)
+	const char *activateNodeSnapshotCommand = NULL;
+	foreach_ptr(activateNodeSnapshotCommand, activateNodeCommandList)
 	{
-		Datum metadataSnapshotCommandDatum = CStringGetTextDatum(metadataSnapshotCommand);
+		Datum activateNodeSnapshotCommandDatum = CStringGetTextDatum(
+			activateNodeSnapshotCommand);
 
-		snapshotCommandDatumArray[snapshotCommandIndex] = metadataSnapshotCommandDatum;
-		snapshotCommandIndex++;
+		activateNodeCommandDatumArray[activateNodeCommandIndex] =
+			activateNodeSnapshotCommandDatum;
+		activateNodeCommandIndex++;
 	}
 
-	ArrayType *snapshotCommandArrayType = DatumArrayToArrayType(snapshotCommandDatumArray,
-																snapshotCommandCount,
-																ddlCommandTypeId);
+	ArrayType *activateNodeCommandArrayType = DatumArrayToArrayType(
+		activateNodeCommandDatumArray,
+		activateNodeCommandCount,
+		ddlCommandTypeId);
 
-	PG_RETURN_ARRAYTYPE_P(snapshotCommandArrayType);
+	PG_RETURN_ARRAYTYPE_P(activateNodeCommandArrayType);
 }
 
 
