@@ -31,8 +31,8 @@ COMMENT ON FUNCTION activate_node_snapshot()
 -- Show that none of the existing tables are qualified to be MX tables
 SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 
--- Show that, with no MX tables, metadata snapshot contains only the delete commands,
--- pg_dist_node entries and reference tables
+-- Show that, with no MX tables, activate node snapshot contains only the delete commands,
+-- pg_dist_node entries, pg_dist_object entries and roles.
 SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- this function is dropped in Citus10, added here for tests
@@ -60,25 +60,25 @@ reset citus.shard_replication_factor;
 -- considered as an MX table
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='mx_test_table'::regclass;
 
--- Show that the created MX table is included in the metadata snapshot
+-- Show that the created MX table is and its sequences are included in the activate node snapshot
 SELECT unnest(activate_node_snapshot()) order by 1;
 
--- Show that CREATE INDEX commands are included in the metadata snapshot
+-- Show that CREATE INDEX commands are included in the activate node snapshot
 CREATE INDEX mx_index ON mx_test_table(col_2);
 SELECT unnest(activate_node_snapshot()) order by 1;
 
--- Show that schema changes are included in the metadata snapshot
+-- Show that schema changes are included in the activate node snapshot
 CREATE SCHEMA mx_testing_schema;
 ALTER TABLE mx_test_table SET SCHEMA mx_testing_schema;
 SELECT unnest(activate_node_snapshot()) order by 1;
 
--- Show that append distributed tables are not included in the metadata snapshot
+-- Show that append distributed tables are not included in the activate node snapshot
 CREATE TABLE non_mx_test_table (col_1 int, col_2 text);
 SELECT master_create_distributed_table('non_mx_test_table', 'col_1', 'append');
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='non_mx_test_table'::regclass;
 SELECT unnest(activate_node_snapshot()) order by 1;
 
--- Show that range distributed tables are not included in the metadata snapshot
+-- Show that range distributed tables are not included in the activate node snapshot
 UPDATE pg_dist_partition SET partmethod='r' WHERE logicalrelid='non_mx_test_table'::regclass;
 SELECT unnest(activate_node_snapshot()) order by 1;
 
