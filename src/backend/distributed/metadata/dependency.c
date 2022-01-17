@@ -123,6 +123,7 @@ typedef struct ViewDependencyNode
 static List * GetRelationTriggerFunctionDepencyList(Oid relationId);
 static List * GetRelationStatsSchemaDependencyList(Oid relationId);
 static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid objectId);
+static List * CreateObjectAddressDependencyDefList(Oid classId, List *objectIdList);
 static ObjectAddress DependencyDefinitionObjectAddress(DependencyDefinition *definition);
 
 /* forward declarations for functions to interact with the ObjectAddressCollector */
@@ -1003,18 +1004,9 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 static List *
 GetRelationStatsSchemaDependencyList(Oid relationId)
 {
-	List *dependencyList = NIL;
-
 	List *schemaIds = GetExplicitStatisticsSchemaIdList(relationId);
-	Oid schemaId = InvalidOid;
-	foreach_oid(schemaId, schemaIds)
-	{
-		DependencyDefinition *dependency =
-			CreateObjectAddressDependencyDef(NamespaceRelationId, schemaId);
-		dependencyList = lappend(dependencyList, dependency);
-	}
 
-	return dependencyList;
+	return CreateObjectAddressDependencyDefList(NamespaceRelationId, schemaIds);
 }
 
 
@@ -1053,6 +1045,27 @@ CreateObjectAddressDependencyDef(Oid classId, Oid objectId)
 	dependency->mode = DependencyObjectAddress;
 	ObjectAddressSet(dependency->data.address, classId, objectId);
 	return dependency;
+}
+
+
+/*
+ * CreateObjectAddressDependencyDefList is a wrapper function for
+ * CreateObjectAddressDependencyDef to operate on a list of relation oids,
+ * instead of a single oid.
+ */
+static List *
+CreateObjectAddressDependencyDefList(Oid classId, List *objectIdList)
+{
+	List *dependencyList = NIL;
+	Oid objectId = InvalidOid;
+	foreach_oid(objectId, objectIdList)
+	{
+		DependencyDefinition *dependency =
+			CreateObjectAddressDependencyDef(classId, objectId);
+		dependencyList = lappend(dependencyList, dependency);
+	}
+
+	return dependencyList;
 }
 
 
