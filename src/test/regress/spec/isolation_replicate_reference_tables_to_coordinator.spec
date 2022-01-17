@@ -1,5 +1,8 @@
 setup
 {
+  SET citus.log_remote_commands to true;
+  SET citus.worker_min_messages to debug4;
+  set client_min_messages to debug4;
   SELECT citus_internal.replace_isolation_tester_func();
   SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 

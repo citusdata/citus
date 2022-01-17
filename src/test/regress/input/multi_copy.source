@@ -497,7 +497,12 @@ SELECT shardid, nodename, nodeport
 	WHERE logicalrelid = 'numbers_append'::regclass order by placementid;
 
 -- add the node back
+SET citus.log_remote_commands to true;
+SET citus.worker_min_messages to debug4;
+set client_min_messages to debug4;
 SELECT 1 FROM master_activate_node('localhost', :worker_1_port);
+reset citus.log_remote_commands;
+reset citus.worker_min_messages;
 RESET client_min_messages;
 RESET citus.shard_replication_factor;
 -- add two new shards and verify they are created at both workers
