@@ -38,6 +38,22 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 ---------------------------------------------------------------------
 (0 rows)
 
+-- Since password_encryption default has been changed to sha from md5 with PG14
+-- we are updating it manually just for consistent test results between PG versions.
+ALTER SYSTEM SET password_encryption TO md5;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER ROLE CURRENT_USER WITH PASSWORD 'dummypassword';
 -- Show that, with no MX tables, activate node snapshot contains only the delete commands,
 -- pg_dist_node entries, pg_dist_object entries and roles.
 SELECT unnest(activate_node_snapshot()) order by 1;
@@ -55,7 +71,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  RESET ROLE
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
- SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md53e559cc1fcf0c70f1f8e05c9a79c3133'' VALID UNTIL ''2052-05-05 00:00:00-07''')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
  SET ROLE postgres
@@ -127,7 +143,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT pg_catalog.worker_record_sequence_dependency('public.mx_test_table_col_3_seq'::regclass,'public.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
- SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md53e559cc1fcf0c70f1f8e05c9a79c3133'' VALID UNTIL ''2052-05-05 00:00:00-07''')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
  SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
@@ -177,7 +193,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT pg_catalog.worker_record_sequence_dependency('public.mx_test_table_col_3_seq'::regclass,'public.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
- SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md53e559cc1fcf0c70f1f8e05c9a79c3133'' VALID UNTIL ''2052-05-05 00:00:00-07''')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
  SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
@@ -229,7 +245,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
- SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md53e559cc1fcf0c70f1f8e05c9a79c3133'' VALID UNTIL ''2052-05-05 00:00:00-07''')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
@@ -287,7 +303,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
- SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md53e559cc1fcf0c70f1f8e05c9a79c3133'' VALID UNTIL ''2052-05-05 00:00:00-07''')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
@@ -338,7 +354,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
- SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md53e559cc1fcf0c70f1f8e05c9a79c3133'' VALID UNTIL ''2052-05-05 00:00:00-07''')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
@@ -1874,7 +1890,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_sequence_0 AS integer INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1 NO CYCLE','integer')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_sequence_1 AS integer INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1 NO CYCLE','integer')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
- SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md53e559cc1fcf0c70f1f8e05c9a79c3133'' VALID UNTIL ''2052-05-05 00:00:00-07''')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_test_schema_1.mx_table_1')
  SELECT worker_create_truncate_trigger('mx_test_schema_2.mx_table_2')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')

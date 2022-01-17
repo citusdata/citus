@@ -35,6 +35,8 @@ SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 -- we are updating it manually just for consistent test results between PG versions.
 ALTER SYSTEM SET password_encryption TO md5;
 SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+ALTER ROLE CURRENT_USER WITH PASSWORD 'dummypassword';
 
 -- Show that, with no MX tables, activate node snapshot contains only the delete commands,
 -- pg_dist_node entries, pg_dist_object entries and roles.
