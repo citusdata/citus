@@ -104,7 +104,7 @@ nodeport|xact_exists
    57638|t
 (2 rows)
 
-step s1-drop-table: 
+step s1-drop-table:
  DROP TABLE distributed_transaction_id_table;
 
 step s1-commit:

@@ -31,6 +31,11 @@ COMMENT ON FUNCTION activate_node_snapshot()
 -- Show that none of the existing tables are qualified to be MX tables
 SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
 
+-- Since password_encryption default has been changed to sha from md5 with PG14
+-- we are updating it manually just for consistent test results between PG versions.
+ALTER SYSTEM SET password_encryption TO md5;
+SELECT pg_reload_conf();
+
 -- Show that, with no MX tables, activate node snapshot contains only the delete commands,
 -- pg_dist_node entries, pg_dist_object entries and roles.
 SELECT unnest(activate_node_snapshot()) order by 1;
