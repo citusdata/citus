@@ -91,7 +91,7 @@ static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
-static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
+static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
@@ -235,7 +235,7 @@ SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
 
 	/* fail if metadata synchronization doesn't succeed */
 	bool raiseInterrupts = true;
-	SyncMetadataSnapshotToNode(workerNode, raiseInterrupts);
+	SyncNodeMetadataSnapshotToNode(workerNode, raiseInterrupts);
 }
 
 
@@ -442,25 +442,25 @@ ShouldSyncTableMetadataInternal(bool hashDistributed, bool citusTableWithNoDistK
 
 
 /*
- * SyncMetadataSnapshotToNode does the following:
+ * SyncNodeMetadataSnapshotToNode does the following:
  *  1. Sets the localGroupId on the worker so the worker knows which tuple in
  *     pg_dist_node represents itself.
  *  2. Recreates the distributed metadata on the given worker.
  * If raiseOnError is true, it errors out if synchronization fails.
  */
 static bool
-SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
+SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError)
 {
 	char *currentUser = CurrentUserName();
 
 	/* generate and add the local group id's update query */
 	char *localGroupIdUpdateCommand = LocalGroupIdUpdateCommand(workerNode->groupId);
 
-	/* generate the queries which drop the metadata */
-	List *dropMetadataCommandList = MetadataDropCommands();
+	/* generate the queries which drop the node metadata */
+	List *dropMetadataCommandList = NodeMetadataDropCommands();
 
-	/* generate the queries which create the metadata from scratch */
-	List *createMetadataCommandList = MetadataCreateCommands();
+	/* generate the queries which create the node metadata from scratch */
+	List *createMetadataCommandList = NodeMetadataCreateCommands();
 
 	List *recreateMetadataSnapshotCommandList = list_make1(localGroupIdUpdateCommand);
 	recreateMetadataSnapshotCommandList = list_concat(recreateMetadataSnapshotCommandList,
@@ -506,7 +506,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	char *userName = CurrentUserName();
 
 	/* generate the queries which drop the metadata */
-	List *dropMetadataCommandList = MetadataDropCommands();
+	List *dropMetadataCommandList = NodeMetadataDropCommands();
 
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  LocalGroupIdUpdateCommand(0));
@@ -520,7 +520,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 
 
 /*
- * MetadataCreateCommands returns list of queries that are
+ * NodeMetadataCreateCommands returns list of queries that are
  * required to create the current metadata snapshot of the node that the
  * function is called. The metadata snapshot commands includes the
  * following queries:
@@ -528,7 +528,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
  * (i)   Query that populates pg_dist_node table
  */
 List *
-MetadataCreateCommands(void)
+NodeMetadataCreateCommands(void)
 {
 	List *metadataSnapshotCommandList = NIL;
 	bool includeNodesFromOtherClusters = true;
@@ -687,14 +687,14 @@ GetDistributedTableMetadataEvents(Oid relationId)
 
 
 /*
- * MetadataDropCommands returns list of queries that are required to
+ * NodeMetadataDropCommands returns list of queries that are required to
  * drop all the metadata of the node that are not related to clustered tables.
  * The drop metadata snapshot commands includes the following queries:
  *
  * (i) Queries that delete all the rows from pg_dist_node table
  */
 List *
-MetadataDropCommands(void)
+NodeMetadataDropCommands(void)
 {
 	List *dropSnapshotCommandList = NIL;
 
@@ -1971,7 +1971,7 @@ DetachPartitionCommandList(void)
 
 
 /*
- * SyncMetadataToNodes tries recreating the metadata snapshot in the
+ * SyncNodeMetadataToNodes tries recreating the metadata snapshot in the
  * metadata workers that are out of sync. Returns the result of
  * synchronization.
  *
@@ -1980,7 +1980,7 @@ DetachPartitionCommandList(void)
  * goes wrong.
  */
 static MetadataSyncResult
-SyncMetadataToNodes(void)
+SyncNodeMetadataToNodes(void)
 {
 	MetadataSyncResult result = METADATA_SYNC_SUCCESS;
 	if (!IsCoordinator())
@@ -2006,7 +2006,7 @@ SyncMetadataToNodes(void)
 		if (workerNode->hasMetadata && !workerNode->metadataSynced)
 		{
 			bool raiseInterrupts = false;
-			if (!SyncMetadataSnapshotToNode(workerNode, raiseInterrupts))
+			if (!SyncNodeMetadataSnapshotToNode(workerNode, raiseInterrupts))
 			{
 				ereport(WARNING, (errmsg("failed to sync metadata to %s:%d",
 										 workerNode->workerName,
@@ -2041,11 +2041,11 @@ SyncMetadataToNodes(void)
 
 
 /*
- * SyncMetadataToNodesMain is the main function for syncing metadata to
+ * SyncNodeMetadataToNodesMain is the main function for syncing node metadata to
  * MX nodes. It retries until success and then exits.
  */
 void
-SyncMetadataToNodesMain(Datum main_arg)
+SyncNodeMetadataToNodesMain(Datum main_arg)
 {
 	Oid databaseOid = DatumGetObjectId(main_arg);
 
@@ -2086,7 +2086,7 @@ SyncMetadataToNodesMain(Datum main_arg)
 		{
 			UseCoordinatedTransaction();
 
-			MetadataSyncResult result = SyncMetadataToNodes();
+			MetadataSyncResult result = SyncNodeMetadataToNodes();
 			syncedAllNodes = (result == METADATA_SYNC_SUCCESS);
 
 			/* we use LISTEN/NOTIFY to wait for metadata syncing in tests */
@@ -2174,11 +2174,11 @@ MetadataSyncSigAlrmHandler(SIGNAL_ARGS)
 
 
 /*
- * SpawnSyncMetadataToNodes starts a background worker which runs metadata
+ * SpawnSyncNodeMetadataToNodes starts a background worker which runs node metadata
  * sync. On success it returns workers' handle. Otherwise it returns NULL.
  */
 BackgroundWorkerHandle *
-SpawnSyncMetadataToNodes(Oid database, Oid extensionOwner)
+SpawnSyncNodeMetadataToNodes(Oid database, Oid extensionOwner)
 {
 	BackgroundWorker worker;
 	BackgroundWorkerHandle *handle = NULL;
@@ -2196,7 +2196,7 @@ SpawnSyncMetadataToNodes(Oid database, Oid extensionOwner)
 	worker.bgw_restart_time = BGW_NEVER_RESTART;
 	strcpy_s(worker.bgw_library_name, sizeof(worker.bgw_library_name), "citus");
 	strcpy_s(worker.bgw_function_name, sizeof(worker.bgw_library_name),
-			 "SyncMetadataToNodesMain");
+			 "SyncNodeMetadataToNodesMain");
 	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
 	memcpy_s(worker.bgw_extra, sizeof(worker.bgw_extra), &extensionOwner,
 			 sizeof(Oid));

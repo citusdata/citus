@@ -524,7 +524,7 @@ CitusMaintenanceDaemonMain(Datum main_arg)
 			if (syncMetadata)
 			{
 				metadataSyncBgwHandle =
-					SpawnSyncMetadataToNodes(MyDatabaseId, myDbData->userOid);
+					SpawnSyncNodeMetadataToNodes(MyDatabaseId, myDbData->userOid);
 			}
 
 			nextMetadataSyncTime =

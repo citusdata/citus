@@ -33,9 +33,9 @@ extern bool ClusterHasKnownMetadataWorkers(void);
 extern char * LocalGroupIdUpdateCommand(int32 groupId);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
-extern List * MetadataCreateCommands(void);
+extern List * NodeMetadataCreateCommands(void);
 extern List * DistributedObjectMetadataSyncCommandList(void);
-extern List * MetadataDropCommands(void);
+extern List * NodeMetadataDropCommands(void);
 extern char * MarkObjectsDistributedCreateCommand(List *addresses,
 												  List *distributionArgumentIndexes,
 												  List *colocationIds);
@@ -57,8 +57,8 @@ extern char * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateShellTableOnWorkers(Oid relationId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
 extern List * DetachPartitionCommandList(void);
-extern BackgroundWorkerHandle * SpawnSyncMetadataToNodes(Oid database, Oid owner);
-extern void SyncMetadataToNodesMain(Datum main_arg);
+extern BackgroundWorkerHandle * SpawnSyncNodeMetadataToNodes(Oid database, Oid owner);
+extern void SyncNodeMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
 extern List * SequenceDependencyCommandList(Oid relationId);
