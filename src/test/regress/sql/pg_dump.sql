@@ -101,3 +101,28 @@ COPY dist_columnar TO STDOUT;
 SELECT indexname FROM pg_indexes WHERE tablename = 'weird.table' ORDER BY indexname;
 
 DROP SCHEMA dumper CASCADE;
+
+CREATE SCHEMA dumper;
+CREATE TABLE data (
+	key int,
+	value text
+);
+SELECT create_distributed_table('data', 'key');
+COPY data FROM STDIN WITH (format csv, delimiter '|', escape '\');
+1|{"this":"is","json":1}
+2|{"$\"":9}
+3|{"{}":"	"}
+4|{}
+\.
+
+-- run pg_dump on worker (which has shards)
+\COPY output FROM PROGRAM 'PGAPPNAME=pg_dump pg_dump -f results/pg_dump.tmp -h localhost -p 57637 -U postgres -d regression -n dumper --quote-all-identifiers'
+
+-- restore pg_dump from worker via coordinator
+DROP SCHEMA dumper CASCADE;
+\COPY (SELECT line FROM output WHERE line IS NOT NULL) TO PROGRAM 'psql -qtAX -h localhost -p 57636 -U postgres -d regression -f results/pg_dump.tmp'
+
+-- check the tables (should not include shards)
+SELECT tablename FROM pg_tables WHERE schemaname = 'dumper' ORDER BY 1;
+
+DROP SCHEMA dumper CASCADE;

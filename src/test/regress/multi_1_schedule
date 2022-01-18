@@ -196,12 +196,13 @@ test: local_dist_join_modifications
 test: local_table_join
 test: local_dist_join_mixed
 test: citus_local_dist_joins
+test: pg_dump
 
 # ---------
 # multi_copy creates hash and range-partitioned tables and performs COPY
 # multi_router_planner creates hash partitioned tables.
 # ---------
-test: multi_copy fast_path_router_modify pg_dump
+test: multi_copy fast_path_router_modify
 test: multi_router_planner
 # These 2 tests have prepared statements which sometimes get invalidated by concurrent tests,
 # changing the debug output. We should not run them in parallel with others

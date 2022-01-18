@@ -92,6 +92,7 @@ IsSettingSafeToPropagate(char *name)
 {
 	/* if this list grows considerably we should switch to bsearch */
 	const char *skipSettings[] = {
+		"application_name",
 		"citus.propagate_set_commands",
 		"client_encoding",
 		"exit_on_error",
