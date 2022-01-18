@@ -1,4 +1,4 @@
-FROM ubuntu:21.10 AS base
+FROM ubuntu:20.04 AS base
 
 # environment is to make python pass an interactive shell, probably not the best timezone given a wide variety of colleagues
 ENV TZ=Europe/Amsterdam
