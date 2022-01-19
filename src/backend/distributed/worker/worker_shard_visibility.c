@@ -172,9 +172,6 @@ ErrorIfIllegallyChangingKnownShard(Oid relationId)
 /*
  * RelationIsAKnownShard gets a relationId, check whether it's a shard of
  * any distributed table.
- *
- * We can only do that in MX since both the metadata and tables are only
- * present there.
  */
 bool
 RelationIsAKnownShard(Oid shardRelationId)
