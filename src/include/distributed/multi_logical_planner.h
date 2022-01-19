@@ -199,7 +199,6 @@ extern bool IsCitusTableRTE(Node *node);
 extern bool IsDistributedOrReferenceTableRTE(Node *node);
 extern bool IsDistributedTableRTE(Node *node);
 extern bool IsReferenceTableRTE(Node *node);
-extern bool QueryContainsDistributedTableRTE(Query *query);
 extern bool IsCitusExtraDataContainerRelation(RangeTblEntry *rte);
 extern bool ContainsReadIntermediateResultFunction(Node *node);
 extern bool ContainsReadIntermediateResultArrayFunction(Node *node);

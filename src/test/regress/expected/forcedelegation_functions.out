@@ -1,0 +1,1430 @@
+SET citus.log_remote_commands TO OFF;
+DROP SCHEMA IF EXISTS forcepushdown_schema CASCADE;
+NOTICE:  schema "forcepushdown_schema" does not exist, skipping
+CREATE SCHEMA forcepushdown_schema;
+SET search_path TO 'forcepushdown_schema';
+SET citus.shard_replication_factor = 1;
+SET citus.shard_count = 32;
+SET citus.next_shard_id TO 900000;
+CREATE TABLE test_forcepushdown(intcol int PRIMARY KEY, data char(50) default 'default');
+SELECT create_distributed_table('test_forcepushdown', 'intcol', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+--
+--Table in a different colocation group
+--
+CREATE TABLE test_forcepushdown_noncolocate(intcol int PRIMARY KEY);
+SELECT create_distributed_table('test_forcepushdown_noncolocate', 'intcol', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION insert_data(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (a);
+END;
+$fn$;
+CREATE FUNCTION insert_data_non_distarg(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (a+1);
+END;
+$fn$;
+CREATE FUNCTION update_data_nonlocal(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	UPDATE forcepushdown_schema.test_forcepushdown SET data = 'non-default';
+END;
+$fn$;
+CREATE FUNCTION insert_data_noncolocation(a int)
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	-- Insert into a different table than the function is colocated with
+	INSERT INTO forcepushdown_schema.test_forcepushdown_noncolocate VALUES (a);
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_data(int)', 'a',
+  colocate_with := 'test_forcepushdown',
+  force_delegation := true
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'insert_data_non_distarg(int)', 'a',
+  colocate_with := 'test_forcepushdown',
+  force_delegation := true
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'update_data_nonlocal(int)', 'a',
+  colocate_with := 'test_forcepushdown',
+  force_delegation := true
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function(
+  'insert_data_noncolocation(int)', 'a',
+  colocate_with := 'test_forcepushdown',
+  force_delegation := true
+);
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO DEBUG1;
+--SET citus.log_remote_commands TO on;
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT 'Transaction with no errors' Testing;
+          testing
+---------------------------------------------------------------------
+ Transaction with no errors
+(1 row)
+
+BEGIN;
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (1);
+-- This call will insert both the rows locally on the remote worker
+SELECT insert_data(2);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ insert_data
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (3);
+COMMIT;
+SELECT 'Transaction with duplicate error in the remote function' Testing;
+                         testing
+---------------------------------------------------------------------
+ Transaction with duplicate error in the remote function
+(1 row)
+
+BEGIN;
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (4);
+-- This call will fail with duplicate error on the remote worker
+SELECT insert_data(3);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  duplicate key value violates unique constraint "test_forcepushdown_pkey_900015"
+DETAIL:  Key (intcol)=(3) already exists.
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (a)"
+PL/pgSQL function forcepushdown_schema.insert_data(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (5);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+SELECT 'Transaction with duplicate error in the local statement' Testing;
+                         testing
+---------------------------------------------------------------------
+ Transaction with duplicate error in the local statement
+(1 row)
+
+BEGIN;
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (6);
+-- This call will insert both the rows locally on the remote worker
+SELECT insert_data(7);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ insert_data
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (8);
+-- This will fail
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (8);
+ERROR:  duplicate key value violates unique constraint "test_forcepushdown_pkey_900000"
+DETAIL:  Key (intcol)=(8) already exists.
+CONTEXT:  while executing command on localhost:xxxxx
+COMMIT;
+SELECT 'Transaction with function using non-distribution argument' Testing;
+                          testing
+---------------------------------------------------------------------
+ Transaction with function using non-distribution argument
+(1 row)
+
+BEGIN;
+-- This should fail
+SELECT insert_data_non_distarg(9);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (a+1)"
+PL/pgSQL function forcepushdown_schema.insert_data_non_distarg(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+COMMIT;
+SELECT 'Transaction with function doing remote connection' Testing;
+                      testing
+---------------------------------------------------------------------
+ Transaction with function doing remote connection
+(1 row)
+
+BEGIN;
+-- This statement will pass
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (11);
+-- This call will try to update rows locally and on remote node(s)
+SELECT update_data_nonlocal(12);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "UPDATE forcepushdown_schema.test_forcepushdown SET data = 'non-default'"
+PL/pgSQL function forcepushdown_schema.update_data_nonlocal(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (13);
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+COMMIT;
+SELECT 'Transaction with no errors but with a rollback' Testing;
+                    testing
+---------------------------------------------------------------------
+ Transaction with no errors but with a rollback
+(1 row)
+
+BEGIN;
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (14);
+-- This call will insert both the rows locally on the remote worker
+SELECT insert_data(15);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ insert_data
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (16);
+ROLLBACK;
+--
+-- Add function with pushdown=true in the targetList of a query
+--
+BEGIN;
+-- Query gets delegated to the node of the shard xx_900001 for the key=1,
+-- and the function inserts value (1+17) locally on the shard xx_900031
+SELECT insert_data(intcol+17) from test_forcepushdown where intcol = 1;
+ insert_data
+---------------------------------------------------------------------
+
+(1 row)
+
+-- This will fail with duplicate error as the function already inserted
+-- the value(1+17)
+SELECT insert_data(18);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  duplicate key value violates unique constraint "test_forcepushdown_pkey_900031"
+DETAIL:  Key (intcol)=(18) already exists.
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (a)"
+PL/pgSQL function forcepushdown_schema.insert_data(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+COMMIT;
+--
+-- Access a table with the same shard key as distribution argument but in a
+-- different colocation group.
+--
+BEGIN;
+SELECT insert_data_noncolocation(19);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown_noncolocate VALUES (a)"
+PL/pgSQL function forcepushdown_schema.insert_data_noncolocation(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+COMMIT;
+SELECT insert_data_noncolocation(19);
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown_noncolocate VALUES (a)"
+PL/pgSQL function forcepushdown_schema.insert_data_noncolocation(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+-- This should have only the first 3 rows as all other transactions were rolled back.
+SELECT * FROM forcepushdown_schema.test_forcepushdown ORDER BY 1;
+ intcol |                        data
+---------------------------------------------------------------------
+      1 | default
+      2 | default
+      3 | default
+(3 rows)
+
+--
+-- Nested call, function with pushdown=false calling function with pushdown=true
+--
+CREATE TABLE test_nested (id int, name text);
+SELECT create_distributed_table('test_nested','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO test_nested VALUES (100,'hundred');
+INSERT INTO test_nested VALUES (200,'twohundred');
+INSERT INTO test_nested VALUES (300,'threehundred');
+INSERT INTO test_nested VALUES (400,'fourhundred');
+INSERT INTO test_nested VALUES (512,'fivetwelve');
+CREATE OR REPLACE FUNCTION inner_force_delegation_function(int)
+RETURNS NUMERIC AS $$
+DECLARE ret_val NUMERIC;
+BEGIN
+        SELECT max(id)::numeric+1 INTO ret_val  FROM forcepushdown_schema.test_nested WHERE id = $1;
+	RAISE NOTICE 'inner_force_delegation_function():%', ret_val;
+        RETURN ret_val;
+END;
+$$  LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION func_calls_forcepush_func()
+RETURNS NUMERIC AS $$
+DECLARE incremented_val NUMERIC;
+BEGIN
+	-- Constant distribution argument
+	SELECT inner_force_delegation_function INTO incremented_val FROM inner_force_delegation_function(100);
+	RETURN incremented_val;
+END;
+$$  LANGUAGE plpgsql;
+SELECT create_distributed_function('func_calls_forcepush_func()');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_function('inner_force_delegation_function(int)', '$1', colocate_with := 'test_nested', force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT func_calls_forcepush_func();
+DEBUG:  not pushing down function calls in a multi-statement transaction
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(100)"
+PL/pgSQL function func_calls_forcepush_func() line XX at SQL statement
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(100)"
+PL/pgSQL function func_calls_forcepush_func() line XX at SQL statement
+NOTICE:  inner_force_delegation_function():101
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(100)"
+PL/pgSQL function func_calls_forcepush_func() line XX at SQL statement
+ func_calls_forcepush_func
+---------------------------------------------------------------------
+                       101
+(1 row)
+
+COMMIT;
+SELECT func_calls_forcepush_func();
+DEBUG:  function does not have co-located tables
+NOTICE:  inner_force_delegation_function():101
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(100)"
+PL/pgSQL function func_calls_forcepush_func() line XX at SQL statement
+ func_calls_forcepush_func
+---------------------------------------------------------------------
+                       101
+(1 row)
+
+CREATE OR REPLACE FUNCTION get_val()
+RETURNS INT AS $$
+BEGIN
+        RETURN 100::INT;
+END;
+$$  LANGUAGE plpgsql;
+--
+-- UDF calling another UDF in a FROM clause
+-- fn()
+-- {
+--   select res into var from fn();
+-- }
+--
+CREATE OR REPLACE FUNCTION func_calls_forcepush_func_infrom()
+RETURNS NUMERIC AS $$
+DECLARE incremented_val NUMERIC;
+DECLARE add_val INT;
+BEGIN
+	add_val := get_val();
+	SELECT inner_force_delegation_function INTO incremented_val FROM inner_force_delegation_function(add_val + 100);
+	RETURN incremented_val;
+END;
+$$  LANGUAGE plpgsql;
+SELECT func_calls_forcepush_func_infrom();
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
+PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
+PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
+NOTICE:  inner_force_delegation_function():201
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
+PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
+ func_calls_forcepush_func_infrom
+---------------------------------------------------------------------
+                              201
+(1 row)
+
+BEGIN;
+SELECT func_calls_forcepush_func_infrom();
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
+PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
+PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
+NOTICE:  inner_force_delegation_function():201
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
+PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
+ func_calls_forcepush_func_infrom
+---------------------------------------------------------------------
+                              201
+(1 row)
+
+COMMIT;
+--
+-- UDF calling another UDF in the SELECT targetList
+-- fn()
+-- {
+--   select fn() into var;
+-- }
+--
+CREATE OR REPLACE FUNCTION func_calls_forcepush_func_intarget()
+RETURNS NUMERIC AS $$
+DECLARE incremented_val NUMERIC;
+DECLARE add_val INT;
+BEGIN
+	add_val := get_val();
+	SELECT inner_force_delegation_function(100 + 100) INTO incremented_val OFFSET 0;
+	RETURN incremented_val;
+END;
+$$  LANGUAGE plpgsql;
+SELECT func_calls_forcepush_func_intarget();
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement
+NOTICE:  inner_force_delegation_function():201
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement
+ func_calls_forcepush_func_intarget
+---------------------------------------------------------------------
+                                201
+(1 row)
+
+BEGIN;
+SELECT func_calls_forcepush_func_intarget();
+NOTICE:  inner_force_delegation_function():201
+DETAIL:  from localhost:xxxxx
+CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
+PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement
+ func_calls_forcepush_func_intarget
+---------------------------------------------------------------------
+                                201
+(1 row)
+
+COMMIT;
+--
+-- Recursive function call with pushdown=true
+--
+CREATE OR REPLACE FUNCTION test_recursive(inp integer)
+RETURNS INT AS $$
+DECLARE var INT;
+BEGIN
+	RAISE NOTICE 'input:%', inp;
+	if (inp > 1) then
+		inp := inp - 1;
+		var := forcepushdown_schema.test_recursive(inp);
+		RETURN var;
+	else
+		RETURN inp;
+	END if;
+END;
+$$  LANGUAGE plpgsql;
+SELECT create_distributed_function('test_recursive(int)', '$1', colocate_with := 'test_nested', force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT test_recursive(5);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+NOTICE:  input:5
+DETAIL:  from localhost:xxxxx
+NOTICE:  input:4
+DETAIL:  from localhost:xxxxx
+NOTICE:  input:3
+DETAIL:  from localhost:xxxxx
+NOTICE:  input:2
+DETAIL:  from localhost:xxxxx
+NOTICE:  input:1
+DETAIL:  from localhost:xxxxx
+ test_recursive
+---------------------------------------------------------------------
+              1
+(1 row)
+
+END;
+--
+-- Distributed function gets delegated indirectly (as part of a query)
+--
+BEGIN;
+-- Query lands on the shard with key = 300(shard __900089) and the function inserts locally
+SELECT inner_force_delegation_function(id) FROM test_nested WHERE id = 300;
+NOTICE:  inner_force_delegation_function():301
+DETAIL:  from localhost:xxxxx
+ inner_force_delegation_function
+---------------------------------------------------------------------
+                             301
+(1 row)
+
+-- Query lands on the shard with key = 300(shard __900089) and the function inserts remotely
+SELECT insert_data_non_distarg(id) FROM test_nested WHERE id = 300;
+ERROR:  cannot execute a distributed query from a query on a shard
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (a+1)"
+PL/pgSQL function forcepushdown_schema.insert_data_non_distarg(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+END;
+--
+-- Non constant distribution arguments
+--
+-- Param(PARAM_EXEC) node e.g. SELECT fn((SELECT col from test_nested where col=val))
+BEGIN;
+SELECT inner_force_delegation_function((SELECT id+112 FROM test_nested WHERE id=400));
+NOTICE:  inner_force_delegation_function():513
+DETAIL:  from localhost:xxxxx
+ inner_force_delegation_function
+---------------------------------------------------------------------
+                             513
+(1 row)
+
+END;
+CREATE OR REPLACE FUNCTION test_non_constant(x int, y bigint)
+RETURNS int
+AS $$
+DECLARE
+BEGIN
+        RAISE NOTICE 'test_non_constant: % %', x, y;
+        RETURN x + y;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function(
+'test_non_constant(int,bigint)',
+'$1',
+colocate_with := 'test_forcepushdown',
+force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT count(*) FROM test_nested;
+ count
+---------------------------------------------------------------------
+     5
+(1 row)
+
+-- Result should print 99, count(*) from test_nested
+WITH c AS (SELECT count(*) FROM test_nested),
+		     b as (SELECT test_non_constant(99::int, (SELECT COUNT FROM c)))
+			SELECT COUNT(*) FROM b;
+DEBUG:  CTE c is going to be inlined via distributed planning
+DEBUG:  generating subplan XXX_1 for CTE b: SELECT forcepushdown_schema.test_non_constant(99, (SELECT c.count FROM (SELECT count(*) AS count FROM forcepushdown_schema.test_nested) c)) AS test_non_constant
+DEBUG:  generating subplan XXX_1 for subquery SELECT count(*) AS count FROM forcepushdown_schema.test_nested
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT forcepushdown_schema.test_non_constant(99, (SELECT c.count FROM (SELECT intermediate_result.count FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(count bigint)) c)) AS test_non_constant
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT count(*) AS count FROM (SELECT intermediate_result.test_non_constant FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(test_non_constant integer)) b
+DEBUG:  arguments in a distributed function must not contain subqueries
+NOTICE:  test_non_constant: 99 5
+CONTEXT:  PL/pgSQL function test_non_constant(integer,bigint) line XX at RAISE
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+CREATE TABLE emp (
+    empname           text NOT NULL,
+    salary            integer
+);
+CREATE TABLE emp_audit(
+    operation         char(1)   NOT NULL,
+    stamp             timestamp NOT NULL,
+    userid            text      NOT NULL,
+    empname           text      NOT NULL,
+    salary integer
+);
+SELECT create_distributed_table('emp','empname');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('emp_audit','empname');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION inner_emp(empname text)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO emp VALUES (empname, 33);
+END;
+$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION outer_emp()
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    PERFORM inner_emp('hello');
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('inner_emp(text)','empname', force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT outer_emp();
+DEBUG:  Skipping delegation of function from a PL/PgSQL simple expression
+CONTEXT:  SQL statement "SELECT inner_emp('hello')"
+PL/pgSQL function outer_emp() line XX at PERFORM
+ outer_emp
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * from emp;
+ empname | salary
+---------------------------------------------------------------------
+ hello   |     33
+(1 row)
+
+--
+-- INSERT..SELECT
+--
+CREATE FUNCTION insert_select_data(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	INSERT INTO forcepushdown_schema.test_forcepushdown SELECT(a+1);
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_select_data(int)', 'a',
+  colocate_with := 'test_forcepushdown',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Function lands on worker1 and issues COPY ... INSERT on the worker2 into the shard_900021
+BEGIN;
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (30);
+-- This will fail
+SELECT insert_select_data(20);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  cannot execute a distributed query from a query on a shard
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown SELECT(a+1)"
+PL/pgSQL function forcepushdown_schema.insert_select_data(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+COMMIT;
+-- Function lands on worker2 and issues COPY ... INSERT on the same node into the shard_900029
+BEGIN;
+-- This will pass
+SELECT insert_select_data(21);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ insert_select_data
+---------------------------------------------------------------------
+
+(1 row)
+
+END;
+-- Function lands on worker2 and issues COPY ... INSERT on the worker1 into the shard_900028
+BEGIN;
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (30);
+-- This will fail
+SELECT insert_select_data(22);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  cannot execute a distributed query from a query on a shard
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown SELECT(a+1)"
+PL/pgSQL function forcepushdown_schema.insert_select_data(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+END;
+-- Functions lands on worker1 and issues COPY ... INSERT on the worker2 into the shard_900021
+-- This will pass as there is no surrounding transaction
+SELECT insert_select_data(20);
+DEBUG:  pushing down the function call
+ insert_select_data
+---------------------------------------------------------------------
+
+(1 row)
+
+-- (21+1) and (20+1) should appear
+SELECT * FROM forcepushdown_schema.test_forcepushdown ORDER BY 1;
+ intcol |                        data
+---------------------------------------------------------------------
+      1 | default
+      2 | default
+      3 | default
+     21 | default
+     22 | default
+(5 rows)
+
+CREATE FUNCTION insert_select_data_nonlocal(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	INSERT INTO forcepushdown_schema.test_forcepushdown(intcol)
+		SELECT intcol FROM forcepushdown_schema.test_forcepushdown_noncolocate;
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_select_data_nonlocal(int)', 'a',
+  colocate_with := 'test_forcepushdown',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO forcepushdown_schema.test_forcepushdown_noncolocate VALUES (30);
+INSERT INTO forcepushdown_schema.test_forcepushdown_noncolocate VALUES (31);
+INSERT INTO forcepushdown_schema.test_forcepushdown_noncolocate VALUES (32);
+BEGIN;
+INSERT INTO forcepushdown_schema.test_forcepushdown VALUES (40);
+-- This will fail
+SELECT insert_select_data_nonlocal(41);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  cannot execute a distributed query from a query on a shard
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown(intcol)
+		SELECT intcol FROM forcepushdown_schema.test_forcepushdown_noncolocate"
+PL/pgSQL function forcepushdown_schema.insert_select_data_nonlocal(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+COMMIT;
+-- Above 3 rows (30, 31, 32) should appear now
+SELECT insert_select_data_nonlocal(40);
+DEBUG:  pushing down the function call
+ insert_select_data_nonlocal
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM forcepushdown_schema.test_forcepushdown ORDER BY 1;
+ intcol |                        data
+---------------------------------------------------------------------
+      1 | default
+      2 | default
+      3 | default
+     21 | default
+     22 | default
+     30 | default
+     31 | default
+     32 | default
+(8 rows)
+
+CREATE TABLE test_forcepushdown_char(data char(50) PRIMARY KEY);
+DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_forcepushdown_char_pkey" for table "test_forcepushdown_char"
+SELECT create_distributed_table('test_forcepushdown_char', 'data', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE test_forcepushdown_varchar(data varchar PRIMARY KEY);
+DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_forcepushdown_varchar_pkey" for table "test_forcepushdown_varchar"
+SELECT create_distributed_table('test_forcepushdown_varchar', 'data', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE test_forcepushdown_text(data text PRIMARY KEY);
+DEBUG:  CREATE TABLE / PRIMARY KEY will create implicit index "test_forcepushdown_text_pkey" for table "test_forcepushdown_text"
+SELECT create_distributed_table('test_forcepushdown_text', 'data', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION insert_data_char(a char(50))
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	INSERT INTO forcepushdown_schema.test_forcepushdown_char VALUES (a);
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_data_char(char)', 'a',
+  colocate_with := 'test_forcepushdown_char',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION insert_data_varchar(a varchar)
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	INSERT INTO forcepushdown_schema.test_forcepushdown_varchar VALUES (a);
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_data_varchar(varchar)', 'a',
+  colocate_with := 'test_forcepushdown_varchar',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION insert_data_text(a text)
+RETURNS void LANGUAGE plpgsql AS $fn$
+BEGIN
+	INSERT INTO forcepushdown_schema.test_forcepushdown_text VALUES (a);
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_data_text(text)', 'a',
+  colocate_with := 'test_forcepushdown_text',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT insert_data_varchar('VARCHAR');
+DEBUG:  pushing down the function call
+ insert_data_varchar
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT insert_data_varchar('VARCHAR2');
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ insert_data_varchar
+---------------------------------------------------------------------
+
+(1 row)
+
+COMMIT;
+SELECT insert_data_text('TEXT');
+DEBUG:  pushing down the function call
+ insert_data_text
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT insert_data_text('TEXT2');
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ insert_data_text
+---------------------------------------------------------------------
+
+(1 row)
+
+COMMIT;
+-- Char is failing as the datatype is represented differently in the
+-- PL/PgSQL and the exec engine.
+SELECT insert_data_char('CHAR');
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown_char VALUES (a)"
+PL/pgSQL function forcepushdown_schema.insert_data_char(character) line XX at SQL statement
+while executing command on localhost:xxxxx
+BEGIN;
+SELECT insert_data_char('CHAR');
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.test_forcepushdown_char VALUES (a)"
+PL/pgSQL function forcepushdown_schema.insert_data_char(character) line XX at SQL statement
+while executing command on localhost:xxxxx
+COMMIT;
+SELECT * FROM test_forcepushdown_char ORDER BY 1;
+ data
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM test_forcepushdown_varchar ORDER BY 1;
+   data
+---------------------------------------------------------------------
+ VARCHAR
+ VARCHAR2
+(2 rows)
+
+SELECT * FROM test_forcepushdown_text ORDER BY 1;
+ data
+---------------------------------------------------------------------
+ TEXT
+ TEXT2
+(2 rows)
+
+-- Test sub query
+CREATE TABLE test_subquery(data int, result int);
+SELECT create_distributed_table('test_subquery', 'data', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE test_non_colocated(id int);
+SELECT create_distributed_table('test_non_colocated', 'id', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION select_data(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+DECLARE var INT;
+BEGIN
+        SELECT result INTO var FROM forcepushdown_schema.test_subquery WHERE data =
+		(SELECT data FROM forcepushdown_schema.test_subquery WHERE data = a);
+	RAISE NOTICE 'Result: %', var;
+END;
+$fn$;
+SELECT create_distributed_function(
+  'select_data(int)', 'a',
+  colocate_with := 'test_subquery',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION select_data_noncolocate(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+DECLARE var INT;
+BEGIN
+	-- Key is the same but colocation ID is different
+        SELECT data INTO var FROM forcepushdown_schema.test_subquery WHERE data =
+		(SELECT id FROM forcepushdown_schema.test_non_colocated WHERE id = a);
+	RAISE NOTICE 'Result: %', var;
+END;
+$fn$;
+SELECT create_distributed_function(
+  'select_data_noncolocate(int)', 'a',
+  colocate_with := 'test_subquery',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION insert_select_data_cte1(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+DECLARE var INT;
+BEGIN
+	WITH ins AS (INSERT INTO forcepushdown_schema.test_subquery VALUES (a) RETURNING data)
+			SELECT ins.data INTO var FROM ins;
+	RAISE NOTICE 'Result: %', var;
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_select_data_cte1(int)', 'a',
+  colocate_with := 'test_subquery',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION insert_select_data_cte2(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+DECLARE var INT;
+BEGIN
+	WITH ins AS (INSERT INTO forcepushdown_schema.test_subquery VALUES (a) RETURNING data)
+		SELECT ins.data INTO var FROM forcepushdown_schema.test_subquery, ins WHERE forcepushdown_schema.test_subquery.data = a;
+	RAISE NOTICE 'Result: %', var;
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_select_data_cte2(int)', 'a',
+  colocate_with := 'test_subquery',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE FUNCTION insert_data_cte_nondist(a integer)
+RETURNS void LANGUAGE plpgsql AS $fn$
+DECLARE var INT;
+BEGIN
+	-- Inserting a non-distribution argument (a+1)
+	WITH ins AS (INSERT INTO forcepushdown_schema.test_subquery VALUES (a+1) RETURNING data)
+		SELECT ins.data INTO var FROM forcepushdown_schema.test_subquery, ins WHERE forcepushdown_schema.test_subquery.data = a;
+	RAISE NOTICE 'Result: %', var;
+END;
+$fn$;
+SELECT create_distributed_function(
+  'insert_data_cte_nondist(int)', 'a',
+  colocate_with := 'test_subquery',
+  force_delegation := true
+);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO forcepushdown_schema.test_subquery VALUES(100, -1);
+-- This should pass
+SELECT select_data(100);
+DEBUG:  pushing down the function call
+NOTICE:  Result: -1
+DETAIL:  from localhost:xxxxx
+ select_data
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT select_data(100);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  cannot execute a distributed query from a query on a shard
+CONTEXT:  SQL statement "SELECT result          FROM forcepushdown_schema.test_subquery WHERE data =
+		(SELECT data FROM forcepushdown_schema.test_subquery WHERE data = a)"
+PL/pgSQL function forcepushdown_schema.select_data(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+END;
+-- This should fail
+SELECT select_data_noncolocate(100);
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "SELECT data          FROM forcepushdown_schema.test_subquery WHERE data =
+		(SELECT id FROM forcepushdown_schema.test_non_colocated WHERE id = a)"
+PL/pgSQL function forcepushdown_schema.select_data_noncolocate(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+BEGIN;
+SELECT select_data_noncolocate(100);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "SELECT data          FROM forcepushdown_schema.test_subquery WHERE data =
+		(SELECT id FROM forcepushdown_schema.test_non_colocated WHERE id = a)"
+PL/pgSQL function forcepushdown_schema.select_data_noncolocate(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+END;
+-- This should pass
+SELECT insert_select_data_cte1(200);
+DEBUG:  pushing down the function call
+NOTICE:  Result: 200
+DETAIL:  from localhost:xxxxx
+ insert_select_data_cte1
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT insert_select_data_cte1(200);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+NOTICE:  Result: 200
+DETAIL:  from localhost:xxxxx
+ insert_select_data_cte1
+---------------------------------------------------------------------
+
+(1 row)
+
+COMMIT;
+-- This should pass
+SELECT insert_select_data_cte2(300);
+DEBUG:  pushing down the function call
+NOTICE:  Result: <NULL>
+DETAIL:  from localhost:xxxxx
+ insert_select_data_cte2
+---------------------------------------------------------------------
+
+(1 row)
+
+BEGIN;
+SELECT insert_select_data_cte2(300);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+NOTICE:  Result: 300
+DETAIL:  from localhost:xxxxx
+ insert_select_data_cte2
+---------------------------------------------------------------------
+
+(1 row)
+
+COMMIT;
+-- This should fail
+SELECT insert_data_cte_nondist(400);
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "WITH ins AS (INSERT INTO forcepushdown_schema.test_subquery VALUES (a+1) RETURNING data)
+		SELECT ins.data          FROM forcepushdown_schema.test_subquery, ins WHERE forcepushdown_schema.test_subquery.data = a"
+PL/pgSQL function forcepushdown_schema.insert_data_cte_nondist(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+BEGIN;
+SELECT insert_data_cte_nondist(400);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "WITH ins AS (INSERT INTO forcepushdown_schema.test_subquery VALUES (a+1) RETURNING data)
+		SELECT ins.data          FROM forcepushdown_schema.test_subquery, ins WHERE forcepushdown_schema.test_subquery.data = a"
+PL/pgSQL function forcepushdown_schema.insert_data_cte_nondist(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+COMMIT;
+-- Rows 100, 200, 300 should be seen
+SELECT * FROM forcepushdown_schema.test_subquery ORDER BY 1;
+ data | result
+---------------------------------------------------------------------
+  100 |     -1
+  200 |
+  200 |
+  300 |
+  300 |
+(5 rows)
+
+-- Query with targetList greater than 1
+-- Function from FROM clause is not delegated outside of a BEGIN (for now)
+SELECT 1,2,3 FROM select_data(100);
+DEBUG:  generating subplan XXX_1 for subquery SELECT data FROM forcepushdown_schema.test_subquery WHERE (data OPERATOR(pg_catalog.=) 100)
+CONTEXT:  SQL statement "SELECT result          FROM forcepushdown_schema.test_subquery WHERE data =
+		(SELECT data FROM forcepushdown_schema.test_subquery WHERE data = a)"
+PL/pgSQL function select_data(integer) line XX at SQL statement
+DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT result FROM forcepushdown_schema.test_subquery WHERE (data OPERATOR(pg_catalog.=) (SELECT intermediate_result.data FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(data integer)))
+CONTEXT:  SQL statement "SELECT result          FROM forcepushdown_schema.test_subquery WHERE data =
+		(SELECT data FROM forcepushdown_schema.test_subquery WHERE data = a)"
+PL/pgSQL function select_data(integer) line XX at SQL statement
+NOTICE:  Result: -1
+CONTEXT:  PL/pgSQL function select_data(integer) line XX at RAISE
+ ?column? | ?column? | ?column?
+---------------------------------------------------------------------
+        1 |        2 |        3
+(1 row)
+
+BEGIN;
+-- Function from FROM clause is delegated
+SELECT 1,2,3 FROM select_data(100);
+DEBUG:  pushing down function call in a multi-statement transaction
+DEBUG:  pushing down the function call
+ERROR:  cannot execute a distributed query from a query on a shard
+CONTEXT:  SQL statement "SELECT result          FROM forcepushdown_schema.test_subquery WHERE data =
+		(SELECT data FROM forcepushdown_schema.test_subquery WHERE data = a)"
+PL/pgSQL function forcepushdown_schema.select_data(integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+END;
+-- Test prepared statements
+CREATE TABLE table_test_prepare(i int, j bigint);
+SELECT create_distributed_table('table_test_prepare', 'i', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP FUNCTION test_prepare(int, int);
+ERROR:  function test_prepare(integer, integer) does not exist
+CREATE OR REPLACE FUNCTION test_prepare(x int, y int)
+RETURNS bigint
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO forcepushdown_schema.table_test_prepare VALUES (x, y);
+    INSERT INTO forcepushdown_schema.table_test_prepare VALUES (y, x);
+	RETURN x + y;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('test_prepare(int,int)','x',force_delegation :=true, colocate_with := 'table_test_prepare');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP FUNCTION outer_test_prepare(int, int);
+ERROR:  function outer_test_prepare(integer, integer) does not exist
+CREATE OR REPLACE FUNCTION outer_test_prepare(x int, y int)
+RETURNS void
+AS $$
+DECLARE
+    v int;
+BEGIN
+    PERFORM FROM test_prepare(x, y);
+    PERFORM 1, 1 + a FROM test_prepare(x + 1, y + 1) a;
+END;
+$$ LANGUAGE plpgsql;
+-- First 5 get delegated and succeeds
+BEGIN;
+SELECT outer_test_prepare(1,1);
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+ outer_test_prepare
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT outer_test_prepare(1,1);
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+ outer_test_prepare
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT outer_test_prepare(1,1);
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+ outer_test_prepare
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT outer_test_prepare(1,1);
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+ outer_test_prepare
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT outer_test_prepare(1,1);
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+ outer_test_prepare
+---------------------------------------------------------------------
+
+(1 row)
+
+-- All the above gets delegated and should see 5 * 4 rows
+SELECT COUNT(*) FROM table_test_prepare;
+ count
+---------------------------------------------------------------------
+    20
+(1 row)
+
+-- 6th execution will be generic plan and should get delegated
+SELECT outer_test_prepare(1,1);
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+ outer_test_prepare
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT outer_test_prepare(1,1);
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT 1, 1 + a FROM test_prepare(x + 1, y + 1) a"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+ outer_test_prepare
+---------------------------------------------------------------------
+
+(1 row)
+
+END;
+-- Fails as expected
+SELECT outer_test_prepare(1,2);
+DEBUG:  pushing down function call in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+DEBUG:  pushing down the function call
+CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+ERROR:  queries must filter by the distribution argument in the same colocation group when using the forced function pushdown
+HINT:  consider disabling forced delegation through create_distributed_table(..., force_delegation := false)
+CONTEXT:  SQL statement "INSERT INTO forcepushdown_schema.table_test_prepare VALUES (y, x)"
+PL/pgSQL function forcepushdown_schema.test_prepare(integer,integer) line XX at SQL statement
+while executing command on localhost:xxxxx
+SQL statement "SELECT FROM test_prepare(x, y)"
+PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
+SELECT COUNT(*) FROM table_test_prepare;
+ count
+---------------------------------------------------------------------
+    28
+(1 row)
+
+RESET client_min_messages;
+SET citus.log_remote_commands TO off;
+DROP SCHEMA forcepushdown_schema CASCADE;
+NOTICE:  drop cascades to 36 other objects
+DETAIL:  drop cascades to table test_forcepushdown
+drop cascades to table test_forcepushdown_noncolocate
+drop cascades to function insert_data(integer)
+drop cascades to function insert_data_non_distarg(integer)
+drop cascades to function update_data_nonlocal(integer)
+drop cascades to function insert_data_noncolocation(integer)
+drop cascades to table test_nested
+drop cascades to function inner_force_delegation_function(integer)
+drop cascades to function func_calls_forcepush_func()
+drop cascades to function get_val()
+drop cascades to function func_calls_forcepush_func_infrom()
+drop cascades to function func_calls_forcepush_func_intarget()
+drop cascades to function test_recursive(integer)
+drop cascades to function test_non_constant(integer,bigint)
+drop cascades to table emp
+drop cascades to table emp_audit
+drop cascades to function inner_emp(text)
+drop cascades to function outer_emp()
+drop cascades to function insert_select_data(integer)
+drop cascades to function insert_select_data_nonlocal(integer)
+drop cascades to table test_forcepushdown_char
+drop cascades to table test_forcepushdown_varchar
+drop cascades to table test_forcepushdown_text
+drop cascades to function insert_data_char(character)
+drop cascades to function insert_data_varchar(character varying)
+drop cascades to function insert_data_text(text)
+drop cascades to table test_subquery
+drop cascades to table test_non_colocated
+drop cascades to function select_data(integer)
+drop cascades to function select_data_noncolocate(integer)
+drop cascades to function insert_select_data_cte1(integer)
+drop cascades to function insert_select_data_cte2(integer)
+drop cascades to function insert_data_cte_nondist(integer)
+drop cascades to table table_test_prepare
+drop cascades to function test_prepare(integer,integer)
+drop cascades to function outer_test_prepare(integer,integer)

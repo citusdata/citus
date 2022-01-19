@@ -178,11 +178,13 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 		List *objectAddressList = list_make1((ObjectAddress *) distAddress);
 		List *distArgumetIndexList = list_make1_int(INVALID_DISTRIBUTION_ARGUMENT_INDEX);
 		List *colocationIdList = list_make1_int(INVALID_COLOCATION_ID);
+		List *forceDelegationList = list_make1_int(NO_FORCE_PUSHDOWN);
 
 		char *workerPgDistObjectUpdateCommand =
 			MarkObjectsDistributedCreateCommand(objectAddressList,
 												distArgumetIndexList,
-												colocationIdList);
+												colocationIdList,
+												forceDelegationList);
 		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
 	}
 }
