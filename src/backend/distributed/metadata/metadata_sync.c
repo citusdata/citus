@@ -1885,9 +1885,7 @@ List *
 InterTableRelationshipOfRelationCommandList(Oid relationId)
 {
 	/* commands to create foreign key constraints */
-	List *foreignConstraintCommands =
-		GetReferencingForeignConstaintCommands(relationId);
-	List *commandList = list_concat(commandList, foreignConstraintCommands);
+	List *commandList = GetReferencingForeignConstaintCommands(relationId);
 
 	/* commands to create partitioning hierarchy */
 	if (PartitionTable(relationId))

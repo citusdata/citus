@@ -597,22 +597,20 @@ InterTableRelationshipCommandList()
 	CitusTableCacheEntry *cacheEntry = NULL;
 	foreach_ptr(cacheEntry, distributedTableList)
 	{
-		if (ShouldSyncTableMetadata(cacheEntry->relationId))
+		/*
+		 * Skip foreign key and partition creation when we shouldn't need to sync
+		 * tablem metadata or the Citus table is owned by an extension.
+		 */
+		if (ShouldSyncTableMetadata(cacheEntry->relationId) &&
+			!IsTableOwnedByExtension(cacheEntry->relationId))
 		{
 			propagatedTableList = lappend(propagatedTableList, cacheEntry);
 		}
 	}
 
-	/* construct the foreign key constraints after all tables are created */
 	foreach_ptr(cacheEntry, propagatedTableList)
 	{
 		Oid relationId = cacheEntry->relationId;
-
-		if (IsTableOwnedByExtension(relationId))
-		{
-			/* skip foreign key creation when the Citus table is owned by an extension */
-			continue;
-		}
 
 		List *commandListForRelation =
 			InterTableRelationshipOfRelationCommandList(relationId);

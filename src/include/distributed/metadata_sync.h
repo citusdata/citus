@@ -56,6 +56,7 @@ extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int sha
 									 uint64 shardLength, int32 groupId);
 extern char * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
+extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
 extern void CreateShellTableOnWorkers(Oid relationId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
 extern List * DetachPartitionCommandList(void);
