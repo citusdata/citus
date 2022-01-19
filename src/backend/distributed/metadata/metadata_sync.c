@@ -1851,7 +1851,7 @@ HasMetadataWorkers(void)
 
 /*
  * CreateInterTableRelationshipOfRelationOnWorkers create inter table relationship
- * for the the given relation id.
+ * for the the given relation id on each worker node with metadata.
  */
 void
 CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
@@ -1863,20 +1863,8 @@ CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
 		return;
 	}
 
-	List *commandList = NIL;
-
-	/* commands to create foreign key constraints */
-	List *foreignConstraintCommands =
-		GetReferencingForeignConstaintCommands(relationId);
-	commandList = list_concat(commandList, foreignConstraintCommands);
-
-	/* commands to create partitioning hierarchy */
-	if (PartitionTable(relationId))
-	{
-		char *alterTableAttachPartitionCommands =
-			GenerateAlterTableAttachPartitionCommand(relationId);
-		commandList = lappend(commandList, alterTableAttachPartitionCommands);
-	}
+	List *commandList =
+		InterTableRelationshipOfRelationCommandList(relationId);
 
 	/* prevent recursive propagation */
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
@@ -1886,6 +1874,30 @@ CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
 	{
 		SendCommandToWorkersWithMetadata(command);
 	}
+}
+
+
+/*
+ * InterTableRelationshipOfRelationCommandList returns the command list to create
+ * inter table relationship for the given relation.
+ */
+List *
+InterTableRelationshipOfRelationCommandList(Oid relationId)
+{
+	/* commands to create foreign key constraints */
+	List *foreignConstraintCommands =
+		GetReferencingForeignConstaintCommands(relationId);
+	List *commandList = list_concat(commandList, foreignConstraintCommands);
+
+	/* commands to create partitioning hierarchy */
+	if (PartitionTable(relationId))
+	{
+		char *alterTableAttachPartitionCommands =
+			GenerateAlterTableAttachPartitionCommand(relationId);
+		commandList = lappend(commandList, alterTableAttachPartitionCommands);
+	}
+
+	return commandList;
 }
 
 

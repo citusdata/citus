@@ -111,7 +111,7 @@ static List * MetadataSetupCommandList();
 static List * ClearMetadataCommandList();
 static List * ClearShellTablesCommandList();
 static void SetUpDistributedTableWithDependencies(WorkerNode *workerNode);
-static List * MultipleDistributedTableIntegrationsCommandList();
+static List * InterTableRelationshipCommandList();
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static List * PropagateNodeWideObjectsCommandList();
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
@@ -579,15 +579,16 @@ master_set_node_property(PG_FUNCTION_ARGS)
 
 
 /*
- * MultipleDistributedTableIntegrationsCommandList returns the command list to
+ * InterTableRelationshipCommandList returns the command list to
  * set up the multiple integrations including
  *
  * (i) Foreign keys
  * (ii) Partionining hierarchy
  *
+ * for each citus table.
  */
 static List *
-MultipleDistributedTableIntegrationsCommandList()
+InterTableRelationshipCommandList()
 {
 	List *distributedTableList = CitusTableList();
 	List *propagatedTableList = NIL;
@@ -613,34 +614,12 @@ MultipleDistributedTableIntegrationsCommandList()
 			continue;
 		}
 
-		List *foreignConstraintCommands =
-			GetReferencingForeignConstaintCommands(relationId);
+		List *commandListForRelation =
+			InterTableRelationshipOfRelationCommandList(relationId);
 
 		multipleTableIntegrationCommandList = list_concat(
 			multipleTableIntegrationCommandList,
-			foreignConstraintCommands);
-	}
-
-	/* construct partitioning hierarchy after all tables are created */
-	foreach_ptr(cacheEntry, propagatedTableList)
-	{
-		Oid relationId = cacheEntry->relationId;
-
-		if (IsTableOwnedByExtension(relationId))
-		{
-			/* skip partition creation when the Citus table is owned by an extension */
-			continue;
-		}
-
-		if (PartitionTable(relationId))
-		{
-			char *alterTableAttachPartitionCommands =
-				GenerateAlterTableAttachPartitionCommand(relationId);
-
-			multipleTableIntegrationCommandList = lappend(
-				multipleTableIntegrationCommandList,
-				alterTableAttachPartitionCommands);
-		}
+			commandListForRelation);
 	}
 
 	multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION,
@@ -790,7 +769,7 @@ RecreateDistributedTablesWithDependenciesCommandList(WorkerNode *workerNode)
 								  workerNode->workerName,
 								  workerNode->workerPort));
 	commandList = list_concat(commandList,
-							  MultipleDistributedTableIntegrationsCommandList());
+							  InterTableRelationshipCommandList());
 
 	return commandList;
 }
