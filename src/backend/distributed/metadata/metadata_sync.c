@@ -84,7 +84,7 @@ char *EnableManualMetadataChangesForUser = "";
 
 
 static void EnsureSequentialModeMetadataOperations(void);
-static List * GetDistributedTableMetadataEvents(Oid relationId);
+static List * CitusTableMetadataCreateCommandList(Oid relationId);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
 static char * SchemaOwnerName(Oid objectId);
@@ -643,11 +643,13 @@ DistributedObjectMetadataSyncCommandList(void)
 
 
 /*
- * GetDistributedTableMetadataEvents returns the full set of DDL commands necessary to
- * create the given distributed table metadata on a worker.
+ * CitusTableMetadataCreateCommandList returns the set of commands necessary to
+ * create the given distributed table metadata on a worker. It includes truncate
+ * trigger as well, since we need to create truncate trigger for tables owned by
+ * extensions and use it for handling metadata while truncating tables.
  */
 static List *
-GetDistributedTableMetadataEvents(Oid relationId)
+CitusTableMetadataCreateCommandList(Oid relationId)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
 
@@ -1946,7 +1948,7 @@ CreateShellTableOnWorkers(Oid relationId)
 void
 CreateTableMetadataOnWorkers(Oid relationId)
 {
-	List *commandList = GetDistributedTableMetadataEvents(relationId);
+	List *commandList = CitusTableMetadataCreateCommandList(relationId);
 
 	/* prevent recursive propagation */
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
