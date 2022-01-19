@@ -404,14 +404,6 @@ ShouldSyncTableMetadata(Oid relationId)
 	bool citusTableWithNoDistKey =
 		IsCitusTableTypeCacheEntry(tableEntry, CITUS_TABLE_WITH_NO_DIST_KEY);
 
-	/*
-	 * We shouldn't sync metadata for distributed tables created with master_create_distributed_table
-	 */
-	if (hashDistributed && tableEntry->colocationId == INVALID_COLOCATION_ID)
-	{
-		return false;
-	}
-
 	return ShouldSyncTableMetadataInternal(hashDistributed, citusTableWithNoDistKey);
 }
 
