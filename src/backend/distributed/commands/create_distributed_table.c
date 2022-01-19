@@ -509,11 +509,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		CreateTruncateTrigger(relationId);
 	}
 
-	if (ShouldSyncTableMetadata(relationId))
-	{
-		SyncCitusTableMetadata(relationId);
-	}
-
 	/*
 	 * If we are using master_create_distributed_table, we don't need to continue,
 	 * because deprecated API does not supports the following features.
@@ -537,6 +532,11 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		 * create reference table when the method is DISTRIBUTE_BY_NONE.
 		 */
 		CreateReferenceTableShard(relationId);
+	}
+
+	if (ShouldSyncTableMetadata(relationId))
+	{
+		SyncCitusTableMetadata(relationId);
 	}
 
 	/*

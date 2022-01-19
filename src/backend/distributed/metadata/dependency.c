@@ -1029,7 +1029,8 @@ GetRelationSequenceDependencyList(Oid relationId)
 	List *sequenceDependencyDefList = NIL;
 
 	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	sequenceDependencyDefList = CreateObjectAddressDependencyDefList(RelationRelationId, dependentSequenceList);
+	sequenceDependencyDefList = CreateObjectAddressDependencyDefList(RelationRelationId,
+																	 dependentSequenceList);
 
 	return sequenceDependencyDefList;
 }
