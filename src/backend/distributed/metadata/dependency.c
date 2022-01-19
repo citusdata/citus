@@ -1026,20 +1026,12 @@ GetRelationSequenceDependencyList(Oid relationId)
 {
 	List *attnumList = NIL;
 	List *dependentSequenceList = NIL;
-	List *sequenceDependencyList = NIL;
+	List *sequenceDependencyDefList = NIL;
 
 	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+	sequenceDependencyDefList = CreateObjectAddressDependencyDefList(RelationRelationId, dependentSequenceList);
 
-	ListCell *dependentSequenceCell = NULL;
-	foreach(dependentSequenceCell, dependentSequenceList)
-	{
-		Oid sequenceOid = lfirst_oid(dependentSequenceCell);
-		DependencyDefinition *dependency = CreateObjectAddressDependencyDef(
-			RelationRelationId, sequenceOid);
-		sequenceDependencyList = lappend(sequenceDependencyList, dependency);
-	}
-
-	return sequenceDependencyList;
+	return sequenceDependencyDefList;
 }
 
 
