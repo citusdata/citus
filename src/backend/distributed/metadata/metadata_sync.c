@@ -1996,8 +1996,8 @@ DetachPartitionCommandList(void)
 		return NIL;
 	}
 
-	detachPartitionCommandList = lcons(DISABLE_DDL_PROPAGATION,
-									   detachPartitionCommandList);
+	detachPartitionCommandList =
+		lcons(DISABLE_DDL_PROPAGATION, detachPartitionCommandList);
 
 	/*
 	 * We probably do not need this but as an extra precaution, we are enabling
@@ -2019,13 +2019,13 @@ DetachPartitionCommandList(void)
  * since updates on the pg_dist_node metadata must be rollbacked if anything
  * goes wrong.
  */
-static MetadataSyncResult
+static NodeMetadataSyncResult
 SyncNodeMetadataToNodes(void)
 {
-	MetadataSyncResult result = METADATA_SYNC_SUCCESS;
+	NodeMetadataSyncResult result = NODE_METADATA_SYNC_SUCCESS;
 	if (!IsCoordinator())
 	{
-		return METADATA_SYNC_SUCCESS;
+		return NODE_METADATA_SYNC_SUCCESS;
 	}
 
 	/*
@@ -2035,7 +2035,7 @@ SyncNodeMetadataToNodes(void)
 	 */
 	if (!ConditionalLockRelationOid(DistNodeRelationId(), RowExclusiveLock))
 	{
-		return METADATA_SYNC_FAILED_LOCK;
+		return NODE_METADATA_SYNC_FAILED_LOCK;
 	}
 
 	List *syncedWorkerList = NIL;
@@ -2051,7 +2051,7 @@ SyncNodeMetadataToNodes(void)
 				ereport(WARNING, (errmsg("failed to sync metadata to %s:%d",
 										 workerNode->workerName,
 										 workerNode->workerPort)));
-				result = METADATA_SYNC_FAILED_SYNC;
+				result = NODE_METADATA_SYNC_FAILED_SYNC;
 			}
 			else
 			{
@@ -2072,7 +2072,7 @@ SyncNodeMetadataToNodes(void)
 		if (!nodeUpdated->metadataSynced)
 		{
 			/* set the result to FAILED to trigger the sync again */
-			result = METADATA_SYNC_FAILED_SYNC;
+			result = NODE_METADATA_SYNC_FAILED_SYNC;
 		}
 	}
 
@@ -2126,11 +2126,11 @@ SyncNodeMetadataToNodesMain(Datum main_arg)
 		{
 			UseCoordinatedTransaction();
 
-			MetadataSyncResult result = SyncNodeMetadataToNodes();
-			syncedAllNodes = (result == METADATA_SYNC_SUCCESS);
+			NodeMetadataSyncResult result = SyncNodeMetadataToNodes();
+			syncedAllNodes = (result == NODE_METADATA_SYNC_SUCCESS);
 
 			/* we use LISTEN/NOTIFY to wait for metadata syncing in tests */
-			if (result != METADATA_SYNC_FAILED_LOCK)
+			if (result != NODE_METADATA_SYNC_FAILED_LOCK)
 			{
 				Async_Notify(METADATA_SYNC_CHANNEL, NULL);
 			}

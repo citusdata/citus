@@ -22,10 +22,10 @@ extern int MetadataSyncRetryInterval;
 
 typedef enum
 {
-	METADATA_SYNC_SUCCESS = 0,
-	METADATA_SYNC_FAILED_LOCK = 1,
-	METADATA_SYNC_FAILED_SYNC = 2
-} MetadataSyncResult;
+	NODE_METADATA_SYNC_SUCCESS = 0,
+	NODE_METADATA_SYNC_FAILED_LOCK = 1,
+	NODE_METADATA_SYNC_FAILED_SYNC = 2
+} NodeMetadataSyncResult;
 
 /* Functions declarations for metadata syncing */
 extern void SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort);
