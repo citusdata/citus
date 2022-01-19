@@ -1,15 +1,14 @@
 #ifndef COLUMNAR_TABLEAM_H
 #define COLUMNAR_TABLEAM_H
-#include "citus_version.h"
 
 #include "postgres.h"
 #include "fmgr.h"
-#include "access/tableam.h"
 #include "access/skey.h"
+#include "access/tableam.h"
 #include "nodes/bitmapset.h"
 
-#include "distributed/coordinator_protocol.h"
-
+#include "access/heapam.h"
+#include "catalog/indexing.h"
 
 /*
  * Number of valid ItemPointer Offset's for "row number" <> "ItemPointer"
@@ -44,7 +43,10 @@
 #define VALID_BLOCKNUMBERS ((uint64) (MaxBlockNumber + 1))
 
 
-struct ColumnarScanDescData;
+extern void CreateTruncateTrigger(Oid relationId);
+extern void EnsureTableOwner(Oid relationId);
+extern bool CheckCitusVersion(int elevel);
+
 typedef struct ColumnarScanDescData *ColumnarScanDesc;
 
 
