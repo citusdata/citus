@@ -732,6 +732,7 @@ DistributedObjectMetadataSyncCommandList(void)
 	List *objectAddressList = NIL;
 	List *distArgumentIndexList = NIL;
 	List *colocationIdList = NIL;
+	List *forceDelegationList = NIL;
 
 	/* It is not strictly necessary to read the tuples in order.
 	 * However, it is useful to get consistent behavior, both for regression
@@ -767,6 +768,14 @@ DistributedObjectMetadataSyncCommandList(void)
 						 &colocationIdIsNull);
 		int32 colocationId = DatumGetInt32(colocationIdDatum);
 
+		bool forceDelegationIsNull = false;
+		Datum forceDelegationDatum =
+			heap_getattr(pgDistObjectTup,
+						 Anum_pg_dist_object_force_delegation,
+						 pgDistObjectDesc,
+						 &forceDelegationIsNull);
+		bool forceDelegation = DatumGetBool(forceDelegationDatum);
+
 		objectAddressList = lappend(objectAddressList, address);
 
 		if (distributionArgumentIndexIsNull)
@@ -789,6 +798,15 @@ DistributedObjectMetadataSyncCommandList(void)
 		{
 			colocationIdList = lappend_int(colocationIdList, colocationId);
 		}
+
+		if (forceDelegationIsNull)
+		{
+			forceDelegationList = lappend_int(forceDelegationList, NO_FORCE_PUSHDOWN);
+		}
+		else
+		{
+			forceDelegationList = lappend_int(forceDelegationList, forceDelegation);
+		}
 	}
 
 	systable_endscan_ordered(pgDistObjectScan);
@@ -798,7 +816,8 @@ DistributedObjectMetadataSyncCommandList(void)
 	char *workerMetadataUpdateCommand =
 		MarkObjectsDistributedCreateCommand(objectAddressList,
 											distArgumentIndexList,
-											colocationIdList);
+											colocationIdList,
+											forceDelegationList);
 	List *commandList = list_make1(workerMetadataUpdateCommand);
 
 	return commandList;
@@ -1000,7 +1019,8 @@ NodeListInsertCommand(List *workerNodeList)
 char *
 MarkObjectsDistributedCreateCommand(List *addresses,
 									List *distributionArgumentIndexes,
-									List *colocationIds)
+									List *colocationIds,
+									List *forceDelegations)
 {
 	StringInfo insertDistributedObjectsCommand = makeStringInfo();
 
@@ -1009,7 +1029,7 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 
 	appendStringInfo(insertDistributedObjectsCommand,
 					 "WITH distributed_object_data(typetext, objnames, "
-					 "objargs, distargumentindex, colocationid)  AS (VALUES ");
+					 "objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ");
 
 	bool isFirstObject = true;
 	for (int currentObjectCounter = 0; currentObjectCounter < list_length(addresses);
@@ -1019,6 +1039,7 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 		int distributionArgumentIndex = list_nth_int(distributionArgumentIndexes,
 													 currentObjectCounter);
 		int colocationId = list_nth_int(colocationIds, currentObjectCounter);
+		int forceDelegation = list_nth_int(forceDelegations, currentObjectCounter);
 		List *names = NIL;
 		List *args = NIL;
 		char *objectType = NULL;
@@ -1074,15 +1095,18 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 		appendStringInfo(insertDistributedObjectsCommand, "%d, ",
 						 distributionArgumentIndex);
 
-		appendStringInfo(insertDistributedObjectsCommand, "%d)",
+		appendStringInfo(insertDistributedObjectsCommand, "%d, ",
 						 colocationId);
+
+		appendStringInfo(insertDistributedObjectsCommand, "%s)",
+						 forceDelegation ? "true" : "false");
 	}
 
 	appendStringInfo(insertDistributedObjectsCommand, ") ");
 
 	appendStringInfo(insertDistributedObjectsCommand,
 					 "SELECT citus_internal_add_object_metadata("
-					 "typetext, objnames, objargs, distargumentindex::int, colocationid::int) "
+					 "typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) "
 					 "FROM distributed_object_data;");
 
 	return insertDistributedObjectsCommand->data;
@@ -1101,6 +1125,7 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 	ArrayType *argsArray = PG_GETARG_ARRAYTYPE_P(2);
 	int distributionArgumentIndex = PG_GETARG_INT32(3);
 	int colocationId = PG_GETARG_INT32(4);
+	bool forceDelegation = PG_GETARG_INT32(5);
 
 	if (!ShouldSkipMetadataChecks())
 	{
@@ -1142,9 +1167,14 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 			NULL :
 			&colocationId;
 
+		bool *forceDelegationAddress =
+			forceDelegation == false ?
+			NULL :
+			&forceDelegation;
 		UpdateFunctionDistributionInfo(&objectAddress,
 									   distributionArgumentIndexAddress,
-									   colocationIdAddress);
+									   colocationIdAddress,
+									   forceDelegationAddress);
 	}
 
 	SetLocalEnableDependencyCreation(prevDependencyCreationValue);

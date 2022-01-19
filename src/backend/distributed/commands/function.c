@@ -91,6 +91,7 @@ static void DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
 													   char *distributionArgumentName,
 													   Oid distributionArgumentOid,
 													   char *colocateWithTableName,
+													   bool *forceDelegationAddress,
 													   const ObjectAddress *
 													   functionAddress);
 static void DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid,
@@ -124,6 +125,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	char *distributionArgumentName = NULL;
 	char *colocateWithTableName = NULL;
+	bool *forceDelegationAddress = NULL;
+	bool forceDelegation = false;
 
 	/* if called on NULL input, error out */
 	if (funcOid == InvalidOid)
@@ -169,6 +172,17 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		}
 	}
 
+	/* check if the force_delegation flag is explicitly set (default is NULL) */
+	if (PG_ARGISNULL(3))
+	{
+		forceDelegationAddress = NULL;
+	}
+	else
+	{
+		forceDelegation = PG_GETARG_BOOL(3);
+		forceDelegationAddress = &forceDelegation;
+	}
+
 	EnsureCoordinator();
 	EnsureFunctionOwner(funcOid);
 
@@ -204,6 +218,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		DistributeFunctionWithDistributionArgument(funcOid, distributionArgumentName,
 												   distributionArgumentOid,
 												   colocateWithTableName,
+												   forceDelegationAddress,
 												   &functionAddress);
 	}
 	else if (!colocatedWithReferenceTable)
@@ -265,6 +280,7 @@ DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
 										   char *distributionArgumentName,
 										   Oid distributionArgumentOid,
 										   char *colocateWithTableName,
+										   bool *forceDelegationAddress,
 										   const ObjectAddress *functionAddress)
 {
 	/* get the argument index, or error out if we cannot find a valid index */
@@ -279,7 +295,8 @@ DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
 
 	/* record the distribution argument and colocationId */
 	UpdateFunctionDistributionInfo(functionAddress, &distributionArgumentIndex,
-								   &colocationId);
+								   &colocationId,
+								   forceDelegationAddress);
 }
 
 
@@ -310,7 +327,7 @@ DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid,
 	}
 
 	/* set distribution argument and colocationId to NULL */
-	UpdateFunctionDistributionInfo(functionAddress, NULL, NULL);
+	UpdateFunctionDistributionInfo(functionAddress, NULL, NULL, NULL);
 }
 
 
@@ -327,7 +344,8 @@ DistributeFunctionColocatedWithReferenceTable(const ObjectAddress *functionAddre
 	/* set distribution argument to NULL and colocationId to the reference table colocation id */
 	int *distributionArgumentIndex = NULL;
 	UpdateFunctionDistributionInfo(functionAddress, distributionArgumentIndex,
-								   &colocationId);
+								   &colocationId,
+								   NULL);
 }
 
 
@@ -596,7 +614,8 @@ EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid distributionColumnTyp
 void
 UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 							   int *distribution_argument_index,
-							   int *colocationId)
+							   int *colocationId,
+							   bool *forceDelegation)
 {
 	const bool indexOK = true;
 
@@ -655,6 +674,18 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 		isnull[Anum_pg_dist_object_colocationid - 1] = true;
 	}
 
+	replace[Anum_pg_dist_object_force_delegation - 1] = true;
+	if (forceDelegation != NULL)
+	{
+		values[Anum_pg_dist_object_force_delegation - 1] = BoolGetDatum(
+			*forceDelegation);
+		isnull[Anum_pg_dist_object_force_delegation - 1] = false;
+	}
+	else
+	{
+		isnull[Anum_pg_dist_object_force_delegation - 1] = true;
+	}
+
 	heapTuple = heap_modify_tuple(heapTuple, tupleDescriptor, values, isnull, replace);
 
 	CatalogTupleUpdate(pgDistObjectRel, &heapTuple->t_self, heapTuple);
@@ -672,6 +703,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 		List *objectAddressList = list_make1((ObjectAddress *) distAddress);
 		List *distArgumentIndexList = NIL;
 		List *colocationIdList = NIL;
+		List *forceDelegationList = NIL;
 
 		if (distribution_argument_index == NULL)
 		{
@@ -691,10 +723,20 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 			colocationIdList = list_make1_int(*colocationId);
 		}
 
+		if (forceDelegation == NULL)
+		{
+			forceDelegationList = list_make1_int(NO_FORCE_PUSHDOWN);
+		}
+		else
+		{
+			forceDelegationList = list_make1_int(*forceDelegation);
+		}
+
 		char *workerPgDistObjectUpdateCommand =
 			MarkObjectsDistributedCreateCommand(objectAddressList,
 												distArgumentIndexList,
-												colocationIdList);
+												colocationIdList,
+												forceDelegationList);
 		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
 	}
 }

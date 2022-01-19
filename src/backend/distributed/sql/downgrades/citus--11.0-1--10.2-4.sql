@@ -1,5 +1,6 @@
 -- citus--11.0-1--10.2-4
 
+DROP FUNCTION pg_catalog.create_distributed_function(regprocedure, text, text, bool);
 CREATE FUNCTION pg_catalog.master_apply_delete_command(text)
     RETURNS integer
     LANGUAGE C STRICT
@@ -43,7 +44,7 @@ COMMENT ON FUNCTION pg_catalog.citus_disable_node(nodename text, nodeport intege
 DROP FUNCTION pg_catalog.citus_check_connection_to_node (text, integer);
 DROP FUNCTION pg_catalog.citus_check_cluster_node_health ();
 
-DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer);
+DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer, boolean);
 DROP FUNCTION pg_catalog.citus_run_local_command(text);
 DROP FUNCTION pg_catalog.worker_drop_sequence_dependency(text);
 
@@ -80,3 +81,5 @@ ORDER BY 1,2;
 
 DROP FUNCTION pg_catalog.citus_shards_on_worker();
 DROP FUNCTION pg_catalog.citus_shard_indexes_on_worker();
+#include "../udfs/create_distributed_function/9.0-1.sql"
+ALTER TABLE citus.pg_dist_object DROP COLUMN force_delegation;
