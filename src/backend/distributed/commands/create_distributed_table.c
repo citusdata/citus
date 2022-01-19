@@ -539,6 +539,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		CreateShellTableOnWorkers(relationId);
 		MarkObjectDistributed(&tableAddress);
 		CreateTableMetadataOnWorkers(relationId);
+		CreateInterTableRelationshipOfRelationOnWorkers(relationId);
 	}
 
 	/*
@@ -601,7 +602,6 @@ void
 EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
-
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{

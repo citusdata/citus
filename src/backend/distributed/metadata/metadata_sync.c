@@ -637,8 +637,7 @@ DistributedObjectMetadataSyncCommandList(void)
 
 /*
  * GetDistributedTableMetadataEvents returns the full set of DDL commands necessary to
- * create the given distributed table metadata on a worker. The list includes setting up
- * any shard metadata, setting the truncate trigger and foreign key constraints.
+ * create the given distributed table metadata on a worker.
  */
 static List *
 GetDistributedTableMetadataEvents(Oid relationId)
@@ -647,40 +646,14 @@ GetDistributedTableMetadataEvents(Oid relationId)
 
 	List *commandList = NIL;
 
-	/* if the table is owned by an extension we only propagate pg_dist_* records */
-	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
-
 	/* command to insert pg_dist_partition entry */
 	char *metadataCommand = DistributionCreateCommand(cacheEntry);
 	commandList = lappend(commandList, metadataCommand);
-
-	/* commands to create the truncate trigger of the table */
-	if (!IsForeignTable(relationId))
-	{
-		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
-		commandList = lappend(commandList, truncateTriggerCreateCommand);
-	}
 
 	/* commands to insert pg_dist_shard & pg_dist_placement entries */
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	List *shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
 	commandList = list_concat(commandList, shardMetadataInsertCommandList);
-
-	if (!tableOwnedByExtension)
-	{
-		/* commands to create foreign key constraints */
-		List *foreignConstraintCommands =
-			GetReferencingForeignConstaintCommands(relationId);
-		commandList = list_concat(commandList, foreignConstraintCommands);
-
-		/* commands to create partitioning hierarchy */
-		if (PartitionTable(relationId))
-		{
-			char *alterTableAttachPartitionCommands =
-				GenerateAlterTableAttachPartitionCommand(relationId);
-			commandList = lappend(commandList, alterTableAttachPartitionCommands);
-		}
-	}
 
 	return commandList;
 }
@@ -1857,7 +1830,48 @@ HasMetadataWorkers(void)
 
 
 /*
- * CreateShellTableOnWorkers creates the shell table on each worker node with metadata.
+ * CreateInterTableRelationshipOfRelationOnWorkers create inter table relationship
+ * for the the given relation id.
+ */
+void
+CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId)
+{
+	/* if the table is owned by an extension we don't create */
+	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
+	if (tableOwnedByExtension)
+	{
+		return;
+	}
+
+	List *commandList = NIL;
+
+	/* commands to create foreign key constraints */
+	List *foreignConstraintCommands =
+		GetReferencingForeignConstaintCommands(relationId);
+	commandList = list_concat(commandList, foreignConstraintCommands);
+
+	/* commands to create partitioning hierarchy */
+	if (PartitionTable(relationId))
+	{
+		char *alterTableAttachPartitionCommands =
+			GenerateAlterTableAttachPartitionCommand(relationId);
+		commandList = lappend(commandList, alterTableAttachPartitionCommands);
+	}
+
+	/* prevent recursive propagation */
+	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+
+	const char *command = NULL;
+	foreach_ptr(command, commandList)
+	{
+		SendCommandToWorkersWithMetadata(command);
+	}
+}
+
+
+/*
+ * CreateShellTableOnWorkers creates the shell table on each worker node with metadata
+ * including sequence dependency and truncate triggers.
  */
 void
 CreateShellTableOnWorkers(Oid relationId)
@@ -1885,6 +1899,13 @@ CreateShellTableOnWorkers(Oid relationId)
 	List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
 	commandList = list_concat(commandList, sequenceDependencyCommandList);
 
+	/* commands to create the truncate trigger of the table */
+	if (!IsForeignTable(relationId))
+	{
+		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
+		commandList = lappend(commandList, truncateTriggerCreateCommand);
+	}
+
 	/* prevent recursive propagation */
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
@@ -1898,9 +1919,9 @@ CreateShellTableOnWorkers(Oid relationId)
 
 /*
  * CreateTableMetadataOnWorkers creates the list of commands needed to create the
- * given distributed table and sends these commands to all metadata workers i.e. workers
- * with hasmetadata=true. Before sending the commands, in order to prevent recursive
- * propagation, DDL propagation on workers are disabled with a
+ * metadata of the given distributed table and sends these commands to all metadata
+ * workers i.e. workers with hasmetadata=true. Before sending the commands, in order
+ * to prevent recursive propagation, DDL propagation on workers are disabled with a
  * `SET citus.enable_ddl_propagation TO off;` command.
  */
 void

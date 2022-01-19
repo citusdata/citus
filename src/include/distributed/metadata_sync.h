@@ -54,6 +54,7 @@ extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
 extern char * TruncateTriggerCreateCommand(Oid relationId);
+extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
 extern void CreateShellTableOnWorkers(Oid relationId);
 extern void CreateTableMetadataOnWorkers(Oid relationId);
 extern List * DetachPartitionCommandList(void);

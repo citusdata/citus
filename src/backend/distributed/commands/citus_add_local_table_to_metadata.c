@@ -1242,11 +1242,12 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 	if (ShouldSyncTableMetadata(relationId))
 	{
 		CreateShellTableOnWorkers(relationId);
-		CreateTableMetadataOnWorkers(relationId);
-
 		ObjectAddress relationAddress = { 0 };
 		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
 		MarkObjectDistributed(&relationAddress);
+
+		CreateTableMetadataOnWorkers(relationId);
+		CreateInterTableRelationshipOfRelationOnWorkers(relationId);
 	}
 
 	/*

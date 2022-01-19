@@ -374,7 +374,8 @@ GetCitusTableDDLCommandList(Oid relationId)
 List *
 ReplicateAllDependenciesToNodeCommandList(const char *nodeName, int nodePort)
 {
-	List *ddlCommands = NIL;
+	/* since we are executing ddl commands disable propagation first, primarily for mx */
+	List *ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
 
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
@@ -412,8 +413,6 @@ ReplicateAllDependenciesToNodeCommandList(const char *nodeName, int nodePort)
 								  GetDependencyCreateDDLCommands(dependency));
 	}
 
-	/* since we are executing ddl commands lets disable propagation, primarily for mx */
-	ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
 	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
 	return ddlCommands;
