@@ -1026,11 +1026,10 @@ GetRelationSequenceDependencyList(Oid relationId)
 {
 	List *attnumList = NIL;
 	List *dependentSequenceList = NIL;
-	List *sequenceDependencyDefList = NIL;
 
 	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	sequenceDependencyDefList = CreateObjectAddressDependencyDefList(RelationRelationId,
-																	 dependentSequenceList);
+	List *sequenceDependencyDefList =
+		CreateObjectAddressDependencyDefList(RelationRelationId, dependentSequenceList);
 
 	return sequenceDependencyDefList;
 }
