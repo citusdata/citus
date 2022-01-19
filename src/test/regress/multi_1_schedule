@@ -185,11 +185,8 @@ test: foreign_key_to_reference_table validate_constraint
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 
 test: multi_modifying_xacts
-test: check_mx
-test: turn_mx_off
 test: multi_generate_ddl_commands multi_repair_shards
 test: multi_create_shards
-test: turn_mx_on
 test: multi_transaction_recovery
 
 test: local_dist_join_modifications
@@ -279,8 +276,8 @@ test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
 test: turn_mx_off
 test: citus_local_tables
-test: mixed_relkind_tests
 test: turn_mx_on
+test: mixed_relkind_tests
 test: multi_row_router_insert
 test: multi_reference_table citus_local_tables_queries
 test: citus_local_table_triggers
