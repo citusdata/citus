@@ -536,10 +536,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
-		CreateShellTableOnWorkers(relationId);
-		MarkObjectDistributed(&tableAddress);
-		CreateTableMetadataOnWorkers(relationId);
-		CreateInterTableRelationshipOfRelationOnWorkers(relationId);
+		SyncCitusTableMetadata(relationId);
 	}
 
 	/*

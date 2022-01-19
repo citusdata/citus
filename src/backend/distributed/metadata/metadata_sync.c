@@ -240,6 +240,21 @@ SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort)
 
 
 /*
+ * SyncCitusTableMetadata syncs citus table metadata to worker nodes with metadata.
+ * Our definition of metadata includes the shell table and its inter relations with
+ * other shell tables, corresponding pg_dist_object, pg_dist_partiton, pg_dist_shard
+ * and pg_dist_shard placement entries.
+ */
+void
+SyncCitusTableMetadata(Oid relationId)
+{
+	CreateShellTableOnWorkers(relationId);
+	CreateTableMetadataOnWorkers(relationId);
+	CreateInterTableRelationshipOfRelationOnWorkers(relationId);
+}
+
+
+/*
  * EnsureSequentialModeMetadataOperations makes sure that the current transaction is
  * already in sequential mode, or can still safely be put in sequential mode,
  * it errors if that is not possible. The error contains information for the user to
@@ -649,6 +664,17 @@ GetDistributedTableMetadataEvents(Oid relationId)
 	/* command to insert pg_dist_partition entry */
 	char *metadataCommand = DistributionCreateCommand(cacheEntry);
 	commandList = lappend(commandList, metadataCommand);
+
+	/*
+	 * Commands to create the truncate trigger of the table. We are creating
+	 * that as a part of metadata since truncate trigger handles the metadata
+	 * while dropping the table.
+	 */
+	if (!IsForeignTable(relationId))
+	{
+		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
+		commandList = lappend(commandList, truncateTriggerCreateCommand);
+	}
 
 	/* commands to insert pg_dist_shard & pg_dist_placement entries */
 	List *shardIntervalList = LoadShardIntervalList(relationId);
@@ -1899,13 +1925,6 @@ CreateShellTableOnWorkers(Oid relationId)
 	List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
 	commandList = list_concat(commandList, sequenceDependencyCommandList);
 
-	/* commands to create the truncate trigger of the table */
-	if (!IsForeignTable(relationId))
-	{
-		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
-		commandList = lappend(commandList, truncateTriggerCreateCommand);
-	}
-
 	/* prevent recursive propagation */
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
 
@@ -1914,6 +1933,14 @@ CreateShellTableOnWorkers(Oid relationId)
 	{
 		SendCommandToWorkersWithMetadata(command);
 	}
+
+	/*
+	 * Mark the table object as distributed at the end as we need to propagate
+	 * that table to new nodes anyway.
+	 */
+	ObjectAddress relationAddress = { 0 };
+	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
+	MarkObjectDistributed(&relationAddress);
 }
 
 
