@@ -203,6 +203,7 @@ ORDER BY 1;
  function worker_cleanup_job_schema_cache()
  function worker_create_or_alter_role(text,text,text)
  function worker_create_or_replace_object(text)
+ function worker_create_or_replace_object(text[])
  function worker_create_schema(bigint,text)
  function worker_create_truncate_trigger(regclass)
  function worker_drop_distributed_table(text)
@@ -267,5 +268,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(251 rows)
+(252 rows)
 

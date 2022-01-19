@@ -725,12 +725,6 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 {
 	IndexStmt *indexStmt = castNode(IndexStmt, node);
 
-	/* we are only processing CONCURRENT index statements */
-	if (!indexStmt->concurrent)
-	{
-		return NIL;
-	}
-
 	/* this logic only applies to the coordinator */
 	if (!IsCoordinator())
 	{
@@ -747,14 +741,36 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
+	Oid indexRelationId = get_relname_relid(indexStmt->idxname, schemaId);
+
+	/* ensure dependencies of index exist on all nodes */
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, RelationRelationId, indexRelationId);
+	EnsureDependenciesExistOnAllNodes(&address);
+
+	/* furtheron we are only processing CONCURRENT index statements */
+	if (!indexStmt->concurrent)
+	{
+		return NIL;
+	}
+
+	/*
+	 * EnsureDependenciesExistOnAllNodes could have distributed objects that are required
+	 * by this index. During the propagation process an active snapshout might be left as
+	 * a side effect of inserting the local tuples via SPI. To not leak a snapshot like
+	 * that we will pop any snapshot if we have any right before we commit.
+	 */
+	if (ActiveSnapshotSet())
+	{
+		PopActiveSnapshot();
+	}
+
 	/* commit the current transaction and start anew */
 	CommitTransactionCommand();
 	StartTransactionCommand();
 
 	/* get the affected relation and index */
 	Relation relation = table_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
-	Oid indexRelationId = get_relname_relid(indexStmt->idxname,
-											schemaId);
 	Relation indexRelation = index_open(indexRelationId, RowExclusiveLock);
 
 	/* close relations but retain locks */

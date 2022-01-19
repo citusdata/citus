@@ -102,7 +102,6 @@ static GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
 											  bool withGrantOption);
 static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
-static RoleSpec * GetRoleSpecObjectForGrantStmt(Oid roleOid);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
 static void SetLocalEnableMetadataSync(bool state);
@@ -1782,7 +1781,7 @@ GenerateGrantStmtForRights(ObjectType objectType,
 	stmt->objtype = objectType;
 	stmt->objects = GetObjectsForGrantStmt(objectType, objectId);
 	stmt->privileges = list_make1(GetAccessPrivObjectForGrantStmt(permission));
-	stmt->grantees = list_make1(GetRoleSpecObjectForGrantStmt(roleOid));
+	stmt->grantees = list_make1(GetRoleSpecObjectForUser(roleOid));
 	stmt->grant_option = withGrantOption;
 
 	return stmt;
@@ -1828,22 +1827,6 @@ GetAccessPrivObjectForGrantStmt(char *permission)
 	accessPriv->cols = NULL;
 
 	return accessPriv;
-}
-
-
-/*
- * GetRoleSpecObjectForGrantStmt creates a RoleSpec object for the given roleOid.
- * It will be used when creating GrantStmt objects.
- */
-static RoleSpec *
-GetRoleSpecObjectForGrantStmt(Oid roleOid)
-{
-	RoleSpec *roleSpec = makeNode(RoleSpec);
-	roleSpec->roletype = OidIsValid(roleOid) ? ROLESPEC_CSTRING : ROLESPEC_PUBLIC;
-	roleSpec->rolename = OidIsValid(roleOid) ? GetUserNameFromId(roleOid, false) : NULL;
-	roleSpec->location = -1;
-
-	return roleSpec;
 }
 
 
