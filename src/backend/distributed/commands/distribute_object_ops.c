@@ -497,6 +497,14 @@ static DistributeObjectOps Sequence_Rename = {
 	.address = RenameSequenceStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps TextSearchConfig_Define = {
+	.deparse = DeparseCreateTextSearchStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = true,
+};
 static DistributeObjectOps Trigger_AlterObjectDepends = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -999,6 +1007,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Define;
+				}
+
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_Define;
 				}
 
 				default:

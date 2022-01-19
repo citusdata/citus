@@ -462,6 +462,9 @@ extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 extern bool ConstrTypeUsesIndex(ConstrType constrType);
 
 
+/* text_search.c - forward declarations */
+extern List * CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address);
+
 /* truncate.c - forward declarations */
 extern void PreprocessTruncateStatement(TruncateStmt *truncateStatement);
 

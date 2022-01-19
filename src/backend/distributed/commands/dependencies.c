@@ -241,6 +241,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				return NIL;
 			}
 
+			if (relKind == RELKIND_INDEX)
+			{
+				return NIL;
+			}
+
 			if (relKind == RELKIND_RELATION || relKind == RELKIND_PARTITIONED_TABLE ||
 				relKind == RELKIND_FOREIGN_TABLE)
 			{
@@ -315,6 +320,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			DDLCommands = list_concat(DDLCommands, grantDDLCommands);
 
 			return DDLCommands;
+		}
+
+		case OCLASS_TSCONFIG:
+		{
+			return CreateTextSearchConfigDDLCommandsIdempotent(dependency);
 		}
 
 		case OCLASS_TYPE:
