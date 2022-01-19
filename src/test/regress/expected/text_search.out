@@ -1,0 +1,62 @@
+CREATE SCHEMA text_search;
+SET search_path TO text_search;
+-- create a new configruation from scratch
+CREATE TEXT SEARCH CONFIGURATION my_text_search_config ( parser = default );
+CREATE TABLE t1(id int, name text);
+CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
+SELECT create_distributed_table('t1', 'name');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+DROP TABLE t1;
+DROP TEXT SEARCH CONFIGURATION my_text_search_config;
+-- try to create table and index in 1 transaction
+BEGIN;
+CREATE TEXT SEARCH CONFIGURATION my_text_search_config ( parser = default );
+CREATE TABLE t1(id int, name text);
+CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
+SELECT create_distributed_table('t1', 'name');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ABORT;
+-- try again, should not fail with my_text_search_config being retained on the worker
+BEGIN;
+CREATE TEXT SEARCH CONFIGURATION my_text_search_config ( parser = default );
+CREATE TABLE t1(id int, name text);
+CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
+SELECT create_distributed_table('t1', 'name');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ABORT;
+-- create an index on an already distributed table
+BEGIN;
+CREATE TEXT SEARCH CONFIGURATION my_text_search_config ( parser = default );
+CREATE TABLE t1(id int, name text);
+SELECT create_distributed_table('t1', 'name');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
+ABORT;
+-- should be able to create a configuration based on a copy of an existing configuration
+CREATE TEXT SEARCH CONFIGURATION french_noaccent ( COPY = french );
+CREATE TABLE t2(id int, name text);
+CREATE INDEX t2_search_name ON t2 USING gin (to_tsvector('text_search.french_noaccent'::regconfig, (COALESCE(name, ''::character varying))::text));
+SELECT create_distributed_table('t2', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SET client_min_messages TO 'warning';
+DROP SCHEMA text_search CASCADE;
