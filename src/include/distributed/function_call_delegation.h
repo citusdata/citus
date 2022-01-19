@@ -19,11 +19,11 @@
  * These flags keep track of whether the process is currently in a delegated
  * function or procedure call.
  */
-extern bool InDelegatedFunctionCall;
+extern bool InTopLevelDelegatedFunctionCall;
 extern bool InDelegatedProcedureCall;
 
-
 PlannedStmt * TryToDelegateFunctionCall(DistributedPlanningContext *planContext);
-
+extern void ResetAllowedShardKeyValue(void);
+extern bool IsShardKeyValueAllowed(Const *shardKey, uint32 colocationId);
 
 #endif /* FUNCTION_CALL_DELEGATION_H */

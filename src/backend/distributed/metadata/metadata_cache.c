@@ -1363,6 +1363,9 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 									 1]);
 		cacheEntry->colocationId =
 			DatumGetInt32(datumArray[Anum_pg_dist_object_colocationid - 1]);
+
+		cacheEntry->forceDelegation =
+			DatumGetBool(datumArray[Anum_pg_dist_object_force_delegation - 1]);
 	}
 	else
 	{

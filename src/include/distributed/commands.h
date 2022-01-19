@@ -506,7 +506,8 @@ extern char * GenerateBackupNameForProcCollision(const ObjectAddress *address);
 extern ObjectWithArgs * ObjectWithArgsFromOid(Oid funcOid);
 extern void UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 										   int *distribution_argument_index,
-										   int *colocationId);
+										   int *colocationId,
+										   bool *forceDelegation);
 
 /* vacuum.c - forward declarations */
 extern void PostprocessVacuumStmt(VacuumStmt *vacuumStmt, const char *vacuumCommand);
