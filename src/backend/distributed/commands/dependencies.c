@@ -26,7 +26,6 @@
 #include "miscadmin.h"
 #include "storage/lmgr.h"
 #include "utils/lsyscache.h"
-#include "miscadmin.h"
 
 typedef bool (*AddressPredicate)(const ObjectAddress *);
 
@@ -243,7 +242,7 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				Oid relationId = dependency->objectId;
 				List *commandList = NIL;
 
-				if (IsCitusTable(relationId) && !IsTableOwnedByExtension(relationId))
+				if (IsCitusTable(relationId))
 				{
 					commandList = GetCitusTableDDLCommandList(relationId);
 				}
