@@ -2051,8 +2051,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 																	  list_make1_int(
 																		  attnum));
 
-								if (ShouldSyncTableMetadata(relationId) &&
-									ClusterHasKnownMetadataWorkers())
+								if (ShouldSyncTableMetadata(relationId))
 								{
 									needMetadataSyncForNewSequences = true;
 									MarkSequenceDistributedAndPropagateWithDependencies(
@@ -2092,8 +2091,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 														  list_make1_oid(seqOid),
 														  list_make1_int(attnum));
 
-					if (ShouldSyncTableMetadata(relationId) &&
-						ClusterHasKnownMetadataWorkers())
+					if (ShouldSyncTableMetadata(relationId))
 					{
 						needMetadataSyncForNewSequences = true;
 						MarkSequenceDistributedAndPropagateWithDependencies(relationId,
@@ -2627,8 +2625,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 							 * We currently don't support adding a serial column for an MX table
 							 * TODO: record the dependency in the workers
 							 */
-							if (ShouldSyncTableMetadata(relationId) &&
-								ClusterHasKnownMetadataWorkers())
+							if (ShouldSyncTableMetadata(relationId))
 							{
 								ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 												errmsg(

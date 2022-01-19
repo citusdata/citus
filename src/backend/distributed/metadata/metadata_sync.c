@@ -1857,7 +1857,7 @@ HasMetadataWorkers(void)
 
 
 /*
- * CreateShellTableOnWorkers creates shell table on workers.
+ * CreateShellTableOnWorkers creates the shell table on each worker node with metadata.
  */
 void
 CreateShellTableOnWorkers(Oid relationId)
