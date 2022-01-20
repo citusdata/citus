@@ -22,16 +22,20 @@
 
 #include "columnar/columnar_tableam.h"
 
+void _PG_init(void);
+void _PG_fini(void);
+
+//columnar_init
 void
-columnar_init(void)
+_PG_init(void)
 {
 	columnar_init_gucs();
 	columnar_tableam_init();
 }
 
-
+//columnar_fini
 void
-columnar_fini(void)
+_PG_fini(void)
 {
 	columnar_tableam_finish();
 }
