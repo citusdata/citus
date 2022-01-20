@@ -10,17 +10,21 @@
 
 #include "postgres.h"
 
+#include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_ts_config.h"
 #include "catalog/pg_ts_parser.h"
-#include "catalog/namespace.h"
+#include "commands/extension.h"
+#include "nodes/makefuncs.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
-#include "nodes/makefuncs.h"
 
 #include "distributed/commands.h"
+#include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata/distobject.h"
+#include "distributed/metadata_sync.h"
 
 
 static List * GetTextSearchConfigCreateStmts(Oid tsconfigOid);
@@ -47,6 +51,70 @@ CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address)
 	}
 
 	return commands;
+}
+
+
+List *
+PreprocessDropTextSearchConfigurationStmt(Node *node, const char *queryString,
+										  ProcessUtilityContext processUtilityContext)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+	Assert(stmt->removeType == OBJECT_TSCONFIGURATION);
+
+	if (creating_extension)
+	{
+		/*
+		 * extensions should be created separately on the workers, text search
+		 * configurations cascading from an extension should therefore not be
+		 * propagated here.
+		 */
+		return NIL;
+	}
+
+	if (!EnableDependencyCreation)
+	{
+		/* disabled object propagation, should not propagate anything */
+		return NIL;
+	}
+
+	/*
+	 * iterate over all text search configurations dropped, and create a list
+	 * of all objects that are distributed.
+	 */
+	List *objName = NULL;
+	List *distributedObjects = NIL;
+	foreach_ptr(objName, stmt->objects)
+	{
+		Oid tsconfigOid = get_ts_config_oid(objName, false);
+		ObjectAddress address = { 0 };
+		ObjectAddressSet(address, TSConfigRelationId, tsconfigOid);
+		if (!IsObjectDistributed(&address))
+		{
+			continue;
+		}
+		distributedObjects = lappend(distributedObjects, objName);
+	}
+
+	if (list_length(distributedObjects) == 0)
+	{
+		/* no distributed objects to remove */
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	/* TODO do we need to unmark objects distributed? */
+
+	DropStmt *stmtCopy = copyObject(stmt);
+	stmtCopy->objects = distributedObjects;
+	QualifyTreeNode((Node *) stmtCopy);
+	const char *dropStmtSql = DeparseTreeNode((Node *) stmtCopy);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) dropStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
 }
 
 

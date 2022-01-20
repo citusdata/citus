@@ -67,3 +67,37 @@ AppendDefElemList(StringInfo buf, List *defelems)
 		appendStringInfo(buf, "%s = %s", defelem->defname, identifier);
 	}
 }
+
+
+char *
+DeparseDropTextSearchConfigurationStmt(Node *node)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+	Assert(stmt->removeType == OBJECT_TSCONFIGURATION);
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	appendStringInfoString(&buf, "DROP TEXT SEARCH CONFIGURATION ");
+	List *nameList = NIL;
+	bool first = true;
+	foreach_ptr(nameList, stmt->objects)
+	{
+		if (!first)
+		{
+			appendStringInfoString(&buf, ", ");
+		}
+		first = false;
+
+		appendStringInfoString(&buf, NameListToQuotedString(nameList));
+	}
+
+	if (stmt->behavior == DROP_CASCADE)
+	{
+		appendStringInfoString(&buf, " CASCADE");
+	}
+
+	appendStringInfoString(&buf, ";");
+
+	return buf.data;
+}

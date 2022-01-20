@@ -464,6 +464,10 @@ extern bool ConstrTypeUsesIndex(ConstrType constrType);
 
 /* text_search.c - forward declarations */
 extern List * CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address);
+extern List * PreprocessDropTextSearchConfigurationStmt(Node *node,
+														const char *queryString,
+														ProcessUtilityContext
+														processUtilityContext);
 
 /* truncate.c - forward declarations */
 extern void PreprocessTruncateStatement(TruncateStmt *truncateStatement);

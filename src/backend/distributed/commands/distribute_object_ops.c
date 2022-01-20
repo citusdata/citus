@@ -505,6 +505,14 @@ static DistributeObjectOps TextSearchConfig_Define = {
 	.address = NULL,
 	.markDistributed = true,
 };
+static DistributeObjectOps TextSearchConfig_Drop = {
+	.deparse = DeparseDropTextSearchConfigurationStmt,
+	.qualify = QualifyDropTextSearchConfigurationStmt,
+	.preprocess = PreprocessDropTextSearchConfigurationStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
 static DistributeObjectOps Trigger_AlterObjectDepends = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -1089,6 +1097,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TABLE:
 				{
 					return &Table_Drop;
+				}
+
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_Drop;
 				}
 
 				case OBJECT_TYPE:
