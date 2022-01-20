@@ -23,6 +23,8 @@
 #include "citus_version.h"
 #include "columnar/columnar.h"
 
+PG_MODULE_MAGIC;
+
 /* Default values for option parameters */
 #define DEFAULT_STRIPE_ROW_COUNT 150000
 #define DEFAULT_CHUNK_ROW_COUNT 10000
