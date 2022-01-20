@@ -659,17 +659,6 @@ CitusTableMetadataCreateCommandList(Oid relationId)
 	char *metadataCommand = DistributionCreateCommand(cacheEntry);
 	commandList = lappend(commandList, metadataCommand);
 
-	/*
-	 * Commands to create the truncate trigger of the table. We are creating
-	 * that as a part of metadata since truncate trigger handles the metadata
-	 * while dropping the table.
-	 */
-	if (!IsForeignTable(relationId))
-	{
-		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
-		commandList = lappend(commandList, truncateTriggerCreateCommand);
-	}
-
 	/* commands to insert pg_dist_shard & pg_dist_placement entries */
 	List *shardIntervalList = LoadShardIntervalList(relationId);
 	List *shardMetadataInsertCommandList = ShardListInsertCommand(shardIntervalList);
@@ -1906,28 +1895,37 @@ InterTableRelationshipOfRelationCommandList(Oid relationId)
 void
 CreateShellTableOnWorkers(Oid relationId)
 {
-	/* if the table is owned by an extension we don't create */
-	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
-	if (tableOwnedByExtension)
-	{
-		return;
-	}
-
 	List *commandList = NIL;
-	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
-	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-														  includeSequenceDefaults);
-	TableDDLCommand *tableDDLCommand = NULL;
-	foreach_ptr(tableDDLCommand, tableDDLCommands)
+	/*
+	 * If the table is owned by an extension we only create truncate trigger,
+	 * otherwise we create shell table and sequence dependency as well.
+	 */
+	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
+	if (!tableOwnedByExtension)
 	{
-		Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-		commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+		IncludeSequenceDefaults includeSequenceDefaults =
+			WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
+
+		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+															  includeSequenceDefaults);
+		TableDDLCommand *tableDDLCommand = NULL;
+		foreach_ptr(tableDDLCommand, tableDDLCommands)
+		{
+			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+		}
+
+		/* command to associate sequences with table */
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
+		commandList = list_concat(commandList, sequenceDependencyCommandList);
 	}
 
-	/* command to associate sequences with table */
-	List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
-	commandList = list_concat(commandList, sequenceDependencyCommandList);
+	if (!IsForeignTable(relationId))
+	{
+		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
+		commandList = lappend(commandList, truncateTriggerCreateCommand);
+	}
 
 	/* prevent recursive propagation */
 	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
@@ -1938,13 +1936,17 @@ CreateShellTableOnWorkers(Oid relationId)
 		SendCommandToWorkersWithMetadata(command);
 	}
 
-	/*
-	 * Mark the table object as distributed at the end as we need to propagate
-	 * that table to new nodes anyway.
-	 */
-	ObjectAddress relationAddress = { 0 };
-	ObjectAddressSet(relationAddress, RelationRelationId, relationId);
-	MarkObjectDistributed(&relationAddress);
+	/* once shell table is created, mark the object as distributed as well */
+	if (!tableOwnedByExtension)
+	{
+		/*
+		 * Mark the table object as distributed at the end as we need to propagate
+		 * that table to new nodes anyway.
+		 */
+		ObjectAddress relationAddress = { 0 };
+		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
+		MarkObjectDistributed(&relationAddress);
+	}
 }
 
 

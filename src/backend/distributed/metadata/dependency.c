@@ -706,6 +706,7 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 /*
  * IsTableOwnedByExtension returns whether the table with the given relation ID is
  * owned by an extension.
+ * TODO: Check what if the extension is not distributed?
  */
 bool
 IsTableOwnedByExtension(Oid relationId)
