@@ -35,7 +35,11 @@ FOR EACH ROW EXECUTE FUNCTION dummy_function();
 
 -- Show that we can activate node successfully. That means, we create
 -- the function that trigger needs in mx workers too.
+set citus.log_remote_commands to true;
+set citus.worker_min_messages to debug4;
 SELECT citus_activate_node('localhost', :worker_1_port);
+reset citus.log_remote_commands;
+reset citus.worker_min_messages;
 
 CREATE EXTENSION seg;
 ALTER TRIGGER dummy_function_trigger ON citus_local_table DEPENDS ON EXTENSION seg;

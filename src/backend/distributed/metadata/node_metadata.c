@@ -743,11 +743,10 @@ SyncTableMetadataCommandList(WorkerNode *workerNode)
 	List *commandList = NIL;
 
 	/*
-	 * Remove shell tables and pg_dist_* metadata.
+	 * Remove shell tables first.
 	 */
 	commandList = list_concat(commandList, DetachPartitionCommandList());
-	commandList = lappend(commandList, REMOVE_ALL_CITUS_TABLES_COMMAND);
-	commandList = lappend(commandList, DELETE_ALL_DISTRIBUTED_OBJECTS);
+	commandList = lappend(commandList, REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND);
 
 	/*
 	 * Propagate node wide objects. It includes only roles for now.
@@ -766,6 +765,11 @@ SyncTableMetadataCommandList(WorkerNode *workerNode)
 	 * those tables.
 	 */
 	commandList = list_concat(commandList, InterTableRelationshipCommandList());
+
+	commandList = lappend(commandList, DELETE_ALL_DISTRIBUTED_OBJECTS);
+	commandList = lappend(commandList, DELETE_ALL_PLACEMENTS);
+	commandList = lappend(commandList, DELETE_ALL_SHARDS);
+	commandList = lappend(commandList, DELETE_ALL_PARTITIONS);
 
 	/*
 	 * Finally create pg_dist_* entries 
