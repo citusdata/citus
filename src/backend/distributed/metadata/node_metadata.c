@@ -1124,32 +1124,22 @@ ActivateNode(char *nodeName, int nodePort)
 
 	if (syncMetadata)
 	{
-		/*
-		 * We are going to sync the metadata anyway in this transaction, so do
-		 * not fail just because the current metadata is not synced.
-		 */
-		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
-						BoolGetDatum(true));
+		SyncNodeMetadataToNode(nodeName, nodePort);
 	}
 
 	SetUpDistributedTableWithDependencies(workerNode);
 
-	if (syncMetadata)
+	if (syncMetadata && !NodeIsCoordinator(workerNode))
 	{
-		SyncNodeMetadataToNode(nodeName, nodePort);
+		List *metadataUpdateCommandList = ResyncMetadataCommandList();
 
-		if (!NodeIsCoordinator(workerNode))
-		{
-			List *metadataUpdateCommandList = ResyncMetadataCommandList();
-
-			/* send commands to the new worker, the current user should be a superuser */
-			Assert(superuser());
-			SendMetadataCommandListToWorkerInCoordinatedTransaction(
-				workerNode->workerName,
-				workerNode->workerPort,
-				CurrentUserName(),
-				metadataUpdateCommandList);
-		}
+		/* send commands to the new worker, the current user should be a superuser */
+		Assert(superuser());
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(
+			workerNode->workerName,
+			workerNode->workerPort,
+			CurrentUserName(),
+			metadataUpdateCommandList);
 	}
 
 	/* finally, let all other active metadata nodes to learn about this change */
