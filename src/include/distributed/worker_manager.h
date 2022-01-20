@@ -103,9 +103,8 @@ extern WorkerNode * SetWorkerColumnLocalOnly(WorkerNode *workerNode, int columnI
 											 Datum value);
 extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
-extern List * RecreateDistributedTablesWithDependenciesCommandList(
-	WorkerNode *workerNode);
-extern List * SyncTableMetadataCommandList(WorkerNode *workerNode);
+extern List * SyncObjectDependenciesCommandList(WorkerNode *workerNode);
+extern List * PgDistTableMetadataSyncCommandList(void);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);

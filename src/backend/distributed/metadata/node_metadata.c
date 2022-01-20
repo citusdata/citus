@@ -107,8 +107,8 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static List * PgDistMetadataSyncCommandList();
-static void SyncTableMetadataToNode(WorkerNode *workerNode);
+static void SyncObjectDependenciesToNode(WorkerNode *workerNode);
+static void SyncPgDistTableMetadataToNode(WorkerNode *workerNode);
 static List * InterTableRelationshipCommandList();
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
 static List * PropagateNodeWideObjectsCommandList();
@@ -628,11 +628,11 @@ InterTableRelationshipCommandList()
 
 
 /*
- * PgDistMetadataSyncCommandList returns the command list to sync the pg_dist_*
- * metadata.
+ * PgDistTableMetadataSyncCommandList returns the command list to sync the pg_dist_*
+ * (except pg_dist_node) metadata. We call them as table metadata.
  */
-static List *
-PgDistMetadataSyncCommandList()
+List *
+PgDistTableMetadataSyncCommandList(void)
 {
 	List *distributedTableList = CitusTableList();
 	List *propagatedTableList = NIL;
@@ -648,12 +648,21 @@ PgDistMetadataSyncCommandList()
 		}
 	}
 
-	/* after all tables are created, create the metadata */
+	/* remove all dist table related metadata first */
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  DELETE_ALL_PARTITIONS);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList, DELETE_ALL_SHARDS);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  DELETE_ALL_PLACEMENTS);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  DELETE_ALL_DISTRIBUTED_OBJECTS);
+
+	/* create pg_dist_partition, pg_dist_shard and pg_dist_placement entries */
 	foreach_ptr(cacheEntry, propagatedTableList)
 	{
 		Oid clusteredTableId = cacheEntry->relationId;
 
-		/* add the table metadata command first*/
+		/* add the table metadata command first */
 		char *metadataCommand = DistributionCreateCommand(cacheEntry);
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  metadataCommand);
@@ -726,24 +735,27 @@ PropagateNodeWideObjectsCommandList()
 
 
 /*
- * SyncTableMetadataCommandList returns commands to sync table metadata to the
- * given worker node. To be idempotent, it first drops the ones required to be
- * dropped. 
- * 
- * Table metadata includes:
- * 
+ * SyncObjectDependenciesCommandList returns commands to sync object dependencies
+ * to the given worker node. To be idempotent, it first drops the ones required to be
+ * dropped.
+ *
+ * Object dependencies include:
+ *
  * - All dependencies (e.g., types, schemas, sequences)
  * - All shell distributed tables
- * - pg_dist_partition, pg_dist_shard, pg_dist_placement, pg_dist_object
- * 
+ * - Inter relation between those shell tables
+ * - Node wide objects
+ *
+ * We also update the local group id here, as handling sequence dependencies
+ * requires it.
  */
 List *
-SyncTableMetadataCommandList(WorkerNode *workerNode)
+SyncObjectDependenciesCommandList(WorkerNode *workerNode)
 {
 	List *commandList = NIL;
 
 	/*
-	 * Remove shell tables first.
+	 * Detach partitions, remove shell tables and delete all objects first.
 	 */
 	commandList = list_concat(commandList, DetachPartitionCommandList());
 	commandList = lappend(commandList, REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND);
@@ -754,11 +766,13 @@ SyncTableMetadataCommandList(WorkerNode *workerNode)
 	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
 
 	/*
-	 * Replicate all objects of the pg_dist_object to the remote node. We need to 
+	 * Replicate all objects of the pg_dist_object to the remote node. We need to
 	 * update local group id first, as sequence replication logic depends on it.
 	 */
-	commandList = list_concat(commandList, list_make1(LocalGroupIdUpdateCommand(workerNode->groupId)));
-	commandList = list_concat(commandList, ReplicateAllObjectsToNodeCommandList(workerNode->workerName, workerNode->workerPort));
+	commandList = list_concat(commandList, list_make1(LocalGroupIdUpdateCommand(
+														  workerNode->groupId)));
+	commandList = list_concat(commandList, ReplicateAllObjectsToNodeCommandList(
+								  workerNode->workerName, workerNode->workerPort));
 
 	/*
 	 * After creating each table, handle the inter table relationship between
@@ -766,50 +780,57 @@ SyncTableMetadataCommandList(WorkerNode *workerNode)
 	 */
 	commandList = list_concat(commandList, InterTableRelationshipCommandList());
 
-	commandList = lappend(commandList, DELETE_ALL_DISTRIBUTED_OBJECTS);
-	commandList = lappend(commandList, DELETE_ALL_PLACEMENTS);
-	commandList = lappend(commandList, DELETE_ALL_SHARDS);
-	commandList = lappend(commandList, DELETE_ALL_PARTITIONS);
-
-	/*
-	 * Finally create pg_dist_* entries 
-	 */
-	List *syncPgDistMetadataCommandList = PgDistMetadataSyncCommandList();
-	commandList = list_concat(commandList, syncPgDistMetadataCommandList);							
-
 	return commandList;
 }
 
 
 /*
- * SyncTableMetadataToNode sync the table metadata to the node. Metadata includes
+ * SyncObjectDependenciesToNode sync the object dependencies to the node. It includes
  * - All dependencies (e.g., types, schemas, sequences)
  * - All shell distributed table
- * - pg_dist_partition, pg_dist_shard, pg_dist_placement, pg_dist_object
+ * - Inter relation between those shell tables
  *
  * Note that we do not create the distributed dependencies on the coordinator
  * since all the dependencies should be present in the coordinator already.
  */
 static void
-SyncTableMetadataToNode(WorkerNode *newWorkerNode)
+SyncObjectDependenciesToNode(WorkerNode *workerNode)
 {
-	if (NodeIsPrimary(newWorkerNode))
+	if (NodeIsPrimary(workerNode))
 	{
 		EnsureNoModificationsHaveBeenDone();
 
 		Assert(ShouldPropagate());
-		if (!NodeIsCoordinator(newWorkerNode))
+		if (!NodeIsCoordinator(workerNode))
 		{
-			List *commandList = SyncTableMetadataCommandList(newWorkerNode);
+			List *commandList = SyncObjectDependenciesCommandList(workerNode);
 
 			/* send commands to new workers, the current user should be a superuser */
 			Assert(superuser());
 			SendMetadataCommandListToWorkerInCoordinatedTransaction(
-				newWorkerNode->workerName,
-				newWorkerNode->workerPort,
+				workerNode->workerName,
+				workerNode->workerPort,
 				CurrentUserName(),
 				commandList);
 		}
+	}
+}
+
+
+static void
+SyncPgDistTableMetadataToNode(WorkerNode *workerNode)
+{
+	if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
+	{
+		List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
+
+		/* send commands to new workers, the current user should be a superuser */
+		Assert(superuser());
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(
+			workerNode->workerName,
+			workerNode->workerPort,
+			CurrentUserName(),
+			syncPgDistMetadataCommandList);
 	}
 }
 
@@ -1074,12 +1095,13 @@ ActivateNode(char *nodeName, int nodePort)
 						BoolGetDatum(true));
 
 		/*
-		 * Sync table metadata first. Please check the comment on SyncTableMetadataToNode
-		 * for the definition of table metadata.
+		 * Sync object dependencies first. We must sync object dependencies before
+		 * replicating reference tables to the remote node, as reference tables may
+		 * need such objects.
 		 */
-		SyncTableMetadataToNode(workerNode);
+		SyncObjectDependenciesToNode(workerNode);
 
-		/* 
+		/*
 		 * We need to replicate reference tables before syncing node metadata, otherwise
 		 * reference table replication logic would try to get lock on the new node before
 		 * having the shard placement on it
@@ -1089,11 +1111,19 @@ ActivateNode(char *nodeName, int nodePort)
 			ReplicateAllReferenceTablesToNode(workerNode->workerName,
 											  workerNode->workerPort);
 		}
-		
-		/* 
-		 * Sync node metadata (pg_dist_node) finally.
+
+		/*
+		 * Sync node metadata. We must sync node metadata before syncing table
+		 * related pg_dist_xxx metadata.
 		 */
 		SyncNodeMetadataToNode(nodeName, nodePort);
+
+		/*
+		 * As the last step, sync the table related metadata to the remote node.
+		 * We must handle it as the last step because of limitations shared with
+		 * above comments.
+		 */
+		SyncPgDistTableMetadataToNode(workerNode);
 	}
 
 	/* finally, let all other active metadata nodes to learn about this change */
