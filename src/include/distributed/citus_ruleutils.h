@@ -54,7 +54,6 @@ bool get_merged_argument_list(CallStmt *stmt, List **mergedNamedArgList,
 char * pg_get_rule_expr(Node *expression);
 extern void deparse_shard_query(Query *query, Oid distrelid, int64 shardid,
 								StringInfo buffer);
-extern char * pg_get_triggerdef_command(Oid triggerId);
 #if PG_VERSION_NUM >= PG_VERSION_14
 extern char * pg_get_statisticsobj_worker(Oid statextid, bool columns_only,
 										  bool missing_ok);
