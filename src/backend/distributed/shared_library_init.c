@@ -353,7 +353,8 @@ _PG_init(void)
 	{
 		DoInitialCleanup();
 	}
-	columnar_init();
+
+	load_file("columnar.so", false);
 }
 
 
