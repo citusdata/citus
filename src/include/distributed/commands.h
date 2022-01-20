@@ -463,11 +463,17 @@ extern bool ConstrTypeUsesIndex(ConstrType constrType);
 
 
 /* text_search.c - forward declarations */
+extern List * PostprocessCreateTextSearchConfigurationStmt(Node *node,
+														   const char *queryString);
 extern List * CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address);
 extern List * PreprocessDropTextSearchConfigurationStmt(Node *node,
 														const char *queryString,
 														ProcessUtilityContext
 														processUtilityContext);
+extern ObjectAddress CreateTextSearchConfigurationObjectAddress(Node *node,
+																bool missing_ok);
+extern char * GenerateBackupNameForTextSearchConfiguration(const ObjectAddress *address);
+extern List * get_ts_config_namelist(Oid tsconfigOid);
 
 /* truncate.c - forward declarations */
 extern void PreprocessTruncateStatement(TruncateStmt *truncateStatement);

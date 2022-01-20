@@ -501,14 +501,22 @@ static DistributeObjectOps TextSearchConfig_Define = {
 	.deparse = DeparseCreateTextSearchStmt,
 	.qualify = NULL,
 	.preprocess = NULL,
-	.postprocess = NULL,
-	.address = NULL,
+	.postprocess = PostprocessCreateTextSearchConfigurationStmt,
+	.address = CreateTextSearchConfigurationObjectAddress,
 	.markDistributed = true,
 };
 static DistributeObjectOps TextSearchConfig_Drop = {
 	.deparse = DeparseDropTextSearchConfigurationStmt,
 	.qualify = QualifyDropTextSearchConfigurationStmt,
 	.preprocess = PreprocessDropTextSearchConfigurationStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchConfig_Rename = {
+	.deparse = DeparseRenameTextSearchStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
 	.postprocess = NULL,
 	.address = NULL,
 	.markDistributed = false,
@@ -1201,6 +1209,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_STATISTIC_EXT:
 				{
 					return &Statistics_Rename;
+				}
+
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_Rename;
 				}
 
 				case OBJECT_TYPE:

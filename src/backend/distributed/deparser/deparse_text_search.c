@@ -101,3 +101,20 @@ DeparseDropTextSearchConfigurationStmt(Node *node)
 
 	return buf.data;
 }
+
+
+char *
+DeparseRenameTextSearchStmt(Node *node)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_TSCONFIGURATION);
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	char *identifier = NameListToQuotedString(castNode(List, stmt->object));
+	appendStringInfo(&buf, "ALTER TEXT SEARCH CONFIGURAIONT %s RENAME TO %s;",
+					 identifier, quote_identifier(stmt->newname));
+
+	return buf.data;
+}
