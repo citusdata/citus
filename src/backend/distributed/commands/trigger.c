@@ -17,7 +17,6 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_trigger.h"
 #include "commands/trigger.h"
-#include "distributed/citus_ruleutils.h"
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/coordinator_protocol.h"
@@ -27,6 +26,8 @@
 #include "distributed/namespace_utils.h"
 #include "distributed/shard_utils.h"
 #include "distributed/worker_protocol.h"
+#include "utils/builtins.h"
+#include "utils/fmgrprotos.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -68,7 +69,22 @@ GetExplicitTriggerCommandList(Oid relationId)
 	Oid triggerId = InvalidOid;
 	foreach_oid(triggerId, triggerIdList)
 	{
-		char *createTriggerCommand = pg_get_triggerdef_command(triggerId);
+		bool prettyOutput = false;
+		Datum commandText = DirectFunctionCall2(pg_get_triggerdef_ext,
+												ObjectIdGetDatum(triggerId),
+												BoolGetDatum(prettyOutput));
+
+		/*
+		 * pg_get_triggerdef_ext doesn't throw an error if there is no such
+		 * trigger, be on the safe side.
+		 */
+		if (DatumGetPointer(commandText) == NULL)
+		{
+			ereport(ERROR, (errmsg("trigger with oid %u does not exist",
+								   triggerId)));
+		}
+
+		char *createTriggerCommand = TextDatumGetCString(commandText);
 
 		createTriggerCommandList = lappend(
 			createTriggerCommandList,

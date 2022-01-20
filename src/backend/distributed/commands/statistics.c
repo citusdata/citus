@@ -40,6 +40,7 @@
 #include "miscadmin.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
+#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
 #include "utils/ruleutils.h"
@@ -447,8 +448,20 @@ GetExplicitStatisticsCommandList(Oid relationId)
 	foreach_oid(statisticsId, statisticsIdList)
 	{
 		/* we need create commands for already created stats before distribution */
-		char *createStatisticsCommand = pg_get_statisticsobj_worker_compat(statisticsId,
-																		   false, false);
+		Datum commandText = DirectFunctionCall1(pg_get_statisticsobjdef,
+												ObjectIdGetDatum(statisticsId));
+
+		/*
+		 * pg_get_statisticsobjdef doesn't throw an error if there is no such
+		 * statistics object, be on the safe side.
+		 */
+		if (DatumGetPointer(commandText) == NULL)
+		{
+			ereport(ERROR, (errmsg("statistics with oid %u does not exist",
+								   statisticsId)));
+		}
+
+		char *createStatisticsCommand = TextDatumGetCString(commandText);
 
 		explicitStatisticsCommandList =
 			lappend(explicitStatisticsCommandList,
