@@ -1011,7 +1011,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                       | function citus_shard_indexes_on_worker() SETOF record
                                                                       | function citus_shards_on_worker() SETOF record
                                                                       | function create_distributed_function(regprocedure,text,text,boolean) void
-                                                                      | function worker_drop_distributed_table_only(text) void            
+                                                                      | function worker_drop_distributed_table_only(text) void
                                                                       | function worker_drop_sequence_dependency(text) void
 (15 rows)
 
