@@ -249,8 +249,7 @@ extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
 extern bool ShouldPropagate(void);
 extern bool ShouldPropagateObject(const ObjectAddress *address);
-extern List * ReplicateAllDependenciesToNodeCommandList(const char *nodeName, int
-														nodePort);
+extern List * ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort);
 
 /* Remaining metadata utility functions  */
 extern char * TableOwner(Oid relationId);

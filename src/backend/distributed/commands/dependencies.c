@@ -372,7 +372,7 @@ GetCitusTableDDLCommandList(Oid relationId)
  * clusterHasDistributedFunction if there are any distributed functions.
  */
 List *
-ReplicateAllDependenciesToNodeCommandList(const char *nodeName, int nodePort)
+ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
 {
 	/* since we are executing ddl commands disable propagation first, primarily for mx */
 	List *ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);

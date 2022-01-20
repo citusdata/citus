@@ -105,7 +105,7 @@ extern uint32 CountPrimariesWithMetadata(void);
 extern WorkerNode * GetFirstPrimaryWorkerNode(void);
 extern List * RecreateDistributedTablesWithDependenciesCommandList(
 	WorkerNode *workerNode);
-extern List * ResyncMetadataCommandList(void);
+extern List * SyncTableMetadataCommandList(WorkerNode *workerNode);
 
 /* Function declarations for worker node utilities */
 extern int CompareWorkerNodes(const void *leftElement, const void *rightElement);

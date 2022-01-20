@@ -48,22 +48,18 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	 */
 	WorkerNode *dummyWorkerNode = GetFirstPrimaryWorkerNode();
 
-	List *recreateTablesCommands = RecreateDistributedTablesWithDependenciesCommandList(
-		dummyWorkerNode);
+	List *syncTableMetadataCommandList = SyncTableMetadataCommandList(dummyWorkerNode);
 	List *dropSnapshotCommands = NodeMetadataDropCommands();
 	List *createSnapshotCommands = NodeMetadataCreateCommands();
-	List *metadataUpdateCommandList = ResyncMetadataCommandList();
+
 	List *activateNodeCommandList = NIL;
 	int activateNodeCommandIndex = 0;
 	Oid ddlCommandTypeId = TEXTOID;
 
 	activateNodeCommandList = list_concat(activateNodeCommandList,
-										  recreateTablesCommands);
+										  syncTableMetadataCommandList);
 	activateNodeCommandList = list_concat(activateNodeCommandList, dropSnapshotCommands);
-	activateNodeCommandList = list_concat(activateNodeCommandList,
-										  createSnapshotCommands);
-	activateNodeCommandList = list_concat(activateNodeCommandList,
-										  metadataUpdateCommandList);
+	activateNodeCommandList = list_concat(activateNodeCommandList, createSnapshotCommands);
 
 	int activateNodeCommandCount = list_length(activateNodeCommandList);
 	Datum *activateNodeCommandDatumArray = palloc0(activateNodeCommandCount *
