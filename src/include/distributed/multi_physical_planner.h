@@ -161,6 +161,7 @@ typedef struct Job
 	 * query.
 	 */
 	bool parametersInJobQueryResolved;
+	uint32 colocationId; /* common colocation group ID of the relations */
 } Job;
 
 

@@ -166,6 +166,7 @@ typedef struct MetadataCacheData
 	Oid secondaryNodeRoleId;
 	Oid pgTableIsVisibleFuncId;
 	Oid citusTableIsVisibleFuncId;
+	Oid relationIsAKnownShardFuncId;
 	Oid jsonbExtractPathFuncId;
 	bool databaseNameValid;
 	char databaseName[NAMEDATALEN];
@@ -1362,6 +1363,9 @@ LookupDistObjectCacheEntry(Oid classid, Oid objid, int32 objsubid)
 									 1]);
 		cacheEntry->colocationId =
 			DatumGetInt32(datumArray[Anum_pg_dist_object_colocationid - 1]);
+
+		cacheEntry->forceDelegation =
+			DatumGetBool(datumArray[Anum_pg_dist_object_force_delegation - 1]);
 	}
 	else
 	{
@@ -2616,6 +2620,24 @@ CitusTableVisibleFuncId(void)
 	}
 
 	return MetadataCache.citusTableIsVisibleFuncId;
+}
+
+
+/*
+ * RelationIsAKnownShardFuncId returns oid of the relation_is_a_known_shard function.
+ */
+Oid
+RelationIsAKnownShardFuncId(void)
+{
+	if (MetadataCache.relationIsAKnownShardFuncId == InvalidOid)
+	{
+		const int argCount = 1;
+
+		MetadataCache.relationIsAKnownShardFuncId =
+			FunctionOid("pg_catalog", "relation_is_a_known_shard", argCount);
+	}
+
+	return MetadataCache.relationIsAKnownShardFuncId;
 }
 
 

@@ -39,7 +39,8 @@ extern List * DistributedObjectMetadataSyncCommandList(void);
 extern List * NodeMetadataDropCommands(void);
 extern char * MarkObjectsDistributedCreateCommand(List *addresses,
 												  List *distributionArgumentIndexes,
-												  List *colocationIds);
+												  List *colocationIds,
+												  List *forceDelegations);
 extern char * DistributionCreateCommand(CitusTableCacheEntry *cacheEntry);
 extern char * DistributionDeleteCommand(const char *schemaName,
 										const char *tableName);

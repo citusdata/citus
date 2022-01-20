@@ -25,6 +25,7 @@
 
 #include "citus_version.h"
 #include "commands/explain.h"
+#include "common/string.h"
 #include "executor/executor.h"
 #include "distributed/backend_data.h"
 #include "distributed/citus_nodefuncs.h"
@@ -102,6 +103,9 @@ static char *CitusVersion = CITUS_VERSION;
 /* deprecated GUC value that should not be used anywhere outside this file */
 static int ReplicationModel = REPLICATION_MODEL_STREAMING;
 
+/* we override the application_name assign_hook and keep a pointer to the old one */
+static GucStringAssignHook OldApplicationNameAssignHook = NULL;
+
 
 void _PG_init(void);
 void _PG_fini(void);
@@ -115,11 +119,16 @@ static void CitusCleanupConnectionsAtExit(int code, Datum arg);
 static void DecrementClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
+static void OverridePostgresConfigAssignHooks(void);
 static bool ErrorIfNotASuitableDeadlockFactor(double *newval, void **extra,
 											  GucSource source);
 static bool WarnIfDeprecatedExecutorUsed(int *newval, void **extra, GucSource source);
 static bool WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source);
 static bool NoticeIfSubqueryPushdownEnabled(bool *newval, void **extra, GucSource source);
+static bool HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra,
+												   GucSource source);
+static void HideShardsFromAppNamePrefixesAssignHook(const char *newval, void *extra);
+static void ApplicationNameAssignHook(const char *newval, void *extra);
 static bool NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source);
 static void NodeConninfoGucAssignHook(const char *newval, void *extra);
 static const char * MaxSharedPoolSizeGucShowHook(void);
@@ -1106,6 +1115,24 @@ RegisterCitusConfigVariables(void)
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
+	DefineCustomStringVariable(
+		"citus.hide_shards_from_app_name_prefixes",
+		gettext_noop("If application_name starts with one of these values, hide shards"),
+		gettext_noop("Citus places distributed tables and shards in the same schema. "
+					 "That can cause confusion when inspecting the list of tables on "
+					 "a node with shards. This GUC can be used to hide the shards from "
+					 "pg_class for certain applications based on the application_name "
+					 "of the connection. The default is *, which hides shards from all "
+					 "applications. This behaviour can be overridden using the "
+					 "citus.override_table_visibility setting"),
+		&HideShardsFromAppNamePrefixes,
+		"*",
+		PGC_USERSET,
+		GUC_STANDARD,
+		HideShardsFromAppNamePrefixesCheckHook,
+		HideShardsFromAppNamePrefixesAssignHook,
+		NULL);
+
 	DefineCustomIntVariable(
 		"citus.isolation_test_session_process_id",
 		NULL,
@@ -1782,6 +1809,33 @@ RegisterCitusConfigVariables(void)
 
 	/* warn about config items in the citus namespace that are not registered above */
 	EmitWarningsOnPlaceholders("citus");
+
+	OverridePostgresConfigAssignHooks();
+}
+
+
+/*
+ * OverridePostgresConfigAssignHooks overrides GUC assign hooks where we want
+ * custom behaviour.
+ */
+static void
+OverridePostgresConfigAssignHooks(void)
+{
+	struct config_generic **guc_vars = get_guc_variables();
+	int gucCount = GetNumConfigOptions();
+
+	for (int gucIndex = 0; gucIndex < gucCount; gucIndex++)
+	{
+		struct config_generic *var = (struct config_generic *) guc_vars[gucIndex];
+
+		if (strcmp(var->name, "application_name") == 0)
+		{
+			struct config_string *stringVar = (struct config_string *) var;
+
+			OldApplicationNameAssignHook = stringVar->assign_hook;
+			stringVar->assign_hook = ApplicationNameAssignHook;
+		}
+	}
 }
 
 
@@ -1881,6 +1935,76 @@ WarnIfReplicationModelIsSet(int *newval, void **extra, GucSource source)
 	}
 
 	return true;
+}
+
+
+/*
+ * HideShardsFromAppNamePrefixesCheckHook ensures that the
+ * citus.hide_shards_from_app_name_prefixes holds a valid list of application_name
+ * values.
+ */
+static bool
+HideShardsFromAppNamePrefixesCheckHook(char **newval, void **extra, GucSource source)
+{
+	List *prefixList = NIL;
+
+	/* SplitGUCList scribbles on the input */
+	char *splitCopy = pstrdup(*newval);
+
+	/* check whether we can split into a list of identifiers */
+	if (!SplitGUCList(splitCopy, ',', &prefixList))
+	{
+		GUC_check_errdetail("not a valid list of identifiers");
+		return false;
+	}
+
+	char *appNamePrefix = NULL;
+	foreach_ptr(appNamePrefix, prefixList)
+	{
+		int prefixLength = strlen(appNamePrefix);
+		if (prefixLength >= NAMEDATALEN)
+		{
+			GUC_check_errdetail("prefix %s is more than %d characters", appNamePrefix,
+								NAMEDATALEN);
+			return false;
+		}
+
+		char *prefixAscii = pstrdup(appNamePrefix);
+		pg_clean_ascii(prefixAscii);
+
+		if (strcmp(prefixAscii, appNamePrefix) != 0)
+		{
+			GUC_check_errdetail("prefix %s in citus.hide_shards_from_app_name_prefixes "
+								"contains non-ascii characters", appNamePrefix);
+			return false;
+		}
+	}
+
+	return true;
+}
+
+
+/*
+ * HideShardsFromAppNamePrefixesAssignHook ensures changes to
+ * citus.hide_shards_from_app_name_prefixes are reflected in the decision
+ * whether or not to show shards.
+ */
+static void
+HideShardsFromAppNamePrefixesAssignHook(const char *newval, void *extra)
+{
+	ResetHideShardsDecision();
+}
+
+
+/*
+ * ApplicationNameAssignHook is called whenever application_name changes
+ * to allow us to reset our hide shards decision.
+ */
+static void
+ApplicationNameAssignHook(const char *newval, void *extra)
+{
+	ResetHideShardsDecision();
+	OldApplicationNameAssignHook(newval, extra);
 }
 
 

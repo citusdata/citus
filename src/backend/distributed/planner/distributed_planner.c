@@ -202,9 +202,9 @@ distributed_planner(Query *parse,
 
 	/*
 	 * Make sure that we hide shard names on the Citus MX worker nodes. See comments in
-	 * ReplaceTableVisibleFunction() for the details.
+	 * HideShardsFromSomeApplications() for the details.
 	 */
-	ReplaceTableVisibleFunction((Node *) parse);
+	HideShardsFromSomeApplications(parse);
 
 	/* create a restriction context and put it at the end if context list */
 	planContext.plannerRestrictionContext = CreateAndPushPlannerRestrictionContext();

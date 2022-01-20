@@ -185,23 +185,21 @@ test: foreign_key_to_reference_table validate_constraint
 test: multi_repartition_udt multi_repartitioned_subquery_udf multi_subtransactions
 
 test: multi_modifying_xacts
-test: check_mx
-test: turn_mx_off
 test: multi_generate_ddl_commands multi_repair_shards
 test: multi_create_shards
-test: turn_mx_on
 test: multi_transaction_recovery
 
 test: local_dist_join_modifications
 test: local_table_join
 test: local_dist_join_mixed
 test: citus_local_dist_joins
+test: pg_dump
 
 # ---------
 # multi_copy creates hash and range-partitioned tables and performs COPY
 # multi_router_planner creates hash partitioned tables.
 # ---------
-test: multi_copy fast_path_router_modify pg_dump
+test: multi_copy fast_path_router_modify
 test: multi_router_planner
 # These 2 tests have prepared statements which sometimes get invalidated by concurrent tests,
 # changing the debug output. We should not run them in parallel with others
@@ -272,14 +270,11 @@ test: multi_foreign_key_relation_graph
 # Replicating reference tables to coordinator.  Add coordinator to pg_dist_node
 # and rerun some of the tests.
 # --------
-test: check_mx
 test: add_coordinator
 test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
-test: turn_mx_off
 test: citus_local_tables
 test: mixed_relkind_tests
-test: turn_mx_on
 test: multi_row_router_insert
 test: multi_reference_table citus_local_tables_queries
 test: citus_local_table_triggers

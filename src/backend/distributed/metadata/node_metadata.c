@@ -1114,7 +1114,8 @@ ActivateNode(char *nodeName, int nodePort)
 
 		/*
 		 * Sync node metadata. We must sync node metadata before syncing table
-		 * related pg_dist_xxx metadata.
+		 * related pg_dist_xxx metadata. Since table related metadata requires
+		 * to have right pg_dist_node entries.
 		 */
 		SyncNodeMetadataToNode(nodeName, nodePort);
 

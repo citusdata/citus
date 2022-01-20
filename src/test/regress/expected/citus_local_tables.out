@@ -844,21 +844,28 @@ SELECT relname FROM pg_class
   ORDER BY relname;
                  relname
 ---------------------------------------------------------------------
+ partitioned_distributed
+ partitioned_distributed_1
  partitioned_distributed_1504038
  partitioned_distributed_1504040
  partitioned_distributed_1_1504042
  partitioned_distributed_1_1504044
+ partitioned_distributed_1_a_key
  partitioned_distributed_1_a_key_1504042
  partitioned_distributed_1_a_key_1504044
+ partitioned_distributed_2
  partitioned_distributed_2_1504046
  partitioned_distributed_2_1504048
+ partitioned_distributed_2_a_key
  partitioned_distributed_2_a_key_1504046
  partitioned_distributed_2_a_key_1504048
+ partitioned_distributed_a_key
  partitioned_distributed_a_key_1504038
  partitioned_distributed_a_key_1504040
-(12 rows)
+(18 rows)
 
 \c - - - :master_port
+SET citus.next_shard_id TO 1904000;
 SET search_path TO citus_local_tables_test_schema;
 -- error out if converting multi-level partitioned table
 CREATE TABLE multi_par (id text, country text) PARTITION BY RANGE (id);
@@ -945,7 +952,7 @@ select count(*) from pg_constraint where conname = 'fkey_test_drop';
 select inhrelid::regclass from pg_inherits where (select inhparent::regclass::text) ~ '^parent_1_\d{7}$' order by 1;
          inhrelid
 ---------------------------------------------------------------------
- parent_1_child_1_1190046
+ parent_1_child_1_1904006
 (1 row)
 
 -- check the shell partition

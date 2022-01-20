@@ -539,6 +539,7 @@ SELECT relname FROM pg_class
     AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'citus_local_tables_test_schema')
   ORDER BY relname;
 \c - - - :master_port
+SET citus.next_shard_id TO 1904000;
 SET search_path TO citus_local_tables_test_schema;
 
 -- error out if converting multi-level partitioned table

@@ -15,9 +15,11 @@
 
 extern bool OverrideTableVisibility;
 extern bool EnableManualChangesToShards;
+extern char *HideShardsFromAppNamePrefixes;
 
 
-extern void ReplaceTableVisibleFunction(Node *inputNode);
+extern void HideShardsFromSomeApplications(Query *query);
+extern void ResetHideShardsDecision(void);
 extern void ErrorIfRelationIsAKnownShard(Oid relationId);
 extern void ErrorIfIllegallyChangingKnownShard(Oid relationId);
 extern bool RelationIsAKnownShard(Oid shardRelationId);

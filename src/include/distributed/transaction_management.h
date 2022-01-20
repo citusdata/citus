@@ -12,6 +12,12 @@
 #include "lib/ilist.h"
 #include "lib/stringinfo.h"
 #include "nodes/pg_list.h"
+#include "lib/stringinfo.h"
+#include "nodes/primnodes.h"
+
+/* forward declare, to avoid recursive includes */
+struct DistObjectCacheEntry;
+
 
 /* describes what kind of modifications have occurred in the current transaction */
 typedef enum
@@ -52,6 +58,19 @@ typedef struct SubXactContext
 	SubTransactionId subId;
 	StringInfo setLocalCmds;
 } SubXactContext;
+
+/*
+ * Function delegated with force_delegation call enforces the distribution argument
+ * along with the colocationId. The latter one is equally important to not allow
+ * the same partition key value into another distributed table which is not co-located
+ * and therefore might be on a different node.
+ */
+typedef struct AllowedDistributionColumn
+{
+	Const *distributionColumnValue;
+	uint32 colocationId;
+	bool isActive;
+} AllowedDistributionColumn;
 
 /*
  * GUC that determines whether a SELECT in a transaction block should also run in
@@ -100,6 +119,8 @@ extern void Use2PCForCoordinatedTransaction(void);
 extern bool GetCoordinatedTransactionShouldUse2PC(void);
 extern bool IsMultiStatementTransaction(void);
 extern void EnsureDistributedTransactionId(void);
+extern bool MaybeExecutingUDF(void);
+
 
 /* initialization function(s) */
 extern void InitializeTransactionManagement(void);

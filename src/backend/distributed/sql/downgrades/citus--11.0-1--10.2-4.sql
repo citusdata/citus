@@ -1,5 +1,6 @@
 -- citus--11.0-1--10.2-4
 
+DROP FUNCTION pg_catalog.create_distributed_function(regprocedure, text, text, bool);
 CREATE FUNCTION pg_catalog.master_apply_delete_command(text)
     RETURNS integer
     LANGUAGE C STRICT
@@ -43,7 +44,43 @@ COMMENT ON FUNCTION pg_catalog.citus_disable_node(nodename text, nodeport intege
 DROP FUNCTION pg_catalog.citus_check_connection_to_node (text, integer);
 DROP FUNCTION pg_catalog.citus_check_cluster_node_health ();
 
-DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer);
+DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer, boolean);
 DROP FUNCTION pg_catalog.citus_run_local_command(text);
 DROP FUNCTION pg_catalog.worker_drop_sequence_dependency(text);
 DROP FUNCTION pg_catalog.worker_drop_distributed_table_only(table_name text);
+
+CREATE OR REPLACE VIEW pg_catalog.citus_shards_on_worker AS
+	SELECT n.nspname as "Schema",
+	  c.relname as "Name",
+	  CASE c.relkind WHEN 'r' THEN 'table' WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view' WHEN 'i' THEN 'index' WHEN 'S' THEN 'sequence' WHEN 's' THEN 'special' WHEN 'f' THEN 'foreign table' WHEN 'p' THEN 'table' END as "Type",
+	  pg_catalog.pg_get_userbyid(c.relowner) as "Owner"
+	FROM pg_catalog.pg_class c
+	     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+	WHERE c.relkind IN ('r','p','v','m','S','f','')
+	      AND n.nspname <> 'pg_catalog'
+	      AND n.nspname <> 'information_schema'
+	      AND n.nspname !~ '^pg_toast'
+          AND pg_catalog.relation_is_a_known_shard(c.oid)
+	ORDER BY 1,2;
+
+CREATE OR REPLACE VIEW pg_catalog.citus_shard_indexes_on_worker AS
+SELECT n.nspname as "Schema",
+  c.relname as "Name",
+  CASE c.relkind WHEN 'r' THEN 'table' WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized view' WHEN 'i' THEN 'index' WHEN 'S' THEN 'sequence' WHEN 's' THEN 'special' WHEN 'f' THEN 'foreign table' WHEN 'p' THEN 'table' END as "Type",
+  pg_catalog.pg_get_userbyid(c.relowner) as "Owner",
+ c2.relname as "Table"
+FROM pg_catalog.pg_class c
+     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+     LEFT JOIN pg_catalog.pg_index i ON i.indexrelid = c.oid
+     LEFT JOIN pg_catalog.pg_class c2 ON i.indrelid = c2.oid
+WHERE c.relkind IN ('i','')
+      AND n.nspname <> 'pg_catalog'
+      AND n.nspname <> 'information_schema'
+      AND n.nspname !~ '^pg_toast'
+      AND pg_catalog.relation_is_a_known_shard(c.oid)
+ORDER BY 1,2;
+
+DROP FUNCTION pg_catalog.citus_shards_on_worker();
+DROP FUNCTION pg_catalog.citus_shard_indexes_on_worker();
+#include "../udfs/create_distributed_function/9.0-1.sql"
+ALTER TABLE citus.pg_dist_object DROP COLUMN force_delegation;

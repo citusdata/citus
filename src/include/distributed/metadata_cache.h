@@ -115,6 +115,7 @@ typedef struct DistObjectCacheEntry
 
 	int distributionArgIndex;
 	int colocationId;
+	bool forceDelegation;
 } DistObjectCacheEntry;
 
 typedef enum
@@ -252,6 +253,7 @@ extern Oid CitusExtraDataContainerFuncId(void);
 extern Oid CitusAnyValueFunctionId(void);
 extern Oid PgTableVisibleFuncId(void);
 extern Oid CitusTableVisibleFuncId(void);
+extern Oid RelationIsAKnownShardFuncId(void);
 extern Oid JsonbExtractPathFuncId(void);
 
 /* enum oids */
