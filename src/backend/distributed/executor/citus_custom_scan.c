@@ -34,13 +34,18 @@
 #include "distributed/subplan_execution.h"
 #include "distributed/worker_log_messages.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/colocation_utils.h"
+#include "distributed/function_call_delegation.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/clauses.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
+#include "utils/datum.h"
 
+
+extern AllowedDistributionColumn AllowedDistributionColumnValue;
 
 /* functions for creating custom scan nodes */
 static Node * AdaptiveExecutorCreateScan(CustomScan *scan);
@@ -59,6 +64,8 @@ static DistributedPlan * CopyDistributedPlanWithoutCache(
 	DistributedPlan *originalDistributedPlan);
 static void CitusEndScan(CustomScanState *node);
 static void CitusReScan(CustomScanState *node);
+static void SetJobColocationId(Job *job);
+static void EnsureForceDelegationDistributionKey(Job *job);
 
 
 /* create custom scan methods for all executors */
@@ -188,6 +195,17 @@ CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 	else
 	{
 		CitusBeginModifyScan(node, estate, eflags);
+	}
+
+
+	/*
+	 * If there is force_delgation functions' distribution argument set,
+	 * enforce it
+	 */
+	if (AllowedDistributionColumnValue.isActive)
+	{
+		Job *workerJob = scanState->distributedPlan->workerJob;
+		EnsureForceDelegationDistributionKey(workerJob);
 	}
 
 	/*
@@ -800,4 +818,97 @@ IsCitusCustomScan(Plan *plan)
 	}
 
 	return true;
+}
+
+
+/*
+ * In a Job, given a list of relations, if all them belong to the same
+ * colocation group, the Job's colocation ID is set to the group ID, else,
+ * it will be set to INVALID_COLOCATION_ID.
+ */
+static void
+SetJobColocationId(Job *job)
+{
+	uint32 jobColocationId = INVALID_COLOCATION_ID;
+
+	if (!job->partitionKeyValue)
+	{
+		/* if the Job has no shard key, nothing to do */
+		return;
+	}
+
+	List *rangeTableList = ExtractRangeTableEntryList(job->jobQuery);
+	ListCell *rangeTableCell = NULL;
+	foreach(rangeTableCell, rangeTableList)
+	{
+		RangeTblEntry *rangeTableEntry = (RangeTblEntry *) lfirst(rangeTableCell);
+		Oid relationId = rangeTableEntry->relid;
+
+		if (!IsCitusTable(relationId))
+		{
+			/* ignore the non distributed table */
+			continue;
+		}
+
+		uint32 colocationId = TableColocationId(relationId);
+
+		if (jobColocationId == INVALID_COLOCATION_ID)
+		{
+			/* Initialize the ID */
+			jobColocationId = colocationId;
+		}
+		else if (jobColocationId != colocationId)
+		{
+			/* Tables' colocationId is not the same */
+			jobColocationId = INVALID_COLOCATION_ID;
+			break;
+		}
+	}
+
+	job->colocationId = jobColocationId;
+}
+
+
+/*
+ * Any function with force_delegate flag(true) must ensure that the Job's
+ * partition key match with the functions' distribution argument.
+ */
+static void
+EnsureForceDelegationDistributionKey(Job *job)
+{
+	/* If the Job has the subquery, punt the shard-key-check to the subquery */
+	if (job->subqueryPushdown)
+	{
+		return;
+	}
+
+	/*
+	 * If the query doesn't have shard key, nothing to check, only exception is when
+	 * the query doesn't have distributed tables but an RTE with intermediate_results
+	 * function (a subquery plan).
+	 */
+	if (!job->partitionKeyValue)
+	{
+		bool queryContainsDistributedTable =
+			FindNodeMatchingCheckFunction((Node *) job->jobQuery, IsDistributedTableRTE);
+
+		if (!queryContainsDistributedTable)
+		{
+			return;
+		}
+	}
+
+	/* We should match both the key and the colocation ID */
+	SetJobColocationId(job);
+
+	if (!IsShardKeyValueAllowed(job->partitionKeyValue, job->colocationId))
+	{
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+						errmsg(
+							"queries must filter by the distribution argument in the same "
+							"colocation group when using the forced function pushdown"),
+						errhint(
+							"consider disabling forced delegation through "
+							"create_distributed_table(..., force_delegation := false)")));
+	}
 }

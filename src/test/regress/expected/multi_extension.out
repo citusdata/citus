@@ -997,18 +997,20 @@ SELECT * FROM multi_extension.print_extension_changes();
                            previous_object                            |                                    current_object
 ---------------------------------------------------------------------
  function citus_disable_node(text,integer) void                       |
+ function create_distributed_function(regprocedure,text,text) void    |
  function master_append_table_to_shard(bigint,text,text,integer) real |
  function master_apply_delete_command(text) integer                   |
  function master_get_table_metadata(text) record                      |
                                                                       | function citus_check_cluster_node_health() SETOF record
                                                                       | function citus_check_connection_to_node(text,integer) boolean
                                                                       | function citus_disable_node(text,integer,boolean) void
-                                                                      | function citus_internal_add_object_metadata(text,text[],text[],integer,integer) void
+                                                                      | function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean) void
                                                                       | function citus_run_local_command(text) void
                                                                       | function citus_shard_indexes_on_worker() SETOF record
                                                                       | function citus_shards_on_worker() SETOF record
+                                                                      | function create_distributed_function(regprocedure,text,text,boolean) void
                                                                       | function worker_drop_sequence_dependency(text) void
-(12 rows)
+(14 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

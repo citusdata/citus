@@ -37,6 +37,7 @@
 #include "distributed/version_compat.h"
 #include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/function_call_delegation.h"
 #include "executor/execdebug.h"
 #include "commands/copy.h"
 #include "nodes/execnodes.h"
@@ -234,6 +235,15 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			 * transactions.
 			 */
 			CitusTableCacheFlushInvalidatedEntries();
+
+			/*
+			 * Within a 2PC, when a function is delegated to a remote node, we pin
+			 * the distribution argument as the shard key for all the SQL in the
+			 * function's block. The restriction is imposed to not to access other
+			 * nodes from the current node and violate the transactional integrity
+			 * of the 2PC. Now that the query is ending, reset the shard key to NULL.
+			 */
+			ResetAllowedShardKeyValue();
 		}
 	}
 	PG_CATCH();
@@ -245,6 +255,15 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		executorBoundParams = savedBoundParams;
 		ExecutorLevel--;
+
+		if (ExecutorLevel == 0 && PlannerLevel == 0)
+		{
+			/*
+			 * In case of an exception, reset the pinned shard-key, for more
+			 * details see the function header.
+			 */
+			ResetAllowedShardKeyValue();
+		}
 
 		PG_RE_THROW();
 	}
@@ -761,6 +780,6 @@ InTaskExecution(void)
 	 * are in a delegated function/procedure call.
 	 */
 	return IsCitusInitiatedRemoteBackend() &&
-		   !InDelegatedFunctionCall &&
+		   !InTopLevelDelegatedFunctionCall &&
 		   !InDelegatedProcedureCall;
 }
