@@ -3082,7 +3082,7 @@ citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
 	CheckCitusVersion(ERROR);
 
 	Oid relationId = PG_GETARG_OID(0);
-	uint32 tagetColocationId = PG_GETARG_UINT32(1);
+	uint32 targetColocationId = PG_GETARG_UINT32(1);
 
 	EnsureTableOwner(relationId);
 
@@ -3111,7 +3111,7 @@ citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
 
 		int count = 1;
 		List *targetColocatedTableList =
-			ColocationGroupTableList(tagetColocationId, count);
+			ColocationGroupTableList(targetColocationId, count);
 
 		if (list_length(targetColocatedTableList) == 0)
 		{
@@ -3128,7 +3128,7 @@ citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
 	}
 
 	bool localOnly = true;
-	UpdateRelationColocationGroup(relationId, tagetColocationId, localOnly);
+	UpdateRelationColocationGroup(relationId, targetColocationId, localOnly);
 
 	PG_RETURN_VOID();
 }
