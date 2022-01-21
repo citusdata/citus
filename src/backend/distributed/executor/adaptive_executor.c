@@ -301,6 +301,8 @@ typedef struct DistributedExecution
 	 * do cleanup for repartition queries.
 	 */
 	List *jobIdList;
+
+	bool localExecutionSupported;
 } DistributedExecution;
 
 
@@ -545,6 +547,8 @@ typedef struct ShardCommandExecution
 	bool gotResults;
 
 	TaskExecutionState executionState;
+
+	bool localExecutionSupported;
 } ShardCommandExecution;
 
 /*
@@ -1117,6 +1121,8 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 
 	execution->jobIdList = jobIdList;
 
+	execution->localExecutionSupported = localExecutionSupported;
+
 	/*
 	 * Since task can have multiple queries, we are not sure how many columns we should
 	 * allocate for. We start with 16, and reallocate when we need more.
@@ -1145,7 +1151,8 @@ CreateDistributedExecution(RowModifyLevel modLevel, List *taskList,
 		}
 	}
 
-	if (localExecutionSupported && ShouldExecuteTasksLocally(taskList))
+	if (execution->localExecutionSupported &&
+		ShouldExecuteTasksLocally(taskList))
 	{
 		bool readOnlyPlan = !TaskListModifiesDatabase(modLevel, taskList);
 		ExtractLocalAndRemoteTasks(readOnlyPlan, taskList, &execution->localTaskList,
@@ -1250,6 +1257,16 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 void
 StartDistributedExecution(DistributedExecution *execution)
 {
+	if (!execution->localExecutionSupported)
+	{
+		/*
+		 * Later we may decide failing over to local execution if remote
+		 * execution fails for some reason. However, we shouldn't do that if
+		 * caller told us to avoid from local execution.
+		 */
+		ErrorIfTransactionAccessedPlacementsLocally();
+	}
+
 	TransactionProperties *xactProperties = execution->transactionProperties;
 
 	if (xactProperties->useRemoteTransactionBlocks == TRANSACTION_BLOCKS_REQUIRED)
@@ -2009,6 +2026,8 @@ AssignTasksToConnectionsOrWorkerPool(DistributedExecution *execution)
 		shardCommandExecution->task = task;
 		shardCommandExecution->executionOrder = ExecutionOrderForTask(modLevel, task);
 		shardCommandExecution->executionState = TASK_EXECUTION_NOT_FINISHED;
+		shardCommandExecution->localExecutionSupported =
+			execution->localExecutionSupported;
 		shardCommandExecution->placementExecutions =
 			(TaskPlacementExecution **) palloc0(placementExecutionCount *
 												sizeof(TaskPlacementExecution *));
@@ -2846,14 +2865,17 @@ ManageWorkerPool(WorkerPool *workerPool)
 
 		if (execution->failed)
 		{
+			const char *errHint =
+				execution->localExecutionSupported ?
+				"Consider enabling local execution using SET "
+				"citus.enable_local_execution TO true;" :
+				"Consider using a higher value for max_connections";
+
 			ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-							errmsg(
-								"could not establish any connections to the node %s:%d "
-								"when local execution is also disabled.",
-								workerPool->nodeName,
-								workerPool->nodePort),
-							errhint("Enable local execution via SET "
-									"citus.enable_local_execution TO true;")));
+							errmsg("could not establish any connections to the "
+								   "node %s:%d due to high number connections",
+								   workerPool->nodeName, workerPool->nodePort),
+							errhint("%s", errHint)));
 		}
 
 		return;
@@ -5036,6 +5058,12 @@ CanFailoverPlacementExecutionToLocalExecution(TaskPlacementExecution *placementE
 	if (!EnableLocalExecution)
 	{
 		/* the user explicitly disabled local execution */
+		return false;
+	}
+
+	if (!placementExecution->shardCommandExecution->localExecutionSupported)
+	{
+		/* cannot execute given task locally */
 		return false;
 	}
 

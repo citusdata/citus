@@ -5,6 +5,8 @@ SET citus.shard_replication_factor TO 1;
 SET citus.next_shard_id TO 90630500;
 -- Ensure tuple data in explain analyze output is the same on all PG versions
 SET citus.enable_binary_protocol = TRUE;
+-- do not cache any connections for now, will enable it back soon
+ALTER SYSTEM SET citus.max_cached_conns_per_worker TO 0;
 -- adding the coordinator as inactive is disallowed
 SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
 ERROR:  coordinator node cannot be added as inactive node
@@ -33,6 +35,49 @@ SELECT count(*) FROM pg_dist_node;
 (1 row)
 
 -- there are no workers now, but we should still be able to create Citus tables
+-- force local execution when creating the index
+ALTER SYSTEM SET citus.local_shared_pool_size TO -1;
+-- Postmaster might not ack SIGHUP signal sent by pg_reload_conf() immediately,
+-- so we need to sleep for some amount of time to do our best to ensure that
+-- postmaster reflects GUC changes.
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE failover_to_local (a int);
+SELECT create_distributed_table('failover_to_local', 'a', shard_count=>32);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE INDEX CONCURRENTLY ON failover_to_local(a);
+WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
+ Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
+ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
+HINT:  Consider using a higher value for max_connections
+-- reset global GUC changes
+ALTER SYSTEM RESET citus.local_shared_pool_size;
+ALTER SYSTEM RESET citus.max_cached_conns_per_worker;
+SELECT pg_reload_conf();
+ pg_reload_conf
+---------------------------------------------------------------------
+ t
+(1 row)
+
+SET client_min_messages TO WARNING;
+DROP TABLE failover_to_local;
+RESET client_min_messages;
+-- so that we don't have to update rest of the test output
+SET citus.next_shard_id TO 90630500;
 CREATE TABLE ref(x int, y int);
 SELECT create_reference_table('ref');
  create_reference_table
@@ -2163,24 +2208,24 @@ NOTICE:  executing the command locally: WITH cte_1 AS (UPDATE single_node.anothe
 -- local execution and the queries would fail
 SET citus.enable_local_execution TO  false;
 SELECT count(*) from another_schema_table;
-ERROR:  could not establish any connections to the node localhost:xxxxx when local execution is also disabled.
-HINT:  Enable local execution via SET citus.enable_local_execution TO true;
+ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
+HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
 UPDATE another_schema_table SET b = b;
-ERROR:  could not establish any connections to the node localhost:xxxxx when local execution is also disabled.
-HINT:  Enable local execution via SET citus.enable_local_execution TO true;
+ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
+HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
 INSERT INTO another_schema_table SELECT * FROM another_schema_table;
-ERROR:  could not establish any connections to the node localhost:xxxxx when local execution is also disabled.
-HINT:  Enable local execution via SET citus.enable_local_execution TO true;
+ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
+HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
 INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
-ERROR:  could not establish any connections to the node localhost:xxxxx when local execution is also disabled.
-HINT:  Enable local execution via SET citus.enable_local_execution TO true;
+ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
+HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;
-ERROR:  could not establish any connections to the node localhost:xxxxx when local execution is also disabled.
-HINT:  Enable local execution via SET citus.enable_local_execution TO true;
+ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
+HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
 INSERT INTO another_schema_table VALUES (1,1), (2,2), (3,3), (4,4), (5,5),(6,6),(7,7);
-ERROR:  could not establish any connections to the node localhost:xxxxx when local execution is also disabled.
-HINT:  Enable local execution via SET citus.enable_local_execution TO true;
+ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
+HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
 -- copy fails if local execution is disabled and there is no connection slot
 COPY another_schema_table(a) FROM PROGRAM 'seq 32';
 ERROR:  could not find an available connection
