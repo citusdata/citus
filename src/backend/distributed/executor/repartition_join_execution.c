@@ -50,7 +50,6 @@ static void TraverseJobTree(Job *curJob, List **jobs);
 static char * GenerateCreateSchemasCommand(List *jobIds, char *schemaOwner);
 static char * GenerateJobCommands(List *jobIds, char *templateCommand);
 static char * GenerateDeleteJobsCommand(List *jobIds);
-static void EnsureCompatibleLocalExecutionState(List *taskList);
 
 
 /*
@@ -79,7 +78,7 @@ ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
  * EnsureCompatibleLocalExecutionState makes sure that the tasks won't have
  * any visibility problems because of local execution.
  */
-static void
+void
 EnsureCompatibleLocalExecutionState(List *taskList)
 {
 	/*

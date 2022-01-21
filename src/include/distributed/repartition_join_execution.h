@@ -13,6 +13,7 @@
 #include "nodes/pg_list.h"
 
 extern List * ExecuteDependentTasks(List *taskList, Job *topLevelJob);
+extern void EnsureCompatibleLocalExecutionState(List *taskList);
 extern void DoRepartitionCleanup(List *jobIds);
 
 
