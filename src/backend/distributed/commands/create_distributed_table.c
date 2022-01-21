@@ -432,6 +432,26 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_LOCAL_TABLES);
 	}
 
+	/*
+	 * Ensure that the sequences used in column defaults of the table
+	 * have proper types
+	 */
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
+	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
+										  attnumList);
+
+	/*
+	 * distributed tables might have dependencies on different objects, since we create
+	 * shards for a distributed table via multiple sessions these objects will be created
+	 * via their own connection and committed immediately so they become visible to all
+	 * sessions creating shards.
+	 */
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
+
 	char replicationModel = DecideReplicationModel(distributionMethod,
 												   colocateWithTableName,
 												   viaDeprecatedAPI);
@@ -482,26 +502,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	/* create an entry for distributed table in pg_dist_partition */
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
 							  colocationId, replicationModel, autoConverted);
-
-	/*
-	 * Ensure that the sequences used in column defaults of the table
-	 * have proper types
-	 */
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
-										  attnumList);
-
-	/*
-	 * distributed tables might have dependencies on different objects, since we create
-	 * shards for a distributed table via multiple sessions these objects will be created
-	 * via their own connection and committed immediately so they become visible to all
-	 * sessions creating shards.
-	 */
-	ObjectAddress tableAddress = { 0 };
-	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
-	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
@@ -594,11 +594,15 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
  * If any other distributed table uses the input sequence, it checks whether
  * the types of the columns using the sequence match. If they don't, it errors out.
  * Otherwise, the condition is ensured.
+ * Since the owner of the sequence may not distributed yet, it should be added
+ * explicitly.
  */
 void
-EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId)
+EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId, Oid ownerRelationId)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
+	citusTableIdList = list_append_unique_oid(citusTableIdList, ownerRelationId);
+
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
@@ -742,7 +746,7 @@ EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceLis
 		 * that sequence is supported
 		 */
 		Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
-		EnsureSequenceTypeSupported(sequenceOid, seqTypId);
+		EnsureSequenceTypeSupported(sequenceOid, seqTypId, relationId);
 
 		/*
 		 * Alter the sequence's data type in the coordinator if needed.

@@ -72,7 +72,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  RESET ROLE
  SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
  SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
- SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
  SET ROLE postgres
  SET citus.enable_ddl_propagation TO 'off'
@@ -141,7 +141,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
- SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
  SET ROLE postgres
  SET citus.enable_ddl_propagation TO 'off'
@@ -187,7 +187,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
- SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
  SET ROLE postgres
  SET citus.enable_ddl_propagation TO 'off'
@@ -235,7 +235,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
- SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
  SET ROLE postgres
  SET citus.enable_ddl_propagation TO 'off'
@@ -289,7 +289,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
- SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
  SET ROLE postgres
  SET citus.enable_ddl_propagation TO 'off'
@@ -336,7 +336,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
- SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
  SET ROLE postgres
  SET citus.enable_ddl_propagation TO 'off'
@@ -1873,7 +1873,7 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SELECT worker_create_truncate_trigger('public.dist_table_1')
  SELECT worker_create_truncate_trigger('public.mx_ref')
  SELECT worker_create_truncate_trigger('public.test_table')
- SELECT worker_drop_distributed_table_only(logicalrelid::regclass::text) FROM pg_dist_partition
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
  SET ROLE postgres
  SET ROLE postgres
  SET citus.enable_ddl_propagation TO 'off'

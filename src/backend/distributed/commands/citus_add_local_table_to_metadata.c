@@ -304,6 +304,26 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 		}
 	}
 
+	ObjectAddress tableAddress = { 0 };
+	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+
+	/*
+	 * Ensure that the sequences used in column defaults of the table
+	 * have proper types
+	 */
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
+	GetDependentSequencesWithRelation(relationId, &attnumList,
+									  &dependentSequenceList, 0);
+	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
+										  attnumList);
+
+	/*
+	 * Ensure dependencies exist as we will create shell table on the other nodes
+	 * in the MX case.
+	 */
+	EnsureDependenciesExistOnAllNodes(&tableAddress);
+
 	/*
 	 * Make sure that existing reference tables have been replicated to all
 	 * the nodes such that we can create foreign keys and joins work
@@ -345,26 +365,6 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 														 shellRelationId);
 
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
-
-	ObjectAddress shellTableAddress = { 0 };
-	ObjectAddressSet(shellTableAddress, RelationRelationId, shellRelationId);
-
-	/*
-	 * Ensure that the sequences used in column defaults of the table
-	 * have proper types
-	 */
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(shellRelationId, &attnumList,
-									  &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(shellRelationId, dependentSequenceList,
-										  attnumList);
-
-	/*
-	 * Ensure dependencies exist as we will create shell table on the other nodes
-	 * in the MX case.
-	 */
-	EnsureDependenciesExistOnAllNodes(&shellTableAddress);
 
 	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
 }

@@ -108,6 +108,7 @@ static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetada
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
 static void SyncObjectDependenciesToNode(WorkerNode *workerNode);
+static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNode(WorkerNode *workerNode);
 static List * InterTableRelationshipCommandList();
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
@@ -758,7 +759,7 @@ SyncObjectDependenciesCommandList(WorkerNode *workerNode)
 	 * Detach partitions and remove shell tables first.
 	 */
 	commandList = list_concat(commandList, DetachPartitionCommandList());
-	commandList = lappend(commandList, REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND);
+	commandList = lappend(commandList, REMOVE_ALL_SHELL_TABLES_COMMAND);
 
 	/*
 	 * Propagate node wide objects. It includes only roles for now.
@@ -766,11 +767,8 @@ SyncObjectDependenciesCommandList(WorkerNode *workerNode)
 	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
 
 	/*
-	 * Replicate all objects of the pg_dist_object to the remote node. We need to
-	 * update local group id first, as sequence replication logic depends on it.
+	 * Replicate all objects of the pg_dist_object to the remote node.
 	 */
-	commandList = list_concat(commandList, list_make1(LocalGroupIdUpdateCommand(
-														  workerNode->groupId)));
 	commandList = list_concat(commandList, ReplicateAllObjectsToNodeCommandList(
 								  workerNode->workerName, workerNode->workerPort));
 
@@ -813,6 +811,27 @@ SyncObjectDependenciesToNode(WorkerNode *workerNode)
 				CurrentUserName(),
 				commandList);
 		}
+	}
+}
+
+
+/*
+ * UpdateLocalGroupIdOnNode updates local group id on node.
+ */
+static void
+UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
+{
+	if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
+	{
+		List *commandList = list_make1(LocalGroupIdUpdateCommand(workerNode->groupId));
+
+		/* send commands to new workers, the current user should be a superuser */
+		Assert(superuser());
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(
+			workerNode->workerName,
+			workerNode->workerPort,
+			CurrentUserName(),
+			commandList);
 	}
 }
 
@@ -1098,6 +1117,12 @@ ActivateNode(char *nodeName, int nodePort)
 		 */
 		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
 						BoolGetDatum(true));
+
+		/*
+		 * Update local group id first, as object dependency logic requires to have
+		 * updated local group id.
+		 */
+		UpdateLocalGroupIdOnNode(workerNode);
 
 		/*
 		 * Sync object dependencies first. We must sync object dependencies before

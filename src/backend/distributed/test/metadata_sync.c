@@ -48,6 +48,8 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	 */
 	WorkerNode *dummyWorkerNode = GetFirstPrimaryWorkerNode();
 
+	List *updateLocalGroupCommand = 
+		list_make1(LocalGroupIdUpdateCommand(dummyWorkerNode->groupId));
 	List *syncObjectDepCommands = SyncObjectDependenciesCommandList(dummyWorkerNode);
 	List *dropSnapshotCommands = NodeMetadataDropCommands();
 	List *createSnapshotCommands = NodeMetadataCreateCommands();
@@ -57,6 +59,7 @@ activate_node_snapshot(PG_FUNCTION_ARGS)
 	int activateNodeCommandIndex = 0;
 	Oid ddlCommandTypeId = TEXTOID;
 
+	activateNodeCommandList = list_concat(activateNodeCommandList, updateLocalGroupCommand);
 	activateNodeCommandList = list_concat(activateNodeCommandList, syncObjectDepCommands);
 	activateNodeCommandList = list_concat(activateNodeCommandList, dropSnapshotCommands);
 	activateNodeCommandList = list_concat(activateNodeCommandList,

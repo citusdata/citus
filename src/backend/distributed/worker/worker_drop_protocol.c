@@ -34,7 +34,7 @@
 #include "utils/fmgroids.h"
 
 PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
-PG_FUNCTION_INFO_V1(worker_drop_distributed_table_only);
+PG_FUNCTION_INFO_V1(worker_drop_shell_table);
 PG_FUNCTION_INFO_V1(worker_drop_sequence_dependency);
 
 
@@ -105,8 +105,6 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 		UnmarkObjectDistributed(&ownedSequenceAddress);
 	}
 
-	UnmarkObjectDistributed(&distributedTableObject);
-
 	if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
 	{
 		/*
@@ -146,10 +144,13 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 
 
 /*
- * worker_drop_distributed_table_only drops the distributed table with the given oid.
+ * worker_drop_shell_table drops the shell table of with the given distributed
+ * table without deleting related entries on pg_dist_placement, pg_dist_shard
+ * and pg_dist_placement. We've separated that logic since we handle object
+ * dependencies and table metadata separately while activating nodes.
  */
 Datum
-worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
+worker_drop_shell_table(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
@@ -178,6 +179,11 @@ worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
 	distributedTableObject.objectId = relationId;
 	distributedTableObject.objectSubId = 0;
 
+	if (IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
+	{
+		PG_RETURN_VOID();;
+	}
+
 	/* Drop dependent sequences from pg_dist_object */
 	#if PG_VERSION_NUM >= PG_VERSION_13
 	List *ownedSequences = getOwnedSequences(relationId);
@@ -193,18 +199,15 @@ worker_drop_distributed_table_only(PG_FUNCTION_ARGS)
 		UnmarkObjectDistributed(&ownedSequenceAddress);
 	}
 
-	if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
-	{
-		/*
-		 * If the table is owned by an extension, we cannot drop it, nor should we
-		 * until the user runs DROP EXTENSION. Therefore, we skip dropping the
-		 * table and only delete the metadata.
-		 *
-		 * We drop the table with cascade since other tables may be referring to it.
-		 */
-		performDeletion(&distributedTableObject, DROP_CASCADE,
-						PERFORM_DELETION_INTERNAL);
-	}
+	/*
+	 * If the table is owned by an extension, we cannot drop it, nor should we
+	 * until the user runs DROP EXTENSION. Therefore, we skip dropping the
+	 * table and only delete the metadata.
+	 *
+	 * We drop the table with cascade since other tables may be referring to it.
+	 */
+	performDeletion(&distributedTableObject, DROP_CASCADE,
+					PERFORM_DELETION_INTERNAL);
 
 	PG_RETURN_VOID();
 }
