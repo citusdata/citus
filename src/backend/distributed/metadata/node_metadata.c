@@ -648,7 +648,7 @@ PgDistTableMetadataSyncCommandList(void)
 		}
 	}
 
-	/* remove all dist table related metadata first */
+	/* remove all dist table and object related metadata first */
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 										  DELETE_ALL_PARTITIONS);
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList, DELETE_ALL_SHARDS);
@@ -755,7 +755,7 @@ SyncObjectDependenciesCommandList(WorkerNode *workerNode)
 	List *commandList = NIL;
 
 	/*
-	 * Detach partitions, remove shell tables and delete all objects first.
+	 * Detach partitions and remove shell tables first.
 	 */
 	commandList = list_concat(commandList, DetachPartitionCommandList());
 	commandList = lappend(commandList, REMOVE_ALL_CLUSTERED_TABLES_ONLY_COMMAND);
@@ -817,6 +817,11 @@ SyncObjectDependenciesToNode(WorkerNode *workerNode)
 }
 
 
+/*
+ * SyncPgDistTableMetadataToNode syncs the pg_dist_partition, pg_dist_shard
+ * pg_dist_placement and pg_dist_object metadata entries.
+ *
+ */
 static void
 SyncPgDistTableMetadataToNode(WorkerNode *workerNode)
 {

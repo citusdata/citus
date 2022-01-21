@@ -367,7 +367,7 @@ GetCitusTableDDLCommandList(Oid relationId)
 
 
 /*
- * ReplicateAllDependenciesToNodeCommandList returns commands to replicate all
+ * ReplicateAllObjectsToNodeCommandList returns commands to replicate all
  * previously marked objects to a worker node. The function also sets
  * clusterHasDistributedFunction if there are any distributed functions.
  */
