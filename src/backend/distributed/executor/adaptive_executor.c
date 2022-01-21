@@ -1028,12 +1028,7 @@ ExecuteTaskListExtended(ExecutionParams *executionParams)
 	 * then we should error out as it would cause inconsistencies across the
 	 * remote connection and local execution.
 	 */
-	List *remoteTaskList = execution->remoteTaskList;
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED &&
-		AnyTaskAccessesLocalNode(remoteTaskList))
-	{
-		ErrorIfTransactionAccessedPlacementsLocally();
-	}
+	EnsureCompatibleLocalExecutionState(execution->remoteTaskList);
 
 	/* run the remote execution */
 	StartDistributedExecution(execution);
