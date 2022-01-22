@@ -747,15 +747,15 @@ SyncObjectDependenciesCommandList(WorkerNode *workerNode)
 	List *commandList = NIL;
 
 	/*
+	 * Propagate node wide objects. It includes only roles for now.
+	 */
+	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
+
+	/*
 	 * Detach partitions and remove shell tables first.
 	 */
 	commandList = list_concat(commandList, DetachPartitionCommandList());
 	commandList = lappend(commandList, REMOVE_ALL_SHELL_TABLES_COMMAND);
-
-	/*
-	 * Propagate node wide objects. It includes only roles for now.
-	 */
-	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
 
 	/*
 	 * Replicate all objects of the pg_dist_object to the remote node.
