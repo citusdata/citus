@@ -668,15 +668,6 @@ PgDistTableMetadataSyncCommandList(void)
 		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 											  metadataCommand);
 
-		/* add the truncate trigger command after the table became distributed */
-		if (!IsForeignTable(clusteredTableId))
-		{
-			char *truncateTriggerCreateCommand =
-				TruncateTriggerCreateCommand(clusteredTableId);
-			metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-												  truncateTriggerCreateCommand);
-		}
-
 		/* add the pg_dist_shard{,placement} entries */
 		List *shardIntervalList = LoadShardIntervalList(clusteredTableId);
 		List *shardCreateCommandList = ShardListInsertCommand(shardIntervalList);

@@ -13,6 +13,7 @@
 #define METADATA_SYNC_H
 
 
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "nodes/pg_list.h"
 
@@ -55,7 +56,7 @@ extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
-extern char * TruncateTriggerCreateCommand(Oid relationId);
+extern TableDDLCommand * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
 extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
 extern void CreateShellTableOnWorkers(Oid relationId);

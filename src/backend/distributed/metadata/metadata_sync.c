@@ -1574,7 +1574,8 @@ SequenceDependencyCommandList(Oid relationId)
 			CreateSequenceDependencyCommand(relationId, sequenceId, columnName);
 
 		sequenceCommandList = lappend(sequenceCommandList,
-									  makeTableDDLCommandString(sequenceDependencyCommand));
+									  makeTableDDLCommandString(
+										  sequenceDependencyCommand));
 	}
 
 	return sequenceCommandList;
@@ -1805,7 +1806,7 @@ GenerateSetRoleQuery(Oid roleOid)
  * TruncateTriggerCreateCommand creates a SQL query calling worker_create_truncate_trigger
  * function, which creates the truncate trigger on the worker.
  */
-char *
+TableDDLCommand *
 TruncateTriggerCreateCommand(Oid relationId)
 {
 	StringInfo triggerCreateCommand = makeStringInfo();
@@ -1815,7 +1816,10 @@ TruncateTriggerCreateCommand(Oid relationId)
 					 "SELECT worker_create_truncate_trigger(%s)",
 					 quote_literal_cstr(tableName));
 
-	return triggerCreateCommand->data;
+	TableDDLCommand *triggerDDLCommand = makeTableDDLCommandString(
+		triggerCreateCommand->data);
+
+	return triggerDDLCommand;
 }
 
 
@@ -1937,22 +1941,16 @@ CreateShellTableOnWorkers(Oid relationId)
 		IncludeSequenceDefaults includeSequenceDefaults =
 			WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
-		bool associateSequenceDependency = true;
+		bool creatingShellTableOnRemoteNode = true;
 		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 															  includeSequenceDefaults,
-															  associateSequenceDependency);
+															  creatingShellTableOnRemoteNode);
 		TableDDLCommand *tableDDLCommand = NULL;
 		foreach_ptr(tableDDLCommand, tableDDLCommands)
 		{
 			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
 			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
 		}
-	}
-
-	if (!IsForeignTable(relationId))
-	{
-		char *truncateTriggerCreateCommand = TruncateTriggerCreateCommand(relationId);
-		commandList = lappend(commandList, truncateTriggerCreateCommand);
 	}
 
 	/* prevent recursive propagation */

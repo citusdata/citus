@@ -243,15 +243,16 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 				if (IsCitusTable(relationId))
 				{
-					bool associateSequenceDependency = true;
+					bool creatingShellTableOnRemoteNode = true;
 					List *tableDDLCommands = GetFullTableCreationCommands(relationId,
 																		  WORKER_NEXTVAL_SEQUENCE_DEFAULTS,
-																		  associateSequenceDependency);
+																		  creatingShellTableOnRemoteNode);
 					TableDDLCommand *tableDDLCommand = NULL;
 					foreach_ptr(tableDDLCommand, tableDDLCommands)
 					{
 						Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-						commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+						commandList = lappend(commandList, GetTableDDLCommand(
+												  tableDDLCommand));
 					}
 				}
 

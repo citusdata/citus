@@ -141,10 +141,10 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 			functionContext->multi_call_memory_ctx);
 
 		/* allocate DDL statements, and then save position in DDL statements */
-		bool associateSequenceDependency = false;
+		bool creatingShellTableOnRemoteNode = false;
 		List *tableDDLEventList = GetFullTableCreationCommands(relationId,
 															   includeSequenceDefaults,
-															   associateSequenceDependency);
+															   creatingShellTableOnRemoteNode);
 		tableDDLEventCell = list_head(tableDDLEventList);
 		ListCellAndListWrapper *wrapper = palloc0(sizeof(ListCellAndListWrapper));
 		wrapper->list = tableDDLEventList;
@@ -462,7 +462,7 @@ ResolveRelationId(text *relationName, bool missingOk)
 List *
 GetFullTableCreationCommands(Oid relationId,
 							 IncludeSequenceDefaults includeSequenceDefaults,
-							 bool associateSequenceDependency)
+							 bool creatingShellTableOnRemoteNode)
 {
 	List *tableDDLEventList = NIL;
 
@@ -474,14 +474,23 @@ GetFullTableCreationCommands(Oid relationId,
 	List *postLoadCreationCommandList =
 		GetPostLoadTableCreationCommands(relationId, true, true);
 
-	if (associateSequenceDependency)
+	if (creatingShellTableOnRemoteNode)
 	{
 		/*
 		 * While creating shell tables, we need to associate dependencies between
-		 * sequences and the relation.
+		 * sequences and the relation. We also need to add truncate trigger for it
+		 * if it is not the foreign table.
 		 */
 		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
 		tableDDLEventList = list_concat(tableDDLEventList, sequenceDependencyCommandList);
+
+		if (!IsForeignTable(relationId))
+		{
+			TableDDLCommand *truncateTriggerCommand = TruncateTriggerCreateCommand(
+				relationId);
+			tableDDLEventList = lappend(tableDDLEventList,
+										truncateTriggerCommand);
+		}
 	}
 
 	tableDDLEventList = list_concat(tableDDLEventList, postLoadCreationCommandList);
