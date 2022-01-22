@@ -1574,7 +1574,7 @@ SequenceDependencyCommandList(Oid relationId)
 			CreateSequenceDependencyCommand(relationId, sequenceId, columnName);
 
 		sequenceCommandList = lappend(sequenceCommandList,
-									  sequenceDependencyCommand);
+									  makeTableDDLCommandString(sequenceDependencyCommand));
 	}
 
 	return sequenceCommandList;
@@ -1937,18 +1937,16 @@ CreateShellTableOnWorkers(Oid relationId)
 		IncludeSequenceDefaults includeSequenceDefaults =
 			WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
 
+		bool associateSequenceDependency = true;
 		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-															  includeSequenceDefaults);
+															  includeSequenceDefaults,
+															  associateSequenceDependency);
 		TableDDLCommand *tableDDLCommand = NULL;
 		foreach_ptr(tableDDLCommand, tableDDLCommands)
 		{
 			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
 			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
 		}
-
-		/* command to associate sequences with table */
-		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
-		commandList = list_concat(commandList, sequenceDependencyCommandList);
 	}
 
 	if (!IsForeignTable(relationId))

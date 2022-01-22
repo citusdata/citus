@@ -31,7 +31,6 @@ typedef bool (*AddressPredicate)(const ObjectAddress *);
 
 static int ObjectAddressComparator(const void *a, const void *b);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
-static List * GetCitusTableDDLCommandList(Oid relationId);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
 
@@ -244,7 +243,16 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 				if (IsCitusTable(relationId))
 				{
-					commandList = GetCitusTableDDLCommandList(relationId);
+					bool associateSequenceDependency = true;
+					List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+																		  WORKER_NEXTVAL_SEQUENCE_DEFAULTS,
+																		  associateSequenceDependency);
+					TableDDLCommand *tableDDLCommand = NULL;
+					foreach_ptr(tableDDLCommand, tableDDLCommands)
+					{
+						Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+						commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+					}
 				}
 
 				return commandList;
@@ -335,34 +343,6 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 					errdetail(
 						"citus tries to recreate an unsupported object on its workers"),
 					errhint("please report a bug as this should not be happening")));
-}
-
-
-/*
- * GetCitusTableDDLCommandList returns the list of commands to create citus table
- * including the commands to associate sequences with table.
- */
-static List *
-GetCitusTableDDLCommandList(Oid relationId)
-{
-	List *commandList = NIL;
-	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-														  WORKER_NEXTVAL_SEQUENCE_DEFAULTS);
-
-	TableDDLCommand *tableDDLCommand = NULL;
-	foreach_ptr(tableDDLCommand, tableDDLCommands)
-	{
-		Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-		commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
-	}
-
-	/*
-	 * Get commands to associate sequences with dependencies
-	 */
-	List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
-	commandList = list_concat(commandList, sequenceDependencyCommandList);
-
-	return commandList;
 }
 
 

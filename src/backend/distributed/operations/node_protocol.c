@@ -141,8 +141,10 @@ master_get_table_ddl_events(PG_FUNCTION_ARGS)
 			functionContext->multi_call_memory_ctx);
 
 		/* allocate DDL statements, and then save position in DDL statements */
+		bool associateSequenceDependency = false;
 		List *tableDDLEventList = GetFullTableCreationCommands(relationId,
-															   includeSequenceDefaults);
+															   includeSequenceDefaults,
+															   associateSequenceDependency);
 		tableDDLEventCell = list_head(tableDDLEventList);
 		ListCellAndListWrapper *wrapper = palloc0(sizeof(ListCellAndListWrapper));
 		wrapper->list = tableDDLEventList;
@@ -458,8 +460,9 @@ ResolveRelationId(text *relationName, bool missingOk)
  * constraint and trigger definitions.
  */
 List *
-GetFullTableCreationCommands(Oid relationId, IncludeSequenceDefaults
-							 includeSequenceDefaults)
+GetFullTableCreationCommands(Oid relationId,
+							 IncludeSequenceDefaults includeSequenceDefaults,
+							 bool associateSequenceDependency)
 {
 	List *tableDDLEventList = NIL;
 
@@ -470,6 +473,16 @@ GetFullTableCreationCommands(Oid relationId, IncludeSequenceDefaults
 
 	List *postLoadCreationCommandList =
 		GetPostLoadTableCreationCommands(relationId, true, true);
+
+	if (associateSequenceDependency)
+	{
+		/*
+		 * While creating shell tables, we need to associate dependencies between
+		 * sequences and the relation.
+		 */
+		List *sequenceDependencyCommandList = SequenceDependencyCommandList(relationId);
+		tableDDLEventList = list_concat(tableDDLEventList, sequenceDependencyCommandList);
+	}
 
 	tableDDLEventList = list_concat(tableDDLEventList, postLoadCreationCommandList);
 

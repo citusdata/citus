@@ -181,7 +181,7 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 
 	if (IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
 	{
-		PG_RETURN_VOID();;
+		PG_RETURN_VOID();
 	}
 
 	/* Drop dependent sequences from pg_dist_object */
