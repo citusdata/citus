@@ -195,11 +195,12 @@ GenerateBackupNameForCollision(const ObjectAddress *address)
 
 		default:
 		{
-			ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
-							errdetail(
-								"unable to generate a backup name for the old type")));
+			break;
 		}
 	}
+
+	ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
+					errdetail("unable to generate a backup name for the old type")));
 }
 
 
@@ -340,8 +341,10 @@ CreateRenameStatement(const ObjectAddress *address, char *newName)
 
 		default:
 		{
-			ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
-							errdetail("unable to generate a parsetree for the rename")));
+			break;
 		}
 	}
+
+	ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
+					errdetail("unable to generate a parsetree for the rename")));
 }
