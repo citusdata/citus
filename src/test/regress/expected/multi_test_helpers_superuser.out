@@ -25,8 +25,17 @@ WITH dist_node_summary AS (
         master_run_on_worker(ARRAY[hostname, 'localhost'], ARRAY[port, master_port],
                             ARRAY[dist_node_summary.query, dist_node_summary.query],
                             false)
+), dist_placement_summary AS (
+    SELECT 'SELECT jsonb_agg(pg_dist_placement ORDER BY placementid) FROM pg_dist_placement' AS query
+), dist_placement_check AS (
+    SELECT count(distinct result) = 1 AS matches
+    FROM dist_placement_summary CROSS JOIN LATERAL
+        master_run_on_worker(ARRAY[hostname, 'localhost'], ARRAY[port, master_port],
+                            ARRAY[dist_placement_summary.query, dist_placement_summary.query],
+                            false)
 )
-SELECT dist_node_check.matches FROM dist_node_check
+SELECT dist_node_check.matches AND dist_placement_check.matches
+FROM dist_node_check CROSS JOIN dist_placement_check
 $$;
 -- partition_task_list_results tests the internal PartitionTasklistResults function
 CREATE OR REPLACE FUNCTION pg_catalog.partition_task_list_results(resultIdPrefix text,
