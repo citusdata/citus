@@ -656,3 +656,45 @@ PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 
 	return NIL;
 }
+
+
+/*
+ * GenerateBackupNameForSequenceCollision generates a new sequence name for an existing
+ * sequence. The name is generated in such a way that the new name doesn't overlap with
+ * an existing relation by adding a suffix with incrementing number after the new name.
+ */
+char *
+GenerateBackupNameForSequenceCollision(const ObjectAddress *address)
+{
+	char *newName = palloc0(NAMEDATALEN);
+	char suffix[NAMEDATALEN] = { 0 };
+	int count = 0;
+	char *namespaceName = get_namespace_name(get_rel_namespace(address->objectId));
+	Oid schemaId = get_namespace_oid(namespaceName, false);
+
+	char *baseName = get_rel_name(address->objectId);
+	int baseLength = strlen(baseName);
+
+	while (true)
+	{
+		int suffixLength = SafeSnprintf(suffix, NAMEDATALEN - 1, "(citus_backup_%d)",
+										count);
+
+		/* trim the base name at the end to leave space for the suffix and trailing \0 */
+		baseLength = Min(baseLength, NAMEDATALEN - suffixLength - 1);
+
+		/* clear newName before copying the potentially trimmed baseName and suffix */
+		memset(newName, 0, NAMEDATALEN);
+		strncpy_s(newName, NAMEDATALEN, baseName, baseLength);
+		strncpy_s(newName + baseLength, NAMEDATALEN - baseLength, suffix,
+				  suffixLength);
+
+		Oid typeOid = get_relname_relid(newName, schemaId);
+		if (typeOid == InvalidOid)
+		{
+			return newName;
+		}
+
+		count++;
+	}
+}
