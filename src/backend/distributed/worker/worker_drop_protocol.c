@@ -105,6 +105,8 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 		UnmarkObjectDistributed(&ownedSequenceAddress);
 	}
 
+	UnmarkObjectDistributed(&distributedTableObject);
+
 	if (!IsObjectAddressOwnedByExtension(&distributedTableObject, NULL))
 	{
 		/*
