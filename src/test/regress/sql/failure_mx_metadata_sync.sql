@@ -25,9 +25,9 @@ SELECT citus.mitmproxy('conn.onQuery(query="^UPDATE pg_dist_local_group SET grou
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to drop all tables in pg_dist_partition
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").cancel(' || :pid || ')');
+SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM pg_dist_partition").cancel(' || :pid || ')');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
-SELECT citus.mitmproxy('conn.onQuery(query="^SELECT worker_drop_distributed_table").kill()');
+SELECT citus.mitmproxy('conn.onQuery(query="^DELETE FROM pg_dist_partition").kill()');
 SELECT citus_activate_node('localhost', :worker_2_proxy_port);
 
 -- Failure to truncate pg_dist_node in the worker
