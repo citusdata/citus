@@ -100,12 +100,16 @@ static bool SyncMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError
 static void DropMetadataSnapshotOnNode(WorkerNode *workerNode);
 static char * CreateSequenceDependencyCommand(Oid relationId, Oid sequenceId,
 											  char *columnName);
+static GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
+											  Oid roleOid,
+											  Oid objectId,
+											  char *permission,
+											  bool withGrantOption);
+static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
+static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
+static RoleSpec * GetRoleSpecObjectForGrantStmt(Oid roleOid);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
-static GrantStmt * GenerateGrantOnSchemaStmtForRights(Oid roleOid,
-													  Oid schemaOid,
-													  char *permission,
-													  bool withGrantOption);
 static void SetLocalEnableDependencyCreation(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
@@ -1970,16 +1974,16 @@ GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid, AclItem *aclItem)
 
 	if (permissions & ACL_USAGE)
 	{
-		char *query = DeparseTreeNode((Node *) GenerateGrantOnSchemaStmtForRights(
-										  granteeOid, schemaOid, "USAGE", grants &
-										  ACL_USAGE));
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_SCHEMA, granteeOid, schemaOid, "USAGE",
+										  grants & ACL_USAGE));
 		queries = lappend(queries, query);
 	}
 	if (permissions & ACL_CREATE)
 	{
-		char *query = DeparseTreeNode((Node *) GenerateGrantOnSchemaStmtForRights(
-										  granteeOid, schemaOid, "CREATE", grants &
-										  ACL_CREATE));
+		char *query = DeparseTreeNode((Node *) GenerateGrantStmtForRights(
+										  OBJECT_SCHEMA, granteeOid, schemaOid, "CREATE",
+										  grants & ACL_CREATE));
 		queries = lappend(queries, query);
 	}
 
@@ -1989,30 +1993,88 @@ GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid, AclItem *aclItem)
 }
 
 
-GrantStmt *
-GenerateGrantOnSchemaStmtForRights(Oid roleOid,
-								   Oid schemaOid,
-								   char *permission,
-								   bool withGrantOption)
+/*
+ * GenerateGrantStmtForRights is the function for creating GrantStmt's for all
+ * types of objects that are supported. It takes parameters to fill a GrantStmt's
+ * fields and returns the GrantStmt.
+ * The field `objects` of GrantStmt doesn't have a common structure for all types.
+ * Make sure you have added your object type to GetObjectsForGrantStmt.
+ */
+static GrantStmt *
+GenerateGrantStmtForRights(ObjectType objectType,
+						   Oid roleOid,
+						   Oid objectId,
+						   char *permission,
+						   bool withGrantOption)
+{
+	GrantStmt *stmt = makeNode(GrantStmt);
+	stmt->is_grant = true;
+	stmt->targtype = ACL_TARGET_OBJECT;
+	stmt->objtype = objectType;
+	stmt->objects = GetObjectsForGrantStmt(objectType, objectId);
+	stmt->privileges = list_make1(GetAccessPrivObjectForGrantStmt(permission));
+	stmt->grantees = list_make1(GetRoleSpecObjectForGrantStmt(roleOid));
+	stmt->grant_option = withGrantOption;
+
+	return stmt;
+}
+
+
+/*
+ * GetObjectsForGrantStmt takes an object type and object id and returns the 'objects'
+ * field to be used when creating GrantStmt. We have only one object here (the one with
+ * the oid = objectId) but we pass it into the GrantStmt as a list with one element,
+ * as GrantStmt->objects field is actually a list.
+ */
+static List *
+GetObjectsForGrantStmt(ObjectType objectType, Oid objectId)
+{
+	switch (objectType)
+	{
+		/* supported object types */
+		case OBJECT_SCHEMA:
+		{
+			return list_make1(makeString(get_namespace_name(objectId)));
+		}
+
+		default:
+		{
+			elog(ERROR, "unsupported object type for GRANT");
+		}
+	}
+
+	return NIL;
+}
+
+
+/*
+ * GetAccessPrivObjectForGrantStmt creates an AccessPriv object for the given permission.
+ * It will be used when creating GrantStmt objects.
+ */
+static AccessPriv *
+GetAccessPrivObjectForGrantStmt(char *permission)
 {
 	AccessPriv *accessPriv = makeNode(AccessPriv);
-	accessPriv->priv_name = permission;
+	accessPriv->priv_name = pstrdup(permission);
 	accessPriv->cols = NULL;
 
+	return accessPriv;
+}
+
+
+/*
+ * GetRoleSpecObjectForGrantStmt creates a RoleSpec object for the given roleOid.
+ * It will be used when creating GrantStmt objects.
+ */
+static RoleSpec *
+GetRoleSpecObjectForGrantStmt(Oid roleOid)
+{
 	RoleSpec *roleSpec = makeNode(RoleSpec);
 	roleSpec->roletype = OidIsValid(roleOid) ? ROLESPEC_CSTRING : ROLESPEC_PUBLIC;
 	roleSpec->rolename = OidIsValid(roleOid) ? GetUserNameFromId(roleOid, false) : NULL;
 	roleSpec->location = -1;
 
-	GrantStmt *stmt = makeNode(GrantStmt);
-	stmt->is_grant = true;
-	stmt->targtype = ACL_TARGET_OBJECT;
-	stmt->objtype = OBJECT_SCHEMA;
-	stmt->objects = list_make1(makeString(get_namespace_name(schemaOid)));
-	stmt->privileges = list_make1(accessPriv);
-	stmt->grantees = list_make1(roleSpec);
-	stmt->grant_option = withGrantOption;
-	return stmt;
+	return roleSpec;
 }
 
 
