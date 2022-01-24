@@ -1268,16 +1268,6 @@ DecideTransactionPropertiesForTaskList(RowModifyLevel modLevel, List *taskList, 
 void
 StartDistributedExecution(DistributedExecution *execution)
 {
-	if (!execution->localExecutionSupported)
-	{
-		/*
-		 * Later we may decide failing over to local execution if remote
-		 * execution fails for some reason. However, we shouldn't do that if
-		 * caller told us to avoid from local execution.
-		 */
-		ErrorIfTransactionAccessedPlacementsLocally();
-	}
-
 	TransactionProperties *xactProperties = execution->transactionProperties;
 
 	if (xactProperties->useRemoteTransactionBlocks == TRANSACTION_BLOCKS_REQUIRED)
