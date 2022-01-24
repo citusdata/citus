@@ -69,6 +69,8 @@ WrapCreateOrReplace(const char *sql)
  *  - non destructive if there is data store that would be destroyed if the object was
  *    used in a table on this node, eg. types. If the type would be dropped with a cascade
  *    it would drop any column holding user data for this type.
+ *
+ *  TODO: we can probably remove the existing object if it has no dependents
  */
 Datum
 worker_create_or_replace_object(PG_FUNCTION_ARGS)

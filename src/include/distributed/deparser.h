@@ -63,6 +63,7 @@ extern void QualifyAlterTableSchemaStmt(Node *stmt);
 extern char * DeparseCreateTextSearchStmt(Node *node);
 extern char * DeparseDropTextSearchConfigurationStmt(Node *node);
 extern char * DeparseRenameTextSearchStmt(Node *node);
+extern char * DeparseAlterTextSearchConfigurationStmt(Node *node);
 
 /* forward declarations for deparse_schema_stmts.c */
 extern char * DeparseGrantOnSchemaStmt(Node *stmt);

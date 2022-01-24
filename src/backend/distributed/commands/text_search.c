@@ -10,12 +10,19 @@
 
 #include "postgres.h"
 
+#include "access/genam.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_ts_config.h"
+#include "catalog/pg_ts_config_map.h"
+#include "catalog/pg_ts_dict.h"
 #include "catalog/pg_ts_parser.h"
 #include "commands/extension.h"
+#include "fmgr.h"
 #include "nodes/makefuncs.h"
+#include "tsearch/ts_cache.h"
+#include "tsearch/ts_public.h"
+#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -30,7 +37,11 @@
 
 static DefineStmt * GetTextSearchConfigDefineStmt(Oid tsconfigOid);
 static List * GetTSParserNameList(Oid tsparserOid);
+static List * GetTextSearchConfigMappingStmt(Oid tsconfigOid);
 
+static List * get_ts_dict_namelist(Oid tsdictOid);
+static Oid get_ts_config_parser(Oid tsconfigOid);
+static char * get_ts_parser_tokentype_name(Oid parserOid, int32 tokentype);
 
 List *
 PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString)
@@ -81,12 +92,19 @@ CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address)
 	Assert(address->classId == TSConfigRelationId);
 	List *commands = NIL;
 
-
+	/* CREATE TEXT SEARCH CONFIGURATION ...*/
 	DefineStmt *defineStmt = GetTextSearchConfigDefineStmt(address->objectId);
 	commands = lappend(commands,
 					   WrapCreateOrReplace(DeparseTreeNode((Node *) defineStmt)));
 
-	/* TODO add alter statements for all associated mappings */
+	/* ALTER TEXT SEARCH CONFIGURATION ... ADD MAPPING FOR ... WITH ... */
+	List *mappingStmts = GetTextSearchConfigMappingStmt(address->objectId);
+	Node *mappingStmt = NULL;
+	foreach_ptr(mappingStmt, mappingStmts)
+	{
+		char *mappingSql = DeparseTreeNode(mappingStmt);
+		commands = lappend(commands, mappingSql);
+	}
 
 	return commands;
 }
@@ -179,6 +197,84 @@ GetTextSearchConfigDefineStmt(Oid tsconfigOid)
 }
 
 
+static List *
+GetTextSearchConfigMappingStmt(Oid tsconfigOid)
+{
+	ScanKeyData mapskey = { 0 };
+
+	/* mapcfg = tsconfigOid */
+	ScanKeyInit(&mapskey,
+				Anum_pg_ts_config_map_mapcfg,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(tsconfigOid));
+
+	Relation maprel = table_open(TSConfigMapRelationId, AccessShareLock);
+	Relation mapidx = index_open(TSConfigMapIndexId, AccessShareLock);
+	SysScanDesc mapscan = systable_beginscan_ordered(maprel, mapidx, NULL, 1, &mapskey);
+
+	List *stmts = NIL;
+	AlterTSConfigurationStmt *stmt = NULL;
+
+	/*
+	 * We iterate the config mappings on the index order filtered by mapcfg. Meaning we
+	 * get equal maptokentype's in 1 run. By comparing the current tokentype to the last
+	 * we know when we can create a new stmt and append the previous constructed one to
+	 * the list.
+	 */
+	int lastTokType = -1;
+
+	/*
+	 * We read all mappings filtered by config id, hence we only need to load the name
+	 * once and can reuse for every statement.
+	 */
+	List *configName = get_ts_config_namelist(tsconfigOid);
+
+	Oid parserOid = get_ts_config_parser(tsconfigOid);
+
+	HeapTuple maptup = NULL;
+	while ((maptup = systable_getnext_ordered(mapscan, ForwardScanDirection)) != NULL)
+	{
+		Form_pg_ts_config_map cfgmap = (Form_pg_ts_config_map) GETSTRUCT(maptup);
+		if (lastTokType != cfgmap->maptokentype)
+		{
+			/* creating a new statement, appending the previous one (if existing) */
+			if (stmt != NULL)
+			{
+				stmts = lappend(stmts, stmt);
+			}
+
+			stmt = makeNode(AlterTSConfigurationStmt);
+			stmt->cfgname = configName;
+			stmt->kind = ALTER_TSCONFIG_ADD_MAPPING;
+			stmt->tokentype = list_make1(makeString(
+											 get_ts_parser_tokentype_name(parserOid,
+																		  cfgmap->
+																		  maptokentype)));
+
+			lastTokType = cfgmap->maptokentype;
+		}
+
+		stmt->dicts = lappend(stmt->dicts, get_ts_dict_namelist(cfgmap->mapdict));
+	}
+
+	/*
+	 * If we have ran atleast 1 iteration above we have the last stmt not added to the
+	 * stmts list.
+	 */
+	if (stmt != NULL)
+	{
+		stmts = lappend(stmts, stmt);
+		stmt = NULL;
+	}
+
+	systable_endscan_ordered(mapscan);
+	index_close(mapidx, AccessShareLock);
+	table_close(maprel, AccessShareLock);
+
+	return stmts;
+}
+
+
 List *
 get_ts_config_namelist(Oid tsconfigOid)
 {
@@ -196,6 +292,71 @@ get_ts_config_namelist(Oid tsconfigOid)
 
 	ReleaseSysCache(tup);
 	return names;
+}
+
+
+static List *
+get_ts_dict_namelist(Oid tsdictOid)
+{
+	HeapTuple tup = SearchSysCache1(TSDICTOID, ObjectIdGetDatum(tsdictOid));
+	if (!HeapTupleIsValid(tup)) /* should not happen */
+	{
+		elog(ERROR, "cache lookup failed for text search dictionary %u", tsdictOid);
+	}
+	Form_pg_ts_dict dict = (Form_pg_ts_dict) GETSTRUCT(tup);
+
+	char *schema = get_namespace_name(dict->dictnamespace);
+	char *dictName = pstrdup(NameStr(dict->dictname));
+	List *names = list_make2(makeString(schema), makeString(dictName));
+
+	ReleaseSysCache(tup);
+	return names;
+}
+
+
+static Oid
+get_ts_config_parser(Oid tsconfigOid)
+{
+	HeapTuple tup = SearchSysCache1(TSCONFIGOID, ObjectIdGetDatum(tsconfigOid));
+	if (!HeapTupleIsValid(tup)) /* should not happen */
+	{
+		elog(ERROR, "cache lookup failed for text search configuration %u", tsconfigOid);
+	}
+	Form_pg_ts_config config = (Form_pg_ts_config) GETSTRUCT(tup);
+	Oid parserOid = config->cfgparser;
+
+	ReleaseSysCache(tup);
+	return parserOid;
+}
+
+
+static char *
+get_ts_parser_tokentype_name(Oid parserOid, int32 tokentype)
+{
+	TSParserCacheEntry *parserCache = lookup_ts_parser_cache(parserOid);
+	if (!OidIsValid(parserCache->lextypeOid))
+	{
+		elog(ERROR, "method lextype isn't defined for text search parser %u", parserOid);
+	}
+
+	/* take lextypes from parser */
+	LexDescr *tokenlist = (LexDescr *) DatumGetPointer(
+		OidFunctionCall1(parserCache->lextypeOid, Int32GetDatum(0)));
+
+	/* and find the one with lexid = tokentype */
+	int j = 0;
+	while (tokenlist && tokenlist[j].lexid)
+	{
+		if (tokenlist[j].lexid == tokentype)
+		{
+			return pstrdup(tokenlist[j].alias);
+		}
+		j++;
+	}
+
+	/* we haven't found the token */
+	ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("token type \"%d\" does not exist in parser", tokentype)));
 }
 
 

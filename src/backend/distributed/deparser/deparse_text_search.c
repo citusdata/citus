@@ -113,8 +113,60 @@ DeparseRenameTextSearchStmt(Node *node)
 	initStringInfo(&buf);
 
 	char *identifier = NameListToQuotedString(castNode(List, stmt->object));
-	appendStringInfo(&buf, "ALTER TEXT SEARCH CONFIGURAIONT %s RENAME TO %s;",
+	appendStringInfo(&buf, "ALTER TEXT SEARCH CONFIGURATION %s RENAME TO %s;",
 					 identifier, quote_identifier(stmt->newname));
+
+	return buf.data;
+}
+
+
+char *
+DeparseAlterTextSearchConfigurationStmt(Node *node)
+{
+	AlterTSConfigurationStmt *stmt = castNode(AlterTSConfigurationStmt, node);
+	if (stmt->kind != ALTER_TSCONFIG_ADD_MAPPING)
+	{
+		ereport(ERROR, (errmsg("can only deparse ADD MAPPING statements for "
+							   "ALTER TEXT SEARCH CONFIGURATION")));
+	}
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	char *identifier = NameListToQuotedString(castNode(List, stmt->cfgname));
+	appendStringInfo(&buf, "ALTER TEXT SEARCH CONFIGURATION %s ", identifier);
+
+	appendStringInfoString(&buf, " ALTER MAPPING FOR ");
+	Value *tokentype = NULL;
+	bool first = true;
+	foreach_ptr(tokentype, stmt->tokentype)
+	{
+		Assert(nodeTag(tokentype) == T_String);
+		if (!first)
+		{
+			appendStringInfoString(&buf, ", ");
+		}
+		first = false;
+
+		appendStringInfoString(&buf, strVal(tokentype));
+	}
+
+	appendStringInfoString(&buf, " WITH ");
+	List *dictNames = NIL;
+	first = true;
+	foreach_ptr(dictNames, stmt->dicts)
+	{
+		if (!first)
+		{
+			appendStringInfoString(&buf, ", ");
+		}
+		first = false;
+
+		char *dictIdentifier = NameListToQuotedString(dictNames);
+		appendStringInfoString(&buf, dictIdentifier);
+	}
+
+	appendStringInfoString(&buf, ";");
 
 	return buf.data;
 }

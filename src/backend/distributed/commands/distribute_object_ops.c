@@ -497,6 +497,14 @@ static DistributeObjectOps Sequence_Rename = {
 	.address = RenameSequenceStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps TextSearchConfig_Alter = {
+	.deparse = DeparseAlterTextSearchConfigurationStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
 static DistributeObjectOps TextSearchConfig_Define = {
 	.deparse = DeparseCreateTextSearchStmt,
 	.qualify = NULL,
@@ -963,6 +971,11 @@ GetDistributeObjectOps(Node *node)
 		case T_AlterTableMoveAllStmt:
 		{
 			return &Any_AlterTableMoveAll;
+		}
+
+		case T_AlterTSConfigurationStmt:
+		{
+			return &TextSearchConfig_Alter;
 		}
 
 		case T_ClusterStmt:
