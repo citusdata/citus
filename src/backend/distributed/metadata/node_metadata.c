@@ -785,24 +785,30 @@ SyncObjectDependenciesCommandList(WorkerNode *workerNode)
 static void
 SyncObjectDependenciesToNode(WorkerNode *workerNode)
 {
-	if (NodeIsPrimary(workerNode))
+	if (NodeIsCoordinator(workerNode))
 	{
-		EnsureNoModificationsHaveBeenDone();
-
-		Assert(ShouldPropagate());
-		if (!NodeIsCoordinator(workerNode))
-		{
-			List *commandList = SyncObjectDependenciesCommandList(workerNode);
-
-			/* send commands to new workers, the current user should be a superuser */
-			Assert(superuser());
-			SendMetadataCommandListToWorkerInCoordinatedTransaction(
-				workerNode->workerName,
-				workerNode->workerPort,
-				CurrentUserName(),
-				commandList);
-		}
+		/* coordinator has all the objects */
+		return;
 	}
+
+	if (!NodeIsPrimary(workerNode))
+	{
+		/* secondary nodes gets the objects from their primaries via replication */
+		return;
+	}
+
+	EnsureNoModificationsHaveBeenDone();
+	Assert(ShouldPropagate());
+
+	List *commandList = SyncObjectDependenciesCommandList(workerNode);
+
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(
+		workerNode->workerName,
+		workerNode->workerPort,
+		CurrentUserName(),
+		commandList);
 }
 
 

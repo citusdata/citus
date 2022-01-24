@@ -466,18 +466,18 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	/*
 	 * If sequence with the same name exist for different type, it must have been
 	 * stayed on that node after a rollbacked create_distributed_table operation.
-	 * We must drop it first to create the sequence with the correct type.
+	 * We must change it's name first to create the sequence with the correct type.
 	 */
+	Oid sequenceOid;
 	CreateSeqStmt *createSequenceStatement = (CreateSeqStmt *) commandNode;
 	char *sequenceName = createSequenceStatement->sequence->relname;
 	char *sequenceSchema = createSequenceStatement->sequence->schemaname;
-	RangeVar *sequenceRange = makeRangeVar(sequenceSchema, sequenceName, -1);
 
-	Oid sequenceRelationId = RangeVarGetRelid(sequenceRange, AccessShareLock, true);
-
-	if (sequenceRelationId != InvalidOid)
+	RangeVarGetAndCheckCreationNamespace(createSequenceStatement->sequence, NoLock,
+										 &sequenceOid);
+	if (OidIsValid(sequenceOid))
 	{
-		Form_pg_sequence pgSequenceForm = pg_get_sequencedef(sequenceRelationId);
+		Form_pg_sequence pgSequenceForm = pg_get_sequencedef(sequenceOid);
 		if (pgSequenceForm->seqtypid != sequenceTypeId)
 		{
 			StringInfo dropSequenceString = makeStringInfo();
