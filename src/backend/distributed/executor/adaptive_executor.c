@@ -302,6 +302,12 @@ typedef struct DistributedExecution
 	 */
 	List *jobIdList;
 
+	/*
+	 * Indicates whether we can execute tasks locally during distributed
+	 * execution. In other words, this flag must be set to false when
+	 * executing a command that we surely know that local execution would
+	 * fail, such as CREATE INDEX CONCURRENTLY.
+	 */
 	bool localExecutionSupported;
 } DistributedExecution;
 
@@ -548,6 +554,11 @@ typedef struct ShardCommandExecution
 
 	TaskExecutionState executionState;
 
+	/*
+	 * Indicates whether given shard command can be executed locally on
+	 * placements. Should be inherited from DistributedExecution for the
+	 * shard level execution.
+	 */
 	bool localExecutionSupported;
 } ShardCommandExecution;
 
