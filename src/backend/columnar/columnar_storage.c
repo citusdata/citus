@@ -187,17 +187,17 @@ ColumnarStorageInit(SMgrRelation srel, uint64 storageId)
 	phdr->pd_lower += sizeof(ColumnarMetapage);
 
 	PageSetChecksumInplace(page, COLUMNAR_METAPAGE_BLOCKNO);
-	smgrwrite(srel, MAIN_FORKNUM, COLUMNAR_METAPAGE_BLOCKNO, page, true);
 	log_newpage(&srel->smgr_rnode.node, MAIN_FORKNUM,
 				COLUMNAR_METAPAGE_BLOCKNO, page, true);
+	smgrextend(srel, MAIN_FORKNUM, COLUMNAR_METAPAGE_BLOCKNO, page, true);
 
 	/* write empty page */
 	PageInit(page, BLCKSZ, 0);
 
 	PageSetChecksumInplace(page, COLUMNAR_EMPTY_BLOCKNO);
-	smgrwrite(srel, MAIN_FORKNUM, COLUMNAR_EMPTY_BLOCKNO, page, true);
 	log_newpage(&srel->smgr_rnode.node, MAIN_FORKNUM,
 				COLUMNAR_EMPTY_BLOCKNO, page, true);
+	smgrextend(srel, MAIN_FORKNUM, COLUMNAR_EMPTY_BLOCKNO, page, true);
 
 	/*
 	 * An immediate sync is required even if we xlog'd the page, because the
