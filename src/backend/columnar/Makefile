@@ -1,10 +1,16 @@
+#SUBDIRS = . safeclib
+#OBJS += \
+	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
+
+safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
 MODULE_big = columnar
-OBJS = mem_primitives_lib.o \
-       memcpy_s.o \
-	   safe_str_constraint.o \
-	   safe_mem_constraint.o \
-	   ignore_handler_s.o \
-	   abort_handler_s.o \
+
+OBJS = safeclib/mem_primitives_lib.o \
+       safeclib/memcpy_s.o \
+	   safeclib/safe_str_constraint.o \
+	   safeclib/safe_mem_constraint.o \
+	   safeclib/ignore_handler_s.o \
+	   safeclib/abort_handler_s.o \
        columnar.o \
        columnar_tableam.o \
 	   columnar_storage.o \
@@ -17,7 +23,6 @@ OBJS = mem_primitives_lib.o \
 	   mod.o \
 	   write_state_management.o 
 
-safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include 
 EXTENSION = columnar
 
