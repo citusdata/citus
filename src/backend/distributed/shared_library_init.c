@@ -445,8 +445,16 @@ multi_log_hook(ErrorData *edata)
 		MyBackendGotCancelledDueToDeadlock())
 	{
 		edata->sqlerrcode = ERRCODE_T_R_DEADLOCK_DETECTED;
-		edata->message = "canceling the transaction since it was "
-						 "involved in a distributed deadlock";
+
+		/*
+		 * This hook is called by EmitErrorReport() when emitting the ereport
+		 * either to frontend or to the server logs. And some callers of
+		 * EmitErrorReport() (e.g.: errfinish()) seems to assume that string
+		 * fields of given ErrorData object needs to be freed. For this reason,
+		 * we copy the message into heap here.
+		 */
+		edata->message = pstrdup("canceling the transaction since it was "
+								 "involved in a distributed deadlock");
 	}
 }
 
