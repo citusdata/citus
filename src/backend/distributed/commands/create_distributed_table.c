@@ -113,8 +113,6 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
-static void EnsureSequenceExistOnMetadataWorkersForRelation(Oid relationId,
-															Oid sequenceOid);
 static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
@@ -665,63 +663,6 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 		AlterSequence(pstate, alterSequenceStatement);
 		CommandCounterIncrement();
 	}
-}
-
-
-/*
- * MarkSequenceListDistributedAndPropagateWithDependencies ensures sequences and their
- * dependencies for the given sequence list exist on all nodes and marks them as distributed.
- */
-void
-MarkSequenceListDistributedAndPropagateWithDependencies(Oid relationId,
-														List *sequenceList)
-{
-	Oid sequenceOid = InvalidOid;
-	foreach_oid(sequenceOid, sequenceList)
-	{
-		MarkSequenceDistributedAndPropagateWithDependencies(relationId, sequenceOid);
-	}
-}
-
-
-/*
- * MarkSequenceDistributedAndPropagateWithDependencies ensures sequence and its'
- * dependencies for the given sequence exist on all nodes and marks them as distributed.
- */
-void
-MarkSequenceDistributedAndPropagateWithDependencies(Oid relationId, Oid sequenceOid)
-{
-	/* get sequence address */
-	ObjectAddress sequenceAddress = { 0 };
-	ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-	EnsureSequenceExistOnMetadataWorkersForRelation(relationId, sequenceOid);
-	MarkObjectDistributed(&sequenceAddress);
-}
-
-
-/*
- * EnsureSequenceExistOnMetadataWorkersForRelation ensures sequence for the given relation
- * exist on each worker node with metadata.
- */
-static void
-EnsureSequenceExistOnMetadataWorkersForRelation(Oid relationId, Oid sequenceOid)
-{
-	Assert(ShouldSyncTableMetadata(relationId));
-
-	char *ownerName = TableOwner(relationId);
-	List *sequenceDDLList = DDLCommandsForSequence(sequenceOid, ownerName);
-
-	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
-
-	const char *sequenceCommand = NULL;
-	foreach_ptr(sequenceCommand, sequenceDDLList)
-	{
-		SendCommandToWorkersWithMetadata(sequenceCommand);
-	}
-
-	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
 }
 
 

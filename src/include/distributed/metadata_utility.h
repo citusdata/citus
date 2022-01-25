@@ -288,10 +288,6 @@ extern bool GetNodeDiskSpaceStatsForConnection(MultiConnection *connection,
 extern void ExecuteQueryViaSPI(char *query, int SPIOK);
 extern void EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId, Oid ownerRelationId);
 extern void AlterSequenceType(Oid seqOid, Oid typeOid);
-extern void MarkSequenceListDistributedAndPropagateWithDependencies(Oid relationId,
-																	List *sequenceList);
-extern void MarkSequenceDistributedAndPropagateWithDependencies(Oid relationId, Oid
-																sequenceOid);
 extern void EnsureDistributedSequencesHaveOneType(Oid relationId,
 												  List *dependentSequenceList,
 												  List *attnumList);
