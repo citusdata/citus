@@ -441,9 +441,8 @@ multi_log_hook(ErrorData *edata)
 	 * by the distributed deadlock detection. Also reset the state for this,
 	 * since the next cancelation of the backend might have another reason.
 	 */
-	bool clearState = true;
 	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_QUERY_CANCELED &&
-		MyBackendGotCancelledDueToDeadlock(clearState))
+		MyBackendGotCancelledDueToDeadlock())
 	{
 		edata->sqlerrcode = ERRCODE_T_R_DEADLOCK_DETECTED;
 		edata->message = "canceling the transaction since it was "

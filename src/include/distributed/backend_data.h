@@ -65,7 +65,7 @@ extern void AssignDistributedTransactionId(void);
 extern void MarkCitusInitiatedCoordinatorBackend(void);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
 extern void CancelTransactionDueToDeadlock(PGPROC *proc);
-extern bool MyBackendGotCancelledDueToDeadlock(bool clearState);
+extern bool MyBackendGotCancelledDueToDeadlock(void);
 extern bool MyBackendIsInDisributedTransaction(void);
 extern List * ActiveDistributedTransactionNumbers(void);
 extern LocalTransactionId GetMyProcLocalTransactionId(void);
