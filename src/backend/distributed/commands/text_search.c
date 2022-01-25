@@ -65,7 +65,7 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 
 	EnsureCoordinator();
 
-	ObjectAddress address = GetObjectAddressFromParseTree(node, false);
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	EnsureDependenciesExistOnAllNodes(&address);
 
 	/*
@@ -75,7 +75,7 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 	 */
 	List *commands = CreateTextSearchConfigDDLCommandsIdempotent(&address);
 
-	commands = list_insert_nth(commands, 0, DISABLE_DDL_PROPAGATION);
+	commands = lcons(DISABLE_DDL_PROPAGATION, commands);
 	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
