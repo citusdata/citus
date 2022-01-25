@@ -168,6 +168,12 @@ worker_drop_shell_table(PG_FUNCTION_ARGS)
 
 	EnsureTableOwner(relationId);
 
+	if (GetLocalGroupId() == COORDINATOR_GROUP_ID)
+	{
+		ereport(ERROR, (errmsg("worker_drop_shell_table is only allowed to run"
+							   " on worker nodes")));
+	}
+
 	/* first check the relation type */
 	Relation distributedRelation = relation_open(relationId, AccessShareLock);
 	EnsureRelationKindSupported(relationId);
