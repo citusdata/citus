@@ -326,12 +326,13 @@ COMMIT;
 SELECT distributed_2PCs_are_equal_to_worker_count();
 DROP TABLE test_seq_ddl_index;
 
--- create_distributed_table should fail on relations with data in sequential mode in and out transaction block
+-- create_distributed_table should works on relations with data in sequential mode in and out transaction block
 CREATE TABLE test_create_seq_table (a int);
 INSERT INTO test_create_seq_table VALUES (1);
 
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT create_distributed_table('test_create_seq_table' ,'a');
+SELECT undistribute_table('test_create_seq_table');
 
 RESET citus.multi_shard_modify_mode;
 
@@ -339,6 +340,17 @@ BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     select create_distributed_table('test_create_seq_table' ,'a');
 ROLLBACK;
+
+-- trigger switch-over when using single connection per worker
+BEGIN;
+SET citus.next_shard_id TO 16900;
+SET LOCAL citus.shard_count TO 4;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+CREATE UNLOGGED TABLE trigger_switchover(a int, b int, c int, d int, e int, f int, g int, h int);
+INSERT INTO trigger_switchover
+  SELECT s AS a, s AS b, s AS c, s AS d, s AS e, s AS f, s AS g, s AS h FROM generate_series(1,250000) s;
+SELECT create_distributed_table('trigger_switchover','a');
+ABORT;
 
 SET search_path TO 'public';
 DROP SCHEMA test_seq_ddl CASCADE;

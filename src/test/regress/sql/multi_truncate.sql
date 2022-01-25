@@ -295,13 +295,9 @@ INSERT INTO dist SELECT x,x FROM generate_series(1,10000) x;
 -- test that we do not cascade truncates to local referencing tables
 SELECT truncate_local_data_after_distributing_table('ref');
 
--- test that we do not allow distributing tables that have foreign keys to reference tables
+-- test that we allow distributing tables that have foreign keys to reference tables
 SELECT create_distributed_table('dist','id');
 SHOW citus.multi_shard_modify_mode;
-
--- distribute the table after a truncate
-TRUNCATE dist;
-SELECT create_distributed_table('dist','id');
 
 -- the following should truncate ref and dist
 BEGIN;

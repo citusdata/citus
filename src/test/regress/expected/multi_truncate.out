@@ -501,22 +501,21 @@ INSERT INTO dist SELECT x,x FROM generate_series(1,10000) x;
 SELECT truncate_local_data_after_distributing_table('ref');
 ERROR:  cannot truncate a table referenced in a foreign key constraint by a local table
 DETAIL:  Table "dist" references "ref"
--- test that we do not allow distributing tables that have foreign keys to reference tables
+-- test that we allow distributing tables that have foreign keys to reference tables
 SELECT create_distributed_table('dist','id');
-ERROR:  cannot distribute "dist" in sequential mode because it is not empty
-HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$multi_truncate.dist$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SHOW citus.multi_shard_modify_mode;
  citus.multi_shard_modify_mode
 ---------------------------------------------------------------------
  parallel
-(1 row)
-
--- distribute the table after a truncate
-TRUNCATE dist;
-SELECT create_distributed_table('dist','id');
- create_distributed_table
----------------------------------------------------------------------
-
 (1 row)
 
 -- the following should truncate ref and dist

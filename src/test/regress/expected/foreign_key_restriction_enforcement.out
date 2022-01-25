@@ -722,7 +722,7 @@ BEGIN;
 
 	UPDATE reference_table SET id = 101 WHERE id = 99;
 ERROR:  cannot modify table "reference_table" because there was a parallel operation on a distributed table
-DETAIL: When there is a foreign key to a reference table or to a local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+DETAIL:  When there is a foreign key to a reference table or to a local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 BEGIN;
@@ -734,7 +734,7 @@ BEGIN;
 
 	UPDATE transitive_reference_table SET id = 101 WHERE id = 99;
 ERROR:  cannot modify table "transitive_reference_table" because there was a parallel operation on a distributed table
-DETAIL: When there is a foreign key to a reference table or to a local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+DETAIL:  When there is a foreign key to a reference table or to a local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- case 4.3: SELECT to a dist table is follwed by an unrelated DDL to a reference table
@@ -1074,7 +1074,7 @@ BEGIN;
 	UPDATE unrelated_dist_table SET value_1 = 15;
 	UPDATE reference_table SET id = 101 WHERE id = 99;
 ERROR:  cannot modify table "reference_table" because there was a parallel operation on a distributed table
-DETAIL: When there is a foreign key to a reference table or to a local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
+DETAIL:  When there is a foreign key to a reference table or to a local table, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 	UPDATE on_update_fkey_table SET value_1 = 5 WHERE id != 11;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
@@ -1282,8 +1282,8 @@ ERROR:  current transaction is aborted, commands ignored until end of transactio
 	DROP TABLE test_table_1 CASCADE;
 ERROR:  current transaction is aborted, commands ignored until end of transaction block
 ROLLBACK;
--- make sure that we cannot create hash distributed tables with
--- foreign keys to reference tables when they have data in it
+-- make sure that we can create hash distributed tables with
+-- even when foreign keys to reference tables and they have data in it
 BEGIN;
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
 	INSERT INTO test_table_1 SELECT i FROM generate_series(0,100) i;
@@ -1300,16 +1300,21 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 (1 row)
 
 	SELECT create_distributed_table('test_table_2', 'id');
-ERROR:  cannot distribute "test_table_2" in sequential mode because it is not empty
-HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_fkey_to_ref_in_tx.test_table_2$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 	-- make sure that the output isn't too verbose
  	SET LOCAL client_min_messages TO ERROR;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 	DROP TABLE test_table_2, test_table_1;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
--- the same test with above in sequential mode would still not work
--- since COPY cannot be executed in sequential mode
+-- the same test with above in sequential mode would just work
+-- as COPY can be executed in sequential mode
 BEGIN;
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
@@ -1327,13 +1332,18 @@ HINT:  To remove the local data, run: SELECT truncate_local_data_after_distribut
 (1 row)
 
 	SELECT create_distributed_table('test_table_2', 'id');
-ERROR:  cannot distribute "test_table_2" in sequential mode because it is not empty
-HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_fkey_to_ref_in_tx.test_table_2$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 	-- make sure that the output isn't too verbose
  	SET LOCAL client_min_messages TO ERROR;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 	DROP TABLE test_table_2, test_table_1;
-ERROR:  current transaction is aborted, commands ignored until end of transaction block
 COMMIT;
 -- we should be able to execute and DML/DDL/SELECT after we've
 -- switched to sequential via create_distributed_table
