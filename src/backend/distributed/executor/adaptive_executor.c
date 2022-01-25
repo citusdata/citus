@@ -556,8 +556,7 @@ typedef struct ShardCommandExecution
 
 	/*
 	 * Indicates whether given shard command can be executed locally on
-	 * placements. Should be inherited from DistributedExecution for the
-	 * shard level execution.
+	 * placements. Normally determined by DistributedExecution's same field.
 	 */
 	bool localExecutionSupported;
 } ShardCommandExecution;
@@ -2863,14 +2862,15 @@ ManageWorkerPool(WorkerPool *workerPool)
 		{
 			const char *errHint =
 				execution->localExecutionSupported ?
-				"Consider enabling local execution using SET "
-				"citus.enable_local_execution TO true;" :
+				"This command supports local execution. Consider enabling "
+				"local execution using SET citus.enable_local_execution "
+				"TO true;" :
 				"Consider using a higher value for max_connections";
 
 			ereport(ERROR, (errcode(ERRCODE_CONNECTION_FAILURE),
-							errmsg("could not establish any connections to the "
-								   "node %s:%d due to high number connections",
-								   workerPool->nodeName, workerPool->nodePort),
+							errmsg("the total number of connections on the "
+								   "server is more than max_connections(%d)",
+								   MaxConnections),
 							errhint("%s", errHint)));
 		}
 

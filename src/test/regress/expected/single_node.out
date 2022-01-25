@@ -62,7 +62,7 @@ SELECT create_distributed_table('failover_to_local', 'a', shard_count=>32);
 CREATE INDEX CONCURRENTLY ON failover_to_local(a);
 WARNING:  CONCURRENTLY-enabled index commands can fail partially, leaving behind an INVALID index.
  Use DROP INDEX CONCURRENTLY IF EXISTS to remove the invalid index.
-ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
+ERROR:  the total number of connections on the server is more than max_connections(100)
 HINT:  Consider using a higher value for max_connections
 -- reset global GUC changes
 ALTER SYSTEM RESET citus.local_shared_pool_size;
@@ -2208,24 +2208,24 @@ NOTICE:  executing the command locally: WITH cte_1 AS (UPDATE single_node.anothe
 -- local execution and the queries would fail
 SET citus.enable_local_execution TO  false;
 SELECT count(*) from another_schema_table;
-ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
-HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
+ERROR:  the total number of connections on the server is more than max_connections(100)
+HINT:  This command supports local execution. Consider enabling local execution using SET citus.enable_local_execution TO true;
 UPDATE another_schema_table SET b = b;
-ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
-HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
+ERROR:  the total number of connections on the server is more than max_connections(100)
+HINT:  This command supports local execution. Consider enabling local execution using SET citus.enable_local_execution TO true;
 INSERT INTO another_schema_table SELECT * FROM another_schema_table;
-ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
-HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
+ERROR:  the total number of connections on the server is more than max_connections(100)
+HINT:  This command supports local execution. Consider enabling local execution using SET citus.enable_local_execution TO true;
 INSERT INTO another_schema_table SELECT b::int, a::int FROM another_schema_table;
-ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
-HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
+ERROR:  the total number of connections on the server is more than max_connections(100)
+HINT:  This command supports local execution. Consider enabling local execution using SET citus.enable_local_execution TO true;
 WITH cte_1 AS (SELECT * FROM another_schema_table LIMIT 1000)
 	SELECT count(*) FROM cte_1;
-ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
-HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
+ERROR:  the total number of connections on the server is more than max_connections(100)
+HINT:  This command supports local execution. Consider enabling local execution using SET citus.enable_local_execution TO true;
 INSERT INTO another_schema_table VALUES (1,1), (2,2), (3,3), (4,4), (5,5),(6,6),(7,7);
-ERROR:  could not establish any connections to the node localhost:xxxxx due to high number connections
-HINT:  Consider enabling local execution using SET citus.enable_local_execution TO true;
+ERROR:  the total number of connections on the server is more than max_connections(100)
+HINT:  This command supports local execution. Consider enabling local execution using SET citus.enable_local_execution TO true;
 -- copy fails if local execution is disabled and there is no connection slot
 COPY another_schema_table(a) FROM PROGRAM 'seq 32';
 ERROR:  could not find an available connection
