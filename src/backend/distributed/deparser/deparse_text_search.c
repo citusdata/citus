@@ -8,6 +8,9 @@
 
 static void AppendDefElemList(StringInfo buf, List *defelms);
 
+static void AppendStringInfoTokentypeList(StringInfo buf, List *tokentypes);
+static void AppendStringInfoDictnames(StringInfo buf, List *dicts);
+
 char *
 DeparseCreateTextSearchStmt(Node *node)
 {
@@ -134,39 +137,58 @@ DeparseAlterTextSearchConfigurationStmt(Node *node)
 	initStringInfo(&buf);
 
 	char *identifier = NameListToQuotedString(castNode(List, stmt->cfgname));
-	appendStringInfo(&buf, "ALTER TEXT SEARCH CONFIGURATION %s ", identifier);
+	appendStringInfo(&buf, "ALTER TEXT SEARCH CONFIGURATION %s", identifier);
 
-	appendStringInfoString(&buf, " ALTER MAPPING FOR ");
-	Value *tokentype = NULL;
-	bool first = true;
-	foreach_ptr(tokentype, stmt->tokentype)
-	{
-		Assert(nodeTag(tokentype) == T_String);
-		if (!first)
-		{
-			appendStringInfoString(&buf, ", ");
-		}
-		first = false;
-
-		appendStringInfoString(&buf, strVal(tokentype));
-	}
+	appendStringInfoString(&buf, " ADD MAPPING FOR ");
+	AppendStringInfoTokentypeList(&buf, stmt->tokentype);
 
 	appendStringInfoString(&buf, " WITH ");
-	List *dictNames = NIL;
-	first = true;
-	foreach_ptr(dictNames, stmt->dicts)
-	{
-		if (!first)
-		{
-			appendStringInfoString(&buf, ", ");
-		}
-		first = false;
-
-		char *dictIdentifier = NameListToQuotedString(dictNames);
-		appendStringInfoString(&buf, dictIdentifier);
-	}
+	AppendStringInfoDictnames(&buf, stmt->dicts);
 
 	appendStringInfoString(&buf, ";");
 
 	return buf.data;
+}
+
+
+static void
+AppendStringInfoTokentypeList(StringInfo buf, List *tokentypes)
+{
+	Value *tokentype = NULL;
+	bool first = true;
+	foreach_ptr(tokentype, tokentypes)
+	{
+		if (nodeTag(tokentype) != T_String)
+		{
+			elog(ERROR,
+				 "unexpected tokentype for deparsing in text search configuration");
+		}
+
+		if (!first)
+		{
+			appendStringInfoString(buf, ", ");
+		}
+		first = false;
+
+		appendStringInfoString(buf, strVal(tokentype));
+	}
+}
+
+
+static void
+AppendStringInfoDictnames(StringInfo buf, List *dicts)
+{
+	List *dictNames = NIL;
+	bool first = true;
+	foreach_ptr(dictNames, dicts)
+	{
+		if (!first)
+		{
+			appendStringInfoString(buf, ", ");
+		}
+		first = false;
+
+		char *dictIdentifier = NameListToQuotedString(dictNames);
+		appendStringInfoString(buf, dictIdentifier);
+	}
 }

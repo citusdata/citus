@@ -146,6 +146,7 @@ extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
 
 /* forward declatations for depatse_text_search_stmts.c */
 extern void QualifyDropTextSearchConfigurationStmt(Node *node);
+extern void QualifyAlterTextSearchConfigurationStmt(Node *node);
 
 /* forward declarations for deparse_sequence_stmts.c */
 extern char * DeparseDropSequenceStmt(Node *node);

@@ -470,8 +470,14 @@ extern List * PreprocessDropTextSearchConfigurationStmt(Node *node,
 														const char *queryString,
 														ProcessUtilityContext
 														processUtilityContext);
+extern List * PreprocessAlterTextSearchConfigurationStmt(Node *node,
+														 const char *queryString,
+														 ProcessUtilityContext
+														 processUtilityContext);
 extern ObjectAddress CreateTextSearchConfigurationObjectAddress(Node *node,
 																bool missing_ok);
+extern ObjectAddress AlterTextSearchConfigurationStmtObjectAddress(Node *node,
+																   bool missing_ok);
 extern char * GenerateBackupNameForTextSearchConfiguration(const ObjectAddress *address);
 extern List * get_ts_config_namelist(Oid tsconfigOid);
 

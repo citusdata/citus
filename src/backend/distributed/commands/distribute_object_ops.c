@@ -499,10 +499,10 @@ static DistributeObjectOps Sequence_Rename = {
 };
 static DistributeObjectOps TextSearchConfig_Alter = {
 	.deparse = DeparseAlterTextSearchConfigurationStmt,
-	.qualify = NULL,
-	.preprocess = NULL,
+	.qualify = QualifyAlterTextSearchConfigurationStmt,
+	.preprocess = PreprocessAlterTextSearchConfigurationStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.address = AlterTextSearchConfigurationStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Define = {

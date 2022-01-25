@@ -172,6 +172,36 @@ PreprocessDropTextSearchConfigurationStmt(Node *node, const char *queryString,
 }
 
 
+List *
+PreprocessAlterTextSearchConfigurationStmt(Node *node, const char *queryString,
+										   ProcessUtilityContext processUtilityContext)
+{
+	AlterTSConfigurationStmt *stmt = castNode(AlterTSConfigurationStmt, node);
+
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(&address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) stmt);
+	const char *alterStmtSql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) alterStmtSql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+}
+
+
 static DefineStmt *
 GetTextSearchConfigDefineStmt(Oid tsconfigOid)
 {
@@ -387,6 +417,19 @@ CreateTextSearchConfigurationObjectAddress(Node *node, bool missing_ok)
 	Assert(stmt->kind == OBJECT_TSCONFIGURATION);
 
 	Oid objid = get_ts_config_oid(stmt->defnames, missing_ok);
+
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TSConfigRelationId, objid);
+	return address;
+}
+
+
+ObjectAddress
+AlterTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterTSConfigurationStmt *stmt = castNode(AlterTSConfigurationStmt, node);
+
+	Oid objid = get_ts_config_oid(stmt->cfgname, missing_ok);
 
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, TSConfigRelationId, objid);
