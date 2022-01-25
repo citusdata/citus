@@ -410,9 +410,14 @@ SELECT update_distributed_table_colocation('table1_group_none', colocate_with =>
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_groupE');
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table3_groupE');
 
--- activate node to get rid of inconsistencies in pg_dist tables
-select citus_activate_node('localhost', :worker_1_port);
-select citus_activate_node('localhost', :worker_2_port);
+-- activate nodes to get rid of inconsistencies in pg_dist tables
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table1_group1'::regclass::oid, 0);
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table2_group1'::regclass::oid, 0);
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table3_group2'::regclass::oid, 0);
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table4_group2'::regclass::oid, 0);
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table5_groupX'::regclass::oid, 0);
+select 1 from citus_activate_node('localhost', :worker_1_port);
+select 1 from citus_activate_node('localhost', :worker_2_port);
 
 -- move a table with a colocation id which is already not in pg_dist_colocation
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_group_none');
