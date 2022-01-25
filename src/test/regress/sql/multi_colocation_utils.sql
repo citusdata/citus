@@ -62,6 +62,11 @@ CREATE FUNCTION find_shard_interval_index(bigint)
     AS 'citus'
     LANGUAGE C STRICT;
 
+-- remove tables from pg_dist_partition, if they don't exist i.e not found in pg_class
+delete from pg_dist_partition where not exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid);
+select 1 from run_command_on_workers($$
+    delete from pg_dist_partition where not exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid);$$);
+
 -- ===================================================================
 -- test co-location util functions
 -- ===================================================================
@@ -403,6 +408,12 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table1_groupE');
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_groupE');
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table3_groupE');
+
+-- sync metadata to get rid of inconsistencies in pg_dist tables
+select stop_metadata_sync_to_node('localhost', :worker_1_port);
+select stop_metadata_sync_to_node('localhost', :worker_2_port);
+select start_metadata_sync_to_node('localhost', :worker_1_port);
+select start_metadata_sync_to_node('localhost', :worker_2_port);
 
 -- move a table with a colocation id which is already not in pg_dist_colocation
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_group_none');
