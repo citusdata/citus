@@ -131,6 +131,9 @@ IS 'reset on or more options on a columnar table to the system defaults';
 END IF;
 END$proc$;
 
+-- add citus_internal schema
+CREATE SCHEMA IF NOT EXISTS citus_internal;
+
 -- dropped in 10.0.3#include "udfs/columnar_ensure_objects_exist/10.0-1.sql"
 
 -- citus_internal.columnar_ensure_objects_exist is an internal helper function to create
@@ -141,7 +144,7 @@ END$proc$;
 -- we couldn't create before.
 -- This internal function is called from `citus_finish_pg_upgrade` which the user is
 -- required to call after a PG major upgrade.
-CREATE OR REPLACE FUNCTION columnar_ensure_objects_exist()
+CREATE OR REPLACE FUNCTION citus_internal.columnar_ensure_objects_exist()
     RETURNS void
     LANGUAGE plpgsql
     SET search_path = pg_catalog
@@ -150,39 +153,39 @@ BEGIN
 
 -- when postgres is version 12 or above we need to create the tableam. If the tableam
 -- exist we assume all objects have been created.
---IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
-IF NOT EXISTS (SELECT 1 FROM pg_am WHERE amname = 'columnar') THEN
+-- IF substring(current_Setting('server_version'), '\d+')::int >= 12 THEN
+-- IF NOT EXISTS (SELECT 1 FROM pg_am WHERE amname = 'columnar') THEN
 
---#include "../columnar_handler/10.0-1.sql"
+-- --#include "../columnar_handler/10.0-1.sql"
 
---#include "../alter_columnar_table_set/10.0-1.sql"
+-- --#include "../alter_columnar_table_set/10.0-1.sql"
 
---#include "../alter_columnar_table_reset/10.0-1.sql"
+-- --#include "../alter_columnar_table_reset/10.0-1.sql"
 
--- Need change extension name to columnar ???
-    -- add the missing objects to the extension
-    ALTER EXTENSION citus ADD FUNCTION columnar.columnar_handler(internal);
-    ALTER EXTENSION citus ADD ACCESS METHOD columnar;
-    ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_set(
-        table_name regclass,
-        chunk_group_row_limit int,
-        stripe_row_limit int,
-        compression name,
-        compression_level int);
-    ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_reset(
-        table_name regclass,
-        chunk_group_row_limit bool,
-        stripe_row_limit bool,
-        compression bool,
-        compression_level bool);
+-- -- ??
+--     -- add the missing objects to the extension
+--     ALTER EXTENSION citus ADD FUNCTION columnar.columnar_handler(internal);
+--     ALTER EXTENSION citus ADD ACCESS METHOD columnar;
+--     ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_set(
+--         table_name regclass,
+--         chunk_group_row_limit int,
+--         stripe_row_limit int,
+--         compression name,
+--         compression_level int);
+--     ALTER EXTENSION citus ADD FUNCTION pg_catalog.alter_columnar_table_reset(
+--         table_name regclass,
+--         chunk_group_row_limit bool,
+--         stripe_row_limit bool,
+--         compression bool,
+--         compression_level bool);
 
-END IF;
-END IF;
-END;
-$ceoe$;
+-- END IF;
+-- END IF;
+-- END;
+-- $ceoe$;
 
-COMMENT ON FUNCTION columnar_ensure_objects_exist()
-    IS 'internal function to be called by pg_catalog.citus_finish_pg_upgrade responsible for creating the columnar objects';
+-- COMMENT ON FUNCTION citus_internal.columnar_ensure_objects_exist()
+--     IS 'internal function to be called by pg_catalog.citus_finish_pg_upgrade responsible for creating the columnar objects';
 
 
 RESET search_path;
@@ -209,6 +212,10 @@ ALTER TABLE columnar.chunk_group DROP CONSTRAINT chunk_group_storage_id_fkey;
   $$;
 END IF;
 END$proc$;
+
+-- since we dropped pg11 support, we don't need to worry about missing
+-- columnar objects when upgrading postgres
+-- DROP FUNCTION citus_internal.columnar_ensure_objects_exist();
 
 --10.1-1 -- 10.2-1
 
@@ -239,27 +246,27 @@ END;
 $$;
 
 --#include "udfs/upgrade_columnar_storage/10.2-1.sql"
-CREATE OR REPLACE FUNCTION upgrade_columnar_storage(rel regclass)
+CREATE OR REPLACE FUNCTION citus_internal.upgrade_columnar_storage(rel regclass)
   RETURNS VOID
   STRICT
   LANGUAGE c AS 'MODULE_PATHNAME', $$upgrade_columnar_storage$$;
 
-COMMENT ON FUNCTION upgrade_columnar_storage(regclass)
+COMMENT ON FUNCTION citus_internal.upgrade_columnar_storage(regclass)
   IS 'function to upgrade the columnar storage, if necessary';
 
 
 --#include "udfs/downgrade_columnar_storage/10.2-1.sql"
 
-CREATE OR REPLACE FUNCTION downgrade_columnar_storage(rel regclass)
+CREATE OR REPLACE FUNCTION citus_internal.downgrade_columnar_storage(rel regclass)
   RETURNS VOID
   STRICT
   LANGUAGE c AS 'MODULE_PATHNAME', $$downgrade_columnar_storage$$;
 
-COMMENT ON FUNCTION downgrade_columnar_storage(regclass)
+COMMENT ON FUNCTION citus_internal.downgrade_columnar_storage(regclass)
   IS 'function to downgrade the columnar storage, if necessary';
 
 -- upgrade storage for all columnar relations
-SELECT upgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a
+SELECT citus_internal.upgrade_columnar_storage(c.oid) FROM pg_class c, pg_am a
   WHERE c.relam = a.oid AND amname = 'columnar';
 
 -- columnar--10.2-1--10.2-2.sql
@@ -287,7 +294,7 @@ UNIQUE (storage_id, first_row_number);
 
 -- columnar--10.2-3--10.2-4.sql
 
-CREATE OR REPLACE FUNCTION columnar_ensure_am_depends_catalog()
+CREATE OR REPLACE FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
   RETURNS void
   LANGUAGE plpgsql
   SET search_path = pg_catalog
@@ -324,9 +331,9 @@ BEGIN
   EXCEPT TABLE pg_depend;
 END;
 $func$;
-COMMENT ON FUNCTION columnar_ensure_am_depends_catalog()
+COMMENT ON FUNCTION citus_internal.columnar_ensure_am_depends_catalog()
   IS 'internal function responsible for creating dependencies from columnar '
      'table access method to the rel objects in columnar schema';
 
 
-SELECT columnar_ensure_am_depends_catalog();
+SELECT citus_internal.columnar_ensure_am_depends_catalog();
