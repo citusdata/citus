@@ -7,6 +7,9 @@ SET citus.next_shard_id TO 90630500;
 -- Ensure tuple data in explain analyze output is the same on all PG versions
 SET citus.enable_binary_protocol = TRUE;
 
+-- do not cache any connections for now, will enable it back soon
+ALTER SYSTEM SET citus.max_cached_conns_per_worker TO 0;
+
 -- adding the coordinator as inactive is disallowed
 SELECT 1 FROM master_add_inactive_node('localhost', :master_port, groupid => 0);
 
@@ -24,6 +27,32 @@ SELECT 1 FROM master_remove_node('localhost', :master_port);
 SELECT count(*) FROM pg_dist_node;
 
 -- there are no workers now, but we should still be able to create Citus tables
+
+-- force local execution when creating the index
+ALTER SYSTEM SET citus.local_shared_pool_size TO -1;
+
+-- Postmaster might not ack SIGHUP signal sent by pg_reload_conf() immediately,
+-- so we need to sleep for some amount of time to do our best to ensure that
+-- postmaster reflects GUC changes.
+SELECT pg_reload_conf();
+SELECT pg_sleep(0.1);
+
+CREATE TABLE failover_to_local (a int);
+SELECT create_distributed_table('failover_to_local', 'a', shard_count=>32);
+
+CREATE INDEX CONCURRENTLY ON failover_to_local(a);
+
+-- reset global GUC changes
+ALTER SYSTEM RESET citus.local_shared_pool_size;
+ALTER SYSTEM RESET citus.max_cached_conns_per_worker;
+SELECT pg_reload_conf();
+
+SET client_min_messages TO WARNING;
+DROP TABLE failover_to_local;
+RESET client_min_messages;
+
+-- so that we don't have to update rest of the test output
+SET citus.next_shard_id TO 90630500;
 
 CREATE TABLE ref(x int, y int);
 SELECT create_reference_table('ref');
