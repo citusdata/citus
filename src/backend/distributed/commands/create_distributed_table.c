@@ -1539,19 +1539,7 @@ CanUseExclusiveConnections(Oid relationId, bool localTableEmpty)
 	bool shouldRunSequential = MultiShardConnectionType == SEQUENTIAL_CONNECTION ||
 							   hasForeignKeyToReferenceTable;
 
-	if (!localTableEmpty && shouldRunSequential)
-	{
-		char *relationName = get_rel_name(relationId);
-
-		ereport(ERROR, (errmsg("cannot distribute \"%s\" in sequential mode "
-							   "because it is not empty", relationName),
-						errhint("If you have manually set "
-								"citus.multi_shard_modify_mode to 'sequential', "
-								"try with 'parallel' option. If that is not the "
-								"case, try distributing local tables when they "
-								"are empty.")));
-	}
-	else if (shouldRunSequential && ParallelQueryExecutedInTransaction())
+	if (shouldRunSequential && ParallelQueryExecutedInTransaction())
 	{
 		/*
 		 * We decided to use sequential execution. It's either because relation
