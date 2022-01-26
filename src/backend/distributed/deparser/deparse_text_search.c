@@ -127,11 +127,6 @@ char *
 DeparseAlterTextSearchConfigurationStmt(Node *node)
 {
 	AlterTSConfigurationStmt *stmt = castNode(AlterTSConfigurationStmt, node);
-	if (stmt->kind != ALTER_TSCONFIG_ADD_MAPPING)
-	{
-		ereport(ERROR, (errmsg("can only deparse ADD MAPPING statements for "
-							   "ALTER TEXT SEARCH CONFIGURATION")));
-	}
 
 	StringInfoData buf = { 0 };
 	initStringInfo(&buf);
@@ -139,11 +134,75 @@ DeparseAlterTextSearchConfigurationStmt(Node *node)
 	char *identifier = NameListToQuotedString(castNode(List, stmt->cfgname));
 	appendStringInfo(&buf, "ALTER TEXT SEARCH CONFIGURATION %s", identifier);
 
-	appendStringInfoString(&buf, " ADD MAPPING FOR ");
-	AppendStringInfoTokentypeList(&buf, stmt->tokentype);
+	switch (stmt->kind)
+	{
+		case ALTER_TSCONFIG_ADD_MAPPING:
+		{
+			appendStringInfoString(&buf, " ADD MAPPING FOR ");
+			AppendStringInfoTokentypeList(&buf, stmt->tokentype);
 
-	appendStringInfoString(&buf, " WITH ");
-	AppendStringInfoDictnames(&buf, stmt->dicts);
+			appendStringInfoString(&buf, " WITH ");
+			AppendStringInfoDictnames(&buf, stmt->dicts);
+
+			break;
+		}
+
+		case ALTER_TSCONFIG_ALTER_MAPPING_FOR_TOKEN:
+		{
+			appendStringInfoString(&buf, " ALTER MAPPING FOR ");
+			AppendStringInfoTokentypeList(&buf, stmt->tokentype);
+
+			appendStringInfoString(&buf, " WITH ");
+			AppendStringInfoDictnames(&buf, stmt->dicts);
+
+			break;
+		}
+
+		case ALTER_TSCONFIG_REPLACE_DICT:
+		case ALTER_TSCONFIG_REPLACE_DICT_FOR_TOKEN:
+		{
+			appendStringInfoString(&buf, " ALTER MAPPING");
+			if (list_length(stmt->tokentype) > 0)
+			{
+				appendStringInfoString(&buf, " FOR ");
+				AppendStringInfoTokentypeList(&buf, stmt->tokentype);
+			}
+
+			if (list_length(stmt->dicts) != 2)
+			{
+				elog(ERROR, "unexpected number of dictionaries while deparsing ALTER "
+							"TEXT SEARCH CONFIGURATION ... ALTER MAPPING [FOR ...] REPLACE "
+							"statement.");
+			}
+
+			appendStringInfo(&buf, " REPLACE %s",
+							 NameListToQuotedString(linitial(stmt->dicts)));
+
+			appendStringInfo(&buf, " WITH %s",
+							 NameListToQuotedString(lsecond(stmt->dicts)));
+
+			break;
+		}
+
+		case ALTER_TSCONFIG_DROP_MAPPING:
+		{
+			appendStringInfoString(&buf, " DROP MAPPING");
+
+			if (stmt->missing_ok)
+			{
+				appendStringInfoString(&buf, " IF EXISTS");
+			}
+
+			appendStringInfoString(&buf, " FOR ");
+			AppendStringInfoTokentypeList(&buf, stmt->tokentype);
+			break;
+		}
+
+		default:
+		{
+			elog(ERROR, "unable to deparse unsupported ALTER TEXT SEARCH STATEMENT");
+		}
+	}
 
 	appendStringInfoString(&buf, ";");
 
