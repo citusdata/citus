@@ -21,6 +21,7 @@ test: multi_mx_function_table_reference
 test: multi_test_catalog_views
 
 # the following test has to be run sequentially
+test: mx_application_name
 test: multi_mx_create_table
 test: start_stop_metadata_sync
 test: multi_mx_hide_shard_names
