@@ -89,6 +89,8 @@ ResetConnParams()
 	ConnParams.size = 0;
 
 	InvalidateConnParamsHashEntries();
+
+	AddConnParam("fallback_application_name", CITUS_APPLICATION_NAME);
 }
 
 
@@ -251,16 +253,14 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		"port",
 		"dbname",
 		"user",
-		"client_encoding",
-		"application_name"
+		"client_encoding"
 	};
 	const char *runtimeValues[] = {
 		key->hostname,
 		nodePortString,
 		key->database,
 		key->user,
-		GetDatabaseEncodingName(),
-		CITUS_APPLICATION_NAME
+		GetDatabaseEncodingName()
 	};
 
 	/*
