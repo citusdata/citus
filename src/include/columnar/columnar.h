@@ -211,6 +211,10 @@ extern void columnar_init_gucs(void);
 
 extern CompressionType ParseCompressionType(const char *compressionTypeString);
 
+/* called when columnar needs to check corresponding Citus version */
+typedef bool (*ColumnarCheckCitusVersion_hook_type)(int elevel);
+extern ColumnarCheckCitusVersion_hook_type ColumnarCheckCitusVersion_hook;
+
 /* Function declarations for writing to a columnar table */
 extern ColumnarWriteState * ColumnarBeginWrite(RelFileNode relfilenode,
 											   ColumnarOptions options,

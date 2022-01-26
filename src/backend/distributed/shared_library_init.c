@@ -326,6 +326,10 @@ _PG_init(void)
 	 */
 	ColumnarTableSetOptions_hook = ColumnarTableSetOptionsHook;
 
+	/*
+	 * When Columnar works with Citus, we need to check the Citus Version
+	 */
+	ColumnarCheckCitusVersion_hook = CheckCitusVersion;
 	InitializeMaintenanceDaemon();
 
 	/* initialize coordinated transaction management */
