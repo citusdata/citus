@@ -293,6 +293,7 @@ class CitusUnusualQuerySettingsConfig(CitusMXBaseClusterConfig):
             "citus.recover_2pc_interval": "1s",
             "citus.remote_task_check_interval": "1ms",
             "citus.values_materialization_threshold": "0",
+            "application_name": "non_citus_app_name"
         }
 
 
@@ -316,7 +317,6 @@ class CitusSingleShardClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {"citus.shard_count": 1}
-
 
 class CitusNonMxClusterConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
