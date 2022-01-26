@@ -202,6 +202,38 @@ PreprocessAlterTextSearchConfigurationStmt(Node *node, const char *queryString,
 }
 
 
+List *
+PreprocessRenameTextSearchConfigurationStmt(Node *node, const char *queryString,
+											ProcessUtilityContext processUtilityContext)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_TSCONFIGURATION);
+
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!IsObjectDistributed(&address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	QualifyTreeNode((Node *) stmt);
+
+	char *ddlCommand = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) ddlCommand,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+}
+
+
 static DefineStmt *
 GetTextSearchConfigDefineStmt(Oid tsconfigOid)
 {
@@ -417,6 +449,20 @@ CreateTextSearchConfigurationObjectAddress(Node *node, bool missing_ok)
 	Assert(stmt->kind == OBJECT_TSCONFIGURATION);
 
 	Oid objid = get_ts_config_oid(stmt->defnames, missing_ok);
+
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TSConfigRelationId, objid);
+	return address;
+}
+
+
+ObjectAddress
+RenameTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
+{
+	RenameStmt *stmt = castNode(RenameStmt, node);
+	Assert(stmt->renameType == OBJECT_TSCONFIGURATION);
+
+	Oid objid = get_ts_config_oid(castNode(List, stmt->object), missing_ok);
 
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, TSConfigRelationId, objid);

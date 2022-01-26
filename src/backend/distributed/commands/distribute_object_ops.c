@@ -522,11 +522,11 @@ static DistributeObjectOps TextSearchConfig_Drop = {
 	.markDistributed = false,
 };
 static DistributeObjectOps TextSearchConfig_Rename = {
-	.deparse = DeparseRenameTextSearchStmt,
-	.qualify = NULL,
-	.preprocess = NULL,
+	.deparse = DeparseRenameTextSearchConfigurationStmt,
+	.qualify = QualifyRenameTextSearchConfigurationStmt,
+	.preprocess = PreprocessRenameTextSearchConfigurationStmt,
 	.postprocess = NULL,
-	.address = NULL,
+	.address = RenameTextSearchConfigurationStmtObjectAddress,
 	.markDistributed = false,
 };
 static DistributeObjectOps Trigger_AlterObjectDepends = {

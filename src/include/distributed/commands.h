@@ -474,8 +474,14 @@ extern List * PreprocessAlterTextSearchConfigurationStmt(Node *node,
 														 const char *queryString,
 														 ProcessUtilityContext
 														 processUtilityContext);
+extern List * PreprocessRenameTextSearchConfigurationStmt(Node *node,
+														  const char *queryString,
+														  ProcessUtilityContext
+														  processUtilityContext);
 extern ObjectAddress CreateTextSearchConfigurationObjectAddress(Node *node,
 																bool missing_ok);
+extern ObjectAddress RenameTextSearchConfigurationStmtObjectAddress(Node *node,
+																	bool missing_ok);
 extern ObjectAddress AlterTextSearchConfigurationStmtObjectAddress(Node *node,
 																   bool missing_ok);
 extern char * GenerateBackupNameForTextSearchConfiguration(const ObjectAddress *address);

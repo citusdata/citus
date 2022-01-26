@@ -107,7 +107,7 @@ DeparseDropTextSearchConfigurationStmt(Node *node)
 
 
 char *
-DeparseRenameTextSearchStmt(Node *node)
+DeparseRenameTextSearchConfigurationStmt(Node *node)
 {
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_TSCONFIGURATION);
