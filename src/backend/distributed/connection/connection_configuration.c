@@ -87,8 +87,8 @@ ResetConnParams()
 	}
 
 	ConnParams.size = 0;
-AddConnParam("fallback_application_name", CITUS_APPLICATION_NAME);
 	InvalidateConnParamsHashEntries();
+AddConnParam("fallback_application_name", CITUS_APPLICATION_NAME);
 }
 
 
