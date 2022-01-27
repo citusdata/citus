@@ -68,7 +68,7 @@ CallDistributedProcedureRemotely(CallStmt *callStmt, DestReceiver *dest)
 		return false;
 	}
 
-	if (IsCitusInitiatedRemoteBackend())
+	if (IsCitusInternalBackend())
 	{
 		/*
 		 * We are in a citus-initiated backend handling a CALL to a distributed

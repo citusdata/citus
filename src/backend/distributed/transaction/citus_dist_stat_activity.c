@@ -188,7 +188,7 @@ FROM \
 	get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp) \
 	ON pg_stat_activity.pid = dist_txs.process_id \
 WHERE \
-	pg_stat_activity.application_name = 'citus' \
+	pg_stat_activity.application_name = 'citus_internal' \
 	AND \
 	pg_stat_activity.query NOT ILIKE '%stat_activity%';"
 
