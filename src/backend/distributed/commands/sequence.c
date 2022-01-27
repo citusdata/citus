@@ -689,8 +689,8 @@ GenerateBackupNameForSequenceCollision(const ObjectAddress *address)
 		strncpy_s(newName + baseLength, NAMEDATALEN - baseLength, suffix,
 				  suffixLength);
 
-		Oid typeOid = get_relname_relid(newName, schemaId);
-		if (typeOid == InvalidOid)
+		Oid newRelationId = get_relname_relid(newName, schemaId);
+		if (newRelationId == InvalidOid)
 		{
 			return newName;
 		}
