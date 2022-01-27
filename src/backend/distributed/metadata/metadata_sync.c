@@ -83,7 +83,6 @@
 char *EnableManualMetadataChangesForUser = "";
 
 
-static void EnsureSequentialModeMetadataOperations(void);
 static List * CitusTableMetadataCreateCommandList(Oid relationId);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
@@ -276,7 +275,7 @@ SyncCitusTableMetadata(Oid relationId)
  * visible on all connections used by the transaction, meaning we can only use 1
  * connection per node.
  */
-static void
+void
 EnsureSequentialModeMetadataOperations(void)
 {
 	if (!IsTransactionBlock())

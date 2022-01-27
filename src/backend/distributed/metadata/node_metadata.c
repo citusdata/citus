@@ -798,6 +798,7 @@ SyncObjectDependenciesToNode(WorkerNode *workerNode)
 		return;
 	}
 
+	EnsureSequentialModeMetadataOperations();
 	Assert(ShouldPropagate());
 
 	List *commandList = SyncObjectDependenciesCommandList(workerNode);
