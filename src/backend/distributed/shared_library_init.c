@@ -354,17 +354,9 @@ _PG_init(void)
 	{
 		DoInitialCleanup();
 	}
-	columnar_init();
+	
+	load_file("columnar.so", false);
 }
-
-
-/* shared library deconstruction function */
-void
-_PG_fini(void)
-{
-	columnar_fini();
-}
-
 
 /*
  * DoInitialCleanup does cleanup at start time.

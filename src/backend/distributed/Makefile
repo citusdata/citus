@@ -19,8 +19,7 @@ DATA_built = $(generated_sql_files)
 
 # directories with source files
 SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib test transaction utils worker
-# columnar modules
-SUBDIRS += ../columnar
+
 # enterprise modules
 SUBDIRS +=
 
@@ -34,13 +33,15 @@ OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 
 # be explicit about the default target
-all:
+all: 
 
 NO_PGXS = 1
 
-SHLIB_LINK = $(libpq)
+SHLIB_LINK += $(libpq) columnar.so
 
 include $(citus_top_builddir)/Makefile.global
+
+rpathdir = $(shell $(PG_CONFIG) --libdir):$(shell $(PG_CONFIG) --pkglibdir)
 
 # make sure citus_version.o is recompiled whenever any change is made to the binary or any
 # other artifact being installed to reflect the correct gitref for every build
@@ -86,7 +87,7 @@ endif
 cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus*
 
-install: cleanup-before-install
+install: cleanup-before-install 
 
 # install and install-downgrades should be run sequentially
 install-all: install

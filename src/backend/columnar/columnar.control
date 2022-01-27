@@ -1,6 +1,0 @@
-# Columnar extension
-comment = 'Columnar extension'
-default_version = '11.0-1'
-module_pathname = '$libdir/columnar'
-relocatable = false
-schema = pg_catalog 

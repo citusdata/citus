@@ -1,7 +1,3 @@
-#SUBDIRS = . safeclib
-#OBJS += \
-	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
-
 safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
 MODULE_big = columnar
 
@@ -24,7 +20,6 @@ OBJS = safeclib/mem_primitives_lib.o \
 	   write_state_management.o 
 
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include 
-EXTENSION = columnar
 
 DATA = $(wildcard sql/*--*.sql)
 REGRESS = columnar
