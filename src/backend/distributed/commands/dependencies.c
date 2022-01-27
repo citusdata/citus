@@ -396,6 +396,15 @@ ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
+		if (IsObjectAddressOwnedByExtension(dependency, NULL))
+		{
+			/*
+			 * we expect extension-owned objects to be created as a result
+			 * of the extension being created.
+			 */
+			continue;
+		}
+
 		ddlCommands = list_concat(ddlCommands,
 								  GetDependencyCreateDDLCommands(dependency));
 	}
