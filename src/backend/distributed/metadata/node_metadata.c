@@ -1136,8 +1136,7 @@ ActivateNode(char *nodeName, int nodePort)
 		 */
 		if (ReplicateReferenceTablesOnActivate)
 		{
-			ReplicateAllReferenceTablesToNode(workerNode->workerName,
-											  workerNode->workerPort);
+			ReplicateAllReferenceTablesToNode(workerNode);
 		}
 
 		/*
