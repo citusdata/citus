@@ -1024,14 +1024,14 @@ static void
 columnar_vacuum_rel(Relation rel, VacuumParams *params,
 					BufferAccessStrategy bstrategy)
 {
-	 if (!CheckCitusVersion(WARNING))
-	 {
+	if (!CheckCitusVersion(WARNING))
+	{
 	 	/*
 	 	 * Skip if the extension catalogs are not up-to-date, but avoid
 	 	 * erroring during auto-vacuum.
 	 	 */
 	 	return;
-	 } 
+	} 
 
 	/*
 	 * If metapage version of relation is older, then we hint users to VACUUM
