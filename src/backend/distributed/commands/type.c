@@ -1191,7 +1191,11 @@ ShouldPropagateTypeCreate()
 	 */
 	if (IsMultiStatementTransaction())
 	{
-		return false;
+		if (MultiShardConnectionType != SEQUENTIAL_CONNECTION)
+		{
+			/* only block propagation when we are _not_ running in sequential mode */
+			return false;
+		}
 	}
 
 	return true;
