@@ -1,7 +1,6 @@
 SET citus.next_shard_id TO 1220000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART 1;
-SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
 -- Tests functions related to cluster membership
 
@@ -85,13 +84,11 @@ SELECT master_activate_node('localhost', :worker_2_port);
 DROP TABLE test_reference_table, cluster_management_test;
 
 -- create users like this so results of community and enterprise are same
-SET citus.enable_object_propagation TO ON;
 SET client_min_messages TO ERROR;
 CREATE USER non_super_user;
 CREATE USER node_metadata_user;
 SELECT 1 FROM run_command_on_workers('CREATE USER node_metadata_user');
 RESET client_min_messages;
-SET citus.enable_object_propagation TO OFF;
 GRANT EXECUTE ON FUNCTION master_activate_node(text,int) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_inactive_node(text,int,int,noderole,name) TO node_metadata_user;
 GRANT EXECUTE ON FUNCTION master_add_node(text,int,int,noderole,name) TO node_metadata_user;
@@ -125,7 +122,6 @@ SELECT master_update_node(nodeid, 'localhost', :worker_2_port + 3) FROM pg_dist_
 
 -- try to manipulate node metadata via privileged user
 SET ROLE node_metadata_user;
-SET citus.enable_object_propagation TO off; -- prevent master activate node to actually connect for this test
 SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 BEGIN;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port);
@@ -137,7 +133,6 @@ ABORT;
 
 \c - postgres - :master_port
 SET citus.next_shard_id TO 1220000;
-SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 SET citus.shard_count TO 16;
 SET citus.shard_replication_factor TO 1;
 SELECT master_get_active_worker_nodes();
@@ -222,7 +217,6 @@ SELECT master_remove_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
-SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
 -- check that added nodes are not propagated to nodes without metadata
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
@@ -230,7 +224,6 @@ SELECT 1 FROM master_add_node('localhost', :worker_2_port);
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
-SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
 -- check that removing two nodes in the same transaction works
 SELECT
@@ -265,8 +258,6 @@ SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodep
 \c - - - :worker_1_port
 SELECT nodename, nodeport FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_2_port;
 \c - - - :master_port
-
-SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 
 SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
 SELECT 1 FROM master_add_node('localhost', :worker_1_port);
@@ -303,7 +294,6 @@ DELETE FROM pg_dist_shard;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_node;
 \c - - - :master_port
-SET citus.enable_object_propagation TO off; -- prevent object propagation on add node during setup
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
 

@@ -2,6 +2,9 @@
 SET citus.next_shard_id TO 1300000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 4;
 
+-- Delete orphaned entries from pg_dist_colocation
+DELETE FROM pg_dist_colocation where colocationid = 5 or colocationid = 6;
+
 -- ===================================================================
 -- create test utility function
 -- ===================================================================
@@ -95,6 +98,7 @@ SELECT master_create_worker_shards('table5_groupX', 4, 2);
 CREATE TABLE table6_append ( id int );
 SELECT master_create_distributed_table('table6_append', 'id', 'append');
 SELECT master_create_empty_shard('table6_append');
+
 SELECT master_create_empty_shard('table6_append');
 
 
@@ -105,7 +109,6 @@ SELECT colocation_test_colocate_tables('table1_group1', 'table2_group1');
 SELECT get_table_colocation_id('table1_group1');
 SELECT get_table_colocation_id('table5_groupX');
 SELECT get_table_colocation_id('table6_append');
-
 -- check self table co-location
 SELECT tables_colocated('table1_group1', 'table1_group1');
 SELECT tables_colocated('table5_groupX', 'table5_groupX');
@@ -120,7 +123,6 @@ SELECT tables_colocated('table1_group1', 'table3_group2');
 -- check table co-location with invalid co-location group
 SELECT tables_colocated('table1_group1', 'table5_groupX');
 SELECT tables_colocated('table1_group1', 'table6_append');
-
 -- check self shard co-location
 SELECT shards_colocated(1300000, 1300000);
 SELECT shards_colocated(1300016, 1300016);
@@ -155,7 +157,6 @@ SELECT find_shard_interval_index(1300001);
 SELECT find_shard_interval_index(1300002);
 SELECT find_shard_interval_index(1300003);
 SELECT find_shard_interval_index(1300016);
-
 -- check external colocation API
 
 SELECT count(*) FROM pg_dist_partition WHERE colocationid IN (4, 5);
@@ -409,11 +410,14 @@ SELECT update_distributed_table_colocation('table1_group_none', colocate_with =>
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_groupE');
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table3_groupE');
 
--- sync metadata to get rid of inconsistencies in pg_dist tables
-select stop_metadata_sync_to_node('localhost', :worker_1_port);
-select stop_metadata_sync_to_node('localhost', :worker_2_port);
-select start_metadata_sync_to_node('localhost', :worker_1_port);
-select start_metadata_sync_to_node('localhost', :worker_2_port);
+-- activate nodes to get rid of inconsistencies in pg_dist tables
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table1_group1'::regclass::oid, 0);
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table2_group1'::regclass::oid, 0);
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table3_group2'::regclass::oid, 0);
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table4_group2'::regclass::oid, 0);
+INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table5_groupX'::regclass::oid, 0);
+select 1 from citus_activate_node('localhost', :worker_1_port);
+select 1 from citus_activate_node('localhost', :worker_2_port);
 
 -- move a table with a colocation id which is already not in pg_dist_colocation
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table2_group_none');

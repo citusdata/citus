@@ -135,6 +135,8 @@ permutation "s1-begin" "s1-update-node-1" "s2-begin" "s2-update-node-1" "s1-comm
 // master_update_node should block start_metadata_sync_to_node. Note that we
 // cannot run start_metadata_sync_to_node in a transaction, so we're not
 // testing the reverse order here.
+// Having different result on coordinator and worker is expected for now since
+// we run test after disabling mx.
 permutation "s1-begin" "s1-update-node-1" "s2-start-metadata-sync-node-2" "s1-commit" "s2-verify-metadata"
 
 // make sure we have entries in prepared statement cache

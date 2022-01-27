@@ -47,6 +47,7 @@ DROP FUNCTION pg_catalog.citus_check_cluster_node_health ();
 DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer, boolean);
 DROP FUNCTION pg_catalog.citus_run_local_command(text);
 DROP FUNCTION pg_catalog.worker_drop_sequence_dependency(text);
+DROP FUNCTION pg_catalog.worker_drop_shell_table(table_name text);
 
 CREATE OR REPLACE VIEW pg_catalog.citus_shards_on_worker AS
 	SELECT n.nspname as "Schema",

@@ -43,12 +43,12 @@ FOR EACH ROW EXECUTE FUNCTION dummy_function();
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1508000, 'citus_local_tables_mx', 'CREATE TRIGGER dummy_function_trigger
 BEFORE UPDATE OF value ON citus_local_table
 FOR EACH ROW EXECUTE FUNCTION dummy_function();')
--- Show that we can sync metadata successfully. That means, we create
+-- Show that we can activate node successfully. That means, we create
 -- the function that trigger needs in mx workers too.
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT citus_activate_node('localhost', :worker_1_port);
+ citus_activate_node
 ---------------------------------------------------------------------
-
+                  16
 (1 row)
 
 CREATE EXTENSION seg;

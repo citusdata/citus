@@ -224,7 +224,8 @@ extern uint64 GetNextShardId(void);
 extern uint64 GetNextPlacementId(void);
 extern Oid ResolveRelationId(text *relationName, bool missingOk);
 extern List * GetFullTableCreationCommands(Oid relationId,
-										   IncludeSequenceDefaults includeSequenceDefaults);
+										   IncludeSequenceDefaults includeSequenceDefaults,
+										   bool creatingShellTableOnRemoteNode);
 extern List * GetPostLoadTableCreationCommands(Oid relationId, bool includeIndexes,
 											   bool includeReplicaIdentity);
 extern List * GetPreLoadTableCreationCommands(Oid relationId, IncludeSequenceDefaults

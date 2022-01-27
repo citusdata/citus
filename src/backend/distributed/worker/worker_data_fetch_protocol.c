@@ -32,9 +32,11 @@
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
 #include "distributed/coordinator_protocol.h"
+#include "distributed/deparser.h"
 #include "distributed/intermediate_results.h"
 #include "distributed/listutils.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_logical_optimizer.h"
 #include "distributed/multi_partitioning_utils.h"
@@ -43,8 +45,10 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 
+#include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_protocol.h"
 #include "distributed/version_compat.h"
+#include "executor/spi.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_relation.h"
 #include "storage/lmgr.h"
@@ -461,16 +465,40 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 						" SEQUENCE command string")));
 	}
 
+	/*
+	 * If sequence with the same name exist for different type, it must have been
+	 * stayed on that node after a rollbacked create_distributed_table operation.
+	 * We must change it's name first to create the sequence with the correct type.
+	 */
+	Oid sequenceOid;
+	CreateSeqStmt *createSequenceStatement = (CreateSeqStmt *) commandNode;
+	char *sequenceName = createSequenceStatement->sequence->relname;
+	char *sequenceSchema = createSequenceStatement->sequence->schemaname;
+
+	RangeVarGetAndCheckCreationNamespace(createSequenceStatement->sequence, NoLock,
+										 &sequenceOid);
+	if (OidIsValid(sequenceOid))
+	{
+		Form_pg_sequence pgSequenceForm = pg_get_sequencedef(sequenceOid);
+		if (pgSequenceForm->seqtypid != sequenceTypeId)
+		{
+			ObjectAddress sequenceAddress = { 0 };
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+
+			char *newName = GenerateBackupNameForCollision(&sequenceAddress);
+
+			RenameStmt *renameStmt = CreateRenameStatement(&sequenceAddress, newName);
+			const char *sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
+			ProcessUtilityParseTree((Node *) renameStmt, sqlRenameStmt,
+									PROCESS_UTILITY_QUERY,
+									NULL, None_Receiver, NULL);
+		}
+	}
+
 	/* run the CREATE SEQUENCE command */
 	ProcessUtilityParseTree(commandNode, commandString, PROCESS_UTILITY_QUERY, NULL,
 							None_Receiver, NULL);
 	CommandCounterIncrement();
-
-	CreateSeqStmt *createSequenceStatement = (CreateSeqStmt *) commandNode;
-
-	char *sequenceName = createSequenceStatement->sequence->relname;
-	char *sequenceSchema = createSequenceStatement->sequence->schemaname;
-	createSequenceStatement = (CreateSeqStmt *) commandNode;
 
 	Oid sequenceRelationId = RangeVarGetRelid(createSequenceStatement->sequence,
 											  AccessShareLock, false);

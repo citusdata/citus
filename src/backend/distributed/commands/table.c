@@ -1955,6 +1955,17 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 			return;
 		}
 
+		/*
+		 * Before ensuring each dependency exist, update dependent sequences
+		 * types if necessary.
+		 */
+		List *attnumList = NIL;
+		List *dependentSequenceList = NIL;
+		GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList,
+										  0);
+		EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
+											  attnumList);
+
 		/* changing a relation could introduce new dependencies */
 		ObjectAddress tableAddress = { 0 };
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
@@ -2045,18 +2056,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 							Oid seqOid = GetSequenceOid(relationId, attnum);
 							if (seqOid != InvalidOid)
 							{
-								EnsureDistributedSequencesHaveOneType(relationId,
-																	  list_make1_oid(
-																		  seqOid),
-																	  list_make1_int(
-																		  attnum));
-
-								if (ShouldSyncTableMetadata(relationId) &&
-									ClusterHasKnownMetadataWorkers())
+								if (ShouldSyncTableMetadata(relationId))
 								{
 									needMetadataSyncForNewSequences = true;
-									MarkSequenceDistributedAndPropagateWithDependencies(
-										relationId, seqOid);
 									alterTableDefaultNextvalCmd =
 										GetAddColumnWithNextvalDefaultCmd(seqOid,
 																		  relationId,
@@ -2088,16 +2090,9 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 				Oid seqOid = GetSequenceOid(relationId, attnum);
 				if (seqOid != InvalidOid)
 				{
-					EnsureDistributedSequencesHaveOneType(relationId,
-														  list_make1_oid(seqOid),
-														  list_make1_int(attnum));
-
-					if (ShouldSyncTableMetadata(relationId) &&
-						ClusterHasKnownMetadataWorkers())
+					if (ShouldSyncTableMetadata(relationId))
 					{
 						needMetadataSyncForNewSequences = true;
-						MarkSequenceDistributedAndPropagateWithDependencies(relationId,
-																			seqOid);
 						alterTableDefaultNextvalCmd = GetAlterColumnWithNextvalDefaultCmd(
 							seqOid, relationId, command->name);
 					}
@@ -2627,8 +2622,7 @@ ErrorIfUnsupportedAlterTableStmt(AlterTableStmt *alterTableStatement)
 							 * We currently don't support adding a serial column for an MX table
 							 * TODO: record the dependency in the workers
 							 */
-							if (ShouldSyncTableMetadata(relationId) &&
-								ClusterHasKnownMetadataWorkers())
+							if (ShouldSyncTableMetadata(relationId))
 							{
 								ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 												errmsg(

@@ -3,7 +3,7 @@ setup
   SELECT citus_internal.replace_isolation_tester_func();
   SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
-  SELECT master_add_node('localhost', 57636);
+  SELECT master_add_node('localhost', 57636, groupid => 0);
 
   CREATE TABLE ref_table(a int primary key);
   SELECT create_reference_table('ref_table');
