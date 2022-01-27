@@ -158,7 +158,7 @@ nodeid|groupid|nodename |nodeport
 
 master_run_on_worker
 ---------------------------------------------------------------------
-(localhost,57638,t,"[{""f1"": 25, ""f2"": 25, ""f3"": ""localhost"", ""f4"": 58637}, {""f1"": 26, ""f2"": 26, ""f3"": ""localhost"", ""f4"": 57638}]")
+(localhost,57638,t,"[{""f1"": 10, ""f2"": 10, ""f3"": ""localhost"", ""f4"": 57638}]")
 (1 row)
 
 nodeid|nodename|nodeport

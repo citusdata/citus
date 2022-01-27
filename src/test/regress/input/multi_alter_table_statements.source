@@ -637,3 +637,23 @@ CREATE TABLE referenced_table(i int UNIQUE);
 SELECT create_distributed_table('referenced_table', 'i');
 ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES referenced_table(i);
 DROP TABLE referenced_table, test_table_1;
+
+-- Check sequence propagate its own dependencies while adding a column
+CREATE TABLE table_without_sequence(a int);
+SELECT create_distributed_table('table_without_sequence', 'a');
+
+CREATE SCHEMA test_schema_for_sequence_propagation;
+CREATE SEQUENCE test_schema_for_sequence_propagation.seq_10;
+
+-- Both should have zero rows
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation.seq_10'::regclass);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation'::regnamespace);
+
+ALTER TABLE table_without_sequence ADD COLUMN x BIGINT DEFAULT nextval('test_schema_for_sequence_propagation.seq_10');
+
+-- Should be distributed along with the sequence
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation.seq_10'::regclass);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation'::regnamespace);
+
+DROP SCHEMA test_schema_for_sequence_propagation CASCADE;
+DROP TABLE table_without_sequence;

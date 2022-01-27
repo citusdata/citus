@@ -68,7 +68,7 @@ step s3-commit:
     COMMIT;
 
 
-starting permutation: s1-create-table s1-begin s1-insert s1-verify-current-xact-is-on-worker s1-commit
+starting permutation: s1-create-table s1-begin s1-insert s1-verify-current-xact-is-on-worker s1-drop-table s1-commit
 step s1-create-table:
  -- some tests also use distributed table
  CREATE TABLE distributed_transaction_id_table(some_value int, other_value int);
@@ -103,6 +103,9 @@ nodeport|xact_exists
    57637|t
    57638|t
 (2 rows)
+
+step s1-drop-table:
+ DROP TABLE distributed_transaction_id_table;
 
 step s1-commit:
     COMMIT;

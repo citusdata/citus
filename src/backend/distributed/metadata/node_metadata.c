@@ -40,8 +40,10 @@
 #include "distributed/remote_commands.h"
 #include "distributed/resource_lock.h"
 #include "distributed/shardinterval_utils.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "distributed/shared_connection_stats.h"
 #include "distributed/string_utils.h"
+#include "distributed/metadata/pg_dist_object.h"
 #include "distributed/transaction_recovery.h"
 #include "distributed/version_compat.h"
 #include "distributed/worker_manager.h"
@@ -90,7 +92,6 @@ typedef struct NodeMetadata
 } NodeMetadata;
 
 /* local function forward declarations */
-static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static void ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode);
 static bool PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement
@@ -105,9 +106,12 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void SetUpDistributedTableDependencies(WorkerNode *workerNode);
+static void SyncDistributedObjectsToNode(WorkerNode *workerNode);
+static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
+static void SyncPgDistTableMetadataToNode(WorkerNode *workerNode);
+static List * InterTableRelationshipCommandList();
 static WorkerNode * TupleToWorkerNode(TupleDesc tupleDescriptor, HeapTuple heapTuple);
-static void PropagateNodeWideObjects(WorkerNode *newWorkerNode);
+static List * PropagateNodeWideObjectsCommandList();
 static WorkerNode * ModifiableWorkerNode(const char *nodeName, int32 nodePort);
 static bool NodeIsLocal(WorkerNode *worker);
 static void SetLockTimeoutLocally(int32 lock_cooldown);
@@ -573,54 +577,118 @@ master_set_node_property(PG_FUNCTION_ARGS)
 
 
 /*
- * SetUpDistributedTableDependencies sets up up the following on a node if it's
- * a primary node that currently stores data:
- * - All dependencies (e.g., types, schemas)
- * - Reference tables, because they are needed to handle queries efficiently.
- * - Distributed functions
+ * InterTableRelationshipCommandList returns the command list to
+ * set up the multiple integrations including
  *
- * Note that we do not create the distributed dependencies on the coordinator
- * since all the dependencies should be present in the coordinator already.
+ * (i) Foreign keys
+ * (ii) Partionining hierarchy
+ *
+ * for each citus table.
  */
-static void
-SetUpDistributedTableDependencies(WorkerNode *newWorkerNode)
+static List *
+InterTableRelationshipCommandList()
 {
-	if (NodeIsPrimary(newWorkerNode))
+	List *distributedTableList = CitusTableList();
+	List *propagatedTableList = NIL;
+	List *multipleTableIntegrationCommandList = NIL;
+
+	CitusTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
 	{
-		EnsureNoModificationsHaveBeenDone();
-
-		if (ShouldPropagate() && !NodeIsCoordinator(newWorkerNode))
+		/*
+		 * Skip foreign key and partition creation when we shouldn't need to sync
+		 * tablem metadata or the Citus table is owned by an extension.
+		 */
+		if (ShouldSyncTableMetadata(cacheEntry->relationId) &&
+			!IsTableOwnedByExtension(cacheEntry->relationId))
 		{
-			PropagateNodeWideObjects(newWorkerNode);
-			ReplicateAllDependenciesToNode(newWorkerNode->workerName,
-										   newWorkerNode->workerPort);
-		}
-		else if (!NodeIsCoordinator(newWorkerNode))
-		{
-			ereport(WARNING, (errmsg("citus.enable_object_propagation is off, not "
-									 "creating distributed objects on worker"),
-							  errdetail("distributed objects are only kept in sync when "
-										"citus.enable_object_propagation is set to on. "
-										"Newly activated nodes will not get these "
-										"objects created")));
-		}
-
-		if (ReplicateReferenceTablesOnActivate)
-		{
-			ReplicateAllReferenceTablesToNode(newWorkerNode->workerName,
-											  newWorkerNode->workerPort);
+			propagatedTableList = lappend(propagatedTableList, cacheEntry);
 		}
 	}
+
+	foreach_ptr(cacheEntry, propagatedTableList)
+	{
+		Oid relationId = cacheEntry->relationId;
+
+		List *commandListForRelation =
+			InterTableRelationshipOfRelationCommandList(relationId);
+
+		multipleTableIntegrationCommandList = list_concat(
+			multipleTableIntegrationCommandList,
+			commandListForRelation);
+	}
+
+	multipleTableIntegrationCommandList = lcons(DISABLE_DDL_PROPAGATION,
+												multipleTableIntegrationCommandList);
+	multipleTableIntegrationCommandList = lappend(multipleTableIntegrationCommandList,
+												  ENABLE_DDL_PROPAGATION);
+
+	return multipleTableIntegrationCommandList;
 }
 
 
 /*
- * PropagateNodeWideObjects is called during node activation to propagate any object that
- * should be propagated for every node. These are generally not linked to any distributed
- * object but change system wide behaviour.
+ * PgDistTableMetadataSyncCommandList returns the command list to sync the pg_dist_*
+ * (except pg_dist_node) metadata. We call them as table metadata.
  */
-static void
-PropagateNodeWideObjects(WorkerNode *newWorkerNode)
+List *
+PgDistTableMetadataSyncCommandList(void)
+{
+	List *distributedTableList = CitusTableList();
+	List *propagatedTableList = NIL;
+	List *metadataSnapshotCommandList = NIL;
+
+	/* create the list of tables whose metadata will be created */
+	CitusTableCacheEntry *cacheEntry = NULL;
+	foreach_ptr(cacheEntry, distributedTableList)
+	{
+		if (ShouldSyncTableMetadata(cacheEntry->relationId))
+		{
+			propagatedTableList = lappend(propagatedTableList, cacheEntry);
+		}
+	}
+
+	/* remove all dist table and object related metadata first */
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  DELETE_ALL_PARTITIONS);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList, DELETE_ALL_SHARDS);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  DELETE_ALL_PLACEMENTS);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  DELETE_ALL_DISTRIBUTED_OBJECTS);
+
+	/* create pg_dist_partition, pg_dist_shard and pg_dist_placement entries */
+	foreach_ptr(cacheEntry, propagatedTableList)
+	{
+		List *tableMetadataCreateCommandList =
+			CitusTableMetadataCreateCommandList(cacheEntry->relationId);
+
+		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+												  tableMetadataCreateCommandList);
+	}
+
+	/* As the last step, propagate the pg_dist_object entities */
+	Assert(ShouldPropagate());
+	List *distributedObjectSyncCommandList = DistributedObjectMetadataSyncCommandList();
+	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+											  distributedObjectSyncCommandList);
+
+	metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION,
+										metadataSnapshotCommandList);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  ENABLE_DDL_PROPAGATION);
+
+	return metadataSnapshotCommandList;
+}
+
+
+/*
+ * PropagateNodeWideObjectsCommandList is called during node activation to
+ * propagate any object that should be propagated for every node. These are
+ * generally not linked to any distributed object but change system wide behaviour.
+ */
+static List *
+PropagateNodeWideObjectsCommandList()
 {
 	/* collect all commands */
 	List *ddlCommands = NIL;
@@ -640,13 +708,142 @@ PropagateNodeWideObjects(WorkerNode *newWorkerNode)
 		/* if there are command wrap them in enable_ddl_propagation off */
 		ddlCommands = lcons(DISABLE_DDL_PROPAGATION, ddlCommands);
 		ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
+	}
+
+	return ddlCommands;
+}
+
+
+/*
+ * SyncDistributedObjectsCommandList returns commands to sync object dependencies
+ * to the given worker node. To be idempotent, it first drops the ones required to be
+ * dropped.
+ *
+ * Object dependencies include:
+ *
+ * - All dependencies (e.g., types, schemas, sequences)
+ * - All shell distributed tables
+ * - Inter relation between those shell tables
+ * - Node wide objects
+ *
+ * We also update the local group id here, as handling sequence dependencies
+ * requires it.
+ */
+List *
+SyncDistributedObjectsCommandList(WorkerNode *workerNode)
+{
+	List *commandList = NIL;
+
+	/*
+	 * Propagate node wide objects. It includes only roles for now.
+	 */
+	commandList = list_concat(commandList, PropagateNodeWideObjectsCommandList());
+
+	/*
+	 * Detach partitions, break dependencies between sequences and table then
+	 * remove shell tables first.
+	 */
+	commandList = list_concat(commandList, DetachPartitionCommandList());
+	commandList = lappend(commandList, BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+	commandList = lappend(commandList, REMOVE_ALL_SHELL_TABLES_COMMAND);
+
+	/*
+	 * Replicate all objects of the pg_dist_object to the remote node.
+	 */
+	commandList = list_concat(commandList, ReplicateAllObjectsToNodeCommandList(
+								  workerNode->workerName, workerNode->workerPort));
+
+	/*
+	 * After creating each table, handle the inter table relationship between
+	 * those tables.
+	 */
+	commandList = list_concat(commandList, InterTableRelationshipCommandList());
+
+	return commandList;
+}
+
+
+/*
+ * SyncDistributedObjectsToNode sync the distributed objects to the node. It includes
+ * - All dependencies (e.g., types, schemas, sequences)
+ * - All shell distributed table
+ * - Inter relation between those shell tables
+ *
+ * Note that we do not create the distributed dependencies on the coordinator
+ * since all the dependencies should be present in the coordinator already.
+ */
+static void
+SyncDistributedObjectsToNode(WorkerNode *workerNode)
+{
+	if (NodeIsCoordinator(workerNode))
+	{
+		/* coordinator has all the objects */
+		return;
+	}
+
+	if (!NodeIsPrimary(workerNode))
+	{
+		/* secondary nodes gets the objects from their primaries via replication */
+		return;
+	}
+
+	EnsureNoModificationsHaveBeenDone();
+	EnsureSequentialModeMetadataOperations();
+
+	Assert(ShouldPropagate());
+
+	List *commandList = SyncDistributedObjectsCommandList(workerNode);
+
+	/* send commands to new workers, the current user should be a superuser */
+	Assert(superuser());
+	SendMetadataCommandListToWorkerInCoordinatedTransaction(
+		workerNode->workerName,
+		workerNode->workerPort,
+		CurrentUserName(),
+		commandList);
+}
+
+
+/*
+ * UpdateLocalGroupIdOnNode updates local group id on node.
+ */
+static void
+UpdateLocalGroupIdOnNode(WorkerNode *workerNode)
+{
+	if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
+	{
+		List *commandList = list_make1(LocalGroupIdUpdateCommand(workerNode->groupId));
 
 		/* send commands to new workers, the current user should be a superuser */
 		Assert(superuser());
-		SendMetadataCommandListToWorkerInCoordinatedTransaction(newWorkerNode->workerName,
-																newWorkerNode->workerPort,
-																CurrentUserName(),
-																ddlCommands);
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(
+			workerNode->workerName,
+			workerNode->workerPort,
+			CurrentUserName(),
+			commandList);
+	}
+}
+
+
+/*
+ * SyncPgDistTableMetadataToNode syncs the pg_dist_partition, pg_dist_shard
+ * pg_dist_placement and pg_dist_object metadata entries.
+ *
+ */
+static void
+SyncPgDistTableMetadataToNode(WorkerNode *workerNode)
+{
+	if (NodeIsPrimary(workerNode) && !NodeIsCoordinator(workerNode))
+	{
+		List *syncPgDistMetadataCommandList = PgDistTableMetadataSyncCommandList();
+
+		/* send commands to new workers, the current user should be a superuser */
+		Assert(superuser());
+		SendMetadataCommandListToWorkerInCoordinatedTransaction(
+			workerNode->workerName,
+			workerNode->workerPort,
+			CurrentUserName(),
+			syncPgDistMetadataCommandList);
 	}
 }
 
@@ -847,7 +1044,7 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
  * includes only replicating the reference tables and setting isactive column of the
  * given node.
  */
-static int
+int
 ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
@@ -897,10 +1094,11 @@ ActivateNode(char *nodeName, int nodePort)
 	workerNode =
 		SetWorkerColumnLocalOnly(workerNode, Anum_pg_dist_node_isactive,
 								 BoolGetDatum(isActive));
-	bool syncMetadata =
-		EnableMetadataSyncByDefault && NodeIsPrimary(workerNode);
 
-	if (syncMetadata)
+	/* TODO: Once all tests will be enabled for MX, we can remove sync by default check */
+	bool syncMetadata = EnableMetadataSyncByDefault && NodeIsPrimary(workerNode);
+
+	if (syncMetadata && EnableDependencyCreation)
 	{
 		/*
 		 * We are going to sync the metadata anyway in this transaction, so do
@@ -908,13 +1106,43 @@ ActivateNode(char *nodeName, int nodePort)
 		 */
 		SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
 						BoolGetDatum(true));
-	}
 
-	SetUpDistributedTableDependencies(workerNode);
+		/*
+		 * Update local group id first, as object dependency logic requires to have
+		 * updated local group id.
+		 */
+		UpdateLocalGroupIdOnNode(workerNode);
 
-	if (syncMetadata)
-	{
-		StartMetadataSyncToNode(nodeName, nodePort);
+		/*
+		 * Sync distributed objects first. We must sync distributed objects before
+		 * replicating reference tables to the remote node, as reference tables may
+		 * need such objects.
+		 */
+		SyncDistributedObjectsToNode(workerNode);
+
+		/*
+		 * We need to replicate reference tables before syncing node metadata, otherwise
+		 * reference table replication logic would try to get lock on the new node before
+		 * having the shard placement on it
+		 */
+		if (ReplicateReferenceTablesOnActivate)
+		{
+			ReplicateAllReferenceTablesToNode(workerNode);
+		}
+
+		/*
+		 * Sync node metadata. We must sync node metadata before syncing table
+		 * related pg_dist_xxx metadata. Since table related metadata requires
+		 * to have right pg_dist_node entries.
+		 */
+		SyncNodeMetadataToNode(nodeName, nodePort);
+
+		/*
+		 * As the last step, sync the table related metadata to the remote node.
+		 * We must handle it as the last step because of limitations shared with
+		 * above comments.
+		 */
+		SyncPgDistTableMetadataToNode(workerNode);
 	}
 
 	/* finally, let all other active metadata nodes to learn about this change */

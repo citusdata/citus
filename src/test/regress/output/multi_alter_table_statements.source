@@ -1259,3 +1259,43 @@ ALTER TABLE test_table_1 ADD COLUMN test_col int REFERENCES referenced_table(i);
 ERROR:  cannot create foreign key constraint
 DETAIL:  Foreign keys are supported in two cases, either in between two colocated tables including partition column in the same ordinal in the both tables or from distributed to reference tables
 DROP TABLE referenced_table, test_table_1;
+-- Check sequence propagate its own dependencies while adding a column
+CREATE TABLE table_without_sequence(a int);
+SELECT create_distributed_table('table_without_sequence', 'a');
+ create_distributed_table
+--------------------------
+
+(1 row)
+
+CREATE SCHEMA test_schema_for_sequence_propagation;
+CREATE SEQUENCE test_schema_for_sequence_propagation.seq_10;
+-- Both should have zero rows
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation.seq_10'::regclass);
+ pg_identify_object_as_address 
+-------------------------------
+(0 rows)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation'::regnamespace);
+ pg_identify_object_as_address
+-------------------------------
+(0 rows)
+
+ALTER TABLE table_without_sequence ADD COLUMN x BIGINT DEFAULT nextval('test_schema_for_sequence_propagation.seq_10');
+-- Should be distributed along with the sequence
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation.seq_10'::regclass);
+                 pg_identify_object_as_address             
+---------------------------------------------------------------
+ (sequence,"{test_schema_for_sequence_propagation,seq_10}",{})
+(1 row)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_propagation'::regnamespace);
+           pg_identify_object_as_address        
+----------------------------------------------------
+ (schema,{test_schema_for_sequence_propagation},{})
+(1 row)
+
+DROP SCHEMA test_schema_for_sequence_propagation CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to sequence test_schema_for_sequence_propagation.seq_10
+drop cascades to default value for column x of table table_without_sequence
+DROP TABLE table_without_sequence;
