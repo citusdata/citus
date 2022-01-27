@@ -85,7 +85,6 @@ static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
 											 bool missing_ok);
 static void ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt);
-static void ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress);
 static char * quote_qualified_func_name(Oid funcOid);
 static void DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
 													   char *distributionArgumentName,
@@ -101,6 +100,9 @@ static void DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid
 static void DistributeFunctionColocatedWithReferenceTable(const
 														  ObjectAddress *functionAddress);
 
+static void EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
+													const ObjectAddress extensionAddress,
+													char *distributionArgumentName);
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
 
@@ -127,6 +129,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	char *colocateWithTableName = NULL;
 	bool *forceDelegationAddress = NULL;
 	bool forceDelegation = false;
+	ObjectAddress extensionAddress = { 0 };
 
 	/* if called on NULL input, error out */
 	if (funcOid == InvalidOid)
@@ -187,22 +190,35 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	EnsureFunctionOwner(funcOid);
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
-	ErrorIfFunctionDependsOnExtension(&functionAddress);
 
 	/*
-	 * when we allow propagation within a transaction block we should make sure to only
-	 * allow this in sequential mode
+	 * If the function is owned by an extension, only update the
+	 * pg_dist_object, and not propagate the CREATE FUNCTION. Function
+	 * will be created by the virtue of the extension creation.
 	 */
-	EnsureSequentialModeForFunctionDDL();
+	if (IsObjectAddressOwnedByExtension(&functionAddress, &extensionAddress))
+	{
+		EnsureExtensionFunctionCanBeDistributed(functionAddress, extensionAddress,
+												distributionArgumentName);
+	}
+	else
+	{
+		/*
+		 * when we allow propagation within a transaction block we should make sure
+		 * to only allow this in sequential mode.
+		 */
+		EnsureSequentialModeForFunctionDDL();
 
-	EnsureDependenciesExistOnAllNodes(&functionAddress);
+		EnsureDependenciesExistOnAllNodes(&functionAddress);
 
-	const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
-	const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
-	initStringInfo(&ddlCommand);
-	appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_METADATA_SYNC,
-					 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_METADATA_SYNC);
-	SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(), ddlCommand.data);
+		const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
+		const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
+		initStringInfo(&ddlCommand);
+		appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_METADATA_SYNC,
+						 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_METADATA_SYNC);
+		SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(),
+								   ddlCommand.data);
+	}
 
 	MarkObjectDistributed(&functionAddress);
 
@@ -2013,33 +2029,6 @@ ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt)
 }
 
 
-/*
- * ErrorIfFunctionDependsOnExtension functions depending on extensions should raise an
- * error informing the user why they can't be distributed.
- */
-static void
-ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress)
-{
-	/* captures the extension address during lookup */
-	ObjectAddress extensionAddress = { 0 };
-
-	if (IsObjectAddressOwnedByExtension(functionAddress, &extensionAddress))
-	{
-		char *functionName =
-			getObjectIdentity_compat(functionAddress, /* missingOk: */ false);
-		char *extensionName =
-			getObjectIdentity_compat(&extensionAddress, /* missingOk: */ false);
-		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
-							   "owned by an extension"),
-						errdetail("Function \"%s\" has a dependency on extension \"%s\". "
-								  "Functions depending on an extension cannot be "
-								  "distributed. Create the function by creating the "
-								  "extension on the workers.", functionName,
-								  extensionName)));
-	}
-}
-
-
 /* returns the quoted qualified name of a given function oid */
 static char *
 quote_qualified_func_name(Oid funcOid)
@@ -2047,4 +2036,55 @@ quote_qualified_func_name(Oid funcOid)
 	return quote_qualified_identifier(
 		get_namespace_name(get_func_namespace(funcOid)),
 		get_func_name(funcOid));
+}
+
+
+/*
+ * EnsureExtensionFuncionCanBeCreated checks if the dependent objects
+ * (including extension) exists on all nodes, if not, creates them. In
+ * addition, it also checks if distribution argument is passed.
+ */
+static void
+EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
+										const ObjectAddress extensionAddress,
+										char *distributionArgumentName)
+{
+	if (CitusExtensionObject(&extensionAddress))
+	{
+		/*
+		 * Citus extension is a special case. It's the extension that
+		 * provides the 'distributed capabilities' in the first place.
+		 * Trying to distribute it's own function(s) doesn't make sense.
+		 */
+		ereport(ERROR, (errmsg("Citus extension functions(%s) "
+							   "cannot be distributed.",
+							   get_func_name(functionAddress.objectId))));
+	}
+
+	/*
+	 * Distributing functions from extensions has the most benefit when
+	 * distribution argument is specified.
+	 */
+	if (distributionArgumentName == NULL)
+	{
+		ereport(ERROR, (errmsg("Extension functions(%s) "
+							   "without distribution argument "
+							   "are not supported.",
+							   get_func_name(functionAddress.objectId))));
+	}
+
+	/*
+	 * Ensure corresponding extension is in pg_dist_object.
+	 * Functions owned by an extension are depending internally on that extension,
+	 * hence EnsureDependenciesExistOnAllNodes() creates the extension, which in
+	 * turn creates the function, and thus we don't have to create it ourself like
+	 * we do for non-extension functions.
+	 */
+	ereport(DEBUG1, (errmsg("Extension(%s) owning the "
+							"function(%s) is not distributed, "
+							"attempting to propogate the extension",
+							get_extension_name(extensionAddress.objectId),
+							get_func_name(functionAddress.objectId))));
+
+	EnsureDependenciesExistOnAllNodes(&functionAddress);
 }
