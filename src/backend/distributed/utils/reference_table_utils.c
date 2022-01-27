@@ -553,7 +553,7 @@ ReferenceTableReplicationFactor(void)
  * reference table to prevent unnecessary data transfer.
  */
 void
-ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
+ReplicateAllReferenceTablesToNode(WorkerNode *workerNode)
 {
 	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
 
@@ -589,7 +589,9 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 
 			LockShardDistributionMetadata(shardId, ExclusiveLock);
 
-			ReplicateReferenceTableShardToNode(shardInterval, nodeName, nodePort);
+			ReplicateReferenceTableShardToNode(shardInterval,
+											   workerNode->workerName,
+											   workerNode->workerPort);
 		}
 
 		/* create foreign constraints between reference tables */
@@ -599,9 +601,11 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 
 			/* send commands to new workers, the current user should be a superuser */
 			Assert(superuser());
-			SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort,
-																	CurrentUserName(),
-																	commandList);
+			SendMetadataCommandListToWorkerInCoordinatedTransaction(
+				workerNode->workerName,
+				workerNode->workerPort,
+				CurrentUserName(),
+				commandList);
 		}
 	}
 }

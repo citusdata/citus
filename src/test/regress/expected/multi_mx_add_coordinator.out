@@ -49,11 +49,17 @@ SET citus.shard_count TO 8;
 SET citus.next_shard_id TO 7000000;
 SET citus.next_placement_id TO 7000000;
 SET client_min_messages TO WARNING;
--- test that coordinator pg_dist_node entry is synced to the workers
-SELECT wait_until_metadata_sync(30000);
- wait_until_metadata_sync
+-- test that metadata is synced to the workers
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
+        1
+(1 row)
 
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port),
@@ -335,11 +341,17 @@ SELECT master_remove_node('localhost', :master_port);
 
 (1 row)
 
--- test that coordinator pg_dist_node entry was removed from the workers
-SELECT wait_until_metadata_sync(30000);
- wait_until_metadata_sync
+-- test that metadata is synced to the workers
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
+        1
+(1 row)
 
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
+---------------------------------------------------------------------
+        1
 (1 row)
 
 SELECT verify_metadata('localhost', :worker_1_port),

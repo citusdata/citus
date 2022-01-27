@@ -397,6 +397,7 @@ extern ObjectAddress AlterSequenceOwnerStmtObjectAddress(Node *node, bool missin
 extern ObjectAddress RenameSequenceStmtObjectAddress(Node *node, bool missing_ok);
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
+extern char * GenerateBackupNameForSequenceCollision(const ObjectAddress *address);
 
 /* statistics.c - forward declarations */
 extern List * PreprocessCreateStatisticsStmt(Node *node, const char *queryString,

@@ -55,7 +55,7 @@ INSERT INTO sensors VALUES (DEFAULT, DEFAULT, '2010-01-01') RETURNING *;
 INSERT INTO sensors_news VALUES (DEFAULT, DEFAULT, '2021-01-01') RETURNING *;
 
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 
 
 \c - - - :worker_1_port

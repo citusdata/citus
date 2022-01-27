@@ -51,46 +51,6 @@ SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
 ALTER SEQUENCE seq_0 AS bigint;
 ALTER SEQUENCE seq_0_local_table AS bigint;
 
--- we can change other things like increment
--- if metadata is not synced to workers
-BEGIN;
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-CREATE SEQUENCE seq_13;
-CREATE SEQUENCE seq_13_local_table;
-CREATE TABLE seq_test_13 (x int, y int);
-CREATE TABLE seq_test_13_local_table (x int, y int);
-SELECT create_distributed_table('seq_test_13','x');
-SELECT citus_add_local_table_to_metadata('seq_test_13_local_table');
-ALTER TABLE seq_test_13 ADD COLUMN z int DEFAULT nextval('seq_13');
-ALTER TABLE seq_test_13_local_table ADD COLUMN z int DEFAULT nextval('seq_13_local_table');
-
-ALTER SEQUENCE seq_13 INCREMENT BY 2;
-ALTER SEQUENCE seq_13_local_table INCREMENT BY 2;
-\d seq_13
-\d seq_13_local_table
-
-
--- check that we can add serial pseudo-type columns
--- when metadata is not synced to workers
-TRUNCATE seq_test_0;
-ALTER TABLE seq_test_0 ADD COLUMN w00 smallserial;
-ALTER TABLE seq_test_0 ADD COLUMN w01 serial2;
-ALTER TABLE seq_test_0 ADD COLUMN w10 serial;
-ALTER TABLE seq_test_0 ADD COLUMN w11 serial4;
-ALTER TABLE seq_test_0 ADD COLUMN w20 bigserial;
-ALTER TABLE seq_test_0 ADD COLUMN w21 serial8;
-
-TRUNCATE seq_test_0_local_table;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w00 smallserial;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w01 serial2;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w10 serial;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w11 serial4;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w20 bigserial;
-ALTER TABLE seq_test_0_local_table ADD COLUMN w21 serial8;
-
-ROLLBACK;
-
 -- check alter column type precaution
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE bigint;
 ALTER TABLE seq_test_0 ALTER COLUMN z TYPE smallint;
@@ -106,7 +66,6 @@ CREATE TABLE seq_test_4 (x int, y int);
 SELECT create_distributed_table('seq_test_4','x');
 CREATE SEQUENCE seq_4;
 ALTER TABLE seq_test_4 ADD COLUMN a bigint DEFAULT nextval('seq_4');
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SEQUENCE seq_4 CASCADE;
 TRUNCATE seq_test_4;
 CREATE SEQUENCE seq_4;
@@ -381,7 +340,7 @@ SELECT create_reference_table('seq_test_10');
 INSERT INTO seq_test_10 VALUES (0);
 CREATE TABLE seq_test_11 (col0 int, col1 bigint DEFAULT nextval('seq_11'::text));
 -- works but doesn't create seq_11 in the workers
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
 -- works because there is no dependency created between seq_11 and seq_test_10
 SELECT create_distributed_table('seq_test_11', 'col1');
 -- insertion from workers fails
@@ -403,7 +362,7 @@ CREATE TABLE seq_test_12(col0 text, col1 smallint DEFAULT nextval('seq_12'),
                          col2 int DEFAULT nextval('seq_13'),
                          col3 bigint DEFAULT nextval('seq_14'));
 SELECT create_distributed_table('seq_test_12', 'col0');
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
 INSERT INTO seq_test_12 VALUES ('hello0') RETURNING *;
 
 \c - - - :worker_1_port
@@ -458,7 +417,7 @@ SELECT nextval('seq_14');
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT citus_activate_node('localhost', :worker_1_port);
 SELECT undistribute_table('seq_test_12');
 SELECT create_distributed_table('seq_test_12', 'col0');
 INSERT INTO seq_test_12 VALUES ('hello2') RETURNING *;

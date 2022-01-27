@@ -416,40 +416,6 @@ SELECT * FROM run_command_on_workers($$SELECT * FROM (SELECT pg_identify_object_
  localhost |    57638 | t       | (extension,{ltree},{})
 (2 rows)
 
-SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
-NOTICE:  dropping metadata on the node (localhost,57637)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT stop_metadata_sync_to_node('localhost', :worker_2_port);
-NOTICE:  dropping metadata on the node (localhost,57638)
- stop_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
--- Show that we don't have any object metadata after stopping syncing
-SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object;$$) ORDER BY 1,2;
- nodename  | nodeport | success | result
----------------------------------------------------------------------
- localhost |    57637 | t       |
- localhost |    57638 | t       |
-(2 rows)
-
 -- Revert the settings for following tests
 RESET citus.enable_ddl_propagation;
 RESET citus.shard_replication_factor;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
