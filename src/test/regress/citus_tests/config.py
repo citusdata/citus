@@ -110,6 +110,7 @@ class CitusBaseClusterConfig(object, metaclass=NewInitCaller):
         }
         self.new_settings = {}
         self.add_coordinator_to_metadata = False
+        self.env_variables = {}
 
     def post_init(self):
         self._init_node_name_ports()
@@ -270,6 +271,10 @@ class CitusUnusualExecutorConfig(CitusMXBaseClusterConfig):
             "citus.enable_binary_protocol": False,
             "citus.local_table_join_policy": "prefer-distributed",
         }
+
+        # this setting does not necessarily need to be here
+        # could go any other test
+        self.env_variables = {'PGAPPNAME' : 'test_app'}
 
 
 class CitusSmallCopyBuffersConfig(CitusMXBaseClusterConfig):
