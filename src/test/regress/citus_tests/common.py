@@ -66,7 +66,7 @@ def coordinator_should_haveshards(pg_path, port):
     utils.psql(pg_path, port, command)
 
 
-def start_databases(pg_path, rel_data_path, node_name_to_ports, logfile_prefix):
+def start_databases(pg_path, rel_data_path, node_name_to_ports, logfile_prefix, env_variables):
     for node_name in node_name_to_ports.keys():
         abs_data_path = os.path.abspath(os.path.join(rel_data_path, node_name))
         node_port = node_name_to_ports[node_name]
@@ -82,7 +82,13 @@ def start_databases(pg_path, rel_data_path, node_name_to_ports, logfile_prefix):
             "--log",
             os.path.join(abs_data_path, logfile_name(logfile_prefix, node_name)),
         ]
+
+        # set the application name if requires
+        if env_variables != {}:
+            os.environ.update(env_variables)
+
         subprocess.run(command, check=True)
+
     atexit.register(
         stop_databases,
         pg_path,
@@ -127,6 +133,7 @@ def run_pg_regress_without_exit(
         extra_tests,
     )
     copy_binary_path = os.path.join(input_dir, "copy_modified_wrapper")
+
     exit_code |= subprocess.call(copy_binary_path)
     return exit_code
 
@@ -241,7 +248,7 @@ def initialize_citus_cluster(bindir, datadir, settings, config):
     initialize_db_for_cluster(
         bindir, datadir, settings, config.node_name_to_ports.keys()
     )
-    start_databases(bindir, datadir, config.node_name_to_ports, config.name)
+    start_databases(bindir, datadir, config.node_name_to_ports, config.name, config.env_variables)
     create_citus_extension(bindir, config.node_name_to_ports.values())
     add_workers(bindir, config.worker_ports, config.coordinator_port())
     if config.is_mx:

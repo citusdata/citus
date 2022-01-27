@@ -72,8 +72,8 @@ InitConnParams()
 /*
  * ResetConnParams frees all strings in the keywords and parameters arrays,
  * sets their elements to null, and resets the ConnParamsSize to zero before
- * adding back any hardcoded global connection settings (at present, only the
- * fallback_application_name of 'citus').
+ * adding back any hardcoded global connection settings (at present, there
+ * are no).
  */
 void
 ResetConnParams()
@@ -89,8 +89,6 @@ ResetConnParams()
 	ConnParams.size = 0;
 
 	InvalidateConnParamsHashEntries();
-
-	AddConnParam("fallback_application_name", CITUS_APPLICATION_NAME);
 }
 
 
@@ -253,14 +251,16 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 		"port",
 		"dbname",
 		"user",
-		"client_encoding"
+		"client_encoding",
+		"application_name"
 	};
 	const char *runtimeValues[] = {
 		key->hostname,
 		nodePortString,
 		key->database,
 		key->user,
-		GetDatabaseEncodingName()
+		GetDatabaseEncodingName(),
+		CITUS_APPLICATION_NAME
 	};
 
 	/*

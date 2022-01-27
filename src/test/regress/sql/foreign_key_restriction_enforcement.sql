@@ -803,8 +803,8 @@ BEGIN;
 	DROP TABLE test_table_1 CASCADE;
 ROLLBACK;
 
--- make sure that we cannot create hash distributed tables with
--- foreign keys to reference tables when they have data in it
+-- make sure that we can create hash distributed tables with
+-- even when foreign keys to reference tables and they have data in it
 BEGIN;
 
 	CREATE TABLE test_table_1(id int PRIMARY KEY);
@@ -822,8 +822,8 @@ BEGIN;
 COMMIT;
 
 
--- the same test with above in sequential mode would still not work
--- since COPY cannot be executed in sequential mode
+-- the same test with above in sequential mode would just work
+-- as COPY can be executed in sequential mode
 BEGIN;
 
 	SET LOCAL citus.multi_shard_modify_mode TO 'sequential';

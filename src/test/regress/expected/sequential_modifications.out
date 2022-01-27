@@ -610,20 +610,63 @@ SELECT distributed_2PCs_are_equal_to_worker_count();
 (1 row)
 
 DROP TABLE test_seq_ddl_index;
--- create_distributed_table should fail on relations with data in sequential mode in and out transaction block
+-- create_distributed_table should works on relations with data in sequential mode in and out transaction block
 CREATE TABLE test_create_seq_table (a int);
 INSERT INTO test_create_seq_table VALUES (1);
 SET citus.multi_shard_modify_mode TO 'sequential';
 SELECT create_distributed_table('test_create_seq_table' ,'a');
-ERROR:  cannot distribute "test_create_seq_table" in sequential mode because it is not empty
-HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_seq_ddl.test_create_seq_table$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT undistribute_table('test_create_seq_table');
+NOTICE:  creating a new table for test_seq_ddl.test_create_seq_table
+NOTICE:  moving the data of test_seq_ddl.test_create_seq_table
+NOTICE:  dropping the old test_seq_ddl.test_create_seq_table
+NOTICE:  renaming the new table to test_seq_ddl.test_create_seq_table
+ undistribute_table
+---------------------------------------------------------------------
+
+(1 row)
+
 RESET citus.multi_shard_modify_mode;
 BEGIN;
     SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     select create_distributed_table('test_create_seq_table' ,'a');
-ERROR:  cannot distribute "test_create_seq_table" in sequential mode because it is not empty
-HINT:  If you have manually set citus.multi_shard_modify_mode to 'sequential', try with 'parallel' option. If that is not the case, try distributing local tables when they are empty.
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_seq_ddl.test_create_seq_table$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 ROLLBACK;
+-- trigger switch-over when using single connection per worker
+BEGIN;
+SET citus.next_shard_id TO 16900;
+SET LOCAL citus.shard_count TO 4;
+SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
+CREATE UNLOGGED TABLE trigger_switchover(a int, b int, c int, d int, e int, f int, g int, h int);
+INSERT INTO trigger_switchover
+  SELECT s AS a, s AS b, s AS c, s AS d, s AS e, s AS f, s AS g, s AS h FROM generate_series(1,250000) s;
+SELECT create_distributed_table('trigger_switchover','a');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$test_seq_ddl.trigger_switchover$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+ABORT;
 SET search_path TO 'public';
 DROP SCHEMA test_seq_ddl CASCADE;
 NOTICE:  drop cascades to 11 other objects
