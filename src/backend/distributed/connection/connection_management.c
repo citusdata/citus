@@ -1429,7 +1429,7 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 	 * escalating the number of cached connections. We can recognize such backends
 	 * from their application name.
 	 */
-	return IsCitusInitiatedRemoteBackend() ||
+	return (IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
 		   connection->initilizationState != POOL_STATE_INITIALIZED ||
 		   cachedConnectionCount >= MaxCachedConnectionsPerWorker ||
 		   connection->forceCloseAtTransactionEnd ||
@@ -1442,11 +1442,22 @@ ShouldShutdownConnection(MultiConnection *connection, const int cachedConnection
 
 
 /*
+ * IsRebalancerInitiatedBackend returns true if we are in a backend that citus
+ * rebalancer initiated.
+ */
+bool
+IsRebalancerInternalBackend(void)
+{
+	return application_name && strcmp(application_name, CITUS_REBALANCER_NAME) == 0;
+}
+
+
+/*
  * IsCitusInitiatedRemoteBackend returns true if we are in a backend that citus
  * initiated via remote connection.
  */
 bool
-IsCitusInitiatedRemoteBackend(void)
+IsCitusInternalBackend(void)
 {
 	return application_name && strcmp(application_name, CITUS_APPLICATION_NAME) == 0;
 }

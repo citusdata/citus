@@ -2636,7 +2636,8 @@ EnsureCoordinatorInitiatedOperation(void)
 	 * check. The other two checks are to ensure that the operation is initiated
 	 * by the coordinator.
 	 */
-	if (!IsCitusInitiatedRemoteBackend() || !MyBackendIsInDisributedTransaction() ||
+	if (!(IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
+		!MyBackendIsInDisributedTransaction() ||
 		GetLocalGroupId() == COORDINATOR_GROUP_ID)
 	{
 		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),

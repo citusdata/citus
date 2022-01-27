@@ -260,7 +260,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		ereport(DEBUG4, (errmsg("function is distributed")));
 	}
 
-	if (IsCitusInitiatedRemoteBackend())
+	if (IsCitusInternalBackend())
 	{
 		bool isFunctionForceDelegated = procedure->forceDelegation;
 
