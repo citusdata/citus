@@ -106,6 +106,7 @@ static RoleSpec * GetRoleSpecObjectForGrantStmt(Oid roleOid);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
 static void SetLocalEnableDependencyCreation(bool state);
+static void SetLocalReplicateReferenceTablesOnActivate(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
 static void MetadataSyncSigAlrmHandler(SIGNAL_ARGS);
@@ -162,7 +163,12 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 
 	char *nodeNameString = text_to_cstring(nodeName);
 
-	SyncNodeMetadataToNode(nodeNameString, nodePort);
+	bool prevReplicateRefTablesOnActivate = ReplicateReferenceTablesOnActivate;
+	SetLocalReplicateReferenceTablesOnActivate(false);
+
+	ActivateNode(nodeNameString, nodePort);
+
+	SetLocalReplicateReferenceTablesOnActivate(prevReplicateRefTablesOnActivate);
 
 	PG_RETURN_VOID();
 }
@@ -516,12 +522,28 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 
 	char *userName = CurrentUserName();
 
-	/* generate the queries which drop the metadata */
-	List *dropMetadataCommandList = NodeMetadataDropCommands();
-
+	/*
+	 * Detach partitions, break dependencies between sequences and table then
+	 * remove shell tables first.
+	 */
+	List *dropMetadataCommandList = DetachPartitionCommandList();
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
-									  LocalGroupIdUpdateCommand(0));
+									  BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND);
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  REMOVE_ALL_SHELL_TABLES_COMMAND);
+	dropMetadataCommandList = list_concat(dropMetadataCommandList,
+										  NodeMetadataDropCommands());
+	dropMetadataCommandList = lappend(dropMetadataCommandList, LocalGroupIdUpdateCommand(
+										  0));
 
+	/* remove all dist table and object/table related metadata afterwards */
+	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_PARTITIONS);
+	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_SHARDS);
+	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_PLACEMENTS);
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  DELETE_ALL_DISTRIBUTED_OBJECTS);
+
+	EnsureSequentialModeMetadataOperations();
 	SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
 		workerNode->workerName,
 		workerNode->workerPort,
@@ -1849,6 +1871,20 @@ void
 SetLocalEnableDependencyCreation(bool state)
 {
 	set_config_option("citus.enable_object_propagation", state == true ? "on" : "off",
+					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
+}
+
+
+/*
+ * SetLocalReplicateReferenceTablesOnActivate sets the
+ * replicate_reference_tables_on_activate locally
+ */
+void
+SetLocalReplicateReferenceTablesOnActivate(bool state)
+{
+	set_config_option("citus.replicate_reference_tables_on_activate",
+					  state == true ? "on" : "off",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 }

@@ -92,7 +92,6 @@ typedef struct NodeMetadata
 } NodeMetadata;
 
 /* local function forward declarations */
-static int ActivateNode(char *nodeName, int nodePort);
 static void RemoveNodeFromCluster(char *nodeName, int32 nodePort);
 static void ErrorIfNodeContainsNonRemovablePlacements(WorkerNode *workerNode);
 static bool PlacementHasActivePlacementOnAnotherGroup(GroupShardPlacement
@@ -799,7 +798,6 @@ SyncObjectDependenciesToNode(WorkerNode *workerNode)
 		return;
 	}
 
-	EnsureNoModificationsHaveBeenDone();
 	Assert(ShouldPropagate());
 
 	List *commandList = SyncObjectDependenciesCommandList(workerNode);
@@ -1054,7 +1052,7 @@ PrimaryNodeForGroup(int32 groupId, bool *groupContainsNodes)
  * includes only replicating the reference tables and setting isactive column of the
  * given node.
  */
-static int
+int
 ActivateNode(char *nodeName, int nodePort)
 {
 	bool isActive = true;
