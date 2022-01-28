@@ -60,8 +60,6 @@ extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int sha
 extern TableDDLCommand * TruncateTriggerCreateCommand(Oid relationId);
 extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
 extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
-extern void CreateShellTableOnWorkers(Oid relationId);
-extern void CreateTableMetadataOnWorkers(Oid relationId);
 extern List * DetachPartitionCommandList(void);
 extern BackgroundWorkerHandle * SpawnSyncNodeMetadataToNodes(Oid database, Oid owner);
 extern void SyncNodeMetadataToNodesMain(Datum main_arg);

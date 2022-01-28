@@ -88,6 +88,8 @@ static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
+static void CreateShellTableOnWorkers(Oid relationId);
+static void CreateTableMetadataOnWorkers(Oid relationId);
 static bool ShouldSyncTableMetadataInternal(bool hashDistributed,
 											bool citusTableWithNoDistKey);
 static bool SyncNodeMetadataSnapshotToNode(WorkerNode *workerNode, bool raiseOnError);
@@ -264,6 +266,13 @@ SyncCitusTableMetadata(Oid relationId)
 	CreateShellTableOnWorkers(relationId);
 	CreateTableMetadataOnWorkers(relationId);
 	CreateInterTableRelationshipOfRelationOnWorkers(relationId);
+
+	if (!IsTableOwnedByExtension(relationId))
+	{
+		ObjectAddress relationAddress = { 0 };
+		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
+		MarkObjectDistributed(&relationAddress);
+	}
 }
 
 
@@ -695,9 +704,7 @@ DistributedObjectMetadataSyncCommandList(void)
 
 /*
  * CitusTableMetadataCreateCommandList returns the set of commands necessary to
- * create the given distributed table metadata on a worker. It includes truncate
- * trigger as well, since we need to create truncate trigger for tables owned by
- * extensions and use it for handling metadata while truncating tables.
+ * create the given distributed table metadata on a worker.
  */
 static List *
 CitusTableMetadataCreateCommandList(Oid relationId)
@@ -2000,52 +2007,33 @@ InterTableRelationshipOfRelationCommandList(Oid relationId)
  * CreateShellTableOnWorkers creates the shell table on each worker node with metadata
  * including sequence dependency and truncate triggers.
  */
-void
+static void
 CreateShellTableOnWorkers(Oid relationId)
 {
-	List *commandList = NIL;
-
-	/*
-	 * If the table is owned by an extension we only create truncate trigger,
-	 * otherwise we create shell table and sequence dependency as well.
-	 */
-	bool tableOwnedByExtension = IsTableOwnedByExtension(relationId);
-	if (!tableOwnedByExtension)
+	if (IsTableOwnedByExtension(relationId))
 	{
-		IncludeSequenceDefaults includeSequenceDefaults =
-			WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
-
-		bool creatingShellTableOnRemoteNode = true;
-		List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-															  includeSequenceDefaults,
-															  creatingShellTableOnRemoteNode);
-		TableDDLCommand *tableDDLCommand = NULL;
-		foreach_ptr(tableDDLCommand, tableDDLCommands)
-		{
-			Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
-			commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
-		}
+		return;
 	}
 
-	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
+	List *commandList = list_make1(DISABLE_DDL_PROPAGATION);
+
+	IncludeSequenceDefaults includeSequenceDefaults = WORKER_NEXTVAL_SEQUENCE_DEFAULTS;
+	bool creatingShellTableOnRemoteNode = true;
+	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+														  includeSequenceDefaults,
+														  creatingShellTableOnRemoteNode);
+
+	TableDDLCommand *tableDDLCommand = NULL;
+	foreach_ptr(tableDDLCommand, tableDDLCommands)
+	{
+		Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+		commandList = lappend(commandList, GetTableDDLCommand(tableDDLCommand));
+	}
 
 	const char *command = NULL;
 	foreach_ptr(command, commandList)
 	{
 		SendCommandToWorkersWithMetadata(command);
-	}
-
-	/* once shell table is created, mark the object as distributed as well */
-	if (!tableOwnedByExtension)
-	{
-		/*
-		 * Mark the table object as distributed at the end as we need to propagate
-		 * that table to new nodes anyway.
-		 */
-		ObjectAddress relationAddress = { 0 };
-		ObjectAddressSet(relationAddress, RelationRelationId, relationId);
-		MarkObjectDistributed(&relationAddress);
 	}
 }
 
@@ -2057,7 +2045,7 @@ CreateShellTableOnWorkers(Oid relationId)
  * to prevent recursive propagation, DDL propagation on workers are disabled with a
  * `SET citus.enable_ddl_propagation TO off;` command.
  */
-void
+static void
 CreateTableMetadataOnWorkers(Oid relationId)
 {
 	List *commandList = CitusTableMetadataCreateCommandList(relationId);
