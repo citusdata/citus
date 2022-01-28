@@ -244,9 +244,7 @@ BEGIN;
 	SELECT create_distributed_table('test_table_rep', 'a');
 ROLLBACK;
 
--- multi-shard commands are allowed with start_metadata_sync
--- as long as the start_metadata_sync_to_node executed
--- when it is OK to switch to sequential execution
+-- multi-shard commands are not allowed with start_metadata_sync
 BEGIN;
 	-- sync at the start of the tx
 	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
@@ -262,9 +260,7 @@ BEGIN;
 	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 ROLLBACK;
 
--- multi-shard commands are allowed with start_metadata_sync
--- as long as the start_metadata_sync_to_node executed
--- when it is OK to switch to sequential execution
+-- multi-shard commands are not allowed with start_metadata_sync
 BEGIN;
 	-- sync at the start of the tx
 	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);

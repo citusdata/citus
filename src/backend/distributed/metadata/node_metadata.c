@@ -787,7 +787,7 @@ SyncDistributedObjectsToNode(WorkerNode *workerNode)
 		return;
 	}
 
-	EnsureSequentialModeMetadataOperations();
+	EnsureNoModificationsHaveBeenDone();
 	Assert(ShouldPropagate());
 
 	List *commandList = SyncDistributedObjectsCommandList(workerNode);
