@@ -1334,36 +1334,6 @@ LocalGroupIdUpdateCommand(int32 groupId)
 
 
 /*
- * SequenceDDLCommandsForTable returns a list of commands which create sequences (and
- * their schemas) to run on workers before creating the relation. The sequence creation
- * commands are wrapped with a `worker_apply_sequence_command` call, which sets the
- * sequence space uniquely for each worker. Notice that this function is relevant only
- * during metadata propagation to workers and adds nothing to the list of sequence
- * commands if none of the workers is marked as receiving metadata changes.
- */
-List *
-SequenceDDLCommandsForTable(Oid relationId)
-{
-	List *allSequencesDDLList = NIL;
-
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-
-	char *ownerName = TableOwner(relationId);
-
-	Oid sequenceOid = InvalidOid;
-	foreach_oid(sequenceOid, dependentSequenceList)
-	{
-		List *sequenceDDLCommands = DDLCommandsForSequence(sequenceOid, ownerName);
-		allSequencesDDLList = list_concat(allSequencesDDLList, sequenceDDLCommands);
-	}
-
-	return allSequencesDDLList;
-}
-
-
-/*
  * DDLCommandsForSequence returns the DDL commands needs to be run to create the
  * sequence and alter the owner to the given owner name.
  */
