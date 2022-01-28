@@ -2,7 +2,6 @@
 -- Note in PG12 we use CREATE OR REPLACE AGGREGATE, thus the renaming does not occur
 
 CREATE SCHEMA proc_conflict;
-SELECT run_command_on_workers($$CREATE SCHEMA proc_conflict;$$);
 
 \c - - - :worker_1_port
 SET search_path TO proc_conflict;

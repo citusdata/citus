@@ -520,19 +520,11 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line XX at RAISE
  (localhost,57638,t,"DROP FUNCTION")
 (2 rows)
 
+set citus.enable_ddl_propagation to on;
 -- create schema with weird names
 CREATE SCHEMA "CiTuS.TeeN";
 CREATE SCHEMA "CiTUS.TEEN2";
-SELECT run_command_on_workers($$
-    CREATE SCHEMA IF NOT EXISTS "CiTuS.TeeN";
-    CREATE SCHEMA IF NOT EXISTS "CiTUS.TEEN2";
-$$);
-       run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
-(2 rows)
-
+set citus.enable_ddl_propagation to off;
 -- create table with weird names
 CREATE FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"() RETURNS TEXT
     AS $$ SELECT 'test function without params' $$
@@ -737,15 +729,4 @@ SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA "CiTuS.TeeN" CASCADE;
 DROP SCHEMA "CiTUS.TEEN2" CASCADE;
 DROP SCHEMA function_tests CASCADE;
-SELECT run_command_on_workers($$
-    DROP SCHEMA "CiTuS.TeeN" CASCADE;
-    DROP SCHEMA "CiTUS.TEEN2" CASCADE;
-    DROP SCHEMA function_tests CASCADE;
-$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 DROP ROLE function_role;

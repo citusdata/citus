@@ -412,7 +412,7 @@ SELECT * FROM run_command_on_workers($$ SELECT distribution_argument_index FROM 
  localhost |    57638 | t       | 1
 (2 rows)
 
--- Show that dropping schema doesn't affect the worker node
+-- Show that the schema is dropped on worker node as well
 DROP SCHEMA local_schema CASCADE;
 NOTICE:  drop cascades to 3 other objects
 DETAIL:  drop cascades to function plpgsql_dist_function(text)
@@ -426,8 +426,8 @@ SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as
 SELECT * FROM run_command_on_workers($$SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from citus.pg_dist_object) as obj_identifiers where obj_identifier::text like '%{local_schema}%';$$) ORDER BY 1,2;
  nodename  | nodeport | success |           result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | (schema,{local_schema},{})
- localhost |    57638 | t       | (schema,{local_schema},{})
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
 (2 rows)
 
 -- Show that extension and dependent sequence also created and marked as distributed

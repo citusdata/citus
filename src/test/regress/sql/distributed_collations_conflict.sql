@@ -1,5 +1,4 @@
 CREATE SCHEMA collation_conflict;
-SELECT run_command_on_workers($$CREATE SCHEMA collation_conflict;$$);
 
 \c - - - :worker_1_port
 SET search_path TO collation_conflict;

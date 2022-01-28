@@ -5,6 +5,13 @@ SET citus.next_placement_id TO 1500000;
 -- supress notice messages to make sure that the tests
 -- do not diverge with enterprise
 SET client_min_messages TO WARNING;
+SELECT run_command_on_workers($$CREATE ROLE metadata_sync_helper_role WITH LOGIN;$$);
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
 CREATE ROLE metadata_sync_helper_role WITH LOGIN;
 GRANT ALL ON SCHEMA metadata_sync_helpers TO metadata_sync_helper_role;
 RESET client_min_messages;
@@ -40,26 +47,10 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
 ERROR:  This is an internal Citus function can only be used in a distributed transaction
 ROLLBACK;
--- connect back as super user, and then connect to the worker
--- with the superuser to make sure we can ingest metadata with
--- a regular user under the certain conditions
 \c - postgres -
--- we don't need the table/schema anymore
-SET client_min_messages TO ERROR;
-DROP SCHEMA metadata_sync_helpers CASCADE;
-DROP ROLE metadata_sync_helper_role;
 \c - - - :worker_1_port
-CREATE SCHEMA metadata_sync_helpers;
 SET search_path TO metadata_sync_helpers;
 CREATE TABLE test(col_1 int, col_2 int);
--- supress notice messages to make sure that the tests
--- do not diverge with enterprise
-SET client_min_messages TO WARNING;
-SET citus.enable_ddl_propagation TO OFF;
-CREATE ROLE metadata_sync_helper_role WITH LOGIN;
-GRANT ALL ON SCHEMA metadata_sync_helpers TO metadata_sync_helper_role;
-RESET client_min_messages;
-RESET citus.enable_ddl_propagation;
 -- connect back with the regular user
 \c - metadata_sync_helper_role - :worker_1_port
 SET search_path TO metadata_sync_helpers;
@@ -596,7 +587,7 @@ ROLLBACK;
 -- Now let's check valid pg_dist_object updates
 -- check with non-existing object type
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
- SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
  assign_distributed_transaction_id
 ---------------------------------------------------------------------
 
@@ -640,7 +631,7 @@ ERROR:  colocationId must be a positive number
 ROLLBACK;
 -- check with non-existing object
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
- SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
  assign_distributed_transaction_id
 ---------------------------------------------------------------------
 
@@ -656,7 +647,7 @@ ROLLBACK;
 -- since citus_internal_add_object_metadata is strict function returns NULL
 -- if any parameter is NULL
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
- SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
  assign_distributed_transaction_id
 ---------------------------------------------------------------------
 
@@ -1364,4 +1355,7 @@ SET client_min_messages TO ERROR;
 SET citus.enable_ddl_propagation TO OFF;
 DROP OWNED BY metadata_sync_helper_role;
 DROP ROLE metadata_sync_helper_role;
+\c - - - :master_port
+-- cleanup
+SET client_min_messages TO ERROR;
 DROP SCHEMA metadata_sync_helpers CASCADE;

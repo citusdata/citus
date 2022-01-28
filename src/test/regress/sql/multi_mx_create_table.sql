@@ -63,10 +63,6 @@ CREATE TYPE order_side_mx AS ENUM ('buy', 'sell');
 CREATE TABLE citus_local_table(a int);
 SELECT citus_add_local_table_to_metadata('citus_local_table');
 
--- create schema to test schema support
-CREATE SCHEMA citus_mx_test_schema_join_1;
-CREATE SCHEMA citus_mx_test_schema_join_2;
-
 -- create UDFs in worker node
 CREATE OR REPLACE FUNCTION simpleTestFunction(theValue integer)
     RETURNS text AS
@@ -106,11 +102,6 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 
 -- now create required stuff in the worker 2
 \c - - - :worker_2_port
-
--- create schema to test schema support
-CREATE SCHEMA citus_mx_test_schema_join_1;
-CREATE SCHEMA citus_mx_test_schema_join_2;
-
 
 -- create UDF
 CREATE OR REPLACE FUNCTION simpleTestFunction(theValue integer)

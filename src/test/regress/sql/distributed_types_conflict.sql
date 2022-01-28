@@ -1,7 +1,6 @@
 SET citus.next_shard_id TO 20020000;
 
 CREATE SCHEMA type_conflict;
-SELECT run_command_on_workers($$CREATE SCHEMA type_conflict;$$);
 
 -- create a type on a worker that should not cause data loss once overwritten with a type
 -- from the coordinator
