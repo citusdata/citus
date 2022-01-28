@@ -8,7 +8,7 @@ OBJS += \
 MODULE_big = columnar
 
 
-PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include 
+PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 
 
 ifdef USE_PGXS

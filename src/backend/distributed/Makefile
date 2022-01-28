@@ -6,6 +6,7 @@ safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
 safestringlib_builddir = $(citus_top_builddir)/vendor/safestringlib/build
 safestringlib_a = $(safestringlib_builddir)/libsafestring_static.a
 safestringlib_sources = $(wildcard $(safestringlib_srcdir)/safeclib/*)
+
 MODULE_big = citus
 EXTENSION = citus
 
@@ -31,7 +32,7 @@ OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 
 # be explicit about the default target
-all: 
+all:
 
 NO_PGXS = 1
 
@@ -85,7 +86,7 @@ endif
 cleanup-before-install:
 	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus*
 
-install: cleanup-before-install 
+install: cleanup-before-install
 
 # install and install-downgrades should be run sequentially
 install-all: install
