@@ -28,6 +28,7 @@
 #include "commands/extension.h"
 #include "commands/sequence.h"
 #include "distributed/citus_ruleutils.h"
+#include "distributed/commands.h"
 #include "distributed/commands/multi_copy.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/connection_management.h"
@@ -470,30 +471,9 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 	 * stayed on that node after a rollbacked create_distributed_table operation.
 	 * We must change it's name first to create the sequence with the correct type.
 	 */
-	Oid sequenceOid;
 	CreateSeqStmt *createSequenceStatement = (CreateSeqStmt *) commandNode;
-	char *sequenceName = createSequenceStatement->sequence->relname;
-	char *sequenceSchema = createSequenceStatement->sequence->schemaname;
-
-	RangeVarGetAndCheckCreationNamespace(createSequenceStatement->sequence, NoLock,
-										 &sequenceOid);
-	if (OidIsValid(sequenceOid))
-	{
-		Form_pg_sequence pgSequenceForm = pg_get_sequencedef(sequenceOid);
-		if (pgSequenceForm->seqtypid != sequenceTypeId)
-		{
-			ObjectAddress sequenceAddress = { 0 };
-			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-
-			char *newName = GenerateBackupNameForCollision(&sequenceAddress);
-
-			RenameStmt *renameStmt = CreateRenameStatement(&sequenceAddress, newName);
-			const char *sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
-			ProcessUtilityParseTree((Node *) renameStmt, sqlRenameStmt,
-									PROCESS_UTILITY_QUERY,
-									NULL, None_Receiver, NULL);
-		}
-	}
+	RenameExistingSequenceWithDifferentTypeIfExists(createSequenceStatement->sequence,
+													sequenceTypeId);
 
 	/* run the CREATE SEQUENCE command */
 	ProcessUtilityParseTree(commandNode, commandString, PROCESS_UTILITY_QUERY, NULL,
@@ -502,6 +482,9 @@ worker_apply_sequence_command(PG_FUNCTION_ARGS)
 
 	Oid sequenceRelationId = RangeVarGetRelid(createSequenceStatement->sequence,
 											  AccessShareLock, false);
+	char *sequenceName = createSequenceStatement->sequence->relname;
+	char *sequenceSchema = createSequenceStatement->sequence->schemaname;
+
 	Assert(sequenceRelationId != InvalidOid);
 
 	AlterSequenceMinMax(sequenceRelationId, sequenceSchema, sequenceName, sequenceTypeId);

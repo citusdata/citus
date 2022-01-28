@@ -11,6 +11,7 @@
 
 #include "postgres.h"
 
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
@@ -23,6 +24,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/worker_create_or_replace.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -696,5 +698,37 @@ GenerateBackupNameForSequenceCollision(const ObjectAddress *address)
 		}
 
 		count++;
+	}
+}
+
+
+/*
+ * RenameExistingSequenceWithDifferentTypeIfExists renames the sequence's type if
+ * that sequence exists and the desired sequence type is different than it's type.
+ */
+void
+RenameExistingSequenceWithDifferentTypeIfExists(RangeVar *sequence, Oid desiredSeqTypeId)
+{
+	Oid sequenceOid;
+	RangeVarGetAndCheckCreationNamespace(sequence, NoLock, &sequenceOid);
+
+	if (OidIsValid(sequenceOid))
+	{
+		Form_pg_sequence pgSequenceForm = pg_get_sequencedef(sequenceOid);
+		if (pgSequenceForm->seqtypid != desiredSeqTypeId)
+		{
+			ObjectAddress sequenceAddress = { 0 };
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+
+			char *newName = GenerateBackupNameForCollision(&sequenceAddress);
+
+			RenameStmt *renameStmt = CreateRenameStatement(&sequenceAddress, newName);
+			const char *sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
+			ProcessUtilityParseTree((Node *) renameStmt, sqlRenameStmt,
+									PROCESS_UTILITY_QUERY,
+									NULL, None_Receiver, NULL);
+
+			CommandCounterIncrement();
+		}
 	}
 }
