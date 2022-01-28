@@ -437,7 +437,26 @@ SELECT nextval('seq_14');
 
 \c - - - :master_port
 
+-- Show that sequence and its dependency schema will be propagated if a distributed
+-- table with default column is added
+CREATE SCHEMA test_schema_for_sequence_default_propagation;
+CREATE SEQUENCE test_schema_for_sequence_default_propagation.seq_10;
+
+-- Both should return 0 rows
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation.seq_10'::regclass);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation'::regnamespace);
+
+-- Create distributed table with default column to propagate dependencies
+CREATE TABLE test_seq_dist(a int, x BIGINT DEFAULT nextval('test_schema_for_sequence_default_propagation.seq_10'));
+SELECT create_distributed_table('test_seq_dist', 'a');
+
+-- Both sequence and dependency schema should be distributed
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation.seq_10'::regclass);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation'::regnamespace);
+
 -- clean up
+DROP SCHEMA test_schema_for_sequence_default_propagation CASCADE;
+DROP TABLE test_seq_dist;
 DROP TABLE sequence_default.seq_test_7_par;
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA sequence_default CASCADE;
