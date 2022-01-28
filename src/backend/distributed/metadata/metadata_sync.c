@@ -150,7 +150,7 @@ static bool got_SIGALRM = false;
 
 /*
  * start_metadata_sync_to_node function sets hasmetadata column of the given
- * node to true, and then synchronizes the metadata on the node.
+ * node to true, and then activate node without replicating reference tables.
  */
 Datum
 start_metadata_sync_to_node(PG_FUNCTION_ARGS)
@@ -169,6 +169,7 @@ start_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	SetLocalReplicateReferenceTablesOnActivate(false);
 
 	ActivateNode(nodeNameString, nodePort);
+	TransactionModifiedNodeMetadata = true;
 
 	SetLocalReplicateReferenceTablesOnActivate(prevReplicateRefTablesOnActivate);
 
@@ -369,6 +370,8 @@ stop_metadata_sync_to_node(PG_FUNCTION_ARGS)
 	workerNode = SetWorkerColumn(workerNode, Anum_pg_dist_node_metadatasynced,
 								 BoolGetDatum(false));
 
+	TransactionModifiedNodeMetadata = true;
+
 	PG_RETURN_VOID();
 }
 
@@ -536,8 +539,8 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 									  REMOVE_ALL_SHELL_TABLES_COMMAND);
 	dropMetadataCommandList = list_concat(dropMetadataCommandList,
 										  NodeMetadataDropCommands());
-	dropMetadataCommandList = lappend(dropMetadataCommandList, LocalGroupIdUpdateCommand(
-										  0));
+	dropMetadataCommandList = lappend(dropMetadataCommandList,
+									  LocalGroupIdUpdateCommand(0));
 
 	/* remove all dist table and object/table related metadata afterwards */
 	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_PARTITIONS);
@@ -546,7 +549,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  DELETE_ALL_DISTRIBUTED_OBJECTS);
 
-	EnsureSequentialModeMetadataOperations();
+	Assert(superuser());
 	SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
 		workerNode->workerName,
 		workerNode->workerPort,
