@@ -660,29 +660,18 @@ PgDistTableMetadataSyncCommandList(void)
 	/* create pg_dist_partition, pg_dist_shard and pg_dist_placement entries */
 	foreach_ptr(cacheEntry, propagatedTableList)
 	{
-		Oid clusteredTableId = cacheEntry->relationId;
-
-		/* add the table metadata command first */
-		char *metadataCommand = DistributionCreateCommand(cacheEntry);
-		metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
-											  metadataCommand);
-
-		/* add the pg_dist_shard{,placement} entries */
-		List *shardIntervalList = LoadShardIntervalList(clusteredTableId);
-		List *shardCreateCommandList = ShardListInsertCommand(shardIntervalList);
+		List *tableMetadataCreateCommandList =
+			CitusTableMetadataCreateCommandList(cacheEntry->relationId);
 
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  shardCreateCommandList);
+												  tableMetadataCreateCommandList);
 	}
 
 	/* As the last step, propagate the pg_dist_object entities */
-	if (ShouldPropagate())
-	{
-		List *distributedObjectSyncCommandList =
-			DistributedObjectMetadataSyncCommandList();
-		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
-												  distributedObjectSyncCommandList);
-	}
+	Assert(ShouldPropagate());
+	List *distributedObjectSyncCommandList = DistributedObjectMetadataSyncCommandList();
+	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+											  distributedObjectSyncCommandList);
 
 	metadataSnapshotCommandList = lcons(DISABLE_DDL_PROPAGATION,
 										metadataSnapshotCommandList);

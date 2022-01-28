@@ -83,7 +83,6 @@
 char *EnableManualMetadataChangesForUser = "";
 
 
-static List * CitusTableMetadataCreateCommandList(Oid relationId);
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
 static char * SchemaOwnerName(Oid objectId);
@@ -706,7 +705,7 @@ DistributedObjectMetadataSyncCommandList(void)
  * CitusTableMetadataCreateCommandList returns the set of commands necessary to
  * create the given distributed table metadata on a worker.
  */
-static List *
+List *
 CitusTableMetadataCreateCommandList(Oid relationId)
 {
 	CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(relationId);
