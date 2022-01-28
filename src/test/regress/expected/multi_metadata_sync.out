@@ -60,9 +60,11 @@ SELECT unnest(activate_node_snapshot()) order by 1;
                                                                                                                                                                              unnest
 ---------------------------------------------------------------------
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
- DELETE FROM pg_dist_partition CASCADE
- DELETE FROM pg_dist_placement CASCADE
- DELETE FROM pg_dist_shard CASCADE
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
  GRANT CREATE ON SCHEMA public TO postgres;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
@@ -82,8 +84,6 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
  UPDATE pg_dist_local_group SET groupid = 1
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
 (27 rows)
@@ -125,9 +125,11 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  ALTER TABLE public.mx_test_table OWNER TO postgres
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM pg_dist_partition CASCADE
- DELETE FROM pg_dist_placement CASCADE
- DELETE FROM pg_dist_shard CASCADE
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
  GRANT CREATE ON SCHEMA public TO postgres;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
@@ -152,8 +154,6 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
  UPDATE pg_dist_local_group SET groupid = 1
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
@@ -172,9 +172,11 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE INDEX mx_index ON public.mx_test_table USING btree (col_2)
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM pg_dist_partition CASCADE
- DELETE FROM pg_dist_placement CASCADE
- DELETE FROM pg_dist_shard CASCADE
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
  GRANT CREATE ON SCHEMA public TO postgres;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
@@ -199,8 +201,6 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
  UPDATE pg_dist_local_group SET groupid = 1
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
@@ -221,9 +221,11 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM pg_dist_partition CASCADE
- DELETE FROM pg_dist_placement CASCADE
- DELETE FROM pg_dist_shard CASCADE
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
  GRANT CREATE ON SCHEMA public TO postgres;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
@@ -248,8 +250,6 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
  UPDATE pg_dist_local_group SET groupid = 1
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_testing_schema', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
@@ -276,9 +276,11 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM pg_dist_partition CASCADE
- DELETE FROM pg_dist_placement CASCADE
- DELETE FROM pg_dist_shard CASCADE
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
  GRANT CREATE ON SCHEMA public TO postgres;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
@@ -303,8 +305,6 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
  UPDATE pg_dist_local_group SET groupid = 1
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_testing_schema', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
@@ -324,9 +324,11 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM pg_dist_partition CASCADE
- DELETE FROM pg_dist_placement CASCADE
- DELETE FROM pg_dist_shard CASCADE
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
  GRANT CREATE ON SCHEMA public TO postgres;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
@@ -351,8 +353,6 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
  UPDATE pg_dist_local_group SET groupid = 1
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_testing_schema', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
@@ -1850,9 +1850,11 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE TABLE public.dist_table_1 (a integer)
  CREATE TABLE public.mx_ref (col_1 integer, col_2 text)
  CREATE TABLE public.test_table (id integer DEFAULT worker_nextval('public.mx_test_sequence_0'::regclass), id2 integer DEFAULT worker_nextval('public.mx_test_sequence_1'::regclass))
- DELETE FROM pg_dist_partition CASCADE
- DELETE FROM pg_dist_placement CASCADE
- DELETE FROM pg_dist_shard CASCADE
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
  GRANT CREATE ON SCHEMA public TO PUBLIC;
  GRANT CREATE ON SCHEMA public TO postgres;
  GRANT USAGE ON SCHEMA public TO PUBLIC;
@@ -1889,8 +1891,6 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
  SET citus.enable_ddl_propagation TO 'on'
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
  UPDATE pg_dist_local_group SET groupid = 1
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_testing_schema', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_test_schema_1', 'mx_table_1']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_test_schema_2', 'mx_table_2']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'mx_ref']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'dist_table_1']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_sequence_0']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_sequence_1']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema_2']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_test_schema_1']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_test_schema_2']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 5, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 5, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 5, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 5, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
