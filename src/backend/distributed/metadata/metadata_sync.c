@@ -1843,7 +1843,7 @@ GetRoleSpecObjectForGrantStmt(Oid roleOid)
 /*
  * SetLocalEnableDependencyCreation sets the enable_object_propagation locally
  */
-void
+static void
 SetLocalEnableDependencyCreation(bool state)
 {
 	set_config_option("citus.enable_object_propagation", state == true ? "on" : "off",
