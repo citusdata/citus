@@ -91,7 +91,7 @@ static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
 static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 											 bool autoConverted);
-static void FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList);
+static void FinalizeCitusLocalTableCreation(Oid relationId);
 
 
 PG_FUNCTION_INFO_V1(citus_add_local_table_to_metadata);
@@ -311,12 +311,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * Ensure that the sequences used in column defaults of the table
 	 * have proper types
 	 */
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(relationId, &attnumList,
-									  &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
-										  attnumList);
+	EnsureRelationHasCompatibleSequenceTypes(relationId);
 
 	/*
 	 * Ensure dependencies exist as we will create shell table on the other nodes
@@ -366,7 +361,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
 
-	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
+	FinalizeCitusLocalTableCreation(shellRelationId);
 }
 
 
@@ -1230,7 +1225,7 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
  * sequences dependent with the table.
  */
 static void
-FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
+FinalizeCitusLocalTableCreation(Oid relationId)
 {
 	/*
 	 * If it is a foreign table, then skip creating citus truncate trigger

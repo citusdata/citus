@@ -113,6 +113,9 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
+static void EnsureDistributedSequencesHaveOneType(Oid relationId,
+												  List *dependentSequenceList,
+												  List *attnumList);
 static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
@@ -434,11 +437,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	 * Ensure that the sequences used in column defaults of the table
 	 * have proper types
 	 */
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
-										  attnumList);
+	EnsureRelationHasCompatibleSequenceTypes(relationId);
 
 	/*
 	 * distributed tables might have dependencies on different objects, since we create
@@ -667,11 +666,27 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 
 
 /*
+ * EnsureRelationHasCompatibleSequenceTypes ensures that sequences used for columns
+ * of the table have compatible types both with the column type on that table and
+ * all other distributed tables' columns they have used for
+ */
+void
+EnsureRelationHasCompatibleSequenceTypes(Oid relationId)
+{
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
+
+	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList, attnumList);
+}
+
+
+/*
  * EnsureDistributedSequencesHaveOneType first ensures that the type of the column
  * in which the sequence is used as default is supported for each sequence in input
  * dependentSequenceList, and then alters the sequence type if not the same with the column type.
  */
-void
+static void
 EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceList,
 									  List *attnumList)
 {

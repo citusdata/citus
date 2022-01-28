@@ -1959,12 +1959,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		 * Before ensuring each dependency exist, update dependent sequences
 		 * types if necessary.
 		 */
-		List *attnumList = NIL;
-		List *dependentSequenceList = NIL;
-		GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList,
-										  0);
-		EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
-											  attnumList);
+		EnsureRelationHasCompatibleSequenceTypes(relationId);
 
 		/* changing a relation could introduce new dependencies */
 		ObjectAddress tableAddress = { 0 };
