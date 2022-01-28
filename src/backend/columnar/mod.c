@@ -33,9 +33,3 @@ _PG_init(void)
 	columnar_init_gucs();
 	columnar_tableam_init();
 }
-
-void
-_PG_fini(void)
-{
-	columnar_tableam_finish();
-}

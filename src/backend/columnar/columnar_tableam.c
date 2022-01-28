@@ -1026,12 +1026,12 @@ columnar_vacuum_rel(Relation rel, VacuumParams *params,
 {
 	if (!CheckCitusVersion(WARNING))
 	{
-	 	/*
-	 	 * Skip if the extension catalogs are not up-to-date, but avoid
-	 	 * erroring during auto-vacuum.
-	 	 */
-	 	return;
-	} 
+		/*
+		 * Skip if the extension catalogs are not up-to-date, but avoid
+		 * erroring during auto-vacuum.
+		 */
+		return;
+	}
 
 	/*
 	 * If metapage version of relation is older, then we hint users to VACUUM

@@ -354,9 +354,10 @@ _PG_init(void)
 	{
 		DoInitialCleanup();
 	}
-	
+
 	load_file("columnar.so", false);
 }
+
 
 /*
  * DoInitialCleanup does cleanup at start time.

@@ -6,7 +6,6 @@ safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
 safestringlib_builddir = $(citus_top_builddir)/vendor/safestringlib/build
 safestringlib_a = $(safestringlib_builddir)/libsafestring_static.a
 safestringlib_sources = $(wildcard $(safestringlib_srcdir)/safeclib/*)
-
 MODULE_big = citus
 EXTENSION = citus
 
