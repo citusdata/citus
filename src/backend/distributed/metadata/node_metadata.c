@@ -106,7 +106,7 @@ static void InsertPlaceholderCoordinatorRecord(void);
 static void InsertNodeRow(int nodeid, char *nodename, int32 nodeport, NodeMetadata
 						  *nodeMetadata);
 static void DeleteNodeRow(char *nodename, int32 nodeport);
-static void SyncObjectDependenciesToNode(WorkerNode *workerNode);
+static void SyncDistributedObjectsToNode(WorkerNode *workerNode);
 static void UpdateLocalGroupIdOnNode(WorkerNode *workerNode);
 static void SyncPgDistTableMetadataToNode(WorkerNode *workerNode);
 static List * InterTableRelationshipCommandList();
@@ -715,7 +715,7 @@ PropagateNodeWideObjectsCommandList()
 
 
 /*
- * SyncObjectDependenciesCommandList returns commands to sync object dependencies
+ * SyncDistributedObjectsCommandList returns commands to sync object dependencies
  * to the given worker node. To be idempotent, it first drops the ones required to be
  * dropped.
  *
@@ -730,7 +730,7 @@ PropagateNodeWideObjectsCommandList()
  * requires it.
  */
 List *
-SyncObjectDependenciesCommandList(WorkerNode *workerNode)
+SyncDistributedObjectsCommandList(WorkerNode *workerNode)
 {
 	List *commandList = NIL;
 
@@ -764,7 +764,7 @@ SyncObjectDependenciesCommandList(WorkerNode *workerNode)
 
 
 /*
- * SyncObjectDependenciesToNode sync the object dependencies to the node. It includes
+ * SyncDistributedObjectsToNode sync the distributed objects to the node. It includes
  * - All dependencies (e.g., types, schemas, sequences)
  * - All shell distributed table
  * - Inter relation between those shell tables
@@ -773,7 +773,7 @@ SyncObjectDependenciesCommandList(WorkerNode *workerNode)
  * since all the dependencies should be present in the coordinator already.
  */
 static void
-SyncObjectDependenciesToNode(WorkerNode *workerNode)
+SyncDistributedObjectsToNode(WorkerNode *workerNode)
 {
 	if (NodeIsCoordinator(workerNode))
 	{
@@ -790,7 +790,7 @@ SyncObjectDependenciesToNode(WorkerNode *workerNode)
 	EnsureSequentialModeMetadataOperations();
 	Assert(ShouldPropagate());
 
-	List *commandList = SyncObjectDependenciesCommandList(workerNode);
+	List *commandList = SyncDistributedObjectsCommandList(workerNode);
 
 	/* send commands to new workers, the current user should be a superuser */
 	Assert(superuser());
@@ -1112,11 +1112,11 @@ ActivateNode(char *nodeName, int nodePort)
 		UpdateLocalGroupIdOnNode(workerNode);
 
 		/*
-		 * Sync object dependencies first. We must sync object dependencies before
+		 * Sync distributed objects first. We must sync distributed objects before
 		 * replicating reference tables to the remote node, as reference tables may
 		 * need such objects.
 		 */
-		SyncObjectDependenciesToNode(workerNode);
+		SyncDistributedObjectsToNode(workerNode);
 
 		/*
 		 * We need to replicate reference tables before syncing node metadata, otherwise
