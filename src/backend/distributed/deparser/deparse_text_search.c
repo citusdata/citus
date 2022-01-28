@@ -210,6 +210,23 @@ DeparseAlterTextSearchConfigurationStmt(Node *node)
 }
 
 
+char *
+DeparseAlterTextSearchConfigurationSchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	appendStringInfo(&buf, "ALTER TEXT SEARCH CONFIGURATION %s SET SCHEMA %s;",
+					 NameListToQuotedString(castNode(List, stmt->object)),
+					 quote_identifier(stmt->newschema));
+
+	return buf.data;
+}
+
+
 static void
 AppendStringInfoTokentypeList(StringInfo buf, List *tokentypes)
 {

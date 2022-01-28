@@ -505,6 +505,14 @@ static DistributeObjectOps TextSearchConfig_Alter = {
 	.address = AlterTextSearchConfigurationStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps TextSearchConfig_AlterObjectSchema = {
+	.deparse = DeparseAlterTextSearchConfigurationSchemaStmt,
+	.qualify = QualifyAlterTextSearchConfigurationSchemaStmt,
+	.preprocess = PreprocessAlterTextSearchConfigurationSchemaStmt,
+	.postprocess = PostprocessAlterTextSearchConfigurationSchemaStmt,
+	.address = AlterTextSearchConfigurationSchemaStmtObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps TextSearchConfig_Define = {
 	.deparse = DeparseCreateTextSearchStmt,
 	.qualify = NULL,
@@ -833,6 +841,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TABLE:
 				{
 					return &Table_AlterObjectSchema;
+				}
+
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_AlterObjectSchema;
 				}
 
 				case OBJECT_TYPE:

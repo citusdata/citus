@@ -123,6 +123,29 @@ QualifyRenameTextSearchConfigurationStmt(Node *node)
 }
 
 
+void
+QualifyAlterTextSearchConfigurationSchemaStmt(Node *node)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
+
+	char *schemaName = NULL;
+	char *objName = NULL;
+	DeconstructQualifiedName(castNode(List, stmt->object), &schemaName, &objName);
+
+	/* fully qualify the cfgname being altered */
+	if (!schemaName)
+	{
+		Oid tsconfigOid = get_ts_config_oid(castNode(List, stmt->object), false);
+		Oid namespaceOid = get_ts_config_namespace(tsconfigOid);
+		schemaName = get_namespace_name(namespaceOid);
+
+		stmt->object = (Node *) list_make2(makeString(schemaName),
+										   makeString(objName));
+	}
+}
+
+
 static Oid
 get_ts_config_namespace(Oid tsconfigOid)
 {

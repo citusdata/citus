@@ -234,6 +234,54 @@ PreprocessRenameTextSearchConfigurationStmt(Node *node, const char *queryString,
 }
 
 
+List *
+PreprocessAlterTextSearchConfigurationSchemaStmt(Node *node, const char *queryString,
+												 ProcessUtilityContext
+												 processUtilityContext)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+	if (!ShouldPropagateObject(&address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	QualifyTreeNode((Node *) stmt);
+
+	const char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+}
+
+
+List *
+PostprocessAlterTextSearchConfigurationSchemaStmt(Node *node, const char *queryString)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt,
+														  stmt->missing_ok);
+
+	if (!ShouldPropagateObject(&address))
+	{
+		return NIL;
+	}
+
+	/* dependencies have changed (schema) let's ensure they exist */
+	EnsureDependenciesExistOnAllNodes(&address);
+
+	return NIL;
+}
+
+
 static DefineStmt *
 GetTextSearchConfigDefineStmt(Oid tsconfigOid)
 {
@@ -480,6 +528,50 @@ AlterTextSearchConfigurationStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, TSConfigRelationId, objid);
 	return address;
+}
+
+
+ObjectAddress
+AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node, bool missing_ok)
+{
+	AlterObjectSchemaStmt *stmt = castNode(AlterObjectSchemaStmt, node);
+	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
+
+	Oid objid = get_ts_config_oid(castNode(List, stmt->object), true);
+
+	if (!OidIsValid(objid))
+	{
+		/*
+		 * couldn't find the text search configuration, might have already been moved to
+		 * the new schema, we construct a new sequence name that uses the new schema to
+		 * search in.
+		 */
+		char *schemaname = NULL;
+		char *config_name = NULL;
+		DeconstructQualifiedName(castNode(List, stmt->object), &schemaname, &config_name);
+
+		char *newSchemaName = stmt->newschema;
+		List *names = list_make2(makeString(newSchemaName), makeString(config_name));
+		objid = get_ts_config_oid(names, true);
+
+		if (!missing_ok && !OidIsValid(objid))
+		{
+			/*
+			 * if the text search config id is still invalid we couldn't find it, error
+			 * with the same message postgres would error with if missing_ok is false
+			 * (not ok to miss)
+			 */
+
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("text search configuration \"%s\" does not exist",
+							NameListToString(castNode(List, stmt->object)))));
+		}
+	}
+
+	ObjectAddress sequenceAddress = { 0 };
+	ObjectAddressSet(sequenceAddress, TSConfigRelationId, objid);
+	return sequenceAddress;
 }
 
 
