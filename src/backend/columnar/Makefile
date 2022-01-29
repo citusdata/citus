@@ -1,5 +1,6 @@
+citus_subdir = src/backend/columnar
 safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
-columnar_srcdir = $(citus_abs_top_srcdir)/src/backend/columnar
+columnar_srcdir = $(citus_subdir)/src/backend/columnar
 SUBDIRS = . safeclib
 SUBDIRS +=
 OBJS += \
