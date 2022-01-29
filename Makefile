@@ -15,8 +15,9 @@ all: extension
 
 #build columnar only
 columnar:
+	mkdir -p $(citus_top_builddir)/src/backend/columnar/safeclib
 	$(MAKE) -C src/backend/columnar all
-	cp $(citus_abs_srcdir)/src/backend/columnar/columnar.so $(citus_abs_srcdir)/src/backend/distributed/
+	cp $(citus_top_builddir)/src/backend/columnar/columnar.so $(citus_top_builddir)/src/backend/distributed/
 
 # build extension
 extension: $(citus_top_builddir)/src/include/citus_version.h columnar

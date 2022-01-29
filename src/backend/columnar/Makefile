@@ -1,9 +1,10 @@
+citus_subdir = src/backend/columnar
 safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
 columnar_srcdir = $(citus_abs_top_srcdir)/src/backend/columnar
 SUBDIRS = . safeclib
 SUBDIRS +=
 OBJS += \
-	$(patsubst $(columnar_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(columnar_srcdir)/$(dir)/*.c))))
+	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 
 MODULE_big = columnar
 
