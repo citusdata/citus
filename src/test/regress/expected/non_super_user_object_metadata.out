@@ -416,6 +416,40 @@ SELECT * FROM run_command_on_workers($$SELECT * FROM (SELECT pg_identify_object_
  localhost |    57638 | t       | (extension,{ltree},{})
 (2 rows)
 
+-- Show that dropping a distributed table drops the pg_dist_object entry on worker
+CREATE TABLE extension_schema.table_to_check_object(id int);
+SELECT create_distributed_table('extension_schema.table_to_check_object', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from citus.pg_dist_object) as obj_identifiers where obj_identifier::text like '%table_to_check_object%';
+     obj_identifier
+---------------------------------------------------------------------
+ (table,"{extension_schema,table_to_check_object}",{})
+(1 row)
+
+SELECT * FROM run_command_on_workers($$SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from citus.pg_dist_object) as obj_identifiers where obj_identifier::text like '%table_to_check_object%';$$) ORDER BY 1,2;
+ nodename  | nodeport | success |           result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (table,"{extension_schema,table_to_check_object}",{})
+ localhost |    57638 | t       | (table,"{extension_schema,table_to_check_object}",{})
+(2 rows)
+
+DROP TABLE extension_schema.table_to_check_object;
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from citus.pg_dist_object) as obj_identifiers where obj_identifier::text like '%table_to_check_object%';
+     obj_identifier
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT * FROM run_command_on_workers($$SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from citus.pg_dist_object) as obj_identifiers where obj_identifier::text like '%table_to_check_object%';$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       |
+ localhost |    57638 | t       |
+(2 rows)
+
 -- Revert the settings for following tests
 RESET citus.enable_ddl_propagation;
 RESET citus.shard_replication_factor;
