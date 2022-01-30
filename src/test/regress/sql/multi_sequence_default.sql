@@ -454,6 +454,33 @@ SELECT create_distributed_table('test_seq_dist', 'a');
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation.seq_10'::regclass);
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation'::regnamespace);
 
+-- Show that sequence can stay on the worker node if the transaction is
+-- rollbacked after distributing the table
+BEGIN;
+CREATE SEQUENCE sequence_rollback;
+CREATE TABLE sequence_rollback_table(id int, val_1 int default nextval('sequence_rollback'));
+SELECT create_distributed_table('sequence_rollback_table', 'id');
+ROLLBACK;
+
+-- Show that there is a sequence on the worker with the sequence type int
+\c - - - :worker_1_port
+SELECT seqtypid::regtype, seqmax, seqmin FROM pg_sequence WHERE seqrelid::regclass::text = 'sequence_rollback';
+
+\c - - - :master_port
+-- Show that we can create a sequence with the same name and different data type
+BEGIN;
+CREATE SEQUENCE sequence_rollback;
+CREATE TABLE sequence_rollback_table(id int, val_1 bigint default nextval('sequence_rollback'));
+SELECT create_distributed_table('sequence_rollback_table', 'id');
+ROLLBACK;
+
+-- Show that existing sequence has been renamed and a new sequence with the same name
+-- created for another type
+\c - - - :worker_1_port
+SELECT seqrelid::regclass, seqtypid::regtype, seqmax, seqmin FROM pg_sequence WHERE seqrelid::regclass::text like '%sequence_rollback%';
+
+\c - - - :master_port
+
 -- clean up
 DROP SCHEMA test_schema_for_sequence_default_propagation CASCADE;
 DROP TABLE test_seq_dist;

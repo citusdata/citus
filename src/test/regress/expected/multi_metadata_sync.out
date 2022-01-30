@@ -1927,11 +1927,13 @@ ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when met
                    List of relations
  Schema |          Name           |   Type   |  Owner
 ---------------------------------------------------------------------
- public | mx_test_sequence_0      | sequence | postgres
- public | mx_test_sequence_1      | sequence | postgres
- public | mx_test_table_col_3_seq | sequence | postgres
- public | user_defined_seq        | sequence | postgres
-(4 rows)
+ public | mx_test_sequence_0                | sequence | postgres
+ public | mx_test_sequence_1                | sequence | postgres
+ public | mx_test_table_col_3_seq           | sequence | postgres
+ public | sequence_rollback                 | sequence | postgres
+ public | sequence_rollback(citus_backup_0) | sequence | postgres
+ public | user_defined_seq                  | sequence | postgres
+(6 rows)
 
 \c - - - :master_port
 CREATE SEQUENCE local_sequence;
@@ -1946,9 +1948,11 @@ drop cascades to default value for column id of table test_table
                    List of relations
  Schema |          Name           |   Type   |  Owner
 ---------------------------------------------------------------------
- public | mx_test_table_col_3_seq | sequence | postgres
- public | user_defined_seq        | sequence | postgres
-(2 rows)
+ public | mx_test_table_col_3_seq           | sequence | postgres
+ public | sequence_rollback                 | sequence | postgres
+ public | sequence_rollback(citus_backup_0) | sequence | postgres
+ public | user_defined_seq                  | sequence | postgres
+(4 rows)
 
 \c - - - :master_port
 DROP TABLE test_table CASCADE;
