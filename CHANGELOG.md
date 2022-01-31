@@ -1,3 +1,18 @@
+### citus v10.1.4 (February 1, 2022) ###
+
+* Adds missing version checks for columnar tables
+
+* Fixes a bug that could break `DROP SCHEMA/EXTENSION` commands when there is
+  a columnar table
+
+* Fixes a build error that happens when `lz4` is not installed
+
+* Fixes a missing `FROM` clause entry error
+
+* Reinstates optimisation for uniform shard interval ranges
+
+* Fixes a bug that causes commands to fail when `application_name` is set
+
 ### citus v10.1.3 (September 17, 2021) ###
 
 * Fixes a bug that caused `worker_append_table_to_shard` to write as superuser
