@@ -350,22 +350,6 @@ ReplicateReferenceTableShardToNode(ShardInterval *shardInterval, char *nodeName,
 	List *ddlCommandList =
 		CopyShardCommandList(shardInterval, srcNodeName, srcNodePort, includeData);
 
-	List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
-	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
-																 nodeName, nodePort);
-	if (targetPlacement != NULL)
-	{
-		if (targetPlacement->shardState == SHARD_STATE_ACTIVE)
-		{
-			/* We already have the shard, nothing to do */
-			return;
-		}
-		ereport(ERROR, (errmsg(
-							"Placement for reference table \"%s\" on node %s:%d is not active. This should not be possible, please report this as a bug",
-							get_rel_name(shardInterval->relationId), nodeName,
-							nodePort)));
-	}
-
 	ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to the node %s:%d",
 							get_rel_name(shardInterval->relationId), nodeName,
 							nodePort)));
@@ -553,7 +537,7 @@ ReferenceTableReplicationFactor(void)
  * reference table to prevent unnecessary data transfer.
  */
 void
-ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
+ReplicateAllReferenceTablesToNode(WorkerNode *workerNode)
 {
 	List *referenceTableList = CitusTableTypeIdList(REFERENCE_TABLE);
 
@@ -573,6 +557,20 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 			List *shardIntervalList = LoadShardIntervalList(referenceTableId);
 			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
 
+			List *shardPlacementList =
+				ShardPlacementListIncludingOrphanedPlacements(shardInterval->shardId);
+			ShardPlacement *targetPlacement =
+				SearchShardPlacementInList(shardPlacementList,
+										   workerNode->workerName,
+										   workerNode->workerPort);
+			if (targetPlacement != NULL &&
+				targetPlacement->shardState == SHARD_STATE_ACTIVE)
+			{
+				/* We already have the shard, nothing to do */
+				continue;
+			}
+
+
 			referenceShardIntervalList = lappend(referenceShardIntervalList,
 												 shardInterval);
 		}
@@ -589,7 +587,9 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 
 			LockShardDistributionMetadata(shardId, ExclusiveLock);
 
-			ReplicateReferenceTableShardToNode(shardInterval, nodeName, nodePort);
+			ReplicateReferenceTableShardToNode(shardInterval,
+											   workerNode->workerName,
+											   workerNode->workerPort);
 		}
 
 		/* create foreign constraints between reference tables */
@@ -599,9 +599,11 @@ ReplicateAllReferenceTablesToNode(char *nodeName, int nodePort)
 
 			/* send commands to new workers, the current user should be a superuser */
 			Assert(superuser());
-			SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName, nodePort,
-																	CurrentUserName(),
-																	commandList);
+			SendMetadataCommandListToWorkerInCoordinatedTransaction(
+				workerNode->workerName,
+				workerNode->workerPort,
+				CurrentUserName(),
+				commandList);
 		}
 	}
 }

@@ -11,6 +11,7 @@
 
 #include "postgres.h"
 
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
@@ -23,6 +24,7 @@
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/worker_create_or_replace.h"
 #include "nodes/parsenodes.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -655,4 +657,78 @@ PostprocessAlterSequenceOwnerStmt(Node *node, const char *queryString)
 	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
 
 	return NIL;
+}
+
+
+/*
+ * GenerateBackupNameForSequenceCollision generates a new sequence name for an existing
+ * sequence. The name is generated in such a way that the new name doesn't overlap with
+ * an existing relation by adding a suffix with incrementing number after the new name.
+ */
+char *
+GenerateBackupNameForSequenceCollision(const ObjectAddress *address)
+{
+	char *newName = palloc0(NAMEDATALEN);
+	char suffix[NAMEDATALEN] = { 0 };
+	int count = 0;
+	char *namespaceName = get_namespace_name(get_rel_namespace(address->objectId));
+	Oid schemaId = get_namespace_oid(namespaceName, false);
+
+	char *baseName = get_rel_name(address->objectId);
+	int baseLength = strlen(baseName);
+
+	while (true)
+	{
+		int suffixLength = SafeSnprintf(suffix, NAMEDATALEN - 1, "(citus_backup_%d)",
+										count);
+
+		/* trim the base name at the end to leave space for the suffix and trailing \0 */
+		baseLength = Min(baseLength, NAMEDATALEN - suffixLength - 1);
+
+		/* clear newName before copying the potentially trimmed baseName and suffix */
+		memset(newName, 0, NAMEDATALEN);
+		strncpy_s(newName, NAMEDATALEN, baseName, baseLength);
+		strncpy_s(newName + baseLength, NAMEDATALEN - baseLength, suffix,
+				  suffixLength);
+
+		Oid newRelationId = get_relname_relid(newName, schemaId);
+		if (newRelationId == InvalidOid)
+		{
+			return newName;
+		}
+
+		count++;
+	}
+}
+
+
+/*
+ * RenameExistingSequenceWithDifferentTypeIfExists renames the sequence's type if
+ * that sequence exists and the desired sequence type is different than it's type.
+ */
+void
+RenameExistingSequenceWithDifferentTypeIfExists(RangeVar *sequence, Oid desiredSeqTypeId)
+{
+	Oid sequenceOid;
+	RangeVarGetAndCheckCreationNamespace(sequence, NoLock, &sequenceOid);
+
+	if (OidIsValid(sequenceOid))
+	{
+		Form_pg_sequence pgSequenceForm = pg_get_sequencedef(sequenceOid);
+		if (pgSequenceForm->seqtypid != desiredSeqTypeId)
+		{
+			ObjectAddress sequenceAddress = { 0 };
+			ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
+
+			char *newName = GenerateBackupNameForCollision(&sequenceAddress);
+
+			RenameStmt *renameStmt = CreateRenameStatement(&sequenceAddress, newName);
+			const char *sqlRenameStmt = DeparseTreeNode((Node *) renameStmt);
+			ProcessUtilityParseTree((Node *) renameStmt, sqlRenameStmt,
+									PROCESS_UTILITY_QUERY,
+									NULL, None_Receiver, NULL);
+
+			CommandCounterIncrement();
+		}
+	}
 }
