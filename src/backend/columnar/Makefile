@@ -17,7 +17,6 @@ PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 else
-subdir = src/backend/columnar
-top_builddir = ../../..
-include $(top_builddir)/Makefile.global
+citus_top_builddir = ../../..
+include $(citus_top_builddir)/Makefile.global
 endif
