@@ -31,16 +31,6 @@ teardown
 
 session "s1"
 
-step "increase-retry-interval"
-{
-  ALTER SYSTEM SET citus.metadata_sync_retry_interval TO 20000;
-}
-
-step "reset-retry-interval"
-{
-  ALTER SYSTEM RESET citus.metadata_sync_retry_interval;
-}
-
 step "enable-deadlock-detection"
 {
   ALTER SYSTEM SET citus.distributed_deadlock_detection_factor TO 3;
@@ -74,17 +64,6 @@ step "s1-update-2"
 step "s1-commit"
 {
   COMMIT;
-}
-
-step "s1-count-daemons"
-{
-  SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
-}
-
-step "s1-cancel-metadata-sync"
-{
-  SELECT pg_cancel_backend(pid) FROM pg_stat_activity WHERE application_name LIKE 'Citus Met%';
-  SELECT pg_sleep(2);
 }
 
 session "s2"
@@ -147,7 +126,3 @@ step "s3-wait"
 // themselves involved in a distributed deadlock.
 // See https://github.com/citusdata/citus/issues/4393 for more details.
 permutation "enable-deadlock-detection" "reload-conf" "s2-start-session-level-connection" "s1-begin" "s1-update-1" "s2-begin-on-worker" "s2-update-2-on-worker" "s2-truncate-on-worker" "s3-invalidate-metadata" "s3-resync" "s3-wait" "s2-update-1-on-worker" "s1-update-2" "s1-commit" "s2-commit-on-worker" "disable-deadlock-detection" "reload-conf" "s2-stop-connection"
-
-// Test that when metadata sync is waiting for locks, cancelling it terminates it.
-// This is important in cases where the metadata sync daemon itself is involved in a deadlock.
-permutation "increase-retry-interval" "reload-conf" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-truncate-on-worker" "s3-invalidate-metadata" "s3-resync" "s3-wait" "s1-count-daemons" "s1-cancel-metadata-sync" "s1-count-daemons" "reset-retry-interval" "reload-conf" "s2-commit-on-worker" "s2-stop-connection" "s3-resync" "s3-wait"
