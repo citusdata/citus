@@ -3,7 +3,8 @@ safestringlib_srcdir = $(citus_abs_top_srcdir)/vendor/safestringlib
 SUBDIRS = . safeclib
 SUBDIRS +=
 OBJS += \
-	$(patsubst $(citus_subdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_subdir)/$(dir)/*.c))))
+	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
+
 
 MODULE_big = columnar
 
