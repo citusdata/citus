@@ -194,6 +194,7 @@ check-operations: all
 check-columnar:
 	ls /usr/lib/postgresql/14/lib/c*.so
 	ldd /usr/lib/postgresql/14/lib/citus.so
+	readelf -d /usr/lib/postgresql/14/lib/citus.so
 	$(pg_regress_multi_check) --load-extension=citus \
 	-- $(MULTI_REGRESS_OPTS) --schedule=$(citus_abs_srcdir)/columnar_schedule $(EXTRA_TESTS)
 

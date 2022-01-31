@@ -38,9 +38,13 @@ NO_PGXS = 1
 
 SHLIB_LINK += $(libpq) columnar.so
 
+enable_rpath = yes
+rpathdir = /foo/bar1:$(shell $(PG_CONFIG) --libdir):$(shell $(PG_CONFIG) --pkglibdir)
+
 include $(citus_top_builddir)/Makefile.global
 
-rpathdir = $(shell $(PG_CONFIG) --libdir):$(shell $(PG_CONFIG) --pkglibdir)
+enable_rpath = yes
+rpathdir = /foo/bar2:$(shell $(PG_CONFIG) --libdir):$(shell $(PG_CONFIG) --pkglibdir)
 
 # make sure citus_version.o is recompiled whenever any change is made to the binary or any
 # other artifact being installed to reflect the correct gitref for every build
