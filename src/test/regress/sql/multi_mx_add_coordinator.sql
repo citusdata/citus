@@ -31,8 +31,9 @@ SET citus.next_shard_id TO 7000000;
 SET citus.next_placement_id TO 7000000;
 SET client_min_messages TO WARNING;
 
--- test that coordinator pg_dist_node entry is synced to the workers
-SELECT wait_until_metadata_sync(30000);
+-- test that metadata is synced to the workers
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
@@ -174,8 +175,10 @@ SET client_min_messages TO ERROR;
 DROP TABLE distributed_table, referece_table, local_fkey_table;
 SELECT master_remove_node('localhost', :master_port);
 
--- test that coordinator pg_dist_node entry was removed from the workers
-SELECT wait_until_metadata_sync(30000);
+-- test that metadata is synced to the workers
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+
 SELECT verify_metadata('localhost', :worker_1_port),
        verify_metadata('localhost', :worker_2_port);
 

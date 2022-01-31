@@ -33,8 +33,6 @@
 #include "distributed/worker_protocol.h"
 
 static const char * CreateStmtByObjectAddress(const ObjectAddress *address);
-static RenameStmt * CreateRenameStatement(const ObjectAddress *address, char *newName);
-static char * GenerateBackupNameForCollision(const ObjectAddress *address);
 
 PG_FUNCTION_INFO_V1(worker_create_or_replace_object);
 
@@ -166,7 +164,7 @@ CreateStmtByObjectAddress(const ObjectAddress *address)
  * address. This name should be used when renaming an existing object before creating the
  * new object locally on the worker.
  */
-static char *
+char *
 GenerateBackupNameForCollision(const ObjectAddress *address)
 {
 	switch (getObjectClass(address))
@@ -186,13 +184,23 @@ GenerateBackupNameForCollision(const ObjectAddress *address)
 			return GenerateBackupNameForTypeCollision(address);
 		}
 
+		case OCLASS_CLASS:
+		{
+			char relKind = get_rel_relkind(address->objectId);
+			if (relKind == RELKIND_SEQUENCE)
+			{
+				return GenerateBackupNameForSequenceCollision(address);
+			}
+		}
+
 		default:
 		{
-			ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
-							errdetail(
-								"unable to generate a backup name for the old type")));
+			break;
 		}
 	}
+
+	ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
+					errdetail("unable to generate a backup name for the old type")));
 }
 
 
@@ -243,6 +251,7 @@ CreateRenameTypeStmt(const ObjectAddress *address, char *newName)
 														  address->objectId));
 	stmt->newname = newName;
 
+
 	return stmt;
 }
 
@@ -266,10 +275,42 @@ CreateRenameProcStmt(const ObjectAddress *address, char *newName)
 
 
 /*
+ * CreateRenameSequenceStmt creates a rename statement for a sequence based on its
+ * ObjectAddress. The rename statement will rename the existing object on its address
+ * to the value provided in newName.
+ */
+static RenameStmt *
+CreateRenameSequenceStmt(const ObjectAddress *address, char *newName)
+{
+	RenameStmt *stmt = makeNode(RenameStmt);
+	Oid seqOid = address->objectId;
+
+	HeapTuple seqClassTuple = SearchSysCache1(RELOID, seqOid);
+	if (!HeapTupleIsValid(seqClassTuple))
+	{
+		ereport(ERROR, (errmsg("citus cache lookup error")));
+	}
+	Form_pg_class seqClassForm = (Form_pg_class) GETSTRUCT(seqClassTuple);
+
+	char *schemaName = get_namespace_name(seqClassForm->relnamespace);
+	char *seqName = NameStr(seqClassForm->relname);
+	List *name = list_make2(makeString(schemaName), makeString(seqName));
+	ReleaseSysCache(seqClassTuple);
+
+	stmt->renameType = OBJECT_SEQUENCE;
+	stmt->object = (Node *) name;
+	stmt->relation = makeRangeVar(schemaName, seqName, -1);
+	stmt->newname = newName;
+
+	return stmt;
+}
+
+
+/*
  * CreateRenameStatement creates a rename statement for an existing object to rename the
  * object to newName.
  */
-static RenameStmt *
+RenameStmt *
 CreateRenameStatement(const ObjectAddress *address, char *newName)
 {
 	switch (getObjectClass(address))
@@ -289,10 +330,21 @@ CreateRenameStatement(const ObjectAddress *address, char *newName)
 			return CreateRenameTypeStmt(address, newName);
 		}
 
+		case OCLASS_CLASS:
+		{
+			char relKind = get_rel_relkind(address->objectId);
+			if (relKind == RELKIND_SEQUENCE)
+			{
+				return CreateRenameSequenceStmt(address, newName);
+			}
+		}
+
 		default:
 		{
-			ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
-							errdetail("unable to generate a parsetree for the rename")));
+			break;
 		}
 	}
+
+	ereport(ERROR, (errmsg("unsupported object to construct a rename statement"),
+					errdetail("unable to generate a parsetree for the rename")));
 }

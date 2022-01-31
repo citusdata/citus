@@ -37,6 +37,7 @@
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_sync.h"
 #include "distributed/version_compat.h"
 #include "miscadmin.h"
 #include "utils/fmgroids.h"
@@ -120,6 +121,7 @@ typedef struct ViewDependencyNode
 }ViewDependencyNode;
 
 
+static List * GetRelationSequenceDependencyList(Oid relationId);
 static List * GetRelationTriggerFunctionDependencyList(Oid relationId);
 static List * GetRelationStatsSchemaDependencyList(Oid relationId);
 static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid objectId);
@@ -671,11 +673,20 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 
 		case OCLASS_CLASS:
 		{
+			char relKind = get_rel_relkind(address->objectId);
+
 			/*
 			 * composite types have a reference to a relation of composite type, we need
 			 * to follow those to get the dependencies of type fields.
+			 *
+			 * As we also handle tables as objects as well, follow dependencies
+			 * for tables.
 			 */
-			if (get_rel_relkind(address->objectId) == RELKIND_COMPOSITE_TYPE)
+			if (relKind == RELKIND_COMPOSITE_TYPE ||
+				relKind == RELKIND_RELATION ||
+				relKind == RELKIND_PARTITIONED_TABLE ||
+				relKind == RELKIND_FOREIGN_TABLE ||
+				relKind == RELKIND_SEQUENCE)
 			{
 				return true;
 			}
@@ -985,6 +996,15 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			List *statisticsSchemaDependencyList =
 				GetRelationStatsSchemaDependencyList(relationId);
 			result = list_concat(result, statisticsSchemaDependencyList);
+
+			/*
+			 * Get the dependent sequences for tables (both as serial columns and
+			 * columns have nextval with existing sequences) and expand dependency list
+			 * with them.
+			 */
+			List *sequenceDependencyList = GetRelationSequenceDependencyList(relationId);
+
+			result = list_concat(result, sequenceDependencyList);
 		}
 
 		default:
@@ -994,6 +1014,24 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 		}
 	}
 	return result;
+}
+
+
+/*
+ * GetRelationSequenceDependencyList returns the sequence dependency definition
+ * list for the given relation.
+ */
+static List *
+GetRelationSequenceDependencyList(Oid relationId)
+{
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
+
+	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+	List *sequenceDependencyDefList =
+		CreateObjectAddressDependencyDefList(RelationRelationId, dependentSequenceList);
+
+	return sequenceDependencyDefList;
 }
 
 

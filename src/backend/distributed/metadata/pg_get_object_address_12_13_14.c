@@ -471,6 +471,7 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 			break;
 		}
 
+		case OBJECT_FOREIGN_TABLE:
 		case OBJECT_TABLE:
 		{
 			/* table distribution already does the ownership check, so we can stick to that over acl_check */

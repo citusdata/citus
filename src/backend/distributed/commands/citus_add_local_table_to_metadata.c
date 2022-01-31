@@ -30,6 +30,7 @@
 #include "distributed/commands.h"
 #include "distributed/commands/sequence.h"
 #include "distributed/commands/utility_hook.h"
+#include "distributed/metadata/distobject.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -90,7 +91,7 @@ static void TransferSequenceOwnership(Oid ownedSequenceId, Oid targetRelationId,
 									  char *columnName);
 static void InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
 											 bool autoConverted);
-static void FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList);
+static void FinalizeCitusLocalTableCreation(Oid relationId);
 
 
 PG_FUNCTION_INFO_V1(citus_add_local_table_to_metadata);
@@ -307,7 +308,13 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
 
 	/*
-	 * Ensure dependencies first as we will create shell table on the other nodes
+	 * Ensure that the sequences used in column defaults of the table
+	 * have proper types
+	 */
+	EnsureRelationHasCompatibleSequenceTypes(relationId);
+
+	/*
+	 * Ensure dependencies exist as we will create shell table on the other nodes
 	 * in the MX case.
 	 */
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
@@ -354,18 +361,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 
 	InsertMetadataForCitusLocalTable(shellRelationId, shardId, autoConverted);
 
-	/*
-	 * Ensure that the sequences used in column defaults of the table
-	 * have proper types
-	 */
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(shellRelationId, &attnumList,
-									  &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(shellRelationId, dependentSequenceList,
-										  attnumList);
-
-	FinalizeCitusLocalTableCreation(shellRelationId, dependentSequenceList);
+	FinalizeCitusLocalTableCreation(shellRelationId);
 }
 
 
@@ -657,8 +653,10 @@ GetShellTableDDLEventsForCitusLocalTable(Oid relationId)
 	 */
 	IncludeSequenceDefaults includeSequenceDefaults = NEXTVAL_SEQUENCE_DEFAULTS;
 
+	bool creatingShellTableOnRemoteNode = false;
 	List *tableDDLCommands = GetFullTableCreationCommands(relationId,
-														  includeSequenceDefaults);
+														  includeSequenceDefaults,
+														  creatingShellTableOnRemoteNode);
 
 	List *shellTableDDLEvents = NIL;
 	TableDDLCommand *tableDDLCommand = NULL;
@@ -1227,7 +1225,7 @@ InsertMetadataForCitusLocalTable(Oid citusLocalTableId, uint64 shardId,
  * sequences dependent with the table.
  */
 static void
-FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
+FinalizeCitusLocalTableCreation(Oid relationId)
 {
 	/*
 	 * If it is a foreign table, then skip creating citus truncate trigger
@@ -1240,16 +1238,7 @@ FinalizeCitusLocalTableCreation(Oid relationId, List *dependentSequenceList)
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
-		if (ClusterHasKnownMetadataWorkers())
-		{
-			/*
-			 * Ensure sequence dependencies and mark them as distributed
-			 * before creating table metadata on workers
-			 */
-			MarkSequenceListDistributedAndPropagateWithDependencies(relationId,
-																	dependentSequenceList);
-		}
-		CreateTableMetadataOnWorkers(relationId);
+		SyncCitusTableMetadata(relationId);
 	}
 
 	/*

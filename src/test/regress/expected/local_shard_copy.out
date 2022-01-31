@@ -52,17 +52,9 @@ SELECT create_distributed_table('collections_list', 'key');
 CREATE TABLE collections_list_0
 	PARTITION OF collections_list (key, collection_id)
 	FOR VALUES IN ( 0 );
-DEBUG:  relation "collections_list_key_seq" already exists, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  relation "collections_list_key_seq" already exists, skipping
-DETAIL:  from localhost:xxxxx
 CREATE TABLE collections_list_1
 	PARTITION OF collections_list (key, collection_id)
 	FOR VALUES IN ( 1 );
-DEBUG:  relation "collections_list_key_seq" already exists, skipping
-DETAIL:  from localhost:xxxxx
-DEBUG:  relation "collections_list_key_seq" already exists, skipping
-DETAIL:  from localhost:xxxxx
 -- connection worker and get ready for the tests
 \c - - - :worker_1_port
 SET search_path TO local_shard_copy;

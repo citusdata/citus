@@ -140,10 +140,10 @@ INSERT INTO sensors_news VALUES (DEFAULT, DEFAULT, '2021-01-01') RETURNING *;
 (1 row)
 
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 \c - - - :worker_1_port
