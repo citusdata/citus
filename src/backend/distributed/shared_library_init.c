@@ -1142,6 +1142,17 @@ RegisterCitusConfigVariables(void)
 		HideShardsFromAppNamePrefixesAssignHook,
 		NULL);
 
+	DefineCustomStringVariable(
+		"citus.internal_connection_name",
+		gettext_noop("TODO: add comment"),
+		NULL,
+		&InternalConnectionName,
+		"",
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+
 	DefineCustomIntVariable(
 		"citus.isolation_test_session_process_id",
 		NULL,

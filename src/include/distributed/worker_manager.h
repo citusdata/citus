@@ -63,6 +63,8 @@ extern char *WorkerListFileName;
 extern char *CurrentCluster;
 extern bool ReplicateReferenceTablesOnActivate;
 
+extern char *InternalConnectionName;
+
 
 /* Function declarations for finding worker nodes to place shards on */
 extern WorkerNode * WorkerGetRandomCandidateNode(List *currentNodeList);

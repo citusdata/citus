@@ -58,6 +58,8 @@
 #include "utils/memutils.h"
 #include "utils/syscache.h"
 
+#include "distributed/distributed_deadlock_detection.h"
+
 #if PG_VERSION_NUM >= PG_VERSION_13
 #include "common/hashfn.h"
 #endif
@@ -824,6 +826,9 @@ rebalance_table_shards(PG_FUNCTION_ARGS)
 		.rebalanceStrategy = strategy,
 		.improvementThreshold = strategy->improvementThreshold,
 	};
+
+	SetLocalInternalConnectionName("rebalancer");
+
 	Oid shardTransferModeOid = PG_GETARG_OID(4);
 	RebalanceTableShards(&options, shardTransferModeOid);
 	PG_RETURN_VOID();
@@ -1696,6 +1701,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	 * In case of failure, we throw an error such that rebalance_table_shards
 	 * fails early.
 	 */
+
 	ExecuteCriticalCommandInSeparateTransaction(placementUpdateCommand->data);
 
 	UpdateColocatedShardPlacementProgress(shardId,

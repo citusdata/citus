@@ -63,6 +63,8 @@ static void LogCancellingBackend(TransactionNode *transactionNode);
 static void LogTransactionNode(TransactionNode *transactionNode);
 static void LogDistributedDeadlockDebugMessage(const char *errorMessage);
 
+
+
 PG_FUNCTION_INFO_V1(check_distributed_deadlocks);
 
 
@@ -118,6 +120,8 @@ CheckForDistributedDeadlocks(void)
 	{
 		return false;
 	}
+
+	SetLocalInternalConnectionName("distributed deadlock detection");
 
 	WaitGraph *waitGraph = BuildGlobalWaitGraph();
 	HTAB *adjacencyLists = BuildAdjacencyListsForWaitGraph(waitGraph);
@@ -216,6 +220,15 @@ CheckForDistributedDeadlocks(void)
 	}
 
 	return false;
+}
+
+
+void
+SetLocalInternalConnectionName(char *internalConnectionName)
+{
+	set_config_option("citus.internal_connection_name", internalConnectionName,
+			(superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
+					  GUC_ACTION_LOCAL, true, 0, false);
 }
 
 

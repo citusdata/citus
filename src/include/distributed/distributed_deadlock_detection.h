@@ -37,6 +37,7 @@ typedef struct TransactionNode
 /* GUC, determining whether debug messages for deadlock detection sent to LOG */
 extern bool LogDistributedDeadlockDetection;
 
+extern void SetLocalInternalConnectionName(char *internalConnectionName);
 
 extern bool CheckForDistributedDeadlocks(void);
 extern HTAB * BuildAdjacencyListsForWaitGraph(WaitGraph *waitGraph);

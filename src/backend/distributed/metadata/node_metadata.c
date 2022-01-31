@@ -66,6 +66,10 @@ int GroupSize = 1;
 /* config variable managed via guc.c */
 char *CurrentCluster = "default";
 
+/*TODO: add comments, move correct file */
+char *InternalConnectionName = "";
+
+
 /*
  * Config variable to control whether we should replicate reference tables on
  * node activation or we should defer it to shard creation.

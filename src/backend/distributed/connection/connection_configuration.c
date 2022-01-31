@@ -234,8 +234,16 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	char nodePortString[12] = "";
 
 	StringInfo applicationName = makeStringInfo();
-	appendStringInfo(applicationName, "%s%ld", CITUS_APPLICATION_NAME_PREFIX,
-					 GetGlobalPID());
+elog(WARNING, "InternalConnectionName::%s::", InternalConnectionName);
+	if (strcmp(InternalConnectionName, "") == 0)
+	{
+		appendStringInfo(applicationName, "%s%ld", CITUS_APPLICATION_NAME_PREFIX,
+						 GetGlobalPID());
+	}
+	else
+	{
+		appendStringInfo(applicationName, "%s", InternalConnectionName);
+	}
 
 	/*
 	 * This function has three sections:
