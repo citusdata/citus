@@ -44,6 +44,7 @@ install: install-extension install-headers
 install-downgrades:
 	$(MAKE) -C src/backend/distributed/ install-downgrades
 install-all: install-headers
+	$(MAKE) -C src/backend/columnar install-all
 	$(MAKE) -C src/backend/distributed/ install-all
 
 clean: clean-extension
