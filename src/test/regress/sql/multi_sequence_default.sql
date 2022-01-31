@@ -340,7 +340,7 @@ SELECT create_reference_table('seq_test_10');
 INSERT INTO seq_test_10 VALUES (0);
 CREATE TABLE seq_test_11 (col0 int, col1 bigint DEFAULT nextval('seq_11'::text));
 -- works but doesn't create seq_11 in the workers
-SELECT citus_activate_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 -- works because there is no dependency created between seq_11 and seq_test_10
 SELECT create_distributed_table('seq_test_11', 'col1');
 -- insertion from workers fails
@@ -362,7 +362,7 @@ CREATE TABLE seq_test_12(col0 text, col1 smallint DEFAULT nextval('seq_12'),
                          col2 int DEFAULT nextval('seq_13'),
                          col3 bigint DEFAULT nextval('seq_14'));
 SELECT create_distributed_table('seq_test_12', 'col0');
-SELECT citus_activate_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 INSERT INTO seq_test_12 VALUES ('hello0') RETURNING *;
 
 \c - - - :worker_1_port
@@ -417,7 +417,7 @@ SELECT nextval('seq_14');
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
-SELECT citus_activate_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 SELECT undistribute_table('seq_test_12');
 SELECT create_distributed_table('seq_test_12', 'col0');
 INSERT INTO seq_test_12 VALUES ('hello2') RETURNING *;

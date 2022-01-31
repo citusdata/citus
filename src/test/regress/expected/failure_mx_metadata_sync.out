@@ -129,10 +129,10 @@ SELECT citus.mitmproxy('conn.allow()');
 
 (1 row)
 
-SELECT citus_activate_node('localhost', :worker_2_proxy_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_proxy_port);
+ ?column?
 ---------------------------------------------------------------------
-                   4
+        1
 (1 row)
 
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;

@@ -28,16 +28,16 @@ SELECT create_distributed_table('t1', 'c');
 (1 row)
 
 ALTER TABLE t1 DROP COLUMN b;
-SELECT citus_activate_node('localhost',:worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost',:worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                  16
+        1
 (1 row)
 
-SELECT citus_activate_node('localhost',:worker_2_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost',:worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-                  30
+        1
 (1 row)
 
 \c - - - :worker_1_port

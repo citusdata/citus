@@ -16,8 +16,8 @@ CREATE TABLE t1 (a int, b int, c int UNIQUE);
 SELECT create_distributed_table('t1', 'c');
 ALTER TABLE t1 DROP COLUMN b;
 
-SELECT citus_activate_node('localhost',:worker_1_port);
-SELECT citus_activate_node('localhost',:worker_2_port);
+SELECT 1 FROM citus_activate_node('localhost',:worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost',:worker_2_port);
 
 \c - - - :worker_1_port
 SET search_path TO local_shard_execution_dropped_column;

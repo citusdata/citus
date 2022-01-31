@@ -409,10 +409,10 @@ SELECT master_add_secondary_node('localhost', 8889, 'localhost', :worker_1_port,
 
 \c - - - :master_port
 -- Run start_metadata_sync_to_node and citus_activate_node and check that it marked hasmetadata for that worker
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                   1
+        1
 (1 row)
 
 SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
@@ -527,10 +527,10 @@ SELECT create_distributed_table('mx_testing_schema_2.fk_test_2', 'col1');
 
 (1 row)
 
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                   1
+        1
 (1 row)
 
 -- Check that foreign key metadata exists on the worker
@@ -547,16 +547,16 @@ DROP TABLE mx_testing_schema.fk_test_1;
 RESET citus.shard_replication_factor;
 -- Check that repeated calls to citus_activate_node has no side effects
 \c - - - :master_port
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                   1
+        1
 (1 row)
 
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                   1
+        1
 (1 row)
 
 \c - - - :worker_1_port
@@ -639,10 +639,10 @@ SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table':
 -- Make sure that citus_activate_node can be called inside a transaction and rollbacked
 \c - - - :master_port
 BEGIN;
-SELECT citus_activate_node('localhost', :worker_2_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-                   2
+        1
 (1 row)
 
 ROLLBACK;
@@ -655,10 +655,10 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 -- Check that the distributed table can be queried from the worker
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                   1
+        1
 (1 row)
 
 CREATE TABLE mx_query_test (a int, b text, c int);
@@ -1129,10 +1129,10 @@ SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
 
 (1 row)
 
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                   1
+        1
 (1 row)
 
 DROP TABLE mx_table_with_small_sequence;
@@ -1238,10 +1238,10 @@ SELECT nextval('mx_table_with_sequence_c_seq');
 
 -- Check that adding a new metadata node sets the sequence space correctly
 \c - - - :master_port
-SELECT citus_activate_node('localhost', :worker_2_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-                   2
+        1
 (1 row)
 
 \c - - - :worker_2_port
@@ -2091,15 +2091,15 @@ ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
 -- Activate them at the end
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                   1
+        1
 (1 row)
 
-SELECT citus_activate_node('localhost', :worker_2_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-                   7
+        1
 (1 row)
 

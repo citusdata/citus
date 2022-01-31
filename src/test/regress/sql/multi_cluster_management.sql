@@ -48,7 +48,7 @@ SELECT * FROM rebalance_table_shards();
 TRUNCATE pg_dist_colocation;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 
-SELECT * FROM citus_activate_node('localhost', :worker_2_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');

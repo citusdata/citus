@@ -45,10 +45,10 @@ BEFORE UPDATE OF value ON citus_local_table
 FOR EACH ROW EXECUTE FUNCTION dummy_function();')
 -- Show that we can activate node successfully. That means, we create
 -- the function that trigger needs in mx workers too.
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                  16
+        1
 (1 row)
 
 CREATE EXTENSION seg;

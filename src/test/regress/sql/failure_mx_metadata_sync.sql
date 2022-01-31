@@ -47,7 +47,7 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
 
 -- Verify we can activate node after unsuccessful attempts
 SELECT citus.mitmproxy('conn.allow()');
-SELECT citus_activate_node('localhost', :worker_2_proxy_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_proxy_port);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_proxy_port;
 
 -- Check failures on DDL command propagation

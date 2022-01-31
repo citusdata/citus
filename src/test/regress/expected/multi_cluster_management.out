@@ -102,10 +102,10 @@ SELECT * FROM rebalance_table_shards();
 -- insert stuff into pg_dist_colocation
 TRUNCATE pg_dist_colocation;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
-SELECT * FROM citus_activate_node('localhost', :worker_2_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-                   3
+        1
 (1 row)
 
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);

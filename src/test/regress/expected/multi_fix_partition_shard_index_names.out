@@ -89,10 +89,10 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' A
 
 \c - - - :master_port
 -- this should work properly
-SELECT citus_activate_node('localhost', :worker_1_port);
- citus_activate_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-                   1
+        1
 (1 row)
 
 \c - - - :worker_1_port
