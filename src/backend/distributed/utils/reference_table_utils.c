@@ -350,22 +350,6 @@ ReplicateReferenceTableShardToNode(ShardInterval *shardInterval, char *nodeName,
 	List *ddlCommandList =
 		CopyShardCommandList(shardInterval, srcNodeName, srcNodePort, includeData);
 
-	List *shardPlacementList = ShardPlacementListIncludingOrphanedPlacements(shardId);
-	ShardPlacement *targetPlacement = SearchShardPlacementInList(shardPlacementList,
-																 nodeName, nodePort);
-	if (targetPlacement != NULL)
-	{
-		if (targetPlacement->shardState == SHARD_STATE_ACTIVE)
-		{
-			/* We already have the shard, nothing to do */
-			return;
-		}
-		ereport(ERROR, (errmsg(
-							"Placement for reference table \"%s\" on node %s:%d is not active. This should not be possible, please report this as a bug",
-							get_rel_name(shardInterval->relationId), nodeName,
-							nodePort)));
-	}
-
 	ereport(NOTICE, (errmsg("Replicating reference table \"%s\" to the node %s:%d",
 							get_rel_name(shardInterval->relationId), nodeName,
 							nodePort)));
@@ -572,6 +556,20 @@ ReplicateAllReferenceTablesToNode(WorkerNode *workerNode)
 		{
 			List *shardIntervalList = LoadShardIntervalList(referenceTableId);
 			ShardInterval *shardInterval = (ShardInterval *) linitial(shardIntervalList);
+
+			List *shardPlacementList =
+				ShardPlacementListIncludingOrphanedPlacements(shardInterval->shardId);
+			ShardPlacement *targetPlacement =
+				SearchShardPlacementInList(shardPlacementList,
+										   workerNode->workerName,
+										   workerNode->workerPort);
+			if (targetPlacement != NULL &&
+				targetPlacement->shardState == SHARD_STATE_ACTIVE)
+			{
+				/* We already have the shard, nothing to do */
+				continue;
+			}
+
 
 			referenceShardIntervalList = lappend(referenceShardIntervalList,
 												 shardInterval);
