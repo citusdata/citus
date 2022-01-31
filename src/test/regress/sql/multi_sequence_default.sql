@@ -477,7 +477,7 @@ ROLLBACK;
 -- Show that existing sequence has been renamed and a new sequence with the same name
 -- created for another type
 \c - - - :worker_1_port
-SELECT seqrelid::regclass, seqtypid::regtype, seqmax, seqmin FROM pg_sequence WHERE seqrelid::regclass::text like '%sequence_rollback%';
+SELECT seqrelid::regclass, seqtypid::regtype, seqmax, seqmin FROM pg_sequence WHERE seqrelid::regclass::text like '%sequence_rollback%' ORDER BY 1,2;
 
 \c - - - :master_port
 
