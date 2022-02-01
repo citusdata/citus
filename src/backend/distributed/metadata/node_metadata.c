@@ -787,7 +787,6 @@ SyncDistributedObjectsToNode(WorkerNode *workerNode)
 		return;
 	}
 
-	EnsureNoModificationsHaveBeenDone();
 	EnsureSequentialModeMetadataOperations();
 
 	Assert(ShouldPropagate());
