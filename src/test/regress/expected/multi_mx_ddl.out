@@ -303,5 +303,126 @@ SELECT * FROM seg_test;
 (1 row)
 
 \c - - - :master_port
+CREATE SCHEMA ext_owned_tables;
+SELECT run_command_on_workers($$CREATE SCHEMA ext_owned_tables;$$);
+       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE SCHEMA")
+ (localhost,57638,t,"CREATE SCHEMA")
+(2 rows)
+
+SET search_path TO ext_owned_tables;
+CREATE sequence my_seq_ext_1;
+SELECT run_command_on_workers($$CREATE sequence ext_owned_tables.my_seq_ext_1;$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE SEQUENCE")
+ (localhost,57638,t,"CREATE SEQUENCE")
+(2 rows)
+
+CREATE sequence my_seq_ext_2;
+SELECT run_command_on_workers($$CREATE sequence ext_owned_tables.my_seq_ext_2;$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE SEQUENCE")
+ (localhost,57638,t,"CREATE SEQUENCE")
+(2 rows)
+
+-- test distributed tables owned by extension
+CREATE TABLE seg_test (x int, y bigserial, z int default nextval('my_seq_ext_1'));
+SELECT run_command_on_workers($$CREATE TABLE ext_owned_tables.seg_test (x int, y bigserial, z int default nextval('ext_owned_tables.my_seq_ext_1'))$$);
+       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE TABLE")
+ (localhost,57638,t,"CREATE TABLE")
+(2 rows)
+
+INSERT INTO seg_test VALUES (42);
+CREATE TABLE tcn_test (x int, y bigserial, z int default nextval('my_seq_ext_2'));
+SELECT run_command_on_workers($$CREATE TABLE ext_owned_tables.tcn_test (x int, y bigserial, z int default nextval('ext_owned_tables.my_seq_ext_2'));$$);
+       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE TABLE")
+ (localhost,57638,t,"CREATE TABLE")
+(2 rows)
+
+INSERT INTO tcn_test VALUES (42);
+-- pretend this table belongs to an extension
+ALTER EXTENSION seg ADD TABLE ext_owned_tables.seg_test;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
+ALTER EXTENSION seg ADD SEQUENCE ext_owned_tables.my_seq_ext_1;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
+SELECT run_command_on_workers($$ALTER EXTENSION seg ADD TABLE ext_owned_tables.seg_test;$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"ALTER EXTENSION")
+ (localhost,57638,t,"ALTER EXTENSION")
+(2 rows)
+
+SELECT run_command_on_workers($$ALTER EXTENSION seg ADD SEQUENCE ext_owned_tables.my_seq_ext_1;$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"ALTER EXTENSION")
+ (localhost,57638,t,"ALTER EXTENSION")
+(2 rows)
+
+CREATE EXTENSION tcn;
+ALTER EXTENSION tcn ADD TABLE ext_owned_tables.tcn_test;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
+ALTER EXTENSION tcn ADD SEQUENCE ext_owned_tables.my_seq_ext_2;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
+SELECT run_command_on_workers($$ALTER EXTENSION tcn ADD TABLE ext_owned_tables.tcn_test;$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"ALTER EXTENSION")
+ (localhost,57638,t,"ALTER EXTENSION")
+(2 rows)
+
+SELECT run_command_on_workers($$ALTER EXTENSION tcn ADD SEQUENCE ext_owned_tables.my_seq_ext_2;$$);
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"ALTER EXTENSION")
+ (localhost,57638,t,"ALTER EXTENSION")
+(2 rows)
+
+SELECT create_reference_table('seg_test');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$ext_owned_tables.seg_test$$)
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT create_distributed_table('tcn_test', 'x');
+NOTICE:  Copying data from local table...
+NOTICE:  copying the data has completed
+DETAIL:  The local data in the table is no longer visible, but is still on disk.
+HINT:  To remove the local data, run: SELECT truncate_local_data_after_distributing_table($$ext_owned_tables.tcn_test$$)
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- test metadata re-sync in the presence of an extension-owned table
+-- and serial/sequences
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 -- also drops table on both worker and master
-DROP EXTENSION seg CASCADE;
+SET client_min_messages TO ERROR;
+DROP SCHEMA ext_owned_tables CASCADE;
