@@ -13,10 +13,17 @@ include Makefile.global
 
 all: extension
 
+#build columnar only
+columnar:
+	mkdir -p $(citus_top_builddir)/src/backend/columnar/safeclib
+	$(MAKE) -C src/backend/columnar all
+	cp $(citus_top_builddir)/src/backend/columnar/columnar.so $(citus_top_builddir)/src/backend/distributed/
 # build extension
-extension: $(citus_top_builddir)/src/include/citus_version.h
+extension: $(citus_top_builddir)/src/include/citus_version.h columnar
 	$(MAKE) -C src/backend/distributed/ all
-install-extension: extension
+install-columnar:
+	$(MAKE) -C src/backend/columnar install
+install-extension: extension install-columnar
 	$(MAKE) -C src/backend/distributed/ install
 install-headers: extension
 	$(MKDIR_P) '$(DESTDIR)$(includedir_server)/distributed/'
@@ -27,6 +34,8 @@ install-headers: extension
 
 clean-extension:
 	$(MAKE) -C src/backend/distributed/ clean
+	rm -f $(citus_top_builddir)/src/backend/distributed/columnar.so
+	$(MAKE) -C src/backend/columnar/ clean
 clean-full:
 	$(MAKE) -C src/backend/distributed/ clean-full
 .PHONY: extension install-extension clean-extension clean-full
@@ -35,6 +44,7 @@ install: install-extension install-headers
 install-downgrades:
 	$(MAKE) -C src/backend/distributed/ install-downgrades
 install-all: install-headers
+	$(MAKE) -C src/backend/columnar install-all
 	$(MAKE) -C src/backend/distributed/ install-all
 
 clean: clean-extension
