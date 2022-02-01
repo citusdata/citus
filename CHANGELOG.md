@@ -1,3 +1,32 @@
+### citus v10.2.4 (February 1, 2022) ###
+
+* Adds support for operator class parameters in indexes
+
+* Fixes a bug with distributed functions that have `OUT` parameters or
+  return `TABLE`
+
+* Fixes a build error that happens when `lz4` is not installed
+
+* Improves self-deadlock prevention for `CREATE INDEX` &
+  `REINDEX CONCURRENTLY` commands for builds using PG14 or higher
+
+* Fixes a bug that causes commands to fail when `application_name` is set
+
+### citus v10.1.4 (February 1, 2022) ###
+
+* Adds missing version checks for columnar tables
+
+* Fixes a bug that could break `DROP SCHEMA/EXTENSION` commands when there is
+  a columnar table
+
+* Fixes a build error that happens when `lz4` is not installed
+
+* Fixes a missing `FROM` clause entry error
+
+* Reinstates optimisation for uniform shard interval ranges
+
+* Fixes a bug that causes commands to fail when `application_name` is set
+
 ### citus v10.2.3 (November 29, 2021) ###
 
 * Adds `fix_partition_shard_index_names` udf to fix currently broken
