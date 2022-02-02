@@ -20,6 +20,9 @@
 #include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/index.h"
+#if PG_VERSION_NUM < 140000
+#include "catalog/indexing.h"
+#endif
 #include "catalog/objectaccess.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_publication.h"
@@ -54,8 +57,10 @@
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
-#include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
+
+extern bool CheckCitusVersion(int elevel);
+extern void EnsureTableOwner(Oid relationId);
 
 /*
  * Timing parameters for truncate locking heuristics.
