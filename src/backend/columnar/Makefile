@@ -14,12 +14,5 @@ MODULE_big = columnar
 
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 
-
-ifdef USE_PGXS
-PG_CONFIG = pg_config
-PGXS := $(shell $(PG_CONFIG) --pgxs)
-include $(PGXS)
-else
 citus_top_builddir = ../../..
 include $(citus_top_builddir)/Makefile.global
-endif
