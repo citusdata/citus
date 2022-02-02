@@ -186,17 +186,17 @@ ColumnarStorageInit(SMgrRelation srel, uint64 storageId)
 			 (char *) &metapage, sizeof(ColumnarMetapage));
 	phdr->pd_lower += sizeof(ColumnarMetapage);
 
-	PageSetChecksumInplace(page, COLUMNAR_METAPAGE_BLOCKNO);
 	log_newpage(&srel->smgr_rnode.node, MAIN_FORKNUM,
 				COLUMNAR_METAPAGE_BLOCKNO, page, true);
+	PageSetChecksumInplace(page, COLUMNAR_METAPAGE_BLOCKNO);
 	smgrextend(srel, MAIN_FORKNUM, COLUMNAR_METAPAGE_BLOCKNO, page, true);
 
 	/* write empty page */
 	PageInit(page, BLCKSZ, 0);
 
-	PageSetChecksumInplace(page, COLUMNAR_EMPTY_BLOCKNO);
 	log_newpage(&srel->smgr_rnode.node, MAIN_FORKNUM,
 				COLUMNAR_EMPTY_BLOCKNO, page, true);
+	PageSetChecksumInplace(page, COLUMNAR_EMPTY_BLOCKNO);
 	smgrextend(srel, MAIN_FORKNUM, COLUMNAR_EMPTY_BLOCKNO, page, true);
 
 	/*
