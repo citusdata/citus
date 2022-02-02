@@ -101,7 +101,7 @@ BEGIN;
 	-- it'd spawn a bg worker targeting this node
 	-- and that changes the connection count specific tests
 	-- here
-	SET LOCAL citus.enable_metadata_sync_by_default TO OFF;
+	SET LOCAL citus.enable_metadata_sync TO OFF;
 	-- cannot add workers with specific IP as long as I have a placeholder coordinator record
 	SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
 COMMIT;
@@ -111,7 +111,7 @@ BEGIN;
 	-- it'd spawn a bg worker targeting this node
 	-- and that changes the connection count specific tests
 	-- here
-	SET LOCAL citus.enable_metadata_sync_by_default TO OFF;
+	SET LOCAL citus.enable_metadata_sync TO OFF;
 	-- adding localhost workers is ok
 	SELECT 1 FROM master_add_node('localhost', :worker_1_port);
 COMMIT;
@@ -127,7 +127,7 @@ BEGIN;
 	-- it'd spawn a bg worker targeting this node
 	-- and that changes the connection count specific tests
 	-- here
-	SET LOCAL citus.enable_metadata_sync_by_default TO OFF;
+	SET LOCAL citus.enable_metadata_sync TO OFF;
 	-- adding workers with specific IP is ok now
 	SELECT 1 FROM master_add_node('127.0.0.1', :worker_1_port);
 COMMIT;

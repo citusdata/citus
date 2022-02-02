@@ -558,7 +558,7 @@ IsObjectAddressCollected(ObjectAddress findAddress,
 bool
 SupportedDependencyByCitus(const ObjectAddress *address)
 {
-	if (!EnableDependencyCreation)
+	if (!EnableMetadataSync)
 	{
 		/*
 		 * If the user has disabled object propagation we need to fall back to the legacy

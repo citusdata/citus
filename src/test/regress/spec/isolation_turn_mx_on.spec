@@ -2,7 +2,7 @@ session "s1"
 
 step "enable-mx-by-default"
 {
-  ALTER SYSTEM SET citus.enable_metadata_sync_by_default TO ON;
+  ALTER SYSTEM SET citus.enable_metadata_sync TO ON;
 }
 
 step "reload"

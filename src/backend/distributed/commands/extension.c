@@ -649,7 +649,7 @@ static bool
 ShouldPropagateExtensionCommand(Node *parseTree)
 {
 	/* if we disabled object propagation, then we should not propagate anything. */
-	if (!EnableDependencyCreation)
+	if (!EnableMetadataSync)
 	{
 		return false;
 	}

@@ -34,8 +34,6 @@ static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
 
-bool EnableDependencyCreation = true;
-
 /*
  * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes
  * sure these are available on all workers. If not available they will be created on the
@@ -364,7 +362,7 @@ ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
 	List *dependencies = GetDistributedObjectAddressList();
 
 	/*
-	 * Depending on changes in the environment, such as the enable_object_propagation guc
+	 * Depending on changes in the environment, such as the enable_metadata_sync guc
 	 * there might be objects in the distributed object address list that should currently
 	 * not be propagated by citus as they are 'not supported'.
 	 */
@@ -415,7 +413,7 @@ ShouldPropagate(void)
 		return false;
 	}
 
-	if (!EnableDependencyCreation)
+	if (!EnableMetadataSync)
 	{
 		/*
 		 * we are configured to disable object propagation, should not propagate anything
