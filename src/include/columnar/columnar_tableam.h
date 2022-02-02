@@ -8,9 +8,6 @@
 #include "access/skey.h"
 #include "nodes/bitmapset.h"
 
-#include "distributed/coordinator_protocol.h"
-
-
 /*
  * Number of valid ItemPointer Offset's for "row number" <> "ItemPointer"
  * mapping.

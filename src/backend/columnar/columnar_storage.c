@@ -38,6 +38,7 @@
 
 #include "safe_lib.h"
 
+#include "access/relation.h"
 #include "access/generic_xlog.h"
 #include "catalog/storage.h"
 #include "miscadmin.h"

@@ -54,6 +54,7 @@
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
+#include "distributed/coordinator_protocol.h"
 #include "distributed/listutils.h"
 
 /*
