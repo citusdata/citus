@@ -156,7 +156,7 @@ SELECT * FROM test_matview;
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'events%' ORDER BY logicalrelid::text;
-        logicalrelid        | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
+        logicalrelid        | partmethod |                                                          partkey                                                           | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
  events                     | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |      1390012 | s        | f
  events_2021_feb            | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |      1390012 | s        | f
@@ -468,7 +468,9 @@ BEGIN;
 (1 row)
 
 	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-ERROR:  cannot open new connections after the first modification command within a transaction
+ERROR:  cannot execute metadata syncing operation because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When modifying metadata, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- this is safe because start_metadata_sync_to_node already switches to
 -- sequential execution
@@ -539,7 +541,11 @@ BEGIN;
 
 	-- sync at the end of the tx
 	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-ERROR:  cannot open new connections after the first modification command within a transaction
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 ROLLBACK;
 -- multi-shard commands are not allowed with start_metadata_sync
 BEGIN;
@@ -576,7 +582,11 @@ BEGIN;
 
 	-- sync at the end of the tx
 	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-ERROR:  cannot open new connections after the first modification command within a transaction
+ start_metadata_sync_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
 ROLLBACK;
 -- cleanup
 \c - - - :master_port

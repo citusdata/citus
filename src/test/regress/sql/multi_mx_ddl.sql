@@ -172,5 +172,48 @@ SELECT * FROM seg_test;
 
 \c - - - :master_port
 
+CREATE SCHEMA ext_owned_tables;
+SELECT run_command_on_workers($$CREATE SCHEMA ext_owned_tables;$$);
+
+SET search_path TO ext_owned_tables;
+
+CREATE sequence my_seq_ext_1;
+SELECT run_command_on_workers($$CREATE sequence ext_owned_tables.my_seq_ext_1;$$);
+CREATE sequence my_seq_ext_2;
+SELECT run_command_on_workers($$CREATE sequence ext_owned_tables.my_seq_ext_2;$$);
+
+-- test distributed tables owned by extension
+CREATE TABLE seg_test (x int, y bigserial, z int default nextval('my_seq_ext_1'));
+SELECT run_command_on_workers($$CREATE TABLE ext_owned_tables.seg_test (x int, y bigserial, z int default nextval('ext_owned_tables.my_seq_ext_1'))$$);
+
+INSERT INTO seg_test VALUES (42);
+
+CREATE TABLE tcn_test (x int, y bigserial, z int default nextval('my_seq_ext_2'));
+SELECT run_command_on_workers($$CREATE TABLE ext_owned_tables.tcn_test (x int, y bigserial, z int default nextval('ext_owned_tables.my_seq_ext_2'));$$);
+
+INSERT INTO tcn_test VALUES (42);
+
+-- pretend this table belongs to an extension
+ALTER EXTENSION seg ADD TABLE ext_owned_tables.seg_test;
+ALTER EXTENSION seg ADD SEQUENCE ext_owned_tables.my_seq_ext_1;
+SELECT run_command_on_workers($$ALTER EXTENSION seg ADD TABLE ext_owned_tables.seg_test;$$);
+SELECT run_command_on_workers($$ALTER EXTENSION seg ADD SEQUENCE ext_owned_tables.my_seq_ext_1;$$);
+
+
+CREATE EXTENSION tcn;
+ALTER EXTENSION tcn ADD TABLE ext_owned_tables.tcn_test;
+ALTER EXTENSION tcn ADD SEQUENCE ext_owned_tables.my_seq_ext_2;
+SELECT run_command_on_workers($$ALTER EXTENSION tcn ADD TABLE ext_owned_tables.tcn_test;$$);
+SELECT run_command_on_workers($$ALTER EXTENSION tcn ADD SEQUENCE ext_owned_tables.my_seq_ext_2;$$);
+
+SELECT create_reference_table('seg_test');
+SELECT create_distributed_table('tcn_test', 'x');
+
+-- test metadata re-sync in the presence of an extension-owned table
+-- and serial/sequences
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+
 -- also drops table on both worker and master
-DROP EXTENSION seg CASCADE;
+SET client_min_messages TO ERROR;
+DROP SCHEMA ext_owned_tables CASCADE;

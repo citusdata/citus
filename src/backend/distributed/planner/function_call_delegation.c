@@ -303,17 +303,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	if (localGroupId != COORDINATOR_GROUP_ID)
-	{
-		/*
-		 * We are calling a distributed function on a worker node. We currently
-		 * only delegate from the coordinator.
-		 *
-		 * TODO: remove this restriction.
-		 */
-		return NULL;
-	}
-
 	/*
 	 * Cannot delegate functions for INSERT ... SELECT func(), since they require
 	 * coordinated transactions.
