@@ -1626,17 +1626,21 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			 * Note that we should decide those nodes by looking into the actual
 			 * nodes behind coercions, casts etc.
 			 */
-			Expr *strippedDirectArg =
-				(Expr *) strip_implicit_coercions((Node *) directarg);
-			if (IsA(strippedDirectArg, Var))
+			List *directArgVars = pull_var_clause_default((Node *) directarg);
+			if (list_length(directArgVars) > 0)
 			{
-				Var *var = makeVar(masterTableId, walkerContext->columnId,
-								   exprType((Node *) directarg),
-								   exprTypmod((Node *) directarg),
-								   exprCollation((Node *) directarg),
-								   columnLevelsUp);
-				aggregate->aggdirectargs = lappend(aggregate->aggdirectargs, var);
-				walkerContext->columnId++;
+				Var *directArgVar = NULL;
+				foreach_ptr(directArgVar, directArgVars)
+				{
+					Var *var = makeVar(masterTableId, walkerContext->columnId,
+									   exprType((Node *) directArgVar),
+									   exprTypmod((Node *) directArgVar),
+									   exprCollation((Node *) directArgVar),
+									   columnLevelsUp);
+					walkerContext->columnId++;
+
+					aggregate->aggdirectargs = lappend(aggregate->aggdirectargs, var);
+				}
 			}
 			else
 			{
@@ -3082,10 +3086,8 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		Expr *directarg;
 		foreach_ptr(directarg, originalAggregate->aggdirectargs)
 		{
-			if (!IsA(directarg, Const) && !IsA(directarg, Param))
-			{
-				workerAggregateList = lappend(workerAggregateList, directarg);
-			}
+			List *directArgVars = pull_var_clause_default((Node *) directarg);
+			workerAggregateList = list_concat(workerAggregateList, directArgVars);
 		}
 
 		if (originalAggregate->aggfilter)

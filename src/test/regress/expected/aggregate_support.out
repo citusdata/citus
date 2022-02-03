@@ -695,8 +695,17 @@ select percentile_cont(0.5) within group(order by valf) from aggdata;
 (1 row)
 
 select key, percentile_cont(key/10.0) within group(order by val) from aggdata group by key;
-ERROR:  attribute 2 of type record has wrong type
-DETAIL:  Table has type double precision, but query expects integer.
+ key | percentile_cont
+---------------------------------------------------------------------
+   1 |               2
+   2 |               2
+   3 |               4
+   5 |
+   6 |
+   7 |               8
+   9 |               0
+(7 rows)
+
 select array_agg(val order by valf) from aggdata;
               array_agg
 ---------------------------------------------------------------------
