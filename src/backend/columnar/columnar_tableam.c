@@ -1913,13 +1913,6 @@ columnar_tableam_init()
 }
 
 
-void
-columnar_tableam_finish()
-{
-	object_access_hook = PrevObjectAccessHook;
-}
-
-
 /*
  * Get the number of chunks filtered out during the given scan.
  */
