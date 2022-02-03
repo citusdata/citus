@@ -3082,18 +3082,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		Expr *directarg;
 		foreach_ptr(directarg, originalAggregate->aggdirectargs)
 		{
-			/*
-			 * For the query that we will execute on worker node, we can leave
-			 * only Const nodes as is and can resolve Param's in the runtime.
-			 * For the other type of nodes, we need to execute them on worker
-			 * node.
-			 *
-			 * Note that we should decide those nodes by looking into the actual
-			 * nodes hidden behind coercions, casts etc..
-			 */
-			Expr *strippedDirectArg =
-				(Expr *) strip_implicit_coercions((Node *) directarg);
-			if (IsA(strippedDirectArg, Var))
+			if (!IsA(directarg, Const) && !IsA(directarg, Param))
 			{
 				workerAggregateList = lappend(workerAggregateList, directarg);
 			}
