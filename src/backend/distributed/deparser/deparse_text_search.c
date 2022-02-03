@@ -227,6 +227,23 @@ DeparseAlterTextSearchConfigurationSchemaStmt(Node *node)
 }
 
 
+char *
+DeparseTextSearchConfigurationCommentStmt(Node *node)
+{
+	CommentStmt *stmt = castNode(CommentStmt, node);
+	Assert(stmt->objtype == OBJECT_TSCONFIGURATION);
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	appendStringInfo(&buf, "COMMENT ON TEXT SEARCH CONFIGURATION %s IS %s;",
+					 NameListToQuotedString(castNode(List, stmt->object)),
+					 quote_literal_cstr(stmt->comment));
+
+	return buf.data;
+}
+
+
 static void
 AppendStringInfoTokentypeList(StringInfo buf, List *tokentypes)
 {

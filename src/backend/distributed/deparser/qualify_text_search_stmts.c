@@ -133,7 +133,28 @@ QualifyAlterTextSearchConfigurationSchemaStmt(Node *node)
 	char *objName = NULL;
 	DeconstructQualifiedName(castNode(List, stmt->object), &schemaName, &objName);
 
-	/* fully qualify the cfgname being altered */
+	if (!schemaName)
+	{
+		Oid tsconfigOid = get_ts_config_oid(castNode(List, stmt->object), false);
+		Oid namespaceOid = get_ts_config_namespace(tsconfigOid);
+		schemaName = get_namespace_name(namespaceOid);
+
+		stmt->object = (Node *) list_make2(makeString(schemaName),
+										   makeString(objName));
+	}
+}
+
+
+void
+QualifyTextSearchConfigurationCommentStmt(Node *node)
+{
+	CommentStmt *stmt = castNode(CommentStmt, node);
+	Assert(stmt->objtype == OBJECT_TSCONFIGURATION);
+
+	char *schemaName = NULL;
+	char *objName = NULL;
+	DeconstructQualifiedName(castNode(List, stmt->object), &schemaName, &objName);
+
 	if (!schemaName)
 	{
 		Oid tsconfigOid = get_ts_config_oid(castNode(List, stmt->object), false);

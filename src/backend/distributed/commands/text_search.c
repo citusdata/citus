@@ -17,6 +17,7 @@
 #include "catalog/pg_ts_config_map.h"
 #include "catalog/pg_ts_dict.h"
 #include "catalog/pg_ts_parser.h"
+#include "commands/comment.h"
 #include "commands/extension.h"
 #include "fmgr.h"
 #include "nodes/makefuncs.h"
@@ -36,6 +37,7 @@
 
 
 static DefineStmt * GetTextSearchConfigDefineStmt(Oid tsconfigOid);
+static CommentStmt * GetTextSearchConfigCommentStmt(Oid tsconfigOid);
 static List * GetTSParserNameList(Oid tsparserOid);
 static List * GetTextSearchConfigMappingStmt(Oid tsconfigOid);
 
@@ -96,6 +98,13 @@ CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address)
 	DefineStmt *defineStmt = GetTextSearchConfigDefineStmt(address->objectId);
 	commands = lappend(commands,
 					   WrapCreateOrReplace(DeparseTreeNode((Node *) defineStmt)));
+
+	/* COMMENT ON TEXT SEARCH CONFIGURATION ... */
+	CommentStmt *commentStmt = GetTextSearchConfigCommentStmt(address->objectId);
+	if (commentStmt)
+	{
+		commands = lappend(commands, DeparseTreeNode((Node *) commentStmt));
+	}
 
 	/* ALTER TEXT SEARCH CONFIGURATION ... ADD MAPPING FOR ... WITH ... */
 	List *mappingStmts = GetTextSearchConfigMappingStmt(address->objectId);
@@ -282,6 +291,32 @@ PostprocessAlterTextSearchConfigurationSchemaStmt(Node *node, const char *queryS
 }
 
 
+List *
+PreprocessTextSearchConfigurationCommentStmt(Node *node, const char *queryString,
+											 ProcessUtilityContext processUtilityContext)
+{
+	CommentStmt *stmt = castNode(CommentStmt, node);
+	Assert(stmt->objtype == OBJECT_TSCONFIGURATION);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	QualifyTreeNode((Node *) stmt);
+
+	const char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+}
+
+
 static DefineStmt *
 GetTextSearchConfigDefineStmt(Oid tsconfigOid)
 {
@@ -303,6 +338,24 @@ GetTextSearchConfigDefineStmt(Oid tsconfigOid)
 	stmt->definition = list_make1(makeDefElem("parser", (Node *) parserTypeName, -1));
 
 	ReleaseSysCache(tup);
+	return stmt;
+}
+
+
+static CommentStmt *
+GetTextSearchConfigCommentStmt(Oid tsconfigOid)
+{
+	char *comment = GetComment(tsconfigOid, TSConfigRelationId, 0);
+	if (!comment)
+	{
+		return NULL;
+	}
+
+	CommentStmt *stmt = makeNode(CommentStmt);
+	stmt->objtype = OBJECT_TSCONFIGURATION;
+
+	stmt->object = (Node *) get_ts_config_namelist(tsconfigOid);
+	stmt->comment = comment;
 	return stmt;
 }
 
@@ -572,6 +625,20 @@ AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectAddress sequenceAddress = { 0 };
 	ObjectAddressSet(sequenceAddress, TSConfigRelationId, objid);
 	return sequenceAddress;
+}
+
+
+ObjectAddress
+TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok)
+{
+	CommentStmt *stmt = castNode(CommentStmt, node);
+	Assert(stmt->objtype == OBJECT_TSCONFIGURATION);
+
+	Oid objid = get_ts_config_oid(castNode(List, stmt->object), missing_ok);
+
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, TSConfigRelationId, objid);
+	return address;
 }
 
 

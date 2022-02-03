@@ -513,6 +513,14 @@ static DistributeObjectOps TextSearchConfig_AlterObjectSchema = {
 	.address = AlterTextSearchConfigurationSchemaStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps TextSearchConfig_Comment = {
+	.deparse = DeparseTextSearchConfigurationCommentStmt,
+	.qualify = QualifyTextSearchConfigurationCommentStmt,
+	.preprocess = PreprocessTextSearchConfigurationCommentStmt,
+	.postprocess = NULL,
+	.address = TextSearchConfigurationCommentObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps TextSearchConfig_Define = {
 	.deparse = DeparseCreateTextSearchStmt,
 	.qualify = NULL,
@@ -994,6 +1002,23 @@ GetDistributeObjectOps(Node *node)
 		case T_ClusterStmt:
 		{
 			return &Any_Cluster;
+		}
+
+		case T_CommentStmt:
+		{
+			CommentStmt *stmt = castNode(CommentStmt, node);
+			switch(stmt->objtype)
+			{
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_Comment;
+				}
+
+				default:
+				{
+					return &NoDistributeOps;
+				}
+			}
 		}
 
 		case T_CompositeTypeStmt:
