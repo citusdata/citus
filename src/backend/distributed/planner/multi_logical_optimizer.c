@@ -1628,7 +1628,7 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			 */
 			Expr *strippedDirectArg =
 				(Expr *) strip_implicit_coercions((Node *) directarg);
-			if (!IsA(strippedDirectArg, Const) && !IsA(strippedDirectArg, Param))
+			if (IsA(strippedDirectArg, Var))
 			{
 				Var *var = makeVar(masterTableId, walkerContext->columnId,
 								   exprType((Node *) directarg),
@@ -3093,7 +3093,7 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			 */
 			Expr *strippedDirectArg =
 				(Expr *) strip_implicit_coercions((Node *) directarg);
-			if (!IsA(strippedDirectArg, Const) && !IsA(strippedDirectArg, Param))
+			if (IsA(strippedDirectArg, Var))
 			{
 				workerAggregateList = lappend(workerAggregateList, directarg);
 			}

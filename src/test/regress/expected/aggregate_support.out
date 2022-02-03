@@ -695,17 +695,8 @@ select percentile_cont(0.5) within group(order by valf) from aggdata;
 (1 row)
 
 select key, percentile_cont(key/10.0) within group(order by val) from aggdata group by key;
- key | percentile_cont
----------------------------------------------------------------------
-   1 |               2
-   2 |             2.4
-   3 |               4
-   5 |
-   6 |
-   7 |               8
-   9 |               0
-(7 rows)
-
+ERROR:  attribute 2 of type record has wrong type
+DETAIL:  Table has type double precision, but query expects integer.
 select array_agg(val order by valf) from aggdata;
               array_agg
 ---------------------------------------------------------------------
@@ -965,5 +956,10 @@ FROM (SELECT *, random() FROM dist_table) a;
 SELECT PERCENTILE_DISC((.25 > random())::int::numeric / 10) WITHIN GROUP (ORDER BY agg_col)
 FROM dist_table
 LEFT JOIN ref_table ON TRUE;
-SSL SYSCALL error: EOF detected
-connection to server was lost
+ percentile_disc
+---------------------------------------------------------------------
+
+(1 row)
+
+set client_min_messages to error;
+drop schema aggregate_support cascade;
