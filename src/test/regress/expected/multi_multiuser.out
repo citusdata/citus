@@ -283,6 +283,14 @@ SELECT * FROM columnar_table;
  1
 (2 rows)
 
+-- Fail to alter a columnar table that is created by a different user
+SET ROLE full_access;
+SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
+ERROR:  must be owner of table columnar_table
+-- Fail to reset a columnar table value created by a different user
+SELECT alter_columnar_table_reset('columnar_table', chunk_group_row_limit => true);
+ERROR:  must be owner of table columnar_table
+SET ROLE read_access;
 -- and drop it
 DROP TABLE columnar_table;
 -- cannot modify columnar metadata table as unprivileged user
