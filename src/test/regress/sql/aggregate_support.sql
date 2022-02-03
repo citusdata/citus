@@ -479,6 +479,24 @@ SELECT square_func(5), a FROM t1 GROUP BY a;
 -- the expression will be pushed down.
 SELECT square_func(5), a, count(a) FROM t1 GROUP BY a;
 
+-- Test the cases where the worker agg exec. returns no tuples.
+
+CREATE TABLE dist_table (dist_col int, agg_col int);
+SELECT create_distributed_table('dist_table', 'dist_col');
+
+CREATE TABLE ref_table (int_col int);
+SELECT create_reference_table('ref_table');
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random() FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((.25 > random())::int::numeric / 10) WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
 
 set client_min_messages to error;
 drop schema aggregate_support cascade;
