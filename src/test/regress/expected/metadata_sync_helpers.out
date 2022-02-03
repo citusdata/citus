@@ -658,11 +658,26 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
     CREATE FUNCTION distribution_test_function(int) RETURNS int
     AS $$ SELECT $1 $$
     LANGUAGE SQL;
+	-- Since creating function grant execute to public directly, user can
+	-- call the citus_internal_add_object_metadata
     SET ROLE metadata_sync_helper_role;
     WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
         AS (VALUES ('function', ARRAY['distribution_test_function']::text[], ARRAY['integer']::text[], -1, 0, false))
     SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
-ERROR:  must be owner of function distribution_test_function
+ citus_internal_add_object_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+	RESET ROLE;
+	REVOKE ALL ON FUNCTION distribution_test_function(int) FROM PUBLIC;
+	-- After revoking it's execute right on the function, user can not
+	-- call the citus_internal_add_object_metadata
+	SET ROLE metadata_sync_helper_role;
+    WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
+        AS (VALUES ('function', ARRAY['distribution_test_function']::text[], ARRAY['integer']::text[], -1, 0, false))
+    SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+ERROR:  Current user does not have required privileges on function distribution_test_function(integer) to mark it as distributed
 ROLLBACK;
 -- we do not allow wrong partmethod
 -- so manually insert wrong partmethod for the sake of the test

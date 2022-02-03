@@ -419,7 +419,19 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
     AS $$ SELECT $1 $$
     LANGUAGE SQL;
 
+	-- Since creating function grant execute to public directly, user can
+	-- call the citus_internal_add_object_metadata
     SET ROLE metadata_sync_helper_role;
+    WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
+        AS (VALUES ('function', ARRAY['distribution_test_function']::text[], ARRAY['integer']::text[], -1, 0, false))
+    SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+
+	RESET ROLE;
+	REVOKE ALL ON FUNCTION distribution_test_function(int) FROM PUBLIC;
+
+	-- After revoking it's execute right on the function, user can not
+	-- call the citus_internal_add_object_metadata
+	SET ROLE metadata_sync_helper_role;
     WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
         AS (VALUES ('function', ARRAY['distribution_test_function']::text[], ARRAY['integer']::text[], -1, 0, false))
     SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;

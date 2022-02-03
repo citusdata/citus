@@ -38,7 +38,6 @@ static void ErrorIfCurrentUserCanNotDistributeObject(ObjectType type,
 													 ObjectAddress *addr,
 													 Node *node,
 													 Relation *relation);
-static void ErrorIfUserNotAllowedToPropagateExtension(char *extensionName);
 static List * textarray_to_strvaluelist(ArrayType *arr);
 
 /* It is defined on PG >= 13 versions by default */
@@ -421,8 +420,8 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 		case OBJECT_PROCEDURE:
 		case OBJECT_AGGREGATE:
 		{
-			check_object_ownership(userId, type, *addr, node, *relation);
-			skipAclCheck = true;
+			idToCheck = addr->objectId;
+			aclMaskResult = pg_proc_aclmask(idToCheck, userId, ACL_EXECUTE, ACLMASK_ANY);
 			break;
 		}
 
@@ -481,9 +480,6 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 
 		case OBJECT_EXTENSION:
 		{
-			Value *valueNode = (Value *) node;
-			char *extensionName = strVal(valueNode);
-			ErrorIfUserNotAllowedToPropagateExtension(extensionName);
 			skipAclCheck = true;
 			break;
 		}
@@ -504,116 +500,17 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 
 	if (!skipAclCheck && aclMaskResult == ACL_NO_RIGHTS)
 	{
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		char *objectDescription = getObjectDescription(addr, false);
+		#else
+		char *objectDescription = getObjectDescription(addr);
+		#endif
 		ereport(ERROR, (errmsg("Current user does not have required privileges "
-							   "on %d with type id %d to distribute it",
-							   idToCheck, type)));
+							   "on %s to mark it as distributed", objectDescription),
+						errdetail("User must own tables, must have EXECUTE privilege "
+								  "on procedures, CONNECT privilege on databases and "
+								  "USAGE privilege on all other object tpes")));
 	}
-}
-
-
-/*
- * ErrorIfUserNotAllowedToPropagateExtension errors out if the current user does
- * not have required privileges to propagate extension
- */
-static void
-ErrorIfUserNotAllowedToPropagateExtension(char *extensionName)
-{
-	const int nameAttributeIndex = 1;
-	const int superuserAttributeIndex = 4;
-#if PG_VERSION_NUM >= PG_VERSION_13
-	const int trustedAttributeIndex = 5;
-#endif
-
-	LOCAL_FCINFO(fcinfo, 0);
-	FmgrInfo flinfo;
-
-	bool goForward = true;
-	bool doCopy = false;
-
-	EState *estate = CreateExecutorState();
-	ReturnSetInfo *extensionsResultSet = makeNode(ReturnSetInfo);
-	extensionsResultSet->econtext = GetPerTupleExprContext(estate);
-	extensionsResultSet->allowedModes = SFRM_Materialize;
-
-	fmgr_info(F_PG_AVAILABLE_EXTENSION_VERSIONS, &flinfo);
-	InitFunctionCallInfoData(*fcinfo, &flinfo, 0, InvalidOid, NULL,
-							 (Node *) extensionsResultSet);
-
-	/*
-	 * pg_available_extensions_versions returns result set containing all
-	 * available extension versions with whether the extension requires
-	 * superuser and it is trusted information.
-	 */
-	(*pg_available_extension_versions)(fcinfo);
-
-	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(
-		extensionsResultSet->setDesc,
-		&TTSOpsMinimalTuple);
-	bool hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult,
-											goForward,
-											doCopy,
-											tupleTableSlot);
-	while (hasTuple)
-	{
-		bool isNull = false;
-		Datum curExtensionNameDatum = slot_getattr(tupleTableSlot,
-												   nameAttributeIndex,
-												   &isNull);
-		char *curExtensionName = NameStr(*DatumGetName(curExtensionNameDatum));
-		if (strcmp(extensionName, curExtensionName) == 0)
-		{
-			Datum superuserExpectedDatum = slot_getattr(tupleTableSlot,
-														superuserAttributeIndex,
-														&isNull);
-			bool superuserExpected = DatumGetBool(superuserExpectedDatum);
-
-#if PG_VERSION_NUM < PG_VERSION_13
-			if (superuserExpected)
-			{
-				EnsureSuperUser();
-			}
-#else
-			if (superuserExpected)
-			{
-				/*
-				 * After PG 13, if the extension is trusted it can be created
-				 * by the user having CREATE privilege on the database even if
-				 * the extension requires superuser.
-				 */
-				Datum trustedExtensionDatum = slot_getattr(tupleTableSlot,
-														   trustedAttributeIndex,
-														   &isNull);
-				bool trustedExtension = DatumGetBool(trustedExtensionDatum);
-
-				if (trustedExtension)
-				{
-					/* Allow if user has CREATE privilege on current database */
-					AclResult aclresult = pg_database_aclcheck(MyDatabaseId,
-															   GetUserId(),
-															   ACL_CREATE);
-					if (aclresult != ACLCHECK_OK)
-					{
-						ereport(ERROR, (errmsg("operation is not allowed"),
-										errhint("Must have CREATE privilege "
-												"on database to propagate "
-												"extension %s", curExtensionName)));
-					}
-				}
-				else
-				{
-					EnsureSuperUser();
-				}
-			}
-#endif
-			break;
-		}
-
-		ExecClearTuple(tupleTableSlot);
-		hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward,
-										   doCopy, tupleTableSlot);
-	}
-
-	ExecDropSingleTupleTableSlot(tupleTableSlot);
 }
 
 
