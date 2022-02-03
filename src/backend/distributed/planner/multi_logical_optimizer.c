@@ -1617,14 +1617,11 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		foreach_ptr(directarg, originalAggregate->aggdirectargs)
 		{
 			/*
-			 * At this point, we can only leave Const nodes as is and resolve
-			 * Param's in the runtime. For the other type of nodes, we should
-			 * be able to resolve them via aggregate result returned from the
-			 * worker node. To do that, need to wrap those nodes in variables
-			 * pointing to worker result.
+			 * Need to overwrite Var nodes so that they point to the related
+			 * column of the result set returned for the worker aggregation.
 			 *
-			 * Note that we should decide those nodes by looking into the actual
-			 * nodes behind coercions, casts etc.
+			 * We also need to do the same for the Var's within complex
+			 * expressions, so we use pull_var_clause_default here.
 			 */
 			List *directArgVars = pull_var_clause_default((Node *) directarg);
 			if (list_length(directArgVars) > 0)
@@ -3086,6 +3083,10 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		Expr *directarg;
 		foreach_ptr(directarg, originalAggregate->aggdirectargs)
 		{
+			/*
+			 * As coordinator expects (see MasterAggregateExpression), need
+			 * to collect Var's living in the complex objects.
+			 */
 			List *directArgVars = pull_var_clause_default((Node *) directarg);
 			workerAggregateList = list_concat(workerAggregateList, directArgVars);
 		}
