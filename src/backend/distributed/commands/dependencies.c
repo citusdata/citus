@@ -122,7 +122,8 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 */
 	foreach_ptr(dependency, dependenciesWithCommands)
 	{
-		MarkObjectDistributed(dependency);
+		/* TODO: add comment why we do this, and why we should NOT user supreuser in any other case */
+		MarkObjectDistributedViaSuperUser(dependency);
 	}
 }
 

@@ -46,6 +46,8 @@
 #include "utils/rel.h"
 
 
+static void MarkObjectDistributedLocally(const ObjectAddress *distAddress);
+static char * CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress);
 static int ExecuteCommandAsSuperuser(char *query, int paramCount, Oid *paramTypes,
 									 Datum *paramValues);
 
@@ -150,6 +152,44 @@ ObjectExists(const ObjectAddress *address)
 void
 MarkObjectDistributed(const ObjectAddress *distAddress)
 {
+	MarkObjectDistributedLocally(distAddress);
+
+	if (EnableDependencyCreation)
+	{
+		char *workerPgDistObjectUpdateCommand =
+			CreatePgDistObjectEntryCommand(distAddress);
+		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
+	}
+}
+
+
+/*
+ * TODO:add comment
+ */
+void
+MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress)
+{
+	MarkObjectDistributedLocally(distAddress);
+
+	if (EnableDependencyCreation)
+	{
+		char *workerPgDistObjectUpdateCommand =
+			CreatePgDistObjectEntryCommand(distAddress);
+		SendCommandToWorkersWithMetadataViaSuperUser(workerPgDistObjectUpdateCommand);
+	}
+}
+
+
+/*
+ * MarkObjectDistributedLocally marks an object as a distributed object by citus.
+ * Marking is done by adding appropriate entries to citus.pg_dist_object.
+ *
+ * This function should never be called alone, MarkObjectDistributed() or
+ * MarkObjectDistributedViaSuperUser() should be called.
+ */
+static void
+MarkObjectDistributedLocally(const ObjectAddress *distAddress)
+{
 	int paramCount = 3;
 	Oid paramTypes[3] = {
 		OIDOID,
@@ -171,22 +211,29 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 	{
 		ereport(ERROR, (errmsg("failed to insert object into citus.pg_dist_object")));
 	}
+}
 
-	if (EnableDependencyCreation)
-	{
-		/* create a list by adding the address of value to not to have warning */
-		List *objectAddressList = list_make1((ObjectAddress *) distAddress);
-		List *distArgumetIndexList = list_make1_int(INVALID_DISTRIBUTION_ARGUMENT_INDEX);
-		List *colocationIdList = list_make1_int(INVALID_COLOCATION_ID);
-		List *forceDelegationList = list_make1_int(NO_FORCE_PUSHDOWN);
 
-		char *workerPgDistObjectUpdateCommand =
-			MarkObjectsDistributedCreateCommand(objectAddressList,
-												distArgumetIndexList,
-												colocationIdList,
-												forceDelegationList);
-		SendCommandToWorkersWithMetadata(workerPgDistObjectUpdateCommand);
-	}
+/*
+ * tODO: add comment
+ */
+static char *
+CreatePgDistObjectEntryCommand(const ObjectAddress *objectAddress)
+{
+	/* create a list by adding the address of value to not to have warning */
+	List *objectAddressList =
+		list_make1((ObjectAddress *) objectAddress);
+	List *distArgumetIndexList = list_make1_int(INVALID_DISTRIBUTION_ARGUMENT_INDEX);
+	List *colocationIdList = list_make1_int(INVALID_COLOCATION_ID);
+	List *forceDelegationList = list_make1_int(NO_FORCE_PUSHDOWN);
+
+	char *workerPgDistObjectUpdateCommand =
+		MarkObjectsDistributedCreateCommand(objectAddressList,
+											distArgumetIndexList,
+											colocationIdList,
+											forceDelegationList);
+
+	return workerPgDistObjectUpdateCommand;
 }
 
 

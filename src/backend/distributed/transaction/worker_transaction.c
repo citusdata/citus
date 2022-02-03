@@ -124,6 +124,18 @@ SendCommandToWorkersWithMetadata(const char *command)
 
 
 /*
+ * TODO: add comment
+ * Discourged to use.
+ */
+void
+SendCommandToWorkersWithMetadataViaSuperUser(const char *command)
+{
+	SendCommandToMetadataWorkersParams(command, CitusExtensionOwnerName(),
+									   0, NULL, NULL);
+}
+
+
+/*
  * TargetWorkerSetNodeList returns a list of WorkerNode's that satisfies the
  * TargetWorkerSet.
  */
