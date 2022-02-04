@@ -1623,21 +1623,16 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			 * We also need to do the same for the Var's within complex
 			 * expressions, so we use pull_var_clause_default here.
 			 */
-			List *directArgVars = pull_var_clause_default((Node *) directarg);
-			if (list_length(directArgVars) > 0)
+			if (pull_var_clause_default((Node *) directarg) != NIL)
 			{
-				Var *directArgVar = NULL;
-				foreach_ptr(directArgVar, directArgVars)
-				{
-					Var *var = makeVar(masterTableId, walkerContext->columnId,
-									   exprType((Node *) directArgVar),
-									   exprTypmod((Node *) directArgVar),
-									   exprCollation((Node *) directArgVar),
-									   columnLevelsUp);
-					walkerContext->columnId++;
+				Var *var = makeVar(masterTableId, walkerContext->columnId,
+								   exprType((Node *) directarg),
+								   exprTypmod((Node *) directarg),
+								   exprCollation((Node *) directarg),
+								   columnLevelsUp);
+				walkerContext->columnId++;
 
-					aggregate->aggdirectargs = lappend(aggregate->aggdirectargs, var);
-				}
+				aggregate->aggdirectargs = lappend(aggregate->aggdirectargs, var);
 			}
 			else
 			{
@@ -3087,8 +3082,10 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 			 * As coordinator expects (see MasterAggregateExpression), need
 			 * to collect Var's living in the complex objects.
 			 */
-			List *directArgVars = pull_var_clause_default((Node *) directarg);
-			workerAggregateList = list_concat(workerAggregateList, directArgVars);
+			if (pull_var_clause_default((Node *) directarg) != NIL)
+			{
+				workerAggregateList = lappend(workerAggregateList, directarg);
+			}
 		}
 
 		if (originalAggregate->aggfilter)

@@ -698,7 +698,7 @@ select key, percentile_cont(key/10.0) within group(order by val) from aggdata gr
  key | percentile_cont
 ---------------------------------------------------------------------
    1 |               2
-   2 |               2
+   2 |             2.4
    3 |               4
    5 |
    6 |
