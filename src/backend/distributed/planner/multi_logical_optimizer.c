@@ -1617,11 +1617,9 @@ MasterAggregateExpression(Aggref *originalAggregate,
 		foreach_ptr(directarg, originalAggregate->aggdirectargs)
 		{
 			/*
-			 * Need to overwrite Var nodes so that they point to the related
-			 * column of the result set returned for the worker aggregation.
-			 *
-			 * We also need to do the same for the Var's within complex
-			 * expressions, so we use pull_var_clause_default here.
+			 * Need to replace nodes that contain any Vars with Vars referring
+			 * to the related column of the result set returned for the worker
+			 * aggregation.
 			 */
 			if (pull_var_clause_default((Node *) directarg) != NIL)
 			{
@@ -1630,9 +1628,8 @@ MasterAggregateExpression(Aggref *originalAggregate,
 								   exprTypmod((Node *) directarg),
 								   exprCollation((Node *) directarg),
 								   columnLevelsUp);
-				walkerContext->columnId++;
-
 				aggregate->aggdirectargs = lappend(aggregate->aggdirectargs, var);
+				walkerContext->columnId++;
 			}
 			else
 			{
@@ -3079,8 +3076,10 @@ WorkerAggregateExpressionList(Aggref *originalAggregate,
 		foreach_ptr(directarg, originalAggregate->aggdirectargs)
 		{
 			/*
-			 * As coordinator expects (see MasterAggregateExpression), need
-			 * to collect Var's living in the complex objects.
+			 * The worker aggregation should execute any node that contains any
+			 * Var nodes and return the result in the targetlist, so that the
+			 * combine query can then fetch the result via remote scan; see
+			 * MasterAggregateExpression.
 			 */
 			if (pull_var_clause_default((Node *) directarg) != NIL)
 			{
