@@ -55,6 +55,18 @@ SET search_path TO local_schema;
 SELECT create_distributed_table('dist_table', 'a');
 SELECT create_distributed_function('test_function(int)');
 
+-- Create and distribute plpgsql extension's function
+CREATE OR REPLACE FUNCTION plpgsql_dist_function(text)
+RETURNS void
+LANGUAGE plpgsql AS
+$$
+    BEGIN
+        RAISE NOTICE '%', $1;
+    END;
+$$;
+
+SELECT create_distributed_function('plpgsql_dist_function(text)');
+
 -- show that schema, types, function and sequence has marked as distributed
 -- on the coordinator node
 RESET ROLE;
@@ -65,6 +77,7 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dis
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'test_sequence_schema.test_sequence'::regclass::oid;
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'local_schema.dist_table_e_seq'::regclass::oid;
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'local_schema.test_function'::regproc::oid;
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'local_schema.plpgsql_dist_function'::regproc::oid;
 
 -- show those objects marked as distributed on metadata worker node as well
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'local_schema'::regnamespace::oid;$$) ORDER BY 1,2;
@@ -74,6 +87,11 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'test_sequence_schema.test_sequence'::regclass::oid;$$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'local_schema.dist_table_e_seq'::regclass::oid;$$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'local_schema.test_function'::regproc::oid;$$) ORDER BY 1,2;
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'local_schema.plpgsql_dist_function'::regproc::oid;$$) ORDER BY 1,2;
+
+-- Show that extension plpgsql is also marked as distributed as a dependency of plpgsl_dist_function
+SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from citus.pg_dist_object) as obj_identifiers where obj_identifier::text like '%{plpgsql}%';
+SELECT * FROM run_command_on_workers($$SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from citus.pg_dist_object) as obj_identifiers where obj_identifier::text like '%{plpgsql}%';$$) ORDER BY 1,2;
 
 -- show that schema is owned by the superuser
 SELECT rolname FROM pg_roles JOIN pg_namespace ON(pg_namespace.nspowner = pg_roles.oid) WHERE nspname = 'local_schema';
