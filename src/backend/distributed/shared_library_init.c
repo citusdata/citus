@@ -108,7 +108,6 @@ static GucStringAssignHook OldApplicationNameAssignHook = NULL;
 
 
 void _PG_init(void);
-void _PG_fini(void);
 
 static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
@@ -355,14 +354,6 @@ _PG_init(void)
 		DoInitialCleanup();
 	}
 	columnar_init();
-}
-
-
-/* shared library deconstruction function */
-void
-_PG_fini(void)
-{
-	columnar_fini();
 }
 
 

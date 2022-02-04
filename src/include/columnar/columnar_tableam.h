@@ -7,9 +7,9 @@
 #include "access/tableam.h"
 #include "access/skey.h"
 #include "nodes/bitmapset.h"
-
-#include "distributed/coordinator_protocol.h"
-
+#include "access/heapam.h"
+#include "catalog/indexing.h"
+#include "utils/acl.h"
 
 /*
  * Number of valid ItemPointer Offset's for "row number" <> "ItemPointer"
@@ -50,8 +50,7 @@ typedef struct ColumnarScanDescData *ColumnarScanDesc;
 
 const TableAmRoutine * GetColumnarTableAmRoutine(void);
 extern void columnar_tableam_init(void);
-extern void columnar_tableam_finish(void);
-
+extern bool CheckCitusVersion(int elevel);
 extern TableScanDesc columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 												 int nkeys, ScanKey key,
 												 ParallelTableScanDesc parallel_scan,
