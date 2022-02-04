@@ -37,7 +37,15 @@ SELECT create_distributed_table('t1', 'name');
 
 (1 row)
 
--- TODO verify comment on workers
+SELECT run_command_on_workers($$
+    SELECT obj_description('text_search.my_text_search_config'::regconfig);
+$$);
+                              run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"on demand propagation of text search object with a comment")
+ (localhost,57638,t,"on demand propagation of text search object with a comment")
+(2 rows)
+
 -- verify that changing anything on a managed TEXT SEARCH CONFIGURATION fails after parallel execution
 COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config  IS 'this comment can''t be set right now';
 ERROR:  cannot create or modify text search configuration because there was a parallel operation on a distributed table in the transaction
@@ -47,7 +55,7 @@ ABORT;
 -- create an index on an already distributed table
 BEGIN;
 CREATE TEXT SEARCH CONFIGURATION my_text_search_config2 ( parser = default );
-COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config2 IS 'on demand propagation of text search object with a comment';
+COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config2 IS 'on demand propagation of text search object with a comment 2';
 CREATE TABLE t1(id int, name text);
 SELECT create_distributed_table('t1', 'name');
  create_distributed_table
@@ -56,7 +64,15 @@ SELECT create_distributed_table('t1', 'name');
 (1 row)
 
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config2'::regconfig, (COALESCE(name, ''::character varying))::text));
--- TODO verify comment on workers
+SELECT run_command_on_workers($$
+    SELECT obj_description('text_search.my_text_search_config2'::regconfig);
+$$);
+                               run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"on demand propagation of text search object with a comment 2")
+ (localhost,57638,t,"on demand propagation of text search object with a comment 2")
+(2 rows)
+
 ABORT;
 -- should be able to create a configuration based on a copy of an existing configuration
 CREATE TEXT SEARCH CONFIGURATION french_noaccent ( COPY = french );
@@ -136,7 +152,26 @@ ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING IF EXISTS FOR ascii
 NOTICE:  mapping for token type "asciihword" does not exist, skipping
 -- Comment on a text search configuration
 COMMENT ON TEXT SEARCH CONFIGURATION french_noaccent IS 'a text configuration that is butcherd to test all edge cases';
--- TODO actually verify the comment is propagated
+SELECT run_command_on_workers($$
+    SELECT obj_description('text_search.french_noaccent'::regconfig);
+$$);
+                               run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"a text configuration that is butcherd to test all edge cases")
+ (localhost,57638,t,"a text configuration that is butcherd to test all edge cases")
+(2 rows)
+
+-- Remove a comment
+COMMENT ON TEXT SEARCH CONFIGURATION french_noaccent IS NULL;
+SELECT run_command_on_workers($$
+    SELECT obj_description('text_search.french_noaccent'::regconfig);
+$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"")
+ (localhost,57638,t,"")
+(2 rows)
+
 SET client_min_messages TO 'warning';
 SELECT run_command_on_workers($$CREATE ROLE text_search_owner;$$);
       run_command_on_workers

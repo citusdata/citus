@@ -237,9 +237,19 @@ DeparseTextSearchConfigurationCommentStmt(Node *node)
 	StringInfoData buf = { 0 };
 	initStringInfo(&buf);
 
-	appendStringInfo(&buf, "COMMENT ON TEXT SEARCH CONFIGURATION %s IS %s;",
-					 NameListToQuotedString(castNode(List, stmt->object)),
-					 quote_literal_cstr(stmt->comment));
+	appendStringInfo(&buf, "COMMENT ON TEXT SEARCH CONFIGURATION %s IS ",
+					 NameListToQuotedString(castNode(List, stmt->object)));
+
+	if (stmt->comment == NULL)
+	{
+		appendStringInfoString(&buf, "NULL");
+	}
+	else
+	{
+		appendStringInfoString(&buf, quote_literal_cstr(stmt->comment));
+	}
+
+	appendStringInfoString(&buf, ";");
 
 	return buf.data;
 }

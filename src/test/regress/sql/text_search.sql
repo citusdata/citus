@@ -26,7 +26,9 @@ COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config IS 'on demand propaga
 CREATE TABLE t1(id int, name text);
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
 SELECT create_distributed_table('t1', 'name');
--- TODO verify comment on workers
+SELECT run_command_on_workers($$
+    SELECT obj_description('text_search.my_text_search_config'::regconfig);
+$$);
 
 -- verify that changing anything on a managed TEXT SEARCH CONFIGURATION fails after parallel execution
 COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config  IS 'this comment can''t be set right now';
@@ -35,11 +37,13 @@ ABORT;
 -- create an index on an already distributed table
 BEGIN;
 CREATE TEXT SEARCH CONFIGURATION my_text_search_config2 ( parser = default );
-COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config2 IS 'on demand propagation of text search object with a comment';
+COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config2 IS 'on demand propagation of text search object with a comment 2';
 CREATE TABLE t1(id int, name text);
 SELECT create_distributed_table('t1', 'name');
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config2'::regconfig, (COALESCE(name, ''::character varying))::text));
--- TODO verify comment on workers
+SELECT run_command_on_workers($$
+    SELECT obj_description('text_search.my_text_search_config2'::regconfig);
+$$);
 ABORT;
 
 -- should be able to create a configuration based on a copy of an existing configuration
@@ -80,7 +84,15 @@ ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING IF EXISTS FOR ascii
 
 -- Comment on a text search configuration
 COMMENT ON TEXT SEARCH CONFIGURATION french_noaccent IS 'a text configuration that is butcherd to test all edge cases';
--- TODO actually verify the comment is propagated
+SELECT run_command_on_workers($$
+    SELECT obj_description('text_search.french_noaccent'::regconfig);
+$$);
+
+-- Remove a comment
+COMMENT ON TEXT SEARCH CONFIGURATION french_noaccent IS NULL;
+SELECT run_command_on_workers($$
+    SELECT obj_description('text_search.french_noaccent'::regconfig);
+$$);
 
 SET client_min_messages TO 'warning';
 SELECT run_command_on_workers($$CREATE ROLE text_search_owner;$$);
