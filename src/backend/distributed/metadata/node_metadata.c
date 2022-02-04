@@ -77,7 +77,7 @@ bool ReplicateReferenceTablesOnActivate = true;
 /* did current transaction modify pg_dist_node? */
 bool TransactionModifiedNodeMetadata = false;
 
-bool EnableMetadataSyncByDefault = true;
+bool EnableMetadataSync = true;
 
 typedef struct NodeMetadata
 {
@@ -1095,9 +1095,9 @@ ActivateNode(char *nodeName, int nodePort)
 								 BoolGetDatum(isActive));
 
 	/* TODO: Once all tests will be enabled for MX, we can remove sync by default check */
-	bool syncMetadata = EnableMetadataSyncByDefault && NodeIsPrimary(workerNode);
+	bool syncMetadata = EnableMetadataSync && NodeIsPrimary(workerNode);
 
-	if (syncMetadata && EnableDependencyCreation)
+	if (syncMetadata)
 	{
 		/*
 		 * We are going to sync the metadata anyway in this transaction, so do

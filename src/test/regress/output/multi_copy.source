@@ -745,7 +745,7 @@ UPDATE pg_dist_shard_placement SET nodeport = :worker_1_port+10 WHERE shardid = 
 SET session_replication_role = DEFAULT;
 -- disable test_user on the first worker
 \c - :default_user - :worker_1_port
-SET citus.enable_object_propagation TO off;
+SET citus.enable_metadata_sync TO off;
 ALTER USER test_user WITH nologin;
 \c - test_user - :master_port
 -- reissue copy, and it should fail
@@ -804,7 +804,7 @@ SELECT shardid, shardstate, nodename, nodeport
 
 -- re-enable test_user on the first worker
 \c - :default_user - :worker_1_port
-SET citus.enable_object_propagation TO off;
+SET citus.enable_metadata_sync TO off;
 ALTER USER test_user WITH login;
 \c - test_user - :master_port
 DROP TABLE numbers_hash;

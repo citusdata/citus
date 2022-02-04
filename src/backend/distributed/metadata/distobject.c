@@ -172,7 +172,7 @@ MarkObjectDistributed(const ObjectAddress *distAddress)
 		ereport(ERROR, (errmsg("failed to insert object into citus.pg_dist_object")));
 	}
 
-	if (EnableDependencyCreation)
+	if (EnableMetadataSync)
 	{
 		/* create a list by adding the address of value to not to have warning */
 		List *objectAddressList = list_make1((ObjectAddress *) distAddress);

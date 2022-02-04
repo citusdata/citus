@@ -1,4 +1,4 @@
-ALTER SYSTEM SET citus.enable_metadata_sync_by_default TO OFF;
+ALTER SYSTEM SET citus.enable_metadata_sync TO OFF;
 SELECT pg_reload_conf();
  pg_reload_conf
 ---------------------------------------------------------------------
