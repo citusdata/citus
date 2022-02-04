@@ -437,8 +437,12 @@ AcquireDistributedLockOnRelations(List *relationIdList, LOCKMODE lockMode)
 		/*
 		 * We only acquire distributed lock on relation if
 		 * the relation is sync'ed between mx nodes.
+		 *
+		 * Even if users disable metadata sync, we cannot
+		 * allow them not to acquire the remote locks.
+		 * Hence, we have !IsCoordinator() check.
 		 */
-		if (ShouldSyncTableMetadata(relationId))
+		if (ShouldSyncTableMetadata(relationId) || !IsCoordinator())
 		{
 			char *qualifiedRelationName = generate_qualified_relation_name(relationId);
 			StringInfo lockRelationCommand = makeStringInfo();

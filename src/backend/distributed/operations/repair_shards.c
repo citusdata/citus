@@ -556,8 +556,12 @@ BlockWritesToShardList(List *shardList)
 	Oid firstDistributedTableId = firstShardInterval->relationId;
 
 	bool shouldSyncMetadata = ShouldSyncTableMetadata(firstDistributedTableId);
-	if (shouldSyncMetadata)
+	if (shouldSyncMetadata || !IsCoordinator())
 	{
+		/*
+		 * Even if users disable metadata sync, we cannot allow them not to
+		 * acquire the remote locks. Hence, we have !IsCoordinator() check.
+		 */
 		LockShardListMetadataOnWorkers(ExclusiveLock, shardList);
 	}
 }
