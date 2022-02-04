@@ -513,6 +513,14 @@ static DistributeObjectOps TextSearchConfig_AlterObjectSchema = {
 	.address = AlterTextSearchConfigurationSchemaStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps TextSearchConfig_AlterOwner = {
+	.deparse = DeparseAlterTextSearchConfigurationOwnerStmt,
+	.qualify = QualifyAlterTextSearchConfigurationOwnerStmt,
+	.preprocess = PreprocessAlterTextSearchConfigurationOwnerStmt,
+	.postprocess = NULL,
+	.address = AlterTextSearchConfigurationOwnerObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps TextSearchConfig_Comment = {
 	.deparse = DeparseTextSearchConfigurationCommentStmt,
 	.qualify = QualifyTextSearchConfigurationCommentStmt,
@@ -913,6 +921,11 @@ GetDistributeObjectOps(Node *node)
 					return &Statistics_AlterOwner;
 				}
 
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_AlterOwner;
+				}
+
 				case OBJECT_TYPE:
 				{
 					return &Type_AlterOwner;
@@ -1007,7 +1020,7 @@ GetDistributeObjectOps(Node *node)
 		case T_CommentStmt:
 		{
 			CommentStmt *stmt = castNode(CommentStmt, node);
-			switch(stmt->objtype)
+			switch (stmt->objtype)
 			{
 				case OBJECT_TSCONFIGURATION:
 				{

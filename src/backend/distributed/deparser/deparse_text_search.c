@@ -3,6 +3,7 @@
 #include "catalog/namespace.h"
 #include "utils/builtins.h"
 
+#include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
 #include "distributed/listutils.h"
 
@@ -284,4 +285,21 @@ AppendStringInfoDictnames(StringInfo buf, List *dicts)
 		char *dictIdentifier = NameListToQuotedString(dictNames);
 		appendStringInfoString(buf, dictIdentifier);
 	}
+}
+
+
+char *
+DeparseAlterTextSearchConfigurationOwnerStmt(Node *node)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+
+	appendStringInfo(&buf, "ALTER TEXT SEARCH CONFIGURATION %s OWNER TO %s;",
+					 NameListToQuotedString(castNode(List, stmt->object)),
+					 RoleSpecString(stmt->newowner, true));
+
+	return buf.data;
 }

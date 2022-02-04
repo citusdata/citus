@@ -41,4 +41,23 @@ CREATE INDEX t2_search_name ON t2 USING gin (to_tsvector('text_search.french_noa
 SELECT create_distributed_table('t2', 'id');
 
 SET client_min_messages TO 'warning';
+SELECT run_command_on_workers($$CREATE ROLE text_search_owner;$$);
+CREATE ROLE text_search_owner;
+RESET client_min_messages;
+
+CREATE TEXT SEARCH CONFIGURATION changed_owner ( PARSER = default );
+SELECT run_command_on_workers($$
+    SELECT cfgowner::regrole
+      FROM pg_ts_config
+     WHERE oid = 'text_search.changed_owner'::regconfig;
+$$);
+ALTER TEXT SEARCH CONFIGURATION changed_owner OWNER TO text_search_owner;
+SELECT run_command_on_workers($$
+    SELECT cfgowner::regrole
+      FROM pg_ts_config
+     WHERE oid = 'text_search.changed_owner'::regconfig;
+$$);
+
+SET client_min_messages TO 'warning';
 DROP SCHEMA text_search CASCADE;
+DROP ROLE text_search_owner;

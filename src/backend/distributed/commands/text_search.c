@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "access/genam.h"
+#include "access/xact.h"
 #include "catalog/namespace.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_ts_config.h"
@@ -33,6 +34,8 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/worker_create_or_replace.h"
 
 
@@ -44,6 +47,8 @@ static List * GetTextSearchConfigMappingStmt(Oid tsconfigOid);
 static List * get_ts_dict_namelist(Oid tsdictOid);
 static Oid get_ts_config_parser(Oid tsconfigOid);
 static char * get_ts_parser_tokentype_name(Oid parserOid, int32 tokentype);
+
+static void EnsureSequentialModeForTextSearchConfigurationDDL(void);
 
 List *
 PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString)
@@ -66,6 +71,7 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 	}
 
 	EnsureCoordinator();
+	EnsureSequentialModeForTextSearchConfigurationDDL();
 
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
 	EnsureDependenciesExistOnAllNodes(&address);
@@ -167,6 +173,7 @@ PreprocessDropTextSearchConfigurationStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
+	EnsureSequentialModeForTextSearchConfigurationDDL();
 
 	DropStmt *stmtCopy = copyObject(stmt);
 	stmtCopy->objects = distributedObjects;
@@ -199,6 +206,7 @@ PreprocessAlterTextSearchConfigurationStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
+	EnsureSequentialModeForTextSearchConfigurationDDL();
 
 	QualifyTreeNode((Node *) stmt);
 	const char *alterStmtSql = DeparseTreeNode((Node *) stmt);
@@ -230,6 +238,7 @@ PreprocessRenameTextSearchConfigurationStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
+	EnsureSequentialModeForTextSearchConfigurationDDL();
 
 	QualifyTreeNode((Node *) stmt);
 
@@ -259,6 +268,7 @@ PreprocessAlterTextSearchConfigurationSchemaStmt(Node *node, const char *querySt
 	}
 
 	EnsureCoordinator();
+	EnsureSequentialModeForTextSearchConfigurationDDL();
 	QualifyTreeNode((Node *) stmt);
 
 	const char *sql = DeparseTreeNode((Node *) stmt);
@@ -305,6 +315,8 @@ PreprocessTextSearchConfigurationCommentStmt(Node *node, const char *queryString
 	}
 
 	EnsureCoordinator();
+	EnsureSequentialModeForTextSearchConfigurationDDL();
+
 	QualifyTreeNode((Node *) stmt);
 
 	const char *sql = DeparseTreeNode((Node *) stmt);
@@ -314,6 +326,34 @@ PreprocessTextSearchConfigurationCommentStmt(Node *node, const char *queryString
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_METADATA_NODES, commands);
+}
+
+
+List *
+PreprocessAlterTextSearchConfigurationOwnerStmt(Node *node, const char *queryString,
+												ProcessUtilityContext
+												processUtilityContext)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateObject(&address))
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+	EnsureSequentialModeForTextSearchConfigurationDDL();
+
+	QualifyTreeNode((Node *) stmt);
+	char *sql = DeparseTreeNode((Node *) stmt);
+
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -642,6 +682,19 @@ TextSearchConfigurationCommentObjectAddress(Node *node, bool missing_ok)
 }
 
 
+ObjectAddress
+AlterTextSearchConfigurationOwnerObjectAddress(Node *node, bool missing_ok)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	Relation relation = NULL;
+
+	Assert(stmt->objectType == OBJECT_TSCONFIGURATION);
+
+	return get_object_address(stmt->objectType, stmt->object, &relation, AccessShareLock,
+							  missing_ok);
+}
+
+
 char *
 GenerateBackupNameForTextSearchConfiguration(const ObjectAddress *address)
 {
@@ -682,4 +735,49 @@ GenerateBackupNameForTextSearchConfiguration(const ObjectAddress *address)
 
 		count++;
 	}
+}
+
+
+/*
+ * EnsureSequentialModeForTextSearchConfigurationDDL makes sure that the current
+ * transaction is already in sequential mode, or can still safely be put in sequential
+ * mode, it errors if that is not possible. The error contains information for the user to
+ * retry the transaction with sequential mode set from the beginning.
+ *
+ * As text search configurations are node scoped objects there exists only 1 instance of
+ * the text search configuration used by  potentially multiple shards. To make sure all
+ * shards in the transaction can interact with the text search configuration needs to be
+ * visible on all connections used by the transaction, meaning we can only use 1
+ * connection per node.
+ */
+static void
+EnsureSequentialModeForTextSearchConfigurationDDL(void)
+{
+	if (!IsTransactionBlock())
+	{
+		/* we do not need to switch to sequential mode if we are not in a transaction */
+		return;
+	}
+
+	if (ParallelQueryExecutedInTransaction())
+	{
+		ereport(ERROR, (errmsg("cannot create or modify text search configuration "
+							   "because there was a parallel operation on a distributed "
+							   "table in the transaction"),
+						errdetail(
+							"When creating or altering a text search configuration, Citus "
+							"needs to perform all operations over a single connection per "
+							"node to ensure consistency."),
+						errhint("Try re-running the transaction with "
+								"\"SET LOCAL citus.multi_shard_modify_mode TO "
+								"\'sequential\';\"")));
+	}
+
+	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
+					 errdetail(
+						 "Text search configuration is created or altered. To make sure "
+						 "subsequent commands see the Text search configuration correctly "
+						 "we need to make sure to use only one connection for all future "
+						 "commands")));
+	SetLocalMultiShardModifyModeToSequential();
 }

@@ -66,6 +66,7 @@ extern char * DeparseRenameTextSearchConfigurationStmt(Node *node);
 extern char * DeparseAlterTextSearchConfigurationStmt(Node *node);
 extern char * DeparseAlterTextSearchConfigurationSchemaStmt(Node *node);
 extern char * DeparseTextSearchConfigurationCommentStmt(Node *node);
+extern char * DeparseAlterTextSearchConfigurationOwnerStmt(Node *node);
 
 /* forward declarations for deparse_schema_stmts.c */
 extern char * DeparseGrantOnSchemaStmt(Node *stmt);
@@ -152,6 +153,7 @@ extern void QualifyAlterTextSearchConfigurationStmt(Node *node);
 extern void QualifyRenameTextSearchConfigurationStmt(Node *node);
 extern void QualifyAlterTextSearchConfigurationSchemaStmt(Node *node);
 extern void QualifyTextSearchConfigurationCommentStmt(Node *node);
+extern void QualifyAlterTextSearchConfigurationOwnerStmt(Node *node);
 
 /* forward declarations for deparse_sequence_stmts.c */
 extern char * DeparseDropSequenceStmt(Node *node);

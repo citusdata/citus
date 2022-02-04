@@ -488,6 +488,10 @@ extern List * PreprocessTextSearchConfigurationCommentStmt(Node *node,
 														   const char *queryString,
 														   ProcessUtilityContext
 														   processUtilityContext);
+extern List * PreprocessAlterTextSearchConfigurationOwnerStmt(Node *node,
+															  const char *queryString,
+															  ProcessUtilityContext
+															  processUtilityContext);
 extern ObjectAddress CreateTextSearchConfigurationObjectAddress(Node *node,
 																bool missing_ok);
 extern ObjectAddress RenameTextSearchConfigurationStmtObjectAddress(Node *node,
@@ -498,6 +502,8 @@ extern ObjectAddress AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *n
 																		 bool missing_ok);
 extern ObjectAddress TextSearchConfigurationCommentObjectAddress(Node *node,
 																 bool missing_ok);
+extern ObjectAddress AlterTextSearchConfigurationOwnerObjectAddress(Node *node,
+																	bool missing_ok);
 extern char * GenerateBackupNameForTextSearchConfiguration(const ObjectAddress *address);
 extern List * get_ts_config_namelist(Oid tsconfigOid);
 
