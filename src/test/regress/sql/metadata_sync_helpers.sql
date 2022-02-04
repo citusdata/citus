@@ -425,6 +425,19 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
     SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
 ROLLBACK;
 
+BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+    SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
+    SET application_name to 'citus_internal';
+    \set VERBOSITY terse
+
+    CREATE TYPE distributed_test_type AS (a int, b int);
+
+    SET ROLE metadata_sync_helper_role;
+    WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)
+        AS (VALUES ('type', ARRAY['distributed_test_type']::text[], ARRAY[]::text[], -1, 0, false))
+    SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation) FROM distributed_object_data;
+ROLLBACK;
+
 -- we do not allow wrong partmethod
 -- so manually insert wrong partmethod for the sake of the test
 SET search_path TO metadata_sync_helpers;
