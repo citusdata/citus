@@ -132,19 +132,8 @@ PreprocessDropTextSearchConfigurationStmt(Node *node, const char *queryString,
 	DropStmt *stmt = castNode(DropStmt, node);
 	Assert(stmt->removeType == OBJECT_TSCONFIGURATION);
 
-	if (creating_extension)
+	if (!ShouldPropagate())
 	{
-		/*
-		 * extensions should be created separately on the workers, text search
-		 * configurations cascading from an extension should therefore not be
-		 * propagated here.
-		 */
-		return NIL;
-	}
-
-	if (!EnableDependencyCreation)
-	{
-		/* disabled object propagation, should not propagate anything */
 		return NIL;
 	}
 
