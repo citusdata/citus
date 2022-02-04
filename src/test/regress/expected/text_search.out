@@ -1,4 +1,5 @@
 CREATE SCHEMA text_search;
+CREATE SCHEMA text_search2;
 SET search_path TO text_search;
 -- create a new configruation from scratch
 CREATE TEXT SEARCH CONFIGURATION my_text_search_config ( parser = default );
@@ -113,6 +114,27 @@ $$);
  (localhost,57638,t,text_search.changed_name)
 (2 rows)
 
+-- test move of schema
+CREATE TEXT SEARCH CONFIGURATION change_schema ( PARSER = default );
+SELECT run_command_on_workers($$ -- verify the name exists on the worker
+    SELECT 'text_search.change_schema'::regconfig;
+$$);
+            run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,text_search.change_schema)
+ (localhost,57638,t,text_search.change_schema)
+(2 rows)
+
+ALTER TEXT SEARCH CONFIGURATION change_schema SET SCHEMA text_search2;
+SELECT run_command_on_workers($$ -- verify the name exists on the worker
+    SELECT 'text_search2.change_schema'::regconfig;
+$$);
+             run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,text_search2.change_schema)
+ (localhost,57638,t,text_search2.change_schema)
+(2 rows)
+
 SET client_min_messages TO 'warning';
-DROP SCHEMA text_search CASCADE;
+DROP SCHEMA text_search, text_search2 CASCADE;
 DROP ROLE text_search_owner;
