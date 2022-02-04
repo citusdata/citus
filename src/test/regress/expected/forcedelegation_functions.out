@@ -627,7 +627,7 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
 (1 row)
 
 SELECT outer_emp();
-DEBUG:  Skipping delegation of function from a PL/PgSQL simple expression
+DEBUG:  Skipping pushdown of function from a PL/PgSQL simple expression
 CONTEXT:  SQL statement "SELECT inner_emp('hello')"
 PL/pgSQL function outer_emp() line XX at PERFORM
  outer_emp
@@ -1388,10 +1388,47 @@ SELECT COUNT(*) FROM table_test_prepare;
     28
 (1 row)
 
+CREATE TABLE test_perform(i int);
+SELECT create_distributed_table('test_perform', 'i', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION test(x int)
+RETURNS int
+AS $$
+DECLARE
+BEGIN
+    RAISE NOTICE 'INPUT %', x;
+    RETURN x;
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function('test(int)', 'x',
+                colocate_with := 'test_perform', force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+DO $$
+BEGIN
+    PERFORM test(3);
+END;
+$$ LANGUAGE plpgsql;
+DEBUG:  Skipping pushdown of function from a PL/PgSQL simple expression
+CONTEXT:  SQL statement "SELECT test(3)"
+PL/pgSQL function inline_code_block line XX at PERFORM
+NOTICE:  INPUT 3
+CONTEXT:  PL/pgSQL function test(integer) line XX at RAISE
+SQL statement "SELECT test(3)"
+PL/pgSQL function inline_code_block line XX at PERFORM
 RESET client_min_messages;
 SET citus.log_remote_commands TO off;
 DROP SCHEMA forcepushdown_schema CASCADE;
-NOTICE:  drop cascades to 36 other objects
+NOTICE:  drop cascades to 38 other objects
 DETAIL:  drop cascades to table test_forcepushdown
 drop cascades to table test_forcepushdown_noncolocate
 drop cascades to function insert_data(integer)
@@ -1428,3 +1465,5 @@ drop cascades to function insert_data_cte_nondist(integer)
 drop cascades to table table_test_prepare
 drop cascades to function test_prepare(integer,integer)
 drop cascades to function outer_test_prepare(integer,integer)
+drop cascades to table test_perform
+drop cascades to function test(integer)
