@@ -1620,6 +1620,13 @@ MasterAggregateExpression(Aggref *originalAggregate,
 			 * Need to replace nodes that contain any Vars with Vars referring
 			 * to the related column of the result set returned for the worker
 			 * aggregation.
+			 *
+			 * When there are no Vars, then the expression can be fully evaluated
+			 * on the coordinator, so we skip it here. This is not just an
+			 * optimization, but the result of the expression might require
+			 * calling the final function of the aggregate, and doing so when
+			 * there are no input rows (i.e.: with an empty tuple slot) is not
+			 * desirable for the node-executor methods.
 			 */
 			if (pull_var_clause_default((Node *) directarg) != NIL)
 			{
