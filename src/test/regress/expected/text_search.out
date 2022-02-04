@@ -28,6 +28,7 @@ ABORT;
 -- try again, should not fail with my_text_search_config being retained on the worker
 BEGIN;
 CREATE TEXT SEARCH CONFIGURATION my_text_search_config ( parser = default );
+COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config IS 'on demand propagation of text search object with a comment';
 CREATE TABLE t1(id int, name text);
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
 SELECT create_distributed_table('t1', 'name');
@@ -36,10 +37,17 @@ SELECT create_distributed_table('t1', 'name');
 
 (1 row)
 
+-- TODO verify comment on workers
+-- verify that changing anything on a managed TEXT SEARCH CONFIGURATION fails after parallel execution
+COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config  IS 'this comment can''t be set right now';
+ERROR:  cannot create or modify text search configuration because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When creating or altering a text search configuration, Citus needs to perform all operations over a single connection per node to ensure consistency.
+HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ABORT;
 -- create an index on an already distributed table
 BEGIN;
-CREATE TEXT SEARCH CONFIGURATION my_text_search_config ( parser = default );
+CREATE TEXT SEARCH CONFIGURATION my_text_search_config2 ( parser = default );
+COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config2 IS 'on demand propagation of text search object with a comment';
 CREATE TABLE t1(id int, name text);
 SELECT create_distributed_table('t1', 'name');
  create_distributed_table
@@ -47,7 +55,8 @@ SELECT create_distributed_table('t1', 'name');
 
 (1 row)
 
-CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
+CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config2'::regconfig, (COALESCE(name, ''::character varying))::text));
+-- TODO verify comment on workers
 ABORT;
 -- should be able to create a configuration based on a copy of an existing configuration
 CREATE TEXT SEARCH CONFIGURATION french_noaccent ( COPY = french );
