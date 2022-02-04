@@ -712,6 +712,19 @@ select array_agg(val order by valf) from aggdata;
  {0,NULL,2,3,5,2,4,NULL,NULL,8,NULL}
 (1 row)
 
+-- test by using some other node types as arguments to agg
+select key, percentile_cont((key - (key > 4)::int) / 10.0) within group(order by val) from aggdata group by key;
+ key | percentile_cont
+---------------------------------------------------------------------
+   1 |               2
+   2 |             2.4
+   3 |               4
+   5 |
+   6 |
+   7 |               8
+   9 |               0
+(7 rows)
+
 -- Test TransformSubqueryNode
 select * FROM (
     SELECT key, mode() within group (order by floor(agg1.val/2)) m from aggdata agg1
@@ -932,5 +945,100 @@ SELECT square_func(5), a, count(a) FROM t1 GROUP BY a;
 ERROR:  function aggregate_support.square_func(integer) does not exist
 HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
 CONTEXT:  while executing command on localhost:xxxxx
+-- Test the cases where the worker agg exec. returns no tuples.
+CREATE TABLE dist_table (dist_col int, agg_col numeric);
+SELECT create_distributed_table('dist_table', 'dist_col');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE TABLE ref_table (int_col int);
+SELECT create_reference_table('ref_table');
+ create_reference_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ percentile_disc
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random() FROM dist_table) a;
+ percentile_disc
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT PERCENTILE_DISC((2 > random())::int::numeric / 10) WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ percentile_disc
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT SUM(COALESCE(agg_col, 3))
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ sum
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT AVG(COALESCE(agg_col, 10))
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ avg
+---------------------------------------------------------------------
+
+(1 row)
+
+insert into dist_table values (2, 11.2), (3, NULL), (6, 3.22), (3, 4.23), (5, 5.25), (4, 63.4), (75, NULL), (80, NULL), (96, NULL), (8, 1078), (0, 1.19);
+-- run the same queries after loading some data
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ percentile_disc
+---------------------------------------------------------------------
+            3.22
+(1 row)
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random() FROM dist_table) a;
+ percentile_disc
+---------------------------------------------------------------------
+            3.22
+(1 row)
+
+SELECT PERCENTILE_DISC((2 > random())::int::numeric / 10) WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ percentile_disc
+---------------------------------------------------------------------
+            1.19
+(1 row)
+
+SELECT floor(SUM(COALESCE(agg_col, 3)))
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ floor
+---------------------------------------------------------------------
+  1178
+(1 row)
+
+SELECT floor(AVG(COALESCE(agg_col, 10)))
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+ floor
+---------------------------------------------------------------------
+   109
+(1 row)
+
 set client_min_messages to error;
 drop schema aggregate_support cascade;
