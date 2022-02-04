@@ -105,7 +105,7 @@ static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
 static RoleSpec * GetRoleSpecObjectForGrantStmt(Oid roleOid);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
-static void SetLocalEnableDependencyCreation(bool state);
+static void SetLocalEnableMetadataSync(bool state);
 static void SetLocalReplicateReferenceTablesOnActivate(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
@@ -417,7 +417,8 @@ ClusterHasKnownMetadataWorkers()
 bool
 ShouldSyncTableMetadata(Oid relationId)
 {
-	if (!OidIsValid(relationId) || !IsCitusTable(relationId))
+	if (!EnableMetadataSync ||
+		!OidIsValid(relationId) || !IsCitusTable(relationId))
 	{
 		return false;
 	}
@@ -950,8 +951,8 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 													 argsArray);
 
 	/* First, disable propagation off to not to cause infinite propagation */
-	bool prevDependencyCreationValue = EnableDependencyCreation;
-	SetLocalEnableDependencyCreation(false);
+	bool prevDependencyCreationValue = EnableMetadataSync;
+	SetLocalEnableMetadataSync(false);
 
 	MarkObjectDistributed(&objectAddress);
 
@@ -978,7 +979,7 @@ citus_internal_add_object_metadata(PG_FUNCTION_ARGS)
 									   forceDelegationAddress);
 	}
 
-	SetLocalEnableDependencyCreation(prevDependencyCreationValue);
+	SetLocalEnableMetadataSync(prevDependencyCreationValue);
 
 	PG_RETURN_VOID();
 }
@@ -1847,12 +1848,12 @@ GetRoleSpecObjectForGrantStmt(Oid roleOid)
 
 
 /*
- * SetLocalEnableDependencyCreation sets the enable_object_propagation locally
+ * SetLocalEnableMetadataSync sets the enable_metadata_sync locally
  */
 static void
-SetLocalEnableDependencyCreation(bool state)
+SetLocalEnableMetadataSync(bool state)
 {
-	set_config_option("citus.enable_object_propagation", state == true ? "on" : "off",
+	set_config_option("citus.enable_metadata_sync", state == true ? "on" : "off",
 					  (superuser() ? PGC_SUSET : PGC_USERSET), PGC_S_SESSION,
 					  GUC_ACTION_LOCAL, true, 0, false);
 }

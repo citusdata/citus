@@ -200,8 +200,8 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
 	const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
 	initStringInfo(&ddlCommand);
-	appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_OBJECT_PROPAGATION,
-					 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_OBJECT_PROPAGATION);
+	appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_METADATA_SYNC,
+					 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_METADATA_SYNC);
 	SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(), ddlCommand.data);
 
 	MarkObjectDistributed(&functionAddress);
@@ -698,7 +698,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 
 	table_close(pgDistObjectRel, NoLock);
 
-	if (EnableDependencyCreation)
+	if (EnableMetadataSync)
 	{
 		List *objectAddressList = list_make1((ObjectAddress *) distAddress);
 		List *distArgumentIndexList = NIL;
@@ -1206,7 +1206,7 @@ ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
 		return false;
 	}
 
-	if (!EnableDependencyCreation)
+	if (!EnableMetadataSync)
 	{
 		/*
 		 * we are configured to disable object propagation, should not propagate anything
@@ -1254,7 +1254,7 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
 		return false;
 	}
 
-	if (!EnableDependencyCreation)
+	if (!EnableMetadataSync)
 	{
 		/*
 		 * we are configured to disable object propagation, should not propagate anything
@@ -1556,7 +1556,7 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	if (!EnableDependencyCreation)
+	if (!EnableMetadataSync)
 	{
 		/*
 		 * we are configured to disable object propagation, should not propagate anything
@@ -1657,7 +1657,7 @@ PreprocessAlterFunctionDependsStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	if (!EnableDependencyCreation)
+	if (!EnableMetadataSync)
 	{
 		/*
 		 * we are configured to disable object propagation, should not propagate anything
