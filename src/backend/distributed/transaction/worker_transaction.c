@@ -112,13 +112,30 @@ SendCommandToWorkerAsUser(const char *nodeName, int32 nodePort, const char *node
 /*
  * SendCommandToWorkers sends a command to all workers in
  * parallel. Commands are committed on the workers when the local
- * transaction commits. The connection are made as the extension
- * owner to ensure write access to the Citus metadata tables.
+ * transaction commits.
  */
 void
 SendCommandToWorkersWithMetadata(const char *command)
 {
 	SendCommandToMetadataWorkersParams(command, CurrentUserName(),
+									   0, NULL, NULL);
+}
+
+
+/*
+ * SendCommandToWorkersWithMetadataViaSuperUser sends a command to all workers in
+ * parallel by opening a super user connection. Commands are committed on the workers
+ * when the local transaction commits. The connection are made as the extension
+ * owner to ensure write access to the Citus metadata tables.
+ *
+ * Since we prevent to open superuser connections for metadata tables, it is
+ * discourated to use it. Consider using it only for propagating pg_dist_object
+ * tuples for dependent objects.
+ */
+void
+SendCommandToWorkersWithMetadataViaSuperUser(const char *command)
+{
+	SendCommandToMetadataWorkersParams(command, CitusExtensionOwnerName(),
 									   0, NULL, NULL);
 }
 
