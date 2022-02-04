@@ -725,12 +725,6 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 {
 	IndexStmt *indexStmt = castNode(IndexStmt, node);
 
-	/* we are only processing CONCURRENT index statements */
-	if (!indexStmt->concurrent)
-	{
-		return NIL;
-	}
-
 	/* this logic only applies to the coordinator */
 	if (!IsCoordinator())
 	{
@@ -747,14 +741,25 @@ PostprocessIndexStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
+	Oid indexRelationId = get_relname_relid(indexStmt->idxname, schemaId);
+
+	/* ensure dependencies of index exist on all nodes */
+	ObjectAddress address = { 0 };
+	ObjectAddressSet(address, RelationRelationId, indexRelationId);
+	EnsureDependenciesExistOnAllNodes(&address);
+
+	/* furtheron we are only processing CONCURRENT index statements */
+	if (!indexStmt->concurrent)
+	{
+		return NIL;
+	}
+
 	/* commit the current transaction and start anew */
 	CommitTransactionCommand();
 	StartTransactionCommand();
 
 	/* get the affected relation and index */
 	Relation relation = table_openrv(indexStmt->relation, ShareUpdateExclusiveLock);
-	Oid indexRelationId = get_relname_relid(indexStmt->idxname,
-											schemaId);
 	Relation indexRelation = index_open(indexRelationId, RowExclusiveLock);
 
 	/* close relations but retain locks */
