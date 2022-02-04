@@ -376,6 +376,9 @@ select percentile_cont(0.5) within group(order by valf) from aggdata;
 select key, percentile_cont(key/10.0) within group(order by val) from aggdata group by key;
 select array_agg(val order by valf) from aggdata;
 
+-- test by using some other node types as arguments to agg
+select key, percentile_cont((key - (key > 4)::int) / 10.0) within group(order by val) from aggdata group by key;
+
 -- Test TransformSubqueryNode
 
 select * FROM (
@@ -481,7 +484,7 @@ SELECT square_func(5), a, count(a) FROM t1 GROUP BY a;
 
 -- Test the cases where the worker agg exec. returns no tuples.
 
-CREATE TABLE dist_table (dist_col int, agg_col int);
+CREATE TABLE dist_table (dist_col int, agg_col numeric);
 SELECT create_distributed_table('dist_table', 'dist_col');
 
 CREATE TABLE ref_table (int_col int);
@@ -494,7 +497,37 @@ LEFT JOIN ref_table ON TRUE;
 SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
 FROM (SELECT *, random() FROM dist_table) a;
 
-SELECT PERCENTILE_DISC((.25 > random())::int::numeric / 10) WITHIN GROUP (ORDER BY agg_col)
+SELECT PERCENTILE_DISC((2 > random())::int::numeric / 10) WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+SELECT SUM(COALESCE(agg_col, 3))
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+SELECT AVG(COALESCE(agg_col, 10))
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+insert into dist_table values (2, 11.2), (3, NULL), (6, 3.22), (3, 4.23), (5, 5.25), (4, 63.4), (75, NULL), (80, NULL), (96, NULL), (8, 1078), (0, 1.19);
+
+-- run the same queries after loading some data
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+SELECT PERCENTILE_DISC(.25) WITHIN GROUP (ORDER BY agg_col)
+FROM (SELECT *, random() FROM dist_table) a;
+
+SELECT PERCENTILE_DISC((2 > random())::int::numeric / 10) WITHIN GROUP (ORDER BY agg_col)
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+SELECT floor(SUM(COALESCE(agg_col, 3)))
+FROM dist_table
+LEFT JOIN ref_table ON TRUE;
+
+SELECT floor(AVG(COALESCE(agg_col, 10)))
 FROM dist_table
 LEFT JOIN ref_table ON TRUE;
 
