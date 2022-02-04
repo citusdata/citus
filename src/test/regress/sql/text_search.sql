@@ -58,6 +58,16 @@ SELECT run_command_on_workers($$
      WHERE oid = 'text_search.changed_owner'::regconfig;
 $$);
 
+-- rename tests
+CREATE TEXT SEARCH CONFIGURATION change_name ( PARSER = default );
+SELECT run_command_on_workers($$ -- verify the name exists on the worker
+    SELECT 'text_search.change_name'::regconfig;
+$$);
+ALTER TEXT SEARCH CONFIGURATION change_name RENAME TO changed_name;
+SELECT run_command_on_workers($$ -- verify the name exists on the worker
+    SELECT 'text_search.changed_name'::regconfig;
+$$);
+
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search CASCADE;
 DROP ROLE text_search_owner;

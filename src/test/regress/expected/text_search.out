@@ -92,6 +92,27 @@ $$);
  (localhost,57638,t,text_search_owner)
 (2 rows)
 
+-- rename tests
+CREATE TEXT SEARCH CONFIGURATION change_name ( PARSER = default );
+SELECT run_command_on_workers($$ -- verify the name exists on the worker
+    SELECT 'text_search.change_name'::regconfig;
+$$);
+           run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,text_search.change_name)
+ (localhost,57638,t,text_search.change_name)
+(2 rows)
+
+ALTER TEXT SEARCH CONFIGURATION change_name RENAME TO changed_name;
+SELECT run_command_on_workers($$ -- verify the name exists on the worker
+    SELECT 'text_search.changed_name'::regconfig;
+$$);
+            run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,text_search.changed_name)
+ (localhost,57638,t,text_search.changed_name)
+(2 rows)
+
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search CASCADE;
 DROP ROLE text_search_owner;
