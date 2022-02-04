@@ -92,6 +92,7 @@ test: isolation_metadata_sync_deadlock
 test: isolation_replicated_dist_on_mx
 test: isolation_replicate_reference_tables_to_coordinator
 test: isolation_multiuser_locking
+test: isolation_metadata_sync_vs_all
 
 # MXless tests
 test: isolation_check_mx
