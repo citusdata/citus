@@ -41,6 +41,37 @@ CREATE TABLE t2(id int, name text);
 CREATE INDEX t2_search_name ON t2 USING gin (to_tsvector('text_search.french_noaccent'::regconfig, (COALESCE(name, ''::character varying))::text));
 SELECT create_distributed_table('t2', 'id');
 
+-- spot check that french_noaccent copied settings from french
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'comment tu t''appelle') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+-- makes no sense, however we expect that the dictionary for the first token changes accordingly
+ALTER TEXT SEARCH CONFIGURATION french_noaccent ALTER MAPPING FOR asciiword WITH dutch_stem;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'comment tu t''appelle') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+-- do the same but we will replace all french dictionaries
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+ALTER TEXT SEARCH CONFIGURATION french_noaccent ALTER MAPPING REPLACE french_stem WITH dutch_stem;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+-- once more but now back via yet a different DDL command
+ALTER TEXT SEARCH CONFIGURATION french_noaccent ALTER MAPPING FOR asciihword REPLACE dutch_stem WITH french_stem;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+-- drop a mapping
+ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING FOR asciihword;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+-- also with exists, doesn't change anything, but should not error
+ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING IF EXISTS FOR asciihword;
+
+
 SET client_min_messages TO 'warning';
 SELECT run_command_on_workers($$CREATE ROLE text_search_owner;$$);
 CREATE ROLE text_search_owner;

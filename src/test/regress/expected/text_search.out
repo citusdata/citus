@@ -59,6 +59,72 @@ SELECT create_distributed_table('t2', 'id');
 
 (1 row)
 
+-- spot check that french_noaccent copied settings from french
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'comment tu t''appelle') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+            run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(asciiword,french_stem)")
+ (localhost,57638,t,"(asciiword,french_stem)")
+(2 rows)
+
+-- makes no sense, however we expect that the dictionary for the first token changes accordingly
+ALTER TEXT SEARCH CONFIGURATION french_noaccent ALTER MAPPING FOR asciiword WITH dutch_stem;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'comment tu t''appelle') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+            run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(asciiword,dutch_stem)")
+ (localhost,57638,t,"(asciiword,dutch_stem)")
+(2 rows)
+
+-- do the same but we will replace all french dictionaries
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+             run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(asciihword,french_stem)")
+ (localhost,57638,t,"(asciihword,french_stem)")
+(2 rows)
+
+ALTER TEXT SEARCH CONFIGURATION french_noaccent ALTER MAPPING REPLACE french_stem WITH dutch_stem;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+            run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(asciihword,dutch_stem)")
+ (localhost,57638,t,"(asciihword,dutch_stem)")
+(2 rows)
+
+-- once more but now back via yet a different DDL command
+ALTER TEXT SEARCH CONFIGURATION french_noaccent ALTER MAPPING FOR asciihword REPLACE dutch_stem WITH french_stem;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+             run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(asciihword,french_stem)")
+ (localhost,57638,t,"(asciihword,french_stem)")
+(2 rows)
+
+-- drop a mapping
+ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING FOR asciihword;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+       run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(asciihword,)")
+ (localhost,57638,t,"(asciihword,)")
+(2 rows)
+
+-- also with exists, doesn't change anything, but should not error
+ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING IF EXISTS FOR asciihword;
+NOTICE:  mapping for token type "asciihword" does not exist, skipping
 SET client_min_messages TO 'warning';
 SELECT run_command_on_workers($$CREATE ROLE text_search_owner;$$);
       run_command_on_workers
