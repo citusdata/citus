@@ -125,6 +125,9 @@ $$);
 -- also with exists, doesn't change anything, but should not error
 ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING IF EXISTS FOR asciihword;
 NOTICE:  mapping for token type "asciihword" does not exist, skipping
+-- Comment on a text search configuration
+COMMENT ON TEXT SEARCH CONFIGURATION french_noaccent IS 'a text configuration that is butcherd to test all edge cases';
+-- TODO actually verify the comment is propagated
 SET client_min_messages TO 'warning';
 SELECT run_command_on_workers($$CREATE ROLE text_search_owner;$$);
       run_command_on_workers
