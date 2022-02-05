@@ -32,7 +32,6 @@ install-headers: extension
 
 clean-extension:
 	$(MAKE) -C src/backend/distributed/ clean
-	rm -f $(citus_top_builddir)/src/backend/distributed/columnar.so
 	$(MAKE) -C src/backend/columnar/ clean
 clean-full:
 	$(MAKE) -C src/backend/distributed/ clean-full
