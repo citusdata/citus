@@ -19,6 +19,7 @@
 
 #include "columnar/columnar.h"
 #include "columnar/columnar_tableam.h"
+#include "columnar/columnar_wal.h"
 
 
 PG_MODULE_MAGIC;

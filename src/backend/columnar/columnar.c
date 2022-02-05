@@ -23,6 +23,7 @@
 #include "citus_version.h"
 #include "columnar/columnar.h"
 #include "columnar/columnar_tableam.h"
+#include "columnar/columnar_wal.h"
 
 /* Default values for option parameters */
 #define DEFAULT_STRIPE_ROW_COUNT 150000
@@ -57,6 +58,7 @@ static const struct config_enum_entry columnar_compression_options[] =
 void
 columnar_init(void)
 {
+	columnar_wal_init();
 	columnar_init_gucs();
 	columnar_tableam_init();
 }
