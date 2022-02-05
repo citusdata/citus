@@ -736,6 +736,7 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 	Datum *values = detoast_values(slot->tts_tupleDescriptor,
 								   slot->tts_values, slot->tts_isnull);
 
+	columnar_wal_insert(relation, slot, options);
 	uint64 writtenRowNumber = ColumnarWriteRow(writeState, values, slot->tts_isnull);
 	slot->tts_tid = row_number_to_tid(writtenRowNumber);
 
