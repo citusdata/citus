@@ -54,6 +54,7 @@
 #include "columnar/columnar_storage.h"
 #include "columnar/columnar_tableam.h"
 #include "columnar/columnar_version_compat.h"
+#include "columnar/columnar_wal.h"
 #include "distributed/listutils.h"
 
 /*
@@ -752,6 +753,8 @@ columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 
 	uint64 writtenRowNumber = ColumnarWriteRow(writeState, values, slot->tts_isnull);
 	slot->tts_tid = row_number_to_tid(writtenRowNumber);
+
+	columnar_wal_insert(relation, slot, options);
 
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextReset(ColumnarWritePerTupleContext(writeState));
