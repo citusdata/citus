@@ -40,10 +40,6 @@ int MaxWorkerNodesTracked = 2048;    /* determines worker node hash table size *
 
 
 /* Local functions forward declarations */
-static List * PrimaryNodesNotInList(List *currentList);
-static WorkerNode * FindRandomNodeFromList(List *candidateWorkerNodeList);
-static bool OddNumber(uint32 number);
-static bool ListMember(List *currentList, WorkerNode *workerNode);
 static bool NodeIsPrimaryWorker(WorkerNode *node);
 static bool NodeIsReadableWorker(WorkerNode *node);
 
@@ -52,73 +48,6 @@ static bool NodeIsReadableWorker(WorkerNode *node);
  * Worker node selection functions follow
  * ------------------------------------------------------------
  */
-
-/*
- * WorkerGetRandomCandidateNode accepts a list of WorkerNode's and returns a random
- * primary node which is not in that list.
- *
- * Note that the function returns null if the worker membership list does not
- * contain enough nodes to allocate a new worker node.
- */
-WorkerNode *
-WorkerGetRandomCandidateNode(List *currentNodeList)
-{
-	WorkerNode *workerNode = NULL;
-	bool wantSameRack = false;
-	uint32 tryCount = WORKER_RACK_TRIES;
-
-	uint32 currentNodeCount = list_length(currentNodeList);
-	List *candidateWorkerNodeList = PrimaryNodesNotInList(currentNodeList);
-
-	/* we check if the shard has already been placed on all nodes known to us */
-	if (list_length(candidateWorkerNodeList) == 0)
-	{
-		return NULL;
-	}
-
-	/* if current node list is empty, randomly pick one node and return */
-	if (currentNodeCount == 0)
-	{
-		workerNode = FindRandomNodeFromList(candidateWorkerNodeList);
-		return workerNode;
-	}
-
-	/*
-	 * If the current list has an odd number of nodes (1, 3, 5, etc), we want to
-	 * place the shard on a different rack than the first node's rack.
-	 * Otherwise, we want to place the shard on the same rack as the first node.
-	 */
-	if (OddNumber(currentNodeCount))
-	{
-		wantSameRack = false;
-	}
-	else
-	{
-		wantSameRack = true;
-	}
-
-	/*
-	 * We try to find a worker node that fits our rack-aware placement strategy.
-	 * If after a predefined number of tries, we still cannot find such a node,
-	 * we simply give up and return the last worker node we found.
-	 */
-	for (uint32 tryIndex = 0; tryIndex < tryCount; tryIndex++)
-	{
-		WorkerNode *firstNode = (WorkerNode *) linitial(currentNodeList);
-		char *firstRack = firstNode->workerRack;
-
-		workerNode = FindRandomNodeFromList(candidateWorkerNodeList);
-		char *workerRack = workerNode->workerRack;
-
-		bool sameRack = (strncmp(workerRack, firstRack, WORKER_LENGTH) == 0);
-		if ((sameRack && wantSameRack) || (!sameRack && !wantSameRack))
-		{
-			break;
-		}
-	}
-
-	return workerNode;
-}
 
 
 /*
@@ -396,84 +325,6 @@ static bool
 NodeIsReadableWorker(WorkerNode *node)
 {
 	return !NodeIsCoordinator(node) && NodeIsReadable(node);
-}
-
-
-/*
- * PrimaryNodesNotInList scans through the worker node hash and returns a list of all
- * primary nodes which are not in currentList. It runs in O(n*m) but currentList is
- * quite small.
- */
-static List *
-PrimaryNodesNotInList(List *currentList)
-{
-	List *workerNodeList = NIL;
-	HTAB *workerNodeHash = GetWorkerNodeHash();
-	WorkerNode *workerNode = NULL;
-	HASH_SEQ_STATUS status;
-
-	hash_seq_init(&status, workerNodeHash);
-
-	while ((workerNode = hash_seq_search(&status)) != NULL)
-	{
-		if (ListMember(currentList, workerNode))
-		{
-			continue;
-		}
-
-		if (NodeIsPrimary(workerNode))
-		{
-			workerNodeList = lappend(workerNodeList, workerNode);
-		}
-	}
-
-	return workerNodeList;
-}
-
-
-/* FindRandomNodeFromList picks a random node from the list provided to it. */
-static WorkerNode *
-FindRandomNodeFromList(List *candidateWorkerNodeList)
-{
-	uint32 candidateNodeCount = list_length(candidateWorkerNodeList);
-
-	/* nb, the random seed has already been set by the postmaster when starting up */
-	uint32 workerPosition = (random() % candidateNodeCount);
-
-	WorkerNode *workerNode =
-		(WorkerNode *) list_nth(candidateWorkerNodeList, workerPosition);
-
-	return workerNode;
-}
-
-
-/*
- * OddNumber function returns true if given number is odd; returns false otherwise.
- */
-static bool
-OddNumber(uint32 number)
-{
-	bool oddNumber = ((number % 2) == 1);
-	return oddNumber;
-}
-
-
-/* Checks if given worker node is a member of the current list. */
-static bool
-ListMember(List *currentList, WorkerNode *workerNode)
-{
-	Size keySize = WORKER_LENGTH + sizeof(uint32);
-
-	WorkerNode *currentNode = NULL;
-	foreach_ptr(currentNode, currentList)
-	{
-		if (WorkerNodeCompare(workerNode, currentNode, keySize) == 0)
-		{
-			return true;
-		}
-	}
-
-	return false;
 }
 
 
