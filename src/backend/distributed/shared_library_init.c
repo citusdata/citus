@@ -169,7 +169,6 @@ static const struct config_enum_entry task_executor_type_options[] = {
 };
 
 static const struct config_enum_entry shard_placement_policy_options[] = {
-	{ "local-node-first", SHARD_PLACEMENT_LOCAL_NODE_FIRST, false },
 	{ "round-robin", SHARD_PLACEMENT_ROUND_ROBIN, false },
 	{ "random", SHARD_PLACEMENT_RANDOM, false },
 	{ NULL, 0, false }

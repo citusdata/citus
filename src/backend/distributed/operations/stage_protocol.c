@@ -173,11 +173,7 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	{
 		WorkerNode *candidateNode = NULL;
 
-		if (ShardPlacementPolicy == SHARD_PLACEMENT_LOCAL_NODE_FIRST)
-		{
-			candidateNode = WorkerGetLocalFirstCandidateNode(candidateNodeList);
-		}
-		else if (ShardPlacementPolicy == SHARD_PLACEMENT_ROUND_ROBIN)
+		if (ShardPlacementPolicy == SHARD_PLACEMENT_ROUND_ROBIN)
 		{
 			candidateNode = WorkerGetRoundRobinCandidateNode(workerNodeList, shardId,
 															 candidateNodeIndex);
