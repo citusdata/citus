@@ -172,6 +172,23 @@ $$);
  (localhost,57638,t,"")
 (2 rows)
 
+--verify we can drop cascade a configuration that is in use
+-- verify it is in use
+DROP TEXT SEARCH CONFIGURATION text_search.french_noaccent;
+ERROR:  cannot drop text search configuration french_noaccent because other objects depend on it
+DETAIL:  index t2_search_name depends on text search configuration french_noaccent
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+-- drop cascade
+DROP TEXT SEARCH CONFIGURATION text_search.french_noaccent CASCADE;
+NOTICE:  drop cascades to index t2_search_name
+-- verify the configuration is dropped from the workers
+SELECT run_command_on_workers($$ SELECT 'text_search.french_noaccent'::regconfig; $$);
+                                         run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  text search configuration ""text_search.french_noaccent"" does not exist")
+ (localhost,57638,f,"ERROR:  text search configuration ""text_search.french_noaccent"" does not exist")
+(2 rows)
+
 SET client_min_messages TO 'warning';
 SELECT run_command_on_workers($$CREATE ROLE text_search_owner;$$);
       run_command_on_workers

@@ -94,6 +94,14 @@ SELECT run_command_on_workers($$
     SELECT obj_description('text_search.french_noaccent'::regconfig);
 $$);
 
+--verify we can drop cascade a configuration that is in use
+-- verify it is in use
+DROP TEXT SEARCH CONFIGURATION text_search.french_noaccent;
+-- drop cascade
+DROP TEXT SEARCH CONFIGURATION text_search.french_noaccent CASCADE;
+-- verify the configuration is dropped from the workers
+SELECT run_command_on_workers($$ SELECT 'text_search.french_noaccent'::regconfig; $$);
+
 SET client_min_messages TO 'warning';
 SELECT run_command_on_workers($$CREATE ROLE text_search_owner;$$);
 CREATE ROLE text_search_owner;
