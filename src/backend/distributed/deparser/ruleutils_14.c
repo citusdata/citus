@@ -3439,6 +3439,8 @@ get_update_query_targetlist_def(Query *query, List *targetList,
 	SubLink    *cur_ma_sublink;
 	List	   *ma_sublinks;
 
+    targetList = ExpandMergedSubscriptingRefEntries(targetList);
+
 	/*
 	 * Prepare to deal with MULTIEXPR assignments: collect the source SubLinks
 	 * into a list.  We expect them to appear, in ID order, in resjunk tlist

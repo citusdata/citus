@@ -704,7 +704,12 @@ ModifyPartialQuerySupported(Query *queryTree, bool multiShardQuery,
 			if (FindNodeMatchingCheckFunction((Node *) targetEntry->expr,
 											  NodeIsFieldStore))
 			{
-				/* DELETE cannot do field indirection already */
+				/*
+				 * DELETE cannot do field indirection already, so assert here.
+				 *
+				 * NB: See TargetEntryExprFindSubsRef if you decide removing
+				 *     this error check.
+				 */
 				Assert(commandType == CMD_UPDATE || commandType == CMD_INSERT);
 				return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
 									 "inserting or modifying composite type fields is not "

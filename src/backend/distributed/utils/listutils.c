@@ -264,3 +264,20 @@ GenerateListFromElement(void *listElement, int listLength)
 
 	return list;
 }
+
+
+/*
+ * list_reverse returns a new list by reverting order of the elements within
+ * given list.
+ */
+List *
+list_reverse(const List *list)
+{
+	List *newList = NIL;
+	for (int i = list_length(list) - 1; i >= 0; i--)
+	{
+		newList = lappend(newList, list_nth(list, i));
+	}
+
+	return newList;
+}

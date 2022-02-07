@@ -3,10 +3,6 @@
 --
 SET citus.next_shard_id TO 13100000;
 SET citus.shard_replication_factor TO 1;
-CREATE FUNCTION deparse_shard_query_test(text)
-	RETURNS VOID
-	AS 'citus'
- 	LANGUAGE C STRICT;
 -- create the first table
 CREATE TABLE raw_events_1
 	(tenant_id bigint,

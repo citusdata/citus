@@ -135,3 +135,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+CREATE OR REPLACE FUNCTION deparse_shard_query_test(text)
+	RETURNS VOID
+	AS 'citus'
+ 	LANGUAGE C STRICT;
+
