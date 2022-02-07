@@ -38,7 +38,7 @@ NO_PGXS = 1
 
 SHLIB_LINK += $(libpq) 
 SHLIB_LINK_INTERNAL += -L../columnar -l:columnar.so
-
+override enable_rpath = yes
 include $(citus_top_builddir)/Makefile.global
 
 rpathdir = $(shell $(PG_CONFIG) --libdir):$(shell $(PG_CONFIG) --pkglibdir)
