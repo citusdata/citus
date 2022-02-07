@@ -352,7 +352,6 @@ _PG_init(void)
 }
 
 
-
 /*
  * DoInitialCleanup does cleanup at start time.
  * Currently it:
