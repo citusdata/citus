@@ -130,6 +130,27 @@ SELECT run_command_on_workers($$
      WHERE oid = 'text_search.changed_owner'::regconfig;
 $$);
 
+-- redo test with propagating object after it was created and changed of owner
+SET citus.enable_ddl_propagation TO off;
+CREATE TEXT SEARCH CONFIGURATION changed_owner2 ( PARSER = default );
+ALTER TEXT SEARCH CONFIGURATION changed_owner2 OWNER TO text_search_owner;
+RESET citus.enable_ddl_propagation;
+-- verify object doesn't exist before propagating
+SELECT run_command_on_workers($$ SELECT 'text_search.changed_owner2'::regconfig; $$);
+
+-- distribute configuration
+CREATE TABLE t2(id int, name text);
+CREATE INDEX t2_search_name ON t2 USING gin (to_tsvector('text_search.changed_owner2'::regconfig, (COALESCE(name, ''::character varying))::text));
+SELECT create_distributed_table('t2', 'name');
+
+-- verify config owner
+SELECT run_command_on_workers($$
+    SELECT cfgowner::regrole
+      FROM pg_ts_config
+     WHERE oid = 'text_search.changed_owner2'::regconfig;
+$$);
+
+
 -- rename tests
 CREATE TEXT SEARCH CONFIGURATION change_name ( PARSER = default );
 SELECT run_command_on_workers($$ -- verify the name exists on the worker
@@ -181,7 +202,6 @@ SELECT run_command_on_workers($$ SELECT 'text_search.config3'::regconfig; $$);
 SELECT 'text_search.config1'::regconfig;
 SELECT 'text_search.config2'::regconfig;
 SELECT 'text_search.config3'::regconfig;
-
 
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2 CASCADE;

@@ -245,6 +245,37 @@ $$);
  (localhost,57638,t,text_search_owner)
 (2 rows)
 
+-- redo test with propagating object after it was created and changed of owner
+SET citus.enable_ddl_propagation TO off;
+CREATE TEXT SEARCH CONFIGURATION changed_owner2 ( PARSER = default );
+ALTER TEXT SEARCH CONFIGURATION changed_owner2 OWNER TO text_search_owner;
+RESET citus.enable_ddl_propagation;
+-- verify object doesn't exist before propagating
+SELECT run_command_on_workers($$ SELECT 'text_search.changed_owner2'::regconfig; $$);
+                                        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  text search configuration ""text_search.changed_owner2"" does not exist")
+ (localhost,57638,f,"ERROR:  text search configuration ""text_search.changed_owner2"" does not exist")
+(2 rows)
+
+-- distribute configuration
+CREATE TABLE t2(id int, name text);
+ERROR:  relation "t2" already exists
+CREATE INDEX t2_search_name ON t2 USING gin (to_tsvector('text_search.changed_owner2'::regconfig, (COALESCE(name, ''::character varying))::text));
+SELECT create_distributed_table('t2', 'name');
+ERROR:  table "t2" is already distributed
+-- verify config owner
+SELECT run_command_on_workers($$
+    SELECT cfgowner::regrole
+      FROM pg_ts_config
+     WHERE oid = 'text_search.changed_owner2'::regconfig;
+$$);
+    run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,text_search_owner)
+ (localhost,57638,t,text_search_owner)
+(2 rows)
+
 -- rename tests
 CREATE TEXT SEARCH CONFIGURATION change_name ( PARSER = default );
 SELECT run_command_on_workers($$ -- verify the name exists on the worker
