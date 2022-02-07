@@ -62,12 +62,15 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 	}
 
 	/*
-	 * If the create  command is a part of a multi-statement transaction, don't propagate,
-	 * instead we will rely on lazy propagation
+	 * If the create command is a part of a multi-statement transaction that is not in
+	 * sequential mode, don't propagate. Instead we will rely on back filling.
 	 */
 	if (IsMultiStatementTransaction())
 	{
-		return NIL;
+		if (MultiShardConnectionType != SEQUENTIAL_CONNECTION)
+		{
+			return NIL;
+		}
 	}
 
 	EnsureCoordinator();
