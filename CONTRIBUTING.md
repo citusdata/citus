@@ -31,7 +31,7 @@ why we ask this as well as instructions for how to proceed, see the
   cd citus
   ./configure
   make
-  make install
+  make install install-all
   cd src/test/regress
   make check
   ```
@@ -51,7 +51,7 @@ why we ask this as well as instructions for how to proceed, see the
                           autoconf flex git libcurl4-gnutls-dev libicu-dev \
                           libkrb5-dev liblz4-dev libpam0g-dev libreadline-dev \
                           libselinux1-dev libssl-dev libxslt1-dev libzstd-dev \
-                          make uuid-dev
+                          make uuid-dev mitmproxy
   ```
 
 2. Get, build, and test the code
