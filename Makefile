@@ -10,10 +10,11 @@ ifeq (,$(wildcard Makefile.global))
 endif
 
 include Makefile.global
-
+# directories with source files
+SUBDIRS +=  $(citus_top_builddir)/src/backend/columnar/safeclib
+ENSURE_SUBDIRS_EXIST := $(shell mkdir -p $(SUBDIRS))
 all: extension
 
-ENSURE_SUBDIRS_EXIST := $(shell mkdir -p $(SUBDIRS))
 
 #build columnar only
 columnar:
