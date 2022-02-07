@@ -36,7 +36,8 @@ all:
 
 NO_PGXS = 1
 
-SHLIB_LINK += $(libpq) columnar.so
+SHLIB_LINK += $(libpq) 
+SHLIB_LINK_INTERNAL += -L../columnar -l:columnar.so
 
 include $(citus_top_builddir)/Makefile.global
 

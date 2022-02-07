@@ -13,10 +13,11 @@ include Makefile.global
 
 all: extension
 
+ENSURE_SUBDIRS_EXIST := $(shell mkdir -p $(SUBDIRS))
+
 #build columnar only
 columnar:
 	$(MAKE) -C src/backend/columnar all
-	cp $(citus_top_builddir)/src/backend/columnar/columnar.so $(citus_top_builddir)/src/backend/distributed/
 # build extension
 extension: $(citus_top_builddir)/src/include/citus_version.h columnar
 	$(MAKE) -C src/backend/distributed/ all
@@ -33,7 +34,6 @@ install-headers: extension
 
 clean-extension:
 	$(MAKE) -C src/backend/distributed/ clean
-	rm -f $(citus_top_builddir)/src/backend/distributed/columnar.so
 	$(MAKE) -C src/backend/columnar/ clean
 clean-full:
 	$(MAKE) -C src/backend/distributed/ clean-full
