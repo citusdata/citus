@@ -60,6 +60,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
 #include "executor/executor.h"
@@ -378,6 +379,8 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 					   int shardCount, bool shardCountIsStrict,
 					   char *colocateWithTableName, bool viaDeprecatedAPI)
 {
+	ErrorIfRelationIsAKnownShard(relationId);
+
 	/*
 	 * EnsureTableNotDistributed errors out when relation is a citus table but
 	 * we don't want to ask user to first undistribute their citus local tables

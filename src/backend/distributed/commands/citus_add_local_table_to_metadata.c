@@ -195,6 +195,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 */
 	EnsureCoordinator();
 	EnsureTableOwner(relationId);
+	ErrorIfRelationIsAKnownShard(relationId);
 
 	/* enable citus_add_local_table_to_metadata on an empty node */
 	InsertCoordinatorIfClusterEmpty();
