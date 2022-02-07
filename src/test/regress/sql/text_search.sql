@@ -150,6 +150,13 @@ SELECT run_command_on_workers($$ -- verify the name exists on the worker
     SELECT 'text_search2.change_schema'::regconfig;
 $$);
 
+-- verify we get an error that the configuration change_schema is not found, even though the object address will be
+-- found in its new schema, and is distributed
+ALTER TEXT SEARCH CONFIGURATION change_schema SET SCHEMA text_search2;
+-- should tell us that text_search.does_not_exist does not exist, covers a complex edgecase
+-- in resolving the object address
+ALTER TEXT SEARCH CONFIGURATION text_search.does_not_exist SET SCHEMA text_search2;
+
 
 -- verify edgecases in deparsers
 CREATE TEXT SEARCH CONFIGURATION config1 ( PARSER = default );
