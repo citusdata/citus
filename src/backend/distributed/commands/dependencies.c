@@ -120,7 +120,15 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 */
 	foreach_ptr(dependency, dependenciesWithCommands)
 	{
-		MarkObjectDistributed(dependency);
+		/*
+		 * pg_dist_object entries must be propagated with the super user, since
+		 * the owner of the target object may not own dependencies but we must
+		 * propagate as we send objects itself with the superuser.
+		 *
+		 * Only dependent object's metadata should be propagated with super user.
+		 * Metadata of the table itself must be propagated with the current user.
+		 */
+		MarkObjectDistributedViaSuperUser(dependency);
 	}
 }
 
