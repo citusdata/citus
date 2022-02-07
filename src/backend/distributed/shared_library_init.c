@@ -168,13 +168,6 @@ static const struct config_enum_entry task_executor_type_options[] = {
 	{ NULL, 0, false }
 };
 
-static const struct config_enum_entry shard_placement_policy_options[] = {
-	{ "local-node-first", SHARD_PLACEMENT_LOCAL_NODE_FIRST, false },
-	{ "round-robin", SHARD_PLACEMENT_ROUND_ROBIN, false },
-	{ "random", SHARD_PLACEMENT_RANDOM, false },
-	{ NULL, 0, false }
-};
-
 static const struct config_enum_entry use_secondary_nodes_options[] = {
 	{ "never", USE_SECONDARY_NODES_NEVER, false },
 	{ "always", USE_SECONDARY_NODES_ALWAYS, false },
@@ -1625,22 +1618,6 @@ RegisterCitusConfigVariables(void)
 		NULL,
 		&ShardCount,
 		32, 1, MAX_SHARD_COUNT,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
-	DefineCustomEnumVariable(
-		"citus.shard_placement_policy",
-		gettext_noop("Sets the policy to use when choosing nodes for shard placement."),
-		gettext_noop("The master node chooses which worker nodes to place new shards "
-					 "on. This configuration value specifies the policy to use when "
-					 "selecting these nodes. The local-node-first policy places the "
-					 "first replica on the client node and chooses others randomly. "
-					 "The round-robin policy aims to distribute shards evenly across "
-					 "the cluster by selecting nodes in a round-robin fashion."
-					 "The random policy picks all workers randomly."),
-		&ShardPlacementPolicy,
-		SHARD_PLACEMENT_ROUND_ROBIN, shard_placement_policy_options,
 		PGC_USERSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);

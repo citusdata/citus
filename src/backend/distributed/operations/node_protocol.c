@@ -67,7 +67,6 @@
 /* Shard related configuration */
 int ShardCount = 32;
 int ShardReplicationFactor = 1; /* desired replication factor for shards */
-int ShardPlacementPolicy = SHARD_PLACEMENT_ROUND_ROBIN;
 int NextShardId = 0;
 int NextPlacementId = 0;
 

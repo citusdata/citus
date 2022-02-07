@@ -171,26 +171,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	/* first retrieve a list of random nodes for shard placements */
 	while (candidateNodeIndex < attemptableNodeCount)
 	{
-		WorkerNode *candidateNode = NULL;
-
-		if (ShardPlacementPolicy == SHARD_PLACEMENT_LOCAL_NODE_FIRST)
-		{
-			candidateNode = WorkerGetLocalFirstCandidateNode(candidateNodeList);
-		}
-		else if (ShardPlacementPolicy == SHARD_PLACEMENT_ROUND_ROBIN)
-		{
-			candidateNode = WorkerGetRoundRobinCandidateNode(workerNodeList, shardId,
-															 candidateNodeIndex);
-		}
-		else if (ShardPlacementPolicy == SHARD_PLACEMENT_RANDOM)
-		{
-			candidateNode = WorkerGetRandomCandidateNode(candidateNodeList);
-		}
-		else
-		{
-			ereport(ERROR, (errmsg("unrecognized shard placement policy")));
-		}
-
+		WorkerNode *candidateNode = WorkerGetRoundRobinCandidateNode(workerNodeList,
+																	 shardId,
+																	 candidateNodeIndex);
 		if (candidateNode == NULL)
 		{
 			ereport(ERROR, (errmsg("could only find %u of %u possible nodes",

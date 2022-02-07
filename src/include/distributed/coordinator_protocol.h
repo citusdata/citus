@@ -72,15 +72,6 @@
 #define DROP_FOREIGN_TABLE_COMMAND "DROP FOREIGN TABLE IF EXISTS %s CASCADE"
 #define CREATE_SCHEMA_COMMAND "CREATE SCHEMA IF NOT EXISTS %s AUTHORIZATION %s"
 
-/* Enumeration that defines the shard placement policy to use while staging */
-typedef enum
-{
-	SHARD_PLACEMENT_INVALID_FIRST = 0,
-	SHARD_PLACEMENT_LOCAL_NODE_FIRST = 1,
-	SHARD_PLACEMENT_ROUND_ROBIN = 2,
-	SHARD_PLACEMENT_RANDOM = 3
-} ShardPlacementPolicyType;
-
 /*
  * TableDDLCommandType encodes the implementation used by TableDDLCommand. See comments in
  * TableDDLCpmmand for details.
@@ -212,7 +203,6 @@ extern TableDDLCommand * ColumnarGetCustomTableOptionsDDL(char *schemaName,
 /* Config variables managed via guc.c */
 extern int ShardCount;
 extern int ShardReplicationFactor;
-extern int ShardPlacementPolicy;
 extern int NextShardId;
 extern int NextPlacementId;
 
