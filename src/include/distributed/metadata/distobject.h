@@ -34,4 +34,5 @@ extern ObjectAddress PgGetObjectAddress(char *ttype, ArrayType *namearr,
 extern List * GetDistributedObjectAddressList(void);
 extern void UpdateDistributedObjectColocationId(uint32 oldColocationId, uint32
 												newColocationId);
+extern RoleSpec * GetRoleSpecObjectForUser(Oid roleOid);
 #endif /* CITUS_METADATA_DISTOBJECT_H */

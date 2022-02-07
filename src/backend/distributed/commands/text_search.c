@@ -40,9 +40,10 @@
 
 
 static DefineStmt * GetTextSearchConfigDefineStmt(Oid tsconfigOid);
-static CommentStmt * GetTextSearchConfigCommentStmt(Oid tsconfigOid);
+static List * GetTextSearchConfigCommentStmt(Oid tsconfigOid);
 static List * GetTSParserNameList(Oid tsparserOid);
 static List * GetTextSearchConfigMappingStmt(Oid tsconfigOid);
+static List * GetTextSearchConfigOwnerStmts(Oid tsconfigOid);
 
 static List * get_ts_dict_namelist(Oid tsdictOid);
 static Oid get_ts_config_parser(Oid tsconfigOid);
@@ -108,20 +109,27 @@ CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address)
 	commands = lappend(commands,
 					   WrapCreateOrReplace(DeparseTreeNode((Node *) defineStmt)));
 
+	List *configurationStmts = NIL;
+
+	/* ALTER TEXT SEARCH CONFIGURATION ... OWNER TO ...*/
+	configurationStmts = list_concat(configurationStmts,
+									 GetTextSearchConfigOwnerStmts(address->objectId));
+
 	/* COMMENT ON TEXT SEARCH CONFIGURATION ... */
-	CommentStmt *commentStmt = GetTextSearchConfigCommentStmt(address->objectId);
-	if (commentStmt)
-	{
-		commands = lappend(commands, DeparseTreeNode((Node *) commentStmt));
-	}
+	configurationStmts = list_concat(configurationStmts,
+									 GetTextSearchConfigCommentStmt(address->objectId));
+
 
 	/* ALTER TEXT SEARCH CONFIGURATION ... ADD MAPPING FOR ... WITH ... */
-	List *mappingStmts = GetTextSearchConfigMappingStmt(address->objectId);
-	Node *mappingStmt = NULL;
-	foreach_ptr(mappingStmt, mappingStmts)
+	configurationStmts = list_concat(configurationStmts,
+									 GetTextSearchConfigMappingStmt(address->objectId));
+
+	/* deparse all statements into sql */
+	Node *stmt = NULL;
+	foreach_ptr(stmt, configurationStmts)
 	{
-		char *mappingSql = DeparseTreeNode(mappingStmt);
-		commands = lappend(commands, mappingSql);
+		char *sql = DeparseTreeNode(stmt);
+		commands = lappend(commands, sql);
 	}
 
 	return commands;
@@ -374,13 +382,13 @@ GetTextSearchConfigDefineStmt(Oid tsconfigOid)
 }
 
 
-static CommentStmt *
+static List *
 GetTextSearchConfigCommentStmt(Oid tsconfigOid)
 {
 	char *comment = GetComment(tsconfigOid, TSConfigRelationId, 0);
 	if (!comment)
 	{
-		return NULL;
+		return NIL;
 	}
 
 	CommentStmt *stmt = makeNode(CommentStmt);
@@ -388,7 +396,7 @@ GetTextSearchConfigCommentStmt(Oid tsconfigOid)
 
 	stmt->object = (Node *) get_ts_config_namelist(tsconfigOid);
 	stmt->comment = comment;
-	return stmt;
+	return list_make1(stmt);
 }
 
 
@@ -467,6 +475,27 @@ GetTextSearchConfigMappingStmt(Oid tsconfigOid)
 	table_close(maprel, AccessShareLock);
 
 	return stmts;
+}
+
+
+static List *
+GetTextSearchConfigOwnerStmts(Oid tsconfigOid)
+{
+	HeapTuple tup = SearchSysCache1(TSCONFIGOID, ObjectIdGetDatum(tsconfigOid));
+	if (!HeapTupleIsValid(tup)) /* should not happen */
+	{
+		elog(ERROR, "cache lookup failed for text search configuration %u",
+			 tsconfigOid);
+	}
+	Form_pg_ts_config config = (Form_pg_ts_config) GETSTRUCT(tup);
+
+	AlterOwnerStmt *stmt = makeNode(AlterOwnerStmt);
+	stmt->objectType = OBJECT_TSCONFIGURATION;
+	stmt->object = (Node *) get_ts_config_namelist(tsconfigOid);
+	stmt->newowner = GetRoleSpecObjectForUser(config->cfgowner);
+
+	ReleaseSysCache(tup);
+	return list_make1(stmt);
 }
 
 
