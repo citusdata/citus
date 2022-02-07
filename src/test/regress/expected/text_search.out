@@ -172,6 +172,28 @@ $$);
  (localhost,57638,t,"")
 (2 rows)
 
+-- verify adding 2 dictionaries for two tokes at once
+ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING IF EXISTS FOR asciiword, asciihword;
+NOTICE:  mapping for token type "asciihword" does not exist, skipping
+ALTER TEXT SEARCH CONFIGURATION french_noaccent ADD MAPPING FOR asciiword, asciihword WITH french_stem, dutch_stem;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionaries) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+                     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(asciiword,""{french_stem,dutch_stem}"")")
+ (localhost,57638,t,"(asciiword,""{french_stem,dutch_stem}"")")
+(2 rows)
+
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionaries) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+                     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"(asciihword,""{french_stem,dutch_stem}"")")
+ (localhost,57638,t,"(asciihword,""{french_stem,dutch_stem}"")")
+(2 rows)
+
 --verify we can drop cascade a configuration that is in use
 -- verify it is in use
 DROP TEXT SEARCH CONFIGURATION text_search.french_noaccent;

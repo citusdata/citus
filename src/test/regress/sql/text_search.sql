@@ -94,6 +94,16 @@ SELECT run_command_on_workers($$
     SELECT obj_description('text_search.french_noaccent'::regconfig);
 $$);
 
+-- verify adding 2 dictionaries for two tokes at once
+ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING IF EXISTS FOR asciiword, asciihword;
+ALTER TEXT SEARCH CONFIGURATION french_noaccent ADD MAPPING FOR asciiword, asciihword WITH french_stem, dutch_stem;
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionaries) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+SELECT run_command_on_workers($$
+    SELECT ROW(alias,dictionaries) FROM ts_debug('text_search.french_noaccent', 'un chou-fleur') WHERE alias = 'asciihword' LIMIT 1;
+$$);
+
 --verify we can drop cascade a configuration that is in use
 -- verify it is in use
 DROP TEXT SEARCH CONFIGURATION text_search.french_noaccent;
