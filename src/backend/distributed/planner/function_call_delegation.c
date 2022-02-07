@@ -260,7 +260,7 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		ereport(DEBUG4, (errmsg("function is distributed")));
 	}
 
-	if (IsCitusInitiatedRemoteBackend())
+	if (IsCitusInternalBackend())
 	{
 		bool isFunctionForceDelegated = procedure->forceDelegation;
 
@@ -300,17 +300,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 			}
 		}
 
-		return NULL;
-	}
-
-	if (localGroupId != COORDINATOR_GROUP_ID)
-	{
-		/*
-		 * We are calling a distributed function on a worker node. We currently
-		 * only delegate from the coordinator.
-		 *
-		 * TODO: remove this restriction.
-		 */
 		return NULL;
 	}
 
@@ -374,14 +363,16 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 			}
 
 			/*
-			 * If the expression is simple, such as, SELECT fn() in
-			 * PL/PgSQL code, PL engine is doing simple expression
-			 * evaluation, which can't interpret the CustomScan Node.
-			 * Function from FROM clause is not simple, so it's ok.
+			 * If the expression is simple, such as, SELECT function() or PEFORM function()
+			 * in PL/PgSQL code, PL engine does a simple expression evaluation which can't
+			 * interpret the Citus CustomScan Node.
+			 * Note: Function from FROM clause is not simple, so it's ok to pushdown.
 			 */
-			if (MaybeExecutingUDF() && IsQuerySimple(planContext->query) && !fromFuncExpr)
+			if ((MaybeExecutingUDF() || DoBlockLevel > 0) &&
+				IsQuerySimple(planContext->query) &&
+				!fromFuncExpr)
 			{
-				ereport(DEBUG1, (errmsg("Skipping delegation of function "
+				ereport(DEBUG1, (errmsg("Skipping pushdown of function "
 										"from a PL/PgSQL simple expression")));
 				return NULL;
 			}

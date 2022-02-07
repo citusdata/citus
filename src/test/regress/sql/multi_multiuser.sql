@@ -169,6 +169,12 @@ SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000)
 -- insert some data and read
 INSERT INTO columnar_table VALUES (1), (1);
 SELECT * FROM columnar_table;
+-- Fail to alter a columnar table that is created by a different user
+SET ROLE full_access;
+SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
+-- Fail to reset a columnar table value created by a different user
+SELECT alter_columnar_table_reset('columnar_table', chunk_group_row_limit => true);
+SET ROLE read_access;
 -- and drop it
 DROP TABLE columnar_table;
 

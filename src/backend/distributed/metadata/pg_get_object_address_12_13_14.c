@@ -38,7 +38,6 @@ static void ErrorIfCurrentUserCanNotDistributeObject(ObjectType type,
 													 ObjectAddress *addr,
 													 Node *node,
 													 Relation *relation);
-static void ErrorIfUserNotAllowedToPropagateExtension(char *extensionName);
 static List * textarray_to_strvaluelist(ArrayType *arr);
 
 /* It is defined on PG >= 13 versions by default */
@@ -398,12 +397,8 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 										 Node *node, Relation *relation)
 {
 	Oid userId = GetUserId();
-	AclMode aclMaskResult = 0;
-	bool skipAclCheck = false;
-	Oid idToCheck = InvalidOid;
 
-	/* Since we don't handle sequences like object, add it separately */
-	if (!(SupportedDependencyByCitus(addr) || type == OBJECT_SEQUENCE))
+	if (!SupportedDependencyByCitus(addr))
 	{
 		ereport(ERROR, (errmsg("Object type %d can not be distributed by Citus", type)));
 	}
@@ -411,27 +406,19 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 	switch (type)
 	{
 		case OBJECT_SCHEMA:
-		{
-			idToCheck = addr->objectId;
-			aclMaskResult = pg_namespace_aclmask(idToCheck, userId, ACL_USAGE,
-												 ACLMASK_ANY);
-			break;
-		}
-
+		case OBJECT_DATABASE:
 		case OBJECT_FUNCTION:
 		case OBJECT_PROCEDURE:
 		case OBJECT_AGGREGATE:
+		case OBJECT_TYPE:
+		case OBJECT_FOREIGN_SERVER:
+		case OBJECT_SEQUENCE:
+		case OBJECT_FOREIGN_TABLE:
+		case OBJECT_TABLE:
+		case OBJECT_EXTENSION:
+		case OBJECT_COLLATION:
 		{
 			check_object_ownership(userId, type, *addr, node, *relation);
-			skipAclCheck = true;
-			break;
-		}
-
-		case OBJECT_DATABASE:
-		{
-			idToCheck = addr->objectId;
-			aclMaskResult = pg_database_aclmask(idToCheck, userId, ACL_CONNECT,
-												ACLMASK_ANY);
 			break;
 		}
 
@@ -444,54 +431,6 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 									   "access privileges on role %d with type %d",
 									   addr->objectId, type)));
 			}
-			skipAclCheck = true;
-			break;
-		}
-
-		case OBJECT_TYPE:
-		{
-			idToCheck = addr->objectId;
-			aclMaskResult = pg_type_aclmask(idToCheck, userId, ACL_USAGE,
-											ACLMASK_ANY);
-			break;
-		}
-
-		case OBJECT_FOREIGN_SERVER:
-		{
-			idToCheck = addr->objectId;
-			aclMaskResult = pg_foreign_server_aclmask(idToCheck, userId, ACL_USAGE,
-													  ACLMASK_ANY);
-			break;
-		}
-
-		case OBJECT_SEQUENCE:
-		{
-			idToCheck = addr->objectId;
-			aclMaskResult = pg_class_aclmask(idToCheck, userId, ACL_USAGE, ACLMASK_ANY);
-			break;
-		}
-
-		case OBJECT_FOREIGN_TABLE:
-		case OBJECT_TABLE:
-		{
-			/* table distribution already does the ownership check, so we can stick to that over acl_check */
-			check_object_ownership(userId, type, *addr, node, *relation);
-			skipAclCheck = true;
-			break;
-		}
-
-		case OBJECT_EXTENSION:
-		{
-			Value *valueNode = (Value *) node;
-			char *extensionName = strVal(valueNode);
-			ErrorIfUserNotAllowedToPropagateExtension(extensionName);
-			skipAclCheck = true;
-			break;
-		}
-
-		case OBJECT_COLLATION:
-		{
-			skipAclCheck = true;
 			break;
 		}
 
@@ -502,119 +441,6 @@ ErrorIfCurrentUserCanNotDistributeObject(ObjectType type, ObjectAddress *addr,
 			break;
 		}
 	}
-
-	if (!skipAclCheck && aclMaskResult == ACL_NO_RIGHTS)
-	{
-		ereport(ERROR, (errmsg("Current user does not have required privileges "
-							   "on %d with type id %d to distribute it",
-							   idToCheck, type)));
-	}
-}
-
-
-/*
- * ErrorIfUserNotAllowedToPropagateExtension errors out if the current user does
- * not have required privileges to propagate extension
- */
-static void
-ErrorIfUserNotAllowedToPropagateExtension(char *extensionName)
-{
-	const int nameAttributeIndex = 1;
-	const int superuserAttributeIndex = 4;
-#if PG_VERSION_NUM >= PG_VERSION_13
-	const int trustedAttributeIndex = 5;
-#endif
-
-	LOCAL_FCINFO(fcinfo, 0);
-	FmgrInfo flinfo;
-
-	bool goForward = true;
-	bool doCopy = false;
-
-	EState *estate = CreateExecutorState();
-	ReturnSetInfo *extensionsResultSet = makeNode(ReturnSetInfo);
-	extensionsResultSet->econtext = GetPerTupleExprContext(estate);
-	extensionsResultSet->allowedModes = SFRM_Materialize;
-
-	fmgr_info(F_PG_AVAILABLE_EXTENSION_VERSIONS, &flinfo);
-	InitFunctionCallInfoData(*fcinfo, &flinfo, 0, InvalidOid, NULL,
-							 (Node *) extensionsResultSet);
-
-	/*
-	 * pg_available_extensions_versions returns result set containing all
-	 * available extension versions with whether the extension requires
-	 * superuser and it is trusted information.
-	 */
-	(*pg_available_extension_versions)(fcinfo);
-
-	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(
-		extensionsResultSet->setDesc,
-		&TTSOpsMinimalTuple);
-	bool hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult,
-											goForward,
-											doCopy,
-											tupleTableSlot);
-	while (hasTuple)
-	{
-		bool isNull = false;
-		Datum curExtensionNameDatum = slot_getattr(tupleTableSlot,
-												   nameAttributeIndex,
-												   &isNull);
-		char *curExtensionName = NameStr(*DatumGetName(curExtensionNameDatum));
-		if (strcmp(extensionName, curExtensionName) == 0)
-		{
-			Datum superuserExpectedDatum = slot_getattr(tupleTableSlot,
-														superuserAttributeIndex,
-														&isNull);
-			bool superuserExpected = DatumGetBool(superuserExpectedDatum);
-
-#if PG_VERSION_NUM < PG_VERSION_13
-			if (superuserExpected)
-			{
-				EnsureSuperUser();
-			}
-#else
-			if (superuserExpected)
-			{
-				/*
-				 * After PG 13, if the extension is trusted it can be created
-				 * by the user having CREATE privilege on the database even if
-				 * the extension requires superuser.
-				 */
-				Datum trustedExtensionDatum = slot_getattr(tupleTableSlot,
-														   trustedAttributeIndex,
-														   &isNull);
-				bool trustedExtension = DatumGetBool(trustedExtensionDatum);
-
-				if (trustedExtension)
-				{
-					/* Allow if user has CREATE privilege on current database */
-					AclResult aclresult = pg_database_aclcheck(MyDatabaseId,
-															   GetUserId(),
-															   ACL_CREATE);
-					if (aclresult != ACLCHECK_OK)
-					{
-						ereport(ERROR, (errmsg("operation is not allowed"),
-										errhint("Must have CREATE privilege "
-												"on database to propagate "
-												"extension %s", curExtensionName)));
-					}
-				}
-				else
-				{
-					EnsureSuperUser();
-				}
-			}
-#endif
-			break;
-		}
-
-		ExecClearTuple(tupleTableSlot);
-		hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward,
-										   doCopy, tupleTableSlot);
-	}
-
-	ExecDropSingleTupleTableSlot(tupleTableSlot);
 }
 
 

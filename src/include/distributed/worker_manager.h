@@ -70,7 +70,6 @@ extern WorkerNode * WorkerGetRandomCandidateNode(List *currentNodeList);
 extern WorkerNode * WorkerGetRoundRobinCandidateNode(List *workerNodeList,
 													 uint64 shardId,
 													 uint32 placementIndex);
-extern WorkerNode * WorkerGetLocalFirstCandidateNode(List *currentNodeList);
 extern uint32 ActivePrimaryNonCoordinatorNodeCount(void);
 extern uint32 ActivePrimaryNodeCount(void);
 extern List * ActivePrimaryNonCoordinatorNodeList(LOCKMODE lockMode);

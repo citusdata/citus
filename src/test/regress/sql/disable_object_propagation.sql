@@ -1,5 +1,5 @@
 SET citus.next_shard_id TO 20030000;
-SET citus.enable_object_propagation TO false; -- all tests here verify old behaviour without distributing types,functions,etc automatically
+SET citus.enable_metadata_sync TO false; -- all tests here verify old behaviour without distributing types,functions,etc automatically
 
 CREATE USER typeowner_for_disabled_object_propagation_guc;
 CREATE SCHEMA disabled_object_propagation;
@@ -37,7 +37,7 @@ SELECT create_distributed_table('t3', 'a');
 -- verify ALTER TYPE statements are not propagated for types, even though they are marked distributed
 BEGIN;
 -- object propagation is turned off after xact finished, type is already marked distributed by then
-SET LOCAL citus.enable_object_propagation TO on;
+SET LOCAL citus.enable_metadata_sync TO on;
 CREATE TYPE tt3 AS (a int, b int);
 CREATE TABLE t4 (a int PRIMARY KEY, b tt3);
 SELECT create_distributed_table('t4','a');
@@ -75,7 +75,7 @@ $$);
 
 -- suppress any warnings during cleanup
 SET client_min_messages TO error;
-RESET citus.enable_object_propagation;
+RESET citus.enable_metadata_sync;
 DROP SCHEMA disabled_object_propagation CASCADE;
 DROP SCHEMA disabled_object_propagation2 CASCADE;
 DROP USER typeowner_for_disabled_object_propagation_guc;

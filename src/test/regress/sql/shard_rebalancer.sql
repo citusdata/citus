@@ -1399,3 +1399,21 @@ WHERE logicalrelid = 'r1'::regclass;
 
 DROP TABLE t1, r1;
 
+-- Test rebalancer with index on a table
+
+DROP TABLE IF EXISTS test_rebalance_with_index;
+CREATE TABLE test_rebalance_with_index (measureid integer PRIMARY KEY);
+SELECT create_distributed_table('test_rebalance_with_index', 'measureid');
+CREATE INDEX rebalance_with_index ON test_rebalance_with_index(measureid);
+
+INSERT INTO test_rebalance_with_index VALUES(0);
+INSERT INTO test_rebalance_with_index VALUES(1);
+INSERT INTO test_rebalance_with_index VALUES(2);
+
+SELECT * FROM master_drain_node('localhost', :worker_2_port);
+CALL citus_cleanup_orphaned_shards();
+UPDATE pg_dist_node SET shouldhaveshards=true WHERE nodeport = :worker_2_port;
+
+SELECT rebalance_table_shards();
+CALL citus_cleanup_orphaned_shards();
+DROP TABLE test_rebalance_with_index CASCADE;

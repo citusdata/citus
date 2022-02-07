@@ -22,13 +22,11 @@
 
 #include "columnar/columnar_tableam.h"
 
+
 PG_MODULE_MAGIC;
 
 void _PG_init(void);
 
 void
 _PG_init(void)
-{
-	columnar_init_gucs();
-	columnar_tableam_init();
-}
+

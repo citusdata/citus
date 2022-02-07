@@ -89,8 +89,8 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
 #define DISABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'off'"
 #define ENABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'on'"
-#define DISABLE_OBJECT_PROPAGATION "SET citus.enable_object_propagation TO 'off'"
-#define ENABLE_OBJECT_PROPAGATION "SET citus.enable_object_propagation TO 'on'"
+#define DISABLE_METADATA_SYNC "SET citus.enable_metadata_sync TO 'off'"
+#define ENABLE_METADATA_SYNC "SET citus.enable_metadata_sync TO 'on'"
 #define WORKER_APPLY_SEQUENCE_COMMAND "SELECT worker_apply_sequence_command (%s,%s)"
 #define UPSERT_PLACEMENT \
 	"INSERT INTO pg_dist_placement " \
@@ -108,6 +108,6 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
 /* controlled via GUC */
 extern char *EnableManualMetadataChangesForUser;
-extern bool EnableMetadataSyncByDefault;
+extern bool EnableMetadataSync;
 
 #endif /* METADATA_SYNC_H */

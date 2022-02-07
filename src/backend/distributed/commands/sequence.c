@@ -241,7 +241,7 @@ PreprocessDropSequenceStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	if (!EnableDependencyCreation)
+	if (!EnableMetadataSync)
 	{
 		/*
 		 * we are configured to disable object propagation, should not propagate anything
