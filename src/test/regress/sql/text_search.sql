@@ -133,6 +133,31 @@ SELECT run_command_on_workers($$ -- verify the name exists on the worker
 $$);
 
 
+-- verify edgecases in deparsers
+CREATE TEXT SEARCH CONFIGURATION config1 ( PARSER = default );
+CREATE TEXT SEARCH CONFIGURATION config2 ( PARSER = default );
+SET citus.enable_ddl_propagation TO off;
+CREATE TEXT SEARCH CONFIGURATION config3 ( PARSER = default );
+RESET citus.enable_ddl_propagation;
+
+-- verify config1, config2 exist on workers, config3 not
+SELECT run_command_on_workers($$ SELECT 'text_search.config1'::regconfig; $$);
+SELECT run_command_on_workers($$ SELECT 'text_search.config2'::regconfig; $$);
+SELECT run_command_on_workers($$ SELECT 'text_search.config3'::regconfig; $$);
+
+-- DROP all config's, only 1&2 are distributed, they should propagate well to remotes
+DROP TEXT SEARCH CONFIGURATION config1, config2, config3;
+
+-- verify all existing ones have been removed (checking config3 for consistency)
+SELECT run_command_on_workers($$ SELECT 'text_search.config1'::regconfig; $$);
+SELECT run_command_on_workers($$ SELECT 'text_search.config2'::regconfig; $$);
+SELECT run_command_on_workers($$ SELECT 'text_search.config3'::regconfig; $$);
+-- verify they are all removed locally
+SELECT 'text_search.config1'::regconfig;
+SELECT 'text_search.config2'::regconfig;
+SELECT 'text_search.config3'::regconfig;
+
+
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2 CASCADE;
 DROP ROLE text_search_owner;

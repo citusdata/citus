@@ -248,6 +248,65 @@ $$);
  (localhost,57638,t,text_search2.change_schema)
 (2 rows)
 
+-- verify edgecases in deparsers
+CREATE TEXT SEARCH CONFIGURATION config1 ( PARSER = default );
+CREATE TEXT SEARCH CONFIGURATION config2 ( PARSER = default );
+SET citus.enable_ddl_propagation TO off;
+CREATE TEXT SEARCH CONFIGURATION config3 ( PARSER = default );
+RESET citus.enable_ddl_propagation;
+-- verify config1, config2 exist on workers, config3 not
+SELECT run_command_on_workers($$ SELECT 'text_search.config1'::regconfig; $$);
+         run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,text_search.config1)
+ (localhost,57638,t,text_search.config1)
+(2 rows)
+
+SELECT run_command_on_workers($$ SELECT 'text_search.config2'::regconfig; $$);
+         run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,text_search.config2)
+ (localhost,57638,t,text_search.config2)
+(2 rows)
+
+SELECT run_command_on_workers($$ SELECT 'text_search.config3'::regconfig; $$);
+                                     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  text search configuration ""text_search.config3"" does not exist")
+ (localhost,57638,f,"ERROR:  text search configuration ""text_search.config3"" does not exist")
+(2 rows)
+
+-- DROP all config's, only 1&2 are distributed, they should propagate well to remotes
+DROP TEXT SEARCH CONFIGURATION config1, config2, config3;
+-- verify all existing ones have been removed (checking config3 for consistency)
+SELECT run_command_on_workers($$ SELECT 'text_search.config1'::regconfig; $$);
+                                     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  text search configuration ""text_search.config1"" does not exist")
+ (localhost,57638,f,"ERROR:  text search configuration ""text_search.config1"" does not exist")
+(2 rows)
+
+SELECT run_command_on_workers($$ SELECT 'text_search.config2'::regconfig; $$);
+                                     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  text search configuration ""text_search.config2"" does not exist")
+ (localhost,57638,f,"ERROR:  text search configuration ""text_search.config2"" does not exist")
+(2 rows)
+
+SELECT run_command_on_workers($$ SELECT 'text_search.config3'::regconfig; $$);
+                                     run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  text search configuration ""text_search.config3"" does not exist")
+ (localhost,57638,f,"ERROR:  text search configuration ""text_search.config3"" does not exist")
+(2 rows)
+
+-- verify they are all removed locally
+SELECT 'text_search.config1'::regconfig;
+ERROR:  text search configuration "text_search.config1" does not exist
+SELECT 'text_search.config2'::regconfig;
+ERROR:  text search configuration "text_search.config2" does not exist
+SELECT 'text_search.config3'::regconfig;
+ERROR:  text search configuration "text_search.config3" does not exist
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2 CASCADE;
 DROP ROLE text_search_owner;
