@@ -26,8 +26,6 @@ install-columnar:
 	$(MAKE) -C src/backend/columnar install
 install-extension: extension install-columnar
 	$(MAKE) -C src/backend/distributed/ install
-	ldd /usr/lib/postgresql/13/lib/citus.so
-	readelf -d /usr/lib/postgresql/13/lib/citus.so
 install-headers: extension
 	$(MKDIR_P) '$(DESTDIR)$(includedir_server)/distributed/'
 # generated headers are located in the build directory
@@ -47,8 +45,6 @@ install-downgrades:
 	$(MAKE) -C src/backend/distributed/ install-downgrades
 install-all: install-headers
 	$(MAKE) -C src/backend/distributed/ install-all
-	ldd /usr/lib/postgresql/13/lib/citus.so
-	readelf -d /usr/lib/postgresql/13/lib/citus.so
 clean: clean-extension
 
 # apply or check style
