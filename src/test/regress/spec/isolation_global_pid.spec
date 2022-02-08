@@ -82,6 +82,9 @@ step "s2-coordinator-get_all_active_transactions"
 
 step "s2-coordinator-get_global_active_transactions"
 {
+    SELECT * FROM get_global_active_transactions() WHERE global_pid IN (
+        SELECT global_pid FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%'
+    );
     SELECT count(*) FROM get_global_active_transactions() WHERE global_pid IN (
         SELECT global_pid FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%'
     );
