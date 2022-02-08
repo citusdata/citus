@@ -12,3 +12,6 @@ MODULE_big = columnar
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 
 include $(citus_top_builddir)/Makefile.global
+
+.PHONY: install-all
+install-all: install
