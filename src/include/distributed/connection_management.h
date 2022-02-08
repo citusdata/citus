@@ -29,7 +29,7 @@
 #define ERROR_BUFFER_SIZE 256
 
 /* application name used for internal connections in Citus */
-#define CITUS_APPLICATION_NAME "citus_internal"
+#define CITUS_APPLICATION_NAME_PREFIX "citus_internal gpid="
 
 /* application name used for internal connections in rebalancer */
 #define CITUS_REBALANCER_NAME "citus_rebalancer"

@@ -201,6 +201,9 @@ static bool workerNodeHashValid = false;
 /* default value is -1, for coordinator it's 0 and for worker nodes > 0 */
 static int32 LocalGroupId = -1;
 
+/* default value is -1, increases with every node starting from 1 */
+static int32 LocalNodeId = -1;
+
 /* built first time through in InitializeDistCache */
 static ScanKeyData DistPartitionScanKey[1];
 static ScanKeyData DistShardScanKey[1];
@@ -3619,6 +3622,62 @@ GetLocalGroupId(void)
 
 
 /*
+ * GetNodeId returns the node identifier of the local node.
+ */
+int32
+GetLocalNodeId(void)
+{
+	InitializeCaches();
+
+	/*
+	 * Already set the node id, no need to read the heap again.
+	 */
+	if (LocalNodeId != -1)
+	{
+		return LocalNodeId;
+	}
+
+	uint32 nodeId = -1;
+
+	int32 localGroupId = GetLocalGroupId();
+
+	bool includeNodesFromOtherClusters = false;
+	List *workerNodeList = ReadDistNode(includeNodesFromOtherClusters);
+
+	WorkerNode *workerNode = NULL;
+	foreach_ptr(workerNode, workerNodeList)
+	{
+		if (workerNode->groupId == localGroupId &&
+			workerNode->isActive)
+		{
+			nodeId = workerNode->nodeId;
+			break;
+		}
+	}
+
+	/*
+	 * nodeId is -1 if we cannot find an active node whose group id is
+	 * localGroupId in pg_dist_node.
+	 */
+	if (nodeId == -1)
+	{
+		elog(DEBUG4, "there is no active node with group id '%d' on pg_dist_node",
+			 localGroupId);
+
+		/*
+		 * This is expected if the coordinator is not added to the metadata.
+		 * We'll return 0 for this case and for all cases so views can function almost normally
+		 */
+		nodeId = 0;
+	}
+
+	LocalNodeId = nodeId;
+
+	return nodeId;
+}
+
+
+/*
  * RegisterLocalGroupIdCacheCallbacks registers the callbacks required to
  * maintain LocalGroupId at a consistent value. It's separate from
  * GetLocalGroupId so the callback can be registered early, before metadata
@@ -4019,6 +4078,7 @@ InvalidateMetadataSystemCache(void)
 	memset(&MetadataCache, 0, sizeof(MetadataCache));
 	workerNodeHashValid = false;
 	LocalGroupId = -1;
+	LocalNodeId = -1;
 }
 
 
@@ -4110,6 +4170,7 @@ InvalidateNodeRelationCacheCallback(Datum argument, Oid relationId)
 	if (relationId == InvalidOid || relationId == MetadataCache.distNodeRelationId)
 	{
 		workerNodeHashValid = false;
+		LocalNodeId = -1;
 	}
 }
 
