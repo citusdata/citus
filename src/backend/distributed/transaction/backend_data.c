@@ -406,8 +406,16 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 			continue;
 		}
 
+		PGPROC *currentProc = &ProcGlobal->allProcs[backendIndex];
+		if (currentProc->lockGroupLeader != NULL)
+		{
+			/* we skip Postgres' parallel workers as it is enough to show the leader */
+			SpinLockRelease(&currentBackend->mutex);
+			continue;
+		}
+
 		Oid databaseId = currentBackend->databaseId;
-		int backendPid = ProcGlobal->allProcs[backendIndex].pid;
+		int backendPid = currentProc->pid;
 		initiatorNodeIdentifier = currentBackend->citusBackend.initiatorNodeIdentifier;
 
 		/*
