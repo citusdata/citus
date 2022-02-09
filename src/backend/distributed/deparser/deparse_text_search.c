@@ -23,6 +23,14 @@ static void AppendDefElemList(StringInfo buf, List *defelms);
 static void AppendStringInfoTokentypeList(StringInfo buf, List *tokentypes);
 static void AppendStringInfoDictnames(StringInfo buf, List *dicts);
 
+
+/*
+ * DeparseCreateTextSearchStmt returns the sql for a DefineStmt defining a TEXT SEARCH
+ * CONFIGURATION
+ *
+ * Although the syntax is mutually exclusive on the two arguments that can be passed in
+ * the deparser will syntactically correct multiple definitions if provided. *
+ */
 char *
 DeparseCreateTextSearchStmt(Node *node)
 {
@@ -41,6 +49,12 @@ DeparseCreateTextSearchStmt(Node *node)
 }
 
 
+/*
+ * AppendDefElemList specialization to append a comma separated list of definitions to a
+ * define statement.
+ *
+ * Currently only supports String and TypeName entries. Will error on others.
+ */
 static void
 AppendDefElemList(StringInfo buf, List *defelems)
 {
@@ -84,6 +98,10 @@ AppendDefElemList(StringInfo buf, List *defelems)
 }
 
 
+/*
+ * DeparseDropTextSearchConfigurationStmt returns the sql representation for a DROP TEXT
+ * SEARCH CONFIGURATION ... statment. Supports dropping multiple configurations at once.
+ */
 char *
 DeparseDropTextSearchConfigurationStmt(Node *node)
 {
@@ -118,6 +136,10 @@ DeparseDropTextSearchConfigurationStmt(Node *node)
 }
 
 
+/*
+ * DeparseRenameTextSearchConfigurationStmt returns the sql representation of a ALTER TEXT
+ * SEARCH CONFIGURATION ... RENAME TO ... statement.
+ */
 char *
 DeparseRenameTextSearchConfigurationStmt(Node *node)
 {
@@ -135,6 +157,15 @@ DeparseRenameTextSearchConfigurationStmt(Node *node)
 }
 
 
+/*
+ * DeparseAlterTextSearchConfigurationStmt returns the ql representation of any generic
+ * ALTER TEXT SEARCH CONFIGURATION .... statement. The statements supported include:
+ *  - ALTER TEXT SEARCH CONFIGURATIONS ... ADD MAPPING FOR [, ...] WITH [, ...]
+ *  - ALTER TEXT SEARCH CONFIGURATIONS ... ALTER MAPPING FOR [, ...] WITH [, ...]
+ *  - ALTER TEXT SEARCH CONFIGURATIONS ... ALTER MAPPING REPLACE ... WITH ...
+ *  - ALTER TEXT SEARCH CONFIGURATIONS ... ALTER MAPPING FOR [, ...] REPLACE ... WITH ...
+ *  - ALTER TEXT SEARCH CONFIGURATIONS ... DROP MAPPING [ IF EXISTS ] FOR ...
+ */
 char *
 DeparseAlterTextSearchConfigurationStmt(Node *node)
 {
@@ -222,6 +253,10 @@ DeparseAlterTextSearchConfigurationStmt(Node *node)
 }
 
 
+/*
+ * DeparseAlterTextSearchConfigurationSchemaStmt returns the sql statement representing
+ * ALTER TEXT SEARCH CONFIGURATION ... SET SCHEMA ... statements.
+ */
 char *
 DeparseAlterTextSearchConfigurationSchemaStmt(Node *node)
 {
@@ -239,6 +274,10 @@ DeparseAlterTextSearchConfigurationSchemaStmt(Node *node)
 }
 
 
+/*
+ * DeparseTextSearchConfigurationCommentStmt returns the sql statement representing
+ * COMMENT ON TEXT SEARCH CONFIGURATION ... IS ...
+ */
 char *
 DeparseTextSearchConfigurationCommentStmt(Node *node)
 {
@@ -266,6 +305,10 @@ DeparseTextSearchConfigurationCommentStmt(Node *node)
 }
 
 
+/*
+ * AppendStringInfoTokentypeList specializes in adding a comma separated list of
+ * token_tyoe's to TEXT SEARCH CONFIGURATION commands
+ */
 static void
 AppendStringInfoTokentypeList(StringInfo buf, List *tokentypes)
 {
@@ -290,6 +333,10 @@ AppendStringInfoTokentypeList(StringInfo buf, List *tokentypes)
 }
 
 
+/*
+ * AppendStringInfoDictnames specializes in appending a comma separated list of
+ * dictionaries to TEXT SEARCH CONFIGURATION commands.
+ */
 static void
 AppendStringInfoDictnames(StringInfo buf, List *dicts)
 {
@@ -309,6 +356,10 @@ AppendStringInfoDictnames(StringInfo buf, List *dicts)
 }
 
 
+/*
+ * DeparseAlterTextSearchConfigurationOwnerStmt returns the sql statement representing
+ * ALTER TEXT SEARCH CONFIGURATION ... ONWER TO ... commands.
+ */
 char *
 DeparseAlterTextSearchConfigurationOwnerStmt(Node *node)
 {
