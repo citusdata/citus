@@ -958,6 +958,15 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 		return NIL;
 	}
 
+	char type = get_typtype(typeAddress->objectId);
+	char relKind = get_rel_relkind(typeAddress->objectId);
+
+	/* Don't send anything if the type is a table's row type */
+	if (type == TYPTYPE_COMPOSITE && relKind != RELKIND_COMPOSITE_TYPE)
+	{
+		return NIL;
+	}
+
 	Node *stmt = CreateTypeStmtByObjectAddress(typeAddress);
 
 	/* capture ddl command for recreation and wrap in create if not exists construct */
