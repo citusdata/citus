@@ -32,6 +32,9 @@ show citus.node_conninfo;
 select count(*) from test where a = 0;
 ALTER SYSTEM SET citus.node_conninfo = 'sslmode=doesnotexist';
 
+-- we cannot set application name
+ALTER SYSTEM SET citus.node_conninfo = 'application_name=XXX';
+
 BEGIN;
 -- Should still work (no SIGHUP yet);
 select count(*) from test where a = 0;
