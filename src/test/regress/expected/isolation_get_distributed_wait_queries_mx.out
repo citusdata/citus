@@ -2,13 +2,13 @@ Parsed test spec with 4 sessions
 
 starting permutation: s1-begin s1-update-ref-table-from-coordinator s2-start-session-level-connection s2-begin-on-worker s2-update-ref-table s3-select-distributed-waiting-queries s1-commit s2-commit-worker s2-stop-connection
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-update-ref-table-from-coordinator:
- UPDATE ref_table SET value_1 = 15;
+	UPDATE ref_table SET value_1 = 15;
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -16,7 +16,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -24,20 +24,20 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-update-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement                                  |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
 UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|
- UPDATE ref_table SET value_1 = 15;
+	UPDATE ref_table SET value_1 = 15;
 |localhost        |coordinator_host  |            57638|             57636
 (1 row)
 
 step s1-commit:
- COMMIT;
+	COMMIT;
 
 step s2-update-ref-table: <... completed>
 run_commands_on_session_level_connection_to_node
@@ -54,7 +54,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -69,7 +69,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update-ref-table s2-start-session-level-connection s2-begin-on-worker s2-update-ref-table s3-select-distributed-waiting-queries s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -77,7 +77,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -85,7 +85,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-update-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -93,7 +93,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -101,7 +101,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -109,10 +109,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-update-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement                                  |current_statement_in_blocking_process              |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -142,7 +142,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -150,7 +150,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -165,7 +165,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update-dist-table s2-start-session-level-connection s2-begin-on-worker s2-update-dist-table s3-select-distributed-waiting-queries s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -173,7 +173,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -181,7 +181,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-update-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 4');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 4');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -189,7 +189,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -197,7 +197,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -205,10 +205,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-update-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 5');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 5');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement         |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -238,7 +238,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -246,7 +246,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -261,7 +261,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-delete-from-ref-table s2-start-session-level-connection s2-begin-on-worker s2-update-ref-table s3-select-distributed-waiting-queries s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -269,7 +269,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -277,7 +277,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-delete-from-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE user_id = 1');
+	SELECT run_commands_on_session_level_connection_to_node('DELETE FROM ref_table WHERE user_id = 1');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -285,7 +285,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -293,7 +293,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -301,10 +301,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-update-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement                                  |current_statement_in_blocking_process  |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -334,7 +334,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -342,7 +342,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -357,7 +357,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-into-ref-table s2-start-session-level-connection s2-begin-on-worker s2-update-ref-table s3-select-distributed-waiting-queries s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -365,7 +365,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -373,7 +373,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-insert-into-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -381,7 +381,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -389,7 +389,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -397,10 +397,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-update-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement                                  |current_statement_in_blocking_process    |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -430,7 +430,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -438,7 +438,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -453,7 +453,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-insert-into-ref-table s2-start-session-level-connection s2-begin-on-worker s2-insert-into-ref-table s3-select-distributed-waiting-queries s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -461,7 +461,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -469,7 +469,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-insert-into-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -477,7 +477,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -485,7 +485,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -493,7 +493,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-insert-into-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -501,7 +501,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s3-select-distributed-waiting-queries:
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement|current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -524,7 +524,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -532,7 +532,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -547,7 +547,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-copy-to-ref-table s2-start-session-level-connection s2-begin-on-worker s2-update-ref-table s3-select-distributed-waiting-queries s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -555,7 +555,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -563,7 +563,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-copy-to-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
+	SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -571,7 +571,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -579,7 +579,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -587,10 +587,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-update-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement                                  |current_statement_in_blocking_process                              |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -620,7 +620,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -628,7 +628,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -643,7 +643,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-copy-to-ref-table s2-start-session-level-connection s2-begin-on-worker s2-insert-into-ref-table s3-select-distributed-waiting-queries s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -651,7 +651,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -659,7 +659,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-copy-to-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
+	SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -667,7 +667,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -675,7 +675,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -683,7 +683,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-insert-into-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -691,7 +691,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s3-select-distributed-waiting-queries:
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement|current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -714,7 +714,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -722,7 +722,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -737,7 +737,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-copy-to-ref-table s2-start-session-level-connection s2-begin-on-worker s2-copy-to-ref-table s3-select-distributed-waiting-queries s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -745,7 +745,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -753,7 +753,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-copy-to-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
+	SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -761,7 +761,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -769,7 +769,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -777,7 +777,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-copy-to-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
+	SELECT run_commands_on_session_level_connection_to_node('COPY ref_table FROM PROGRAM ''echo 10, 101 && echo 11, 111'' WITH CSV');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -785,7 +785,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s3-select-distributed-waiting-queries:
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement|current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -808,7 +808,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -816,7 +816,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -831,7 +831,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-select-for-update s2-start-session-level-connection s2-begin-on-worker s2-update-ref-table s3-select-distributed-waiting-queries s1-commit-worker s2-commit-worker s1-stop-connection s2-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -839,7 +839,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -847,7 +847,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-select-for-update:
- SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table FOR UPDATE');
+	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table FOR UPDATE');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -855,7 +855,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -863,7 +863,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -871,10 +871,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-update-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement                                  |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -904,7 +904,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -912,7 +912,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -927,7 +927,7 @@ restore_isolation_tester_func
 
 starting permutation: s2-start-session-level-connection s2-begin-on-worker s2-insert-into-ref-table s1-begin s1-alter-table s3-select-distributed-waiting-queries s2-commit-worker s1-commit s2-stop-connection
 step s2-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57638);
+	SELECT start_session_level_connection_to_node('localhost', 57638);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -935,7 +935,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s2-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -943,7 +943,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s2-insert-into-ref-table:
- SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
+	SELECT run_commands_on_session_level_connection_to_node('INSERT INTO ref_table VALUES(8,81),(9,91)');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -951,18 +951,18 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-alter-table:
- ALTER TABLE ref_table ADD CONSTRAINT rf_p_key PRIMARY KEY(user_id);
+	ALTER TABLE ref_table ADD CONSTRAINT rf_p_key PRIMARY KEY(user_id);
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement                                                     |current_statement_in_blocking_process    |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
 
- ALTER TABLE ref_table ADD CONSTRAINT rf_p_key PRIMARY KEY(user_id);
+	ALTER TABLE ref_table ADD CONSTRAINT rf_p_key PRIMARY KEY(user_id);
 |INSERT INTO ref_table VALUES(8,81),(9,91)|coordinator_host |localhost         |            57636|             57638
 (1 row)
 
@@ -976,10 +976,10 @@ run_commands_on_session_level_connection_to_node
 
 step s1-alter-table: <... completed>
 step s1-commit:
- COMMIT;
+	COMMIT;
 
 step s2-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -994,28 +994,28 @@ restore_isolation_tester_func
 
 starting permutation: s1-begin s1-update-on-the-coordinator s2-update-on-the-coordinator s3-select-distributed-waiting-queries s1-commit
 step s1-begin:
- BEGIN;
+	BEGIN;
 
 step s1-update-on-the-coordinator:
- UPDATE tt1 SET value_1 = 4;
+	UPDATE tt1 SET value_1 = 4;
 
 step s2-update-on-the-coordinator:
- UPDATE tt1 SET value_1 = 4;
+	UPDATE tt1 SET value_1 = 4;
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement             |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
 
- UPDATE tt1 SET value_1 = 4;
+	UPDATE tt1 SET value_1 = 4;
 |
- UPDATE tt1 SET value_1 = 4;
+	UPDATE tt1 SET value_1 = 4;
        |coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit:
- COMMIT;
+	COMMIT;
 
 step s2-update-on-the-coordinator: <... completed>
 restore_isolation_tester_func
@@ -1026,7 +1026,7 @@ restore_isolation_tester_func
 
 starting permutation: s1-start-session-level-connection s1-begin-on-worker s1-update-dist-table s4-start-session-level-connection s4-begin-on-worker s4-update-dist-table s3-select-distributed-waiting-queries s1-commit-worker s4-commit-worker s1-stop-connection s4-stop-connection
 step s1-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1034,7 +1034,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s1-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1042,7 +1042,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-update-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 4');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 4');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1050,7 +1050,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s4-start-session-level-connection:
- SELECT start_session_level_connection_to_node('localhost', 57637);
+	SELECT start_session_level_connection_to_node('localhost', 57637);
 
 start_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1058,7 +1058,7 @@ start_session_level_connection_to_node
 (1 row)
 
 step s4-begin-on-worker:
- SELECT run_commands_on_session_level_connection_to_node('BEGIN');
+	SELECT run_commands_on_session_level_connection_to_node('BEGIN');
 
 run_commands_on_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1066,10 +1066,10 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s4-update-dist-table:
- SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 5');
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 5');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
- SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits;
+	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 blocked_statement         |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
@@ -1099,7 +1099,7 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s1-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------
@@ -1107,7 +1107,7 @@ stop_session_level_connection_to_node
 (1 row)
 
 step s4-stop-connection:
- SELECT stop_session_level_connection_to_node();
+	SELECT stop_session_level_connection_to_node();
 
 stop_session_level_connection_to_node
 ---------------------------------------------------------------------

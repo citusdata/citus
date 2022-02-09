@@ -8,7 +8,7 @@ citus_dist_stat_activity AS
 ),
 unique_global_wait_edges AS
 (
-    SELECT DISTINCT ON(waiting_node_id, waiting_transaction_num, blocking_node_id, blocking_transaction_num) * FROM dump_global_wait_edges()
+    SELECT DISTINCT ON(waiting_global_pid, blocking_global_pid) * FROM dump_global_wait_edges(distributed_tx_only:=false)
 ),
 citus_dist_stat_activity_with_node_id AS
 (
@@ -21,6 +21,8 @@ citus_dist_stat_activity_with_node_id AS
     citus_dist_stat_activity.distributed_query_host_port = pg_dist_node.nodeport
 )
 SELECT
+ waiting.global_pid as waiting_gpid,
+ blocking.global_pid as blocking_gpid,
  waiting.pid AS waiting_pid,
  blocking.pid AS blocking_pid,
  waiting.query AS blocked_statement,
@@ -34,9 +36,9 @@ SELECT
 FROM
  unique_global_wait_edges
 JOIN
- citus_dist_stat_activity_with_node_id waiting ON (unique_global_wait_edges.waiting_transaction_num = waiting.transaction_number AND unique_global_wait_edges.waiting_node_id = waiting.initiator_node_id)
+ citus_dist_stat_activity_with_node_id waiting ON (unique_global_wait_edges.waiting_global_pid = waiting.global_pid)
 JOIN
- citus_dist_stat_activity_with_node_id blocking ON (unique_global_wait_edges.blocking_transaction_num = blocking.transaction_number AND unique_global_wait_edges.blocking_node_id = blocking.initiator_node_id);
+ citus_dist_stat_activity_with_node_id blocking ON (unique_global_wait_edges.blocking_global_pid = blocking.global_pid);
 
 ALTER VIEW citus.citus_lock_waits SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
