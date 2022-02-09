@@ -1162,18 +1162,11 @@ SELECT * FROM forcepushdown_schema.test_subquery ORDER BY 1;
 (5 rows)
 
 -- Query with targetList greater than 1
--- Function from FROM clause is not delegated outside of a BEGIN (for now)
+-- Function from FROM clause is delegated outside of a BEGIN
 SELECT 1,2,3 FROM select_data(100);
-DEBUG:  generating subplan XXX_1 for subquery SELECT data FROM forcepushdown_schema.test_subquery WHERE (data OPERATOR(pg_catalog.=) 100)
-CONTEXT:  SQL statement "SELECT result          FROM forcepushdown_schema.test_subquery WHERE data =
-		(SELECT data FROM forcepushdown_schema.test_subquery WHERE data = a)"
-PL/pgSQL function select_data(integer) line XX at SQL statement
-DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT result FROM forcepushdown_schema.test_subquery WHERE (data OPERATOR(pg_catalog.=) (SELECT intermediate_result.data FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(data integer)))
-CONTEXT:  SQL statement "SELECT result          FROM forcepushdown_schema.test_subquery WHERE data =
-		(SELECT data FROM forcepushdown_schema.test_subquery WHERE data = a)"
-PL/pgSQL function select_data(integer) line XX at SQL statement
+DEBUG:  pushing down the function call
 NOTICE:  Result: -1
-CONTEXT:  PL/pgSQL function select_data(integer) line XX at RAISE
+DETAIL:  from localhost:xxxxx
  ?column? | ?column? | ?column?
 ---------------------------------------------------------------------
         1 |        2 |        3
