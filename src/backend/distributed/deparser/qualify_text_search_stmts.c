@@ -1,3 +1,20 @@
+/*-------------------------------------------------------------------------
+ *
+ * qualify_text_search_stmts.c
+ *	  Functions specialized in fully qualifying all text search statements. These
+ *	  functions are dispatched from qualify.c
+ *
+ *	  Fully qualifying text search statements consists of adding the schema name
+ *	  to the subject of the types as well as any other branch of the parsetree.
+ *
+ *	  Goal would be that the deparser functions for these statements can
+ *	  serialize the statement without any external lookups.
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
+
 #include "postgres.h"
 
 #include "access/htup_details.h"
@@ -11,8 +28,15 @@
 #include "distributed/listutils.h"
 
 static Oid get_ts_config_namespace(Oid tsconfigOid);
-static Oid get_ts_dict_namespace(Oid dictOid);
+static Oid get_ts_dict_namespace(Oid tsdictOid);
 
+
+/*
+ * QualifyDropTextSearchConfigurationStmt adds any missing schema names to text search
+ * configurations being dropped. All configurations are expected to exists before fully
+ * qualifying the statement. Errors will be raised for objects not existing. Non-existing
+ * objects are expected to not be distributed.
+ */
 void
 QualifyDropTextSearchConfigurationStmt(Node *node)
 {
@@ -45,6 +69,10 @@ QualifyDropTextSearchConfigurationStmt(Node *node)
 }
 
 
+/*
+ * QualifyAlterTextSearchConfigurationStmt adds the schema name (if missing) to the name
+ * of the text search configurations, as well as the dictionaries referenced.
+ */
 void
 QualifyAlterTextSearchConfigurationStmt(Node *node)
 {
@@ -100,6 +128,11 @@ QualifyAlterTextSearchConfigurationStmt(Node *node)
 }
 
 
+/*
+ * QualifyRenameTextSearchConfigurationStmt adds the schema name (if missing) to the
+ * configuration being renamed. The new name will kept be without schema name since this
+ * command cannot be used to change the schema of a configuration.
+ */
 void
 QualifyRenameTextSearchConfigurationStmt(Node *node)
 {
@@ -123,6 +156,10 @@ QualifyRenameTextSearchConfigurationStmt(Node *node)
 }
 
 
+/*
+ * QualifyAlterTextSearchConfigurationSchemaStmt adds the schema name (if missing) for the
+ * text search being moved to a new schema.
+ */
 void
 QualifyAlterTextSearchConfigurationSchemaStmt(Node *node)
 {
@@ -145,6 +182,10 @@ QualifyAlterTextSearchConfigurationSchemaStmt(Node *node)
 }
 
 
+/*
+ * QualifyTextSearchConfigurationCommentStmt adds the schema name (if missing) to the
+ * configuration name on which the comment is created.
+ */
 void
 QualifyTextSearchConfigurationCommentStmt(Node *node)
 {
@@ -167,6 +208,10 @@ QualifyTextSearchConfigurationCommentStmt(Node *node)
 }
 
 
+/*
+ * QualifyAlterTextSearchConfigurationOwnerStmt adds the schema name (if missing) to the
+ * configuration for which the owner is changing.
+ */
 void
 QualifyAlterTextSearchConfigurationOwnerStmt(Node *node)
 {
@@ -189,6 +234,10 @@ QualifyAlterTextSearchConfigurationOwnerStmt(Node *node)
 }
 
 
+/*
+ * get_ts_config_namespace returns the oid of the namespace which is housing the text
+ * search configuration identified by tsconfigOid.
+ */
 static Oid
 get_ts_config_namespace(Oid tsconfigOid)
 {
@@ -207,10 +256,14 @@ get_ts_config_namespace(Oid tsconfigOid)
 }
 
 
+/*
+ * get_ts_dict_namespace returns the oid of the namespace which is housing the text
+ * search dictionary identified by tsdictOid.
+ */
 static Oid
-get_ts_dict_namespace(Oid dictOid)
+get_ts_dict_namespace(Oid tsdictOid)
 {
-	HeapTuple tup = SearchSysCache1(TSDICTOID, ObjectIdGetDatum(dictOid));
+	HeapTuple tup = SearchSysCache1(TSDICTOID, ObjectIdGetDatum(tsdictOid));
 
 	if (HeapTupleIsValid(tup))
 	{

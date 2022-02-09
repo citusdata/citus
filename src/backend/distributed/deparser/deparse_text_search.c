@@ -1,3 +1,14 @@
+/*-------------------------------------------------------------------------
+ *
+ * deparse_text_search.c
+ *	  All routines to deparse text search statements.
+ *	  This file contains all entry points specific for text search statement deparsing.
+ *
+ * Copyright (c) Citus Data, Inc.
+ *
+ *-------------------------------------------------------------------------
+ */
+
 #include "postgres.h"
 
 #include "catalog/namespace.h"

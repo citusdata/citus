@@ -1,7 +1,7 @@
 /*-------------------------------------------------------------------------
  *
  * text_search.c
- *    Commands for creating and altering TEXT SEARCG objects
+ *    Commands for creating and altering TEXT SEARCH objects
  *
  * Copyright (c) Citus Data, Inc.
  *
