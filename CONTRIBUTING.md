@@ -31,7 +31,7 @@ why we ask this as well as instructions for how to proceed, see the
   cd citus
   ./configure
   make
-  make install install-all
+  make install
   cd src/test/regress
   make check
   ```
@@ -62,6 +62,8 @@ why we ask this as well as instructions for how to proceed, see the
   ./configure
   make
   sudo make install
+  # Optionally, you might instead want to use `sudo make install-all`
+  # since `multi_extension` test would fail due to missing downgrade scripts.
   cd src/test/regress
   make check
   ```
