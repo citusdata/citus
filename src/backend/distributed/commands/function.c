@@ -1306,8 +1306,35 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 	}
 
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (FunctionDependsOnNonDistributedRelation(&address))
+	{
+		ereport(WARNING, (errmsg("Citus can't distribute functions having dependency on"
+								 " non-distributed relations or sequences"),
+						  errdetail("Function will be created only locally"),
+						  errhint("To distribute function, distribute dependent relations"
+						  		  " and sequences first")));
+		return NIL;
+	}
 
-	List *dependencies = GetDependenciesForObject(&address);
+	EnsureDependenciesExistOnAllNodes(&address);
+
+	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
+	commands = list_concat(commands, CreateFunctionDDLCommandsIdempotent(&address));
+	commands = list_concat(commands, list_make1(ENABLE_DDL_PROPAGATION));
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+/*
+ * FunctionDependsOnNonDistributedRelation checks whether the given function depends 
+ * on non-distributed relation.
+ */
+bool
+FunctionDependsOnNonDistributedRelation(ObjectAddress *functionAddress)
+{
+	Assert(getObjectClass(functionAddress) == OCLASS_PROC);
+	
+	List *dependencies = GetDependenciesForObject(functionAddress);
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
@@ -1324,23 +1351,11 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 			relKind == RELKIND_FOREIGN_TABLE ||
 			relKind == RELKIND_SEQUENCE)
 		{
-			/* TODO: Consider changing the check and log message */
-			ereport(WARNING, (errmsg(
-								  "Citus can't distribute functions having dependency on non-distributed relations or sequences"),
-							  errdetail("Function will be created only locally"),
-							  errhint(
-								  "To distribute function, distribute dependent relations and sequences first")));
-			return NIL;
+			return true;
 		}
 	}
 
-	EnsureDependenciesExistOnAllNodes(&address);
-
-	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
-	commands = list_concat(commands, CreateFunctionDDLCommandsIdempotent(&address));
-	commands = list_concat(commands, list_make1(ENABLE_DDL_PROPAGATION));
-
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+	return false;
 }
 
 
