@@ -241,6 +241,12 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 				return NIL;
 			}
 
+			/*
+			 * Indices are created separately, however, they do show up in the dependency
+			 * list for a table since they will have potentially their own dependencies.
+			 * The commands will be added to both shards and metadata tables via the table
+			 * creation commands.
+			 */
 			if (relKind == RELKIND_INDEX)
 			{
 				return NIL;

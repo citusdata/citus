@@ -492,6 +492,8 @@ extern List * PreprocessAlterTextSearchConfigurationOwnerStmt(Node *node,
 															  const char *queryString,
 															  ProcessUtilityContext
 															  processUtilityContext);
+extern List * PostprocessAlterTextSearchConfigurationOwnerStmt(Node *node,
+															   const char *queryString);
 extern ObjectAddress CreateTextSearchConfigurationObjectAddress(Node *node,
 																bool missing_ok);
 extern ObjectAddress RenameTextSearchConfigurationStmtObjectAddress(Node *node,

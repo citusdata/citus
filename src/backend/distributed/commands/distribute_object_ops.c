@@ -517,7 +517,7 @@ static DistributeObjectOps TextSearchConfig_AlterOwner = {
 	.deparse = DeparseAlterTextSearchConfigurationOwnerStmt,
 	.qualify = QualifyAlterTextSearchConfigurationOwnerStmt,
 	.preprocess = PreprocessAlterTextSearchConfigurationOwnerStmt,
-	.postprocess = NULL,
+	.postprocess = PostprocessAlterTextSearchConfigurationOwnerStmt,
 	.address = AlterTextSearchConfigurationOwnerObjectAddress,
 	.markDistributed = false,
 };
