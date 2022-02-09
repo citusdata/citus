@@ -1312,7 +1312,7 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 								 " non-distributed relations or sequences"),
 						  errdetail("Function will be created only locally"),
 						  errhint("To distribute function, distribute dependent relations"
-						  		  " and sequences first")));
+								  " and sequences first")));
 		return NIL;
 	}
 
@@ -1325,15 +1325,16 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
+
 /*
- * FunctionDependsOnNonDistributedRelation checks whether the given function depends 
+ * FunctionDependsOnNonDistributedRelation checks whether the given function depends
  * on non-distributed relation.
  */
 bool
 FunctionDependsOnNonDistributedRelation(ObjectAddress *functionAddress)
 {
 	Assert(getObjectClass(functionAddress) == OCLASS_PROC);
-	
+
 	List *dependencies = GetDependenciesForObject(functionAddress);
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
