@@ -17,6 +17,9 @@
 #include "udfs/get_all_active_transactions/11.0-1.sql"
 #include "udfs/get_global_active_transactions/11.0-1.sql"
 
+#include "udfs/dump_local_wait_edges/11.0-1.sql"
+#include "udfs/dump_global_wait_edges/11.0-1.sql"
+
 #include "udfs/citus_worker_stat_activity/11.0-1.sql"
 #include "udfs/worker_create_or_replace_object/11.0-1.sql"
 
