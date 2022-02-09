@@ -62,7 +62,7 @@ session "s2"
 
 step "s2-coordinator-citus_dist_stat_activity"
 {
-    SELECT global_pid != 0 FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%';
+    SELECT global_pid != 0 FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%' and query NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 }
 
 step "s2-coordinator-citus_worker_stat_activity"
