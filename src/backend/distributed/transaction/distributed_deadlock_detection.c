@@ -119,7 +119,8 @@ CheckForDistributedDeadlocks(void)
 		return false;
 	}
 
-	WaitGraph *waitGraph = BuildGlobalWaitGraph();
+	bool onlyDistributedTx = true;
+	WaitGraph *waitGraph = BuildGlobalWaitGraph(onlyDistributedTx);
 	HTAB *adjacencyLists = BuildAdjacencyListsForWaitGraph(waitGraph);
 
 	int edgeCount = waitGraph->edgeCount;

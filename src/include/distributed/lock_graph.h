@@ -58,7 +58,7 @@ typedef struct WaitGraph
 } WaitGraph;
 
 
-extern WaitGraph * BuildGlobalWaitGraph(void);
+extern WaitGraph * BuildGlobalWaitGraph(bool onlyDistributedTx);
 extern bool IsProcessWaitingForLock(PGPROC *proc);
 extern bool IsInDistributedTransaction(BackendData *backendData);
 extern TimestampTz ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex);

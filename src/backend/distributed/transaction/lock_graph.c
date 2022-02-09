@@ -47,7 +47,7 @@ typedef struct PROCStack
 
 static void AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex);
 static void ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
-static WaitGraph * BuildLocalWaitGraph(void);
+static WaitGraph * BuildLocalWaitGraph(bool onlyDistributedTx);
 static bool IsProcessWaitingForSafeOperations(PGPROC *proc);
 static void LockLockData(void);
 static void UnlockLockData(void);
@@ -74,7 +74,9 @@ PG_FUNCTION_INFO_V1(dump_global_wait_edges);
 Datum
 dump_global_wait_edges(PG_FUNCTION_ARGS)
 {
-	WaitGraph *waitGraph = BuildGlobalWaitGraph();
+	uint64 onlyDistributedTx = PG_GETARG_BOOL(0);
+
+	WaitGraph *waitGraph = BuildGlobalWaitGraph(onlyDistributedTx);
 
 	ReturnWaitGraph(waitGraph, fcinfo);
 
@@ -86,16 +88,23 @@ dump_global_wait_edges(PG_FUNCTION_ARGS)
  * BuildGlobalWaitGraph builds a wait graph for distributed transactions
  * that originate from this node, including edges from all (other) worker
  * nodes.
+ *
+ *
+ * If onlyDistributedTx is true, we only return distributed transactions
+ * (e.g., AssignDistributedTransaction() or assign_distributed_transactions())
+ * has been called for the process. Distributed deadlock detection only
+ * interested in these processes.
  */
 WaitGraph *
-BuildGlobalWaitGraph(void)
+BuildGlobalWaitGraph(bool onlyDistributedTx)
 {
 	List *workerNodeList = ActiveReadableNodeList();
 	char *nodeUser = CitusExtensionOwnerName();
 	List *connectionList = NIL;
 	int32 localGroupId = GetLocalGroupId();
 
-	WaitGraph *waitGraph = BuildLocalWaitGraph();
+	/* deadlock detection is only interested in */
+	WaitGraph *waitGraph = BuildLocalWaitGraph(onlyDistributedTx);
 
 	/* open connections in parallel */
 	WorkerNode *workerNode = NULL;
@@ -256,7 +265,9 @@ ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex)
 Datum
 dump_local_wait_edges(PG_FUNCTION_ARGS)
 {
-	WaitGraph *waitGraph = BuildLocalWaitGraph();
+	uint64 onlyDistributedTx = PG_GETARG_BOOL(0);
+
+	WaitGraph *waitGraph = BuildLocalWaitGraph(onlyDistributedTx);
 	ReturnWaitGraph(waitGraph, fcinfo);
 
 	return (Datum) 0;
@@ -328,9 +339,14 @@ ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo)
 /*
  * BuildLocalWaitGraph builds a wait graph for distributed transactions
  * that originate from the local node.
+ *
+ * If onlyDistributedTx is true, we only return distributed transactions
+ * (e.g., AssignDistributedTransaction() or assign_distributed_transactions())
+ * has been called for the process. Distributed deadlock detection only
+ * interested in these processes.
  */
 static WaitGraph *
-BuildLocalWaitGraph(void)
+BuildLocalWaitGraph(bool onlyDistributedTx)
 {
 	PROCStack remaining;
 	int totalProcs = TotalProcCount();
@@ -379,7 +395,8 @@ BuildLocalWaitGraph(void)
 		 * care about distributed transactions for the purpose of distributed
 		 * deadlock detection.
 		 */
-		if (!IsInDistributedTransaction(&currentBackendData))
+		if (onlyDistributedTx &&
+			!IsInDistributedTransaction(&currentBackendData))
 		{
 			continue;
 		}
