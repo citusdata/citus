@@ -40,8 +40,6 @@ CREATE FUNCTION add(integer, integer) RETURNS integer
 AS 'SELECT $1 + $2;'
 LANGUAGE SQL;
 SELECT create_distributed_function('add(integer,integer)');
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -198,6 +196,7 @@ SET client_min_messages TO ERROR;
 -- function joins in CTE results can create lateral joins that are not supported
 -- we execute the query within a function to consolidate the error messages
 -- between different executors
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION raise_failed_execution_func_join(query text) RETURNS void AS $$
 BEGIN
         EXECUTE query;
@@ -209,6 +208,7 @@ BEGIN
         END IF;
 END;
 $$LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SELECT raise_failed_execution_func_join($$
   WITH one_row AS (
       SELECT * FROM table1 WHERE id=52

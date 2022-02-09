@@ -124,6 +124,7 @@ SET client_min_messages TO ERROR;
 -- function joins in CTE results can create lateral joins that are not supported
 -- we execute the query within a function to consolidate the error messages
 -- between different executors
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION raise_failed_execution_func_join(query text) RETURNS void AS $$
 BEGIN
         EXECUTE query;
@@ -135,6 +136,7 @@ BEGIN
         END IF;
 END;
 $$LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 SELECT raise_failed_execution_func_join($$
   WITH one_row AS (

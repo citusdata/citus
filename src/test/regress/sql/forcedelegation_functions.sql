@@ -203,6 +203,7 @@ $$  LANGUAGE plpgsql;
 --   select res into var from fn();
 -- }
 --
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION func_calls_forcepush_func_infrom()
 RETURNS NUMERIC AS $$
 DECLARE incremented_val NUMERIC;
@@ -213,6 +214,7 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 SELECT func_calls_forcepush_func_infrom();
 
@@ -227,6 +229,7 @@ COMMIT;
 --   select fn() into var;
 -- }
 --
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION func_calls_forcepush_func_intarget()
 RETURNS NUMERIC AS $$
 DECLARE incremented_val NUMERIC;
@@ -237,6 +240,7 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 SELECT func_calls_forcepush_func_intarget();
 
@@ -336,6 +340,7 @@ BEGIN
     INSERT INTO emp VALUES (empname, 33);
 END;
 $$ LANGUAGE plpgsql;
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION outer_emp()
 RETURNS void
 AS $$
@@ -344,6 +349,7 @@ BEGIN
     PERFORM inner_emp('hello');
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 SELECT create_distributed_function('inner_emp(text)','empname', force_delegation := true);
 SELECT outer_emp();
@@ -631,6 +637,7 @@ $$ LANGUAGE plpgsql;
 SELECT create_distributed_function('test_prepare(int,int)','x',force_delegation :=true, colocate_with := 'table_test_prepare');
 
 DROP FUNCTION outer_test_prepare(int, int);
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION outer_test_prepare(x int, y int)
 RETURNS void
 AS $$
@@ -641,6 +648,7 @@ BEGIN
     PERFORM 1, 1 + a FROM test_prepare(x + 1, y + 1) a;
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 -- First 5 get delegated and succeeds
 BEGIN;

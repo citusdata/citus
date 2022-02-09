@@ -303,16 +303,12 @@ BEGIN
 END;
 $$  LANGUAGE plpgsql;
 SELECT create_distributed_function('func_calls_forcepush_func()');
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT create_distributed_function('inner_force_delegation_function(int)', '$1', colocate_with := 'test_nested', force_delegation := true);
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -367,6 +363,7 @@ $$  LANGUAGE plpgsql;
 --   select res into var from fn();
 -- }
 --
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION func_calls_forcepush_func_infrom()
 RETURNS NUMERIC AS $$
 DECLARE incremented_val NUMERIC;
@@ -377,6 +374,7 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SELECT func_calls_forcepush_func_infrom();
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
@@ -418,6 +416,7 @@ COMMIT;
 --   select fn() into var;
 -- }
 --
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION func_calls_forcepush_func_intarget()
 RETURNS NUMERIC AS $$
 DECLARE incremented_val NUMERIC;
@@ -428,6 +427,7 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SELECT func_calls_forcepush_func_intarget();
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
@@ -474,8 +474,6 @@ BEGIN
 END;
 $$  LANGUAGE plpgsql;
 SELECT create_distributed_function('test_recursive(int)', '$1', colocate_with := 'test_nested', force_delegation := true);
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -549,8 +547,6 @@ SELECT create_distributed_function(
 '$1',
 colocate_with := 'test_forcepushdown',
 force_delegation := true);
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -610,6 +606,7 @@ BEGIN
     INSERT INTO emp VALUES (empname, 33);
 END;
 $$ LANGUAGE plpgsql;
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION outer_emp()
 RETURNS void
 AS $$
@@ -618,9 +615,8 @@ BEGIN
     PERFORM inner_emp('hello');
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SELECT create_distributed_function('inner_emp(text)','empname', force_delegation := true);
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -655,8 +651,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_forcepushdown',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -730,8 +724,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_forcepushdown',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -808,8 +800,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_forcepushdown_char',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -826,8 +816,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_forcepushdown_varchar',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -844,8 +832,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_forcepushdown_text',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -952,8 +938,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_subquery',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -974,8 +958,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_subquery',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -995,8 +977,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_subquery',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1016,8 +996,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_subquery',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1038,8 +1016,6 @@ SELECT create_distributed_function(
   colocate_with := 'test_subquery',
   force_delegation := true
 );
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1211,8 +1187,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT create_distributed_function('test_prepare(int,int)','x',force_delegation :=true, colocate_with := 'table_test_prepare');
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1220,6 +1194,7 @@ DETAIL:  A distributed function is created. To make sure subsequent commands see
 
 DROP FUNCTION outer_test_prepare(int, int);
 ERROR:  function outer_test_prepare(integer, integer) does not exist
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION outer_test_prepare(x int, y int)
 RETURNS void
 AS $$
@@ -1230,6 +1205,7 @@ BEGIN
     PERFORM 1, 1 + a FROM test_prepare(x + 1, y + 1) a;
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 -- First 5 get delegated and succeeds
 BEGIN;
 SELECT outer_test_prepare(1,1);
@@ -1406,8 +1382,6 @@ END;
 $$ LANGUAGE plpgsql;
 SELECT create_distributed_function('test(int)', 'x',
                 colocate_with := 'test_perform', force_delegation := true);
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
