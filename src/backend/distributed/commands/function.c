@@ -1169,6 +1169,12 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 static void
 EnsureSequentialModeForFunctionDDL(void)
 {
+	if (!IsTransactionBlock())
+	{
+		/* we do not need to switch to sequential mode if we are not in a transaction */
+		return;
+	}
+
 	if (ParallelQueryExecutedInTransaction())
 	{
 		ereport(ERROR, (errmsg("cannot create function because there was a "
