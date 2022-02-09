@@ -47,6 +47,9 @@ typedef struct PROCStack
 
 static void AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex);
 static void ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
+static void AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result,
+												int rowIndex);
+static void ReturnBlockedProcessGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo);
 static WaitGraph * BuildLocalWaitGraph(bool onlyDistributedTx);
 static bool IsProcessWaitingForSafeOperations(PGPROC *proc);
 static void LockLockData(void);
@@ -62,9 +65,29 @@ static void AddProcToVisit(PROCStack *remaining, PGPROC *proc);
 static bool IsSameLockGroup(PGPROC *leftProc, PGPROC *rightProc);
 static bool IsConflictingLockMask(int holdMask, int conflictMask);
 
-
+/*
+ * We almost have 2 sets of identical functions. The first set (e.g., dump_wait_edges)
+ * functions are intended for distributed deadlock detection purposes.
+ *
+ * The second set of functions (e.g., citus_internal_local_blocked_processes) are
+ * intended for citus_lock_waits view.
+ *
+ * The main difference is that the former functions only show processes that are blocked
+ * inside a distributed transaction (e.g., see AssignDistributedTransactionId()).
+ * The latter functions return a superset, where any blocked process is returned.
+ *
+ * We kept two different set of functions for two purposes. First, the deadlock detection
+ * is a performance critical code-path happening very frequently and we don't add any
+ * performance overhead. Secondly, to be able to do rolling upgrades, we cannot change
+ * the API of dump_global_wait_edges/dump_local_wait_edges such that they take a boolean
+ * parameter. If we do that, until all nodes are upgraded, the deadlock detection would fail,
+ * which is not acceptable.
+ */
 PG_FUNCTION_INFO_V1(dump_local_wait_edges);
 PG_FUNCTION_INFO_V1(dump_global_wait_edges);
+
+PG_FUNCTION_INFO_V1(citus_internal_local_blocked_processes);
+PG_FUNCTION_INFO_V1(citus_internal_global_blocked_processes);
 
 
 /*
@@ -74,11 +97,28 @@ PG_FUNCTION_INFO_V1(dump_global_wait_edges);
 Datum
 dump_global_wait_edges(PG_FUNCTION_ARGS)
 {
-	bool onlyDistributedTx = PG_GETARG_BOOL(0);
+	bool onlyDistributedTx = true;
 
 	WaitGraph *waitGraph = BuildGlobalWaitGraph(onlyDistributedTx);
 
 	ReturnWaitGraph(waitGraph, fcinfo);
+
+	return (Datum) 0;
+}
+
+
+/*
+ * citus_internal_global_blocked_processes returns global wait edges
+ * including all processes running on the cluster.
+ */
+Datum
+citus_internal_global_blocked_processes(PG_FUNCTION_ARGS)
+{
+	bool onlyDistributedTx = false;
+
+	WaitGraph *waitGraph = BuildGlobalWaitGraph(onlyDistributedTx);
+
+	ReturnBlockedProcessGraph(waitGraph, fcinfo);
 
 	return (Datum) 0;
 }
@@ -103,7 +143,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	List *connectionList = NIL;
 	int32 localGroupId = GetLocalGroupId();
 
-	/* deadlock detection is only interested in */
+	/* deadlock detection is only interested in distributed transactions */
 	WaitGraph *waitGraph = BuildLocalWaitGraph(onlyDistributedTx);
 
 	/* open connections in parallel */
@@ -134,11 +174,25 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	foreach_ptr(connection, connectionList)
 	{
 		StringInfo queryString = makeStringInfo();
-		const char *onlyDistributedTxStr = onlyDistributedTx ? "true" : "false";
 
-		appendStringInfo(queryString,
-						 "SELECT * FROM dump_local_wait_edges(%s)",
-						 onlyDistributedTxStr);
+		if (onlyDistributedTx)
+		{
+			appendStringInfo(queryString,
+							 "SELECT waiting_pid, waiting_node_id, "
+							 "waiting_transaction_num, waiting_transaction_stamp, "
+							 "blocking_pid, blocking_node_id, blocking_transaction_num, "
+							 "blocking_transaction_stamp, blocking_transaction_waiting "
+							 "FROM dump_local_wait_edges()");
+		}
+		else
+		{
+			appendStringInfo(queryString,
+							 "SELECT waiting_global_pid, waiting_pid, "
+							 "waiting_node_id, waiting_transaction_num, waiting_transaction_stamp, "
+							 "blocking_global_pid,blocking_pid, blocking_node_id, "
+							 "blocking_transaction_num, blocking_transaction_stamp, blocking_transaction_waiting "
+							 "FROM citus_internal_local_blocked_processes()");
+		}
 
 		int querySent = SendRemoteCommand(connection, queryString->data);
 		if (querySent == 0)
@@ -162,16 +216,29 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		int64 rowCount = PQntuples(result);
 		int64 colCount = PQnfields(result);
 
-		if (colCount != 11)
+		if (onlyDistributedTx && colCount != 9)
 		{
 			ereport(WARNING, (errmsg("unexpected number of columns from "
 									 "dump_local_wait_edges")));
 			continue;
 		}
+		else if (!onlyDistributedTx && colCount != 11)
+		{
+			ereport(WARNING, (errmsg("unexpected number of columns from "
+									 "citus_internal_local_blocked_processes")));
+			continue;
+		}
 
 		for (int64 rowIndex = 0; rowIndex < rowCount; rowIndex++)
 		{
-			AddWaitEdgeFromResult(waitGraph, result, rowIndex);
+			if (onlyDistributedTx)
+			{
+				AddWaitEdgeFromResult(waitGraph, result, rowIndex);
+			}
+			else
+			{
+				AddWaitEdgeFromBlockedProcessResult(waitGraph, result, rowIndex);
+			}
 		}
 
 		PQclear(result);
@@ -188,6 +255,29 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
  */
 static void
 AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
+{
+	WaitEdge *waitEdge = AllocWaitEdge(waitGraph);
+
+	waitEdge->waitingGPid = 0; /* not requested for deadlock detection */
+	waitEdge->waitingPid = ParseIntField(result, rowIndex, 0);
+	waitEdge->waitingNodeId = ParseIntField(result, rowIndex, 1);
+	waitEdge->waitingTransactionNum = ParseIntField(result, rowIndex, 2);
+	waitEdge->waitingTransactionStamp = ParseTimestampTzField(result, rowIndex, 3);
+	waitEdge->blockingGPid = 0; /* not requested for deadlock detection */
+	waitEdge->blockingPid = ParseIntField(result, rowIndex, 4);
+	waitEdge->blockingNodeId = ParseIntField(result, rowIndex, 5);
+	waitEdge->blockingTransactionNum = ParseIntField(result, rowIndex, 6);
+	waitEdge->blockingTransactionStamp = ParseTimestampTzField(result, rowIndex, 7);
+	waitEdge->isBlockingXactWaiting = ParseBoolField(result, rowIndex, 8);
+}
+
+
+/*
+ * AddWaitEdgeFromBlockedProcessResult adds an edge to the wait graph that
+ * is read from a PGresult.
+ */
+static void
+AddWaitEdgeFromBlockedProcessResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
 {
 	WaitEdge *waitEdge = AllocWaitEdge(waitGraph);
 
@@ -272,10 +362,26 @@ ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex)
 Datum
 dump_local_wait_edges(PG_FUNCTION_ARGS)
 {
-	bool onlyDistributedTx = PG_GETARG_BOOL(0);
+	bool onlyDistributedTx = true;
 
 	WaitGraph *waitGraph = BuildLocalWaitGraph(onlyDistributedTx);
 	ReturnWaitGraph(waitGraph, fcinfo);
+
+	return (Datum) 0;
+}
+
+
+/*
+ * citus_internal_local_blocked_processes returns global wait edges
+ * including all processes running on the node.
+ */
+Datum
+citus_internal_local_blocked_processes(PG_FUNCTION_ARGS)
+{
+	bool onlyDistributedTx = false;
+
+	WaitGraph *waitGraph = BuildLocalWaitGraph(onlyDistributedTx);
+	ReturnBlockedProcessGraph(waitGraph, fcinfo);
 
 	return (Datum) 0;
 }
@@ -286,6 +392,68 @@ dump_local_wait_edges(PG_FUNCTION_ARGS)
  */
 static void
 ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo)
+{
+	TupleDesc tupleDesc;
+	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDesc);
+
+	/*
+	 * Columns:
+	 * 00: waiting_pid
+	 * 01: waiting_node_id
+	 * 02: waiting_transaction_num
+	 * 03: waiting_transaction_stamp
+	 * 04: blocking_pid
+	 * 05: blocking__node_id
+	 * 06: blocking_transaction_num
+	 * 07: blocking_transaction_stamp
+	 * 08: blocking_transaction_waiting
+	 */
+	for (size_t curEdgeNum = 0; curEdgeNum < waitGraph->edgeCount; curEdgeNum++)
+	{
+		Datum values[9];
+		bool nulls[9];
+		WaitEdge *curEdge = &waitGraph->edges[curEdgeNum];
+
+		memset(values, 0, sizeof(values));
+		memset(nulls, 0, sizeof(nulls));
+
+		values[0] = Int32GetDatum(curEdge->waitingPid);
+		values[1] = Int32GetDatum(curEdge->waitingNodeId);
+		if (curEdge->waitingTransactionNum != 0)
+		{
+			values[2] = Int64GetDatum(curEdge->waitingTransactionNum);
+			values[3] = TimestampTzGetDatum(curEdge->waitingTransactionStamp);
+		}
+		else
+		{
+			nulls[2] = true;
+			nulls[3] = true;
+		}
+
+		values[4] = Int32GetDatum(curEdge->blockingPid);
+		values[5] = Int32GetDatum(curEdge->blockingNodeId);
+		if (curEdge->blockingTransactionNum != 0)
+		{
+			values[6] = Int64GetDatum(curEdge->blockingTransactionNum);
+			values[7] = TimestampTzGetDatum(curEdge->blockingTransactionStamp);
+		}
+		else
+		{
+			nulls[6] = true;
+			nulls[7] = true;
+		}
+		values[8] = BoolGetDatum(curEdge->isBlockingXactWaiting);
+
+		tuplestore_putvalues(tupleStore, tupleDesc, values, nulls);
+	}
+}
+
+
+/*
+ * ReturnBlockedProcessGraph returns a wait graph for a set returning function.
+ */
+static void
+ReturnBlockedProcessGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo)
 {
 	TupleDesc tupleDesc;
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDesc);

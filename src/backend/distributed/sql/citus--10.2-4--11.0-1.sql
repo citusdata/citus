@@ -17,11 +17,13 @@
 #include "udfs/get_all_active_transactions/11.0-1.sql"
 #include "udfs/get_global_active_transactions/11.0-1.sql"
 
-#include "udfs/dump_local_wait_edges/11.0-1.sql"
-#include "udfs/dump_global_wait_edges/11.0-1.sql"
+#include "udfs/citus_internal_local_blocked_processes/11.0-1.sql"
+#include "udfs/citus_internal_global_blocked_processes/11.0-1.sql"
 
 #include "udfs/citus_worker_stat_activity/11.0-1.sql"
 #include "udfs/worker_create_or_replace_object/11.0-1.sql"
+#include "udfs/citus_isolation_test_session_is_blocked/11.0-1.sql"
+#include "udfs/citus_blocking_pids/11.0-1.sql"
 
 CREATE VIEW citus.citus_worker_stat_activity AS
 SELECT * FROM pg_catalog.citus_worker_stat_activity();
