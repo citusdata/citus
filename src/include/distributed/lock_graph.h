@@ -31,11 +31,13 @@
  */
 typedef struct WaitEdge
 {
+	uint64 waitingGPid;
 	int waitingPid;
 	int waitingNodeId;
 	int64 waitingTransactionNum;
 	TimestampTz waitingTransactionStamp;
 
+	uint64 blockingGPid;
 	int blockingPid;
 	int blockingNodeId;
 	int64 blockingTransactionNum;

@@ -119,6 +119,7 @@ CheckForDistributedDeadlocks(void)
 		return false;
 	}
 
+	/* distributed deadlock detection only considers distributed txs */
 	bool onlyDistributedTx = true;
 	WaitGraph *waitGraph = BuildGlobalWaitGraph(onlyDistributedTx);
 	HTAB *adjacencyLists = BuildAdjacencyListsForWaitGraph(waitGraph);

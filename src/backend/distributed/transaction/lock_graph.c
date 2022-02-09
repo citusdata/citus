@@ -74,7 +74,7 @@ PG_FUNCTION_INFO_V1(dump_global_wait_edges);
 Datum
 dump_global_wait_edges(PG_FUNCTION_ARGS)
 {
-	uint64 onlyDistributedTx = PG_GETARG_BOOL(0);
+	bool onlyDistributedTx = PG_GETARG_BOOL(0);
 
 	WaitGraph *waitGraph = BuildGlobalWaitGraph(onlyDistributedTx);
 
@@ -133,9 +133,14 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 	MultiConnection *connection = NULL;
 	foreach_ptr(connection, connectionList)
 	{
-		const char *command = "SELECT * FROM dump_local_wait_edges()";
+		StringInfo queryString = makeStringInfo();
+		const char *onlyDistributedTxStr = onlyDistributedTx ? "true" : "false";
 
-		int querySent = SendRemoteCommand(connection, command);
+		appendStringInfo(queryString,
+						 "SELECT * FROM dump_local_wait_edges(%s)",
+						 onlyDistributedTxStr);
+
+		int querySent = SendRemoteCommand(connection, queryString->data);
 		if (querySent == 0)
 		{
 			ReportConnectionError(connection, WARNING);
@@ -157,7 +162,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		int64 rowCount = PQntuples(result);
 		int64 colCount = PQnfields(result);
 
-		if (colCount != 9)
+		if (colCount != 11)
 		{
 			ereport(WARNING, (errmsg("unexpected number of columns from "
 									 "dump_local_wait_edges")));
@@ -186,15 +191,17 @@ AddWaitEdgeFromResult(WaitGraph *waitGraph, PGresult *result, int rowIndex)
 {
 	WaitEdge *waitEdge = AllocWaitEdge(waitGraph);
 
-	waitEdge->waitingPid = ParseIntField(result, rowIndex, 0);
-	waitEdge->waitingNodeId = ParseIntField(result, rowIndex, 1);
-	waitEdge->waitingTransactionNum = ParseIntField(result, rowIndex, 2);
-	waitEdge->waitingTransactionStamp = ParseTimestampTzField(result, rowIndex, 3);
-	waitEdge->blockingPid = ParseIntField(result, rowIndex, 4);
-	waitEdge->blockingNodeId = ParseIntField(result, rowIndex, 5);
-	waitEdge->blockingTransactionNum = ParseIntField(result, rowIndex, 6);
-	waitEdge->blockingTransactionStamp = ParseTimestampTzField(result, rowIndex, 7);
-	waitEdge->isBlockingXactWaiting = ParseBoolField(result, rowIndex, 8);
+	waitEdge->waitingGPid = ParseIntField(result, rowIndex, 0);
+	waitEdge->waitingPid = ParseIntField(result, rowIndex, 1);
+	waitEdge->waitingNodeId = ParseIntField(result, rowIndex, 2);
+	waitEdge->waitingTransactionNum = ParseIntField(result, rowIndex, 3);
+	waitEdge->waitingTransactionStamp = ParseTimestampTzField(result, rowIndex, 4);
+	waitEdge->blockingGPid = ParseIntField(result, rowIndex, 5);
+	waitEdge->blockingPid = ParseIntField(result, rowIndex, 6);
+	waitEdge->blockingNodeId = ParseIntField(result, rowIndex, 7);
+	waitEdge->blockingTransactionNum = ParseIntField(result, rowIndex, 8);
+	waitEdge->blockingTransactionStamp = ParseTimestampTzField(result, rowIndex, 9);
+	waitEdge->isBlockingXactWaiting = ParseBoolField(result, rowIndex, 10);
 }
 
 
@@ -265,7 +272,7 @@ ParseTimestampTzField(PGresult *result, int rowIndex, int colIndex)
 Datum
 dump_local_wait_edges(PG_FUNCTION_ARGS)
 {
-	uint64 onlyDistributedTx = PG_GETARG_BOOL(0);
+	bool onlyDistributedTx = PG_GETARG_BOOL(0);
 
 	WaitGraph *waitGraph = BuildLocalWaitGraph(onlyDistributedTx);
 	ReturnWaitGraph(waitGraph, fcinfo);
@@ -285,51 +292,55 @@ ReturnWaitGraph(WaitGraph *waitGraph, FunctionCallInfo fcinfo)
 
 	/*
 	 * Columns:
-	 * 00: waiting_pid
-	 * 01: waiting_node_id
-	 * 02: waiting_transaction_num
-	 * 03: waiting_transaction_stamp
-	 * 04: blocking_pid
-	 * 05: blocking__node_id
-	 * 06: blocking_transaction_num
-	 * 07: blocking_transaction_stamp
-	 * 08: blocking_transaction_waiting
+	 * 00: waiting_global_pid
+	 * 01: waiting_pid
+	 * 02: waiting_node_id
+	 * 03: waiting_transaction_num
+	 * 04: waiting_transaction_stamp
+	 * 05: blocking_global_pid
+	 * 06: blocking_pid
+	 * 07: blocking__node_id
+	 * 08: blocking_transaction_num
+	 * 09: blocking_transaction_stamp
+	 * 10: blocking_transaction_waiting
 	 */
 	for (size_t curEdgeNum = 0; curEdgeNum < waitGraph->edgeCount; curEdgeNum++)
 	{
-		Datum values[9];
-		bool nulls[9];
+		Datum values[11];
+		bool nulls[11];
 		WaitEdge *curEdge = &waitGraph->edges[curEdgeNum];
 
 		memset(values, 0, sizeof(values));
 		memset(nulls, 0, sizeof(nulls));
 
-		values[0] = Int32GetDatum(curEdge->waitingPid);
-		values[1] = Int32GetDatum(curEdge->waitingNodeId);
+		values[0] = UInt64GetDatum(curEdge->waitingGPid);
+		values[1] = Int32GetDatum(curEdge->waitingPid);
+		values[2] = Int32GetDatum(curEdge->waitingNodeId);
 		if (curEdge->waitingTransactionNum != 0)
 		{
-			values[2] = Int64GetDatum(curEdge->waitingTransactionNum);
-			values[3] = TimestampTzGetDatum(curEdge->waitingTransactionStamp);
+			values[3] = Int64GetDatum(curEdge->waitingTransactionNum);
+			values[4] = TimestampTzGetDatum(curEdge->waitingTransactionStamp);
 		}
 		else
 		{
-			nulls[2] = true;
 			nulls[3] = true;
+			nulls[4] = true;
 		}
 
-		values[4] = Int32GetDatum(curEdge->blockingPid);
-		values[5] = Int32GetDatum(curEdge->blockingNodeId);
+		values[5] = UInt64GetDatum(curEdge->blockingGPid);
+		values[6] = Int32GetDatum(curEdge->blockingPid);
+		values[7] = Int32GetDatum(curEdge->blockingNodeId);
 		if (curEdge->blockingTransactionNum != 0)
 		{
-			values[6] = Int64GetDatum(curEdge->blockingTransactionNum);
-			values[7] = TimestampTzGetDatum(curEdge->blockingTransactionStamp);
+			values[8] = Int64GetDatum(curEdge->blockingTransactionNum);
+			values[9] = TimestampTzGetDatum(curEdge->blockingTransactionStamp);
 		}
 		else
 		{
-			nulls[6] = true;
-			nulls[7] = true;
+			nulls[8] = true;
+			nulls[9] = true;
 		}
-		values[8] = BoolGetDatum(curEdge->isBlockingXactWaiting);
+		values[10] = BoolGetDatum(curEdge->isBlockingXactWaiting);
 
 		tuplestore_putvalues(tupleStore, tupleDesc, values, nulls);
 	}
@@ -644,6 +655,7 @@ AddWaitEdge(WaitGraph *waitGraph, PGPROC *waitingProc, PGPROC *blockingProc,
 	}
 
 	curEdge->waitingPid = waitingProc->pid;
+	curEdge->waitingGPid = waitingBackendData.globalPID;
 
 	if (IsInDistributedTransaction(&waitingBackendData))
 	{
@@ -662,6 +674,7 @@ AddWaitEdge(WaitGraph *waitGraph, PGPROC *waitingProc, PGPROC *blockingProc,
 	}
 
 	curEdge->blockingPid = blockingProc->pid;
+	curEdge->blockingGPid = blockingBackendData.globalPID;
 
 	if (IsInDistributedTransaction(&blockingBackendData))
 	{
