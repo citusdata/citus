@@ -1,0 +1,83 @@
+CREATE SCHEMA global_cancel;
+SET search_path TO global_cancel;
+SET citus.next_shard_id TO 56789000;
+CREATE TABLE dist_table (a INT, b INT);
+SELECT create_distributed_table ('dist_table', 'a', shard_count:=4);
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+INSERT INTO dist_table VALUES (1, 1);
+SELECT global_pid AS coordinator_gpid FROM get_all_active_transactions() WHERE process_id = pg_backend_pid() \gset
+SELECT pg_typeof(:coordinator_gpid);
+ pg_typeof
+---------------------------------------------------------------------
+ bigint
+(1 row)
+
+SELECT pg_cancel_backend(:coordinator_gpid);
+ERROR:  canceling statement due to user request
+SET citus.log_remote_commands TO ON;
+SELECT pg_cancel_backend(:coordinator_gpid) FROM dist_table WHERE a = 1;
+NOTICE:  issuing SELECT pg_cancel_backend('xxxxx'::bigint) AS pg_cancel_backend FROM global_cancel.dist_table_56789000 dist_table WHERE (a OPERATOR(pg_catalog.=) 1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  canceling statement due to user request
+BEGIN;
+SELECT pg_cancel_backend(:coordinator_gpid) FROM dist_table WHERE a = 1;
+NOTICE:  issuing BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;SELECT assign_distributed_transaction_id(xx, xx, 'xxxxxxx');
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+NOTICE:  issuing SELECT pg_cancel_backend('xxxxx'::bigint) AS pg_cancel_backend FROM global_cancel.dist_table_56789000 dist_table WHERE (a OPERATOR(pg_catalog.=) 1)
+DETAIL:  on server postgres@localhost:xxxxx connectionId: xxxxxxx
+ERROR:  canceling statement due to user request
+END;
+SET citus.log_remote_commands TO OFF;
+SELECT global_pid AS maintenance_daemon_gpid
+FROM pg_stat_activity psa JOIN get_all_active_transactions() gaat ON psa.pid = gaat.process_id
+WHERE application_name = 'Citus Maintenance Daemon' \gset
+SET client_min_messages TO ERROR;
+CREATE USER global_cancel_user;
+SELECT 1 FROM run_command_on_workers('CREATE USER global_cancel_user');
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
+RESET client_min_messages;
+SET ROLE global_cancel_user;
+SELECT pg_typeof(:maintenance_daemon_gpid);
+ pg_typeof
+---------------------------------------------------------------------
+ bigint
+(1 row)
+
+SELECT pg_cancel_backend(:maintenance_daemon_gpid);
+ERROR:  must be a superuser to cancel superuser query
+CONTEXT:  while executing command on localhost:xxxxx
+SELECT pg_terminate_backend(:maintenance_daemon_gpid);
+ERROR:  must be a superuser to terminate superuser process
+CONTEXT:  while executing command on localhost:xxxxx
+RESET ROLE;
+SELECT nodeid AS coordinator_node_id FROM pg_dist_node WHERE nodeport = :master_port \gset
+SET client_min_messages TO DEBUG;
+-- 10000000000 is the node id multiplier for global pid
+SELECT pg_cancel_backend(10000000000 * :coordinator_node_id + 0);
+DEBUG:  PID 0 is not a PostgreSQL server process
+DETAIL:  from localhost:xxxxx
+ pg_cancel_backend
+---------------------------------------------------------------------
+ f
+(1 row)
+
+SELECT pg_terminate_backend(10000000000 * :coordinator_node_id + 0);
+DEBUG:  PID 0 is not a PostgreSQL server process
+DETAIL:  from localhost:xxxxx
+ pg_terminate_backend
+---------------------------------------------------------------------
+ f
+(1 row)
+
+RESET client_min_messages;
+DROP SCHEMA global_cancel CASCADE;
+NOTICE:  drop cascades to table dist_table

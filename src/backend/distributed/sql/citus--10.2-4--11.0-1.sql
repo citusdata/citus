@@ -35,6 +35,9 @@ GRANT SELECT ON pg_catalog.citus_dist_stat_activity TO PUBLIC;
 -- we have to recreate this view because recreated citus_dist_stat_activity that this view depends
 #include "udfs/citus_lock_waits/11.0-1.sql"
 
+#include "udfs/pg_cancel_backend/11.0-1.sql"
+#include "udfs/pg_terminate_backend/11.0-1.sql"
+
 DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);
 DROP FUNCTION pg_catalog.master_append_table_to_shard(bigint, text, text, integer);

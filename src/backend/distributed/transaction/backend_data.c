@@ -33,6 +33,7 @@
 #include "distributed/shared_connection_stats.h"
 #include "distributed/transaction_identifier.h"
 #include "distributed/tuplestore.h"
+#include "distributed/worker_manager.h"
 #include "nodes/execnodes.h"
 #include "postmaster/autovacuum.h" /* to access autovacuum_max_workers */
 #include "replication/walsender.h"
@@ -47,6 +48,7 @@
 
 #define GET_ACTIVE_TRANSACTION_QUERY "SELECT * FROM get_all_active_transactions();"
 #define ACTIVE_TRANSACTION_COLUMN_COUNT 7
+#define GLOBAL_PID_NODE_ID_MULTIPLIER 10000000000
 
 /*
  * Each backend's data reside in the shared memory
@@ -864,7 +866,7 @@ GenerateGlobalPID(void)
 	 * node ids might cause overflow. But even for the applications that scale around 50 nodes every
 	 * day it'd take about 100K years. So we are not worried.
 	 */
-	return (((uint64) GetLocalNodeId()) * 10000000000) + getpid();
+	return (((uint64) GetLocalNodeId()) * GLOBAL_PID_NODE_ID_MULTIPLIER) + getpid();
 }
 
 
@@ -904,6 +906,42 @@ ExtractGlobalPID(char *applicationName)
 	uint64 globalPID = strtoul(globalPIDString, NULL, 10);
 
 	return globalPID;
+}
+
+
+/*
+ * ExtractNodeIdFromGlobalPID extracts the node id from the global pid.
+ * Global pid is constructed by multiplying node id with GLOBAL_PID_NODE_ID_MULTIPLIER
+ * and adding process id. So integer division of global pid by GLOBAL_PID_NODE_ID_MULTIPLIER
+ * gives us the node id.
+ */
+int
+ExtractNodeIdFromGlobalPID(uint64 globalPID)
+{
+	int nodeId = (int) (globalPID / GLOBAL_PID_NODE_ID_MULTIPLIER);
+
+	if (nodeId == GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA)
+	{
+		ereport(ERROR, (errmsg("originator node of the query with the global pid "
+							   "%lu is not in Citus' metadata", globalPID),
+						errhint("connect to the node directly run pg_cancel_backend(pid) "
+								"or pg_terminate_backend(pid)")));
+	}
+
+	return nodeId;
+}
+
+
+/*
+ * ExtractProcessIdFromGlobalPID extracts the process id from the global pid.
+ * Global pid is constructed by multiplying node id with GLOBAL_PID_NODE_ID_MULTIPLIER
+ * and adding process id. So global pid mod GLOBAL_PID_NODE_ID_MULTIPLIER gives us the
+ * process id.
+ */
+int
+ExtractProcessIdFromGlobalPID(uint64 globalPID)
+{
+	return (int) (globalPID % GLOBAL_PID_NODE_ID_MULTIPLIER);
 }
 
 

@@ -282,6 +282,7 @@ test: create_citus_local_table_cascade
 test: fkeys_between_local_ref
 test: auto_undist_citus_local
 test: mx_regular_user
+test: global_cancel
 test: remove_coordinator
 
 # ----------

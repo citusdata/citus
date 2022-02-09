@@ -31,6 +31,7 @@
 #include "commands/dbcommands.h"
 #include "commands/extension.h"
 #include "commands/trigger.h"
+#include "distributed/backend_data.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/connection_management.h"
 #include "distributed/citus_ruleutils.h"
@@ -3666,9 +3667,10 @@ GetLocalNodeId(void)
 
 		/*
 		 * This is expected if the coordinator is not added to the metadata.
-		 * We'll return 0 for this case and for all cases so views can function almost normally
+		 * We'll return GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA for this case and
+		 * for all cases so views can function almost normally
 		 */
-		nodeId = 0;
+		nodeId = GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA;
 	}
 
 	LocalNodeId = nodeId;
