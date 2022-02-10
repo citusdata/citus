@@ -31,6 +31,7 @@ extern void AssertObjectTypeIsFunctional(ObjectType type);
 
 extern void QualifyTreeNode(Node *stmt);
 extern char * DeparseTreeNode(Node *stmt);
+extern List * DeparseTreeNodes(List *stmts);
 
 /* forward declarations for deparse_attribute_stmts.c */
 extern char * DeparseRenameAttributeStmt(Node *);

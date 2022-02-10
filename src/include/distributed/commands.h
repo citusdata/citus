@@ -465,6 +465,7 @@ extern bool ConstrTypeUsesIndex(ConstrType constrType);
 /* text_search.c - forward declarations */
 extern List * PostprocessCreateTextSearchConfigurationStmt(Node *node,
 														   const char *queryString);
+extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
 extern List * CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address);
 extern List * PreprocessDropTextSearchConfigurationStmt(Node *node,
 														const char *queryString,

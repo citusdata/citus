@@ -55,6 +55,33 @@ WrapCreateOrReplace(const char *sql)
 }
 
 
+char *
+WrapCreateOrReplaceList(List *sqls)
+{
+	StringInfoData textArrayLitteral = { 0 };
+	initStringInfo(&textArrayLitteral);
+
+	appendStringInfoString(&textArrayLitteral, "ARRAY[");
+	const char *sql = NULL;
+	bool first = true;
+	foreach_ptr(sql, sqls)
+	{
+		if (!first)
+		{
+			appendStringInfoString(&textArrayLitteral, ", ");
+		}
+		appendStringInfoString(&textArrayLitteral, quote_literal_cstr(sql));
+		first = false;
+	}
+	appendStringInfoString(&textArrayLitteral, "]::text[]");
+
+	StringInfoData buf = { 0 };
+	initStringInfo(&buf);
+	appendStringInfo(&buf, CREATE_OR_REPLACE_COMMAND, textArrayLitteral.data);
+	return buf.data;
+}
+
+
 #define PG_GETARG_TYPE(n) pg_getarg_type_impl(fcinfo->flinfo->fn_oid, n);
 
 /*
@@ -280,8 +307,8 @@ CreateStmtListByObjectAddress(const ObjectAddress *address)
 			 * that should never match the sql we have passed in for the creation.
 			 */
 
-			/* TODO: get actual list of statements */
-			return NIL;
+			List *stmts = GetCreateTextSearchConfigStatements(address);
+			return DeparseTreeNodes(stmts);
 		}
 
 		case OCLASS_TYPE:

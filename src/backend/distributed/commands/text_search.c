@@ -108,6 +108,29 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 }
 
 
+List *
+GetCreateTextSearchConfigStatements(const ObjectAddress *address)
+{
+	Assert(address->classId == TSConfigRelationId);
+	List *stmts = NIL;
+
+	/* CREATE TEXT SEARCH CONFIGURATION ...*/
+	stmts = lappend(stmts, GetTextSearchConfigDefineStmt(address->objectId));
+
+	/* ALTER TEXT SEARCH CONFIGURATION ... OWNER TO ...*/
+	stmts = list_concat(stmts, GetTextSearchConfigOwnerStmts(address->objectId));
+
+	/* COMMENT ON TEXT SEARCH CONFIGURATION ... */
+	stmts = list_concat(stmts, GetTextSearchConfigCommentStmt(address->objectId));
+
+
+	/* ALTER TEXT SEARCH CONFIGURATION ... ADD MAPPING FOR ... WITH ... */
+	stmts = list_concat(stmts, GetTextSearchConfigMappingStmt(address->objectId));
+
+	return stmts;
+}
+
+
 /*
  * CreateTextSearchConfigDDLCommandsIdempotent creates a list of ddl commands to recreate
  * a TEXT SERACH CONFIGURATION object in an idempotent manner on workers.
@@ -115,38 +138,9 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 List *
 CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address)
 {
-	Assert(address->classId == TSConfigRelationId);
-	List *commands = NIL;
-
-	/* CREATE TEXT SEARCH CONFIGURATION ...*/
-	DefineStmt *defineStmt = GetTextSearchConfigDefineStmt(address->objectId);
-	commands = lappend(commands,
-					   WrapCreateOrReplace(DeparseTreeNode((Node *) defineStmt)));
-
-	List *configurationStmts = NIL;
-
-	/* ALTER TEXT SEARCH CONFIGURATION ... OWNER TO ...*/
-	configurationStmts = list_concat(configurationStmts,
-									 GetTextSearchConfigOwnerStmts(address->objectId));
-
-	/* COMMENT ON TEXT SEARCH CONFIGURATION ... */
-	configurationStmts = list_concat(configurationStmts,
-									 GetTextSearchConfigCommentStmt(address->objectId));
-
-
-	/* ALTER TEXT SEARCH CONFIGURATION ... ADD MAPPING FOR ... WITH ... */
-	configurationStmts = list_concat(configurationStmts,
-									 GetTextSearchConfigMappingStmt(address->objectId));
-
-	/* deparse all statements into sql */
-	Node *stmt = NULL;
-	foreach_ptr(stmt, configurationStmts)
-	{
-		char *sql = DeparseTreeNode(stmt);
-		commands = lappend(commands, sql);
-	}
-
-	return commands;
+	List *stmts = GetCreateTextSearchConfigStatements(address);
+	List *sqls = DeparseTreeNodes(stmts);
+	return list_make1(WrapCreateOrReplaceList(sqls));
 }
 
 

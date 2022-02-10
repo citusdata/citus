@@ -19,6 +19,7 @@
 #define CREATE_OR_REPLACE_COMMAND "SELECT worker_create_or_replace_object(%s);"
 
 extern char * WrapCreateOrReplace(const char *sql);
+extern char * WrapCreateOrReplaceList(List *sqls);
 extern char * GenerateBackupNameForCollision(const ObjectAddress *address);
 extern RenameStmt * CreateRenameStatement(const ObjectAddress *address, char *newName);
 
