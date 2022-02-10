@@ -159,6 +159,7 @@ INSERT INTO test_nested VALUES (300,'threehundred');
 INSERT INTO test_nested VALUES (400,'fourhundred');
 INSERT INTO test_nested VALUES (512,'fivetwelve');
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION inner_force_delegation_function(int)
 RETURNS NUMERIC AS $$
 DECLARE ret_val NUMERIC;
@@ -168,6 +169,7 @@ BEGIN
         RETURN ret_val;
 END;
 $$  LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CREATE OR REPLACE FUNCTION func_calls_forcepush_func()
 RETURNS NUMERIC AS $$
@@ -189,6 +191,7 @@ COMMIT;
 
 SELECT func_calls_forcepush_func();
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION get_val()
 RETURNS INT AS $$
 BEGIN
@@ -203,7 +206,6 @@ $$  LANGUAGE plpgsql;
 --   select res into var from fn();
 -- }
 --
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION func_calls_forcepush_func_infrom()
 RETURNS NUMERIC AS $$
 DECLARE incremented_val NUMERIC;

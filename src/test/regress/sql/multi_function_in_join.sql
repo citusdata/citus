@@ -46,6 +46,7 @@ $$ LANGUAGE plpgsql;
 SELECT * FROM table1 JOIN increment(2) val ON (id = val) ORDER BY id ASC;
 
 -- a function that returns a set of integers
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION next_k_integers(IN first_value INTEGER,
                                            IN k INTEGER DEFAULT 3,
                                            OUT result INTEGER)
@@ -54,6 +55,7 @@ BEGIN
   RETURN QUERY SELECT x FROM generate_series(first_value, first_value+k-1) f(x);
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SELECT *
 FROM table1 JOIN next_k_integers(3,2) next_integers ON (id = next_integers.result)
 ORDER BY id ASC;
@@ -148,8 +150,10 @@ SELECT raise_failed_execution_func_join($$
 $$);
 
 -- a user-defined immutable function
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION the_answer_to_life()
   RETURNS INTEGER IMMUTABLE AS 'SELECT 42' LANGUAGE SQL;
+RESET citus.enable_metadata_sync;
 
 SELECT raise_failed_execution_func_join($$
   SELECT * FROM table1 JOIN the_answer_to_life() the_answer ON (id = the_answer);
