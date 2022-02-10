@@ -155,7 +155,12 @@ FROM \
 	get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp, global_pid) \
 	ON pg_stat_activity.pid = dist_txs.process_id \
 WHERE \
-	dist_txs.worker_query = false;"
+	backend_type = 'client backend' \
+	AND \
+	pg_stat_activity.query NOT ILIKE '%stat_activity%' \
+	AND \
+	pg_stat_activity.application_name NOT SIMILAR TO 'citus_internal gpid=\\d+'; \
+"
 
 #define CITUS_WORKER_STAT_ACTIVITY_QUERY \
 	"\
@@ -186,7 +191,7 @@ SELECT \
 	dist_txs.global_id \
 FROM \
 	pg_stat_activity \
-	LEFT JOIN \
+	JOIN \
 	get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp, global_id) \
 	ON pg_stat_activity.pid = dist_txs.process_id \
 WHERE \
