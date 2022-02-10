@@ -99,7 +99,9 @@ pg_getarg_type_impl(Oid funcOid, int n)
 
 
 /*
- * worker_create_or_replace_object(statement text)
+ * Implementation for both
+ *  - worker_create_or_replace_object(statement text)
+ *  - worker_create_or_replace_object(statements text[])
  *
  * function is called, by the coordinator, with a CREATE statement for an object. This
  * function implements the CREATE ... IF NOT EXISTS functionality for objects that do not
@@ -108,7 +110,9 @@ pg_getarg_type_impl(Oid funcOid, int n)
  * Besides checking if an object of said name exists it tries to compare the object to be
  * created with the one in the local catalog. If there is a difference the one in the local
  * catalog will be renamed after which the statement can be executed on this worker to
- * create the object.
+ * create the object. If more statements are provided, all are compared in order with the
+ * statements generated on the worker. This works assuming a) both citus versions are the
+ * same, b) the objects are exactly the same.
  *
  * Renaming has two purposes
  *  - free the identifier for creation
@@ -206,6 +210,11 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 		parseTree = ParseTreeNode(sqlStatement);
 		ProcessUtilityParseTree(parseTree, sqlStatement, PROCESS_UTILITY_QUERY, NULL,
 								None_Receiver, NULL);
+
+		/*  TODO verify all statements are about exactly 1 subject, mostly a sanity check
+		 * to prevent unintentional use of this UDF, needs to come after the local
+		 * execution to be able to actually resolve the ObjectAddress of the newly created
+		 * object */
 	}
 
 	/* type has been created */
