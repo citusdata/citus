@@ -203,6 +203,7 @@ ORDER BY 1;
  function worker_cleanup_job_schema_cache()
  function worker_create_or_alter_role(text,text,text)
  function worker_create_or_replace_object(text)
+ function worker_create_or_replace_object(text[])
  function worker_create_schema(bigint,text)
  function worker_create_truncate_trigger(regclass)
  function worker_drop_distributed_table(text)
