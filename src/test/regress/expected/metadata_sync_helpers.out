@@ -948,6 +948,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 ERROR:  Node with group id 123123123 for shard placement xxxxx does not exist
 ROLLBACK;
 -- create a volatile function that returns the local node id
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION get_node_id()
 RETURNS INT AS $$
 DECLARE localGroupId int;
@@ -960,6 +961,7 @@ BEGIN
 		nodeport = 57637 AND nodename = 'localhost' AND isactive AND nodecluster = 'default';
   RETURN localGroupId;
 END; $$ language plpgsql;
+RESET citus.enable_metadata_sync;
 -- fails because we ingest more placements for the same shards to the same worker node
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');

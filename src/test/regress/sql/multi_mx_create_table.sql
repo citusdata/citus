@@ -67,33 +67,7 @@ SELECT citus_add_local_table_to_metadata('citus_local_table');
 CREATE SCHEMA citus_mx_test_schema_join_1;
 CREATE SCHEMA citus_mx_test_schema_join_2;
 
--- create UDFs in worker node
-CREATE OR REPLACE FUNCTION simpleTestFunction(theValue integer)
-    RETURNS text AS
-$$
-DECLARE
-    strresult text;
-BEGIN
-    RETURN theValue * 3 / 2 + 1;
-END;
-$$
-LANGUAGE 'plpgsql' IMMUTABLE;
-
 SET search_path TO citus_mx_test_schema;
-CREATE OR REPLACE FUNCTION simpleTestFunction2(theValue integer)
-    RETURNS text AS
-$$
-DECLARE
-    strresult text;
-BEGIN
-    RETURN theValue * 3 / 2 + 1;
-END;
-$$
-LANGUAGE 'plpgsql' IMMUTABLE;
-
-CREATE FUNCTION public.immutable_append_mx(old_values int[], new_value int)
-RETURNS int[] AS $$ SELECT old_values || new_value $$ LANGUAGE SQL IMMUTABLE;
-
 -- create operator
 CREATE OPERATOR citus_mx_test_schema.=== (
     LEFTARG = int,
@@ -111,33 +85,7 @@ CREATE OPERATOR citus_mx_test_schema.=== (
 CREATE SCHEMA citus_mx_test_schema_join_1;
 CREATE SCHEMA citus_mx_test_schema_join_2;
 
-
--- create UDF
-CREATE OR REPLACE FUNCTION simpleTestFunction(theValue integer)
-    RETURNS text AS
-$$
-DECLARE
-    strresult text;
-BEGIN
-    RETURN theValue * 3 / 2 + 1;
-END;
-$$
-LANGUAGE 'plpgsql' IMMUTABLE;
-
 SET search_path TO citus_mx_test_schema;
-CREATE OR REPLACE FUNCTION simpleTestFunction2(theValue integer)
-    RETURNS text AS
-$$
-DECLARE
-    strresult text;
-BEGIN
-    RETURN theValue * 3 / 2 + 1;
-END;
-$$
-LANGUAGE 'plpgsql' IMMUTABLE;
-
-CREATE FUNCTION public.immutable_append_mx(old_values int[], new_value int)
-RETURNS int[] AS $$ SELECT old_values || new_value $$ LANGUAGE SQL IMMUTABLE;
 
 -- create operator
 CREATE OPERATOR citus_mx_test_schema.=== (

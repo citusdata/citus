@@ -140,8 +140,6 @@ BEGIN
 END;
 $$;
 SELECT create_distributed_function('my_group_id()', colocate_with := 'ref');
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 

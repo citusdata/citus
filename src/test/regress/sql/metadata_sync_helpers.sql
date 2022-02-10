@@ -609,6 +609,7 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 ROLLBACK;
 
 -- create a volatile function that returns the local node id
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION get_node_id()
 RETURNS INT AS $$
 DECLARE localGroupId int;
@@ -621,6 +622,7 @@ BEGIN
 		nodeport = 57637 AND nodename = 'localhost' AND isactive AND nodecluster = 'default';
   RETURN localGroupId;
 END; $$ language plpgsql;
+RESET citus.enable_metadata_sync;
 
 -- fails because we ingest more placements for the same shards to the same worker node
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;

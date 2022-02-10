@@ -829,10 +829,12 @@ SELECT master_update_node(nodeid, 'localhost', 12345) FROM pg_dist_node;
 
 (1 row)
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION trigger_metadata_sync()
     RETURNS void
     LANGUAGE C STRICT
     AS 'citus';
+RESET citus.enable_metadata_sync;
 SELECT trigger_metadata_sync();
  trigger_metadata_sync
 ---------------------------------------------------------------------

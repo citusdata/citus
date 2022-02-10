@@ -166,6 +166,7 @@ SET client_min_messages TO DEBUG1;
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
 
 -- Test table returning functions.
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION mx_call_func_tbl(x int)
 RETURNS TABLE (p0 int, p1 int)
 LANGUAGE plpgsql AS $$
@@ -179,6 +180,7 @@ BEGIN
         WHERE id >= x
         ORDER BY 1, 2;
 END;$$;
+RESET citus.enable_metadata_sync;
 
 -- before distribution ...
 select mx_call_func_tbl(10);
