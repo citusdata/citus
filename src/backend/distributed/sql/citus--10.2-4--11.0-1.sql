@@ -18,6 +18,7 @@
 #include "udfs/get_global_active_transactions/11.0-1.sql"
 
 #include "udfs/citus_worker_stat_activity/11.0-1.sql"
+#include "udfs/worker_create_or_replace_object/11.0-1.sql"
 
 CREATE VIEW citus.citus_worker_stat_activity AS
 SELECT * FROM pg_catalog.citus_worker_stat_activity();

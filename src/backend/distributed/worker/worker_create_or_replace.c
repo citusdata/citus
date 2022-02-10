@@ -19,6 +19,7 @@
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
 #include "parser/parse_type.h"
+#include "server/funcapi.h"
 #include "tcop/dest.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
@@ -29,11 +30,13 @@
 #include "distributed/commands.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/worker_create_or_replace.h"
 #include "distributed/worker_protocol.h"
 
-static const char * CreateStmtByObjectAddress(const ObjectAddress *address);
+static List * CreateStmtListByObjectAddress(const ObjectAddress *address);
+static bool CompareStringList(List *list1, List *list2);
 
 PG_FUNCTION_INFO_V1(worker_create_or_replace_object);
 
@@ -49,6 +52,49 @@ WrapCreateOrReplace(const char *sql)
 	initStringInfo(&buf);
 	appendStringInfo(&buf, CREATE_OR_REPLACE_COMMAND, quote_literal_cstr(sql));
 	return buf.data;
+}
+
+
+#define PG_GETARG_TYPE(n) pg_getarg_type_impl(fcinfo->flinfo->fn_oid, n);
+
+/*
+ * pg_getarg_type_impl returns the oid of the type of the argument to a function by its
+ * index.
+ *
+ * Its an implementation detail of PG_GETARG_TYPE to introspect what kind of argument is
+ * passed to the function being called.
+ */
+static Oid
+pg_getarg_type_impl(Oid funcOid, int n)
+{
+	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcOid));
+	if (!HeapTupleIsValid(proctup))
+	{
+		return InvalidOid;
+	}
+
+	Oid *argtypes = NULL;
+	char **argnames = NULL;
+	char *argmodes = NULL;
+	int numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
+	if (n >= numargs)
+	{
+		elog(ERROR, "invalid argument index");
+	}
+
+	Oid typeOid = argtypes[n];
+	pfree(argtypes);
+	if (argnames != NULL)
+	{
+		pfree(argnames);
+	}
+	if (argmodes != NULL)
+	{
+		pfree(argmodes);
+	}
+
+	ReleaseSysCache(proctup);
+	return typeOid;
 }
 
 
@@ -75,32 +121,69 @@ WrapCreateOrReplace(const char *sql)
 Datum
 worker_create_or_replace_object(PG_FUNCTION_ARGS)
 {
-	text *sqlStatementText = PG_GETARG_TEXT_P(0);
-	const char *sqlStatement = text_to_cstring(sqlStatementText);
-	Node *parseTree = ParseTreeNode(sqlStatement);
+	List *sqlStatements = NIL;
 
 	/*
-	 * since going to the drop statement might require some resolving we will do a check
-	 * if the type actually exists instead of adding the IF EXISTS keyword to the
-	 * statement.
+	 * The first argument is either a text or a list of text's, we normalize this to a
+	 * list of statements for further use, where the variant with just a single text
+	 * argument will be treated as a list of statements with length 1
 	 */
+	Oid argTypeOid = PG_GETARG_TYPE(0);
+	if (argTypeOid == TEXTOID)
+	{
+		text *sqlStatementText = PG_GETARG_TEXT_P(0);
+		char *sqlStatement = text_to_cstring(sqlStatementText);
+		sqlStatements = list_make1(sqlStatement);
+	}
+	else if (argTypeOid == TEXTARRAYOID)
+	{
+		Datum *textArray = NULL;
+		int length = 0;
+		deconstruct_array(PG_GETARG_ARRAYTYPE_P(0), TEXTOID, -1, false, 'i', &textArray,
+						  NULL, &length);
+
+		for (int i = 0; i < length; i++)
+		{
+			sqlStatements = lappend(sqlStatements, TextDatumGetCString(textArray[i]));
+		}
+	}
+	else
+	{
+		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("unexpected argument type")));
+	}
+
+	/*
+	 * To check which object we are changing we find the object address from the first
+	 * statement passed into the UDF. Later we will check if all object addresses are the
+	 * same.
+	 *
+	 * Although many of the objects will only have one statement in this call, more
+	 * complex objects might come with a list of statements. We assume they all are on the
+	 * same subject.
+	 */
+	Node *parseTree = ParseTreeNode(linitial(sqlStatements));
 	ObjectAddress address = GetObjectAddressFromParseTree(parseTree, true);
 	if (ObjectExists(&address))
 	{
-		const char *localSqlStatement = CreateStmtByObjectAddress(&address);
+		/*
+		 * Object with name from statement is already found locally, check if states are
+		 * identical. If objects differ we will rename the old object (non- destructively)
+		 * as to make room to create the new object according to the spec sent.
+		 */
 
-		if (strcmp(sqlStatement, localSqlStatement) == 0)
+		/*
+		 * Based on the local catalog we generate the list of commands we would send to
+		 * recreate our version of the object. This we can compare to what the coordinator
+		 * sent us. If they match we don't do anything.
+		 */
+		List *localSqlStatements = CreateStmtListByObjectAddress(&address);
+		if (CompareStringList(sqlStatements, localSqlStatements))
 		{
 			/*
-			 * TODO string compare is a poor man's comparison, but calling equal on the
-			 * parsetree's returns false because there is extra information list character
-			 * position of some sort
-			 */
-
-			/*
-			 * parseTree sent by the coordinator is the same as we would create for our
-			 * object, therefore we can omit the create statement locally and not create
-			 * the object as it already exists.
+			 * statements sent by the coordinator are the same as we would create for our
+			 * object, therefore we can omit the statements locally and not create the
+			 * object as it already exists in the correct shape.
 			 *
 			 * We let the coordinator know we didn't create the object.
 			 */
@@ -116,12 +199,42 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 								NULL, None_Receiver, NULL);
 	}
 
-	/* apply create statement locally */
-	ProcessUtilityParseTree(parseTree, sqlStatement, PROCESS_UTILITY_QUERY, NULL,
-							None_Receiver, NULL);
+	/* apply all statement locally */
+	char *sqlStatement = NULL;
+	foreach_ptr(sqlStatement, sqlStatements)
+	{
+		parseTree = ParseTreeNode(sqlStatement);
+		ProcessUtilityParseTree(parseTree, sqlStatement, PROCESS_UTILITY_QUERY, NULL,
+								None_Receiver, NULL);
+	}
 
 	/* type has been created */
 	PG_RETURN_BOOL(true);
+}
+
+
+static bool
+CompareStringList(List *list1, List *list2)
+{
+	if (list_length(list1) != list_length(list2))
+	{
+		return false;
+	}
+
+	ListCell *cell1 = NULL;
+	ListCell *cell2 = NULL;
+	forboth(cell1, list1, cell2, list2)
+	{
+		const char *str1 = lfirst(cell1);
+		const char *str2 = lfirst(cell2);
+
+		if (strcmp(str1, str2) != 0)
+		{
+			return false;
+		}
+	}
+
+	return true;
 }
 
 
@@ -133,19 +246,19 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
  * therefore you cannot equal this tree against parsed statement. Instead it can be
  * deparsed to do a string comparison.
  */
-static const char *
-CreateStmtByObjectAddress(const ObjectAddress *address)
+static List *
+CreateStmtListByObjectAddress(const ObjectAddress *address)
 {
 	switch (getObjectClass(address))
 	{
 		case OCLASS_COLLATION:
 		{
-			return CreateCollationDDL(address->objectId);
+			return list_make1(CreateCollationDDL(address->objectId));
 		}
 
 		case OCLASS_PROC:
 		{
-			return GetFunctionDDLCommand(address->objectId, false);
+			return list_make1(GetFunctionDDLCommand(address->objectId, false));
 		}
 
 		case OCLASS_TSCONFIG:
@@ -157,12 +270,14 @@ CreateStmtByObjectAddress(const ObjectAddress *address)
 			 * canonical creation sql we return here, hence we return an empty string, as
 			 * that should never match the sql we have passed in for the creation.
 			 */
-			return "";
+
+			/* TODO: get actual list of statements */
+			return NIL;
 		}
 
 		case OCLASS_TYPE:
 		{
-			return DeparseTreeNode(CreateTypeStmtByObjectAddress(address));
+			return list_make1(DeparseTreeNode(CreateTypeStmtByObjectAddress(address)));
 		}
 
 		default:
