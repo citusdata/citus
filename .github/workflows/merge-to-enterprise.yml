@@ -1,0 +1,38 @@
+name: "Automerge to enterprise"
+on:
+  push:
+    branches: # TODO update to master before merging
+      - ci/auto-merge-to-enterprise
+
+env:
+  ENTERPRISE_BRANCH: shadow/enterprise-master
+
+jobs:
+  merge_to_enterprise:
+    # since we merge to a different repository we don't want it to trigger there
+    if: github.event.repository.full_name == 'citusdata/citus'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Configure enterprise deploy key
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.AUTOMERGE_SSH_PRIVATE_KEY }}
+      - name: Configure git identity
+        run: git config user.email "bots@citusdata.com" && git config user.name "citus-bot"
+      - run: git checkout -b "automerge/${ENTERPRISE_BRANCH}"
+      - run: git remote add enterprise git@github.com:citusdata/citus-enterprise.git
+      - run: git fetch enterprise
+      - run: git reset --hard "enterprise/${ENTERPRISE_BRANCH}"
+      - name: Create merge commit with descriptive message
+        run: |
+          sha=$(git rev-parse --short ${{ github.event.ref }})
+          last_message=$(git log --oneline --format=%B -n 1 ${{ github.event.ref }} | head -n1)
+          message="Merge from community up to ${sha}: ${last_message}"
+          git merge -m "${message}" ${{ github.event.ref }}
+      # we forcepush the automerge branch. in case of concurrent changes the automerge branch might not have been
+      # promoted before we got a new merge. The final branch will only be allowing forwards.
+      - run: git push enterprise "automerge/${ENTERPRISE_BRANCH}" --force

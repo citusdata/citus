@@ -530,14 +530,32 @@ workflows:
                 - /release-[0-9]+\.[0-9]+.*/ # match with releaseX.Y.*
 
       - build:
+          filters:
+            branches:
+              ignore:
+                - /ci\/.*/
+                - /shadow\/.*/
+                - /automerge\/.*/
           name: build-12
           pg_major: 12
           image_tag: '<< pipeline.parameters.pg12_version >>'
       - build:
+          filters:
+            branches:
+              ignore:
+                - /ci\/.*/
+                - /shadow\/.*/
+                - /automerge\/.*/
           name: build-13
           pg_major: 13
           image_tag: '<< pipeline.parameters.pg13_version >>'
       - build:
+          filters:
+            branches:
+              ignore:
+                - /ci\/.*/
+                - /shadow\/.*/
+                - /automerge\/.*/
           name: build-14
           pg_major: 14
           image_tag: '<< pipeline.parameters.pg14_version >>'

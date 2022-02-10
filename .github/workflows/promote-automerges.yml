@@ -1,0 +1,34 @@
+name: 'Check promote automerges'
+on:
+  check_suite:
+    types: [completed]
+  # for now we simply promote our tracking branch when the automerge branch is pushed
+  # before we merge this we want to debug the check_suite action above on the default branch.
+  # check_suite (as well as workflow_dispatch only trigger when the workflow is on the main branch
+  # this would require an approved merge
+  push:
+    branches:
+      - automerge/**
+
+jobs:
+  promote_main_branch:
+    if: github.event.repository.full_name == 'citusdata/citus-enterprise'
+    runs-on: ubuntu-latest
+    steps:
+      - name: DEBUG
+        env:
+          EVENT_CONTEXT: ${{ toJSON(github.event) }}
+        run: |
+          echo $EVENT_CONTEXT
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - name: Promote automerge branch to tracking branch
+        run: |
+          base_branch=$(git branch --show-current | sed -e "s/^automerge\///")
+          git checkout "${base_branch}"
+          git reset --hard "automerge/${base_branch}"
+          git log --oneline -n 5
+      - run: git push
