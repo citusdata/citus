@@ -37,7 +37,6 @@ static void AddSchemaFieldIfMissing(CreateExtensionStmt *stmt);
 static List * FilterDistributedExtensions(List *extensionObjectList);
 static List * ExtensionNameListToObjectAddressList(List *extensionObjectList);
 static void MarkExistingObjectDependenciesDistributedIfSupported(void);
-static void EnsureSequentialModeForExtensionDDL(void);
 static bool ShouldPropagateExtensionCommand(Node *parseTree);
 static bool IsAlterExtensionSetSchemaCitus(Node *parseTree);
 static Node * RecreateExtensionStmt(Oid extensionOid);
@@ -163,7 +162,7 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 	 * Make sure that the current transaction is already in sequential mode,
 	 * or can still safely be put in sequential mode
 	 */
-	EnsureSequentialModeForExtensionDDL();
+	EnsureSequentialMode(OBJECT_EXTENSION);
 
 	/*
 	 * Here we append "schema" field to the "options" list (if not specified)
@@ -274,7 +273,7 @@ PreprocessDropExtensionStmt(Node *node, const char *queryString,
 	 * Make sure that the current transaction is already in sequential mode,
 	 * or can still safely be put in sequential mode
 	 */
-	EnsureSequentialModeForExtensionDDL();
+	EnsureSequentialMode(OBJECT_EXTENSION);
 
 	List *distributedExtensionAddresses = ExtensionNameListToObjectAddressList(
 		distributedExtensions);
@@ -409,7 +408,7 @@ PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString,
 	 * Make sure that the current transaction is already in sequential mode,
 	 * or can still safely be put in sequential mode
 	 */
-	EnsureSequentialModeForExtensionDDL();
+	EnsureSequentialMode(OBJECT_EXTENSION);
 
 	const char *alterExtensionStmtSql = DeparseTreeNode(node);
 
@@ -478,7 +477,7 @@ PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString,
 	 * Make sure that the current transaction is already in sequential mode,
 	 * or can still safely be put in sequential mode
 	 */
-	EnsureSequentialModeForExtensionDDL();
+	EnsureSequentialMode(OBJECT_EXTENSION);
 
 	const char *alterExtensionStmtSql = DeparseTreeNode((Node *) alterExtensionStmt);
 
@@ -600,44 +599,6 @@ PreprocessAlterExtensionContentsStmt(Node *node, const char *queryString,
 						 "You can add/drop the member objects on the workers as well.")));
 
 	return NIL;
-}
-
-
-/*
- * EnsureSequentialModeForExtensionDDL makes sure that the current transaction is already in
- * sequential mode, or can still safely be put in sequential mode, it errors if that is
- * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginning.
- *
- * As extensions are node scoped objects there exists only 1 instance of the
- * extension used by potentially multiple shards. To make sure all shards in
- * the transaction can interact with the extension the extension needs to be
- * visible on all connections used by the transaction, meaning we can only use
- *  1 connection per node.
- */
-static void
-EnsureSequentialModeForExtensionDDL(void)
-{
-	if (ParallelQueryExecutedInTransaction())
-	{
-		ereport(ERROR, (errmsg("cannot run extension command because there was a "
-							   "parallel operation on a distributed table in the "
-							   "transaction"),
-						errdetail(
-							"When running command on/for a distributed extension, Citus needs to "
-							"perform all operations over a single connection per "
-							"node to ensure consistency."),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
-	}
-
-	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-					 errdetail(
-						 "A command for a distributed extension is run. To make sure subsequent "
-						 "commands see the type correctly we need to make sure to "
-						 "use only one connection for all future commands")));
-	SetLocalMultiShardModifyModeToSequential();
 }
 
 

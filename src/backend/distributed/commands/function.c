@@ -77,7 +77,6 @@ static int GetFunctionColocationId(Oid functionOid, char *colocateWithName, Oid
 static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 												  distributionColumnType, Oid
 												  sourceRelationId);
-static void EnsureSequentialModeForFunctionDDL(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
@@ -207,7 +206,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		 * when we allow propagation within a transaction block we should make sure
 		 * to only allow this in sequential mode.
 		 */
-		EnsureSequentialModeForFunctionDDL();
+		EnsureSequentialMode(OBJECT_FUNCTION);
 
 		EnsureDependenciesExistOnAllNodes(&functionAddress);
 
@@ -1170,42 +1169,6 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 
 
 /*
- * EnsureSequentialModeForFunctionDDL makes sure that the current transaction is already in
- * sequential mode, or can still safely be put in sequential mode, it errors if that is
- * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginning.
- *
- * As functions are node scoped objects there exists only 1 instance of the function used by
- * potentially multiple shards. To make sure all shards in the transaction can interact
- * with the function the function needs to be visible on all connections used by the transaction,
- * meaning we can only use 1 connection per node.
- */
-static void
-EnsureSequentialModeForFunctionDDL(void)
-{
-	if (ParallelQueryExecutedInTransaction())
-	{
-		ereport(ERROR, (errmsg("cannot create function because there was a "
-							   "parallel operation on a distributed table in the "
-							   "transaction"),
-						errdetail("When creating a distributed function, Citus needs to "
-								  "perform all operations over a single connection per "
-								  "node to ensure consistency."),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
-	}
-
-	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-					 errdetail(
-						 "A distributed function is created. To make sure subsequent "
-						 "commands see the type correctly we need to make sure to "
-						 "use only one connection for all future commands")));
-	SetLocalMultiShardModifyModeToSequential();
-}
-
-
-/*
  * ShouldPropagateCreateFunction tests if we need to propagate a CREATE FUNCTION
  * statement. We only propagate replace's of distributed functions to keep the function on
  * the workers in sync with the one on the coordinator.
@@ -1313,7 +1276,7 @@ PreprocessCreateFunctionStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 
 	/*
 	 * ddl jobs will be generated during the Processing phase as we need the function to
@@ -1432,7 +1395,7 @@ PreprocessAlterFunctionStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 	ErrorIfUnsupportedAlterFunctionStmt(stmt);
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1466,7 +1429,7 @@ PreprocessRenameFunctionStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1498,7 +1461,7 @@ PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1531,7 +1494,7 @@ PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1621,7 +1584,7 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString,
 	 * types, so we block the call.
 	 */
 	EnsureCoordinator();
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 
 	/* remove the entries for the distributed objects on dropping */
 	ObjectAddress *address = NULL;

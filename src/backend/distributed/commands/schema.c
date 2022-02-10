@@ -42,7 +42,6 @@
 
 static ObjectAddress GetObjectAddressBySchemaName(char *schemaName, bool missing_ok);
 static List * FilterDistributedSchemas(List *schemas);
-static void EnsureSequentialModeForSchemaDDL(void);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
 
@@ -62,7 +61,7 @@ PreprocessCreateSchemaStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	EnsureSequentialModeForSchemaDDL();
+	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	/* deparse sql*/
 	const char *sql = DeparseTreeNode(node);
@@ -101,7 +100,7 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
-	EnsureSequentialModeForSchemaDDL();
+	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	Value *schemaVal = NULL;
 	foreach_ptr(schemaVal, distributedSchemas)
@@ -204,7 +203,7 @@ PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString,
 	/* deparse sql*/
 	const char *renameStmtSql = DeparseTreeNode(node);
 
-	EnsureSequentialModeForSchemaDDL();
+	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -290,44 +289,6 @@ FilterDistributedSchemas(List *schemas)
 	}
 
 	return distributedSchemas;
-}
-
-
-/*
- * EnsureSequentialModeForSchemaDDL makes sure that the current transaction is already in
- * sequential mode, or can still safely be put in sequential mode, it errors if that is
- * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginning.
- *
- * Copy-pasted from type.c
- */
-static void
-EnsureSequentialModeForSchemaDDL(void)
-{
-	if (!IsTransactionBlock())
-	{
-		/* we do not need to switch to sequential mode if we are not in a transaction */
-		return;
-	}
-
-	if (ParallelQueryExecutedInTransaction())
-	{
-		ereport(ERROR, (errmsg("cannot create or modify schema because there was a "
-							   "parallel operation on a distributed table in the "
-							   "transaction"),
-						errdetail("When creating, altering, or dropping a schema, Citus "
-								  "needs to perform all operations over a single "
-								  "connection per node to ensure consistency."),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
-	}
-
-	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-					 errdetail("Schema is created or altered. To make sure subsequent "
-							   "commands see the schema correctly we need to make sure to "
-							   "use only one connection for all future commands")));
-	SetLocalMultiShardModifyModeToSequential();
 }
 
 
