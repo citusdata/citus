@@ -73,6 +73,11 @@ step "s1-select-for-update"
 	SELECT run_commands_on_session_level_connection_to_node('SELECT * FROM ref_table FOR UPDATE');
 }
 
+step "s1-update-dist-table-id-1"
+{
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 4 WHERE user_id = 1');
+}
+
 step "s1-commit-worker"
 {
     SELECT run_commands_on_session_level_connection_to_node('COMMIT');
@@ -113,6 +118,11 @@ step "s2-begin-on-worker"
 step "s2-update-dist-table"
 {
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 5');
+}
+
+step "s2-update-dist-table-id-1"
+{
+	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 4 WHERE user_id = 1');
 }
 
 step "s2-update-ref-table"
@@ -196,3 +206,9 @@ permutation "s2-start-session-level-connection" "s2-begin-on-worker" "s2-insert-
 // blocked on the same node
 permutation "s1-begin" "s1-update-on-the-coordinator" "s2-update-on-the-coordinator" "s3-select-distributed-waiting-queries" "s1-commit"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update-dist-table" "s4-start-session-level-connection" "s4-begin-on-worker" "s4-update-dist-table" "s3-select-distributed-waiting-queries" "s1-commit-worker" "s4-commit-worker" "s1-stop-connection" "s4-stop-connection"
+
+
+// show that even if the commands are not in a transaction block
+// we can find the blocking relationship
+permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update-dist-table-id-1" "s2-start-session-level-connection" "s2-update-dist-table-id-1" "s3-select-distributed-waiting-queries" "s1-commit-worker" "s1-stop-connection" "s2-stop-connection"
+permutation "s1-begin" "s1-update-ref-table-from-coordinator" "s2-start-session-level-connection" "s2-update-ref-table" "s3-select-distributed-waiting-queries" "s1-commit" "s2-stop-connection"
