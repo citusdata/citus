@@ -6,7 +6,9 @@
 -- because if the shards are created via the executor
 -- cancellations are processed, otherwise they are not
 
+SET citus.enable_ddl_propagation TO OFF;
 CREATE SCHEMA create_distributed_table_non_empty_failure;
+SET citus.enable_ddl_propagation TO ON;
 SET search_path TO 'create_distributed_table_non_empty_failure';
 
 SET citus.next_shard_id TO 11000000;
@@ -44,7 +46,6 @@ SELECT citus.mitmproxy('conn.onQuery(query="^CREATE SCHEMA").cancel(' ||  pg_bac
 SELECT create_distributed_table('test_table', 'id');
 SELECT count(*) FROM pg_dist_shard WHERE logicalrelid='create_distributed_table_non_empty_failure.test_table'::regclass;
 SELECT run_command_on_workers($$SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'create_distributed_table_non_empty_failure'$$);
-SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS create_distributed_table_non_empty_failure$$);
 
 -- this triggers a schema creation which prevents further transactions around dependency propagation
 SELECT citus.mitmproxy('conn.allow()');

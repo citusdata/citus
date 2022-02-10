@@ -28,7 +28,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    4
+    7
 (1 row)
 
 extname|extversion|nspname
@@ -89,7 +89,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    4
+    7
 (1 row)
 
 extname|extversion|nspname
@@ -158,7 +158,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    3
+    6
 (1 row)
 
 extname|extversion|nspname
@@ -214,7 +214,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    5
+    7
 (1 row)
 
 extname|extversion|nspname
@@ -275,7 +275,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    4
+    6
 (1 row)
 
 extname|extversion|nspname

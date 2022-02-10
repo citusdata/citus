@@ -179,7 +179,7 @@ SELECT create_distributed_function('metadata_dist_test_proc(integer, integer)', 
 SELECT distribution_argument_index FROM citus.pg_dist_object WHERE objid = 'metadata_dist_test_proc'::regproc;
 SELECT * FROM run_command_on_workers($$ SELECT distribution_argument_index FROM citus.pg_dist_object WHERE objid = 'local_schema.metadata_dist_test_proc'::regproc;$$) ORDER BY 1,2;
 
--- Show that dropping schema doesn't affect the worker node
+-- Show that the schema is dropped on worker node as well
 DROP SCHEMA local_schema CASCADE;
 
 SELECT * FROM (SELECT pg_identify_object_as_address(classid, objid, objsubid) as obj_identifier from citus.pg_dist_object) as obj_identifiers where obj_identifier::text like '%{local_schema}%';

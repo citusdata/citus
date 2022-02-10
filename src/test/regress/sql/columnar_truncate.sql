@@ -128,6 +128,7 @@ set columnar.compression = 'pglz';
 INSERT INTO truncate_schema.truncate_tbl SELECT generate_series(1, 100);
 set columnar.compression to default;
 -- create a user that can not truncate
+SELECT run_command_on_workers($$CREATE USER truncate_user;$$);
 CREATE USER truncate_user;
 GRANT USAGE ON SCHEMA truncate_schema TO truncate_user;
 GRANT SELECT ON TABLE truncate_schema.truncate_tbl TO truncate_user;

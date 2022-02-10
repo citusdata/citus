@@ -193,8 +193,8 @@ FOR EACH STATEMENT EXECUTE FUNCTION dummy_function();
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507008, 'interesting!schema', E'CREATE TRIGGER "trigger\\''name"
 BEFORE INSERT ON "interesting!schema"."citus_local!_table"
 FOR EACH STATEMENT EXECUTE FUNCTION dummy_function();')
+CREATE EXTENSION seg;
 BEGIN;
-    CREATE EXTENSION seg;
     -- ALTER TRIGGER DEPENDS ON
     ALTER TRIGGER "trigger\'name" ON "interesting!schema"."citus_local!_table" DEPENDS ON EXTENSION seg;
 NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507008, 'interesting!schema', E'ALTER TRIGGER "trigger\\''name" ON "interesting!schema"."citus_local!_table" DEPENDS ON EXTENSION seg;')
@@ -578,5 +578,5 @@ NOTICE:  executing the command locally: SELECT val FROM citus_local_table_trigge
 
 ROLLBACK;
 -- cleanup at exit
+SET client_min_messages TO ERROR;
 DROP SCHEMA citus_local_table_triggers, "interesting!schema" CASCADE;
-NOTICE:  drop cascades to 22 other objects

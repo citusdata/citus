@@ -2,7 +2,6 @@
 -- test recursive planning functionality on prepared statements
 -- ===================================================================
 CREATE SCHEMA subquery_prepared_statements;
-SELECT run_command_on_workers('CREATE SCHEMA subquery_prepared_statements;');
 
 SET search_path TO subquery_prepared_statements, public;
 

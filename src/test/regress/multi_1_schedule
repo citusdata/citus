@@ -268,7 +268,6 @@ test: multi_foreign_key_relation_graph
 # and rerun some of the tests.
 # --------
 test: add_coordinator
-test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
 test: citus_local_tables
 test: mixed_relkind_tests
