@@ -32,7 +32,7 @@ why we ask this as well as instructions for how to proceed, see the
   ./configure
   make
   make install
-  # Optionally, you might instead want to use `sudo make install-all`
+  # Optionally, you might instead want to use `make install-all`
   # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
   make check
