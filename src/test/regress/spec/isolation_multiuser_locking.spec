@@ -1,5 +1,8 @@
 setup
 {
+	SELECT citus_internal.replace_isolation_tester_func();
+	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
+
 	SET citus.shard_replication_factor TO 1;
 
 	CREATE USER test_user_1;
@@ -16,6 +19,8 @@ setup
 
 teardown
 {
+	SELECT citus_internal.restore_isolation_tester_func();
+
 	BEGIN;
 	DROP TABLE IF EXISTS test_table;
 	DROP USER test_user_1, test_user_2;
@@ -31,6 +36,7 @@ step "s1-grant"
 	SET ROLE test_user_1;
 	SELECT bool_and(success) FROM run_command_on_placements('test_table', 'GRANT ALL ON TABLE %s TO test_user_2');
 	GRANT ALL ON test_table TO test_user_2;
+	SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off; GRANT ALL ON test_table TO test_user_2;$$);
 }
 
 step "s1-begin"

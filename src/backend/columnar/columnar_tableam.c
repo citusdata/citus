@@ -1913,13 +1913,6 @@ columnar_tableam_init()
 }
 
 
-void
-columnar_tableam_finish()
-{
-	object_access_hook = PrevObjectAccessHook;
-}
-
-
 /*
  * Get the number of chunks filtered out during the given scan.
  */
@@ -2334,7 +2327,11 @@ alter_columnar_table_set(PG_FUNCTION_ARGS)
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
-	EnsureTableOwner(relationId);
+	if (!pg_class_ownercheck(relationId, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
+					   get_rel_name(relationId));
+	}
 
 	ColumnarOptions options = { 0 };
 	if (!ReadColumnarOptions(relationId, &options))
@@ -2454,7 +2451,11 @@ alter_columnar_table_reset(PG_FUNCTION_ARGS)
 							   quote_identifier(RelationGetRelationName(rel)))));
 	}
 
-	EnsureTableOwner(relationId);
+	if (!pg_class_ownercheck(relationId, GetUserId()))
+	{
+		aclcheck_error(ACLCHECK_NOT_OWNER, OBJECT_TABLE,
+					   get_rel_name(relationId));
+	}
 
 	ColumnarOptions options = { 0 };
 	if (!ReadColumnarOptions(relationId, &options))

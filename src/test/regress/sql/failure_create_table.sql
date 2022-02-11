@@ -2,7 +2,9 @@
 -- failure_create_table adds failure tests for creating table without data.
 --
 
+SET citus.enable_ddl_propagation TO OFF;
 CREATE SCHEMA failure_create_table;
+SET citus.enable_ddl_propagation TO ON;
 SET search_path TO 'failure_create_table';
 
 SELECT citus.mitmproxy('conn.allow()');

@@ -34,8 +34,6 @@ static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
 
-bool EnableDependencyCreation = true;
-
 /*
  * EnsureDependenciesExistOnAllNodes finds all the dependencies that we support and makes
  * sure these are available on all workers. If not available they will be created on the
@@ -122,7 +120,15 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	 */
 	foreach_ptr(dependency, dependenciesWithCommands)
 	{
-		MarkObjectDistributed(dependency);
+		/*
+		 * pg_dist_object entries must be propagated with the super user, since
+		 * the owner of the target object may not own dependencies but we must
+		 * propagate as we send objects itself with the superuser.
+		 *
+		 * Only dependent object's metadata should be propagated with super user.
+		 * Metadata of the table itself must be propagated with the current user.
+		 */
+		MarkObjectDistributedViaSuperUser(dependency);
 	}
 }
 
@@ -224,13 +230,45 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 	{
 		case OCLASS_CLASS:
 		{
+			char relKind = get_rel_relkind(dependency->objectId);
+
 			/*
 			 * types have an intermediate dependency on a relation (aka class), so we do
 			 * support classes when the relkind is composite
 			 */
-			if (get_rel_relkind(dependency->objectId) == RELKIND_COMPOSITE_TYPE)
+			if (relKind == RELKIND_COMPOSITE_TYPE)
 			{
 				return NIL;
+			}
+
+			if (relKind == RELKIND_RELATION || relKind == RELKIND_PARTITIONED_TABLE ||
+				relKind == RELKIND_FOREIGN_TABLE)
+			{
+				Oid relationId = dependency->objectId;
+				List *commandList = NIL;
+
+				if (IsCitusTable(relationId))
+				{
+					bool creatingShellTableOnRemoteNode = true;
+					List *tableDDLCommands = GetFullTableCreationCommands(relationId,
+																		  WORKER_NEXTVAL_SEQUENCE_DEFAULTS,
+																		  creatingShellTableOnRemoteNode);
+					TableDDLCommand *tableDDLCommand = NULL;
+					foreach_ptr(tableDDLCommand, tableDDLCommands)
+					{
+						Assert(CitusIsA(tableDDLCommand, TableDDLCommand));
+						commandList = lappend(commandList, GetTableDDLCommand(
+												  tableDDLCommand));
+					}
+				}
+
+				return commandList;
+			}
+
+			if (relKind == RELKIND_SEQUENCE)
+			{
+				char *sequenceOwnerName = TableOwner(dependency->objectId);
+				return DDLCommandsForSequence(dependency->objectId, sequenceOwnerName);
 			}
 
 			/* if this relation is not supported, break to the error at the end */
@@ -316,14 +354,15 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 
 
 /*
- * ReplicateAllDependenciesToNode replicate all previously marked objects to a worker
- * node. The function also sets clusterHasDistributedFunction if there are any
- * distributed functions.
+ * ReplicateAllObjectsToNodeCommandList returns commands to replicate all
+ * previously marked objects to a worker node. The function also sets
+ * clusterHasDistributedFunction if there are any distributed functions.
  */
-void
-ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
+List *
+ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort)
 {
-	List *ddlCommands = NIL;
+	/* since we are executing ddl commands disable propagation first, primarily for mx */
+	List *ddlCommands = list_make1(DISABLE_DDL_PROPAGATION);
 
 	/*
 	 * collect all dependencies in creation order and get their ddl commands
@@ -331,7 +370,7 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	List *dependencies = GetDistributedObjectAddressList();
 
 	/*
-	 * Depending on changes in the environment, such as the enable_object_propagation guc
+	 * Depending on changes in the environment, such as the enable_metadata_sync guc
 	 * there might be objects in the distributed object address list that should currently
 	 * not be propagated by citus as they are 'not supported'.
 	 */
@@ -357,24 +396,22 @@ ReplicateAllDependenciesToNode(const char *nodeName, int nodePort)
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
+		if (IsObjectAddressOwnedByExtension(dependency, NULL))
+		{
+			/*
+			 * we expect extension-owned objects to be created as a result
+			 * of the extension being created.
+			 */
+			continue;
+		}
+
 		ddlCommands = list_concat(ddlCommands,
 								  GetDependencyCreateDDLCommands(dependency));
 	}
-	if (list_length(ddlCommands) <= 0)
-	{
-		/* no commands to replicate dependencies to the new worker */
-		return;
-	}
 
-	/* since we are executing ddl commands lets disable propagation, primarily for mx */
-	ddlCommands = list_concat(list_make1(DISABLE_DDL_PROPAGATION), ddlCommands);
+	ddlCommands = lappend(ddlCommands, ENABLE_DDL_PROPAGATION);
 
-	/* send commands to new workers, the current user should a superuser */
-	Assert(superuser());
-	SendMetadataCommandListToWorkerInCoordinatedTransaction(nodeName,
-															nodePort,
-															CurrentUserName(),
-															ddlCommands);
+	return ddlCommands;
 }
 
 
@@ -393,7 +430,7 @@ ShouldPropagate(void)
 		return false;
 	}
 
-	if (!EnableDependencyCreation)
+	if (!EnableMetadataSync)
 	{
 		/*
 		 * we are configured to disable object propagation, should not propagate anything

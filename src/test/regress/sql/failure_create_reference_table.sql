@@ -81,7 +81,9 @@ SET client_min_messages TO NOTICE;
 SELECT citus.mitmproxy('conn.allow()');
 DROP TABLE ref_table;
 DROP SCHEMA failure_reference_table;
+SET citus.enable_ddl_propagation TO OFF;
 CREATE SCHEMA failure_reference_table;
+SET citus.enable_ddl_propagation TO ON;
 CREATE TABLE ref_table(id int);
 INSERT INTO ref_table VALUES(1),(2),(3);
 

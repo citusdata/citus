@@ -29,7 +29,10 @@
 #define ERROR_BUFFER_SIZE 256
 
 /* application name used for internal connections in Citus */
-#define CITUS_APPLICATION_NAME "citus"
+#define CITUS_APPLICATION_NAME_PREFIX "citus_internal gpid="
+
+/* application name used for internal connections in rebalancer */
+#define CITUS_REBALANCER_NAME "citus_rebalancer"
 
 /* forward declare, to avoid forcing large headers on everyone */
 struct pg_conn; /* target of the PGconn typedef */
@@ -277,7 +280,8 @@ extern void FinishConnectionListEstablishment(List *multiConnectionList);
 extern void FinishConnectionEstablishment(MultiConnection *connection);
 extern void ClaimConnectionExclusively(MultiConnection *connection);
 extern void UnclaimConnection(MultiConnection *connection);
-extern bool IsCitusInitiatedRemoteBackend(void);
+extern bool IsCitusInternalBackend(void);
+extern bool IsRebalancerInternalBackend(void);
 extern void MarkConnectionConnected(MultiConnection *connection);
 
 /* time utilities */

@@ -193,6 +193,14 @@ static DistributeObjectOps Any_CreateForeignServer = {
 	.address = CreateForeignServerStmtObjectAddress,
 	.markDistributed = true,
 };
+static DistributeObjectOps Any_CreateSchema = {
+	.deparse = DeparseCreateSchemaStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessCreateSchemaStmt,
+	.postprocess = NULL,
+	.address = CreateSchemaStmtObjectAddress,
+	.markDistributed = true,
+};
 static DistributeObjectOps Any_CreateStatistics = {
 	.deparse = DeparseCreateStatisticsStmt,
 	.qualify = QualifyCreateStatisticsStmt,
@@ -538,7 +546,7 @@ static DistributeObjectOps Routine_Rename = {
 	.markDistributed = false,
 };
 static DistributeObjectOps Schema_Drop = {
-	.deparse = NULL,
+	.deparse = DeparseDropSchemaStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessDropSchemaStmt,
 	.postprocess = NULL,
@@ -974,6 +982,11 @@ GetDistributeObjectOps(Node *node)
 		case T_CreatePolicyStmt:
 		{
 			return &Any_CreatePolicy;
+		}
+
+		case T_CreateSchemaStmt:
+		{
+			return &Any_CreateSchema;
 		}
 
 		case T_CreateStatsStmt:

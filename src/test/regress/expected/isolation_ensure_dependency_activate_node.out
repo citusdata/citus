@@ -1,6 +1,6 @@
 Parsed test spec with 3 sessions
 
-starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -118,7 +118,8 @@ pg_identify_object_as_address
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(table,"{public,t1}",{})
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -163,22 +164,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -186,7 +171,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-public-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -310,7 +295,8 @@ pg_identify_object_as_address
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(table,"{public,t1}",{})
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -355,22 +341,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -378,7 +348,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-public-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-public-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -502,7 +472,8 @@ pg_identify_object_as_address
 (database,{regression},{})
 (role,{postgres},{})
 (schema,{public},{})
-(3 rows)
+(table,"{public,t1}",{})
+(4 rows)
 
 count
 ---------------------------------------------------------------------
@@ -547,22 +518,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -570,7 +525,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -690,7 +645,8 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -735,22 +691,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -758,7 +698,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-worker s2-create-schema s2-create-table s1-commit s2-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -884,7 +824,8 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -929,22 +870,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -952,7 +877,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-table s1-add-worker s2-commit s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -1078,7 +1003,8 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1123,22 +1049,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -1146,7 +1056,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-begin s1-add-worker s2-create-table s1-commit s2-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-begin s1-add-worker s2-create-table s1-commit s2-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -1272,7 +1182,8 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})
+(5 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1317,22 +1228,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -1340,7 +1235,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-add-worker s2-create-schema s2-begin s3-begin s3-use-schema s2-create-table s3-create-table s2-commit s3-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-add-worker s2-create-schema s2-begin s3-begin s3-use-schema s2-create-table s3-create-table s2-commit s3-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -1480,7 +1375,9 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
-(4 rows)
+(table,"{myschema,t1}",{})
+(table,"{myschema,t2}",{})
+(6 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1525,22 +1422,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -1548,7 +1429,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s2-begin s3-begin s1-add-worker s2-create-schema s3-create-schema2 s2-create-table s3-create-table s1-commit s3-commit s2-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s3-begin s1-add-worker s2-create-schema s3-create-schema2 s2-create-table s3-create-table s1-commit s3-commit s2-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -1697,7 +1578,9 @@ pg_identify_object_as_address
 (schema,{myschema},{})
 (schema,{myschema2},{})
 (schema,{public},{})
-(5 rows)
+(table,"{myschema,t1}",{})
+(table,"{myschema2,t2}",{})
+(7 rows)
 
 count
 ---------------------------------------------------------------------
@@ -1742,22 +1625,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -1765,7 +1632,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-type s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-create-type s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -1921,22 +1788,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -1944,7 +1795,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-create-type s1-add-worker s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-create-type s1-add-worker s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -2099,22 +1950,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -2122,7 +1957,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-type s2-create-table-with-type s1-add-worker s2-commit s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-schema s2-create-type s2-create-table-with-type s1-add-worker s2-commit s1-commit s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -2251,8 +2086,9 @@ pg_identify_object_as_address
 (role,{postgres},{})
 (schema,{myschema},{})
 (schema,{public},{})
+(table,"{myschema,t1}",{})
 (type,{myschema.tt1},{})
-(5 rows)
+(6 rows)
 
 count
 ---------------------------------------------------------------------
@@ -2297,22 +2133,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -2320,7 +2140,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-begin s2-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-public-schema s2-distribute-function s1-commit s2-begin s2-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -2496,22 +2316,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -2519,7 +2323,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-distribute-function s2-begin s2-commit s3-wait-for-metadata-sync s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-distribute-function s2-begin s2-commit s3-wait-for-metadata-sync s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -2702,22 +2506,6 @@ step s3-drop-coordinator-schemas:
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
 
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 master_remove_node
 ---------------------------------------------------------------------
 
@@ -2725,7 +2513,7 @@ master_remove_node
 (2 rows)
 
 
-starting permutation: s1-print-distributed-objects s2-begin s2-create-schema s2-distribute-function s2-commit s3-wait-for-metadata-sync s1-begin s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas s3-drop-worker-schemas
+starting permutation: s1-print-distributed-objects s2-begin s2-create-schema s2-distribute-function s2-commit s3-wait-for-metadata-sync s1-begin s1-add-worker s1-commit s3-wait-for-metadata-sync s2-print-distributed-objects s3-drop-coordinator-schemas
 ?column?
 ---------------------------------------------------------------------
        1
@@ -2909,22 +2697,6 @@ step s3-drop-coordinator-schemas:
     -- at the end of the permutations
     DROP SCHEMA IF EXISTS myschema CASCADE;
     DROP SCHEMA IF EXISTS myschema2 CASCADE;
-
-step s3-drop-worker-schemas:
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema CASCADE;$$);
-    SELECT run_command_on_workers($$DROP SCHEMA IF EXISTS myschema2 CASCADE;$$);
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
-run_command_on_workers
----------------------------------------------------------------------
-(localhost,57637,t,"DROP SCHEMA")
-(localhost,57638,t,"DROP SCHEMA")
-(2 rows)
 
 master_remove_node
 ---------------------------------------------------------------------

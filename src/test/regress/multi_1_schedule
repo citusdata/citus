@@ -268,7 +268,6 @@ test: multi_foreign_key_relation_graph
 # and rerun some of the tests.
 # --------
 test: add_coordinator
-test: foreign_key_to_reference_table
 test: replicate_reference_tables_to_coordinator
 test: citus_local_tables
 test: mixed_relkind_tests
@@ -319,11 +318,8 @@ test: check_mx
 test: distributed_functions distributed_functions_conflict
 test: distributed_collations
 test: distributed_procedure
-
-# blocked on #5583
-test: turn_mx_off
 test: distributed_collations_conflict
-test: turn_mx_on
+test: check_mx
 
 # ---------
 # deparsing logic tests

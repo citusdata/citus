@@ -114,8 +114,9 @@ static void EnsureLocalTableEmptyIfNecessary(Oid relationId, char distributionMe
 static bool ShouldLocalTableBeEmpty(Oid relationId, char distributionMethod, bool
 									viaDeprecatedAPI);
 static void EnsureCitusTableCanBeCreated(Oid relationOid);
-static void EnsureSequenceExistOnMetadataWorkersForRelation(Oid relationId,
-															Oid sequenceOid);
+static void EnsureDistributedSequencesHaveOneType(Oid relationId,
+												  List *dependentSequenceList,
+												  List *attnumList);
 static List * GetFKeyCreationCommandsRelationInvolvedWithTableType(Oid relationId,
 																   int tableTypeFlag);
 static Oid DropFKeysAndUndistributeTable(Oid relationId);
@@ -443,6 +444,12 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	}
 
 	/*
+	 * Ensure that the sequences used in column defaults of the table
+	 * have proper types
+	 */
+	EnsureRelationHasCompatibleSequenceTypes(relationId);
+
+	/*
 	 * distributed tables might have dependencies on different objects, since we create
 	 * shards for a distributed table via multiple sessions these objects will be created
 	 * via their own connection and committed immediately so they become visible to all
@@ -455,7 +462,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	char replicationModel = DecideReplicationModel(distributionMethod,
 												   colocateWithTableName,
 												   viaDeprecatedAPI);
-
 
 	/*
 	 * Due to dropping columns, the parent's distribution key may not match the
@@ -504,16 +510,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	InsertIntoPgDistPartition(relationId, distributionMethod, distributionColumn,
 							  colocationId, replicationModel, autoConverted);
 
-	/*
-	 * Ensure that the sequences used in column defaults of the table
-	 * have proper types
-	 */
-	List *attnumList = NIL;
-	List *dependentSequenceList = NIL;
-	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
-	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList,
-										  attnumList);
-
 	/* foreign tables do not support TRUNCATE trigger */
 	if (RegularTable(relationId))
 	{
@@ -547,17 +543,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 
 	if (ShouldSyncTableMetadata(relationId))
 	{
-		if (ClusterHasKnownMetadataWorkers())
-		{
-			/*
-			 * Ensure both sequence and its' dependencies and mark them as distributed
-			 * before creating table metadata on workers
-			 */
-			MarkSequenceListDistributedAndPropagateWithDependencies(relationId,
-																	dependentSequenceList);
-		}
-
-		CreateTableMetadataOnWorkers(relationId);
+		SyncCitusTableMetadata(relationId);
 	}
 
 	/*
@@ -615,11 +601,15 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
  * If any other distributed table uses the input sequence, it checks whether
  * the types of the columns using the sequence match. If they don't, it errors out.
  * Otherwise, the condition is ensured.
+ * Since the owner of the sequence may not distributed yet, it should be added
+ * explicitly.
  */
 void
-EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId)
+EnsureSequenceTypeSupported(Oid seqOid, Oid seqTypId, Oid ownerRelationId)
 {
 	List *citusTableIdList = CitusTableTypeIdList(ANY_CITUS_TABLE_TYPE);
+	citusTableIdList = list_append_unique_oid(citusTableIdList, ownerRelationId);
+
 	Oid citusTableId = InvalidOid;
 	foreach_oid(citusTableId, citusTableIdList)
 	{
@@ -686,59 +676,18 @@ AlterSequenceType(Oid seqOid, Oid typeOid)
 
 
 /*
- * MarkSequenceListDistributedAndPropagateWithDependencies ensures sequences and their
- * dependencies for the given sequence list exist on all nodes and marks them as distributed.
+ * EnsureRelationHasCompatibleSequenceTypes ensures that sequences used for columns
+ * of the table have compatible types both with the column type on that table and
+ * all other distributed tables' columns they have used for
  */
 void
-MarkSequenceListDistributedAndPropagateWithDependencies(Oid relationId,
-														List *sequenceList)
+EnsureRelationHasCompatibleSequenceTypes(Oid relationId)
 {
-	Oid sequenceOid = InvalidOid;
-	foreach_oid(sequenceOid, sequenceList)
-	{
-		MarkSequenceDistributedAndPropagateWithDependencies(relationId, sequenceOid);
-	}
-}
+	List *attnumList = NIL;
+	List *dependentSequenceList = NIL;
 
-
-/*
- * MarkSequenceDistributedAndPropagateWithDependencies ensures sequence and its'
- * dependencies for the given sequence exist on all nodes and marks them as distributed.
- */
-void
-MarkSequenceDistributedAndPropagateWithDependencies(Oid relationId, Oid sequenceOid)
-{
-	/* get sequence address */
-	ObjectAddress sequenceAddress = { 0 };
-	ObjectAddressSet(sequenceAddress, RelationRelationId, sequenceOid);
-	EnsureDependenciesExistOnAllNodes(&sequenceAddress);
-	EnsureSequenceExistOnMetadataWorkersForRelation(relationId, sequenceOid);
-	MarkObjectDistributed(&sequenceAddress);
-}
-
-
-/*
- * EnsureSequenceExistOnMetadataWorkersForRelation ensures sequence for the given relation
- * exist on each worker node with metadata.
- */
-static void
-EnsureSequenceExistOnMetadataWorkersForRelation(Oid relationId, Oid sequenceOid)
-{
-	Assert(ShouldSyncTableMetadata(relationId));
-
-	char *ownerName = TableOwner(relationId);
-	List *sequenceDDLList = DDLCommandsForSequence(sequenceOid, ownerName);
-
-	/* prevent recursive propagation */
-	SendCommandToWorkersWithMetadata(DISABLE_DDL_PROPAGATION);
-
-	const char *sequenceCommand = NULL;
-	foreach_ptr(sequenceCommand, sequenceDDLList)
-	{
-		SendCommandToWorkersWithMetadata(sequenceCommand);
-	}
-
-	SendCommandToWorkersWithMetadata(ENABLE_DDL_PROPAGATION);
+	GetDependentSequencesWithRelation(relationId, &attnumList, &dependentSequenceList, 0);
+	EnsureDistributedSequencesHaveOneType(relationId, dependentSequenceList, attnumList);
 }
 
 
@@ -747,7 +696,7 @@ EnsureSequenceExistOnMetadataWorkersForRelation(Oid relationId, Oid sequenceOid)
  * in which the sequence is used as default is supported for each sequence in input
  * dependentSequenceList, and then alters the sequence type if not the same with the column type.
  */
-void
+static void
 EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceList,
 									  List *attnumList)
 {
@@ -763,7 +712,7 @@ EnsureDistributedSequencesHaveOneType(Oid relationId, List *dependentSequenceLis
 		 * that sequence is supported
 		 */
 		Oid seqTypId = GetAttributeTypeOid(relationId, attnum);
-		EnsureSequenceTypeSupported(sequenceOid, seqTypId);
+		EnsureSequenceTypeSupported(sequenceOid, seqTypId, relationId);
 
 		/*
 		 * Alter the sequence's data type in the coordinator if needed.

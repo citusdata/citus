@@ -919,10 +919,10 @@ citus_drain_node(PG_FUNCTION_ARGS)
 	 * This is done in a separate session. This way it's not undone if the
 	 * draining fails midway through.
 	 */
-	ExecuteCriticalCommandInSeparateTransaction(psprintf(
-													"SELECT master_set_node_property(%s, %i, 'shouldhaveshards', false)",
-													quote_literal_cstr(nodeName),
-													nodePort));
+	ExecuteRebalancerCommandInSeparateTransaction(psprintf(
+													  "SELECT master_set_node_property(%s, %i, 'shouldhaveshards', false)",
+													  quote_literal_cstr(nodeName),
+													  nodePort));
 
 	RebalanceTableShards(&options, shardTransferModeOid);
 
@@ -1696,7 +1696,7 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 	 * In case of failure, we throw an error such that rebalance_table_shards
 	 * fails early.
 	 */
-	ExecuteCriticalCommandInSeparateTransaction(placementUpdateCommand->data);
+	ExecuteRebalancerCommandInSeparateTransaction(placementUpdateCommand->data);
 
 	UpdateColocatedShardPlacementProgress(shardId,
 										  sourceNode->workerName,
@@ -1711,12 +1711,18 @@ UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
  * don't want to rollback when the current transaction is rolled back.
  */
 void
-ExecuteCriticalCommandInSeparateTransaction(char *command)
+ExecuteRebalancerCommandInSeparateTransaction(char *command)
 {
 	int connectionFlag = FORCE_NEW_CONNECTION;
 	MultiConnection *connection = GetNodeConnection(connectionFlag, LocalHostName,
 													PostPortNumber);
+	StringInfo setApplicationName = makeStringInfo();
+	appendStringInfo(setApplicationName, "SET application_name TO %s",
+					 CITUS_REBALANCER_NAME);
+
+	ExecuteCriticalRemoteCommand(connection, setApplicationName->data);
 	ExecuteCriticalRemoteCommand(connection, command);
+
 	CloseConnection(connection);
 }
 

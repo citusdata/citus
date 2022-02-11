@@ -1,13 +1,7 @@
 CREATE SCHEMA collation_conflict;
-SELECT run_command_on_workers($$CREATE SCHEMA collation_conflict;$$);
-       run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
-(2 rows)
-
 \c - - - :worker_1_port
 SET search_path TO collation_conflict;
+SET citus.enable_metadata_sync TO off;
 CREATE COLLATION caseinsensitive (
 	provider = icu,
 	locale = 'und-u-ks-level2'
@@ -45,6 +39,7 @@ SET search_path TO collation_conflict;
 DROP TABLE tblcoll;
 DROP COLLATION caseinsensitive;
 \c - - - :worker_1_port
+SET citus.enable_metadata_sync TO off;
 SET search_path TO collation_conflict;
 CREATE COLLATION caseinsensitive (
 	provider = icu,

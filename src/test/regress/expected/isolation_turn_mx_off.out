@@ -2,7 +2,7 @@ Parsed test spec with 1 sessions
 
 starting permutation: disable-mx-by-default reload stop-metadata-sync
 step disable-mx-by-default:
-  ALTER SYSTEM SET citus.enable_metadata_sync_by_default TO OFF;
+  ALTER SYSTEM SET citus.enable_metadata_sync TO OFF;
 
 step reload:
   SELECT pg_reload_conf();

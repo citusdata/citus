@@ -779,7 +779,7 @@ InTaskExecution(void)
 	 * is considered a task execution, but an exception is when we
 	 * are in a delegated function/procedure call.
 	 */
-	return IsCitusInitiatedRemoteBackend() &&
+	return IsCitusInternalBackend() &&
 		   !InTopLevelDelegatedFunctionCall &&
 		   !InDelegatedProcedureCall;
 }

@@ -160,8 +160,9 @@ CREATE TRIGGER "trigger\'name"
 BEFORE INSERT ON "interesting!schema"."citus_local!_table"
 FOR EACH STATEMENT EXECUTE FUNCTION dummy_function();
 
+CREATE EXTENSION seg;
+
 BEGIN;
-    CREATE EXTENSION seg;
     -- ALTER TRIGGER DEPENDS ON
     ALTER TRIGGER "trigger\'name" ON "interesting!schema"."citus_local!_table" DEPENDS ON EXTENSION seg;
 
@@ -384,4 +385,5 @@ BEGIN;
 ROLLBACK;
 
 -- cleanup at exit
+SET client_min_messages TO ERROR;
 DROP SCHEMA citus_local_table_triggers, "interesting!schema" CASCADE;

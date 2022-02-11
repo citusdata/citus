@@ -606,8 +606,9 @@ SELECT * FROM forcepushdown_schema.test_subquery ORDER BY 1;
 
 -- Query with targetList greater than 1
 
--- Function from FROM clause is not delegated outside of a BEGIN (for now)
+-- Function from FROM clause is delegated outside of a BEGIN
 SELECT 1,2,3 FROM select_data(100);
+
 BEGIN;
 -- Function from FROM clause is delegated
 SELECT 1,2,3 FROM select_data(100);
@@ -660,6 +661,27 @@ END;
 SELECT outer_test_prepare(1,2);
 
 SELECT COUNT(*) FROM table_test_prepare;
+
+CREATE TABLE test_perform(i int);
+SELECT create_distributed_table('test_perform', 'i', colocate_with := 'none');
+
+CREATE OR REPLACE FUNCTION test(x int)
+RETURNS int
+AS $$
+DECLARE
+BEGIN
+    RAISE NOTICE 'INPUT %', x;
+    RETURN x;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT create_distributed_function('test(int)', 'x',
+                colocate_with := 'test_perform', force_delegation := true);
+DO $$
+BEGIN
+    PERFORM test(3);
+END;
+$$ LANGUAGE plpgsql;
 
 RESET client_min_messages;
 SET citus.log_remote_commands TO off;

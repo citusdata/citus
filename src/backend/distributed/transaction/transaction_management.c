@@ -824,7 +824,7 @@ EnsurePrepareTransactionIsAllowed(void)
 		return;
 	}
 
-	if (IsCitusInitiatedRemoteBackend())
+	if (IsCitusInternalBackend())
 	{
 		/*
 		 * If this is a Citus-initiated backend.

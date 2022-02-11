@@ -2349,3 +2349,32 @@ WHERE logicalrelid = 'r1'::regclass;
 (1 row)
 
 DROP TABLE t1, r1;
+-- Test rebalancer with index on a table
+DROP TABLE IF EXISTS test_rebalance_with_index;
+CREATE TABLE test_rebalance_with_index (measureid integer PRIMARY KEY);
+SELECT create_distributed_table('test_rebalance_with_index', 'measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE INDEX rebalance_with_index ON test_rebalance_with_index(measureid);
+INSERT INTO test_rebalance_with_index VALUES(0);
+INSERT INTO test_rebalance_with_index VALUES(1);
+INSERT INTO test_rebalance_with_index VALUES(2);
+SELECT * FROM master_drain_node('localhost', :worker_2_port);
+ master_drain_node
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL citus_cleanup_orphaned_shards();
+UPDATE pg_dist_node SET shouldhaveshards=true WHERE nodeport = :worker_2_port;
+SELECT rebalance_table_shards();
+ rebalance_table_shards
+---------------------------------------------------------------------
+
+(1 row)
+
+CALL citus_cleanup_orphaned_shards();
+DROP TABLE test_rebalance_with_index CASCADE;

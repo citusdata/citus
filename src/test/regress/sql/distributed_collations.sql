@@ -91,20 +91,5 @@ ORDER BY 1,2,3;
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA collation_tests CASCADE;
 DROP SCHEMA collation_tests2 CASCADE;
-
--- This is hacky, but we should clean-up the resources as below
-
-\c - - - :worker_1_port
-SET client_min_messages TO error; -- suppress cascading objects dropping
-DROP SCHEMA collation_tests CASCADE;
-DROP SCHEMA collation_tests2 CASCADE;
-
-\c - - - :worker_2_port
-SET client_min_messages TO error; -- suppress cascading objects dropping
-DROP SCHEMA collation_tests CASCADE;
-DROP SCHEMA collation_tests2 CASCADE;
-
-\c - - - :master_port
-
 DROP USER collationuser;
 SELECT run_command_on_workers($$DROP USER collationuser;$$);

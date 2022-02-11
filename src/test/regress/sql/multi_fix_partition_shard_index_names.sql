@@ -54,7 +54,7 @@ SELECT tablename, indexname FROM pg_indexes WHERE schemaname = 'fix_idx_names' A
 
 \c - - - :master_port
 -- this should work properly
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 
 \c - - - :worker_1_port
 -- we have no clashes
@@ -342,4 +342,3 @@ ALTER TABLE parent_table DROP CONSTRAINT unique_cst CASCADE;
 
 DROP SCHEMA fix_idx_names CASCADE;
 SELECT citus_remove_node('localhost', :master_port);
-SELECT run_command_on_workers($$ DROP SCHEMA IF EXISTS fix_idx_names CASCADE $$);

@@ -7,7 +7,9 @@ CREATE SCHEMA dist_schema;
 CREATE TABLE dist_schema.dist_table (id int);
 CREATE SCHEMA another_dist_schema;
 CREATE TABLE another_dist_schema.dist_table (id int);
+SET citus.enable_ddl_propagation TO off;
 CREATE SCHEMA non_dist_schema;
+SET citus.enable_ddl_propagation TO on;
 
 -- create roles on all nodes
 SELECT run_command_on_coordinator_and_workers('CREATE USER role_1');
@@ -89,9 +91,9 @@ ALTER ROLE role_1 NOSUPERUSER;
 SET citus.enable_alter_role_propagation TO OFF;
 
 DROP TABLE dist_schema.dist_table, another_dist_schema.dist_table;
-SELECT run_command_on_coordinator_and_workers('DROP SCHEMA dist_schema');
-SELECT run_command_on_coordinator_and_workers('DROP SCHEMA another_dist_schema');
-SELECT run_command_on_coordinator_and_workers('DROP SCHEMA non_dist_schema');
+DROP SCHEMA dist_schema;
+DROP SCHEMA another_dist_schema;
+DROP SCHEMA non_dist_schema;
 
 -- test if the grantors are propagated correctly
 -- first remove one of the worker nodes
@@ -157,7 +159,7 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'grantor_schema' ORDER 
 \c - - - :master_port
 
 DROP TABLE grantor_schema.grantor_table;
-SELECT run_command_on_coordinator_and_workers('DROP SCHEMA grantor_schema CASCADE');
+DROP SCHEMA grantor_schema CASCADE;
 
 -- test distributing the schema with another user
 CREATE SCHEMA dist_schema;
@@ -175,7 +177,7 @@ SELECT nspname, nspacl FROM pg_namespace WHERE nspname = 'dist_schema' ORDER BY 
 \c - - - :master_port
 
 DROP TABLE dist_schema.dist_table;
-SELECT run_command_on_coordinator_and_workers('DROP SCHEMA dist_schema CASCADE');
+DROP SCHEMA dist_schema CASCADE;
 
 -- test grants on public schema
 -- first remove one of the worker nodes
