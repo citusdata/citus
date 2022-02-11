@@ -32,6 +32,8 @@ why we ask this as well as instructions for how to proceed, see the
   ./configure
   make
   make install
+  # Optionally, you might instead want to use `sudo make install-all`
+  # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
   make check
   ```
@@ -63,7 +65,7 @@ why we ask this as well as instructions for how to proceed, see the
   make
   sudo make install
   # Optionally, you might instead want to use `sudo make install-all`
-  # since `multi_extension` test would fail due to missing downgrade scripts.
+  # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
   make check
   ```
@@ -106,6 +108,8 @@ why we ask this as well as instructions for how to proceed, see the
   PG_CONFIG=/usr/pgsql-14/bin/pg_config ./configure
   make
   sudo make install
+  # Optionally, you might instead want to use `sudo make install-all`
+  # since `multi_extension` regression test would fail due to missing downgrade scripts.
   cd src/test/regress
   make check
   ```
@@ -127,6 +131,8 @@ cd build
 cmake ..
 make -j5
 sudo make install
+# Optionally, you might instead want to use `sudo make install-all`
+# since `multi_extension` regression test would fail due to missing downgrade scripts.
 cd ../..
 
 git clone https://github.com/citusdata/tools.git
