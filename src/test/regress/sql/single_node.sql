@@ -1017,11 +1017,9 @@ RESET citus.enable_manual_changes_to_shards ;
 TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
 DROP TABLE test_disabling_drop_and_truncate_102040;
 
-RESET citus.shard_replication_factor;
 DROP TABLE test_disabling_drop_and_truncate;
 
 -- test creating distributed or reference tables from shards
-SET citus.shard_replication_factor TO 1;
 CREATE TABLE test_creating_distributed_relation_table_from_shard (a int);
 SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard', 'a');
 
@@ -1031,8 +1029,6 @@ SELECT create_distributed_table('test_creating_distributed_relation_table_from_s
 
 -- create reference table
 SELECT create_reference_table('test_creating_distributed_relation_table_from_shard_102044');
-
-DROP TABLE test_creating_distributed_relation_table_from_shard_102044;
 
 RESET citus.shard_replication_factor;
 DROP TABLE test_creating_distributed_relation_table_from_shard;
