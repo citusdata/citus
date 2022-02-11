@@ -1000,8 +1000,6 @@ SELECT * FROM multi_extension.print_extension_changes();
 ---------------------------------------------------------------------
  function citus_disable_node(text,integer) void                       |
  function create_distributed_function(regprocedure,text,text) void    |
- function dump_global_wait_edges() SETOF record                       |
- function dump_local_wait_edges() SETOF record                        |
  function master_append_table_to_shard(bigint,text,text,integer) real |
  function master_apply_delete_command(text) integer                   |
  function master_get_table_metadata(text) record                      |
@@ -1013,11 +1011,11 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                       | function citus_shard_indexes_on_worker() SETOF record
                                                                       | function citus_shards_on_worker() SETOF record
                                                                       | function create_distributed_function(regprocedure,text,text,boolean) void
-                                                                      | function dump_global_wait_edges(boolean) SETOF record
-                                                                      | function dump_local_wait_edges(boolean) SETOF record
+                                                                      | function dump_global_blocked_processes() SETOF record
+                                                                      | function dump_local_blocked_processes() SETOF record
                                                                       | function worker_drop_sequence_dependency(text) void
                                                                       | function worker_drop_shell_table(text) void
-(19 rows)
+(17 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

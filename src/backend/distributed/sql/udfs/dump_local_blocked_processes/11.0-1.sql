@@ -1,7 +1,5 @@
-DROP FUNCTION pg_catalog.dump_local_wait_edges CASCADE;
-CREATE OR REPLACE FUNCTION pg_catalog.dump_local_wait_edges(
-					distributed_tx_only boolean DEFAULT true,
-					OUT waiting_global_pid int8,
+CREATE OR REPLACE FUNCTION pg_catalog.dump_local_blocked_processes(
+		    OUT waiting_global_pid int8,
                     OUT waiting_pid int4,
                     OUT waiting_node_id int4,
                     OUT waiting_transaction_num int8,
@@ -14,6 +12,6 @@ CREATE OR REPLACE FUNCTION pg_catalog.dump_local_wait_edges(
                     OUT blocking_transaction_waiting bool)
 RETURNS SETOF RECORD
 LANGUAGE C STRICT
-AS $$MODULE_PATHNAME$$, $$dump_local_wait_edges$$;
-COMMENT ON FUNCTION pg_catalog.dump_local_wait_edges(bool)
+AS $$MODULE_PATHNAME$$, $$dump_local_blocked_processes$$;
+COMMENT ON FUNCTION pg_catalog.dump_local_blocked_processes()
 IS 'returns all local lock wait chains, that start from any citus backend';
