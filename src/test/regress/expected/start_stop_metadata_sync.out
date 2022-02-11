@@ -156,7 +156,7 @@ SELECT * FROM test_matview;
 (1 row)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'events%' ORDER BY logicalrelid::text;
-        logicalrelid        | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
+        logicalrelid        | partmethod |                                                          partkey                                                           | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
  events                     | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |      1390012 | s        | f
  events_2021_feb            | h          | {VAR :varno 1 :varattno 1 :vartype 1184 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |      1390012 | s        | f
@@ -251,24 +251,6 @@ SELECT count(*) > 0 FROM pg_dist_node;
  f
 (1 row)
 
-SELECT count(*) > 0 FROM pg_dist_shard;
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
 SELECT * FROM distributed_table_1;
@@ -286,24 +268,6 @@ BEGIN;
 COMMIT;
 \c - - - :worker_1_port
 SELECT count(*) > 0 FROM pg_dist_node;
- ?column?
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT count(*) > 0 FROM pg_dist_shard;
- ?column?
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
- ?column?
----------------------------------------------------------------------
- t
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
  ?column?
 ---------------------------------------------------------------------
  t
@@ -460,24 +424,6 @@ SELECT count(*) > 0 FROM pg_dist_node;
  f
 (1 row)
 
-SELECT count(*) > 0 FROM pg_dist_shard;
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'distributed_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
-SELECT count(*) > 0 FROM pg_class WHERE relname LIKE 'reference_table__' AND relnamespace IN (SELECT oid FROM pg_namespace WHERE nspname = 'start_stop_metadata_sync');
- ?column?
----------------------------------------------------------------------
- f
-(1 row)
-
 \c - - - :master_port
 SET search_path TO "start_stop_metadata_sync";
 -- start metadata sync sets the multi-shard modify mode to sequential
@@ -561,9 +507,7 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
--- multi-shard commands are allowed with start_metadata_sync
--- as long as the start_metadata_sync_to_node executed
--- when it is OK to switch to sequential execution
+-- multi-shard commands are not allowed with start_metadata_sync
 BEGIN;
 	-- sync at the start of the tx
 	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
@@ -603,9 +547,7 @@ BEGIN;
 (1 row)
 
 ROLLBACK;
--- multi-shard commands are allowed with start_metadata_sync
--- as long as the start_metadata_sync_to_node executed
--- when it is OK to switch to sequential execution
+-- multi-shard commands are not allowed with start_metadata_sync
 BEGIN;
 	-- sync at the start of the tx
 	SELECT start_metadata_sync_to_node('localhost', :worker_1_port);

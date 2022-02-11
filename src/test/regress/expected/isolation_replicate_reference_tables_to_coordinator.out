@@ -83,16 +83,16 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+        SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND query NOT ILIKE '%pg_isolation_test_session_is_blocked%' AND query NOT ILIKE '%BEGIN%' ORDER BY query DESC;
 
-query                                |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                    |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
 
-    update ref_table set a = a + 1;
-|coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+  SELECT check_distributed_deadlocks();
+|coordinator_host|         57636|                           |                          0|idle               |Client         |ClientRead|postgres|regression
 
     update ref_table set a = a + 1;
-|localhost       |         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+    |coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
 (2 rows)
 
 step s2-view-worker:
@@ -104,13 +104,11 @@ step s2-view-worker:
           query NOT ILIKE '%dump_local_wait_edges%'
     ORDER BY query, query_hostport DESC;
 
-query                                                                         |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                                                         |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1500775 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost       |         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-(4 rows)
+UPDATE public.ref_table_1500767 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost     |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500767 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost     |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+(2 rows)
 
 step s2-end:
     END;
@@ -141,17 +139,17 @@ step s1-update-ref-table:
 
 step s2-active-transactions:
 	-- Admin should be able to see all transactions
-	SELECT count(*) FROM get_all_active_transactions();
-	SELECT count(*) FROM get_global_active_transactions();
+	SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
+	SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
 
 count
 ---------------------------------------------------------------------
-    2
+    1
 (1 row)
 
 count
 ---------------------------------------------------------------------
-    6
+    3
 (1 row)
 
 step s1-end:

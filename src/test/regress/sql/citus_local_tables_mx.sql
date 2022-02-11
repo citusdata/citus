@@ -33,9 +33,9 @@ CREATE TRIGGER dummy_function_trigger
 BEFORE UPDATE OF value ON citus_local_table
 FOR EACH ROW EXECUTE FUNCTION dummy_function();
 
--- Show that we can sync metadata successfully. That means, we create
+-- Show that we can activate node successfully. That means, we create
 -- the function that trigger needs in mx workers too.
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 
 CREATE EXTENSION seg;
 ALTER TRIGGER dummy_function_trigger ON citus_local_table DEPENDS ON EXTENSION seg;

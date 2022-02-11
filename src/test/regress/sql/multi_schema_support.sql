@@ -1026,10 +1026,10 @@ ROLLBACK;
 
 -- Clean up the created schema
 SET client_min_messages TO WARNING;
-DROP SCHEMA run_test_schema CASCADE;
-DROP SCHEMA test_schema_support_join_1 CASCADE;
-DROP SCHEMA test_schema_support_join_2 CASCADE;
-DROP SCHEMA "Citus'Teen123" CASCADE;
-DROP SCHEMA "CiTUS.TEEN2" CASCADE;
-DROP SCHEMA bar CASCADE;
-DROP SCHEMA test_schema_support CASCADE;
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object
+    WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');
+DROP SCHEMA run_test_schema, test_schema_support_join_1, test_schema_support_join_2, "Citus'Teen123", "CiTUS.TEEN2", bar, test_schema_support CASCADE;
+-- verify that the dropped schema is removed from worker's pg_dist_object
+SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object
+    WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');

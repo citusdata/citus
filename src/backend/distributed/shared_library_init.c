@@ -108,7 +108,6 @@ static GucStringAssignHook OldApplicationNameAssignHook = NULL;
 
 
 void _PG_init(void);
-void _PG_fini(void);
 
 static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
@@ -166,13 +165,6 @@ static const struct config_enum_entry task_executor_type_options[] = {
 	{ "adaptive", MULTI_EXECUTOR_ADAPTIVE, false },
 	{ "real-time", DUMMY_REAL_TIME_EXECUTOR_ENUM_VALUE, false }, /* keep it for backward comp. */
 	{ "task-tracker", MULTI_EXECUTOR_ADAPTIVE, false },
-	{ NULL, 0, false }
-};
-
-static const struct config_enum_entry shard_placement_policy_options[] = {
-	{ "local-node-first", SHARD_PLACEMENT_LOCAL_NODE_FIRST, false },
-	{ "round-robin", SHARD_PLACEMENT_ROUND_ROBIN, false },
-	{ "random", SHARD_PLACEMENT_RANDOM, false },
 	{ NULL, 0, false }
 };
 
@@ -358,14 +350,6 @@ _PG_init(void)
 }
 
 
-/* shared library deconstruction function */
-void
-_PG_fini(void)
-{
-	columnar_fini();
-}
-
-
 /*
  * DoInitialCleanup does cleanup at start time.
  * Currently it:
@@ -474,6 +458,7 @@ StartupCitusBackend(void)
 	InitializeMaintenanceDaemonBackend();
 	InitializeBackendData();
 	RegisterConnectionCleanup();
+	AssignGlobalPID();
 }
 
 
@@ -911,21 +896,10 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
-		"citus.enable_metadata_sync_by_default",
-		gettext_noop("Enables MX in the new nodes by default"),
+		"citus.enable_metadata_sync",
+		gettext_noop("Enables object and metadata syncing."),
 		NULL,
-		&EnableMetadataSyncByDefault,
-		true,
-		PGC_USERSET,
-		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
-		NULL, NULL, NULL);
-
-	DefineCustomBoolVariable(
-		"citus.enable_object_propagation",
-		gettext_noop("Enables propagating object creation for more complex objects, "
-					 "schema's will always be created"),
-		NULL,
-		&EnableDependencyCreation,
+		&EnableMetadataSync,
 		true,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
@@ -1649,22 +1623,6 @@ RegisterCitusConfigVariables(void)
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
-	DefineCustomEnumVariable(
-		"citus.shard_placement_policy",
-		gettext_noop("Sets the policy to use when choosing nodes for shard placement."),
-		gettext_noop("The master node chooses which worker nodes to place new shards "
-					 "on. This configuration value specifies the policy to use when "
-					 "selecting these nodes. The local-node-first policy places the "
-					 "first replica on the client node and chooses others randomly. "
-					 "The round-robin policy aims to distribute shards evenly across "
-					 "the cluster by selecting nodes in a round-robin fashion."
-					 "The random policy picks all workers randomly."),
-		&ShardPlacementPolicy,
-		SHARD_PLACEMENT_ROUND_ROBIN, shard_placement_policy_options,
-		PGC_USERSET,
-		GUC_STANDARD,
-		NULL, NULL, NULL);
-
 	DefineCustomIntVariable(
 		"citus.shard_replication_factor",
 		gettext_noop("Sets the replication factor for shards."),
@@ -2026,7 +1984,6 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 {
 	/* this array _must_ be kept in an order usable by bsearch */
 	const char *allowedConninfoKeywords[] = {
-		"application_name",
 		"connect_timeout",
 			#if defined(ENABLE_GSS) && defined(ENABLE_SSPI)
 		"gsslib",

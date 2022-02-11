@@ -57,6 +57,12 @@ BEGIN
     y := x + y * 2;
 END;$$;
 
+CREATE FUNCTION mx_call_func_bigint_force(x bigint, INOUT y bigint)
+LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM multi_mx_function_call_delegation.mx_call_func_bigint(x, y);
+END;$$;
+
 -- create another function which verifies:
 -- 1. we work fine with multiple return columns
 -- 2. we work fine in combination with custom types
@@ -104,9 +110,16 @@ select mx_call_func_custom_types('S', 'A');
 
 -- Mark them as colocated with a table. Now we should route them to workers.
 select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass, 1);
-select colocate_proc_with_table('mx_call_func_bigint', 'mx_call_dist_table_bigint'::regclass, 1);
 select colocate_proc_with_table('mx_call_func_custom_types', 'mx_call_dist_table_enum'::regclass, 1);
 select colocate_proc_with_table('squares', 'mx_call_dist_table_2'::regclass, 0);
+
+select create_distributed_function('mx_call_func_bigint(bigint,bigint)', 'x',
+                                   colocate_with := 'mx_call_dist_table_bigint');
+
+-- set up a force_delegation function
+select create_distributed_function('mx_call_func_bigint_force(bigint,bigint)', 'x',
+                                   colocate_with := 'mx_call_dist_table_2',
+                                   force_delegation := true);
 
 select mx_call_func(2, 0);
 select mx_call_func_bigint(4, 2);
@@ -261,9 +274,20 @@ select mx_call_func((select x + 1 from mx_call_add(3, 4) x), 2);
 select mx_call_func(floor(random())::int, 2);
 
 -- test forms we don't distribute
-select * from mx_call_func(2, 0);
 select mx_call_func(2, 0) where mx_call_func(0, 2) = 0;
 select mx_call_func(2, 0), mx_call_func(0, 2);
+
+-- regular call in FROM can be pushed down
+select * from mx_call_func(2, 0);
+
+-- prepared statement with 6 invocations to trigger generic plan
+prepare call_func(int, int) as select $1 from mx_call_func($1, $2);
+execute call_func(2, 0);
+execute call_func(2, 0);
+execute call_func(2, 0);
+execute call_func(2, 0);
+execute call_func(2, 0);
+execute call_func(2, 0);
 
 -- we do not delegate the call, but do push down the query
 -- that result in remote execution from workers
@@ -293,6 +317,30 @@ select create_distributed_function('mx_call_func(int,int)');
 -- show that functions can be delegated from worker nodes
 SET client_min_messages TO DEBUG1;
 SELECT mx_call_func(2, 0);
+
+-- not delegated in a transaction block
+BEGIN;
+SELECT mx_call_func(2, 0);
+END;
+
+-- not delegated in a DO block
+DO $$
+BEGIN
+  PERFORM mx_call_func(2, 0);
+END;
+$$ LANGUAGE plpgsql;
+
+-- forced calls are delegated in a transaction block
+BEGIN;
+SELECT mx_call_func_bigint_force(4, 2);
+END;
+
+-- forced calls are delegated in a DO block
+DO $$
+BEGIN
+  PERFORM * FROM mx_call_func_bigint_force(4, 2);
+END;
+$$ LANGUAGE plpgsql;
 
 \c - - - :master_port
 SET search_path TO multi_mx_function_call_delegation, public;

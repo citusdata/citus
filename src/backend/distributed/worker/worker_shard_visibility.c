@@ -150,7 +150,8 @@ ErrorIfRelationIsAKnownShard(Oid relationId)
 void
 ErrorIfIllegallyChangingKnownShard(Oid relationId)
 {
-	if (LocalExecutorLevel > 0 || IsCitusInitiatedRemoteBackend() ||
+	if (LocalExecutorLevel > 0 ||
+		(IsCitusInternalBackend() || IsRebalancerInternalBackend()) ||
 		EnableManualChangesToShards)
 	{
 		return;
@@ -330,7 +331,7 @@ ResetHideShardsDecision(void)
 static bool
 ShouldHideShardsInternal(void)
 {
-	if (IsCitusInitiatedRemoteBackend())
+	if (IsCitusInternalBackend() || IsRebalancerInternalBackend())
 	{
 		/* we never hide shards from Citus */
 		return false;

@@ -25,13 +25,6 @@ SELECT create_distributed_table('notices', 'id');
 (1 row)
 
 INSERT INTO notices VALUES (1, 'hello world');
--- Create the necessary test utility function
-CREATE OR REPLACE FUNCTION master_metadata_snapshot()
-    RETURNS text[]
-    LANGUAGE C STRICT
-    AS 'citus';
-COMMENT ON FUNCTION master_metadata_snapshot()
-    IS 'commands to create the metadata snapshot';
 CREATE FUNCTION notice(text)
 RETURNS void
 LANGUAGE plpgsql AS $$
@@ -476,8 +469,7 @@ ALTER FUNCTION eq(macaddr,macaddr) DEPENDS ON EXTENSION citus;
 ERROR:  distrtibuted functions are not allowed to depend on an extension
 DETAIL:  Function "function_tests.eq(pg_catalog.macaddr,pg_catalog.macaddr)" is already distributed. Functions from extensions are expected to be created on the workers by the extension they depend on.
 SELECT create_distributed_function('pg_catalog.citus_drop_trigger()');
-ERROR:  unable to create a distributed function from functions owned by an extension
-DETAIL:  Function "pg_catalog.citus_drop_trigger()" has a dependency on extension "citus". Functions depending on an extension cannot be distributed. Create the function by creating the extension on the workers.
+ERROR:  Citus extension functions(citus_drop_trigger) cannot be distributed.
 DROP FUNCTION eq(macaddr,macaddr);
 -- call should fail as function should have been dropped
 SELECT * FROM run_command_on_workers($$SELECT function_tests.eq('0123456789ab','ba9876543210');$$) ORDER BY 1,2;
@@ -593,13 +585,6 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', dist
  create_distributed_function
 ---------------------------------------------------------------------
 
-(1 row)
-
--- show that we are able to propagate objects with multiple item on address arrays
-SELECT * FROM (SELECT unnest(master_metadata_snapshot()) as metadata_command  order by 1) as innerResult WHERE metadata_command like '%distributed_object_data%';
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   metadata_command
----------------------------------------------------------------------
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('type', ARRAY['public.usage_access_type']::text[], ARRAY[]::text[], -1, 0, false), ('type', ARRAY['function_tests.dup_result']::text[], ARRAY[]::text[], -1, 0, false), ('function', ARRAY['public', 'usage_access_func']::text[], ARRAY['public.usage_access_type', 'integer[]']::text[], -1, 0, false), ('function', ARRAY['public', 'usage_access_func_third']::text[], ARRAY['integer', 'integer[]']::text[], 0, 50, false), ('function', ARRAY['function_tests', 'notice']::text[], ARRAY['pg_catalog.text']::text[], -1, 0, false), ('function', ARRAY['function_tests', 'dup']::text[], ARRAY['pg_catalog.macaddr']::text[], 0, 52, false), ('function', ARRAY['function_tests', 'eq_with_param_names']::text[], ARRAY['pg_catalog.macaddr', 'pg_catalog.macaddr']::text[], 0, 52, false), ('function', ARRAY['function_tests', 'eq_mi''xed_param_names']::text[], ARRAY['pg_catalog.macaddr', 'pg_catalog.macaddr']::text[], -1, 0, false), ('function', ARRAY['function_tests', 'agg_sfunc']::text[], ARRAY['integer', 'integer']::text[], -1, 0, false), ('function', ARRAY['function_tests', 'agg_invfunc']::text[], ARRAY['integer', 'integer']::text[], -1, 0, false), ('function', ARRAY['function_tests', 'agg_finalfunc']::text[], ARRAY['integer', 'integer']::text[], -1, 0, false), ('aggregate', ARRAY['function_tests', 'my_rank']::text[], ARRAY['pg_catalog."any"']::text[], -1, 0, false), ('function', ARRAY['function_tests', 'agg_names_sfunc']::text[], ARRAY['function_tests.dup_result', 'function_tests.dup_result', 'function_tests.dup_result']::text[], -1, 0, false), ('function', ARRAY['function_tests', 'agg_names_finalfunc']::text[], ARRAY['function_tests.dup_result']::text[], -1, 0, false), ('aggregate', ARRAY['function_tests', 'agg_names']::text[], ARRAY['function_tests.dup_result', 'function_tests.dup_result']::text[], -1, 0, false), ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('server', ARRAY['fake_fdw_server']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema_2']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_test_schema_1']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_test_schema_2']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['schema_colocation']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['function_tests']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['function_tests2']::text[], ARRAY[]::text[], -1, 0, false), ('extension', ARRAY['plpgsql']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
 (1 row)
 
 -- valid distribution with distribution_arg_index
@@ -1078,16 +1063,9 @@ SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isa
 \c - - - :worker_1_port
 UPDATE pg_dist_local_group SET groupid = 0;
 TRUNCATE pg_dist_node;
-SET client_min_messages TO error; -- suppress cascading objects dropping
-DROP SCHEMA function_tests CASCADE;
-DROP SCHEMA function_tests2 CASCADE;
-SET search_path TO function_tests, function_tests2;
 \c - - - :worker_2_port
 UPDATE pg_dist_local_group SET groupid = 0;
 TRUNCATE pg_dist_node;
-SET client_min_messages TO error; -- suppress cascading objects dropping
-DROP SCHEMA function_tests CASCADE;
-DROP SCHEMA function_tests2 CASCADE;
 \c - - - :master_port
 SET client_min_messages TO ERROR;
 DROP USER functionuser;

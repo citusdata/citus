@@ -13,6 +13,7 @@
 #define METADATA_SYNC_H
 
 
+#include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "nodes/pg_list.h"
 
@@ -22,18 +23,23 @@ extern int MetadataSyncRetryInterval;
 
 typedef enum
 {
-	METADATA_SYNC_SUCCESS = 0,
-	METADATA_SYNC_FAILED_LOCK = 1,
-	METADATA_SYNC_FAILED_SYNC = 2
-} MetadataSyncResult;
+	NODE_METADATA_SYNC_SUCCESS = 0,
+	NODE_METADATA_SYNC_FAILED_LOCK = 1,
+	NODE_METADATA_SYNC_FAILED_SYNC = 2
+} NodeMetadataSyncResult;
 
 /* Functions declarations for metadata syncing */
-extern void StartMetadataSyncToNode(const char *nodeNameString, int32 nodePort);
+extern void SyncNodeMetadataToNode(const char *nodeNameString, int32 nodePort);
+extern void SyncCitusTableMetadata(Oid relationId);
+extern void EnsureSequentialModeMetadataOperations(void);
 extern bool ClusterHasKnownMetadataWorkers(void);
+extern char * LocalGroupIdUpdateCommand(int32 groupId);
 extern bool ShouldSyncTableMetadata(Oid relationId);
 extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
-extern List * MetadataCreateCommands(void);
-extern List * MetadataDropCommands(void);
+extern List * NodeMetadataCreateCommands(void);
+extern List * DistributedObjectMetadataSyncCommandList(void);
+extern List * CitusTableMetadataCreateCommandList(Oid relationId);
+extern List * NodeMetadataDropCommands(void);
 extern char * MarkObjectsDistributedCreateCommand(List *addresses,
 												  List *distributionArgumentIndexes,
 												  List *colocationIds,
@@ -52,22 +58,30 @@ extern char * CreateSchemaDDLCommand(Oid schemaId);
 extern List * GrantOnSchemaDDLCommands(Oid schemaId);
 extern char * PlacementUpsertCommand(uint64 shardId, uint64 placementId, int shardState,
 									 uint64 shardLength, int32 groupId);
-extern void CreateTableMetadataOnWorkers(Oid relationId);
-extern BackgroundWorkerHandle * SpawnSyncMetadataToNodes(Oid database, Oid owner);
-extern void SyncMetadataToNodesMain(Datum main_arg);
+extern TableDDLCommand * TruncateTriggerCreateCommand(Oid relationId);
+extern void CreateInterTableRelationshipOfRelationOnWorkers(Oid relationId);
+extern List * InterTableRelationshipOfRelationCommandList(Oid relationId);
+extern List * DetachPartitionCommandList(void);
+extern BackgroundWorkerHandle * SpawnSyncNodeMetadataToNodes(Oid database, Oid owner);
+extern void SyncNodeMetadataToNodesMain(Datum main_arg);
 extern void SignalMetadataSyncDaemon(Oid database, int sig);
 extern bool ShouldInitiateMetadataSync(bool *lockFailure);
+extern List * SequenceDependencyCommandList(Oid relationId);
 
 extern List * DDLCommandsForSequence(Oid sequenceOid, char *ownerName);
-extern List * SequenceDDLCommandsForTable(Oid relationId);
 extern List * GetSequencesFromAttrDef(Oid attrdefOid);
 extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 											  List **dependentSequenceList, AttrNumber
 											  attnum);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
-#define DELETE_ALL_NODES "TRUNCATE pg_dist_node CASCADE"
-#define DELETE_ALL_DISTRIBUTED_OBJECTS "TRUNCATE citus.pg_dist_object"
+#define DELETE_ALL_NODES "DELETE FROM pg_dist_node"
+#define DELETE_ALL_PLACEMENTS "DELETE FROM pg_dist_placement"
+#define DELETE_ALL_SHARDS "DELETE FROM pg_dist_shard"
+#define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM citus.pg_dist_object"
+#define DELETE_ALL_PARTITIONS "DELETE FROM pg_dist_partition"
+#define REMOVE_ALL_SHELL_TABLES_COMMAND \
+	"SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition"
 #define REMOVE_ALL_CITUS_TABLES_COMMAND \
 	"SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition"
 #define BREAK_CITUS_TABLE_SEQUENCE_DEPENDENCY_COMMAND \
@@ -75,8 +89,8 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
 #define DISABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'off'"
 #define ENABLE_DDL_PROPAGATION "SET citus.enable_ddl_propagation TO 'on'"
-#define DISABLE_OBJECT_PROPAGATION "SET citus.enable_object_propagation TO 'off'"
-#define ENABLE_OBJECT_PROPAGATION "SET citus.enable_object_propagation TO 'on'"
+#define DISABLE_METADATA_SYNC "SET citus.enable_metadata_sync TO 'off'"
+#define ENABLE_METADATA_SYNC "SET citus.enable_metadata_sync TO 'on'"
 #define WORKER_APPLY_SEQUENCE_COMMAND "SELECT worker_apply_sequence_command (%s,%s)"
 #define UPSERT_PLACEMENT \
 	"INSERT INTO pg_dist_placement " \
@@ -94,6 +108,6 @@ extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
 /* controlled via GUC */
 extern char *EnableManualMetadataChangesForUser;
-extern bool EnableMetadataSyncByDefault;
+extern bool EnableMetadataSync;
 
 #endif /* METADATA_SYNC_H */

@@ -295,7 +295,9 @@ ALTER TABLE "CiTuS.TeAeN"."TeeNTabLE.1!?!" ADD COLUMN new_col INT;
 SET search_path TO not_existing_schema;
 ALTER TABLE "CiTuS.TeAeN"."TeeNTabLE.1!?!" DROP COLUMN new_col;
 
+SET client_min_messages TO ERROR;
 DROP SCHEMA mx_ddl_schema_1, mx_ddl_schema_2, "CiTuS.TeAeN" CASCADE;
+RESET client_min_messages;
 
 -- test if ALTER TABLE SET SCHEMA sets the original table in the worker
 SET search_path TO public;
@@ -307,7 +309,8 @@ CREATE SCHEMA mx_new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
     FROM citus.pg_dist_object
-    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
+    WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema')
+    ORDER BY "Distributed Schemas";
 \c - - - :worker_1_port
 SELECT table_schema AS "Table's Schema" FROM information_schema.tables WHERE table_name='table_set_schema';
 SELECT table_schema AS "Shards' Schema"

@@ -284,8 +284,6 @@ SELECT * FROM field_indirection_test_2 ORDER BY 1,2,3;
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
-SELECT run_command_on_workers($$DROP SCHEMA type_tests CASCADE;$$);
 DROP SCHEMA type_tests2 CASCADE;
-SELECT run_command_on_workers($$DROP SCHEMA type_tests2 CASCADE;$$);
 DROP USER typeuser;
 SELECT run_command_on_workers($$DROP USER typeuser;$$);

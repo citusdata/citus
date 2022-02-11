@@ -53,7 +53,6 @@ WHERE n.nspname IN ('drop_partitioned_table', 'schema1')
 ORDER BY 1, 2;
 
 \c - - - :worker_1_port
-CREATE SCHEMA drop_partitioned_table;
 SET search_path = drop_partitioned_table;
 CREATE VIEW tables_info AS
 SELECT n.nspname as "Schema",
@@ -240,5 +239,4 @@ DROP TABLE parent, child1;
 ROLLBACK;
 
 DROP SCHEMA drop_partitioned_table CASCADE;
-SELECT run_command_on_workers('DROP SCHEMA IF EXISTS drop_partitioned_table CASCADE');
 SET search_path TO public;

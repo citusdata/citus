@@ -3,7 +3,7 @@ setup
   SELECT citus_internal.replace_isolation_tester_func();
   SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
-  SELECT master_add_node('localhost', 57636);
+  SELECT master_add_node('localhost', 57636, groupid => 0);
 
   CREATE TABLE ref_table(a int primary key);
   SELECT create_reference_table('ref_table');
@@ -83,7 +83,7 @@ step "s2-lock-ref-table-placement-on-coordinator"
 
 step "s2-view-dist"
 {
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+        SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND query NOT ILIKE '%pg_isolation_test_session_is_blocked%' AND query NOT ILIKE '%BEGIN%' ORDER BY query DESC;
 }
 
 step "s2-view-worker"
@@ -106,13 +106,14 @@ step "s2-sleep"
 step "s2-active-transactions"
 {
 	-- Admin should be able to see all transactions
-	SELECT count(*) FROM get_all_active_transactions();
-	SELECT count(*) FROM get_global_active_transactions();
+	SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
+	SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
 }
 
 // we disable the daemon during the regression tests in order to get consistent results
 // thus we manually issue the deadlock detection
 session "deadlock-checker"
+
 
 // we issue the checker not only when there are deadlocks to ensure that we never cancel
 // backend inappropriately

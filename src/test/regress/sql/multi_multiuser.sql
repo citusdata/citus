@@ -54,12 +54,6 @@ GRANT SELECT ON TABLE test_1420000 TO read_access;
 GRANT ALL ON TABLE test_1420002 TO full_access;
 GRANT SELECT ON TABLE test_1420002 TO read_access;
 
-CREATE SCHEMA full_access_user_schema;
-REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
-GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
-GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
-GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
-
 \c - - - :worker_2_port
 CREATE USER full_access;
 CREATE USER usage_access;
@@ -74,12 +68,6 @@ GRANT SELECT ON TABLE test_1420001 TO read_access;
 
 GRANT ALL ON TABLE test_1420003 TO full_access;
 GRANT SELECT ON TABLE test_1420003 TO read_access;
-
-CREATE SCHEMA full_access_user_schema;
-REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
-GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
-GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
-GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 \c - - - :master_port
 
@@ -169,6 +157,12 @@ SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000)
 -- insert some data and read
 INSERT INTO columnar_table VALUES (1), (1);
 SELECT * FROM columnar_table;
+-- Fail to alter a columnar table that is created by a different user
+SET ROLE full_access;
+SELECT alter_columnar_table_set('columnar_table', chunk_group_row_limit => 2000);
+-- Fail to reset a columnar table value created by a different user
+SELECT alter_columnar_table_reset('columnar_table', chunk_group_row_limit => true);
+SET ROLE read_access;
 -- and drop it
 DROP TABLE columnar_table;
 

@@ -19,15 +19,6 @@ CREATE TABLE notices (
 SELECT create_distributed_table('notices', 'id');
 INSERT INTO notices VALUES (1, 'hello world');
 
--- Create the necessary test utility function
-CREATE OR REPLACE FUNCTION master_metadata_snapshot()
-    RETURNS text[]
-    LANGUAGE C STRICT
-    AS 'citus';
-
-COMMENT ON FUNCTION master_metadata_snapshot()
-    IS 'commands to create the metadata snapshot';
-
 CREATE FUNCTION notice(text)
 RETURNS void
 LANGUAGE plpgsql AS $$
@@ -358,9 +349,6 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_proc WHERE proname='eq_w
 -- valid distribution with distribution_arg_name -- case insensitive
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', distribution_arg_name:='VaL1');
 
--- show that we are able to propagate objects with multiple item on address arrays
-SELECT * FROM (SELECT unnest(master_metadata_snapshot()) as metadata_command  order by 1) as innerResult WHERE metadata_command like '%distributed_object_data%';
-
 -- valid distribution with distribution_arg_index
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)','$1');
 
@@ -682,16 +670,9 @@ SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isa
 \c - - - :worker_1_port
 UPDATE pg_dist_local_group SET groupid = 0;
 TRUNCATE pg_dist_node;
-SET client_min_messages TO error; -- suppress cascading objects dropping
-DROP SCHEMA function_tests CASCADE;
-DROP SCHEMA function_tests2 CASCADE;
-SET search_path TO function_tests, function_tests2;
 \c - - - :worker_2_port
 UPDATE pg_dist_local_group SET groupid = 0;
 TRUNCATE pg_dist_node;
-SET client_min_messages TO error; -- suppress cascading objects dropping
-DROP SCHEMA function_tests CASCADE;
-DROP SCHEMA function_tests2 CASCADE;
 \c - - - :master_port
 
 SET client_min_messages TO ERROR;

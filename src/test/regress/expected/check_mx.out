@@ -1,5 +1,5 @@
-SHOW citus.enable_metadata_sync_by_default;
- citus.enable_metadata_sync_by_default
+SHOW citus.enable_metadata_sync;
+ citus.enable_metadata_sync
 ---------------------------------------------------------------------
  on
 (1 row)

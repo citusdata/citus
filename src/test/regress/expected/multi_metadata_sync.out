@@ -26,30 +26,67 @@ ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART 100000;
 SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id \gset
 SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id \gset
 -- Create the necessary test utility function
-CREATE FUNCTION master_metadata_snapshot()
+CREATE FUNCTION activate_node_snapshot()
     RETURNS text[]
     LANGUAGE C STRICT
     AS 'citus';
-COMMENT ON FUNCTION master_metadata_snapshot()
-    IS 'commands to create the metadata snapshot';
+COMMENT ON FUNCTION activate_node_snapshot()
+    IS 'commands to activate node snapshot';
 -- Show that none of the existing tables are qualified to be MX tables
 SELECT * FROM pg_dist_partition WHERE partmethod='h' AND repmodel='s';
  logicalrelid | partmethod | partkey | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
 (0 rows)
 
--- Show that, with no MX tables, metadata snapshot contains only the delete commands,
--- pg_dist_node entries and reference tables
-SELECT unnest(master_metadata_snapshot()) order by 1;
-                                                                                                                                                                                                                       unnest
+-- Since password_encryption default has been changed to sha from md5 with PG14
+-- we are updating it manually just for consistent test results between PG versions.
+ALTER SYSTEM SET password_encryption TO md5;
+SELECT pg_reload_conf();
+ pg_reload_conf
 ---------------------------------------------------------------------
+ t
+(1 row)
+
+SELECT pg_sleep(0.1);
+ pg_sleep
+---------------------------------------------------------------------
+
+(1 row)
+
+ALTER ROLE CURRENT_USER WITH PASSWORD 'dummypassword';
+-- Show that, with no MX tables, activate node snapshot contains only the delete commands,
+-- pg_dist_node entries, pg_dist_object entries and roles.
+SELECT unnest(activate_node_snapshot()) order by 1;
+                                                                                                                                                                             unnest
+---------------------------------------------------------------------
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
+ GRANT CREATE ON SCHEMA public TO PUBLIC;
+ GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO PUBLIC;
+ GRANT USAGE ON SCHEMA public TO postgres;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
+ RESET ROLE
+ RESET ROLE
+ SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
- SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ SET ROLE postgres
+ SET ROLE postgres
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ UPDATE pg_dist_local_group SET groupid = 1
  WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
-(6 rows)
+(27 rows)
 
 -- this function is dropped in Citus10, added here for tests
 CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
@@ -62,111 +99,164 @@ COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regcla
                                                                distribution_column text,
                                                                distribution_method citus.distribution_type)
     IS 'define the table distribution functions';
--- this function is dropped in Citus10, added here for tests
-CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name text, shard_count integer,
-                                                                  replication_factor integer DEFAULT 2)
-    RETURNS void
-    AS 'citus', $$master_create_worker_shards$$
-    LANGUAGE C STRICT;
 -- Create a test table with constraints and SERIAL and default from user defined sequence
 CREATE SEQUENCE user_defined_seq;
 CREATE TABLE mx_test_table (col_1 int UNIQUE, col_2 text NOT NULL, col_3 BIGSERIAL, col_4 BIGINT DEFAULT nextval('user_defined_seq'));
-SELECT master_create_distributed_table('mx_test_table', 'col_1', 'hash');
- master_create_distributed_table
+set citus.shard_count to 8;
+set citus.shard_replication_factor to 1;
+SELECT create_distributed_table('mx_test_table', 'col_1');
+ create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-SELECT master_create_worker_shards('mx_test_table', 8, 1);
- master_create_worker_shards
----------------------------------------------------------------------
-
-(1 row)
-
+reset citus.shard_count;
+reset citus.shard_replication_factor;
 -- Set the replication model of the test table to streaming replication so that it is
 -- considered as an MX table
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='mx_test_table'::regclass;
--- Show that the created MX table is included in the metadata snapshot
-SELECT unnest(master_metadata_snapshot()) order by 1;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                           unnest
+-- Show that the created MX table is and its sequences are included in the activate node snapshot
+SELECT unnest(activate_node_snapshot()) order by 1;
+                                                                                                                                                                             unnest
 ---------------------------------------------------------------------
  ALTER SEQUENCE public.mx_test_table_col_3_seq OWNER TO postgres
  ALTER SEQUENCE public.user_defined_seq OWNER TO postgres
  ALTER TABLE public.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE public.mx_test_table OWNER TO postgres
- ALTER TABLE public.mx_test_table OWNER TO postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
+ GRANT CREATE ON SCHEMA public TO PUBLIC;
+ GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO PUBLIC;
+ GRANT USAGE ON SCHEMA public TO postgres;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
- SELECT citus_internal_add_partition_metadata ('public.mx_test_table'::regclass, 'h', 'col_1', 0, 's')
+ RESET ROLE
+ RESET ROLE
+ SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
+ SELECT citus_internal_add_partition_metadata ('public.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT pg_catalog.worker_record_sequence_dependency('public.mx_test_table_col_3_seq'::regclass,'public.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
- SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ SET ROLE postgres
+ SET ROLE postgres
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ UPDATE pg_dist_local_group SET groupid = 1
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('public.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('public.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('public.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('public.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('public.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('public.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('public.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(19 rows)
+(39 rows)
 
--- Show that CREATE INDEX commands are included in the metadata snapshot
+-- Show that CREATE INDEX commands are included in the activate node snapshot
 CREATE INDEX mx_index ON mx_test_table(col_2);
-SELECT unnest(master_metadata_snapshot()) order by 1;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                           unnest
+SELECT unnest(activate_node_snapshot()) order by 1;
+                                                                                                                                                                             unnest
 ---------------------------------------------------------------------
  ALTER SEQUENCE public.mx_test_table_col_3_seq OWNER TO postgres
  ALTER SEQUENCE public.user_defined_seq OWNER TO postgres
  ALTER TABLE public.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
- ALTER TABLE public.mx_test_table OWNER TO postgres
  ALTER TABLE public.mx_test_table OWNER TO postgres
  CREATE INDEX mx_index ON public.mx_test_table USING btree (col_2)
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
+ GRANT CREATE ON SCHEMA public TO PUBLIC;
+ GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO PUBLIC;
+ GRANT USAGE ON SCHEMA public TO postgres;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
- SELECT citus_internal_add_partition_metadata ('public.mx_test_table'::regclass, 'h', 'col_1', 0, 's')
+ RESET ROLE
+ RESET ROLE
+ SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
+ SELECT citus_internal_add_partition_metadata ('public.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT pg_catalog.worker_record_sequence_dependency('public.mx_test_table_col_3_seq'::regclass,'public.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('public.mx_test_table')
- SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ SET ROLE postgres
+ SET ROLE postgres
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ UPDATE pg_dist_local_group SET groupid = 1
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('public.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('public.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('public.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('public.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('public.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('public.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('public.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(20 rows)
+(40 rows)
 
--- Show that schema changes are included in the metadata snapshot
+-- Show that schema changes are included in the activate node snapshot
 CREATE SCHEMA mx_testing_schema;
 ALTER TABLE mx_test_table SET SCHEMA mx_testing_schema;
-SELECT unnest(master_metadata_snapshot()) order by 1;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       unnest
+SELECT unnest(activate_node_snapshot()) order by 1;
+                                                                                                                                                                             unnest
 ---------------------------------------------------------------------
  ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
  ALTER SEQUENCE public.user_defined_seq OWNER TO postgres
  ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
- ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
  CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
+ CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
+ GRANT CREATE ON SCHEMA public TO PUBLIC;
+ GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO PUBLIC;
+ GRANT USAGE ON SCHEMA public TO postgres;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
- SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 0, 's')
+ RESET ROLE
+ RESET ROLE
+ SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
+ SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
- SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ SET ROLE postgres
+ SET ROLE postgres
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ UPDATE pg_dist_local_group SET groupid = 1
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_testing_schema', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('mx_testing_schema.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('mx_testing_schema.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('mx_testing_schema.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('mx_testing_schema.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('mx_testing_schema.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('mx_testing_schema.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('mx_testing_schema.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(20 rows)
+(41 rows)
 
--- Show that append distributed tables are not included in the metadata snapshot
+-- Show that append distributed tables are not included in the activate node snapshot
 CREATE TABLE non_mx_test_table (col_1 int, col_2 text);
 SELECT master_create_distributed_table('non_mx_test_table', 'col_1', 'append');
  master_create_distributed_table
@@ -175,59 +265,101 @@ SELECT master_create_distributed_table('non_mx_test_table', 'col_1', 'append');
 (1 row)
 
 UPDATE pg_dist_partition SET repmodel='s' WHERE logicalrelid='non_mx_test_table'::regclass;
-SELECT unnest(master_metadata_snapshot()) order by 1;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       unnest
+SELECT unnest(activate_node_snapshot()) order by 1;
+                                                                                                                                                                             unnest
 ---------------------------------------------------------------------
  ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
  ALTER SEQUENCE public.user_defined_seq OWNER TO postgres
  ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
- ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
  CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
+ CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
+ GRANT CREATE ON SCHEMA public TO PUBLIC;
+ GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO PUBLIC;
+ GRANT USAGE ON SCHEMA public TO postgres;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
- SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 0, 's')
+ RESET ROLE
+ RESET ROLE
+ SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
+ SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
- SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ SET ROLE postgres
+ SET ROLE postgres
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ UPDATE pg_dist_local_group SET groupid = 1
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_testing_schema', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('mx_testing_schema.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('mx_testing_schema.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('mx_testing_schema.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('mx_testing_schema.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('mx_testing_schema.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('mx_testing_schema.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('mx_testing_schema.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(20 rows)
+(41 rows)
 
--- Show that range distributed tables are not included in the metadata snapshot
+-- Show that range distributed tables are not included in the activate node snapshot
 UPDATE pg_dist_partition SET partmethod='r' WHERE logicalrelid='non_mx_test_table'::regclass;
-SELECT unnest(master_metadata_snapshot()) order by 1;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       unnest
+SELECT unnest(activate_node_snapshot()) order by 1;
+                                                                                                                                                                             unnest
 ---------------------------------------------------------------------
  ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
  ALTER SEQUENCE public.user_defined_seq OWNER TO postgres
  ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
- ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
  CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
+ CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
+ GRANT CREATE ON SCHEMA public TO PUBLIC;
+ GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO PUBLIC;
+ GRANT USAGE ON SCHEMA public TO postgres;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (1, 1, 'localhost', 57637, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE),(2, 2, 'localhost', 57638, 'default', FALSE, FALSE, TRUE, 'primary'::noderole, 'default', TRUE)
- SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 0, 's')
+ RESET ROLE
+ RESET ROLE
+ SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
+ SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT pg_catalog.worker_drop_sequence_dependency(logicalrelid::regclass::text) FROM pg_dist_partition
  SELECT pg_catalog.worker_record_sequence_dependency('mx_testing_schema.mx_test_table_col_3_seq'::regclass,'mx_testing_schema.mx_test_table'::regclass,'col_3')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS mx_testing_schema.mx_test_table_col_3_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
- SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ SET ROLE postgres
+ SET ROLE postgres
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ UPDATE pg_dist_local_group SET groupid = 1
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_testing_schema', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 2, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 2, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 2, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 2, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('mx_testing_schema.mx_test_table'::regclass, 1310000, 't'::"char", '-2147483648', '-1610612737'), ('mx_testing_schema.mx_test_table'::regclass, 1310001, 't'::"char", '-1610612736', '-1073741825'), ('mx_testing_schema.mx_test_table'::regclass, 1310002, 't'::"char", '-1073741824', '-536870913'), ('mx_testing_schema.mx_test_table'::regclass, 1310003, 't'::"char", '-536870912', '-1'), ('mx_testing_schema.mx_test_table'::regclass, 1310004, 't'::"char", '0', '536870911'), ('mx_testing_schema.mx_test_table'::regclass, 1310005, 't'::"char", '536870912', '1073741823'), ('mx_testing_schema.mx_test_table'::regclass, 1310006, 't'::"char", '1073741824', '1610612735'), ('mx_testing_schema.mx_test_table'::regclass, 1310007, 't'::"char", '1610612736', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(20 rows)
+(41 rows)
 
--- Test start_metadata_sync_to_node UDF
+-- Test start_metadata_sync_to_node and citus_activate_node UDFs
 -- Ensure that hasmetadata=false for all nodes
 SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
  count
@@ -235,7 +367,7 @@ SELECT count(*) FROM pg_dist_node WHERE hasmetadata=true;
      0
 (1 row)
 
--- Ensure it works when run on a secondary node
+-- Show that metadata can not be synced on secondary node
 SELECT groupid AS worker_1_group FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
 SELECT master_add_node('localhost', 8888, groupid => :worker_1_group, noderole => 'secondary');
  master_add_node
@@ -252,7 +384,7 @@ SELECT start_metadata_sync_to_node('localhost', 8888);
 SELECT hasmetadata FROM pg_dist_node WHERE nodeport = 8888;
  hasmetadata
 ---------------------------------------------------------------------
- t
+ f
 (1 row)
 
 SELECT stop_metadata_sync_to_node('localhost', 8888);
@@ -275,11 +407,12 @@ SELECT master_add_secondary_node('localhost', 8889, 'localhost', :worker_1_port,
                          5
 (1 row)
 
--- Run start_metadata_sync_to_node and check that it marked hasmetadata for that worker
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+\c - - - :master_port
+-- Run start_metadata_sync_to_node and citus_activate_node and check that it marked hasmetadata for that worker
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 SELECT nodeid, hasmetadata FROM pg_dist_node WHERE nodename='localhost' AND nodeport=:worker_1_port;
@@ -306,9 +439,9 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 (4 rows)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
-          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel | autoconverted
+          logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
- mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s        | f
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            2 | s        | f
 (1 row)
 
 SELECT * FROM pg_dist_shard  WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
@@ -373,7 +506,7 @@ SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table':
      1
 (1 row)
 
--- Make sure that start_metadata_sync_to_node considers foreign key constraints
+-- Make sure that citus_activate_node considers foreign key constraints
 \c - - - :master_port
 -- Since we're superuser, we can set the replication model to 'streaming' to
 -- create some MX tables
@@ -394,10 +527,10 @@ SELECT create_distributed_table('mx_testing_schema_2.fk_test_2', 'col1');
 
 (1 row)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 -- Check that foreign key metadata exists on the worker
@@ -412,18 +545,18 @@ SELECT "Constraint", "Definition" FROM table_fkeys WHERE relid='mx_testing_schem
 DROP TABLE mx_testing_schema_2.fk_test_2;
 DROP TABLE mx_testing_schema.fk_test_1;
 RESET citus.shard_replication_factor;
--- Check that repeated calls to start_metadata_sync_to_node has no side effects
+-- Check that repeated calls to citus_activate_node has no side effects
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 \c - - - :worker_1_port
@@ -443,9 +576,9 @@ SELECT * FROM pg_dist_node ORDER BY nodeid;
 (4 rows)
 
 SELECT * FROM pg_dist_partition WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY logicalrelid;
-          logicalrelid           | partmethod |                                                        partkey                                                         | colocationid | repmodel | autoconverted
+          logicalrelid           | partmethod |                                                         partkey                                                          | colocationid | repmodel | autoconverted
 ---------------------------------------------------------------------
- mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            0 | s        | f
+ mx_testing_schema.mx_test_table | h          | {VAR :varno 1 :varattno 1 :vartype 23 :vartypmod -1 :varcollid 0 :varlevelsup 0 :varnoold 1 :varoattno 1 :location -1} |            2 | s        | f
 (1 row)
 
 SELECT * FROM pg_dist_shard WHERE logicalrelid::text LIKE 'mx_testing_schema%' ORDER BY shardid;
@@ -503,13 +636,13 @@ SELECT count(*) FROM pg_trigger WHERE tgrelid='mx_testing_schema.mx_test_table':
      1
 (1 row)
 
--- Make sure that start_metadata_sync_to_node can be called inside a transaction and rollbacked
+-- Make sure that citus_activate_node can be called inside a transaction and rollbacked
 \c - - - :master_port
 BEGIN;
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 ROLLBACK;
@@ -522,10 +655,10 @@ SELECT hasmetadata FROM pg_dist_node WHERE nodeport=:worker_2_port;
 -- Check that the distributed table can be queried from the worker
 \c - - - :master_port
 SET citus.shard_replication_factor TO 1;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 CREATE TABLE mx_query_test (a int, b text, c int);
@@ -996,10 +1129,10 @@ SELECT create_distributed_table('mx_table_with_small_sequence', 'a');
 
 (1 row)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 DROP TABLE mx_table_with_small_sequence;
@@ -1105,10 +1238,10 @@ SELECT nextval('mx_table_with_sequence_c_seq');
 
 -- Check that adding a new metadata node sets the sequence space correctly
 \c - - - :master_port
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
 \c - - - :worker_2_port
@@ -1224,7 +1357,7 @@ DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 -- Check that MX sequences play well with non-super users
 \c - - - :master_port
 -- Remove a node so that shards and sequences won't be created on table creation. Therefore,
--- we can test that start_metadata_sync_to_node can actually create the sequence with proper
+-- we can test that citus_activate_node can actually create the sequence with proper
 -- owner
 CREATE TABLE pg_dist_placement_temp AS SELECT * FROM pg_dist_placement;
 CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
@@ -1266,12 +1399,6 @@ SELECT master_add_node('localhost', :worker_2_port);
  master_add_node
 ---------------------------------------------------------------------
                6
-(1 row)
-
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
 (1 row)
 
 \c - mx_user - :worker_1_port
@@ -1674,12 +1801,6 @@ SELECT master_add_node('localhost', :worker_2_port);
                7
 (1 row)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node
----------------------------------------------------------------------
-
-(1 row)
-
 CREATE SEQUENCE mx_test_sequence_0;
 CREATE SEQUENCE mx_test_sequence_1;
 -- test create_distributed_table
@@ -1697,8 +1818,8 @@ ERROR:  cannot execute ALTER TABLE command involving partition column
 ALTER TABLE test_table ADD COLUMN id2 int DEFAULT nextval('mx_test_sequence_1');
 ALTER TABLE test_table ALTER COLUMN id2 DROP DEFAULT;
 ALTER TABLE test_table ALTER COLUMN id2 SET DEFAULT nextval('mx_test_sequence_1');
-SELECT unnest(master_metadata_snapshot()) order by 1;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        unnest
+SELECT unnest(activate_node_snapshot()) order by 1;
+                                                                                                                                                                                                                                                                                unnest
 ---------------------------------------------------------------------
  ALTER SEQUENCE mx_testing_schema.mx_test_table_col_3_seq OWNER TO postgres
  ALTER SEQUENCE public.mx_test_sequence_0 OWNER TO postgres
@@ -1707,33 +1828,44 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  ALTER TABLE mx_test_schema_1.mx_table_1 ADD CONSTRAINT mx_fk_constraint_2 FOREIGN KEY (col1) REFERENCES mx_test_schema_2.mx_table_2(col1) NOT VALID
  ALTER TABLE mx_test_schema_1.mx_table_1 ADD CONSTRAINT mx_table_1_col1_key UNIQUE (col1)
  ALTER TABLE mx_test_schema_1.mx_table_1 OWNER TO postgres
- ALTER TABLE mx_test_schema_1.mx_table_1 OWNER TO postgres
  ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_fk_constraint FOREIGN KEY (col1) REFERENCES mx_test_schema_1.mx_table_1(col1)
  ALTER TABLE mx_test_schema_2.mx_table_2 ADD CONSTRAINT mx_table_2_col1_key UNIQUE (col1)
  ALTER TABLE mx_test_schema_2.mx_table_2 OWNER TO postgres
- ALTER TABLE mx_test_schema_2.mx_table_2 OWNER TO postgres
  ALTER TABLE mx_testing_schema.mx_test_table ADD CONSTRAINT mx_test_table_col_1_key UNIQUE (col_1)
  ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
- ALTER TABLE mx_testing_schema.mx_test_table OWNER TO postgres
- ALTER TABLE public.dist_table_1 OWNER TO postgres
  ALTER TABLE public.dist_table_1 OWNER TO postgres
  ALTER TABLE public.mx_ref OWNER TO postgres
- ALTER TABLE public.mx_ref OWNER TO postgres
- ALTER TABLE public.test_table OWNER TO postgres
  ALTER TABLE public.test_table OWNER TO postgres
  CREATE INDEX mx_index ON mx_testing_schema.mx_test_table USING btree (col_2)
  CREATE INDEX mx_index_1 ON mx_test_schema_1.mx_table_1 USING btree (col1)
  CREATE INDEX mx_index_2 ON mx_test_schema_2.mx_table_2 USING btree (col2)
+ CREATE SCHEMA IF NOT EXISTS mx_test_schema_1 AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS mx_test_schema_2 AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS mx_testing_schema_2 AUTHORIZATION postgres
+ CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_test_schema_1.mx_table_1 (col1 integer, col2 text, col3 integer)
  CREATE TABLE mx_test_schema_2.mx_table_2 (col1 integer, col2 text)
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
  CREATE TABLE public.dist_table_1 (a integer)
  CREATE TABLE public.mx_ref (col_1 integer, col_2 text)
  CREATE TABLE public.test_table (id integer DEFAULT worker_nextval('public.mx_test_sequence_0'::regclass), id2 integer DEFAULT worker_nextval('public.mx_test_sequence_1'::regclass))
+ DELETE FROM citus.pg_dist_object
+ DELETE FROM pg_dist_node
+ DELETE FROM pg_dist_partition
+ DELETE FROM pg_dist_placement
+ DELETE FROM pg_dist_shard
+ GRANT CREATE ON SCHEMA public TO PUBLIC;
+ GRANT CREATE ON SCHEMA public TO postgres;
+ GRANT USAGE ON SCHEMA public TO PUBLIC;
+ GRANT USAGE ON SCHEMA public TO postgres;
  INSERT INTO pg_dist_node (nodeid, groupid, nodename, nodeport, noderack, hasmetadata, metadatasynced, isactive, noderole, nodecluster, shouldhaveshards) VALUES (4, 1, 'localhost', 8888, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'default', TRUE),(5, 1, 'localhost', 8889, 'default', FALSE, FALSE, TRUE, 'secondary'::noderole, 'second-cluster', TRUE),(1, 1, 'localhost', 57637, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE),(7, 5, 'localhost', 57638, 'default', TRUE, TRUE, TRUE, 'primary'::noderole, 'default', TRUE)
- SELECT citus_internal_add_partition_metadata ('mx_test_schema_1.mx_table_1'::regclass, 'h', 'col1', 3, 's')
- SELECT citus_internal_add_partition_metadata ('mx_test_schema_2.mx_table_2'::regclass, 'h', 'col1', 3, 's')
- SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 0, 's')
+ RESET ROLE
+ RESET ROLE
+ SELECT alter_role_if_exists('postgres', 'ALTER ROLE postgres SET lc_messages = ''C''')
+ SELECT citus_internal_add_partition_metadata ('mx_test_schema_1.mx_table_1'::regclass, 'h', 'col1', 4, 's')
+ SELECT citus_internal_add_partition_metadata ('mx_test_schema_2.mx_table_2'::regclass, 'h', 'col1', 4, 's')
+ SELECT citus_internal_add_partition_metadata ('mx_testing_schema.mx_test_table'::regclass, 'h', 'col_1', 2, 's')
  SELECT citus_internal_add_partition_metadata ('public.dist_table_1'::regclass, 'h', 'a', 10005, 's')
  SELECT citus_internal_add_partition_metadata ('public.mx_ref'::regclass, 'n', NULL, 10003, 't')
  SELECT citus_internal_add_partition_metadata ('public.test_table'::regclass, 'h', 'id', 10005, 's')
@@ -1743,16 +1875,24 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_sequence_0 AS integer INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1 NO CYCLE','integer')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.mx_test_sequence_1 AS integer INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1 NO CYCLE','integer')
  SELECT worker_apply_sequence_command ('CREATE SEQUENCE IF NOT EXISTS public.user_defined_seq AS bigint INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1 NO CYCLE','bigint')
+ SELECT worker_create_or_alter_role('postgres', null, 'ALTER ROLE postgres SUPERUSER CREATEDB CREATEROLE INHERIT LOGIN REPLICATION BYPASSRLS CONNECTION LIMIT 0 PASSWORD ''md5c53670dddfc3bb4b5675c7872bc2249a'' VALID UNTIL ''2052-05-05 00:00:00-07''')
  SELECT worker_create_truncate_trigger('mx_test_schema_1.mx_table_1')
  SELECT worker_create_truncate_trigger('mx_test_schema_2.mx_table_2')
  SELECT worker_create_truncate_trigger('mx_testing_schema.mx_test_table')
  SELECT worker_create_truncate_trigger('public.dist_table_1')
  SELECT worker_create_truncate_trigger('public.mx_ref')
  SELECT worker_create_truncate_trigger('public.test_table')
- SELECT worker_drop_distributed_table(logicalrelid::regclass::text) FROM pg_dist_partition
- TRUNCATE citus.pg_dist_object
- TRUNCATE pg_dist_node CASCADE
- WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_sequence_0']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_sequence_1']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema_2']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_test_schema_1']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_test_schema_2']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
+ SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition
+ SET ROLE postgres
+ SET ROLE postgres
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'off'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ SET citus.enable_ddl_propagation TO 'on'
+ UPDATE pg_dist_local_group SET groupid = 1
+ WITH distributed_object_data(typetext, objnames, objargs, distargumentindex, colocationid, force_delegation)  AS (VALUES ('sequence', ARRAY['public', 'user_defined_seq']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['mx_testing_schema', 'mx_test_table_col_3_seq']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_testing_schema', 'mx_test_table']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_test_schema_1', 'mx_table_1']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['mx_test_schema_2', 'mx_table_2']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'mx_ref']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'dist_table_1']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_sequence_0']::text[], ARRAY[]::text[], -1, 0, false), ('sequence', ARRAY['public', 'mx_test_sequence_1']::text[], ARRAY[]::text[], -1, 0, false), ('table', ARRAY['public', 'test_table']::text[], ARRAY[]::text[], -1, 0, false), ('role', ARRAY['postgres']::text[], ARRAY[]::text[], -1, 0, false), ('database', ARRAY['regression']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['public']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_testing_schema_2']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_test_schema_1']::text[], ARRAY[]::text[], -1, 0, false), ('schema', ARRAY['mx_test_schema_2']::text[], ARRAY[]::text[], -1, 0, false)) SELECT citus_internal_add_object_metadata(typetext, objnames, objargs, distargumentindex::int, colocationid::int, force_delegation::bool) FROM distributed_object_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310000, 1, 0, 1, 100000), (1310001, 1, 0, 5, 100001), (1310002, 1, 0, 1, 100002), (1310003, 1, 0, 5, 100003), (1310004, 1, 0, 1, 100004), (1310005, 1, 0, 5, 100005), (1310006, 1, 0, 1, 100006), (1310007, 1, 0, 5, 100007)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310020, 1, 0, 1, 100020), (1310021, 1, 0, 5, 100021), (1310022, 1, 0, 1, 100022), (1310023, 1, 0, 5, 100023), (1310024, 1, 0, 1, 100024)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
  WITH placement_data(shardid, shardstate, shardlength, groupid, placementid)  AS (VALUES (1310025, 1, 0, 1, 100025), (1310026, 1, 0, 5, 100026), (1310027, 1, 0, 1, 100027), (1310028, 1, 0, 5, 100028), (1310029, 1, 0, 1, 100029)) SELECT citus_internal_add_placement_metadata(shardid, shardstate, shardlength, groupid, placementid) FROM placement_data;
@@ -1765,7 +1905,7 @@ SELECT unnest(master_metadata_snapshot()) order by 1;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.dist_table_1'::regclass, 1310074, 't'::"char", '-2147483648', '-1073741825'), ('public.dist_table_1'::regclass, 1310075, 't'::"char", '-1073741824', '-1'), ('public.dist_table_1'::regclass, 1310076, 't'::"char", '0', '1073741823'), ('public.dist_table_1'::regclass, 1310077, 't'::"char", '1073741824', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.mx_ref'::regclass, 1310073, 't'::"char", NULL, NULL)) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
  WITH shard_data(relationname, shardid, storagetype, shardminvalue, shardmaxvalue)  AS (VALUES ('public.test_table'::regclass, 1310083, 't'::"char", '-2147483648', '-1073741825'), ('public.test_table'::regclass, 1310084, 't'::"char", '-1073741824', '-1'), ('public.test_table'::regclass, 1310085, 't'::"char", '0', '1073741823'), ('public.test_table'::regclass, 1310086, 't'::"char", '1073741824', '2147483647')) SELECT citus_internal_add_shard_metadata(relationname, shardid, storagetype, shardminvalue, shardmaxvalue) FROM shard_data;
-(65 rows)
+(84 rows)
 
 -- shouldn't work since test_table is MX
 ALTER TABLE test_table ADD COLUMN id3 bigserial;
@@ -1784,13 +1924,16 @@ ALTER TABLE test_table ADD COLUMN id4 bigserial CHECK (id4 > 0);
 ERROR:  cannot execute ADD COLUMN commands involving serial pseudotypes when metadata is synchronized to workers
 \c - - - :worker_1_port
 \ds
-                 List of relations
- Schema |        Name        |   Type   |  Owner
+                   List of relations
+ Schema |          Name           |   Type   |  Owner
 ---------------------------------------------------------------------
- public | mx_test_sequence_0 | sequence | postgres
- public | mx_test_sequence_1 | sequence | postgres
- public | user_defined_seq   | sequence | postgres
-(3 rows)
+ public | mx_test_sequence_0                | sequence | postgres
+ public | mx_test_sequence_1                | sequence | postgres
+ public | mx_test_table_col_3_seq           | sequence | postgres
+ public | sequence_rollback                 | sequence | postgres
+ public | sequence_rollback(citus_backup_0) | sequence | postgres
+ public | user_defined_seq                  | sequence | postgres
+(6 rows)
 
 \c - - - :master_port
 CREATE SEQUENCE local_sequence;
@@ -1802,11 +1945,14 @@ DETAIL:  drop cascades to default value for column id2 of table test_table
 drop cascades to default value for column id of table test_table
 \c - - - :worker_1_port
 \ds
-                List of relations
- Schema |       Name       |   Type   |  Owner
+                   List of relations
+ Schema |          Name           |   Type   |  Owner
 ---------------------------------------------------------------------
- public | user_defined_seq | sequence | postgres
-(1 row)
+ public | mx_test_table_col_3_seq           | sequence | postgres
+ public | sequence_rollback                 | sequence | postgres
+ public | sequence_rollback(citus_backup_0) | sequence | postgres
+ public | user_defined_seq                  | sequence | postgres
+(4 rows)
 
 \c - - - :master_port
 DROP TABLE test_table CASCADE;
@@ -1917,36 +2063,43 @@ SELECT run_command_on_workers('GRANT USAGE ON SCHEMA mx_test_schema_2 TO non_sup
 (2 rows)
 
 SET ROLE non_super_metadata_user;
+-- user must be super user stop/start metadata
+SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
+ERROR:  operation is not allowed
+HINT:  Run the command with a superuser.
+SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
+ERROR:  operation is not allowed
+HINT:  Run the command with a superuser.
+RESET ROLE;
 SELECT stop_metadata_sync_to_node('localhost', :worker_1_port);
 NOTICE:  dropping metadata on the node (localhost,57637)
  stop_metadata_sync_to_node
 ---------------------------------------------------------------------
 
-(1 row)
+ (1 row)
 
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
  start_metadata_sync_to_node
 ---------------------------------------------------------------------
 
-(1 row)
+ (1 row)
 
-RESET ROLE;
 RESET citus.shard_count;
 RESET citus.shard_replication_factor;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART :last_colocation_id;
 ALTER SEQUENCE pg_catalog.pg_dist_placement_placementid_seq RESTART :last_placement_id;
--- Turn metadata sync back on at the end
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
- start_metadata_sync_to_node
+-- Activate them at the end
+SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 
-SELECT start_metadata_sync_to_node('localhost', :worker_2_port);
- start_metadata_sync_to_node
+SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
+ ?column?
 ---------------------------------------------------------------------
-
+        1
 (1 row)
 

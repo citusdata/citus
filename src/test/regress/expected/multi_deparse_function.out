@@ -64,14 +64,14 @@ CREATE FUNCTION add(integer, integer) RETURNS integer
 -- Since deparse logic on workers can not work for if function
 -- is distributed on workers, we are disabling object propagation
 -- first. Same trick has been applied multiple times in this test.
-SET citus.enable_object_propagation TO OFF;
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('add(int,int)');
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
-RESET citus.enable_object_propagation;
+RESET citus.enable_metadata_sync;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION  add CALLED ON NULL INPUT
 $cmd$);
@@ -520,19 +520,11 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line XX at RAISE
  (localhost,57638,t,"DROP FUNCTION")
 (2 rows)
 
+set citus.enable_ddl_propagation to on;
 -- create schema with weird names
 CREATE SCHEMA "CiTuS.TeeN";
 CREATE SCHEMA "CiTUS.TEEN2";
-SELECT run_command_on_workers($$
-    CREATE SCHEMA IF NOT EXISTS "CiTuS.TeeN";
-    CREATE SCHEMA IF NOT EXISTS "CiTUS.TEEN2";
-$$);
-       run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
-(2 rows)
-
+set citus.enable_ddl_propagation to off;
 -- create table with weird names
 CREATE FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"() RETURNS TEXT
     AS $$ SELECT 'test function without params' $$
@@ -540,7 +532,7 @@ CREATE FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"() RETURNS TEXT
 CREATE FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"(text) RETURNS TEXT
     AS $$ SELECT 'Overloaded function called with param: ' || $1 $$
     LANGUAGE SQL;
-SET citus.enable_object_propagation TO OFF;
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('"CiTuS.TeeN"."TeeNFunCT10N.1!?!"()');
  create_distributed_function
 ---------------------------------------------------------------------
@@ -553,7 +545,7 @@ SELECT create_distributed_function('"CiTuS.TeeN"."TeeNFunCT10N.1!?!"(text)');
 
 (1 row)
 
-RESET citus.enable_object_propagation;
+RESET citus.enable_metadata_sync;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"() SET SCHEMA "CiTUS.TEEN2"
 $cmd$);
@@ -581,14 +573,14 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line XX at RAISE
 CREATE FUNCTION func_default_param(param INT DEFAULT 0) RETURNS TEXT
     AS $$ SELECT 'supplied param is : ' || param; $$
     LANGUAGE SQL;
-SET citus.enable_object_propagation TO OFF;
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('func_default_param(INT)');
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
-RESET citus.enable_object_propagation;
+RESET citus.enable_metadata_sync;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_default_param RENAME TO func_with_default_param;
 $cmd$);
@@ -604,14 +596,14 @@ CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line XX at RAISE
 CREATE FUNCTION func_out_param(IN param INT, OUT result TEXT)
     AS $$ SELECT 'supplied param is : ' || param; $$
     LANGUAGE SQL;
-SET citus.enable_object_propagation TO OFF;
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('func_out_param(INT)');
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
-RESET citus.enable_object_propagation;
+RESET citus.enable_metadata_sync;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_out_param RENAME TO func_in_and_out_param;
 $cmd$);
@@ -630,14 +622,14 @@ BEGIN
    a := a * a;
 END; $$
 LANGUAGE plpgsql;
-SET citus.enable_object_propagation TO OFF;
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('square(NUMERIC)');
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
-RESET citus.enable_object_propagation;
+RESET citus.enable_metadata_sync;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION square SET search_path TO DEFAULT;
 $cmd$);
@@ -663,14 +655,14 @@ BEGIN
    FROM generate_subscripts(list, 1) g(i);
 END; $$
 LANGUAGE plpgsql;
-SET citus.enable_object_propagation TO OFF;
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('sum_avg(NUMERIC[])');
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
-RESET citus.enable_object_propagation;
+RESET citus.enable_metadata_sync;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION sum_avg COST 10000;
 $cmd$);
@@ -689,14 +681,14 @@ RESET citus.enable_ddl_propagation;
 CREATE FUNCTION func_custom_param(IN param intpair, OUT total INT)
     AS $$ SELECT param.x + param.y $$
     LANGUAGE SQL;
-SET citus.enable_object_propagation TO OFF;
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('func_custom_param(intpair)');
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
-RESET citus.enable_object_propagation;
+RESET citus.enable_metadata_sync;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_custom_param RENAME TO func_with_custom_param;
 $cmd$);
@@ -713,14 +705,14 @@ CREATE FUNCTION func_returns_table(IN count INT)
     RETURNS TABLE (x INT, y INT)
     AS $$ SELECT i,i FROM generate_series(1,count) i $$
     LANGUAGE SQL;
-SET citus.enable_object_propagation TO OFF;
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('func_returns_table(INT)');
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
-RESET citus.enable_object_propagation;
+RESET citus.enable_metadata_sync;
 SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_returns_table ROWS 100;
 $cmd$);
@@ -737,15 +729,4 @@ SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA "CiTuS.TeeN" CASCADE;
 DROP SCHEMA "CiTUS.TEEN2" CASCADE;
 DROP SCHEMA function_tests CASCADE;
-SELECT run_command_on_workers($$
-    DROP SCHEMA "CiTuS.TeeN" CASCADE;
-    DROP SCHEMA "CiTUS.TEEN2" CASCADE;
-    DROP SCHEMA function_tests CASCADE;
-$$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-
 DROP ROLE function_role;

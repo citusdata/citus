@@ -366,6 +366,8 @@ extern ObjectAddress AlterRoleSetStmtObjectAddress(Node *node,
 extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid);
 
 /* schema.c - forward declarations */
+extern List * PreprocessCreateSchemaStmt(Node *node, const char *queryString,
+										 ProcessUtilityContext processUtilityContext);
 extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,
 									   const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
@@ -375,6 +377,7 @@ extern List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 										  ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString,
 											  ProcessUtilityContext processUtilityContext);
+extern ObjectAddress CreateSchemaStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok);
 
 /* sequence.c - forward declarations */
@@ -397,6 +400,9 @@ extern ObjectAddress AlterSequenceOwnerStmtObjectAddress(Node *node, bool missin
 extern ObjectAddress RenameSequenceStmtObjectAddress(Node *node, bool missing_ok);
 extern void ErrorIfUnsupportedSeqStmt(CreateSeqStmt *createSeqStmt);
 extern void ErrorIfDistributedAlterSeqOwnedBy(AlterSeqStmt *alterSeqStmt);
+extern char * GenerateBackupNameForSequenceCollision(const ObjectAddress *address);
+extern void RenameExistingSequenceWithDifferentTypeIfExists(RangeVar *sequence,
+															Oid desiredSeqTypeId);
 
 /* statistics.c - forward declarations */
 extern List * PreprocessCreateStatisticsStmt(Node *node, const char *queryString,

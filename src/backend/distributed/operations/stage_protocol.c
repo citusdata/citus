@@ -171,26 +171,9 @@ master_create_empty_shard(PG_FUNCTION_ARGS)
 	/* first retrieve a list of random nodes for shard placements */
 	while (candidateNodeIndex < attemptableNodeCount)
 	{
-		WorkerNode *candidateNode = NULL;
-
-		if (ShardPlacementPolicy == SHARD_PLACEMENT_LOCAL_NODE_FIRST)
-		{
-			candidateNode = WorkerGetLocalFirstCandidateNode(candidateNodeList);
-		}
-		else if (ShardPlacementPolicy == SHARD_PLACEMENT_ROUND_ROBIN)
-		{
-			candidateNode = WorkerGetRoundRobinCandidateNode(workerNodeList, shardId,
-															 candidateNodeIndex);
-		}
-		else if (ShardPlacementPolicy == SHARD_PLACEMENT_RANDOM)
-		{
-			candidateNode = WorkerGetRandomCandidateNode(candidateNodeList);
-		}
-		else
-		{
-			ereport(ERROR, (errmsg("unrecognized shard placement policy")));
-		}
-
+		WorkerNode *candidateNode = WorkerGetRoundRobinCandidateNode(workerNodeList,
+																	 shardId,
+																	 candidateNodeIndex);
 		if (candidateNode == NULL)
 		{
 			ereport(ERROR, (errmsg("could only find %u of %u possible nodes",
@@ -325,8 +308,10 @@ CreateAppendDistributedShardPlacements(Oid relationId, int64 shardId,
 	List *foreignConstraintCommandList =
 		GetReferencingForeignConstaintCommands(relationId);
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
+	bool creatingShellTableOnRemoteNode = false;
 	List *ddlCommandList = GetFullTableCreationCommands(relationId,
-														includeSequenceDefaults);
+														includeSequenceDefaults,
+														creatingShellTableOnRemoteNode);
 	uint32 connectionFlag = FOR_DDL;
 	char *relationOwner = TableOwner(relationId);
 
@@ -438,8 +423,10 @@ CreateShardsOnWorkers(Oid distributedRelationId, List *shardPlacements,
 					  bool useExclusiveConnection, bool colocatedShard)
 {
 	IncludeSequenceDefaults includeSequenceDefaults = NO_SEQUENCE_DEFAULTS;
+	bool creatingShellTableOnRemoteNode = false;
 	List *ddlCommandList = GetFullTableCreationCommands(distributedRelationId,
-														includeSequenceDefaults);
+														includeSequenceDefaults,
+														creatingShellTableOnRemoteNode);
 	List *foreignConstraintCommandList =
 		GetReferencingForeignConstaintCommands(distributedRelationId);
 

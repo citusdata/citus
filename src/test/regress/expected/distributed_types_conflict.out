@@ -1,12 +1,5 @@
 SET citus.next_shard_id TO 20020000;
 CREATE SCHEMA type_conflict;
-SELECT run_command_on_workers($$CREATE SCHEMA type_conflict;$$);
-       run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
-(2 rows)
-
 -- create a type on a worker that should not cause data loss once overwritten with a type
 -- from the coordinator
 \c - - :public_worker_1_host :worker_1_port
