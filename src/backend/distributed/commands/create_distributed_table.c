@@ -347,11 +347,11 @@ EnsureCitusTableCanBeCreated(Oid relationOid)
 	EnsureRelationKindSupported(relationOid);
 
 	/*
-	* When coordinator is added to the metadata, or on the workers,
-	* some of the relations of the coordinator node may/will be shards.
-	* We disallow creating distributed tables from shard relations, by
-	* erroring out here.
-	*/
+	 * When coordinator is added to the metadata, or on the workers,
+	 * some of the relations of the coordinator node may/will be shards.
+	 * We disallow creating distributed tables from shard relations, by
+	 * erroring out here.
+	 */
 	ErrorIfRelationIsAKnownShard(relationOid);
 }
 
