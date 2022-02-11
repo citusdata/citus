@@ -327,6 +327,7 @@ create_reference_table(PG_FUNCTION_ARGS)
  * - we are on the coordinator
  * - the current user is the owner of the table
  * - relation kind is supported
+ * - relation is not a shard
  */
 static void
 EnsureCitusTableCanBeCreated(Oid relationOid)
@@ -343,6 +344,12 @@ EnsureCitusTableCanBeCreated(Oid relationOid)
 	 * will be performed in CreateDistributedTable.
 	 */
 	EnsureRelationKindSupported(relationOid);
+
+	/*
+	 * When coordinator is added to the metadata, or on the workers,
+	 * some of the relations of the coordinator node may/will be shards.
+	 */
+	ErrorIfRelationIsAKnownShard(relationOid);
 }
 
 
@@ -379,8 +386,6 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 					   int shardCount, bool shardCountIsStrict,
 					   char *colocateWithTableName, bool viaDeprecatedAPI)
 {
-	ErrorIfRelationIsAKnownShard(relationId);
-
 	/*
 	 * EnsureTableNotDistributed errors out when relation is a citus table but
 	 * we don't want to ask user to first undistribute their citus local tables
