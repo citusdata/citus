@@ -300,8 +300,6 @@ _PG_init(void)
 	set_join_pathlist_hook = multi_join_restriction_hook;
 	create_upper_paths_hook = PathBasedPlannedUpperPathHook;
 	compare_path_hook = PathBasedPlannerComparePath;
-	prev_add_path_merit_list_hook = add_path_merit_list_hook;
-	add_path_merit_list_hook = PathBasedMeritListHook;
 
 	ExecutorStart_hook = CitusExecutorStart;
 	ExecutorRun_hook = CitusExecutorRun;

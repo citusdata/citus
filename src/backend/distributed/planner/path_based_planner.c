@@ -2639,17 +2639,3 @@ PathBasedPlannerComparePath(Path *new_path, Path *old_path)
 
 	return PATH_EQUAL;
 }
-
-add_path_merit_list_hook_type prev_add_path_merit_list_hook = NULL;
-List *
-PathBasedMeritListHook(Path *path)
-{
-	List *merits = NIL;
-	if (prev_add_path_merit_list_hook)
-	{
-		merits = prev_add_path_merit_list_hook(path);
-	}
-
-	List *colocationIds = ColocationGroupsForPathList(path);
-	return lappend(merits, colocationIds);
-}
