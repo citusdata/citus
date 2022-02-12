@@ -362,10 +362,7 @@ SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('func_custom_param(intpair)');
 RESET citus.enable_metadata_sync;
 
-SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_custom_param RENAME TO func_with_custom_param;
-$cmd$);
-
 
 -- a function that returns TABLE
 CREATE FUNCTION func_returns_table(IN count INT)
@@ -376,9 +373,7 @@ SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('func_returns_table(INT)');
 RESET citus.enable_metadata_sync;
 
-SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_returns_table ROWS 100;
-$cmd$);
 
 -- clear objects
 SET client_min_messages TO WARNING; -- suppress cascading objects dropping

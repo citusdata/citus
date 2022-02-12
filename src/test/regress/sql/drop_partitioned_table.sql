@@ -53,7 +53,6 @@ WHERE n.nspname IN ('drop_partitioned_table', 'schema1')
 ORDER BY 1, 2;
 
 \c - - - :worker_1_port
-CREATE SCHEMA drop_partitioned_table;
 SET search_path = drop_partitioned_table;
 CREATE VIEW tables_info AS
 SELECT n.nspname as "Schema",

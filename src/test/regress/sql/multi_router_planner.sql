@@ -723,6 +723,7 @@ INTERSECT
 -- if these queries get routed, they would fail since number1() does not exist
 -- on workers. This tests an exceptional case in which some local tables bypass
 -- checks.
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION number1(OUT datid int)
 RETURNS SETOF int
 AS $$
@@ -731,6 +732,7 @@ BEGIN
     RETURN QUERY SELECT 1;
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 SELECT 1 FROM authors_reference  r JOIN (
   SELECT s.datid FROM number1() s LEFT JOIN pg_database d ON s.datid = d.oid
@@ -1129,6 +1131,7 @@ PREPARE author_articles(int) as
 EXECUTE author_articles(1);
 
 -- queries inside plpgsql functions could be router plannable
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE
   max_id integer;
@@ -1153,6 +1156,7 @@ BEGIN
 
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 SELECT * FROM author_articles_id_word_count() ORDER BY 1;
 

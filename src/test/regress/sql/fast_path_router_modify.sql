@@ -101,11 +101,13 @@ EXECUTE p1(5,5,5);
 EXECUTE p1(6,6,6);
 EXECUTE p1(7,7,7);
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION modify_fast_path_plpsql(int, int) RETURNS void as $$
 BEGIN
 	DELETE FROM modify_fast_path WHERE key = $1 AND value_1 = $2;
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 SELECT modify_fast_path_plpsql(1,1);
 SELECT modify_fast_path_plpsql(2,2);

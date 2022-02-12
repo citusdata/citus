@@ -467,13 +467,6 @@ UPDATE limit_orders SET placed_at = LEAST(placed_at, now()::timestamp) WHERE id 
 UPDATE limit_orders SET array_of_values = 1 || array_of_values WHERE id = 246;
 CREATE FUNCTION immutable_append(old_values int[], new_value int)
 RETURNS int[] AS $$ SELECT old_values || new_value $$ LANGUAGE SQL IMMUTABLE;
-\c - - - :worker_1_port
-CREATE FUNCTION immutable_append(old_values int[], new_value int)
-RETURNS int[] AS $$ SELECT old_values || new_value $$ LANGUAGE SQL IMMUTABLE;
-\c - - - :worker_2_port
-CREATE FUNCTION immutable_append(old_values int[], new_value int)
-RETURNS int[] AS $$ SELECT old_values || new_value $$ LANGUAGE SQL IMMUTABLE;
-\c - - - :master_port
 -- immutable function calls with vars are also allowed
 UPDATE limit_orders
 SET array_of_values = immutable_append(array_of_values, 2) WHERE id = 246;

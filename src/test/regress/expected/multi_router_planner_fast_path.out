@@ -1225,6 +1225,7 @@ DEBUG:  query has a single distribution column value: 1
 (0 rows)
 
 -- create a dummy function to be used in filtering
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION someDummyFunction(regclass)
     RETURNS text AS
 $$
@@ -1247,6 +1248,7 @@ BEGIN
         END IF;
 END;
 $$LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SET client_min_messages TO ERROR;
 \set VERBOSITY terse
 -- fast path router plannable, but errors
@@ -1601,6 +1603,7 @@ DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
 EXECUTE author_articles_update(NULL);
 -- queries inside plpgsql functions could be router plannable
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE
   max_id integer;
@@ -1611,6 +1614,7 @@ BEGIN
 	return max_id;
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 -- we don't want too many details. though we're omitting
 -- "DETAIL:  distribution column value:", we see it acceptable
 -- since the query results verifies the correctness
@@ -1655,6 +1659,7 @@ SELECT author_articles_max_id();
 (1 row)
 
 -- queries inside plpgsql functions could be router plannable
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_max_id(int) RETURNS int AS $$
 DECLARE
   max_id integer;
@@ -1665,6 +1670,7 @@ BEGIN
 	return max_id;
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SELECT author_articles_max_id(1);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan
@@ -1714,6 +1720,7 @@ DEBUG:  Creating router plan
 (1 row)
 
 -- check that function returning setof query are router plannable
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_id_word_count() RETURNS TABLE(id bigint, word_count int) AS $$
 DECLARE
 BEGIN
@@ -1724,6 +1731,7 @@ BEGIN
 
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SELECT * FROM author_articles_id_word_count();
 DEBUG:  Distributed planning for a fast-path router query
 DEBUG:  Creating router plan
@@ -1788,6 +1796,7 @@ SELECT * FROM author_articles_id_word_count();
 (5 rows)
 
 -- check that function returning setof query are router plannable
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_id_word_count(int) RETURNS TABLE(id bigint, word_count int) AS $$
 DECLARE
 BEGIN
@@ -1798,6 +1807,7 @@ BEGIN
 
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SELECT * FROM author_articles_id_word_count(1);
 DEBUG:  Deferred pruning for a fast-path router query
 DEBUG:  Creating router plan

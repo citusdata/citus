@@ -697,17 +697,7 @@ SELECT create_distributed_function('func_custom_param(intpair)');
 (1 row)
 
 RESET citus.enable_metadata_sync;
-SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_custom_param RENAME TO func_with_custom_param;
-$cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_custom_param(function_tests.intpair) RENAME TO func_with_custom_param;
-CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line XX at RAISE
-      deparse_and_run_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
-(2 rows)
-
 -- a function that returns TABLE
 CREATE FUNCTION func_returns_table(IN count INT)
     RETURNS TABLE (x INT, y INT)
@@ -721,17 +711,7 @@ SELECT create_distributed_function('func_returns_table(INT)');
 (1 row)
 
 RESET citus.enable_metadata_sync;
-SELECT deparse_and_run_on_workers($cmd$
 ALTER FUNCTION func_returns_table ROWS 100;
-$cmd$);
-INFO:  Propagating deparsed query: ALTER FUNCTION function_tests.func_returns_table(integer) ROWS 100.000000;
-CONTEXT:  PL/pgSQL function deparse_and_run_on_workers(text) line XX at RAISE
-      deparse_and_run_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"ALTER FUNCTION")
- (localhost,57638,t,"ALTER FUNCTION")
-(2 rows)
-
 -- clear objects
 SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA "CiTuS.TeeN" CASCADE;
