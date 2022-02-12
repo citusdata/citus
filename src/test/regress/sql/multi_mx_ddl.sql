@@ -173,7 +173,6 @@ SELECT * FROM seg_test;
 \c - - - :master_port
 
 CREATE SCHEMA ext_owned_tables;
-SELECT run_command_on_workers($$CREATE SCHEMA ext_owned_tables;$$);
 
 SET search_path TO ext_owned_tables;
 

@@ -63,6 +63,7 @@ test: shared_connection_waits
 test: isolation_cancellation
 test: isolation_undistribute_table
 test: isolation_fix_partition_shard_index_names
+test: isolation_global_pid
 
 # Rebalancer
 test: isolation_blocking_move_single_shard_commands
@@ -91,6 +92,7 @@ test: isolation_metadata_sync_deadlock
 test: isolation_replicated_dist_on_mx
 test: isolation_replicate_reference_tables_to_coordinator
 test: isolation_multiuser_locking
+test: isolation_metadata_sync_vs_all
 
 # MXless tests
 test: isolation_check_mx

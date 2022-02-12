@@ -313,16 +313,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	if (fromFuncExpr && !IsMultiStatementTransaction())
-	{
-		/*
-		 * For now, let's not push the function from the FROM clause unless it's in a
-		 * multistatement transaction with the forceDelegation flag ON.
-		 */
-		ereport(DEBUG2, (errmsg("function from the FROM clause is not pushed")));
-		return NULL;
-	}
-
 	/* dissuade the planner from trying a generic plan with parameters */
 	(void) expression_tree_walker((Node *) funcExpr->args, contain_param_walker,
 								  &walkerParamContext);

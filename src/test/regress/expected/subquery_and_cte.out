@@ -12,9 +12,11 @@ SELECT create_distributed_table('dist_table', 'id', colocate_with => 'users_tabl
 (1 row)
 
 INSERT INTO dist_table (id, value) VALUES(1, 2),(2, 3),(3,4);
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION func() RETURNS TABLE (id int, value int) AS $$
 	SELECT 1, 2
 $$ LANGUAGE SQL;
+RESET citus.enable_metadata_sync;
 SET client_min_messages TO DEBUG1;
 -- CTEs are recursively planned, and subquery foo is also recursively planned
 -- final plan becomes a router plan

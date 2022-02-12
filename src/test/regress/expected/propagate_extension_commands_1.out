@@ -381,10 +381,34 @@ SELECT 1 from master_remove_node('localhost', :worker_2_port);
         1
 (1 row)
 
+-- Test extension function incorrect distribution argument
+CREATE TABLE test_extension_function(col varchar);
+CREATE EXTENSION seg;
+-- Missing distribution argument
+SELECT create_distributed_function('seg_in(cstring)');
+ERROR:  Extension functions(seg_in) without distribution argument are not supported.
+-- Missing colocation argument
+SELECT create_distributed_function('seg_in(cstring)', '$1');
+ERROR:  cannot distribute the function "seg_in" since there is no table to colocate with
+HINT:  Provide a distributed table via "colocate_with" option to create_distributed_function()
+-- Incorrect distribution argument
+SELECT create_distributed_function('seg_in(cstring)', '$2', colocate_with:='test_extension_function');
+ERROR:  cannot distribute the function "seg_in" since the distribution argument is not valid
+HINT:  Either provide a valid function argument name or a valid "$paramIndex" to create_distributed_function()
+-- Colocated table is not distributed
+SELECT create_distributed_function('seg_in(cstring)', '$1', 'test_extension_function');
+ERROR:  relation test_extension_function is not distributed
+DROP EXTENSION seg;
+SET citus.shard_replication_factor TO 1;
+SELECT create_distributed_table('test_extension_function', 'col', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 -- now, create a type that depends on another type, which
 -- finally depends on an extension
 BEGIN;
-	SET citus.shard_replication_factor TO 1;
 	CREATE EXTENSION seg;
 	CREATE EXTENSION isn;
 	CREATE TYPE test_type AS (a int, b seg);
@@ -404,7 +428,37 @@ BEGIN;
 
 (1 row)
 
+	-- Distribute an extension-function
+	SELECT create_distributed_function('seg_in(cstring)', '$1', 'test_extension_function');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
 COMMIT;
+-- Check the pg_dist_object
+SELECT pg_proc.proname as DistributedFunction
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and
+pg_proc.oid = citus.pg_dist_object.objid and
+classid = 'pg_proc'::regclass;
+ distributedfunction
+---------------------------------------------------------------------
+ seg_in
+(1 row)
+
+SELECT run_command_on_workers($$
+SELECT count(*)
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and
+pg_proc.oid = citus.pg_dist_object.objid and
+classid = 'pg_proc'::regclass;
+$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1)
+(1 row)
+
 -- add the node back
 SELECT 1 from master_add_node('localhost', :worker_2_port);
  ?column?
@@ -426,5 +480,145 @@ SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname 
  (localhost,57638,t,2)
 (2 rows)
 
+-- Check the pg_dist_object on the both nodes
+SELECT run_command_on_workers($$
+SELECT count(*)
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and
+pg_proc.oid = citus.pg_dist_object.objid and
+classid = 'pg_proc'::regclass;
+$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1)
+ (localhost,57638,t,1)
+(2 rows)
+
+DROP EXTENSION seg CASCADE;
+-- Recheck the pg_dist_object
+SELECT pg_proc.proname as DistributedFunction
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and
+pg_proc.oid = citus.pg_dist_object.objid and
+classid = 'pg_proc'::regclass;
+ distributedfunction
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT run_command_on_workers($$
+SELECT count(*)
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and
+pg_proc.oid = citus.pg_dist_object.objid and
+classid = 'pg_proc'::regclass;
+$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+-- Distribute an extension-function where extension is not in pg_dist_object
+SET citus.enable_ddl_propagation TO false;
+CREATE EXTENSION seg;
+SET citus.enable_ddl_propagation TO true;
+-- Check the extension in pg_dist_object
+SELECT count(*) FROM citus.pg_dist_object WHERE classid = 'pg_catalog.pg_extension'::pg_catalog.regclass AND
+objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+SELECT run_command_on_workers($$
+SELECT count(*)
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and
+pg_proc.oid = citus.pg_dist_object.objid and
+classid = 'pg_proc'::regclass;
+$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,0)
+ (localhost,57638,t,0)
+(2 rows)
+
+SELECT create_distributed_function('seg_in(cstring)', '$1', 'test_extension_function');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Recheck the extension in pg_dist_object
+SELECT count(*) FROM citus.pg_dist_object WHERE classid = 'pg_catalog.pg_extension'::pg_catalog.regclass AND
+objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
+ count
+---------------------------------------------------------------------
+     1
+(1 row)
+
+SELECT pg_proc.proname as DistributedFunction
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and
+pg_proc.oid = citus.pg_dist_object.objid and
+classid = 'pg_proc'::regclass;
+ distributedfunction
+---------------------------------------------------------------------
+ seg_in
+(1 row)
+
+SELECT run_command_on_workers($$
+SELECT count(*)
+FROM citus.pg_dist_object, pg_proc
+WHERE pg_proc.proname = 'seg_in' and
+pg_proc.oid = citus.pg_dist_object.objid and
+classid = 'pg_proc'::regclass;
+$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1)
+ (localhost,57638,t,1)
+(2 rows)
+
+DROP EXTENSION seg;
+DROP TABLE test_extension_function;
+-- Test extension function altering distribution argument
+BEGIN;
+SET citus.shard_replication_factor = 1;
+CREATE TABLE test_extension_function(col1 float8[], col2 float8[]);
+SELECT create_distributed_table('test_extension_function', 'col1', colocate_with := 'none');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE EXTENSION cube;
+SELECT create_distributed_function('cube(float8[], float8[])', '$1', 'test_extension_function');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT distribution_argument_index FROM citus.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::pg_catalog.regclass AND
+objid = (SELECT oid FROM pg_proc WHERE prosrc = 'cube_a_f8_f8');
+ distribution_argument_index
+---------------------------------------------------------------------
+                           0
+(1 row)
+
+SELECT create_distributed_function('cube(float8[], float8[])', '$2', 'test_extension_function');
+ create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT distribution_argument_index FROM citus.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::pg_catalog.regclass AND
+objid = (SELECT oid FROM pg_proc WHERE prosrc = 'cube_a_f8_f8');
+ distribution_argument_index
+---------------------------------------------------------------------
+                           1
+(1 row)
+
+ROLLBACK;
 -- drop the schema and all the objects
 DROP SCHEMA "extension'test" CASCADE;

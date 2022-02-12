@@ -14,15 +14,46 @@
 
 #include "distributed/citus_ruleutils.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 #include "lib/stringinfo.h"
 #include "nodes/nodes.h"
 #include "utils/builtins.h"
 
+static void AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt);
+static void AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt);
 static void AppendGrantOnSchemaStmt(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaPrivileges(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaSchemas(StringInfo buf, GrantStmt *stmt);
 static void AppendGrantOnSchemaGrantees(StringInfo buf, GrantStmt *stmt);
 static void AppendAlterSchemaRenameStmt(StringInfo buf, RenameStmt *stmt);
+
+char *
+DeparseCreateSchemaStmt(Node *node)
+{
+	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendCreateSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
+
+char *
+DeparseDropSchemaStmt(Node *node)
+{
+	DropStmt *stmt = castNode(DropStmt, node);
+
+	StringInfoData str = { 0 };
+	initStringInfo(&str);
+
+	AppendDropSchemaStmt(&str, stmt);
+
+	return str.data;
+}
+
 
 char *
 DeparseGrantOnSchemaStmt(Node *node)
@@ -50,6 +81,70 @@ DeparseAlterSchemaRenameStmt(Node *node)
 	AppendAlterSchemaRenameStmt(&str, stmt);
 
 	return str.data;
+}
+
+
+static void
+AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt)
+{
+	if (stmt->schemaElts != NIL)
+	{
+		elog(ERROR, "schema creating is not supported with other create commands");
+	}
+
+	if (stmt->schemaname == NULL)
+	{
+		elog(ERROR, "schema name should be specified");
+	}
+
+	appendStringInfoString(buf, "CREATE SCHEMA ");
+
+	if (stmt->if_not_exists)
+	{
+		appendStringInfoString(buf, "IF NOT EXISTS ");
+	}
+
+	appendStringInfo(buf, "%s ", quote_identifier(stmt->schemaname));
+
+	if (stmt->authrole != NULL)
+	{
+		appendStringInfo(buf, "AUTHORIZATION %s", RoleSpecString(stmt->authrole, true));
+	}
+}
+
+
+static void
+AppendDropSchemaStmt(StringInfo buf, DropStmt *stmt)
+{
+	Assert(stmt->removeType == OBJECT_SCHEMA);
+
+	appendStringInfoString(buf, "DROP SCHEMA ");
+
+	if (stmt->missing_ok)
+	{
+		appendStringInfoString(buf, "IF EXISTS ");
+	}
+
+	Value *schemaValue = NULL;
+	foreach_ptr(schemaValue, stmt->objects)
+	{
+		const char *schemaString = quote_identifier(strVal(schemaValue));
+		appendStringInfo(buf, "%s", schemaString);
+
+		if (schemaValue != llast(stmt->objects))
+		{
+			appendStringInfoString(buf, ", ");
+		}
+	}
+
+	if (stmt->behavior == DROP_CASCADE)
+	{
+		appendStringInfoString(buf, " CASCADE");
+	}
+	else if (stmt->behavior == DROP_RESTRICT)
+	{
+		appendStringInfoString(buf, " RESTRICT");
+	}
 }
 
 

@@ -1,13 +1,6 @@
 -- This is designed to test worker_create_or_replace_object in PG11 with aggregates
 -- Note in PG12 we use CREATE OR REPLACE AGGREGATE, thus the renaming does not occur
 CREATE SCHEMA proc_conflict;
-SELECT run_command_on_workers($$CREATE SCHEMA proc_conflict;$$);
-       run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
-(2 rows)
-
 \c - - - :worker_1_port
 SET search_path TO proc_conflict;
 SET citus.enable_metadata_sync TO OFF;

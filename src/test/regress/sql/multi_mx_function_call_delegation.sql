@@ -276,9 +276,20 @@ select mx_call_func((select x + 1 from mx_call_add(3, 4) x), 2);
 select mx_call_func(floor(random())::int, 2);
 
 -- test forms we don't distribute
-select * from mx_call_func(2, 0);
 select mx_call_func(2, 0) where mx_call_func(0, 2) = 0;
 select mx_call_func(2, 0), mx_call_func(0, 2);
+
+-- regular call in FROM can be pushed down
+select * from mx_call_func(2, 0);
+
+-- prepared statement with 6 invocations to trigger generic plan
+prepare call_func(int, int) as select $1 from mx_call_func($1, $2);
+execute call_func(2, 0);
+execute call_func(2, 0);
+execute call_func(2, 0);
+execute call_func(2, 0);
+execute call_func(2, 0);
+execute call_func(2, 0);
 
 -- we do not delegate the call, but do push down the query
 -- that result in remote execution from workers

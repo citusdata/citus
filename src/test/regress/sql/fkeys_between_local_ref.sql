@@ -247,6 +247,7 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
+  SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
   CREATE SCHEMA another_schema_fkeys_between_local_ref;
   CREATE TABLE another_schema_fkeys_between_local_ref.local_table_6 (col_1 INT PRIMARY KEY);
 
@@ -276,6 +277,7 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
+  SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
   CREATE TABLE local_table_6 (col_1 INT PRIMARY KEY);
   -- first convert local tables to citus local tables in graph
   ALTER TABLE local_table_2 ADD CONSTRAINT fkey_11 FOREIGN KEY (col_1) REFERENCES reference_table_1(col_1) ON DELETE CASCADE;

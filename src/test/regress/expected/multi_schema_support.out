@@ -889,7 +889,8 @@ SELECT objid::oid::regnamespace as "Distributed Schemas"
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
-(1 row)
+ new_schema
+(2 rows)
 
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
@@ -947,7 +948,8 @@ SELECT objid::oid::regnamespace as "Distributed Schemas"
     WHERE objid='new_schema'::regnamespace::oid;
  Distributed Schemas
 ---------------------------------------------------------------------
-(0 rows)
+ new_schema
+(1 row)
 
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
@@ -1013,7 +1015,8 @@ SELECT objid::oid::regnamespace as "Distributed Schemas"
  Distributed Schemas
 ---------------------------------------------------------------------
  old_schema
-(1 row)
+ new_schema
+(2 rows)
 
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
@@ -1374,7 +1377,7 @@ BEGIN;
 
     ALTER SCHEMA bar RENAME TO foo;
 ERROR:  cannot create or modify schema because there was a parallel operation on a distributed table in the transaction
-DETAIL:  When creating or altering a schema, Citus needs to perform all operations over a single connection per node to ensure consistency.
+DETAIL:  When creating, altering, or dropping a schema, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 BEGIN;
@@ -1389,10 +1392,18 @@ BEGIN;
 ROLLBACK;
 -- Clean up the created schema
 SET client_min_messages TO WARNING;
-DROP SCHEMA run_test_schema CASCADE;
-DROP SCHEMA test_schema_support_join_1 CASCADE;
-DROP SCHEMA test_schema_support_join_2 CASCADE;
-DROP SCHEMA "Citus'Teen123" CASCADE;
-DROP SCHEMA "CiTUS.TEEN2" CASCADE;
-DROP SCHEMA bar CASCADE;
-DROP SCHEMA test_schema_support CASCADE;
+SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object
+    WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+ (schema,{run_test_schema},{})
+(1 row)
+
+DROP SCHEMA run_test_schema, test_schema_support_join_1, test_schema_support_join_2, "Citus'Teen123", "CiTUS.TEEN2", bar, test_schema_support CASCADE;
+-- verify that the dropped schema is removed from worker's pg_dist_object
+SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object
+    WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+

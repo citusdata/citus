@@ -239,5 +239,4 @@ DROP TABLE parent, child1;
 ROLLBACK;
 
 DROP SCHEMA drop_partitioned_table CASCADE;
-SELECT run_command_on_workers('DROP SCHEMA IF EXISTS drop_partitioned_table CASCADE');
 SET search_path TO public;

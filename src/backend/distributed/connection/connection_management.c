@@ -19,6 +19,7 @@
 
 #include "access/hash.h"
 #include "commands/dbcommands.h"
+#include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/errormessage.h"
 #include "distributed/error_codes.h"
@@ -1459,7 +1460,7 @@ IsRebalancerInternalBackend(void)
 bool
 IsCitusInternalBackend(void)
 {
-	return application_name && strcmp(application_name, CITUS_APPLICATION_NAME) == 0;
+	return ExtractGlobalPID(application_name) != INVALID_CITUS_INTERNAL_BACKEND_GPID;
 }
 
 

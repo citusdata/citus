@@ -614,8 +614,9 @@ SELECT * FROM forcepushdown_schema.test_subquery ORDER BY 1;
 
 -- Query with targetList greater than 1
 
--- Function from FROM clause is not delegated outside of a BEGIN (for now)
+-- Function from FROM clause is delegated outside of a BEGIN
 SELECT 1,2,3 FROM select_data(100);
+
 BEGIN;
 -- Function from FROM clause is delegated
 SELECT 1,2,3 FROM select_data(100);

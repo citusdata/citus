@@ -367,6 +367,8 @@ extern ObjectAddress AlterRoleSetStmtObjectAddress(Node *node,
 extern List * GenerateCreateOrAlterRoleCommand(Oid roleOid);
 
 /* schema.c - forward declarations */
+extern List * PreprocessCreateSchemaStmt(Node *node, const char *queryString,
+										 ProcessUtilityContext processUtilityContext);
 extern List * PreprocessDropSchemaStmt(Node *dropSchemaStatement,
 									   const char *queryString,
 									   ProcessUtilityContext processUtilityContext);
@@ -376,6 +378,7 @@ extern List * PreprocessGrantOnSchemaStmt(Node *node, const char *queryString,
 										  ProcessUtilityContext processUtilityContext);
 extern List * PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString,
 											  ProcessUtilityContext processUtilityContext);
+extern ObjectAddress CreateSchemaStmtObjectAddress(Node *node, bool missing_ok);
 extern ObjectAddress AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok);
 
 /* sequence.c - forward declarations */
