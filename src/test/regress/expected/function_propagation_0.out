@@ -262,4 +262,62 @@ END;
 $$;
 ERROR:  type "function_propagation_schema.function_prop_view" does not exist
 CONTEXT:  while executing command on localhost:xxxxx
+-- Check within transaction
+BEGIN;
+    CREATE TYPE type_in_transaction AS (a int, b int);
+    CREATE OR REPLACE FUNCTION func_in_transaction(param_1 type_in_transaction)
+    RETURNS int
+    LANGUAGE plpgsql AS
+    $$
+    BEGIN
+        return 1;
+    END;
+    $$;
+    -- Within transaction functions are not distributed
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+COMMIT;
+-- Show that recreating it outside transaction distributes the function and dependencies
+CREATE OR REPLACE FUNCTION func_in_transaction(param_1 type_in_transaction)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;
+                pg_identify_object_as_address
+---------------------------------------------------------------------
+ (type,{function_propagation_schema.type_in_transaction},{})
+(1 row)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
+                                          pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction}",{function_propagation_schema.type_in_transaction})
+(1 row)
+
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                           result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (type,{function_propagation_schema.type_in_transaction},{})
+ localhost |    57638 | t       | (type,{function_propagation_schema.type_in_transaction},{})
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                                      result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction}",{function_propagation_schema.type_in_transaction})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction}",{function_propagation_schema.type_in_transaction})
+(2 rows)
+
 RESET search_path;

@@ -152,4 +152,36 @@ BEGIN
 END;
 $$;
 
+-- Check within transaction
+BEGIN;
+    CREATE TYPE type_in_transaction AS (a int, b int);
+    CREATE OR REPLACE FUNCTION func_in_transaction(param_1 type_in_transaction)
+    RETURNS int
+    LANGUAGE plpgsql AS
+    $$
+    BEGIN
+        return 1;
+    END;
+    $$;
+
+    -- Within transaction functions are not distributed
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
+COMMIT;
+
+-- Show that recreating it outside transaction distributes the function and dependencies
+CREATE OR REPLACE FUNCTION func_in_transaction(param_1 type_in_transaction)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;$$) ORDER BY 1,2;
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;$$) ORDER BY 1,2;
+
 RESET search_path;
