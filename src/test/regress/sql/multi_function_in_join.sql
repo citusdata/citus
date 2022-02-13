@@ -30,9 +30,11 @@ CREATE SEQUENCE numbers;
 SELECT * FROM table1 JOIN nextval('numbers') n ON (id = n) ORDER BY id ASC;
 
 -- Check joins of a function that returns a single integer
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION add(integer, integer) RETURNS integer
 AS 'SELECT $1 + $2;'
 LANGUAGE SQL;
+RESET citus.enable_metadata_sync;
 SELECT create_distributed_function('add(integer,integer)');
 SELECT * FROM table1 JOIN add(3,5) sum ON (id = sum) ORDER BY id ASC;
 

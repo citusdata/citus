@@ -36,9 +36,11 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, ta
 (1 row)
 
 -- Check joins of a function that returns a single integer
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION add(integer, integer) RETURNS integer
 AS 'SELECT $1 + $2;'
 LANGUAGE SQL;
+RESET citus.enable_metadata_sync;
 SELECT create_distributed_function('add(integer,integer)');
  create_distributed_function
 ---------------------------------------------------------------------
