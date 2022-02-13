@@ -1328,13 +1328,13 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 	}
 
 	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (FunctionDependsOnNonDistributedRelation(&address))
+	if (!DependentRelationsOfFunctionCanBeDistributed(&address))
 	{
 		ereport(WARNING, (errmsg("Citus can't distribute functions having dependency on"
-								 " non-distributed relations or sequences"),
+								 " non-distributed relations"),
 						  errdetail("Function will be created only locally"),
 						  errhint("To distribute function, distribute dependent relations"
-								  " and sequences first")));
+								  " first")));
 		return NIL;
 	}
 
@@ -1349,11 +1349,11 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 
 
 /*
- * FunctionDependsOnNonDistributedRelation checks whether the given function depends
- * on non-distributed relation.
+ * DependentRelationsOfFunctionCanBeDistributed checks whether Citus can distribute
+ * dependent relations of the given function.
  */
 bool
-FunctionDependsOnNonDistributedRelation(ObjectAddress *functionAddress)
+DependentRelationsOfFunctionCanBeDistributed(ObjectAddress *functionAddress)
 {
 	Assert(getObjectClass(functionAddress) == OCLASS_PROC);
 
@@ -1366,19 +1366,23 @@ FunctionDependsOnNonDistributedRelation(ObjectAddress *functionAddress)
 			continue;
 		}
 
+		/*
+		 * Since GetDependenciesForObject returns only non-distributed ones, any
+		 * relation comes to that point is must be a non-distributed one.
+		 *
+		 * Citus can only distribute dependent non-distributed sequence and composite
+		 * types.
+		 */
 		char relKind = get_rel_relkind(dependency->objectId);
-
-		/* only distributed ones are allowed */
-		if (relKind == RELKIND_RELATION ||
-			relKind == RELKIND_PARTITIONED_TABLE ||
-			relKind == RELKIND_FOREIGN_TABLE ||
-			relKind == RELKIND_SEQUENCE)
+		if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_COMPOSITE_TYPE)
 		{
-			return true;
+			continue;
 		}
+
+		return false;
 	}
 
-	return false;
+	return true;
 }
 
 
