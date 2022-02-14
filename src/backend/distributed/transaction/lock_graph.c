@@ -69,8 +69,8 @@ static bool IsConflictingLockMask(int holdMask, int conflictMask);
  * We almost have 2 sets of identical functions. The first set (e.g., dump_wait_edges)
  * functions are intended for distributed deadlock detection purposes.
  *
- * The second set of functions (e.g., dump_blocked_processes) are intended for
- * citus_lock_waits view.
+ * The second set of functions (e.g., citus_internal_local_blocked_processes) are
+ * intended for citus_lock_waits view.
  *
  * The main difference is that the former functions only show processes that are blocked
  * inside a distributed transaction (e.g., see AssignDistributedTransactionId()).
@@ -86,8 +86,8 @@ static bool IsConflictingLockMask(int holdMask, int conflictMask);
 PG_FUNCTION_INFO_V1(dump_local_wait_edges);
 PG_FUNCTION_INFO_V1(dump_global_wait_edges);
 
-PG_FUNCTION_INFO_V1(dump_local_blocked_processes);
-PG_FUNCTION_INFO_V1(dump_global_blocked_processes);
+PG_FUNCTION_INFO_V1(citus_internal_local_blocked_processes);
+PG_FUNCTION_INFO_V1(citus_internal_global_blocked_processes);
 
 
 /*
@@ -108,11 +108,11 @@ dump_global_wait_edges(PG_FUNCTION_ARGS)
 
 
 /*
- * dump_global_blocked_processes returns global wait edges including all processes
- * running on the cluster.
+ * citus_internal_global_blocked_processes returns global wait edges
+ * including all processes running on the cluster.
  */
 Datum
-dump_global_blocked_processes(PG_FUNCTION_ARGS)
+citus_internal_global_blocked_processes(PG_FUNCTION_ARGS)
 {
 	bool onlyDistributedTx = false;
 
@@ -183,7 +183,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		else
 		{
 			appendStringInfo(queryString,
-							 "SELECT * FROM dump_local_blocked_processes()");
+							 "SELECT * FROM citus_internal_local_blocked_processes()");
 		}
 
 		int querySent = SendRemoteCommand(connection, queryString->data);
@@ -217,7 +217,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		else if (!onlyDistributedTx && colCount != 11)
 		{
 			ereport(WARNING, (errmsg("unexpected number of columns from "
-									 "dump_local_blocked_processes")));
+									 "citus_internal_local_blocked_processes")));
 			continue;
 		}
 
@@ -364,11 +364,11 @@ dump_local_wait_edges(PG_FUNCTION_ARGS)
 
 
 /*
- * dump_local_blocked_processes returns global wait edges including
- * all processes running on the node.
+ * citus_internal_local_blocked_processes returns global wait edges
+ * including all processes running on the node.
  */
 Datum
-dump_local_blocked_processes(PG_FUNCTION_ARGS)
+citus_internal_local_blocked_processes(PG_FUNCTION_ARGS)
 {
 	bool onlyDistributedTx = false;
 

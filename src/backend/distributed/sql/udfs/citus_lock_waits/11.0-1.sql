@@ -8,7 +8,7 @@ citus_dist_stat_activity AS
 ),
 unique_global_wait_edges AS
 (
-    SELECT DISTINCT ON(waiting_global_pid, blocking_global_pid) * FROM dump_global_blocked_processes()
+    SELECT DISTINCT ON(waiting_global_pid, blocking_global_pid) * FROM citus_internal_global_blocked_processes()
 ),
 citus_dist_stat_activity_with_node_id AS
 (

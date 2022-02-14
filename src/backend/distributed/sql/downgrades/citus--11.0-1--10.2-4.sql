@@ -113,8 +113,8 @@ CREATE FUNCTION get_global_active_transactions(OUT datid oid, OUT process_id int
 
 RESET search_path;
 
-DROP FUNCTION dump_local_blocked_processes CASCADE;
-DROP FUNCTION dump_global_blocked_processes CASCADE;
+DROP FUNCTION citus_internal_local_blocked_processes CASCADE;
+DROP FUNCTION citus_internal_global_blocked_processes CASCADE;
 
 DROP FUNCTION pg_catalog.citus_dist_stat_activity CASCADE;
 

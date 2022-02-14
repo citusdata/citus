@@ -24,7 +24,7 @@ RETURNS boolean AS $$
     END IF;
 
     RETURN EXISTS (
-      SELECT 1 FROM dump_global_blocked_processes()
+      SELECT 1 FROM citus_internal_global_blocked_processes()
         WHERE waiting_global_pid = mBlockedGlobalPid
     ) OR EXISTS (
       -- Check on the workers if any logical replication job spawned by the

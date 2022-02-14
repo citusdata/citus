@@ -20,7 +20,7 @@ RETURNS int4[] AS $$
       WITH activeTransactions AS (
         SELECT global_pid FROM get_all_active_transactions()
       ), blockingTransactions AS (
-        SELECT blocking_global_pid FROM dump_global_blocked_processes()
+        SELECT blocking_global_pid FROM citus_internal_global_blocked_processes()
         WHERE waiting_global_pid = mLocalGlobalPid
       )
       SELECT activeTransactions.global_pid FROM activeTransactions, blockingTransactions
