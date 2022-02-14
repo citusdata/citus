@@ -267,13 +267,17 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 
 		ErrorIfIllegallyChangingKnownShard(relationId);
 
-		if (IsCitusTable(relationId) && IsForeignTable(relationId))
+		/*
+		 * We allow truncating foreign tables that are added to metadata
+		 * only on the coordinator, as user mappings are not propagated.
+		 */
+		if (IsForeignTable(relationId) &&
+			IsCitusTableType(relationId, CITUS_LOCAL_TABLE) &&
+			!IsCoordinator())
 		{
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("truncating distributed foreign tables is "
-								   "currently unsupported"),
-							errhint("Consider undistributing table before TRUNCATE, "
-									"and then distribute or add to metadata again")));
+							errmsg("truncating foreign tables that are added to metadata "
+								   "can only be excuted on the coordinator")));
 		}
 	}
 }
