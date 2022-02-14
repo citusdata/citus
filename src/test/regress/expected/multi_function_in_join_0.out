@@ -36,19 +36,9 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, ta
 (1 row)
 
 -- Check joins of a function that returns a single integer
-SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION add(integer, integer) RETURNS integer
 AS 'SELECT $1 + $2;'
 LANGUAGE SQL;
-RESET citus.enable_metadata_sync;
-SELECT create_distributed_function('add(integer,integer)');
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
- create_distributed_function
----------------------------------------------------------------------
-
-(1 row)
-
 SELECT * FROM table1 JOIN add(3,5) sum ON (id = sum) ORDER BY id ASC;
 DEBUG:  generating subplan XXX_1 for subquery SELECT sum FROM functions_in_joins.add(3, 5) sum(sum)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, table1.data, sum.sum FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.sum FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(sum integer)) sum ON ((table1.id OPERATOR(pg_catalog.=) sum.sum))) ORDER BY table1.id
@@ -74,7 +64,6 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, ta
 (1 row)
 
 -- a function that returns a set of integers
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION next_k_integers(IN first_value INTEGER,
                                            IN k INTEGER DEFAULT 3,
                                            OUT result INTEGER)

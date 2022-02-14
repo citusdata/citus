@@ -30,12 +30,9 @@ CREATE SEQUENCE numbers;
 SELECT * FROM table1 JOIN nextval('numbers') n ON (id = n) ORDER BY id ASC;
 
 -- Check joins of a function that returns a single integer
-SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION add(integer, integer) RETURNS integer
 AS 'SELECT $1 + $2;'
 LANGUAGE SQL;
-RESET citus.enable_metadata_sync;
-SELECT create_distributed_function('add(integer,integer)');
 SELECT * FROM table1 JOIN add(3,5) sum ON (id = sum) ORDER BY id ASC;
 
 -- Check join of plpgsql functions
@@ -49,7 +46,6 @@ $$ LANGUAGE plpgsql;
 SELECT * FROM table1 JOIN increment(2) val ON (id = val) ORDER BY id ASC;
 
 -- a function that returns a set of integers
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION next_k_integers(IN first_value INTEGER,
                                            IN k INTEGER DEFAULT 3,
                                            OUT result INTEGER)
