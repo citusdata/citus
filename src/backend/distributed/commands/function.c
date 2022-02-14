@@ -1329,8 +1329,8 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!DependentRelationsOfFunctionCanBeDistributed(&address))
+	ObjectAddress functionAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!DependentRelationsOfFunctionCanBeDistributed(&functionAddress))
 	{
 		ereport(WARNING, (errmsg("Citus can't distribute functions having dependency on"
 								 " non-distributed relations"),
@@ -1340,10 +1340,15 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	EnsureDependenciesExistOnAllNodes(&address);
+	if (IsObjectAddressOwnedByExtension(&functionAddress, NULL))
+	{
+		return NIL;
+	}
+
+	EnsureDependenciesExistOnAllNodes(&functionAddress);
 
 	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
-	commands = list_concat(commands, CreateFunctionDDLCommandsIdempotent(&address));
+	commands = list_concat(commands, CreateFunctionDDLCommandsIdempotent(&functionAddress));
 	commands = list_concat(commands, list_make1(ENABLE_DDL_PROPAGATION));
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
