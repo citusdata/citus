@@ -83,6 +83,7 @@ static void EnsureSequentialModeForFunctionDDL(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
+static bool DependentRelationsOfFunctionCanBeDistributed(ObjectAddress *functionAddress);
 static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
 											 bool missing_ok);
@@ -1310,9 +1311,10 @@ PreprocessCreateFunctionStmt(Node *node, const char *queryString,
  * PostprocessCreateFunctionStmt actually creates the plan we need to execute for function
  * propagation. This is the downside of using pg_get_functiondef to get the sql statement.
  *
- * If function depends on any non-distributed table or sequence, Citus can not distribute
- * it. In order to not to prevent users from creating local functions on the coordinator
- * WARNING message will be sent to the customer about the case instead of erroring out.
+ * If function depends on any non-distributed relation (except sequence and composite type),
+ * Citus can not distribute it. In order to not to prevent users from creating local
+ * functions on the coordinator WARNING message will be sent to the customer about the case
+ * instead of erroring out.
  *
  * Besides creating the plan we also make sure all (new) dependencies of the function are
  * created on all nodes.
@@ -1352,7 +1354,7 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
  * DependentRelationsOfFunctionCanBeDistributed checks whether Citus can distribute
  * dependent relations of the given function.
  */
-bool
+static bool
 DependentRelationsOfFunctionCanBeDistributed(ObjectAddress *functionAddress)
 {
 	Assert(getObjectClass(functionAddress) == OCLASS_PROC);
