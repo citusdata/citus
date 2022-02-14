@@ -38,7 +38,7 @@
 static List * CreateStmtListByObjectAddress(const ObjectAddress *address);
 static bool CompareStringList(List *list1, List *list2);
 
-PG_FUNCTION_INFO_V1(worker_create_or_replace_object_text);
+PG_FUNCTION_INFO_V1(worker_create_or_replace_object);
 PG_FUNCTION_INFO_V1(worker_create_or_replace_object_array);
 static bool WorkerCreateOrReplaceObject(List *sqlStatements);
 
@@ -107,7 +107,7 @@ WrapCreateOrReplaceList(List *sqls)
  *    it would drop any column holding user data for this type.
  */
 Datum
-worker_create_or_replace_object_text(PG_FUNCTION_ARGS)
+worker_create_or_replace_object(PG_FUNCTION_ARGS)
 {
 	text *sqlStatementText = PG_GETARG_TEXT_P(0);
 	char *sqlStatement = text_to_cstring(sqlStatementText);
