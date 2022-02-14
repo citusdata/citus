@@ -38,6 +38,10 @@ DeparseTreeNode(Node *stmt)
 }
 
 
+/*
+ * DeparseTreeNodes deparses all stmts in the list from the statement datastructure into
+ * sql statements.
+ */
 List *
 DeparseTreeNodes(List *stmts)
 {

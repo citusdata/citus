@@ -38,7 +38,9 @@
 static List * CreateStmtListByObjectAddress(const ObjectAddress *address);
 static bool CompareStringList(List *list1, List *list2);
 
-PG_FUNCTION_INFO_V1(worker_create_or_replace_object);
+PG_FUNCTION_INFO_V1(worker_create_or_replace_object_text);
+PG_FUNCTION_INFO_V1(worker_create_or_replace_object_array);
+static bool WorkerCreateOrReplaceObject(List *sqlStatements);
 
 
 /*
@@ -55,6 +57,10 @@ WrapCreateOrReplace(const char *sql)
 }
 
 
+/*
+ * WrapCreateOrReplaceList takes a list of sql commands and wraps it in a call to citus'
+ * udf to create or replace the existing object based on its create commands.
+ */
 char *
 WrapCreateOrReplaceList(List *sqls)
 {
@@ -82,53 +88,37 @@ WrapCreateOrReplaceList(List *sqls)
 }
 
 
-#define PG_GETARG_TYPE(n) pg_getarg_type_impl(fcinfo->flinfo->fn_oid, n);
-
 /*
- * pg_getarg_type_impl returns the oid of the type of the argument to a function by its
- * index.
+ * worker_create_or_replace_object(statement text)
  *
- * Its an implementation detail of PG_GETARG_TYPE to introspect what kind of argument is
- * passed to the function being called.
+ * function is called, by the coordinator, with a CREATE statement for an object. This
+ * function implements the CREATE ... IF NOT EXISTS functionality for objects that do not
+ * have this functionality or where their implementation is not sufficient.
+ *
+ * Besides checking if an object of said name exists it tries to compare the object to be
+ * created with the one in the local catalog. If there is a difference the one in the local
+ * catalog will be renamed after which the statement can be executed on this worker to
+ * create the object.
+ *
+ * Renaming has two purposes
+ *  - free the identifier for creation
+ *  - non destructive if there is data store that would be destroyed if the object was
+ *    used in a table on this node, eg. types. If the type would be dropped with a cascade
+ *    it would drop any column holding user data for this type.
  */
-static Oid
-pg_getarg_type_impl(Oid funcOid, int n)
+Datum
+worker_create_or_replace_object_text(PG_FUNCTION_ARGS)
 {
-	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcOid));
-	if (!HeapTupleIsValid(proctup))
-	{
-		return InvalidOid;
-	}
+	text *sqlStatementText = PG_GETARG_TEXT_P(0);
+	char *sqlStatement = text_to_cstring(sqlStatementText);
+	List *sqlStatements = list_make1(sqlStatement);
 
-	Oid *argtypes = NULL;
-	char **argnames = NULL;
-	char *argmodes = NULL;
-	int numargs = get_func_arg_info(proctup, &argtypes, &argnames, &argmodes);
-	if (n >= numargs)
-	{
-		elog(ERROR, "invalid argument index");
-	}
-
-	Oid typeOid = argtypes[n];
-	pfree(argtypes);
-	if (argnames != NULL)
-	{
-		pfree(argnames);
-	}
-	if (argmodes != NULL)
-	{
-		pfree(argmodes);
-	}
-
-	ReleaseSysCache(proctup);
-	return typeOid;
+	PG_RETURN_BOOL(WorkerCreateOrReplaceObject(sqlStatements));
 }
 
 
 /*
- * Implementation for both
- *  - worker_create_or_replace_object(statement text)
- *  - worker_create_or_replace_object(statements text[])
+ * worker_create_or_replace_object(statements text[])
  *
  * function is called, by the coordinator, with a CREATE statement for an object. This
  * function implements the CREATE ... IF NOT EXISTS functionality for objects that do not
@@ -146,44 +136,41 @@ pg_getarg_type_impl(Oid funcOid, int n)
  *  - non destructive if there is data store that would be destroyed if the object was
  *    used in a table on this node, eg. types. If the type would be dropped with a cascade
  *    it would drop any column holding user data for this type.
- *
- *  TODO: we can probably remove the existing object if it has no dependents
  */
 Datum
-worker_create_or_replace_object(PG_FUNCTION_ARGS)
+worker_create_or_replace_object_array(PG_FUNCTION_ARGS)
 {
 	List *sqlStatements = NIL;
+	Datum *textArray = NULL;
+	int length = 0;
+	deconstruct_array(PG_GETARG_ARRAYTYPE_P(0), TEXTOID, -1, false, 'i', &textArray,
+					  NULL, &length);
 
-	/*
-	 * The first argument is either a text or a list of text's, we normalize this to a
-	 * list of statements for further use, where the variant with just a single text
-	 * argument will be treated as a list of statements with length 1
-	 */
-	Oid argTypeOid = PG_GETARG_TYPE(0);
-	if (argTypeOid == TEXTOID)
+	for (int i = 0; i < length; i++)
 	{
-		text *sqlStatementText = PG_GETARG_TEXT_P(0);
-		char *sqlStatement = text_to_cstring(sqlStatementText);
-		sqlStatements = list_make1(sqlStatement);
-	}
-	else if (argTypeOid == TEXTARRAYOID)
-	{
-		Datum *textArray = NULL;
-		int length = 0;
-		deconstruct_array(PG_GETARG_ARRAYTYPE_P(0), TEXTOID, -1, false, 'i', &textArray,
-						  NULL, &length);
-
-		for (int i = 0; i < length; i++)
-		{
-			sqlStatements = lappend(sqlStatements, TextDatumGetCString(textArray[i]));
-		}
-	}
-	else
-	{
-		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						errmsg("unexpected argument type")));
+		sqlStatements = lappend(sqlStatements, TextDatumGetCString(textArray[i]));
 	}
 
+	if (list_length(sqlStatements) < 1)
+	{
+		ereport(ERROR, (errmsg("expected atleast 1 statement to be provided")));
+	}
+
+	PG_RETURN_BOOL(WorkerCreateOrReplaceObject(sqlStatements));
+}
+
+
+/*
+ * WorkerCreateOrReplaceObject implements the logic used by both variants of
+ * worker_create_or_replace_object to either create the object or coming to the conclusion
+ * the object already exists in the correct state.
+ *
+ * Returns true if the object has been created, false if it was already in the exact state
+ * it was asked for.
+ */
+static bool
+WorkerCreateOrReplaceObject(List *sqlStatements)
+{
 	/*
 	 * To check which object we are changing we find the object address from the first
 	 * statement passed into the UDF. Later we will check if all object addresses are the
@@ -218,7 +205,7 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 			 *
 			 * We let the coordinator know we didn't create the object.
 			 */
-			PG_RETURN_BOOL(false);
+			return false;
 		}
 
 		char *newName = GenerateBackupNameForCollision(&address);
@@ -245,7 +232,7 @@ worker_create_or_replace_object(PG_FUNCTION_ARGS)
 	}
 
 	/* type has been created */
-	PG_RETURN_BOOL(true);
+	return true;
 }
 
 
