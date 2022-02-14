@@ -90,7 +90,6 @@ static BackendData *MyBackendData = NULL;
 
 static void BackendManagementShmemInit(void);
 static size_t BackendManagementShmemSize(void);
-static void UnSetGlobalPID(void);
 
 
 PG_FUNCTION_INFO_V1(assign_distributed_transaction_id);
@@ -674,7 +673,7 @@ UnSetDistributedTransactionId(void)
 /*
  * UnSetGlobalPID resets the global pid for the current backend.
  */
-static void
+void
 UnSetGlobalPID(void)
 {
 	/* backend does not exist if the extension is not created */
