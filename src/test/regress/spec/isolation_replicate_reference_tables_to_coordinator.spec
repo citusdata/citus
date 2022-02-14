@@ -93,7 +93,8 @@ step "s2-view-worker"
     FROM citus_worker_stat_activity
     WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
           query NOT ILIKE '%COMMIT%' AND
-          query NOT ILIKE '%dump_local_%'
+          query NOT ILIKE '%dump_local_%' AND
+          query NOT ILIKE '%citus_internal_local_blocked_processes%'
     ORDER BY query, query_hostport DESC;
 }
 
