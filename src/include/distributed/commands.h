@@ -466,7 +466,9 @@ extern bool ConstrTypeUsesIndex(ConstrType constrType);
 
 
 /* truncate.c - forward declarations */
-extern void PreprocessTruncateStatement(TruncateStmt *truncateStatement);
+extern List * PreprocessTruncateStatement(TruncateStmt *truncateStatement);
+extern void AddForeignTablesToMetadataAfterTruncate(
+	List *undistributedForeignCitusLocalTables);
 
 /* type.c - forward declarations */
 extern List * PreprocessCompositeTypeStmt(Node *stmt, const char *queryString,

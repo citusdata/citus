@@ -45,6 +45,7 @@
 
 /* Local functions forward declarations for unsupported command checks */
 static void ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement);
+static List * UndistributeForeignTablesBeforeTruncate(TruncateStmt *truncateStatement);
 static void ExecuteTruncateStmtSequentialIfNecessary(TruncateStmt *command);
 static void EnsurePartitionTableNotReplicatedForTruncate(TruncateStmt *truncateStatement);
 static void LockTruncatedRelationMetadataInWorkers(TruncateStmt *truncateStatement);
@@ -242,13 +243,36 @@ EnsureLocalTableCanBeTruncated(Oid relationId)
  * done before standard process utility is called for truncate
  * command.
  */
-void
+List *
 PreprocessTruncateStatement(TruncateStmt *truncateStatement)
 {
 	ErrorIfUnsupportedTruncateStmt(truncateStatement);
+
+	List *undistributedForeignCitusLocalTables =
+		UndistributeForeignTablesBeforeTruncate(truncateStatement);
+
 	EnsurePartitionTableNotReplicatedForTruncate(truncateStatement);
 	ExecuteTruncateStmtSequentialIfNecessary(truncateStatement);
 	LockTruncatedRelationMetadataInWorkers(truncateStatement);
+
+	return undistributedForeignCitusLocalTables;
+}
+
+
+/*
+ * AddForeignTablesToMetadataAfterTruncate takes a list of rangeVar, that contains the
+ * foreign Citus Local Tables that are undistributed before TRUNCATE. This function
+ * adds the given relations to metadata.
+ */
+void
+AddForeignTablesToMetadataAfterTruncate(List *undistributedForeignCitusLocalTables)
+{
+	RangeVar *rangeVar = NULL;
+	foreach_ptr(rangeVar, undistributedForeignCitusLocalTables)
+	{
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+		CreateCitusLocalTable(relationId, true, true);
+	}
 }
 
 
@@ -266,16 +290,41 @@ ErrorIfUnsupportedTruncateStmt(TruncateStmt *truncateStatement)
 		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
 
 		ErrorIfIllegallyChangingKnownShard(relationId);
+	}
+}
 
-		if (IsCitusTable(relationId) && IsForeignTable(relationId))
+
+/*
+ * UndistributeForeignTablesBeforeTruncate takes a TruncateStmt and undistributes the
+ * foreign tables in that statement. Returns the RangeVar list of undistributed tables.
+ */
+static List *
+UndistributeForeignTablesBeforeTruncate(TruncateStmt *truncateStatement)
+{
+	List *undistributedTables = NIL;
+	List *relationList = truncateStatement->relations;
+	RangeVar *rangeVar = NULL;
+	foreach_ptr(rangeVar, relationList)
+	{
+		Oid relationId = RangeVarGetRelid(rangeVar, NoLock, false);
+
+		if (IsForeignTable(relationId) &&
+			IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 		{
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("truncating distributed foreign tables is "
-								   "currently unsupported"),
-							errhint("Consider undistributing table before TRUNCATE, "
-									"and then distribute or add to metadata again")));
+			ereport(DEBUG1, (errmsg("undistributing foreign table %s",
+									generate_qualified_relation_name(relationId)),
+							 errdetail("Will be added to metadata after TRUNCATE")));
+			TableConversionParameters params = {
+				.relationId = relationId,
+				.cascadeViaForeignKeys = true,
+				.suppressNoticeMessages = true
+			};
+			UndistributeTable(&params);
+			undistributedTables = lappend(undistributedTables, rangeVar);
 		}
 	}
+
+	return undistributedTables;
 }
 
 

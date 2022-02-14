@@ -499,9 +499,11 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		ErrorIfDistributedAlterSeqOwnedBy((AlterSeqStmt *) parsetree);
 	}
 
+	List *undistributedForeignCitusLocalTables = NIL;
 	if (IsA(parsetree, TruncateStmt))
 	{
-		PreprocessTruncateStatement((TruncateStmt *) parsetree);
+		undistributedForeignCitusLocalTables =
+			PreprocessTruncateStatement((TruncateStmt *) parsetree);
 	}
 
 	/*
@@ -784,6 +786,12 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		VacuumStmt *vacuumStmt = (VacuumStmt *) parsetree;
 
 		PostprocessVacuumStmt(vacuumStmt, queryString);
+	}
+
+	if (IsA(parsetree, TruncateStmt) &&
+		list_length(undistributedForeignCitusLocalTables) != 0)
+	{
+		AddForeignTablesToMetadataAfterTruncate(undistributedForeignCitusLocalTables);
 	}
 
 	if (!IsDropCitusExtensionStmt(parsetree) && !IsA(parsetree, DropdbStmt))
