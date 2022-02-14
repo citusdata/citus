@@ -1007,8 +1007,8 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                       | function citus_check_connection_to_node(text,integer) boolean
                                                                       | function citus_disable_node(text,integer,boolean) void
                                                                       | function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean) void
-                                                                      | function citus_internal_local_blocked_processes() SETOF record
                                                                       | function citus_internal_global_blocked_processes() SETOF record
+                                                                      | function citus_internal_local_blocked_processes() SETOF record
                                                                       | function citus_run_local_command(text) void
                                                                       | function citus_shard_indexes_on_worker() SETOF record
                                                                       | function citus_shards_on_worker() SETOF record
