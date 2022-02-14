@@ -21,10 +21,12 @@
 #include "columnar/mod.h"
 
 #include "columnar/columnar_tableam.h"
+#include "columnar/columnar_wal.h"
 
 void
 columnar_init(void)
 {
+	columnar_wal_init();
 	columnar_init_gucs();
 	columnar_tableam_init();
 }
