@@ -17,9 +17,9 @@
 #include "lib/stringinfo.h"
 #include "distributed/citus_safe_lib.h"
 #include "distributed/listutils.h"
+#include "distributed/pg_version_constants.h"
 #include "nodes/pg_list.h"
 #include "utils/memutils.h"
-
 
 /*
  * SortList takes in a list of void pointers, and sorts these pointers (and the
@@ -273,6 +273,7 @@ GenerateListFromElement(void *listElement, int listLength)
 List *
 list_reverse(const List *list)
 {
+#if PG_VERSION_NUM >= PG_VERSION_13
 	List *newList = NIL;
 	for (int i = list_length(list) - 1; i >= 0; i--)
 	{
@@ -280,4 +281,29 @@ list_reverse(const List *list)
 	}
 
 	return newList;
+#else
+	int nelements = list_length(list);
+	if (nelements == 0)
+	{
+		return NIL;
+	}
+
+	void **listElements = palloc0(sizeof(void *) * nelements);
+
+	int i = 0;
+	void *listElement = NULL;
+	foreach_ptr(listElement, list)
+	{
+		listElements[i++] = listElement;
+	}
+
+	List *newList = NIL;
+
+	for (i = nelements - 1; i >= 0; i--)
+	{
+		newList = lappend(newList, listElements[i]);
+	}
+
+	return newList;
+#endif
 }
