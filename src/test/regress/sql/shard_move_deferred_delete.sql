@@ -81,6 +81,7 @@ SELECT master_move_shard_placement(20000000, 'localhost', :worker_2_port, 'local
 
 
 -- override the function for testing purpose
+-- since it is extension owned function, propagate it to workers manually
 create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
 as $BODY$
 begin
@@ -88,6 +89,30 @@ begin
     select 8500 into total_disk_size;
 end
 $BODY$ language plpgsql;
+
+\c - - - :worker_1_port
+SET citus.enable_metadata_sync TO OFF;
+create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
+as $BODY$
+begin
+    select 20 into available_disk_size;
+    select 8500 into total_disk_size;
+end
+$BODY$ language plpgsql;
+
+\c - - - :worker_2_port
+SET citus.enable_metadata_sync TO OFF;
+create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
+as $BODY$
+begin
+    select 20 into available_disk_size;
+    select 8500 into total_disk_size;
+end
+$BODY$ language plpgsql;
+
+\c - - - :master_port
+
+SET search_path TO shard_move_deferred_delete;
 
 SELECT citus_shard_cost_by_disk_size(20000001);
 
@@ -106,6 +131,7 @@ SELECT run_command_on_workers($cmd$
 $cmd$);
 
 -- override the function for testing purpose
+-- since it is extension owned function, propagate it to workers manually
 create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
 as $BODY$
 begin
@@ -113,6 +139,30 @@ begin
     select 8500 into total_disk_size;
 end
 $BODY$ language plpgsql;
+
+\c - - - :worker_1_port
+SET citus.enable_metadata_sync TO OFF;
+create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
+as $BODY$
+begin
+    select 8300 into available_disk_size;
+    select 8500 into total_disk_size;
+end
+$BODY$ language plpgsql;
+
+\c - - - :worker_2_port
+SET citus.enable_metadata_sync TO OFF;
+create or replace function pg_catalog.citus_local_disk_space_stats(OUT available_disk_size bigint, OUT total_disk_size bigint)
+as $BODY$
+begin
+    select 8300 into available_disk_size;
+    select 8500 into total_disk_size;
+end
+$BODY$ language plpgsql;
+
+\c - - - :master_port
+
+SET search_path TO shard_move_deferred_delete;
 
 -- When there would not be enough free space left after the move, the move should fail
 SELECT master_move_shard_placement(20000001, 'localhost', :worker_2_port, 'localhost', :worker_1_port);
