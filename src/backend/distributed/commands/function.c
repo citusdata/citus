@@ -1348,7 +1348,8 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 	EnsureDependenciesExistOnAllNodes(&functionAddress);
 
 	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
-	commands = list_concat(commands, CreateFunctionDDLCommandsIdempotent(&functionAddress));
+	commands = list_concat(commands, CreateFunctionDDLCommandsIdempotent(
+							   &functionAddress));
 	commands = list_concat(commands, list_make1(ENABLE_DDL_PROPAGATION));
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
