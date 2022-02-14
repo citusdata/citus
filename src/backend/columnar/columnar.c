@@ -57,6 +57,7 @@ static const struct config_enum_entry columnar_compression_options[] =
 void
 columnar_init(void)
 {
+	columnar_wal_init();
 	columnar_init_gucs();
 	columnar_tableam_init();
 }
