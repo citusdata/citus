@@ -83,7 +83,8 @@ static void EnsureSequentialModeForFunctionDDL(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
-static bool DependentRelationsOfFunctionCanBeDistributed(ObjectAddress *functionAddress);
+static ObjectAddress * UndistributableRelationDependencyOfFunction(
+	ObjectAddress *functionAddress);
 static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
 											 bool missing_ok);
@@ -1227,11 +1228,11 @@ ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
 	}
 
 	/*
-	 * by not propagating in a transaction block we allow for parallelism to be used when
-	 * this function will be used as a column in a table that will be created and distributed
-	 * in this same transaction.
+	 * If the create command is a part of a multi-statement transaction that is not in
+	 * sequential mode, don't propagate. Instead we will rely on back filling.
 	 */
-	if (IsMultiStatementTransaction())
+	if (IsMultiStatementTransaction() &&
+		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
 	{
 		return false;
 	}
@@ -1330,18 +1331,26 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 	}
 
 	ObjectAddress functionAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
-	if (!DependentRelationsOfFunctionCanBeDistributed(&functionAddress))
-	{
-		ereport(WARNING, (errmsg("Citus can't distribute functions having dependency on"
-								 " non-distributed relations"),
-						  errdetail("Function will be created only locally"),
-						  errhint("To distribute function, distribute dependent relations"
-								  " first")));
-		return NIL;
-	}
 
 	if (IsObjectAddressOwnedByExtension(&functionAddress, NULL))
 	{
+		return NIL;
+	}
+
+	ObjectAddress *undistributableDependency =
+		UndistributableRelationDependencyOfFunction(&functionAddress);
+	if (undistributableDependency != NULL)
+	{
+		RangeVar *functionRangeVar = makeRangeVarFromNameList(stmt->funcname);
+		char *functionName = functionRangeVar->relname;
+		char *dependentRelationName = get_rel_name(undistributableDependency->objectId);
+
+		ereport(WARNING, (errmsg("Citus can't distribute function %s having dependency on"
+								 " non-distributed relation %s", functionName,
+								 dependentRelationName),
+						  errdetail("Function will be created only locally"),
+						  errhint("To distribute function, distribute dependent relations"
+								  " first. Then, re-create the function")));
 		return NIL;
 	}
 
@@ -1357,11 +1366,12 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 
 
 /*
- * DependentRelationsOfFunctionCanBeDistributed checks whether Citus can distribute
- * dependent relations of the given function.
+ * UndistributableRelationDependencyOfFunction checks whether Citus can distribute
+ * dependent relations of the given function. If any non-distributable one found, it
+ * will be returned.
  */
-static bool
-DependentRelationsOfFunctionCanBeDistributed(ObjectAddress *functionAddress)
+static ObjectAddress *
+UndistributableRelationDependencyOfFunction(ObjectAddress *functionAddress)
 {
 	Assert(getObjectClass(functionAddress) == OCLASS_PROC);
 
@@ -1387,10 +1397,10 @@ DependentRelationsOfFunctionCanBeDistributed(ObjectAddress *functionAddress)
 			continue;
 		}
 
-		return false;
+		return dependency;
 	}
 
-	return true;
+	return NULL;
 }
 
 

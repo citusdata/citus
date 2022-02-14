@@ -4,9 +4,9 @@ SET search_path TO 'function_propagation_schema';
 -- Check whether supported dependencies can be distributed while propagating functions
 
 -- Check types
-BEGIN;
+SET citus.enable_metadata_sync TO OFF;
     CREATE TYPE function_prop_type AS (a int, b int);
-COMMIT;
+RESET citus.enable_metadata_sync;
 
 CREATE OR REPLACE FUNCTION func_1(param_1 function_prop_type)
 RETURNS int
@@ -25,9 +25,9 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.function_prop_type'::regtype::oid;$$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_1'::regproc::oid;$$) ORDER BY 1,2;
 
-BEGIN;
+SET citus.enable_metadata_sync TO OFF;
     CREATE TYPE function_prop_type_2 AS (a int, b int);
-COMMIT;
+RESET citus.enable_metadata_sync;
 
 CREATE OR REPLACE FUNCTION func_2(param_1 int)
 RETURNS function_prop_type_2
@@ -43,6 +43,7 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dis
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.function_prop_type_2'::regtype::oid;$$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_2'::regproc::oid;$$) ORDER BY 1,2;
 
+-- Have a separate check for type created in transaction
 BEGIN;
     CREATE TYPE function_prop_type_3 AS (a int, b int);
 COMMIT;
