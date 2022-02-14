@@ -304,13 +304,6 @@ SELECT * FROM seg_test;
 
 \c - - - :master_port
 CREATE SCHEMA ext_owned_tables;
-SELECT run_command_on_workers($$CREATE SCHEMA ext_owned_tables;$$);
-       run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE SCHEMA")
- (localhost,57638,t,"CREATE SCHEMA")
-(2 rows)
-
 SET search_path TO ext_owned_tables;
 CREATE sequence my_seq_ext_1;
 SELECT run_command_on_workers($$CREATE sequence ext_owned_tables.my_seq_ext_1;$$);

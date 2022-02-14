@@ -6,6 +6,7 @@ SET citus.next_placement_id TO 1500000;
 -- supress notice messages to make sure that the tests
 -- do not diverge with enterprise
 SET client_min_messages TO WARNING;
+SELECT run_command_on_workers($$CREATE ROLE metadata_sync_helper_role WITH LOGIN;$$);
 CREATE ROLE metadata_sync_helper_role WITH LOGIN;
 GRANT ALL ON SCHEMA metadata_sync_helpers TO metadata_sync_helper_role;
 RESET client_min_messages;
@@ -31,32 +32,12 @@ BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
 	SET application_name to 'citus_internal gpid=10000000001';
 	SELECT citus_internal_add_partition_metadata ('test'::regclass, 'h', 'col_1', 0, 's');
 ROLLBACK;
-
--- connect back as super user, and then connect to the worker
--- with the superuser to make sure we can ingest metadata with
--- a regular user under the certain conditions
 \c - postgres -
-
--- we don't need the table/schema anymore
-SET client_min_messages TO ERROR;
-DROP SCHEMA metadata_sync_helpers CASCADE;
-DROP ROLE metadata_sync_helper_role;
-
 \c - - - :worker_1_port
 
-CREATE SCHEMA metadata_sync_helpers;
 SET search_path TO metadata_sync_helpers;
 
 CREATE TABLE test(col_1 int, col_2 int);
-
--- supress notice messages to make sure that the tests
--- do not diverge with enterprise
-SET client_min_messages TO WARNING;
-SET citus.enable_ddl_propagation TO OFF;
-CREATE ROLE metadata_sync_helper_role WITH LOGIN;
-GRANT ALL ON SCHEMA metadata_sync_helpers TO metadata_sync_helper_role;
-RESET client_min_messages;
-RESET citus.enable_ddl_propagation;
 
 -- connect back with the regular user
 \c - metadata_sync_helper_role - :worker_1_port
@@ -875,4 +856,8 @@ SET client_min_messages TO ERROR;
 SET citus.enable_ddl_propagation TO OFF;
 DROP OWNED BY metadata_sync_helper_role;
 DROP ROLE metadata_sync_helper_role;
+
+\c - - - :master_port
+-- cleanup
+SET client_min_messages TO ERROR;
 DROP SCHEMA metadata_sync_helpers CASCADE;

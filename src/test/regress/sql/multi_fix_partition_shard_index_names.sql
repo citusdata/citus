@@ -342,4 +342,3 @@ ALTER TABLE parent_table DROP CONSTRAINT unique_cst CASCADE;
 
 DROP SCHEMA fix_idx_names CASCADE;
 SELECT citus_remove_node('localhost', :master_port);
-SELECT run_command_on_workers($$ DROP SCHEMA IF EXISTS fix_idx_names CASCADE $$);

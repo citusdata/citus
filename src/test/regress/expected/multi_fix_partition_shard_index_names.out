@@ -741,10 +741,3 @@ SELECT citus_remove_node('localhost', :master_port);
 
 (1 row)
 
-SELECT run_command_on_workers($$ DROP SCHEMA IF EXISTS fix_idx_names CASCADE $$);
-      run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP SCHEMA")
- (localhost,57638,t,"DROP SCHEMA")
-(2 rows)
-

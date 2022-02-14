@@ -60,18 +60,5 @@ JOIN LATERAL
 ON TRUE
 	ORDER BY 1;
 
--- find non-distributed dependencies of the local table test2
-CREATE SCHEMA objectprop2;
-create table objectprop2.test2(a int, b t1);
-SET search_path TO objectprop2;
-SELECT
-	pg_identify_object(t.classid, t.objid, t.objsubid)
-FROM
-	(SELECT * FROM pg_get_object_address('table', '{test2}', '{}')) as addr
-JOIN LATERAL
-	"object prop".citus_get_dependencies_for_object(addr.classid, addr.objid, addr.objsubid) as t(classid oid, objid oid, objsubid int)
-ON TRUE
-	ORDER BY 1;
-
 SET client_min_messages TO ERROR;
-DROP SCHEMA  "object prop", objectprop2 CASCADE;
+DROP SCHEMA  "object prop" CASCADE;

@@ -41,7 +41,7 @@ AS 'SELECT $1 + $2;'
 LANGUAGE SQL;
 SELECT create_distributed_function('add(integer,integer)');
 DEBUG:  switching to sequential query execution mode
-DETAIL:  A distributed function is created. To make sure subsequent commands see the type correctly we need to make sure to use only one connection for all future commands
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 

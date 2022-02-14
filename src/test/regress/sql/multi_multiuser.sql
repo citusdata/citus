@@ -54,12 +54,6 @@ GRANT SELECT ON TABLE test_1420000 TO read_access;
 GRANT ALL ON TABLE test_1420002 TO full_access;
 GRANT SELECT ON TABLE test_1420002 TO read_access;
 
-CREATE SCHEMA full_access_user_schema;
-REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
-GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
-GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
-GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
-
 \c - - - :worker_2_port
 CREATE USER full_access;
 CREATE USER usage_access;
@@ -74,12 +68,6 @@ GRANT SELECT ON TABLE test_1420001 TO read_access;
 
 GRANT ALL ON TABLE test_1420003 TO full_access;
 GRANT SELECT ON TABLE test_1420003 TO read_access;
-
-CREATE SCHEMA full_access_user_schema;
-REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
-GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
-GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
-GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 \c - - - :master_port
 

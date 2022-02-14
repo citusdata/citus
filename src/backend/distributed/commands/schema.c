@@ -40,8 +40,39 @@
 #include "utils/relcache.h"
 
 
+static ObjectAddress GetObjectAddressBySchemaName(char *schemaName, bool missing_ok);
 static List * FilterDistributedSchemas(List *schemas);
-static void EnsureSequentialModeForSchemaDDL(void);
+static bool SchemaHasDistributedTableWithFKey(char *schemaName);
+static bool ShouldPropagateCreateSchemaStmt(void);
+
+
+/*
+ * PreprocessCreateSchemaStmt is called during the planning phase for
+ * CREATE SCHEMA ..
+ */
+List *
+PreprocessCreateSchemaStmt(Node *node, const char *queryString,
+						   ProcessUtilityContext processUtilityContext)
+{
+	if (!ShouldPropagateCreateSchemaStmt())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
+
+	EnsureSequentialMode(OBJECT_SCHEMA);
+
+	/* deparse sql*/
+	const char *sql = DeparseTreeNode(node);
+
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
 
 
 /*
@@ -53,76 +84,54 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 						 ProcessUtilityContext processUtilityContext)
 {
 	DropStmt *dropStatement = castNode(DropStmt, node);
-	Relation pgClass = NULL;
-	HeapTuple heapTuple = NULL;
-	SysScanDesc scanDescriptor = NULL;
-	ScanKeyData scanKey[1];
-	int scanKeyCount = 1;
-	Oid scanIndexId = InvalidOid;
-	bool useIndex = false;
+	Assert(dropStatement->removeType == OBJECT_SCHEMA);
 
-	if (dropStatement->behavior != DROP_CASCADE)
+	if (!ShouldPropagate())
 	{
 		return NIL;
 	}
 
-	Value *schemaValue = NULL;
-	foreach_ptr(schemaValue, dropStatement->objects)
+	EnsureCoordinator();
+
+	List *distributedSchemas = FilterDistributedSchemas(dropStatement->objects);
+
+	if (list_length(distributedSchemas) < 1)
 	{
-		const char *schemaString = strVal(schemaValue);
-		Oid namespaceOid = get_namespace_oid(schemaString, true);
-
-		if (namespaceOid == InvalidOid)
-		{
-			continue;
-		}
-
-		pgClass = table_open(RelationRelationId, AccessShareLock);
-
-		ScanKeyInit(&scanKey[0], Anum_pg_class_relnamespace, BTEqualStrategyNumber,
-					F_OIDEQ, namespaceOid);
-		scanDescriptor = systable_beginscan(pgClass, scanIndexId, useIndex, NULL,
-											scanKeyCount, scanKey);
-
-		heapTuple = systable_getnext(scanDescriptor);
-		while (HeapTupleIsValid(heapTuple))
-		{
-			Form_pg_class relationForm = (Form_pg_class) GETSTRUCT(heapTuple);
-			char *relationName = NameStr(relationForm->relname);
-			Oid relationId = get_relname_relid(relationName, namespaceOid);
-
-			/* we're not interested in non-valid, non-distributed relations */
-			if (relationId == InvalidOid || !IsCitusTable(relationId))
-			{
-				heapTuple = systable_getnext(scanDescriptor);
-				continue;
-			}
-
-			if (IsCitusTableType(relationId, REFERENCE_TABLE))
-			{
-				/* prevent concurrent EnsureReferenceTablesExistOnAllNodes */
-				int colocationId = CreateReferenceTableColocationId();
-				LockColocationId(colocationId, ExclusiveLock);
-			}
-
-			/* invalidate foreign key cache if the table involved in any foreign key */
-			if (TableReferenced(relationId) || TableReferencing(relationId))
-			{
-				MarkInvalidateForeignKeyGraph();
-
-				systable_endscan(scanDescriptor);
-				table_close(pgClass, NoLock);
-				return NIL;
-			}
-
-			heapTuple = systable_getnext(scanDescriptor);
-		}
-
-		systable_endscan(scanDescriptor);
-		table_close(pgClass, NoLock);
+		return NIL;
 	}
 
-	return NIL;
+	EnsureSequentialMode(OBJECT_SCHEMA);
+
+	Value *schemaVal = NULL;
+	foreach_ptr(schemaVal, distributedSchemas)
+	{
+		if (SchemaHasDistributedTableWithFKey(strVal(schemaVal)))
+		{
+			MarkInvalidateForeignKeyGraph();
+			break;
+		}
+	}
+
+	/*
+	 * We swap around the schema's in the statement to only contain the distributed
+	 * schemas before deparsing. We need to restore the original list as postgres
+	 * will execute on this statement locally, which requires all original schemas
+	 * from the user to be present.
+	 */
+	List *originalObjects = dropStatement->objects;
+
+	dropStatement->objects = distributedSchemas;
+
+	const char *sql = DeparseTreeNode(node);
+
+	dropStatement->objects = originalObjects;
+
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
+								(void *) sql,
+								ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
 
 
@@ -194,7 +203,7 @@ PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString,
 	/* deparse sql*/
 	const char *renameStmtSql = DeparseTreeNode(node);
 
-	EnsureSequentialModeForSchemaDDL();
+	EnsureSequentialMode(OBJECT_SCHEMA);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -202,6 +211,19 @@ PreprocessAlterSchemaRenameStmt(Node *node, const char *queryString,
 								ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * CreateSchemaStmtObjectAddress returns the ObjectAddress of the schema that is
+ * the object of the CreateSchemaStmt. Errors if missing_ok is false.
+ */
+ObjectAddress
+CreateSchemaStmtObjectAddress(Node *node, bool missing_ok)
+{
+	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
+
+	return GetObjectAddressBySchemaName(stmt->schemaname, missing_ok);
 }
 
 
@@ -215,7 +237,17 @@ AlterSchemaRenameStmtObjectAddress(Node *node, bool missing_ok)
 	RenameStmt *stmt = castNode(RenameStmt, node);
 	Assert(stmt->renameType == OBJECT_SCHEMA);
 
-	const char *schemaName = stmt->subname;
+	return GetObjectAddressBySchemaName(stmt->subname, missing_ok);
+}
+
+
+/*
+ * GetObjectAddressBySchemaName returns the ObjectAddress of the schema with the
+ * given name. Errors out if schema is not found and missing_ok is false.
+ */
+ObjectAddress
+GetObjectAddressBySchemaName(char *schemaName, bool missing_ok)
+{
 	Oid schemaOid = get_namespace_oid(schemaName, missing_ok);
 
 	ObjectAddress address = { 0 };
@@ -261,38 +293,85 @@ FilterDistributedSchemas(List *schemas)
 
 
 /*
- * EnsureSequentialModeForSchemaDDL makes sure that the current transaction is already in
- * sequential mode, or can still safely be put in sequential mode, it errors if that is
- * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginning.
- *
- * Copy-pasted from type.c
+ * SchemaHasDistributedTableWithFKey takes a schema name and scans the relations within
+ * that schema. If any one of the relations has a foreign key relationship, it returns
+ * true. Returns false otherwise.
  */
-static void
-EnsureSequentialModeForSchemaDDL(void)
+static bool
+SchemaHasDistributedTableWithFKey(char *schemaName)
 {
-	if (!IsTransactionBlock())
+	ScanKeyData scanKey[1];
+	int scanKeyCount = 1;
+	Oid scanIndexId = InvalidOid;
+	bool useIndex = false;
+
+	Oid namespaceOid = get_namespace_oid(schemaName, true);
+
+	if (namespaceOid == InvalidOid)
 	{
-		/* we do not need to switch to sequential mode if we are not in a transaction */
-		return;
+		return false;
 	}
 
-	if (ParallelQueryExecutedInTransaction())
+	Relation pgClass = table_open(RelationRelationId, AccessShareLock);
+
+	ScanKeyInit(&scanKey[0], Anum_pg_class_relnamespace, BTEqualStrategyNumber,
+				F_OIDEQ, namespaceOid);
+	SysScanDesc scanDescriptor = systable_beginscan(pgClass, scanIndexId, useIndex, NULL,
+													scanKeyCount, scanKey);
+
+	HeapTuple heapTuple = systable_getnext(scanDescriptor);
+	while (HeapTupleIsValid(heapTuple))
 	{
-		ereport(ERROR, (errmsg("cannot create or modify schema because there was a "
-							   "parallel operation on a distributed table in the "
-							   "transaction"),
-						errdetail("When creating or altering a schema, Citus needs to "
-								  "perform all operations over a single connection per "
-								  "node to ensure consistency."),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
+		Form_pg_class relationForm = (Form_pg_class) GETSTRUCT(heapTuple);
+		char *relationName = NameStr(relationForm->relname);
+		Oid relationId = get_relname_relid(relationName, namespaceOid);
+
+		/* we're not interested in non-valid, non-distributed relations */
+		if (relationId == InvalidOid || !IsCitusTable(relationId))
+		{
+			heapTuple = systable_getnext(scanDescriptor);
+			continue;
+		}
+
+		/* invalidate foreign key cache if the table involved in any foreign key */
+		if (TableReferenced(relationId) || TableReferencing(relationId))
+		{
+			systable_endscan(scanDescriptor);
+			table_close(pgClass, NoLock);
+			return true;
+		}
+
+		heapTuple = systable_getnext(scanDescriptor);
 	}
 
-	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-					 errdetail("Schema is created or altered. To make sure subsequent "
-							   "commands see the schema correctly we need to make sure to "
-							   "use only one connection for all future commands")));
-	SetLocalMultiShardModifyModeToSequential();
+	systable_endscan(scanDescriptor);
+	table_close(pgClass, NoLock);
+
+	return false;
+}
+
+
+/*
+ * ShouldPropagateCreateSchemaStmt gets called only for CreateSchemaStmt's.
+ * This function wraps the ShouldPropagate function which is commonly used
+ * for all object types; additionally it checks whether there's a multi-statement
+ * transaction ongoing or not. For transaction blocks, we require sequential mode
+ * with this function, for CREATE SCHEMA statements. If Citus has not already
+ * switched to sequential mode, we don't propagate.
+ */
+static bool
+ShouldPropagateCreateSchemaStmt()
+{
+	if (!ShouldPropagate())
+	{
+		return false;
+	}
+
+	if (IsMultiStatementTransaction() &&
+		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
+	{
+		return false;
+	}
+
+	return true;
 }

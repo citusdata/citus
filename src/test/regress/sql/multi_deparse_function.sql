@@ -258,14 +258,11 @@ SELECT deparse_and_run_on_workers($cmd$
 DROP FUNCTION IF EXISTS missing_func_without_args;
 $cmd$);
 
+set citus.enable_ddl_propagation to on;
 -- create schema with weird names
 CREATE SCHEMA "CiTuS.TeeN";
 CREATE SCHEMA "CiTUS.TEEN2";
-
-SELECT run_command_on_workers($$
-    CREATE SCHEMA IF NOT EXISTS "CiTuS.TeeN";
-    CREATE SCHEMA IF NOT EXISTS "CiTUS.TEEN2";
-$$);
+set citus.enable_ddl_propagation to off;
 
 -- create table with weird names
 CREATE FUNCTION "CiTuS.TeeN"."TeeNFunCT10N.1!?!"() RETURNS TEXT
@@ -386,11 +383,5 @@ SET client_min_messages TO WARNING; -- suppress cascading objects dropping
 DROP SCHEMA "CiTuS.TeeN" CASCADE;
 DROP SCHEMA "CiTUS.TEEN2" CASCADE;
 DROP SCHEMA function_tests CASCADE;
-
-SELECT run_command_on_workers($$
-    DROP SCHEMA "CiTuS.TeeN" CASCADE;
-    DROP SCHEMA "CiTUS.TEEN2" CASCADE;
-    DROP SCHEMA function_tests CASCADE;
-$$);
 
 DROP ROLE function_role;
