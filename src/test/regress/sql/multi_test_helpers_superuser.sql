@@ -37,6 +37,7 @@ $$;
 
 
 -- partition_task_list_results tests the internal PartitionTasklistResults function
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION pg_catalog.partition_task_list_results(resultIdPrefix text,
                                                                   query text,
                                                                   target_table regclass,
@@ -48,7 +49,6 @@ CREATE OR REPLACE FUNCTION pg_catalog.partition_task_list_results(resultIdPrefix
                   targetShardIndex int)
     LANGUAGE C STRICT VOLATILE
     AS 'citus', $$partition_task_list_results$$;
-
 
 -- get size of TopTransactionContext
 CREATE OR REPLACE FUNCTION top_transaction_context_size() RETURNS BIGINT
@@ -65,3 +65,4 @@ BEGIN
   PERFORM public.wait_until_metadata_sync(30000);
 END;
 $function$;
+RESET citus.enable_metadata_sync;
