@@ -8,6 +8,8 @@
 -- ===================================================================
 SET client_min_messages TO DEBUG1;
 CREATE SCHEMA non_colocated_subquery;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed schema is run. To make sure subsequent commands see the schema correctly we need to make sure to use only one connection for all future commands
 SET search_path TO non_colocated_subquery, public;
 -- we don't use the data anyway
 CREATE TABLE users_table_local AS SELECT * FROM users_table LIMIT 0;

@@ -2011,8 +2011,28 @@ RESET citus.enable_manual_changes_to_shards ;
 -- these should work as expected
 TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
 DROP TABLE test_disabling_drop_and_truncate_102040;
-RESET citus.shard_replication_factor;
 DROP TABLE test_disabling_drop_and_truncate;
+-- test creating distributed or reference tables from shards
+CREATE TABLE test_creating_distributed_relation_table_from_shard (a int);
+SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard', 'a');
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102044, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) ');SELECT worker_apply_shard_ddl_command (102044, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102045, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) ');SELECT worker_apply_shard_ddl_command (102045, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102046, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) ');SELECT worker_apply_shard_ddl_command (102046, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
+NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (102047, 'single_node', 'CREATE TABLE single_node.test_creating_distributed_relation_table_from_shard (a integer) ');SELECT worker_apply_shard_ddl_command (102047, 'single_node', 'ALTER TABLE single_node.test_creating_distributed_relation_table_from_shard OWNER TO postgres')
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- these should error because shards cannot be used to:
+-- create distributed table
+SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard_102044', 'a');
+ERROR:  relation "test_creating_distributed_relation_table_from_shard_102044" is a shard relation
+-- create reference table
+SELECT create_reference_table('test_creating_distributed_relation_table_from_shard_102044');
+ERROR:  relation "test_creating_distributed_relation_table_from_shard_102044" is a shard relation
+RESET citus.shard_replication_factor;
+DROP TABLE test_creating_distributed_relation_table_from_shard;
 -- lets flush the copy often to make sure everyhing is fine
 SET citus.local_copy_flush_threshold TO 1;
 TRUNCATE another_schema_table;

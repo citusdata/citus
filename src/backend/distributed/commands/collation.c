@@ -37,7 +37,6 @@ static char * CreateCollationDDLInternal(Oid collationId, Oid *collowner,
 										 char **quotedCollationName);
 static List * FilterNameListForDistributedCollations(List *objects, bool missing_ok,
 													 List **addresses);
-static void EnsureSequentialModeForCollationDDL(void);
 
 
 /*
@@ -256,7 +255,7 @@ PreprocessDropCollationStmt(Node *node, const char *queryString,
 	char *dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldCollations;
 
-	EnsureSequentialModeForCollationDDL();
+	EnsureSequentialMode(OBJECT_COLLATION);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -292,7 +291,7 @@ PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString,
 	QualifyTreeNode((Node *) stmt);
 	char *sql = DeparseTreeNode((Node *) stmt);
 
-	EnsureSequentialModeForCollationDDL();
+	EnsureSequentialMode(OBJECT_COLLATION);
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
@@ -328,7 +327,7 @@ PreprocessRenameCollationStmt(Node *node, const char *queryString,
 	/* deparse sql*/
 	char *renameStmtSql = DeparseTreeNode((Node *) stmt);
 
-	EnsureSequentialModeForCollationDDL();
+	EnsureSequentialMode(OBJECT_COLLATION);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -363,7 +362,7 @@ PreprocessAlterCollationSchemaStmt(Node *node, const char *queryString,
 	QualifyTreeNode((Node *) stmt);
 	char *sql = DeparseTreeNode((Node *) stmt);
 
-	EnsureSequentialModeForCollationDDL();
+	EnsureSequentialMode(OBJECT_COLLATION);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
@@ -450,47 +449,6 @@ AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectAddress address = { 0 };
 	ObjectAddressSet(address, CollationRelationId, collationOid);
 	return address;
-}
-
-
-/*
- * EnsureSequentialModeForCollationDDL makes sure that the current transaction is already in
- * sequential mode, or can still safely be put in sequential mode, it errors if that is
- * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginning.
- *
- * As collations are node scoped objects there exists only 1 instance of the collation used by
- * potentially multiple shards. To make sure all shards in the transaction can interact
- * with the type the type needs to be visible on all connections used by the transaction,
- * meaning we can only use 1 connection per node.
- */
-static void
-EnsureSequentialModeForCollationDDL(void)
-{
-	if (!IsTransactionBlock())
-	{
-		/* we do not need to switch to sequential mode if we are not in a transaction */
-		return;
-	}
-
-	if (ParallelQueryExecutedInTransaction())
-	{
-		ereport(ERROR, (errmsg("cannot create or modify collation because there was a "
-							   "parallel operation on a distributed table in the "
-							   "transaction"),
-						errdetail("When creating or altering a collation, Citus needs to "
-								  "perform all operations over a single connection per "
-								  "node to ensure consistency."),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
-	}
-
-	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-					 errdetail("Collation is created or altered. To make sure subsequent "
-							   "commands see the collation correctly we need to make sure to "
-							   "use only one connection for all future commands")));
-	SetLocalMultiShardModifyModeToSequential();
 }
 
 

@@ -60,6 +60,7 @@
 #include "distributed/remote_commands.h"
 #include "distributed/shared_library_init.h"
 #include "distributed/worker_protocol.h"
+#include "distributed/worker_shard_visibility.h"
 #include "distributed/worker_transaction.h"
 #include "distributed/version_compat.h"
 #include "executor/executor.h"
@@ -327,6 +328,7 @@ create_reference_table(PG_FUNCTION_ARGS)
  * - we are on the coordinator
  * - the current user is the owner of the table
  * - relation kind is supported
+ * - relation is not a shard
  */
 static void
 EnsureCitusTableCanBeCreated(Oid relationOid)
@@ -343,6 +345,14 @@ EnsureCitusTableCanBeCreated(Oid relationOid)
 	 * will be performed in CreateDistributedTable.
 	 */
 	EnsureRelationKindSupported(relationOid);
+
+	/*
+	 * When coordinator is added to the metadata, or on the workers,
+	 * some of the relations of the coordinator node may/will be shards.
+	 * We disallow creating distributed tables from shard relations, by
+	 * erroring out here.
+	 */
+	ErrorIfRelationIsAKnownShard(relationOid);
 }
 
 

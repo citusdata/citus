@@ -1376,8 +1376,8 @@ BEGIN;
 (1 row)
 
     ALTER SCHEMA bar RENAME TO foo;
-ERROR:  cannot create or modify schema because there was a parallel operation on a distributed table in the transaction
-DETAIL:  When creating, altering, or dropping a schema, Citus needs to perform all operations over a single connection per node to ensure consistency.
+ERROR:  cannot run schema command because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When running command on/for a distributed schema, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 BEGIN;
