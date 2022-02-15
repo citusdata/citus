@@ -83,7 +83,7 @@ static void EnsureSequentialModeForFunctionDDL(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
-static ObjectAddress * UndistributableRelationDependencyOfFunction(
+static ObjectAddress * GetUndistributableRelationDependency(
 	ObjectAddress *functionAddress);
 static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
@@ -1337,8 +1337,8 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress *undistributableDependency =
-		UndistributableRelationDependencyOfFunction(&functionAddress);
+	ObjectAddress *undistributableDependency = GetUndistributableRelationDependency(
+		&functionAddress);
 	if (undistributableDependency != NULL)
 	{
 		RangeVar *functionRangeVar = makeRangeVarFromNameList(stmt->funcname);
@@ -1366,28 +1366,27 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 
 
 /*
- * UndistributableRelationDependencyOfFunction checks whether Citus can distribute
- * dependent relations of the given function. If any non-distributable one found, it
- * will be returned.
+ * GetUndistributableRelationDependency checks whether object has any non-distributable
+ * relation dependency. If any one found, it will be returned.
  */
 static ObjectAddress *
-UndistributableRelationDependencyOfFunction(ObjectAddress *functionAddress)
+GetUndistributableRelationDependency(ObjectAddress *objectAddress)
 {
-	Assert(getObjectClass(functionAddress) == OCLASS_PROC);
-
-	List *dependencies = GetDependenciesForObject(functionAddress);
+	List *dependencies = GetAllDependenciesForObject(objectAddress);
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{
+		if (IsObjectDistributed(dependency))
+		{
+			continue;
+		}
+
 		if (getObjectClass(dependency) != OCLASS_CLASS)
 		{
 			continue;
 		}
 
 		/*
-		 * Since GetDependenciesForObject returns only non-distributed ones, any
-		 * relation comes to that point is must be a non-distributed one.
-		 *
 		 * Citus can only distribute dependent non-distributed sequence and composite
 		 * types.
 		 */

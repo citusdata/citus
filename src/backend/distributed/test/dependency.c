@@ -47,7 +47,7 @@ citus_get_all_dependencies_for_object(PG_FUNCTION_ARGS)
 	ObjectAddress address = { 0 };
 	ObjectAddressSubSet(address, classid, objid, objsubid);
 
-	List *dependencies = GetAllDependenciesForObject(&address);
+	List *dependencies = GetAllSupportedDependenciesForObject(&address);
 	ObjectAddress *dependency = NULL;
 	foreach_ptr(dependency, dependencies)
 	{

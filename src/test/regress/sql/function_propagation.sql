@@ -68,6 +68,10 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 -- Note that after pg 14 creating sequence doesn't create type
 -- it is expected for versions > pg14 to fail sequence tests below
 CREATE SEQUENCE function_prop_seq;
+
+-- Show that sequence is not distributed yet
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.function_prop_seq'::regclass::oid;
+
 CREATE OR REPLACE FUNCTION func_4(param_1 function_prop_seq)
 RETURNS int
 LANGUAGE plpgsql AS
@@ -83,6 +87,10 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_4'::regproc::oid;$$) ORDER BY 1,2;
 
 CREATE SEQUENCE function_prop_seq_2;
+
+-- Show that sequence is not distributed yet
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.function_prop_seq_2'::regclass::oid;
+
 CREATE OR REPLACE FUNCTION func_5(param_1 int)
 RETURNS function_prop_seq_2
 LANGUAGE plpgsql AS
@@ -184,5 +192,20 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dis
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;$$) ORDER BY 1,2;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;$$) ORDER BY 1,2;
+
+-- Test for SQL function with unsupported object in function body
+CREATE TABLE table_in_sql_body(id int);
+
+CREATE FUNCTION max_of_table()
+RETURNS int
+LANGUAGE SQL AS
+$$
+    SELECT max(id) table_in_sql_body
+$$;
+
+-- Show that only function has propagated, since the table is not resolved as dependency
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regclass::oid;
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.max_of_table'::regproc::oid;
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.max_of_table'::regproc::oid;$$) ORDER BY 1,2;
 
 RESET search_path;
