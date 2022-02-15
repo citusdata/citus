@@ -434,7 +434,7 @@ columnar_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan)
 static IndexFetchTableData *
 columnar_index_fetch_begin(Relation rel)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	Oid relfilenode = rel->rd_node.relNode;
 	if (PendingWritesInUpperTransactions(relfilenode, GetCurrentSubTransactionId()))
