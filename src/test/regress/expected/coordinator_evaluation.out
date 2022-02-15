@@ -566,6 +566,7 @@ BEGIN
   INSERT INTO coordinator_evaluation_table_2 VALUES (filterKey, filterKey);
 END;
 $procedure$;
+DEBUG:  switching to sequential query execution mode
 RESET citus.log_remote_commands ;
 RESET client_min_messages;
 -- these calls would INSERT key = 101, so test if insert succeeded

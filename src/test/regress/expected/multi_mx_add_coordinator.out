@@ -139,7 +139,11 @@ BEGIN
     INSERT INTO mx_add_coordinator.ref(groupid) VALUES (gid);
 END;
 $$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('my_group_id()', colocate_with := 'ref');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 

@@ -1861,6 +1861,8 @@ CREATE OR REPLACE FUNCTION volatile_func_test()
       RETURNS INT AS $$
         SELECT 1;
     $$ LANGUAGE sql VOLATILE;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 -- Citus should be able to evalute functions/row comparisons on the LIMIT/OFFSET
 SELECT user_id, array_length(events_table, 1)
 FROM (

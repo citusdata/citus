@@ -2016,6 +2016,8 @@ BEGIN
         END IF;
 END;
 $$LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SET client_min_messages TO ERROR;
 \set VERBOSITY terse
 SELECT raise_failed_execution_router($$

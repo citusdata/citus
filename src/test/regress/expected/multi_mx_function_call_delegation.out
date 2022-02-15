@@ -212,6 +212,8 @@ select colocate_proc_with_table('squares', 'mx_call_dist_table_2'::regclass, 0);
 
 select create_distributed_function('mx_call_func_bigint(bigint,bigint)', 'x',
                                    colocate_with := 'mx_call_dist_table_bigint');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -221,6 +223,8 @@ select create_distributed_function('mx_call_func_bigint(bigint,bigint)', 'x',
 select create_distributed_function('mx_call_func_bigint_force(bigint,bigint)', 'x',
                                    colocate_with := 'mx_call_dist_table_2',
                                    force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -417,6 +421,8 @@ select mx_call_func_tbl(10);
 
 -- after distribution ...
 select create_distributed_function('mx_call_func_tbl(int)', '$1', 'mx_call_dist_table_1');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -437,7 +443,11 @@ BEGIN
     RAISE WARNING 'warning';
     RAISE EXCEPTION 'error';
 END;$$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 select create_distributed_function('mx_call_func_raise(int)', '$1', 'mx_call_dist_table_1');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -587,7 +597,11 @@ SET citus.shard_replication_factor = 1;
 --
 CREATE FUNCTION mx_call_add(int, int) RETURNS int
     AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('mx_call_add(int,int)', '$1');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 

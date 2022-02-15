@@ -304,13 +304,19 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('func_calls_forcepush_func()');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT create_distributed_function('inner_force_delegation_function(int)', '$1', colocate_with := 'test_nested', force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -475,7 +481,11 @@ BEGIN
 	END if;
 END;
 $$  LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('test_recursive(int)', '$1', colocate_with := 'test_nested', force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -544,11 +554,15 @@ BEGIN
         RETURN x + y;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
 'test_non_constant(int,bigint)',
 '$1',
 colocate_with := 'test_forcepushdown',
 force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -608,6 +622,8 @@ BEGIN
     INSERT INTO emp VALUES (empname, 33);
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION outer_emp()
 RETURNS void
@@ -619,6 +635,8 @@ END;
 $$ LANGUAGE plpgsql;
 RESET citus.enable_metadata_sync;
 SELECT create_distributed_function('inner_emp(text)','empname', force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -648,11 +666,15 @@ BEGIN
 	INSERT INTO forcepushdown_schema.test_forcepushdown SELECT(a+1);
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_select_data(int)', 'a',
   colocate_with := 'test_forcepushdown',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -721,11 +743,15 @@ BEGIN
 		SELECT intcol FROM forcepushdown_schema.test_forcepushdown_noncolocate;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_select_data_nonlocal(int)', 'a',
   colocate_with := 'test_forcepushdown',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -797,11 +823,15 @@ BEGIN
 	INSERT INTO forcepushdown_schema.test_forcepushdown_char VALUES (a);
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_data_char(char)', 'a',
   colocate_with := 'test_forcepushdown_char',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -813,11 +843,15 @@ BEGIN
 	INSERT INTO forcepushdown_schema.test_forcepushdown_varchar VALUES (a);
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_data_varchar(varchar)', 'a',
   colocate_with := 'test_forcepushdown_varchar',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -829,11 +863,15 @@ BEGIN
 	INSERT INTO forcepushdown_schema.test_forcepushdown_text VALUES (a);
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_data_text(text)', 'a',
   colocate_with := 'test_forcepushdown_text',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -935,11 +973,15 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'select_data(int)', 'a',
   colocate_with := 'test_subquery',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -955,11 +997,15 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'select_data_noncolocate(int)', 'a',
   colocate_with := 'test_subquery',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -974,11 +1020,15 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_select_data_cte1(int)', 'a',
   colocate_with := 'test_subquery',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -993,11 +1043,15 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_select_data_cte2(int)', 'a',
   colocate_with := 'test_subquery',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1013,11 +1067,15 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_data_cte_nondist(int)', 'a',
   colocate_with := 'test_subquery',
   force_delegation := true
 );
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1181,7 +1239,11 @@ BEGIN
 	RETURN x + y;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('test_prepare(int,int)','x',force_delegation :=true, colocate_with := 'table_test_prepare');
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1375,8 +1437,12 @@ BEGIN
     RETURN x;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('test(int)', 'x',
                 colocate_with := 'test_perform', force_delegation := true);
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
  create_distributed_function
 ---------------------------------------------------------------------
 
