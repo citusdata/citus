@@ -858,7 +858,7 @@ columnar_relation_set_new_filenode(Relation rel,
 								   MultiXactId *minmulti)
 {
 	// this is the failing function
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	if (persistence == RELPERSISTENCE_UNLOGGED)
 	{
