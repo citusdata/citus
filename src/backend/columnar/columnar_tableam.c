@@ -1819,7 +1819,7 @@ columnar_estimate_rel_size(Relation rel, int32 *attr_widths,
 						   BlockNumber *pages, double *tuples,
 						   double *allvisfrac)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	RelationOpenSmgr(rel);
 	*pages = smgrnblocks(rel->rd_smgr, MAIN_FORKNUM);
@@ -2333,7 +2333,7 @@ PG_FUNCTION_INFO_V1(alter_columnar_table_set);
 Datum
 alter_columnar_table_set(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	Oid relationId = PG_GETARG_OID(0);
 
@@ -2457,7 +2457,7 @@ PG_FUNCTION_INFO_V1(alter_columnar_table_reset);
 Datum
 alter_columnar_table_reset(PG_FUNCTION_ARGS)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	Oid relationId = PG_GETARG_OID(0);
 
