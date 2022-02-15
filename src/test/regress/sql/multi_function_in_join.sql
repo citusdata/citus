@@ -37,7 +37,6 @@ SELECT * FROM table1 JOIN add(3,5) sum ON (id = sum) ORDER BY id ASC;
 
 -- Check join of plpgsql functions
 -- a function returning a single integer
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION increment(i integer) RETURNS integer AS $$
 BEGIN
   RETURN i + 1;
@@ -46,6 +45,8 @@ $$ LANGUAGE plpgsql;
 SELECT * FROM table1 JOIN increment(2) val ON (id = val) ORDER BY id ASC;
 
 -- a function that returns a set of integers
+-- Block distributing function as we have tests below to test it locally
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION next_k_integers(IN first_value INTEGER,
                                            IN k INTEGER DEFAULT 3,
                                            OUT result INTEGER)
@@ -54,6 +55,7 @@ BEGIN
   RETURN QUERY SELECT x FROM generate_series(first_value, first_value+k-1) f(x);
 END;
 $$ LANGUAGE plpgsql;
+SET citus.enable_metadata_sync TO OFF;
 SELECT *
 FROM table1 JOIN next_k_integers(3,2) next_integers ON (id = next_integers.result)
 ORDER BY id ASC;
@@ -75,7 +77,6 @@ SELECT f.* FROM table1 t JOIN dup(32) f ON (f1 = id);
 -- a stable function
 CREATE OR REPLACE FUNCTION the_minimum_id()
   RETURNS INTEGER STABLE AS 'SELECT min(id) FROM table1' LANGUAGE SQL;
-RESET citus.enable_metadata_sync;
 SELECT * FROM table1 JOIN the_minimum_id() min_id ON (id = min_id);
 
 -- a built-in immutable function
@@ -103,7 +104,6 @@ CREATE TYPE min_and_max AS (
 );
 SET client_min_messages TO DEBUG1;
 
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION max_and_min () RETURNS
   min_and_max AS $$
 DECLARE
@@ -113,7 +113,6 @@ begin
   return result;
 end;
 $$ language plpgsql;
-RESET citus.enable_metadata_sync;
 
 SELECT * FROM table1 JOIN max_and_min() m ON (m.maximum = data OR m.minimum = data) ORDER BY 1,2,3,4;
 
