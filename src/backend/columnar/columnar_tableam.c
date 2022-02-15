@@ -857,7 +857,7 @@ columnar_relation_set_new_filenode(Relation rel,
 								   TransactionId *freezeXid,
 								   MultiXactId *minmulti)
 {
-	CheckExtensionVersion(ERROR);
+	CheckCitusVersion(ERROR);
 
 	if (persistence == RELPERSISTENCE_UNLOGGED)
 	{
