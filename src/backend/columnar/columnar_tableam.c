@@ -66,7 +66,7 @@
 
 /*
  * ColumnarScanDescData is the scan state passed between beginscan(),
- * getnextslot(), rescan(), and endscan() calls.
+ * getnextslot(), rescan(), and endscan()  calls.
  */
 typedef struct ColumnarScanDescData
 {
