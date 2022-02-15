@@ -857,7 +857,7 @@ columnar_relation_set_new_filenode(Relation rel,
 								   TransactionId *freezeXid,
 								   MultiXactId *minmulti)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	if (persistence == RELPERSISTENCE_UNLOGGED)
 	{
@@ -894,7 +894,7 @@ columnar_relation_set_new_filenode(Relation rel,
 static void
 columnar_relation_nontransactional_truncate(Relation rel)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	RelFileNode relfilenode = rel->rd_node;
 
@@ -942,7 +942,7 @@ columnar_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap,
 								   double *tups_vacuumed,
 								   double *tups_recently_dead)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	TupleDesc sourceDesc = RelationGetDescr(OldHeap);
 	TupleDesc targetDesc = RelationGetDescr(NewHeap);
@@ -1040,7 +1040,7 @@ static void
 columnar_vacuum_rel(Relation rel, VacuumParams *params,
 					BufferAccessStrategy bstrategy)
 {
-	if (!CheckCitusVersion(WARNING))
+	if (!CheckExtensionVersion(WARNING))
 	{
 		/*
 		 * Skip if the extension catalogs are not up-to-date, but avoid
