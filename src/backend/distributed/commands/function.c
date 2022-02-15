@@ -1345,9 +1345,9 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		char *functionName = functionRangeVar->relname;
 		char *dependentRelationName = get_rel_name(undistributableDependency->objectId);
 
-		ereport(WARNING, (errmsg("Citus can't distribute function %s having dependency on"
-								 " non-distributed relation %s", functionName,
-								 dependentRelationName),
+		ereport(WARNING, (errmsg("Citus can't distribute function \"%s\" having "
+								 "dependency on non-distributed relation \"%s\"",
+								 functionName, dependentRelationName),
 						  errdetail("Function will be created only locally"),
 						  errhint("To distribute function, distribute dependent relations"
 								  " first. Then, re-create the function")));

@@ -2,9 +2,9 @@ CREATE SCHEMA function_propagation_schema;
 SET search_path TO 'function_propagation_schema';
 -- Check whether supported dependencies can be distributed while propagating functions
 -- Check types
-BEGIN;
+SET citus.enable_metadata_sync TO OFF;
     CREATE TYPE function_prop_type AS (a int, b int);
-COMMIT;
+RESET citus.enable_metadata_sync;
 CREATE OR REPLACE FUNCTION func_1(param_1 function_prop_type)
 RETURNS int
 LANGUAGE plpgsql AS
@@ -53,9 +53,9 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
  localhost |    57638 | t       | (function,"{function_propagation_schema,func_1}",{function_propagation_schema.function_prop_type})
 (2 rows)
 
-BEGIN;
+SET citus.enable_metadata_sync TO OFF;
     CREATE TYPE function_prop_type_2 AS (a int, b int);
-COMMIT;
+RESET citus.enable_metadata_sync;
 CREATE OR REPLACE FUNCTION func_2(param_1 int)
 RETURNS function_prop_type_2
 LANGUAGE plpgsql AS
@@ -90,6 +90,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
  localhost |    57638 | t       | (function,"{function_propagation_schema,func_2}",{integer})
 (2 rows)
 
+-- Have a separate check for type created in transaction
 BEGIN;
     CREATE TYPE function_prop_type_3 AS (a int, b int);
 COMMIT;
@@ -122,11 +123,10 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
  localhost |    57638 | t       | (function,"{function_propagation_schema,func_3}",{integer})
 (2 rows)
 
--- Check sequences
--- Note that after pg 14 creating sequence doesn't create type
--- it is expected for versions > pg14 to fail sequence tests below
-CREATE SEQUENCE function_prop_seq;
-CREATE OR REPLACE FUNCTION func_4(param_1 function_prop_seq)
+-- Check table
+CREATE TABLE function_prop_table(a int, b int);
+-- Non-distributed table is not distributed as dependency
+CREATE OR REPLACE FUNCTION func_4(param_1 function_prop_table)
 RETURNS int
 LANGUAGE plpgsql AS
 $$
@@ -134,70 +134,27 @@ BEGIN
     return 1;
 END;
 $$;
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.function_prop_seq'::regclass::oid;
-                  pg_identify_object_as_address
----------------------------------------------------------------------
- (sequence,"{function_propagation_schema,function_prop_seq}",{})
-(1 row)
-
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_4'::regproc::oid;
-                                   pg_identify_object_as_address
----------------------------------------------------------------------
- (function,"{function_propagation_schema,func_4}",{function_propagation_schema.function_prop_seq})
-(1 row)
-
-SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.function_prop_seq'::regclass::oid;$$) ORDER BY 1,2;
- nodename  | nodeport | success |                             result
----------------------------------------------------------------------
- localhost |    57637 | t       | (sequence,"{function_propagation_schema,function_prop_seq}",{})
- localhost |    57638 | t       | (sequence,"{function_propagation_schema,function_prop_seq}",{})
-(2 rows)
-
-SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_4'::regproc::oid;$$) ORDER BY 1,2;
- nodename  | nodeport | success |                                              result
----------------------------------------------------------------------
- localhost |    57637 | t       | (function,"{function_propagation_schema,func_4}",{function_propagation_schema.function_prop_seq})
- localhost |    57638 | t       | (function,"{function_propagation_schema,func_4}",{function_propagation_schema.function_prop_seq})
-(2 rows)
-
-CREATE SEQUENCE function_prop_seq_2;
+WARNING: Citus can't distribute function "func_4" having dependency on non-distributed relation "function_prop_table"
+DETAIL:  Function will be created only locally
+HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
 CREATE OR REPLACE FUNCTION func_5(param_1 int)
-RETURNS function_prop_seq_2
+RETURNS function_prop_table
 LANGUAGE plpgsql AS
 $$
 BEGIN
     return 1;
 END;
 $$;
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.function_prop_seq_2'::regclass::oid;
-                   pg_identify_object_as_address
+WARNING:  Citus can't distribute function "func_5" having dependency on non-distributed relation "function_prop_table"
+DETAIL:  Function will be created only locally
+HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
+-- Functions can be created with distributed table dependency
+SELECT create_distributed_table('function_prop_table', 'a');
+ create_distributed_table
 ---------------------------------------------------------------------
- (sequence,"{function_propagation_schema,function_prop_seq_2}",{})
+
 (1 row)
 
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_5'::regproc::oid;
-                pg_identify_object_as_address
----------------------------------------------------------------------
- (function,"{function_propagation_schema,func_5}",{integer})
-(1 row)
-
-SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.function_prop_seq_2'::regclass::oid;$$) ORDER BY 1,2;
- nodename  | nodeport | success |                              result
----------------------------------------------------------------------
- localhost |    57637 | t       | (sequence,"{function_propagation_schema,function_prop_seq_2}",{})
- localhost |    57638 | t       | (sequence,"{function_propagation_schema,function_prop_seq_2}",{})
-(2 rows)
-
-SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_5'::regproc::oid;$$) ORDER BY 1,2;
- nodename  | nodeport | success |                           result
----------------------------------------------------------------------
- localhost |    57637 | t       | (function,"{function_propagation_schema,func_5}",{integer})
- localhost |    57638 | t       | (function,"{function_propagation_schema,func_5}",{integer})
-(2 rows)
-
--- Check table
-CREATE TABLE function_prop_table(a int, b int);
--- Non-distributed table is not distributed as dependency
 CREATE OR REPLACE FUNCTION func_6(param_1 function_prop_table)
 RETURNS int
 LANGUAGE plpgsql AS
@@ -206,51 +163,22 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  Citus can't distribute functions having dependency on non-distributed relations
-DETAIL:  Function will be created only locally
-HINT:  To distribute function, distribute dependent relations first
-CREATE OR REPLACE FUNCTION func_7(param_1 int)
-RETURNS function_prop_table
-LANGUAGE plpgsql AS
-$$
-BEGIN
-    return 1;
-END;
-$$;
-WARNING:  Citus can't distribute functions having dependency on non-distributed relations
-DETAIL:  Function will be created only locally
-HINT:  To distribute function, distribute dependent relations first
--- Functions can be created with distributed table dependency
-SELECT create_distributed_table('function_prop_table', 'a');
- create_distributed_table
----------------------------------------------------------------------
-
-(1 row)
-
-CREATE OR REPLACE FUNCTION func_8(param_1 function_prop_table)
-RETURNS int
-LANGUAGE plpgsql AS
-$$
-BEGIN
-    return 1;
-END;
-$$;
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_8'::regproc::oid;
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_6'::regproc::oid;
                                     pg_identify_object_as_address
 ---------------------------------------------------------------------
- (function,"{function_propagation_schema,func_8}",{function_propagation_schema.function_prop_table})
+ (function,"{function_propagation_schema,func_6}",{function_propagation_schema.function_prop_table})
 (1 row)
 
-SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_8'::regproc::oid;$$) ORDER BY 1,2;
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_6'::regproc::oid;$$) ORDER BY 1,2;
  nodename  | nodeport | success |                                               result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | (function,"{function_propagation_schema,func_8}",{function_propagation_schema.function_prop_table})
- localhost |    57638 | t       | (function,"{function_propagation_schema,func_8}",{function_propagation_schema.function_prop_table})
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_6}",{function_propagation_schema.function_prop_table})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_6}",{function_propagation_schema.function_prop_table})
 (2 rows)
 
 -- Views are not supported
 CREATE VIEW function_prop_view AS SELECT * FROM function_prop_table;
-CREATE OR REPLACE FUNCTION func_9(param_1 function_prop_view)
+CREATE OR REPLACE FUNCTION func_7(param_1 function_prop_view)
 RETURNS int
 LANGUAGE plpgsql AS
 $$
@@ -258,9 +186,10 @@ BEGIN
     return 1;
 END;
 $$;
-ERROR:  type function_propagation_schema.function_prop_view does not exist
-CONTEXT:  while executing command on localhost:xxxxx
-CREATE OR REPLACE FUNCTION func_10(param_1 int)
+WARNING:  Citus can't distribute function "func_7" having dependency on non-distributed relation "function_prop_view"
+DETAIL:  Function will be created only locally
+HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
+CREATE OR REPLACE FUNCTION func_8(param_1 int)
 RETURNS function_prop_view
 LANGUAGE plpgsql AS
 $$
@@ -268,8 +197,9 @@ BEGIN
     return 1;
 END;
 $$;
-ERROR:  type "function_propagation_schema.function_prop_view" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+WARNING:  Citus can't distribute function "func_8" having dependency on non-distributed relation "function_prop_view"
+DETAIL:  Function will be created only locally
+HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
 -- Check within transaction
 BEGIN;
     CREATE TYPE type_in_transaction AS (a int, b int);
@@ -328,4 +258,50 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
  localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction}",{function_propagation_schema.type_in_transaction})
 (2 rows)
 
+-- Test for SQL function with unsupported object in function body
+CREATE TABLE table_in_sql_body(id int);
+CREATE FUNCTION max_of_table()
+RETURNS int
+LANGUAGE SQL AS
+$$
+    SELECT max(id) FROM table_in_sql_body
+$$;
+-- Show that only function has propagated, since the table is not resolved as dependency
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regclass::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.max_of_table'::regproc::oid;
+               pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,max_of_table}",{})
+(1 row)
+
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.max_of_table'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                           result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,max_of_table}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,max_of_table}",{})
+(2 rows)
+
 RESET search_path;
+DROP SCHEMA function_propagation_schema CASCADE;
+NOTICE:  drop cascades to 17 other objects
+DETAIL:  drop cascades to type function_propagation_schema.function_prop_type
+drop cascades to function function_propagation_schema.func_1(function_propagation_schema.function_prop_type)
+drop cascades to type function_propagation_schema.function_prop_type_2
+drop cascades to function function_propagation_schema.func_2(integer)
+drop cascades to type function_propagation_schema.function_prop_type_3
+drop cascades to function function_propagation_schema.func_3(integer)
+drop cascades to table function_propagation_schema.function_prop_table
+drop cascades to function function_propagation_schema.func_4(function_propagation_schema.function_prop_table)
+drop cascades to function function_propagation_schema.func_5(integer)
+drop cascades to function function_propagation_schema.func_6(function_propagation_schema.function_prop_table)
+drop cascades to view function_propagation_schema.function_prop_view
+drop cascades to function function_propagation_schema.func_7(function_propagation_schema.function_prop_view)
+drop cascades to function function_propagation_schema.func_8(integer)
+drop cascades to type function_propagation_schema.type_in_transaction
+drop cascades to function function_propagation_schema.func_in_transaction(function_propagation_schema.type_in_transaction)
+drop cascades to table function_propagation_schema.table_in_sql_body
+drop cascades to function function_propagation_schema.max_of_table()
