@@ -120,7 +120,7 @@ static bool MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersio
 
 /* global variables for CheckExtensionVersion */
 static bool extensionLoadedColumnar = false;
-static bool EnableVersionChecksColumnar = true;
+static bool EnableVersionChecksColumnar = false;
 static bool citusVersionKnownCompatibleColumnar = false;
 
 /* forward declaration for static functions */
