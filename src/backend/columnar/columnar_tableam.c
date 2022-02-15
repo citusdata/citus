@@ -659,7 +659,7 @@ static bool
 columnar_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot,
 								  Snapshot snapshot)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	uint64 rowNumber = tid_to_row_number(slot->tts_tid);
 	StripeMetadata *stripeMetadata = FindStripeByRowNumber(rel, rowNumber, snapshot);
@@ -672,7 +672,7 @@ static TransactionId
 columnar_index_delete_tuples(Relation rel,
 							 TM_IndexDeleteOp *delstate)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	/*
 	 * XXX: We didn't bother implementing index_delete_tuple for neither of
@@ -733,7 +733,7 @@ static void
 columnar_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid,
 					  int options, BulkInsertState bistate)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	/*
 	 * columnar_init_write_state allocates the write state in a longer
@@ -781,7 +781,7 @@ static void
 columnar_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples,
 					  CommandId cid, int options, BulkInsertState bistate)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	ColumnarWriteState *writeState = columnar_init_write_state(relation,
 															   RelationGetDescr(relation),
