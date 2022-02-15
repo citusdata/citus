@@ -1985,7 +1985,7 @@ ColumnarTableDropHook(Oid relid)
 
 	if (IsColumnarTableAmTable(relid))
 	{
-		CheckCitusVersion(ERROR);
+		CheckExtensionVersion(ERROR);
 
 		/*
 		 * Drop metadata. No need to drop storage here since for
@@ -2110,7 +2110,7 @@ ColumnarProcessUtility(PlannedStmt *pstmt,
 
 		if (rel->rd_tableam == GetColumnarTableAmRoutine())
 		{
-			CheckCitusVersion(ERROR);
+			CheckExtensionVersion(ERROR);
 
 			if (!ColumnarSupportsIndexAM(indexStmt->accessMethod))
 			{
