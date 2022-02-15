@@ -857,6 +857,7 @@ columnar_relation_set_new_filenode(Relation rel,
 								   TransactionId *freezeXid,
 								   MultiXactId *minmulti)
 {
+	// this is the failing function
 	CheckCitusVersion(ERROR);
 
 	if (persistence == RELPERSISTENCE_UNLOGGED)
@@ -1358,7 +1359,7 @@ columnar_index_build_range_scan(Relation columnarRelation,
 								void *callback_state,
 								TableScanDesc scan)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	if (start_blockno != 0 || numblocks != InvalidBlockNumber)
 	{
@@ -1608,7 +1609,7 @@ columnar_index_validate_scan(Relation columnarRelation,
 							 ValidateIndexState *
 							 validateIndexState)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	ColumnarReportTotalVirtualBlocks(columnarRelation, snapshot,
 									 PROGRESS_SCAN_BLOCKS_TOTAL);
@@ -1780,7 +1781,7 @@ TupleSortSkipSmallerItemPointers(Tuplesortstate *tupleSort, ItemPointer targetIt
 static uint64
 columnar_relation_size(Relation rel, ForkNumber forkNumber)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	uint64 nblocks = 0;
 
@@ -1807,7 +1808,7 @@ columnar_relation_size(Relation rel, ForkNumber forkNumber)
 static bool
 columnar_relation_needs_toast_table(Relation rel)
 {
-	CheckCitusVersion(ERROR);
+	CheckExtensionVersion(ERROR);
 
 	return false;
 }
