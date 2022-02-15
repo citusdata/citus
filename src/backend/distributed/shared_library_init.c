@@ -513,6 +513,9 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 	 * are already given away.
 	 */
 	DeallocateReservedConnections();
+
+	/* we don't want any monitoring view/udf to show already exited backends */
+	UnSetGlobalPID();
 }
 
 
