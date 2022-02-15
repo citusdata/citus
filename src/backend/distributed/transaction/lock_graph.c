@@ -178,7 +178,7 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		if (onlyDistributedTx)
 		{
 			appendStringInfo(queryString,
-							 "SELECT waiting_pid integer, waiting_node_id integer, "
+							 "SELECT waiting_pid, waiting_node_id, "
 							 "waiting_transaction_num, waiting_transaction_stamp, "
 							 "blocking_pid, blocking_node_id, blocking_transaction_num, "
 							 "blocking_transaction_stamp, blocking_transaction_waiting "
@@ -187,11 +187,10 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		else
 		{
 			appendStringInfo(queryString,
-							 "SELECT waiting_global_pid bigint, waiting_pid integer, "
-							 "waiting_node_id integer, "
-							 "waiting_transaction_num, waiting_transaction_stamp, "
-							 "blocking_global_pid,blocking_pid, blocking_node_id, blocking_transaction_num, "
-							 "blocking_transaction_stamp, blocking_transaction_waiting "
+							 "SELECT waiting_global_pid, waiting_pid, "
+							 "waiting_node_id, waiting_transaction_num, waiting_transaction_stamp, "
+							 "blocking_global_pid,blocking_pid, blocking_node_id, "
+							 "blocking_transaction_num, blocking_transaction_stamp, blocking_transaction_waiting "
 							 "FROM citus_internal_local_blocked_processes()");
 		}
 
