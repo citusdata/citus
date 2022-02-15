@@ -26,8 +26,10 @@
 #include "catalog/pg_trigger.h"
 #include "catalog/storage.h"
 #include "catalog/storage_xlog.h"
+#include "catalog/pg_extension.h"
 #include "commands/progress.h"
 #include "commands/vacuum.h"
+#include "commands/extension.h"
 #include "executor/executor.h"
 #include "nodes/makefuncs.h"
 #include "optimizer/plancat.h"
@@ -106,6 +108,20 @@ ColumnarTableSetOptions_hook_type ColumnarTableSetOptions_hook = NULL;
 
 static object_access_hook_type PrevObjectAccessHook = NULL;
 static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
+
+static bool CheckAvailableVersionColumnar(int elevel);
+static bool CheckInstalledVersionColumnar(int elevel);
+static char * AvailableExtensionVersionColumnar(void);
+static char * InstalledExtensionVersionColumnar(void);
+static bool CitusHasBeenLoadedInternalColumnar(void);
+static bool CitusHasBeenLoadedColumnar(void);
+static bool CheckExtensionVersion(int elevel);
+static bool MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion);
+
+/* global variables for CheckCitusVersion */
+static bool extensionLoadedColumnar = false;
+static bool EnableVersionChecksColumnar = true;
+static bool citusVersionKnownCompatibleColumnar = false;
 
 /* forward declaration for static functions */
 static MemoryContext CreateColumnarScanMemoryContext(void);
@@ -2578,4 +2594,317 @@ downgrade_columnar_storage(PG_FUNCTION_ARGS)
 
 	table_close(rel, AccessExclusiveLock);
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * Code to check the Citus Version, helps remove dependency from Citus
+ */
+
+/*
+ * CitusHasBeenLoaded returns true if the citus extension has been created
+ * in the current database and the extension script has been executed. Otherwise,
+ * it returns false. The result is cached as this is called very frequently.
+ */
+bool
+CitusHasBeenLoadedColumnar(void)
+{
+	if (!extensionLoadedColumnar || creating_extension)
+	{
+		/*
+		 * Refresh if we have not determined whether the extension has been
+		 * loaded yet, or in case of ALTER EXTENSION since we want to treat
+		 * Citus as "not loaded" during ALTER EXTENSION citus.
+		 */
+		bool extensionLoaded = CitusHasBeenLoadedInternalColumnar();
+		extensionLoadedColumnar = extensionLoaded;
+	}
+
+	return extensionLoadedColumnar;
+}
+
+
+/*
+ * CitusHasBeenLoadedInternal returns true if the citus extension has been created
+ * in the current database and the extension script has been executed. Otherwise,
+ * it returns false.
+ */
+static bool
+CitusHasBeenLoadedInternalColumnar(void)
+{
+	if (IsBinaryUpgrade)
+	{
+		/* never use Citus logic during pg_upgrade */
+		return false;
+	}
+
+	Oid citusExtensionOid = get_extension_oid("citus", true);
+	if (citusExtensionOid == InvalidOid)
+	{
+		/* Citus extension does not exist yet */
+		return false;
+	}
+
+	if (creating_extension && CurrentExtensionObject == citusExtensionOid)
+	{
+		/*
+		 * We do not use Citus hooks during CREATE/ALTER EXTENSION citus
+		 * since the objects used by the C code might be not be there yet.
+		 */
+		return false;
+	}
+
+	/* citus extension exists and has been created */
+	return true;
+}
+
+
+/*
+ * CheckCitusVersion checks whether there is a version mismatch between the
+ * available version and the loaded version or between the installed version
+ * and the loaded version. Returns true if compatible, false otherwise.
+ *
+ * As a side effect, this function also sets citusVersionKnownCompatible_Columnar global
+ * variable to true which reduces version check cost of next calls.
+ */
+bool
+CheckExtensionVersion(int elevel)
+{
+	if (citusVersionKnownCompatibleColumnar ||
+		!CitusHasBeenLoadedColumnar() ||
+		!EnableVersionChecksColumnar)
+	{
+		return true;
+	}
+
+	if (CheckAvailableVersionColumnar(elevel) && CheckInstalledVersionColumnar(elevel))
+	{
+		citusVersionKnownCompatibleColumnar = true;
+		return true;
+	}
+	else
+	{
+		return false;
+	}
+}
+
+
+/*
+ * CheckAvailableVersion compares CITUS_EXTENSIONVERSION and the currently
+ * available version from the citus.control file. If they are not compatible,
+ * this function logs an error with the specified elevel and returns false,
+ * otherwise it returns true.
+ */
+bool
+CheckAvailableVersionColumnar(int elevel)
+{
+	if (!EnableVersionChecksColumnar)
+	{
+		return true;
+	}
+
+	char *availableVersion = AvailableExtensionVersionColumnar();
+
+	if (!MajorVersionsCompatibleColumnar(availableVersion, CITUS_EXTENSIONVERSION))
+	{
+		ereport(elevel, (errmsg("loaded Citus library version differs from latest "
+								"available extension version"),
+						 errdetail("Loaded library requires %s, but the latest control "
+								   "file specifies %s.", CITUS_MAJORVERSION,
+								   availableVersion),
+						 errhint("Restart the database to load the latest Citus "
+								 "library.")));
+		pfree(availableVersion);
+		return false;
+	}
+	pfree(availableVersion);
+	return true;
+}
+
+
+/*
+ * CheckInstalledVersion compares CITUS_EXTENSIONVERSION and the
+ * extension's current version from the pg_extension catalog table. If they
+ * are not compatible, this function logs an error with the specified elevel,
+ * otherwise it returns true.
+ */
+static bool
+CheckInstalledVersionColumnar(int elevel)
+{
+	Assert(CitusHasBeenLoadedColumnar());
+	Assert(EnableVersionChecksColumnar);
+
+	char *installedVersion = InstalledExtensionVersionColumnar();
+
+	if (!MajorVersionsCompatibleColumnar(installedVersion, CITUS_EXTENSIONVERSION))
+	{
+		ereport(elevel, (errmsg("loaded Citus library version differs from installed "
+								"extension version"),
+						 errdetail("Loaded library requires %s, but the installed "
+								   "extension version is %s.", CITUS_MAJORVERSION,
+								   installedVersion),
+						 errhint("Run ALTER EXTENSION citus UPDATE and try again.")));
+		pfree(installedVersion);
+		return false;
+	}
+	pfree(installedVersion);
+	return true;
+}
+
+
+/*
+ * MajorVersionsCompatible checks whether both versions are compatible. They
+ * are if major and minor version numbers match, the schema version is
+ * ignored.  Returns true if compatible, false otherwise.
+ */
+bool
+MajorVersionsCompatibleColumnar(char *leftVersion, char *rightVersion)
+{
+	const char schemaVersionSeparator = '-';
+
+	char *leftSeperatorPosition = strchr(leftVersion, schemaVersionSeparator);
+	char *rightSeperatorPosition = strchr(rightVersion, schemaVersionSeparator);
+	int leftComparisionLimit = 0;
+	int rightComparisionLimit = 0;
+
+	if (leftSeperatorPosition != NULL)
+	{
+		leftComparisionLimit = leftSeperatorPosition - leftVersion;
+	}
+	else
+	{
+		leftComparisionLimit = strlen(leftVersion);
+	}
+
+	if (rightSeperatorPosition != NULL)
+	{
+		rightComparisionLimit = rightSeperatorPosition - rightVersion;
+	}
+	else
+	{
+		rightComparisionLimit = strlen(leftVersion);
+	}
+
+	/* we can error out early if hypens are not in the same position */
+	if (leftComparisionLimit != rightComparisionLimit)
+	{
+		return false;
+	}
+
+	return strncmp(leftVersion, rightVersion, leftComparisionLimit) == 0;
+}
+
+
+/*
+ * AvailableExtensionVersion returns the Citus version from citus.control file. It also
+ * saves the result, thus consecutive calls to CitusExtensionAvailableVersion will
+ * not read the citus.control file again.
+ */
+static char *
+AvailableExtensionVersionColumnar(void)
+{
+	LOCAL_FCINFO(fcinfo, 0);
+	FmgrInfo flinfo;
+
+	bool goForward = true;
+	bool doCopy = false;
+	char *availableExtensionVersion;
+
+	EState *estate = CreateExecutorState();
+	ReturnSetInfo *extensionsResultSet = makeNode(ReturnSetInfo);
+	extensionsResultSet->econtext = GetPerTupleExprContext(estate);
+	extensionsResultSet->allowedModes = SFRM_Materialize;
+
+	fmgr_info(F_PG_AVAILABLE_EXTENSIONS, &flinfo);
+	InitFunctionCallInfoData(*fcinfo, &flinfo, 0, InvalidOid, NULL,
+							 (Node *) extensionsResultSet);
+
+	/* pg_available_extensions returns result set containing all available extensions */
+	(*pg_available_extensions)(fcinfo);
+
+	TupleTableSlot *tupleTableSlot = MakeSingleTupleTableSlotCompat(
+		extensionsResultSet->setDesc,
+		&TTSOpsMinimalTuple);
+	bool hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward,
+											doCopy,
+											tupleTableSlot);
+	while (hasTuple)
+	{
+		bool isNull = false;
+
+		Datum extensionNameDatum = slot_getattr(tupleTableSlot, 1, &isNull);
+		char *extensionName = NameStr(*DatumGetName(extensionNameDatum));
+		if (strcmp(extensionName, "citus") == 0)
+		{
+			Datum availableVersion = slot_getattr(tupleTableSlot, 2, &isNull);
+
+
+			availableExtensionVersion = text_to_cstring(DatumGetTextPP(availableVersion));
+			ExecClearTuple(tupleTableSlot);
+			ExecDropSingleTupleTableSlot(tupleTableSlot);
+
+			return availableExtensionVersion;
+		}
+
+		ExecClearTuple(tupleTableSlot);
+		hasTuple = tuplestore_gettupleslot(extensionsResultSet->setResult, goForward,
+										   doCopy, tupleTableSlot);
+	}
+
+	ExecDropSingleTupleTableSlot(tupleTableSlot);
+
+	ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+					errmsg("citus extension is not found")));
+}
+
+
+/*
+ * InstalledExtensionVersion returns the Citus version in PostgreSQL pg_extension table.
+ */
+static char *
+InstalledExtensionVersionColumnar(void)
+{
+	ScanKeyData entry[1];
+	char *installedExtensionVersion = NULL;
+
+	Relation relation = table_open(ExtensionRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0], Anum_pg_extension_extname, BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum("citus"));
+
+	SysScanDesc scandesc = systable_beginscan(relation, ExtensionNameIndexId, true,
+											  NULL, 1, entry);
+
+	HeapTuple extensionTuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(extensionTuple))
+	{
+		int extensionIndex = Anum_pg_extension_extversion;
+		TupleDesc tupleDescriptor = RelationGetDescr(relation);
+		bool isNull = false;
+
+		Datum installedVersion = heap_getattr(extensionTuple, extensionIndex,
+											  tupleDescriptor, &isNull);
+
+		if (isNull)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("citus extension version is null")));
+		}
+
+
+		installedExtensionVersion = text_to_cstring(DatumGetTextPP(installedVersion));
+	}
+	else
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("citus extension is not loaded")));
+	}
+
+	systable_endscan(scandesc);
+
+	table_close(relation, AccessShareLock);
+
+	return installedExtensionVersion;
 }
