@@ -1186,7 +1186,7 @@ ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
 
 	/*
 	 * If the create command is a part of a multi-statement transaction that is not in
-	 * sequential mode, don't propagate. Instead we will rely on back filling.
+	 * sequential mode, don't propagate.
 	 */
 	if (IsMultiStatementTransaction() &&
 		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
