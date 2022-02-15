@@ -178,12 +178,21 @@ BuildGlobalWaitGraph(bool onlyDistributedTx)
 		if (onlyDistributedTx)
 		{
 			appendStringInfo(queryString,
-							 "SELECT * FROM dump_local_wait_edges()");
+							 "SELECT waiting_pid integer, waiting_node_id integer, "
+							 "waiting_transaction_num, waiting_transaction_stamp, "
+							 "blocking_pid, blocking_node_id, blocking_transaction_num, "
+							 "blocking_transaction_stamp, blocking_transaction_waiting "
+							 "FROM dump_local_wait_edges()");
 		}
 		else
 		{
 			appendStringInfo(queryString,
-							 "SELECT * FROM citus_internal_local_blocked_processes()");
+							 "SELECT waiting_global_pid bigint, waiting_pid integer, "
+							 "waiting_node_id integer, "
+							 "waiting_transaction_num, waiting_transaction_stamp, "
+							 "blocking_global_pid,blocking_pid, blocking_node_id, blocking_transaction_num, "
+							 "blocking_transaction_stamp, blocking_transaction_waiting "
+							 "FROM citus_internal_local_blocked_processes()");
 		}
 
 		int querySent = SendRemoteCommand(connection, queryString->data);
