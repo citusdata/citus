@@ -66,6 +66,8 @@ DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, ta
 (1 row)
 
 -- a function that returns a set of integers
+-- Block distributing function as we have tests below to test it locally
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION next_k_integers(IN first_value INTEGER,
                                            IN k INTEGER DEFAULT 3,
                                            OUT result INTEGER)
@@ -74,12 +76,10 @@ BEGIN
   RETURN QUERY SELECT x FROM generate_series(first_value, first_value+k-1) f(x);
 END;
 $$ LANGUAGE plpgsql;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
+RESET citus.enable_metadata_sync;
 SELECT *
 FROM table1 JOIN next_k_integers(3,2) next_integers ON (id = next_integers.result)
 ORDER BY id ASC;
-DEBUG:  function does not have co-located tables
 DEBUG:  generating subplan XXX_1 for subquery SELECT result FROM functions_in_joins.next_k_integers(3, 2) next_integers(result)
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: SELECT table1.id, table1.data, next_integers.result FROM (functions_in_joins.table1 JOIN (SELECT intermediate_result.result FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(result integer)) next_integers ON ((table1.id OPERATOR(pg_catalog.=) next_integers.result))) ORDER BY table1.id
  id | data | result

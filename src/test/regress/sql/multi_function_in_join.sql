@@ -55,7 +55,7 @@ BEGIN
   RETURN QUERY SELECT x FROM generate_series(first_value, first_value+k-1) f(x);
 END;
 $$ LANGUAGE plpgsql;
-SET citus.enable_metadata_sync TO OFF;
+RESET citus.enable_metadata_sync;
 SELECT *
 FROM table1 JOIN next_k_integers(3,2) next_integers ON (id = next_integers.result)
 ORDER BY id ASC;

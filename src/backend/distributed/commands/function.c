@@ -1298,16 +1298,29 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		&functionAddress);
 	if (undistributableDependency != NULL)
 	{
-		RangeVar *functionRangeVar = makeRangeVarFromNameList(stmt->funcname);
-		char *functionName = functionRangeVar->relname;
-		char *dependentRelationName = get_rel_name(undistributableDependency->objectId);
+		if (SupportedDependencyByCitus(undistributableDependency))
+		{
+			RangeVar *functionRangeVar = makeRangeVarFromNameList(stmt->funcname);
+			char *functionName = functionRangeVar->relname;
+			char *dependentRelationName =
+				get_rel_name(undistributableDependency->objectId);
 
-		ereport(WARNING, (errmsg("Citus can't distribute function \"%s\" having "
-								 "dependency on non-distributed relation \"%s\"",
-								 functionName, dependentRelationName),
-						  errdetail("Function will be created only locally"),
-						  errhint("To distribute function, distribute dependent relations"
-								  " first. Then, re-create the function")));
+			ereport(WARNING, (errmsg("Citus can't distribute function \"%s\" having "
+									 "dependency on non-distributed relation \"%s\"",
+									 functionName, dependentRelationName),
+							  errdetail("Function will be created only locally"),
+							  errhint("To distribute function, distribute dependent "
+									  "relations first. Then, re-create the function")));
+		}
+		else
+		{
+			ereport(WARNING, (errmsg("Citus can't distribute functions having "
+									 "dependency on unsupported relation with relkind %c",
+									 get_rel_relkind(
+										 undistributableDependency->objectId)),
+							  errdetail("Function will be created only locally")));
+		}
+
 		return NIL;
 	}
 

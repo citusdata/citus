@@ -186,9 +186,8 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  Citus can't distribute function "func_7" having dependency on non-distributed relation "function_prop_view"
+WARNING:  Citus can't distribute functions having dependency on unsupported relation with relkind v
 DETAIL:  Function will be created only locally
-HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
 CREATE OR REPLACE FUNCTION func_8(param_1 int)
 RETURNS function_prop_view
 LANGUAGE plpgsql AS
@@ -197,9 +196,8 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  Citus can't distribute function "func_8" having dependency on non-distributed relation "function_prop_view"
+WARNING:  Citus can't distribute functions having dependency on unsupported relation with relkind v
 DETAIL:  Function will be created only locally
-HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
 -- Check within transaction
 BEGIN;
     CREATE TYPE type_in_transaction AS (a int, b int);
