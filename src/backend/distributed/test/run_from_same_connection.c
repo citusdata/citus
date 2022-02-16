@@ -131,11 +131,6 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 static void
 EstablishSingleConnnection(char *nodeNameString, int nodePort)
 {
-	if (LocalConnectionContext != NULL)
-	{
-		MemoryContextDelete(LocalConnectionContext);
-		LocalConnectionContext = NULL;
-	}
 
 	LocalConnectionContext =
 		AllocSetContextCreateExtended(ConnectionContext,
@@ -253,11 +248,18 @@ stop_session_level_connection_to_node(PG_FUNCTION_ARGS)
 {
 	allowNonIdleRemoteTransactionOnXactHandling = false;
 
-	if (singleConnection != NULL)
+	if (LocalConnectionContext != NULL)
 	{
-		PQfinish(singleConnection->pgConn);
-		singleConnection = NULL;
+		if (singleConnection != NULL)
+		{
+			PQfinish(singleConnection->pgConn);
+			singleConnection = NULL;
+		}
+
+		MemoryContextDelete(LocalConnectionContext);
+		LocalConnectionContext = NULL;
 	}
+
 
 	PG_RETURN_VOID();
 }
