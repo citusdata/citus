@@ -396,7 +396,6 @@ select colocate_proc_with_table('mx_call_func', 'mx_call_dist_table_1'::regclass
 (1 row)
 
 -- Test table returning functions.
-SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION mx_call_func_tbl(x int)
 RETURNS TABLE (p0 int, p1 int)
 LANGUAGE plpgsql AS $$
@@ -410,9 +409,11 @@ BEGIN
         WHERE id >= x
         ORDER BY 1, 2;
 END;$$;
-RESET citus.enable_metadata_sync;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 -- before distribution ...
 select mx_call_func_tbl(10);
+DEBUG:  function does not have co-located tables
  mx_call_func_tbl
 ---------------------------------------------------------------------
  (10,-1)

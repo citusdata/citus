@@ -15,7 +15,6 @@ SET citus.enable_repartition_joins TO ON;
 
 -- Function that parses explain output as JSON
 -- copied from multi_explain.sql
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION explain_json(query text)
 RETURNS jsonb
 AS $BODY$
@@ -26,7 +25,6 @@ BEGIN
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
 
 SHOW log_error_verbosity;
 -- should recursively plan foo

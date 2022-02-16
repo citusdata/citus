@@ -11,11 +11,9 @@ CREATE TABLE dist_table (id int, value int);
 SELECT create_distributed_table('dist_table', 'id', colocate_with => 'users_table');
 INSERT INTO dist_table (id, value) VALUES(1, 2),(2, 3),(3,4);
 
-SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION func() RETURNS TABLE (id int, value int) AS $$
 	SELECT 1, 2
 $$ LANGUAGE SQL;
-RESET citus.enable_metadata_sync;
 
 SET client_min_messages TO DEBUG1;
 

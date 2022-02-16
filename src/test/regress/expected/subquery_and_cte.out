@@ -12,11 +12,9 @@ SELECT create_distributed_table('dist_table', 'id', colocate_with => 'users_tabl
 (1 row)
 
 INSERT INTO dist_table (id, value) VALUES(1, 2),(2, 3),(3,4);
-SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION func() RETURNS TABLE (id int, value int) AS $$
 	SELECT 1, 2
 $$ LANGUAGE SQL;
-RESET citus.enable_metadata_sync;
 SET client_min_messages TO DEBUG1;
 -- CTEs are recursively planned, and subquery foo is also recursively planned
 -- final plan becomes a router plan
@@ -128,6 +126,7 @@ WITH cte1 AS MATERIALIZED (SELECT id, value FROM func())
 UPDATE dist_table dt SET value = cte1.value
 FROM cte1 WHERE dt.id = 1;
 DEBUG:  generating subplan XXX_1 for CTE cte1: SELECT id, value FROM subquery_and_ctes.func() func(id, value)
+DEBUG:  function does not have co-located tables
 DEBUG:  Plan XXX query after replacing subqueries and CTEs: UPDATE subquery_and_ctes.dist_table dt SET value = cte1.value FROM (SELECT intermediate_result.id, intermediate_result.value FROM read_intermediate_result('XXX_1'::text, 'binary'::citus_copy_format) intermediate_result(id integer, value integer)) cte1 WHERE (dt.id OPERATOR(pg_catalog.=) 1)
 -- CTEs are recursively planned, and subquery foo is also recursively planned
 -- final plan becomes a real-time plan since we also have events_table in the

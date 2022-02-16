@@ -687,7 +687,6 @@ EXECUTE author_articles_update(NULL);
 EXECUTE author_articles_update(NULL);
 
 -- queries inside plpgsql functions could be router plannable
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE
   max_id integer;
@@ -698,7 +697,6 @@ BEGIN
 	return max_id;
 END;
 $$ LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
 
 -- we don't want too many details. though we're omitting
 -- "DETAIL:  distribution column value:", we see it acceptable
@@ -713,7 +711,6 @@ SELECT author_articles_max_id();
 SELECT author_articles_max_id();
 
 -- queries inside plpgsql functions could be router plannable
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_max_id(int) RETURNS int AS $$
 DECLARE
   max_id integer;
@@ -724,7 +721,6 @@ BEGIN
 	return max_id;
 END;
 $$ LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
 SELECT author_articles_max_id(1);
 SELECT author_articles_max_id(1);
 SELECT author_articles_max_id(1);
@@ -733,7 +729,6 @@ SELECT author_articles_max_id(1);
 SELECT author_articles_max_id(1);
 
 -- check that function returning setof query are router plannable
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_id_word_count() RETURNS TABLE(id bigint, word_count int) AS $$
 DECLARE
 BEGIN
@@ -744,7 +739,6 @@ BEGIN
 
 END;
 $$ LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
 
 SELECT * FROM author_articles_id_word_count();
 SELECT * FROM author_articles_id_word_count();
@@ -754,7 +748,6 @@ SELECT * FROM author_articles_id_word_count();
 SELECT * FROM author_articles_id_word_count();
 
 -- check that function returning setof query are router plannable
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_id_word_count(int) RETURNS TABLE(id bigint, word_count int) AS $$
 DECLARE
 BEGIN
@@ -765,7 +758,6 @@ BEGIN
 
 END;
 $$ LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
 SELECT * FROM author_articles_id_word_count(1);
 SELECT * FROM author_articles_id_word_count(1);
 SELECT * FROM author_articles_id_word_count(1);

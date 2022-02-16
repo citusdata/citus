@@ -373,7 +373,6 @@ CREATE OR REPLACE FUNCTION trigger_metadata_sync()
     LANGUAGE C STRICT
     AS 'citus';
 RESET citus.enable_metadata_sync;
-
 SELECT trigger_metadata_sync();
 
 \c :datname - - :master_port

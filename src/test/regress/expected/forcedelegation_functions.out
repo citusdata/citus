@@ -284,7 +284,6 @@ INSERT INTO test_nested VALUES (200,'twohundred');
 INSERT INTO test_nested VALUES (300,'threehundred');
 INSERT INTO test_nested VALUES (400,'fourhundred');
 INSERT INTO test_nested VALUES (512,'fivetwelve');
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION inner_force_delegation_function(int)
 RETURNS NUMERIC AS $$
 DECLARE ret_val NUMERIC;
@@ -294,7 +293,8 @@ BEGIN
         RETURN ret_val;
 END;
 $$  LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 CREATE OR REPLACE FUNCTION func_calls_forcepush_func()
 RETURNS NUMERIC AS $$
 DECLARE incremented_val NUMERIC;
@@ -358,13 +358,14 @@ PL/pgSQL function func_calls_forcepush_func() line XX at SQL statement
                        101
 (1 row)
 
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION get_val()
 RETURNS INT AS $$
 BEGIN
         RETURN 100::INT;
 END;
 $$  LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 --
 -- UDF calling another UDF in a FROM clause
 -- fn()
@@ -382,8 +383,13 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT func_calls_forcepush_func_infrom();
+DEBUG:  function does not have co-located tables
+DEBUG:  not pushing down function calls in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT get_val()"
+PL/pgSQL function func_calls_forcepush_func_infrom() line XX at assignment
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
 PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
@@ -401,6 +407,7 @@ PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
 
 BEGIN;
 SELECT func_calls_forcepush_func_infrom();
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
 PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
@@ -424,7 +431,6 @@ COMMIT;
 --   select fn() into var;
 -- }
 --
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION func_calls_forcepush_func_intarget()
 RETURNS NUMERIC AS $$
 DECLARE incremented_val NUMERIC;
@@ -435,8 +441,13 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT func_calls_forcepush_func_intarget();
+DEBUG:  function does not have co-located tables
+DEBUG:  not pushing down function calls in a multi-statement transaction
+CONTEXT:  SQL statement "SELECT get_val()"
+PL/pgSQL function func_calls_forcepush_func_intarget() line XX at assignment
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
 PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement
@@ -454,6 +465,7 @@ PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement
 
 BEGIN;
 SELECT func_calls_forcepush_func_intarget();
+DEBUG:  not pushing down function calls in a multi-statement transaction
 NOTICE:  inner_force_delegation_function():201
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
@@ -624,7 +636,6 @@ END;
 $$ LANGUAGE plpgsql;
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION outer_emp()
 RETURNS void
 AS $$
@@ -633,7 +644,8 @@ BEGIN
     PERFORM inner_emp('hello');
 END;
 $$ LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('inner_emp(text)','empname', force_delegation := true);
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
@@ -643,6 +655,7 @@ DETAIL:  A command for a distributed function is run. To make sure subsequent co
 (1 row)
 
 SELECT outer_emp();
+DEBUG:  function does not have co-located tables
 DEBUG:  Skipping pushdown of function from a PL/PgSQL simple expression
 CONTEXT:  SQL statement "SELECT inner_emp('hello')"
 PL/pgSQL function outer_emp() line XX at PERFORM
@@ -1251,7 +1264,6 @@ DETAIL:  A command for a distributed function is run. To make sure subsequent co
 
 DROP FUNCTION outer_test_prepare(int, int);
 ERROR:  function outer_test_prepare(integer, integer) does not exist
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION outer_test_prepare(x int, y int)
 RETURNS void
 AS $$
@@ -1262,10 +1274,12 @@ BEGIN
     PERFORM 1, 1 + a FROM test_prepare(x + 1, y + 1) a;
 END;
 $$ LANGUAGE plpgsql;
-RESET citus.enable_metadata_sync;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 -- First 5 get delegated and succeeds
 BEGIN;
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1284,6 +1298,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1302,6 +1317,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1320,6 +1336,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1338,6 +1355,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1364,6 +1382,7 @@ SELECT COUNT(*) FROM table_test_prepare;
 
 -- 6th execution will be generic plan and should get delegated
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1382,6 +1401,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1402,6 +1422,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 END;
 -- Fails as expected
 SELECT outer_test_prepare(1,2);
+DEBUG:  function does not have co-located tables
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM

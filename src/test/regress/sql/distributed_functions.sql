@@ -462,7 +462,6 @@ SELECT * FROM test ORDER BY id;
 DROP TABLE test;
 
 -- verify that recreating distributed functions with TABLE params gets propagated to workers
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION func_with_return_table(int)
 RETURNS  TABLE (date date)
 LANGUAGE plpgsql AS $$
@@ -470,11 +469,9 @@ BEGIN
     RETURN query SELECT '2011-01-01'::date;
 END;
 $$;
-RESET citus.enable_metadata_sync;
 
 SELECT create_distributed_function('func_with_return_table(int)');
 
-SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION func_with_return_table(int)
 RETURNS  TABLE (date date)
 LANGUAGE plpgsql AS $$
@@ -482,7 +479,6 @@ BEGIN
     RETURN query SELECT '2011-01-02'::date;
 END;
 $$;
-RESET citus.enable_metadata_sync;
 
 SELECT count(*) FROM
   (SELECT result FROM

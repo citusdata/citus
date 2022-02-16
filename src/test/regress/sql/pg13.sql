@@ -74,12 +74,10 @@ SELECT * FROM text_table ORDER BY 1;
 
 -- Test that we don't propagate base types
 CREATE TYPE myvarchar;
-SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION myvarcharin(cstring, oid, integer) RETURNS myvarchar
 LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharin';
 CREATE FUNCTION myvarcharout(myvarchar) RETURNS cstring
 LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharout';
-RESET citus.enable_metadata_sync;
 CREATE TYPE myvarchar (
     input = myvarcharin,
     output = myvarcharout,
