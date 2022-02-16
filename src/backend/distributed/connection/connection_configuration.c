@@ -14,6 +14,7 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/run_from_same_connection.h"
 #include "distributed/worker_manager.h"
 
 #include "postmaster/postmaster.h"
