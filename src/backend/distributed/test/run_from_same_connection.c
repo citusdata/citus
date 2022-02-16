@@ -109,14 +109,14 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 		allowNonIdleRemoteTransactionOnXactHandling = true;
 
 		char **keywords =
-			MemoryContextAllocZero(CurrentMemoryContext, 10 *
+			MemoryContextAllocZero(ConnectionContext, 10 *
 								   sizeof(char *));
 		char **values =
-			MemoryContextAllocZero(CurrentMemoryContext, 10 *
+			MemoryContextAllocZero(ConnectionContext, 10 *
 								   sizeof(char *));
 
 		keywords[0] = "host";
-		values[0] = nodeNameString;
+		values[0] = MemoryContextStrdup(ConnectionContext, nodeNameString);
 
 		keywords[1] = "port";
 
@@ -126,14 +126,16 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 		values[1] = str->data;
 
 		keywords[2] = "dbname";
-		values[2] = (char *) CurrentDatabaseName();
+		values[2] = MemoryContextStrdup(ConnectionContext,
+										(char *) CurrentDatabaseName());
 
 		keywords[3] = "user";
-		values[3] = CurrentUserName();
+		values[3] = MemoryContextStrdup(ConnectionContext, CurrentUserName());
 
 
 		keywords[4] = "client_encoding";
-		values[4] = (char *) GetDatabaseEncodingName();
+		values[4] = MemoryContextStrdup(ConnectionContext, pstrdup(
+											(char *) GetDatabaseEncodingName()));
 
 		keywords[5] = "application_name";
 		values[5] = "citus isolation tester";
@@ -142,6 +144,10 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 		keywords[6] = values[6] = NULL;
 
 		singleConnection = palloc(sizeof(MultiConnection));
+
+		singleConnection->hostname = nodeNameString;
+		singleConnection->port = nodePort;
+
 		singleConnection->pgConn = PQconnectdbParams((const char **) keywords,
 													 (const char **) values,
 													 false);
