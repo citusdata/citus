@@ -65,6 +65,14 @@ fi
 # undo partial merge
 git merge --abort
 
+# If we have a conflict on enterprise merge on the master branch, we have a problem.
+# Provide an error message to indicate that enterprise merge is needed to fix this check.
+if [[ $PR_BRANCH = master ]]; then
+    echo "ERROR: Master branch has merge conflicts with enterprise-master."
+    echo "Try re-running this CI job after merging your changes into enterprise-master."
+    exit 1
+fi
+
 if ! git fetch enterprise "$PR_BRANCH" ; then
     echo "ERROR: enterprise/$PR_BRANCH was not found and community PR branch could not be merged into enterprise-master"
     exit 1
