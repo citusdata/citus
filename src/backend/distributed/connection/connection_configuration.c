@@ -234,8 +234,15 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	char nodePortString[12] = "";
 
 	StringInfo applicationName = makeStringInfo();
-	appendStringInfo(applicationName, "%s%ld", CITUS_APPLICATION_NAME_PREFIX,
-					 GetGlobalPID());
+	if (AllowNonIdleTransactionOnXactHandling())
+	{
+		appendStringInfoString(applicationName, "citus isolation test");
+	}
+	else
+	{
+		appendStringInfo(applicationName, "%s%ld", CITUS_APPLICATION_NAME_PREFIX,
+						 GetGlobalPID());
+	}
 
 	/*
 	 * This function has three sections:

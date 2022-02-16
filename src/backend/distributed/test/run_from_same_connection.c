@@ -104,8 +104,9 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 	 */
 	if (singleConnection == NULL)
 	{
-		singleConnection = GetNodeConnection(connectionFlags, nodeNameString, nodePort);
 		allowNonIdleRemoteTransactionOnXactHandling = true;
+
+		singleConnection = GetNodeConnection(connectionFlags, nodeNameString, nodePort);
 	}
 
 	if (PQstatus(singleConnection->pgConn) != CONNECTION_OK)
