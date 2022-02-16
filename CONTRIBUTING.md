@@ -131,8 +131,6 @@ cd build
 cmake ..
 make -j5
 sudo make install
-# Optionally, you might instead want to use `sudo make install-all`
-# since `multi_extension` regression test would fail due to missing downgrade scripts.
 cd ../..
 
 git clone https://github.com/citusdata/tools.git
