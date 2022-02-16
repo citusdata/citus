@@ -145,7 +145,7 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 
 		singleConnection = palloc(sizeof(MultiConnection));
 
-		singleConnection->hostname = nodeNameString;
+		strlcpy(singleConnection->hostname, nodeNameString, MAX_NODE_LENGTH);
 		singleConnection->port = nodePort;
 
 		singleConnection->pgConn = PQconnectdbParams((const char **) keywords,
