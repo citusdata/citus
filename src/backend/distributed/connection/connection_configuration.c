@@ -14,7 +14,6 @@
 #include "distributed/citus_safe_lib.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
-#include "distributed/run_from_same_connection.h"
 #include "distributed/worker_manager.h"
 
 #include "postmaster/postmaster.h"
@@ -235,10 +234,8 @@ GetConnParams(ConnectionHashKey *key, char ***keywords, char ***values,
 	char nodePortString[12] = "";
 
 	StringInfo applicationName = makeStringInfo();
-
 	appendStringInfo(applicationName, "%s%ld", CITUS_APPLICATION_NAME_PREFIX,
 					 GetGlobalPID());
-
 
 	/*
 	 * This function has three sections:

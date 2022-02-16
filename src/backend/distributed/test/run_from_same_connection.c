@@ -119,10 +119,11 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 		values[0] = nodeNameString;
 
 		keywords[1] = "port";
-		char *portSTR = (char *) palloc(10);
-		pg_ultoa_n(nodePort, portSTR);
 
-		values[1] = portSTR;
+		StringInfo str = makeStringInfo();
+		appendStringInfo(str, "%d", nodePort);
+
+		values[1] = str->data;
 
 		keywords[2] = "dbname";
 		values[2] = (char *) CurrentDatabaseName();
