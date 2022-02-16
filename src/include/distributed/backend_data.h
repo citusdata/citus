@@ -29,7 +29,6 @@
 typedef struct CitusInitiatedBackend
 {
 	int initiatorNodeIdentifier;
-	bool transactionOriginator;
 } CitusInitiatedBackend;
 
 
@@ -51,6 +50,7 @@ typedef struct BackendData
 	slock_t mutex;
 	bool cancelledDueToDeadlock;
 	uint64 globalPID;
+	bool distributedCommandOriginator;
 	CitusInitiatedBackend citusBackend;
 	DistributedTransactionId transactionId;
 } BackendData;

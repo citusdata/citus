@@ -152,7 +152,6 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 
 	MyBackendData->citusBackend.initiatorNodeIdentifier =
 		MyBackendData->transactionId.initiatorNodeIdentifier;
-	MyBackendData->citusBackend.transactionOriginator = false;
 
 	SpinLockRelease(&MyBackendData->mutex);
 
@@ -410,15 +409,12 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 		initiatorNodeIdentifier = currentBackend->citusBackend.initiatorNodeIdentifier;
 
 		/*
-		 * We prefer to use worker_query instead of transactionOriginator in the user facing
-		 * functions since its more intuitive. Thus, we negate the result before returning.
-		 *
-		 * We prefer to use citusBackend's transactionOriginator field over transactionId's
-		 * field with the same name. The reason is that it also covers backends that are not
-		 * inside a distributed transaction.
+		 * We prefer to use worker_query instead of distributedCommandOriginator in
+		 * the user facing functions since its more intuitive. Thus,
+		 * we negate the result before returning.
 		 */
 		bool coordinatorOriginatedQuery =
-			currentBackend->citusBackend.transactionOriginator;
+			currentBackend->distributedCommandOriginator;
 
 		transactionNumber = currentBackend->transactionId.transactionNumber;
 		TimestampTz transactionIdTimestamp = currentBackend->transactionId.timestamp;
@@ -663,7 +659,6 @@ UnSetDistributedTransactionId(void)
 		MyBackendData->transactionId.timestamp = 0;
 
 		MyBackendData->citusBackend.initiatorNodeIdentifier = -1;
-		MyBackendData->citusBackend.transactionOriginator = false;
 
 		SpinLockRelease(&MyBackendData->mutex);
 	}
@@ -682,6 +677,7 @@ UnSetGlobalPID(void)
 		SpinLockAcquire(&MyBackendData->mutex);
 
 		MyBackendData->globalPID = 0;
+		MyBackendData->distributedCommandOriginator = false;
 
 		SpinLockRelease(&MyBackendData->mutex);
 	}
@@ -776,7 +772,6 @@ AssignDistributedTransactionId(void)
 	MyBackendData->transactionId.timestamp = currentTimestamp;
 
 	MyBackendData->citusBackend.initiatorNodeIdentifier = localGroupId;
-	MyBackendData->citusBackend.transactionOriginator = true;
 
 	SpinLockRelease(&MyBackendData->mutex);
 }
@@ -798,7 +793,6 @@ MarkCitusInitiatedCoordinatorBackend(void)
 	SpinLockAcquire(&MyBackendData->mutex);
 
 	MyBackendData->citusBackend.initiatorNodeIdentifier = localGroupId;
-	MyBackendData->citusBackend.transactionOriginator = true;
 
 	SpinLockRelease(&MyBackendData->mutex);
 }
@@ -814,10 +808,12 @@ void
 AssignGlobalPID(void)
 {
 	uint64 globalPID = INVALID_CITUS_INTERNAL_BACKEND_GPID;
+	bool distributedCommandOriginator = false;
 
 	if (!IsCitusInternalBackend())
 	{
 		globalPID = GenerateGlobalPID();
+		distributedCommandOriginator = true;
 	}
 	else
 	{
@@ -826,6 +822,7 @@ AssignGlobalPID(void)
 
 	SpinLockAcquire(&MyBackendData->mutex);
 	MyBackendData->globalPID = globalPID;
+	MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
 	SpinLockRelease(&MyBackendData->mutex);
 }
 
