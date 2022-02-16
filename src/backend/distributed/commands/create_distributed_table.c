@@ -402,11 +402,33 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 	List *originalForeignKeyRecreationCommands = NIL;
 	if (IsCitusTableType(relationId, CITUS_LOCAL_TABLE))
 	{
+		/* save the column name to update the distribution column var later */
+		char *distributionColumnName =
+			ColumnToColumnName(relationId, nodeToString(distributionColumn));
+
 		/* store foreign key creation commands that relation is involved */
 		originalForeignKeyRecreationCommands =
 			GetFKeyCreationCommandsRelationInvolvedWithTableType(relationId,
 																 INCLUDE_ALL_TABLE_TYPES);
 		relationId = DropFKeysAndUndistributeTable(relationId);
+
+		/*
+		 * Because we create a new table when undistributing the table, attribute numbers
+		 * might be changed, because of the dropped columns. To make sure we have the
+		 * correct distribution column, we need to build it again, using the original
+		 * column name that we have saved before.
+		 */
+		Relation relation = try_relation_open(relationId, ExclusiveLock);
+		if (relation == NULL)
+		{
+			ereport(ERROR, (errmsg("could not open the relation %u", relationId),
+							errdetail("When creating the distribution column.")));
+		}
+
+		relation_close(relation, NoLock);
+
+		distributionColumn = BuildDistributionKeyFromColumnName(relation,
+																distributionColumnName);
 	}
 
 	/*
