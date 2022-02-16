@@ -29,7 +29,6 @@
 typedef struct CitusInitiatedBackend
 {
 	int initiatorNodeIdentifier;
-	bool transactionOriginator;
 } CitusInitiatedBackend;
 
 
@@ -51,6 +50,7 @@ typedef struct BackendData
 	slock_t mutex;
 	bool cancelledDueToDeadlock;
 	uint64 globalPID;
+	bool distributedCommandOriginator;
 	CitusInitiatedBackend citusBackend;
 	DistributedTransactionId transactionId;
 } BackendData;
@@ -67,6 +67,8 @@ extern void AssignDistributedTransactionId(void);
 extern void MarkCitusInitiatedCoordinatorBackend(void);
 extern void AssignGlobalPID(void);
 extern uint64 GetGlobalPID(void);
+extern void OverrideBackendDataDistributedCommandOriginator(bool
+															distributedCommandOriginator);
 extern uint64 ExtractGlobalPID(char *applicationName);
 extern int ExtractNodeIdFromGlobalPID(uint64 globalPID);
 extern int ExtractProcessIdFromGlobalPID(uint64 globalPID);
