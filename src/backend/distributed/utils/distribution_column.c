@@ -56,14 +56,11 @@ column_name_to_column(PG_FUNCTION_ARGS)
 	text *columnText = PG_GETARG_TEXT_P(1);
 	char *columnName = text_to_cstring(columnText);
 
-	Relation relation = relation_open(relationId, AccessShareLock);
-
-	Var *column = BuildDistributionKeyFromColumnName(relation, columnName);
+	Var *column = BuildDistributionKeyFromColumnName(relationId, columnName,
+													 AccessShareLock);
 	Assert(column != NULL);
 	char *columnNodeString = nodeToString(column);
 	text *columnNodeText = cstring_to_text(columnNodeString);
-
-	relation_close(relation, AccessShareLock);
 
 	PG_RETURN_TEXT_P(columnNodeText);
 }
@@ -81,12 +78,9 @@ column_name_to_column_id(PG_FUNCTION_ARGS)
 	Oid distributedTableId = PG_GETARG_OID(0);
 	char *columnName = PG_GETARG_CSTRING(1);
 
-	Relation relation = relation_open(distributedTableId, AccessExclusiveLock);
-
-	Var *column = BuildDistributionKeyFromColumnName(relation, columnName);
+	Var *column = BuildDistributionKeyFromColumnName(distributedTableId, columnName,
+													 AccessExclusiveLock);
 	Assert(column != NULL);
-
-	relation_close(relation, NoLock);
 
 	PG_RETURN_INT16((int16) column->varattno);
 }
@@ -107,59 +101,13 @@ column_to_column_name(PG_FUNCTION_ARGS)
 	text *columnNodeText = PG_GETARG_TEXT_P(1);
 
 	char *columnNodeString = text_to_cstring(columnNodeText);
+	Node *columnNode = stringToNode(columnNodeString);
 
-	char *columnName = ColumnToColumnName(relationId, columnNodeString);
+	char *columnName = ColumnToColumnName(relationId, columnNode);
 
 	text *columnText = cstring_to_text(columnName);
 
 	PG_RETURN_TEXT_P(columnText);
-}
-
-
-/*
- * FindColumnWithNameOnTargetRelation gets a source table and
- * column name. The function returns the the column with the
- * same name on the target table.
- *
- * Note that due to dropping columns, the parent's distribution key may not
- * match the partition's distribution key. See issue #5123.
- *
- * The function throws error if the input or output is not valid or does
- * not exist.
- */
-Var *
-FindColumnWithNameOnTargetRelation(Oid sourceRelationId, char *sourceColumnName,
-								   Oid targetRelationId)
-{
-	if (sourceColumnName == NULL || sourceColumnName[0] == '\0')
-	{
-		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN),
-						errmsg("cannot find the given column on table \"%s\"",
-							   generate_qualified_relation_name(sourceRelationId))));
-	}
-
-	AttrNumber attributeNumberOnTarget = get_attnum(targetRelationId, sourceColumnName);
-	if (attributeNumberOnTarget == InvalidAttrNumber)
-	{
-		ereport(ERROR, (errmsg("Column \"%s\" does not exist on "
-							   "relation \"%s\"", sourceColumnName,
-							   get_rel_name(targetRelationId))));
-	}
-
-	Index varNo = 1;
-	Oid targetTypeId = InvalidOid;
-	int32 targetTypMod = 0;
-	Oid targetCollation = InvalidOid;
-	Index varlevelsup = 0;
-
-	/* this function throws error in case anything goes wrong */
-	get_atttypetypmodcoll(targetRelationId, attributeNumberOnTarget,
-						  &targetTypeId, &targetTypMod, &targetCollation);
-	Var *targetColumn =
-		makeVar(varNo, attributeNumberOnTarget, targetTypeId, targetTypMod,
-				targetCollation, varlevelsup);
-
-	return targetColumn;
 }
 
 
@@ -173,9 +121,18 @@ FindColumnWithNameOnTargetRelation(Oid sourceRelationId, char *sourceColumnName,
  * corresponds to reference tables.
  */
 Var *
-BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnName)
+BuildDistributionKeyFromColumnName(Oid relationId, char *columnName, LOCKMODE lockMode)
 {
-	char *tableName = RelationGetRelationName(distributedRelation);
+	Relation relation = try_relation_open(relationId, ExclusiveLock);
+
+	if (relation == NULL)
+	{
+		ereport(ERROR, (errmsg("relation does not exist")));
+	}
+
+	relation_close(relation, NoLock);
+
+	char *tableName = get_rel_name(relationId);
 
 	/* short circuit for reference tables */
 	if (columnName == NULL)
@@ -187,8 +144,7 @@ BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnNam
 	truncate_identifier(columnName, strlen(columnName), true);
 
 	/* lookup column definition */
-	HeapTuple columnTuple = SearchSysCacheAttName(RelationGetRelid(distributedRelation),
-												  columnName);
+	HeapTuple columnTuple = SearchSysCacheAttName(relationId, columnName);
 	if (!HeapTupleIsValid(columnTuple))
 	{
 		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_COLUMN),
@@ -218,15 +174,13 @@ BuildDistributionKeyFromColumnName(Relation distributedRelation, char *columnNam
 
 /*
  * ColumnToColumnName returns the human-readable name of a column given a
- * relation identifier and the column's internal textual (Var) representation.
+ * relation identifier and the column's internal (Var) representation.
  * This function will raise an ERROR if no such column can be found or if the
  * provided Var refers to a system column.
  */
 char *
-ColumnToColumnName(Oid relationId, char *columnNodeString)
+ColumnToColumnName(Oid relationId, Node *columnNode)
 {
-	Node *columnNode = stringToNode(columnNodeString);
-
 	if (columnNode == NULL || !IsA(columnNode, Var))
 	{
 		ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
