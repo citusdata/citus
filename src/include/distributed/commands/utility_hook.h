@@ -24,6 +24,13 @@
 
 typedef enum
 {
+	DDL_PROPAGATION_PARALLELISM = 0,
+	DDL_PROPAGATION_OPTIMISTIC = 1,
+	DDL_PROPAGATION_ALWAYS = 2
+} DDLPropagationModes;
+
+typedef enum
+{
 	PROPSETCMD_INVALID = -1,
 	PROPSETCMD_NONE, /* do not propagate SET commands */
 	PROPSETCMD_LOCAL, /* propagate SET LOCAL commands */
@@ -32,6 +39,7 @@ typedef enum
 } PropSetCmdBehavior;
 extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
+extern int DDLPropagationMode;
 extern bool EnableCreateTypePropagation;
 extern bool EnableAlterRolePropagation;
 extern bool EnableAlterRoleSetPropagation;
