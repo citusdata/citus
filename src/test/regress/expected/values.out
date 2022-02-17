@@ -587,6 +587,8 @@ CREATE OR REPLACE FUNCTION fixed_volatile_value() RETURNS integer VOLATILE AS $$
                 RETURN 1;
         END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 EXECUTE test_values_pushdown(fixed_volatile_value(),2,3);
 NOTICE:  evaluated on the coordinator
 CONTEXT:  PL/pgSQL function fixed_volatile_value() line XX at RAISE

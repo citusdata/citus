@@ -69,14 +69,7 @@ CREATE TABLE repartition_udt_other (
 \c - - :public_worker_1_host :worker_1_port
 
 -- START type creation
--- ... as well as a function to use as its comparator...
-CREATE FUNCTION equal_test_udt_function(test_udt, test_udt) RETURNS boolean
-AS 'select $1.i = $2.i AND $1.i2 = $2.i2;'
-LANGUAGE SQL
-IMMUTABLE
-RETURNS NULL ON NULL INPUT;
-
--- ... use that function to create a custom equality operator...
+-- Use function to create a custom equality operator...
 CREATE OPERATOR = (
     LEFTARG = test_udt,
     RIGHTARG = test_udt,
@@ -87,15 +80,6 @@ CREATE OPERATOR = (
 
 -- ... and create a custom operator family for hash indexes...
 CREATE OPERATOR FAMILY tudt_op_fam USING hash;
-
--- ... create a test HASH function. Though it is a poor hash function,
--- it is acceptable for our tests
-CREATE FUNCTION test_udt_hash(test_udt) RETURNS int
-AS 'SELECT hashtext( ($1.i + $1.i2)::text);'
-LANGUAGE SQL
-IMMUTABLE
-RETURNS NULL ON NULL INPUT;
-
 
 -- We need to define two different operator classes for the composite types
 -- One uses BTREE the other uses HASH
@@ -113,14 +97,7 @@ FUNCTION 1 test_udt_hash(test_udt);
 \c - - :public_worker_2_host :worker_2_port
 
 -- START type creation
--- ... as well as a function to use as its comparator...
-CREATE FUNCTION equal_test_udt_function(test_udt, test_udt) RETURNS boolean
-AS 'select $1.i = $2.i AND $1.i2 = $2.i2;'
-LANGUAGE SQL
-IMMUTABLE
-RETURNS NULL ON NULL INPUT;
-
--- ... use that function to create a custom equality operator...
+-- Use function to create a custom equality operator...
 CREATE OPERATOR = (
     LEFTARG = test_udt,
     RIGHTARG = test_udt,
@@ -131,15 +108,6 @@ CREATE OPERATOR = (
 
 -- ... and create a custom operator family for hash indexes...
 CREATE OPERATOR FAMILY tudt_op_fam USING hash;
-
--- ... create a test HASH function. Though it is a poor hash function,
--- it is acceptable for our tests
-CREATE FUNCTION test_udt_hash(test_udt) RETURNS int
-AS 'SELECT hashtext( ($1.i + $1.i2)::text);'
-LANGUAGE SQL
-IMMUTABLE
-RETURNS NULL ON NULL INPUT;
-
 
 -- We need to define two different operator classes for the composite types
 -- One uses BTREE the other uses HASH

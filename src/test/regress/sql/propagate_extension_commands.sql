@@ -116,13 +116,6 @@ CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS 
 CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
 CREATE TEXT SEARCH DICTIONARY intdict (TEMPLATE = intdict_template);
 COMMENT ON TEXT SEARCH DICTIONARY intdict IS 'dictionary for integers';
-SELECT run_command_on_workers($$
-CREATE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
-$$);
-
-SELECT run_command_on_workers($$
-CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
-$$);
 
 SELECT run_command_on_workers($$
 CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );

@@ -43,11 +43,13 @@ SELECT create_reference_table('numbers');
 
 INSERT INTO numbers VALUES (20), (21);
 NOTICE:  executing the command locally: INSERT INTO replicate_ref_to_coordinator.numbers_8000001 AS citus_table_alias (a) VALUES (20), (21)
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION my_volatile_fn()
 RETURNS INT AS $$
 BEGIN
   RETURN 1;
 END; $$ language plpgsql VOLATILE;
+RESET citus.enable_metadata_sync;
 -- INSERT ... SELECT between reference tables
 BEGIN;
 EXPLAIN (COSTS OFF) INSERT INTO squares SELECT a, a*a FROM numbers;
