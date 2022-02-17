@@ -124,6 +124,7 @@ typedef struct ViewDependencyNode
 static List * GetRelationSequenceDependencyList(Oid relationId);
 static List * GetRelationTriggerFunctionDependencyList(Oid relationId);
 static List * GetRelationStatsSchemaDependencyList(Oid relationId);
+static List * GetRelationIndicesDependencyList(Oid relationId);
 static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid objectId);
 static List * CreateObjectAddressDependencyDefList(Oid classId, List *objectIdList);
 static ObjectAddress DependencyDefinitionObjectAddress(DependencyDefinition *definition);
@@ -639,6 +640,11 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			return true;
 		}
 
+		case OCLASS_TSCONFIG:
+		{
+			return true;
+		}
+
 		case OCLASS_TYPE:
 		{
 			switch (get_typtype(address->objectId))
@@ -686,7 +692,8 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 				relKind == RELKIND_RELATION ||
 				relKind == RELKIND_PARTITIONED_TABLE ||
 				relKind == RELKIND_FOREIGN_TABLE ||
-				relKind == RELKIND_SEQUENCE)
+				relKind == RELKIND_SEQUENCE ||
+				relKind == RELKIND_INDEX)
 			{
 				return true;
 			}
@@ -1005,6 +1012,17 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			List *sequenceDependencyList = GetRelationSequenceDependencyList(relationId);
 
 			result = list_concat(result, sequenceDependencyList);
+
+			/*
+			 * Tables could have indexes. Indexes themself could have dependencies that
+			 * need to be propagated. eg. TEXT SEARCH CONFIGRUATIONS. Here we add the
+			 * addresses of all indices to the list of objects to vist, as to make sure we
+			 * create all objects required by the indices before we create the table
+			 * including indices.
+			 */
+
+			List *indexDependencyList = GetRelationIndicesDependencyList(relationId);
+			result = list_concat(result, indexDependencyList);
 		}
 
 		default:
@@ -1045,6 +1063,28 @@ GetRelationStatsSchemaDependencyList(Oid relationId)
 	List *schemaIds = GetExplicitStatisticsSchemaIdList(relationId);
 
 	return CreateObjectAddressDependencyDefList(NamespaceRelationId, schemaIds);
+}
+
+
+/*
+ * CollectIndexOids implements PGIndexProcessor to create a list of all index oids
+ */
+static void
+CollectIndexOids(Form_pg_index formPgIndex, List **oids, int flags)
+{
+	*oids = lappend_oid(*oids, formPgIndex->indexrelid);
+}
+
+
+/*
+ * GetRelationIndicesDependencyList creates a list of ObjectAddressDependencies for the
+ * indexes on a given relation.
+ */
+static List *
+GetRelationIndicesDependencyList(Oid relationId)
+{
+	List *indexIds = ExecuteFunctionOnEachTableIndex(relationId, CollectIndexOids, 0);
+	return CreateObjectAddressDependencyDefList(RelationRelationId, indexIds);
 }
 
 

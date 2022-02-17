@@ -770,6 +770,11 @@ GetObjectTypeString(ObjectType objType)
 			return "schema";
 		}
 
+		case OBJECT_TSCONFIGURATION:
+		{
+			return "text search configuration";
+		}
+
 		case OBJECT_TYPE:
 		{
 			return "type";

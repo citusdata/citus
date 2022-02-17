@@ -208,4 +208,7 @@ SELECT * FROM pg_catalog.citus_worker_stat_activity();
 ALTER VIEW citus.citus_worker_stat_activity SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_worker_stat_activity TO PUBLIC;
 
+DROP FUNCTION pg_catalog.worker_create_or_replace_object(text[]);
+#include "../udfs/worker_create_or_replace_object/9.0-1.sql"
+
 RESET search_path;
