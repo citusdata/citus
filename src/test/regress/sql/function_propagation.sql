@@ -167,5 +167,20 @@ SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dis
 SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.max_of_table'::regproc::oid;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.max_of_table'::regproc::oid;$$) ORDER BY 1,2;
 
+-- Check extension owned table
+CREATE TABLE extension_owned_table(a int);
+CREATE EXTENSION seg;
+ALTER EXTENSION seg ADD TABLE extension_owned_table;
+
+CREATE OR REPLACE FUNCTION func_for_ext_check(param_1 extension_owned_table)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+
 RESET search_path;
+SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;

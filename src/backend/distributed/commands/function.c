@@ -1294,6 +1294,14 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
+	/*
+	 * This check should have been
+	 * (a) valid for all objects not only for functions
+	 * (b) should check for all types of objects no only for relations.
+	 *
+	 * We do this limited check for now as functions are more likely to be used with
+	 * (a) and (b), and we want to scope it for now
+	 */
 	ObjectAddress *undistributableDependency = GetUndistributableRelationDependency(
 		&functionAddress);
 	if (undistributableDependency != NULL)

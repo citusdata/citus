@@ -283,23 +283,23 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
  localhost |    57638 | t       | (function,"{function_propagation_schema,max_of_table}",{})
 (2 rows)
 
+-- Check extension owned table
+CREATE TABLE extension_owned_table(a int);
+CREATE EXTENSION seg;
+ALTER EXTENSION seg ADD TABLE extension_owned_table;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
+CREATE OR REPLACE FUNCTION func_for_ext_check(param_1 extension_owned_table)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+WARNING:  Citus can't distribute function "func_for_ext_check" having dependency on non-distributed relation "extension_owned_table"
+DETAIL:  Function will be created only locally
+HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
 RESET search_path;
+SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;
-NOTICE:  drop cascades to 17 other objects
-DETAIL:  drop cascades to type function_propagation_schema.function_prop_type
-drop cascades to function function_propagation_schema.func_1(function_propagation_schema.function_prop_type)
-drop cascades to type function_propagation_schema.function_prop_type_2
-drop cascades to function function_propagation_schema.func_2(integer)
-drop cascades to type function_propagation_schema.function_prop_type_3
-drop cascades to function function_propagation_schema.func_3(integer)
-drop cascades to table function_propagation_schema.function_prop_table
-drop cascades to function function_propagation_schema.func_4(function_propagation_schema.function_prop_table)
-drop cascades to function function_propagation_schema.func_5(integer)
-drop cascades to function function_propagation_schema.func_6(function_propagation_schema.function_prop_table)
-drop cascades to view function_propagation_schema.function_prop_view
-drop cascades to function function_propagation_schema.func_7(function_propagation_schema.function_prop_view)
-drop cascades to function function_propagation_schema.func_8(integer)
-drop cascades to type function_propagation_schema.type_in_transaction
-drop cascades to function function_propagation_schema.func_in_transaction(function_propagation_schema.type_in_transaction)
-drop cascades to table function_propagation_schema.table_in_sql_body
-drop cascades to function function_propagation_schema.max_of_table()

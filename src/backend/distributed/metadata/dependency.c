@@ -159,6 +159,8 @@ static bool FollowAllDependencies(ObjectAddressCollector *collector,
 								  DependencyDefinition *definition);
 static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 									 DependencyDefinition *definition);
+static void ApplyAddAllToDependencyList(ObjectAddressCollector *collector,
+										DependencyDefinition *definition);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
 										ObjectAddress target);
 static ViewDependencyNode * BuildViewDependencyGraph(Oid relationId, HTAB *nodeMap);
@@ -240,7 +242,10 @@ GetAllSupportedDependenciesForObject(const ObjectAddress *target)
 
 /*
  * GetAllDependenciesForObject returns a list of all the dependent objects of the given
- * object irrespective of whether the dependent object is supported by Citus or not.
+ * object irrespective of whether the dependent object is supported by Citus or not, if
+ * the object can be found as dependency with RecurseObjectDependencies and
+ * ExpandCitusSupportedTypes.
+ *
  * This function will be used to provide meaningful error messages if any dependent
  * object for a given object is not supported. If you want to create dependencies for
  * an object, you probably need to use GetDependenciesForObject().
@@ -254,7 +259,7 @@ GetAllDependenciesForObject(const ObjectAddress *target)
 	RecurseObjectDependencies(*target,
 							  &ExpandCitusSupportedTypes,
 							  &FollowAllDependencies,
-							  &ApplyAddToDependencyList,
+							  &ApplyAddAllToDependencyList,
 							  &collector);
 
 	return collector.dependencyList;
@@ -971,10 +976,12 @@ FollowAllDependencies(ObjectAddressCollector *collector,
 
 
 /*
- * ApplyAddToDependencyList is an apply function for RecurseObjectDependencies that will collect
- * all the ObjectAddresses for pg_depend entries to the context. The context here is
- * assumed to be a (ObjectAddressCollector *) to the location where all ObjectAddresses
- * will be collected.
+ * ApplyAddToDependencyList is an apply function for RecurseObjectDependencies that will
+ * collect all the ObjectAddresses for pg_depend entries to the context, except it is
+ * extension owned one.
+ *
+ * The context here is assumed to be a (ObjectAddressCollector *) to the location where
+ * all ObjectAddresses will be collected.
  */
 static void
 ApplyAddToDependencyList(ObjectAddressCollector *collector,
@@ -994,6 +1001,22 @@ ApplyAddToDependencyList(ObjectAddressCollector *collector,
 		return;
 	}
 
+	CollectObjectAddress(collector, &address);
+}
+
+
+/*
+ * ApplyAddAllToDependencyList is an apply function for RecurseObjectDependencies that will
+ * collect all the ObjectAddresses for pg_depend entries to the context. This one will be
+ * used to provide meaningfull messages if an object has a dependency on extension owned
+ * object. You probably need ApplyAddToDependencyList, if you want to create dependencies
+ * for objects.
+ */
+static void
+ApplyAddAllToDependencyList(ObjectAddressCollector *collector,
+							DependencyDefinition *definition)
+{
+	ObjectAddress address = DependencyDefinitionObjectAddress(definition);
 	CollectObjectAddress(collector, &address);
 }
 
