@@ -217,7 +217,18 @@ PreprocessDropForeignServerStmt(Node *node, const char *queryString,
 List *
 PostprocessCreateForeignServerStmt(Node *node, const char *queryString)
 {
-	bool missingOk = false;
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	/* check creation against multi-statement transaction policy */
+	if (IsMultiStatementTransaction() && !ShouldPropagateCreateInCurrentTransaction())
+	{
+		return NIL;
+	}
+
+	const bool missingOk = false;
 	ObjectAddress address = GetObjectAddressFromParseTree(node, missingOk);
 	EnsureDependenciesExistOnAllNodes(&address);
 
@@ -232,8 +243,14 @@ PostprocessCreateForeignServerStmt(Node *node, const char *queryString)
 List *
 PostprocessAlterForeignServerOwnerStmt(Node *node, const char *queryString)
 {
-	bool missingOk = false;
+	const bool missingOk = false;
 	ObjectAddress address = GetObjectAddressFromParseTree(node, missingOk);
+
+	if (!ShouldPropagateObject(&address))
+	{
+		return NIL;
+	}
+
 	EnsureDependenciesExistOnAllNodes(&address);
 
 	return NIL;

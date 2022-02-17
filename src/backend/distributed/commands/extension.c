@@ -136,11 +136,8 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	/*
-	 * If the extension command is a part of a multi-statement transaction,
-	 * do not propagate it
-	 */
-	if (IsMultiStatementTransaction())
+	/* check creation against multi-statement transaction policy */
+	if (IsMultiStatementTransaction() && !ShouldPropagateCreateInCurrentTransaction())
 	{
 		return NIL;
 	}
