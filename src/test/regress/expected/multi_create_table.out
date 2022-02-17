@@ -7,6 +7,7 @@
 -- reference and hash-distributed version of orders, customer and part tables.
 SET citus.next_shard_id TO 360000;
 -- this function is dropped in Citus10, added here for tests
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
                                                                       distribution_column text,
                                                                       distribution_method citus.distribution_type)
@@ -23,6 +24,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name tex
     RETURNS void
     AS 'citus', $$master_create_worker_shards$$
     LANGUAGE C STRICT;
+RESET citus.enable_metadata_sync;
 CREATE TABLE lineitem (
 	l_orderkey bigint not null,
 	l_partkey integer not null,

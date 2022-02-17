@@ -293,6 +293,8 @@ BEGIN
         RETURN ret_val;
 END;
 $$  LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 CREATE OR REPLACE FUNCTION func_calls_forcepush_func()
 RETURNS NUMERIC AS $$
 DECLARE incremented_val NUMERIC;
@@ -302,6 +304,8 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('func_calls_forcepush_func()');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
@@ -354,12 +358,16 @@ PL/pgSQL function func_calls_forcepush_func() line XX at SQL statement
                        101
 (1 row)
 
+-- Block distributing that function as distributing it causes
+-- different test output on PG 14.
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION get_val()
 RETURNS INT AS $$
 BEGIN
         RETURN 100::INT;
 END;
 $$  LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 --
 -- UDF calling another UDF in a FROM clause
 -- fn()
@@ -377,7 +385,10 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT func_calls_forcepush_func_infrom();
+DEBUG:  function does not have co-located tables
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
 PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
@@ -395,6 +406,7 @@ PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
 
 BEGIN;
 SELECT func_calls_forcepush_func_infrom();
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
 PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
@@ -428,7 +440,10 @@ BEGIN
 	RETURN incremented_val;
 END;
 $$  LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT func_calls_forcepush_func_intarget();
+DEBUG:  function does not have co-located tables
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
 PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement
@@ -446,6 +461,7 @@ PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement
 
 BEGIN;
 SELECT func_calls_forcepush_func_intarget();
+DEBUG:  not pushing down function calls in a multi-statement transaction
 NOTICE:  inner_force_delegation_function():201
 DETAIL:  from localhost:xxxxx
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
@@ -473,6 +489,8 @@ BEGIN
 	END if;
 END;
 $$  LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('test_recursive(int)', '$1', colocate_with := 'test_nested', force_delegation := true);
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
@@ -544,6 +562,8 @@ BEGIN
         RETURN x + y;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
 'test_non_constant(int,bigint)',
 '$1',
@@ -610,6 +630,8 @@ BEGIN
     INSERT INTO emp VALUES (empname, 33);
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 CREATE OR REPLACE FUNCTION outer_emp()
 RETURNS void
 AS $$
@@ -618,6 +640,8 @@ BEGIN
     PERFORM inner_emp('hello');
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('inner_emp(text)','empname', force_delegation := true);
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
@@ -627,6 +651,7 @@ DETAIL:  A command for a distributed function is run. To make sure subsequent co
 (1 row)
 
 SELECT outer_emp();
+DEBUG:  function does not have co-located tables
 DEBUG:  Skipping pushdown of function from a PL/PgSQL simple expression
 CONTEXT:  SQL statement "SELECT inner_emp('hello')"
 PL/pgSQL function outer_emp() line XX at PERFORM
@@ -650,6 +675,8 @@ BEGIN
 	INSERT INTO forcepushdown_schema.test_forcepushdown SELECT(a+1);
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_select_data(int)', 'a',
   colocate_with := 'test_forcepushdown',
@@ -725,6 +752,8 @@ BEGIN
 		SELECT intcol FROM forcepushdown_schema.test_forcepushdown_noncolocate;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_select_data_nonlocal(int)', 'a',
   colocate_with := 'test_forcepushdown',
@@ -803,6 +832,8 @@ BEGIN
 	INSERT INTO forcepushdown_schema.test_forcepushdown_char VALUES (a);
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_data_char(char)', 'a',
   colocate_with := 'test_forcepushdown_char',
@@ -821,6 +852,8 @@ BEGIN
 	INSERT INTO forcepushdown_schema.test_forcepushdown_varchar VALUES (a);
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_data_varchar(varchar)', 'a',
   colocate_with := 'test_forcepushdown_varchar',
@@ -839,6 +872,8 @@ BEGIN
 	INSERT INTO forcepushdown_schema.test_forcepushdown_text VALUES (a);
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_data_text(text)', 'a',
   colocate_with := 'test_forcepushdown_text',
@@ -947,6 +982,8 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'select_data(int)', 'a',
   colocate_with := 'test_subquery',
@@ -969,6 +1006,8 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'select_data_noncolocate(int)', 'a',
   colocate_with := 'test_subquery',
@@ -990,6 +1029,8 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_select_data_cte1(int)', 'a',
   colocate_with := 'test_subquery',
@@ -1011,6 +1052,8 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_select_data_cte2(int)', 'a',
   colocate_with := 'test_subquery',
@@ -1033,6 +1076,8 @@ BEGIN
 	RAISE NOTICE 'Result: %', var;
 END;
 $fn$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'insert_data_cte_nondist(int)', 'a',
   colocate_with := 'test_subquery',
@@ -1203,6 +1248,8 @@ BEGIN
 	RETURN x + y;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('test_prepare(int,int)','x',force_delegation :=true, colocate_with := 'table_test_prepare');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
@@ -1223,9 +1270,12 @@ BEGIN
     PERFORM 1, 1 + a FROM test_prepare(x + 1, y + 1) a;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 -- First 5 get delegated and succeeds
 BEGIN;
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1244,6 +1294,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1262,6 +1313,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1280,6 +1332,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1298,6 +1351,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1324,6 +1378,7 @@ SELECT COUNT(*) FROM table_test_prepare;
 
 -- 6th execution will be generic plan and should get delegated
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1342,6 +1397,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 (1 row)
 
 SELECT outer_test_prepare(1,1);
+DEBUG:  not pushing down function calls in a multi-statement transaction
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1362,6 +1418,7 @@ PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
 END;
 -- Fails as expected
 SELECT outer_test_prepare(1,2);
+DEBUG:  function does not have co-located tables
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT FROM test_prepare(x, y)"
 PL/pgSQL function outer_test_prepare(integer,integer) line XX at PERFORM
@@ -1397,6 +1454,8 @@ BEGIN
     RETURN x;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('test(int)', 'x',
                 colocate_with := 'test_perform', force_delegation := true);
 DEBUG:  switching to sequential query execution mode
@@ -1433,6 +1492,8 @@ BEGIN
     INSERT INTO forcepushdown_schema.testnested_table VALUES (x,x);
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 -- Non-force function calling force-delegation function
 CREATE OR REPLACE FUNCTION outer_local_fn()
 RETURNS void
@@ -1445,6 +1506,8 @@ BEGIN
     INSERT INTO forcepushdown_schema.testnested_table VALUES (5,6);
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('inner_fn(int)','x',
 		colocate_with:='testnested_table', force_delegation := true);
 DEBUG:  switching to sequential query execution mode
@@ -1455,6 +1518,7 @@ DETAIL:  A command for a distributed function is run. To make sure subsequent co
 (1 row)
 
 SELECT outer_local_fn();
+DEBUG:  function does not have co-located tables
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT 1 FROM inner_fn(1)"
 PL/pgSQL function outer_local_fn() line XX at PERFORM
@@ -1484,6 +1548,7 @@ SELECT * FROM testnested_table ORDER BY 1;
 
 BEGIN;
 SELECT outer_local_fn();
+DEBUG:  not pushing down function calls in a multi-statement transaction
  outer_local_fn
 ---------------------------------------------------------------------
 
@@ -1507,6 +1572,8 @@ DROP FUNCTION inner_fn(int);
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 DROP FUNCTION outer_local_fn();
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 TRUNCATE TABLE testnested_table;
 CREATE OR REPLACE FUNCTION inner_fn(x int)
 RETURNS void
@@ -1516,6 +1583,8 @@ BEGIN
     INSERT INTO forcepushdown_schema.testnested_table VALUES (x,x);
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 -- Force-delegation function calling non-force function
 CREATE OR REPLACE FUNCTION outer_fn(y int, z int)
 RETURNS void
@@ -1528,6 +1597,8 @@ BEGIN
     INSERT INTO forcepushdown_schema.testnested_table VALUES (z,z);
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('inner_fn(int)','x',
 		colocate_with:='testnested_table', force_delegation := false);
 DEBUG:  switching to sequential query execution mode
@@ -1582,6 +1653,8 @@ BEGIN
     INSERT INTO forcepushdown_schema.testnested_table VALUES (y,y);
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 CREATE OR REPLACE FUNCTION force_push_outer(x int)
 RETURNS void
 AS $$
@@ -1591,6 +1664,8 @@ BEGIN
     PERFORM forcepushdown_schema.force_push_inner(x+1) LIMIT 1;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'force_push_outer(int)', 'x',
   colocate_with := 'testnested_table',
@@ -1672,6 +1747,8 @@ BEGIN
     PERFORM forcepushdown_schema.force_push_2(x+1) LIMIT 1;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 CREATE OR REPLACE FUNCTION force_push_2(y int)
 RETURNS void
 AS $$
@@ -1681,6 +1758,8 @@ BEGIN
     PERFORM forcepushdown_schema.force_push_3(y+1) LIMIT 1;
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 CREATE OR REPLACE FUNCTION force_push_3(z int)
 RETURNS void
 AS $$
@@ -1689,6 +1768,8 @@ BEGIN
     INSERT INTO forcepushdown_schema.testnested_table VALUES (z,z);
 END;
 $$ LANGUAGE plpgsql;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function(
   'force_push_1(int)', 'x',
   colocate_with := 'testnested_table',

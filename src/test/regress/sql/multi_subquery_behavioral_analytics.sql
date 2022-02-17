@@ -1278,17 +1278,8 @@ ORDER BY
 LIMIT 10;
 
 -- this is one complex join query derived from a user's production query
--- first declare the function on workers on master
+-- declare the function on workers and master
 -- With array_index:
-SELECT * FROM  run_command_on_workers('CREATE OR REPLACE FUNCTION array_index(ANYARRAY, ANYELEMENT)
-      RETURNS INT AS $$
-        SELECT i
-        FROM (SELECT generate_series(array_lower($1, 1), array_upper($1, 1))) g(i)
-        WHERE $1 [i] = $2
-        LIMIT 1;
-    $$ LANGUAGE sql')
-ORDER BY 1,2;
-
 CREATE OR REPLACE FUNCTION array_index(ANYARRAY, ANYELEMENT)
       RETURNS INT AS $$
         SELECT i
@@ -1431,8 +1422,6 @@ LIMIT 10;
 
 
 -- drop created functions
-SELECT * FROM run_command_on_workers('DROP FUNCTION array_index(ANYARRAY, ANYELEMENT)')
-ORDER BY 1,2;
 DROP FUNCTION array_index(ANYARRAY, ANYELEMENT);
 
 -- a query with a constant subquery
@@ -1628,16 +1617,6 @@ CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
-
-SELECT run_command_on_workers($f$
-
-CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
-    AS 'select $1 > $2;'
-    LANGUAGE SQL
-    IMMUTABLE
-    RETURNS NULL ON NULL INPUT;
-
-$f$);
 
 -- we don't support joins via functions
 SELECT user_id, array_length(events_table, 1)
@@ -1868,12 +1847,6 @@ LIMIT 1;
 
 
 DROP FUNCTION test_join_function_2(integer, integer);
-
-SELECT run_command_on_workers($f$
-
-  DROP FUNCTION test_join_function_2(integer, integer);
-
-$f$);
 
 SET citus.enable_router_execution TO TRUE;
 SET citus.subquery_pushdown to OFF;

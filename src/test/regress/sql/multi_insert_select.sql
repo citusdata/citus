@@ -106,6 +106,7 @@ WHERE
   user_id < 0;
 
 -- make sure we don't evaluate stable functions with column arguments
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION evaluate_on_master(x int)
 RETURNS int LANGUAGE plpgsql STABLE
 AS $function$
@@ -114,6 +115,7 @@ BEGIN
   RETURN x;
 END;
 $function$;
+RESET citus.enable_metadata_sync;
 
 INSERT INTO raw_events_second (user_id, value_1)
 SELECT

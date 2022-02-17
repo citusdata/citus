@@ -1363,6 +1363,7 @@ DEBUG:  query has a single distribution column value: 1
 (5 rows)
 
 -- queries inside plpgsql functions could be router plannable
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE
   max_id integer;
@@ -1418,6 +1419,7 @@ PL/pgSQL function author_articles_id_word_count() line XX at RETURN QUERY
  41 |      11814
 (5 rows)
 
+RESET citus.enable_metadata_sync;
 -- materialized views can be created for router plannable queries
 CREATE MATERIALIZED VIEW mv_articles_hash_mx AS
 	SELECT * FROM articles_hash_mx WHERE author_id = 1;

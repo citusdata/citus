@@ -165,6 +165,7 @@ BEGIN
 END;
 $$ LANGUAGE 'plpgsql' STRICT;
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE PROCEDURE coordinator_evaluation.test_procedure(int)
  LANGUAGE plpgsql
 AS $procedure$
@@ -174,6 +175,7 @@ BEGIN
   PERFORM DISTINCT value FROM coordinator_evaluation_table_2 WHERE key = filterKey;
 END;
 $procedure$;
+RESET citus.enable_metadata_sync;
 
 -- we couldn't find a meaningful query to write for this
 -- however this query fails before https://github.com/citusdata/citus/pull/3454

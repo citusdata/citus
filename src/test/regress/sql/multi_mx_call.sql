@@ -180,6 +180,7 @@ select colocate_proc_with_table('mx_call_proc', 'mx_call_dist_table_1'::regclass
 
 -- Test that we handle transactional constructs correctly inside a procedure
 -- that is routed to the workers.
+SET citus.enable_metadata_sync TO OFF;
 CREATE PROCEDURE mx_call_proc_tx(x int) LANGUAGE plpgsql AS $$
 BEGIN
     INSERT INTO multi_mx_call.mx_call_dist_table_1 VALUES (x, -1), (x+1, 4);
@@ -189,6 +190,7 @@ BEGIN
     -- Now do the final update!
     UPDATE multi_mx_call.mx_call_dist_table_1 SET val = val-1 WHERE id >= x;
 END;$$;
+RESET citus.enable_metadata_sync;
 
 -- before distribution ...
 CALL multi_mx_call.mx_call_proc_tx(10);

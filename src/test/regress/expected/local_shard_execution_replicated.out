@@ -770,6 +770,7 @@ NOTICE:  executing the command locally: INSERT INTO local_shard_execution_replic
 ERROR:  VACUUM cannot run inside a transaction block
 ROLLBACK;
 -- make sure that functions can use local execution
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE PROCEDURE only_local_execution() AS $$
 		DECLARE cnt INT;
 		BEGIN
@@ -865,6 +866,7 @@ CREATE OR REPLACE PROCEDURE local_execution_followed_by_dist() AS $$
 			SELECT count(*) INTO cnt FROM distributed_table;
         END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 CALL local_execution_followed_by_dist();
 NOTICE:  executing the command locally: INSERT INTO local_shard_execution_replicated.distributed_table_1500001 AS citus_table_alias (key, value, age) VALUES (1, '11'::text, 21) ON CONFLICT(key) DO UPDATE SET value = '29'::text
 CONTEXT:  SQL statement "INSERT INTO distributed_table VALUES (1, '11',21) ON CONFLICT(key) DO UPDATE SET value = '29'"
