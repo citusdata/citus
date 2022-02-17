@@ -20,6 +20,8 @@
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
@@ -456,6 +458,82 @@ ShouldPropagate(void)
 	}
 
 	return true;
+}
+
+
+/*
+ * ShouldPropagateCreateInCurrentTransaction returns based on configuration and the
+ * current state of the transaction if Citus needs to propagate the creation of new
+ * objects.
+ *
+ * Creation of objects on other nodes could be postponed till the object is actually used
+ * in a sharded object (eg. distributed table or index on a distributed table). In certain
+ * use cases the opportunity for parallelism in a transaction block is preferred. When
+ * configured like that the creation of an object might be postponed and backfilled till
+ * the object is actually used.
+ */
+bool
+ShouldPropagateCreateInCurrentTransaction()
+{
+	/*
+	 * we assume this has already been checked. if we are not in a multi statement
+	 * transaction this check doesn't make any sense
+	 */
+	Assert(IsMultiStatementTransaction());
+
+	switch (DDLPropagationMode)
+	{
+		case DDL_PROPAGATION_PARALLELISM:
+		{
+			/*
+			 * When we run in parallelism mode we only allow propagation of the object if
+			 * the transaction has already been switched to sequential mode.
+			 *
+			 * When in sequential mode it is safe to propagate any ddl command and it
+			 * would follow postgres' normal visibility rules for ddl commands.
+			 *
+			 * However if we are not already in sequential mode we will not propagate ddl
+			 * commands. Propagating them would entail either a switch to sequential or
+			 * throwing an error if we can't switch.
+			 */
+			return MultiShardConnectionType == SEQUENTIAL_CONNECTION;
+		}
+
+		case DDL_PROPAGATION_OPTIMISTIC:
+		{
+			/*
+			 * When we run in optimistic mode we want to switch to sequential mode, only
+			 * if this would _not_ give an error to the user. Meaning, we either are
+			 * already in sequential mode, or there has been no parallel execution in the
+			 * current transaction block.
+			 *
+			 * If switching to sequential would throw an error we would stay in parallel
+			 * mode while creating new objects. We will rely on backfilling the object i
+			 * it would be used in a sharded object.
+			 */
+			if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+			{
+				return true;
+			}
+
+			if (ParallelQueryExecutedInTransaction())
+			{
+				return false;
+			}
+
+			return true;
+		}
+
+		case DDL_PROPAGATION_ALWAYS:
+		{
+			return true;
+		}
+
+		default:
+		{
+			elog(ERROR, "unsupported ddl propagation mode");
+		}
+	}
 }
 
 
