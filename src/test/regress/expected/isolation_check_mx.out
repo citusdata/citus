@@ -1,6 +1,11 @@
 Parsed test spec with 1 sessions
 
 starting permutation: check_mx
+create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
 step check_mx:
     SHOW citus.enable_metadata_sync;
     SELECT bool_and(metadatasynced) FROM pg_dist_node WHERE noderole = 'primary';
@@ -14,4 +19,34 @@ bool_and
 ---------------------------------------------------------------------
 t
 (1 row)
+
+
+starting permutation: compare-metadata
+create_distributed_function
+---------------------------------------------------------------------
+
+(1 row)
+
+step compare-metadata:
+    -- Following tests capture the difference between the metadata in the worker nodes and the
+    -- coordinator. It is expected to see no rows. However if the tests fail, we list the
+    -- problematic queries in the activate_node_snapshot() result set.
+    -- list all metadata that is missing in the worker nodes
+    SELECT unnest(activate_node_snapshot())
+        EXCEPT
+    SELECT unnest(result::text[]) AS unnested_result
+    FROM run_command_on_workers($$SELECT activate_node_snapshot()$$);
+    -- list all the metadata that is missing on the coordinator
+    SELECT unnest(result::text[]) AS unnested_result
+    FROM run_command_on_workers($$SELECT activate_node_snapshot()$$)
+        EXCEPT
+    SELECT unnest(activate_node_snapshot());
+
+unnest
+---------------------------------------------------------------------
+(0 rows)
+
+unnested_result
+---------------------------------------------------------------------
+(0 rows)
 
