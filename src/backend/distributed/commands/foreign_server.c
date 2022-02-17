@@ -17,6 +17,7 @@
 #include "distributed/listutils.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
 #include "distributed/worker_transaction.h"
 #include "foreign/foreign.h"
 #include "nodes/makefuncs.h"
@@ -41,7 +42,14 @@ PreprocessCreateForeignServerStmt(Node *node, const char *queryString,
 		return NIL;
 	}
 
+	/* check creation against multi-statement transaction policy */
+	if (IsMultiStatementTransaction() && !ShouldPropagateCreateInCurrentTransaction())
+	{
+		return NIL;
+	}
+
 	EnsureCoordinator();
+	EnsureSequentialMode(OBJECT_FOREIGN_SERVER);
 
 	char *sql = DeparseTreeNode(node);
 

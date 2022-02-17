@@ -367,6 +367,7 @@ ShouldPropagateCreateSchemaStmt()
 		return false;
 	}
 
+	/* check creation against multi-statement transaction policy */
 	if (IsMultiStatementTransaction() && !ShouldPropagateCreateInCurrentTransaction())
 	{
 		return false;
