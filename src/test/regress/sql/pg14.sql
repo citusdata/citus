@@ -642,3 +642,46 @@ SELECT count(*) FROM
 
 set client_min_messages to error;
 drop schema pg14 cascade;
+
+create schema pg14;
+set search_path to pg14;
+
+select 1 from citus_add_node('localhost',:master_port,groupid=>0);
+
+-- test adding foreign table to metadata with the guc
+-- will test truncating foreign tables later
+CREATE TABLE foreign_table_test (id integer NOT NULL, data text, a bigserial);
+INSERT INTO foreign_table_test VALUES (1, 'text_test');
+SELECT citus_add_local_table_to_metadata('foreign_table_test');
+CREATE EXTENSION postgres_fdw;
+CREATE SERVER foreign_server
+        FOREIGN DATA WRAPPER postgres_fdw
+        OPTIONS (host 'localhost', port :'master_port', dbname 'regression');
+CREATE USER MAPPING FOR CURRENT_USER
+        SERVER foreign_server
+        OPTIONS (user 'postgres');
+CREATE FOREIGN TABLE foreign_table (
+        id integer NOT NULL,
+        data text,
+        a bigserial
+)
+        SERVER foreign_server
+        OPTIONS (schema_name 'pg14', table_name 'foreign_table_test');
+SELECT citus_add_local_table_to_metadata('foreign_table');
+
+SELECT count(*) FROM foreign_table;
+TRUNCATE foreign_table;
+\c - - - :worker_1_port
+set search_path to pg14;
+-- verify the foreign table is truncated
+SELECT count(*) FROM pg14.foreign_table;
+
+-- should error out
+TRUNCATE foreign_table;
+\c - - - :master_port
+-- cleanup
+set client_min_messages to error;
+drop extension postgres_fdw cascade;
+drop schema pg14 cascade;
+reset client_min_messages;
+select 1 from citus_remove_node('localhost',:master_port);
