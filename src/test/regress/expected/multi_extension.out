@@ -77,7 +77,7 @@ END
 $func$ LANGUAGE plpgsql;
 CREATE SCHEMA test;
 :create_function_test_maintenance_worker
-WARNING:  Citus can't distribute functions having dependency on unsupported relation with relkind v
+WARNING:  Citus can't distribute functions having dependency on unsupported object of type "view"
 DETAIL:  Function will be created only locally
 -- check maintenance daemon is started
 SELECT datname, current_database(),
@@ -1200,7 +1200,7 @@ HINT:  You can manually create a database and its extensions on workers.
 CREATE EXTENSION citus;
 CREATE SCHEMA test;
 :create_function_test_maintenance_worker
-WARNING:  Citus can't distribute functions having dependency on unsupported relation with relkind v
+WARNING:  Citus can't distribute functions having dependency on unsupported object of type "view"
 DETAIL:  Function will be created only locally
 -- see that the daemon started
 SELECT datname, current_database(),

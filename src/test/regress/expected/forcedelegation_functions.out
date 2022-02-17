@@ -358,14 +358,16 @@ PL/pgSQL function func_calls_forcepush_func() line XX at SQL statement
                        101
 (1 row)
 
+-- Block distributing that function as distributing it causes
+-- different test output on PG 14.
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION get_val()
 RETURNS INT AS $$
 BEGIN
         RETURN 100::INT;
 END;
 $$  LANGUAGE plpgsql;
-DEBUG:  switching to sequential query execution mode
-DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
+RESET citus.enable_metadata_sync;
 --
 -- UDF calling another UDF in a FROM clause
 -- fn()
@@ -387,9 +389,6 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT func_calls_forcepush_func_infrom();
 DEBUG:  function does not have co-located tables
-DEBUG:  not pushing down function calls in a multi-statement transaction
-CONTEXT:  SQL statement "SELECT get_val()"
-PL/pgSQL function func_calls_forcepush_func_infrom() line XX at assignment
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function                      FROM inner_force_delegation_function(add_val + 100)"
 PL/pgSQL function func_calls_forcepush_func_infrom() line XX at SQL statement
@@ -445,9 +444,6 @@ DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT func_calls_forcepush_func_intarget();
 DEBUG:  function does not have co-located tables
-DEBUG:  not pushing down function calls in a multi-statement transaction
-CONTEXT:  SQL statement "SELECT get_val()"
-PL/pgSQL function func_calls_forcepush_func_intarget() line XX at assignment
 DEBUG:  pushing down function call in a multi-statement transaction
 CONTEXT:  SQL statement "SELECT inner_force_delegation_function(100 + 100)                      OFFSET 0"
 PL/pgSQL function func_calls_forcepush_func_intarget() line XX at SQL statement

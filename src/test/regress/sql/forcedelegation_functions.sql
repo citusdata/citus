@@ -189,12 +189,16 @@ COMMIT;
 
 SELECT func_calls_forcepush_func();
 
+-- Block distributing that function as distributing it causes
+-- different test output on PG 14.
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION get_val()
 RETURNS INT AS $$
 BEGIN
         RETURN 100::INT;
 END;
 $$  LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 --
 -- UDF calling another UDF in a FROM clause

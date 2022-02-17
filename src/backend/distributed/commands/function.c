@@ -82,8 +82,7 @@ static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
-static ObjectAddress * GetUndistributableRelationDependency(
-	ObjectAddress *functionAddress);
+static ObjectAddress * GetUndistributableDependency(ObjectAddress *functionAddress);
 static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
 											 bool missing_ok);
@@ -1295,19 +1294,20 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 	}
 
 	/*
-	 * This check should have been
-	 * (a) valid for all objects not only for functions
-	 * (b) should check for all types of objects no only for relations.
-	 *
-	 * We do this limited check for now as functions are more likely to be used with
-	 * (a) and (b), and we want to scope it for now
+	 * This check should have been valid for all objects not only for functions. Though,
+	 * we do this limited check for now as functions are more likely to be used with
+	 * such dependencies, and we want to scope it for now
 	 */
-	ObjectAddress *undistributableDependency = GetUndistributableRelationDependency(
+	ObjectAddress *undistributableDependency = GetUndistributableDependency(
 		&functionAddress);
 	if (undistributableDependency != NULL)
 	{
 		if (SupportedDependencyByCitus(undistributableDependency))
 		{
+			/*
+			 * Citus can't distribute some relations as dependency, although those
+			 * types as supported by Citus. So we can use get_rel_name directly
+			 */
 			RangeVar *functionRangeVar = makeRangeVarFromNameList(stmt->funcname);
 			char *functionName = functionRangeVar->relname;
 			char *dependentRelationName =
@@ -1322,10 +1322,15 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		}
 		else
 		{
+			char *objectType = NULL;
+			#if PG_VERSION_NUM >= PG_VERSION_14
+			objectType = getObjectTypeDescription(undistributableDependency, false);
+			#else
+			objectType = getObjectTypeDescription(undistributableDependency);
+			#endif
 			ereport(WARNING, (errmsg("Citus can't distribute functions having "
-									 "dependency on unsupported relation with relkind %c",
-									 get_rel_relkind(
-										 undistributableDependency->objectId)),
+									 "dependency on unsupported object of type \"%s\"",
+									 objectType),
 							  errdetail("Function will be created only locally")));
 		}
 
@@ -1344,11 +1349,11 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 
 
 /*
- * GetUndistributableRelationDependency checks whether object has any non-distributable
- * relation dependency. If any one found, it will be returned.
+ * GetUndistributableDependency checks whether object has any non-distributable
+ * dependency. If any one found, it will be returned.
  */
 static ObjectAddress *
-GetUndistributableRelationDependency(ObjectAddress *objectAddress)
+GetUndistributableDependency(ObjectAddress *objectAddress)
 {
 	List *dependencies = GetAllDependenciesForObject(objectAddress);
 	ObjectAddress *dependency = NULL;
@@ -1359,22 +1364,32 @@ GetUndistributableRelationDependency(ObjectAddress *objectAddress)
 			continue;
 		}
 
-		if (getObjectClass(dependency) != OCLASS_CLASS)
+		if (!SupportedDependencyByCitus(dependency))
 		{
-			continue;
+			/*
+			 * Although languages are not supported by Citus, all must be created
+			 * with the postgres itself, so skip them. Since roles should also be
+			 * handled manually with Citus community, skip them as well.
+			 */
+			if (getObjectClass(dependency) != OCLASS_LANGUAGE &&
+				getObjectClass(dependency) != OCLASS_ROLE)
+			{
+				return dependency;
+			}
 		}
 
-		/*
-		 * Citus can only distribute dependent non-distributed sequence and composite
-		 * types.
-		 */
-		char relKind = get_rel_relkind(dependency->objectId);
-		if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_COMPOSITE_TYPE)
+		if (getObjectClass(dependency) == OCLASS_CLASS)
 		{
-			continue;
+			/*
+			 * Citus can only distribute dependent non-distributed sequence
+			 * and composite types.
+			 */
+			char relKind = get_rel_relkind(dependency->objectId);
+			if (relKind != RELKIND_SEQUENCE && relKind != RELKIND_COMPOSITE_TYPE)
+			{
+				return dependency;
+			}
 		}
-
-		return dependency;
 	}
 
 	return NULL;

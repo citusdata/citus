@@ -186,7 +186,7 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  Citus can't distribute functions having dependency on unsupported relation with relkind v
+WARNING:  Citus can't distribute functions having dependency on unsupported object of type "view"
 DETAIL:  Function will be created only locally
 CREATE OR REPLACE FUNCTION func_8(param_1 int)
 RETURNS function_prop_view
@@ -196,7 +196,7 @@ BEGIN
     return 1;
 END;
 $$;
-WARNING:  Citus can't distribute functions having dependency on unsupported relation with relkind v
+WARNING:  Citus can't distribute functions having dependency on unsupported object of type "view"
 DETAIL:  Function will be created only locally
 -- Check within transaction
 BEGIN;
