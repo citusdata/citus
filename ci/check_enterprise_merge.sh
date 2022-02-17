@@ -66,10 +66,10 @@ fi
 git merge --abort
 
 # If we have a conflict on enterprise merge on the master branch, we have a problem.
-# Provide an error message to indicate that enterprise merge is needed.
+# Provide an error message to indicate that enterprise merge is needed to fix this check.
 if [[ $PR_BRANCH = master ]]; then
-    echo "ERROR: Master branch has merge conlicts with enterprise-master."
-    echo "Try re-running this job if you merged community PR before enterprise PR. Otherwise conflicts need to be resolved as a separate PR on enterprise."
+    echo "ERROR: Master branch has merge conflicts with enterprise-master."
+    echo "Try re-running this CI job after merging your changes into enterprise-master."
     exit 1
 fi
 

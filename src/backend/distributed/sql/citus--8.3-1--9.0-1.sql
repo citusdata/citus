@@ -21,13 +21,7 @@ ALTER FUNCTION citus.restore_isolation_tester_func SET SCHEMA citus_internal;
 GRANT USAGE ON SCHEMA citus TO public;
 
 #include "udfs/pg_dist_shard_placement_trigger_func/9.0-1.sql"
-
-CREATE OR REPLACE FUNCTION pg_catalog.worker_create_or_replace_object(statement text)
-  RETURNS bool
-  LANGUAGE C STRICT
-  AS 'MODULE_PATHNAME', $$worker_create_or_replace_object$$;
-COMMENT ON FUNCTION pg_catalog.worker_create_or_replace_object(statement text)
-    IS 'takes a sql CREATE statement, before executing the create it will check if an object with that name already exists and safely replaces that named object with the new object';
+#include "udfs/worker_create_or_replace_object/9.0-1.sql"
 
 CREATE OR REPLACE FUNCTION pg_catalog.master_unmark_object_distributed(classid oid, objid oid, objsubid int)
     RETURNS void

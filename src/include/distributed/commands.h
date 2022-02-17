@@ -465,6 +465,54 @@ extern Oid GetSequenceOid(Oid relationId, AttrNumber attnum);
 extern bool ConstrTypeUsesIndex(ConstrType constrType);
 
 
+/* text_search.c - forward declarations */
+extern List * PostprocessCreateTextSearchConfigurationStmt(Node *node,
+														   const char *queryString);
+extern List * GetCreateTextSearchConfigStatements(const ObjectAddress *address);
+extern List * CreateTextSearchConfigDDLCommandsIdempotent(const ObjectAddress *address);
+extern List * PreprocessDropTextSearchConfigurationStmt(Node *node,
+														const char *queryString,
+														ProcessUtilityContext
+														processUtilityContext);
+extern List * PreprocessAlterTextSearchConfigurationStmt(Node *node,
+														 const char *queryString,
+														 ProcessUtilityContext
+														 processUtilityContext);
+extern List * PreprocessRenameTextSearchConfigurationStmt(Node *node,
+														  const char *queryString,
+														  ProcessUtilityContext
+														  processUtilityContext);
+extern List * PreprocessAlterTextSearchConfigurationSchemaStmt(Node *node,
+															   const char *queryString,
+															   ProcessUtilityContext
+															   processUtilityContext);
+extern List * PostprocessAlterTextSearchConfigurationSchemaStmt(Node *node,
+																const char *queryString);
+extern List * PreprocessTextSearchConfigurationCommentStmt(Node *node,
+														   const char *queryString,
+														   ProcessUtilityContext
+														   processUtilityContext);
+extern List * PreprocessAlterTextSearchConfigurationOwnerStmt(Node *node,
+															  const char *queryString,
+															  ProcessUtilityContext
+															  processUtilityContext);
+extern List * PostprocessAlterTextSearchConfigurationOwnerStmt(Node *node,
+															   const char *queryString);
+extern ObjectAddress CreateTextSearchConfigurationObjectAddress(Node *node,
+																bool missing_ok);
+extern ObjectAddress RenameTextSearchConfigurationStmtObjectAddress(Node *node,
+																	bool missing_ok);
+extern ObjectAddress AlterTextSearchConfigurationStmtObjectAddress(Node *node,
+																   bool missing_ok);
+extern ObjectAddress AlterTextSearchConfigurationSchemaStmtObjectAddress(Node *node,
+																		 bool missing_ok);
+extern ObjectAddress TextSearchConfigurationCommentObjectAddress(Node *node,
+																 bool missing_ok);
+extern ObjectAddress AlterTextSearchConfigurationOwnerObjectAddress(Node *node,
+																	bool missing_ok);
+extern char * GenerateBackupNameForTextSearchConfiguration(const ObjectAddress *address);
+extern List * get_ts_config_namelist(Oid tsconfigOid);
+
 /* truncate.c - forward declarations */
 extern void PreprocessTruncateStatement(TruncateStmt *truncateStatement);
 

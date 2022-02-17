@@ -156,9 +156,9 @@ git merge "community/$PR_BRANCH"
    familiar with the change.
 5. You should rerun the `check-merge-to-enterprise` check on
    `community/$PR_BRANCH`. You can use re-run from failed option in circle CI.
-6. You can now merge the PR on enterprise. Be sure to NOT use "squash and merge",
+6. You can now merge the PR on community. Be sure to NOT use "squash and merge",
    but instead use the regular "merge commit" mode.
-7. You can now merge the PR on community. Be sure to NOT use "squash and merge",
+7. You can now merge the PR on enterprise. Be sure to NOT use "squash and merge",
    but instead use the regular "merge commit" mode.
 
 The subsequent PRs on community will be able to pass the

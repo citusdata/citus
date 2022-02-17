@@ -406,6 +406,21 @@ GetDistributedObjectAddressList(void)
 
 
 /*
+ * GetRoleSpecObjectForUser creates a RoleSpec object for the given roleOid.
+ */
+RoleSpec *
+GetRoleSpecObjectForUser(Oid roleOid)
+{
+	RoleSpec *roleSpec = makeNode(RoleSpec);
+	roleSpec->roletype = OidIsValid(roleOid) ? ROLESPEC_CSTRING : ROLESPEC_PUBLIC;
+	roleSpec->rolename = OidIsValid(roleOid) ? GetUserNameFromId(roleOid, false) : NULL;
+	roleSpec->location = -1;
+
+	return roleSpec;
+}
+
+
+/*
  * UpdateDistributedObjectColocationId gets an old and a new colocationId
  * and updates the colocationId of all tuples in citus.pg_dist_object which
  * have the old colocationId to the new colocationId.
