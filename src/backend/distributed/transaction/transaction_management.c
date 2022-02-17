@@ -557,7 +557,8 @@ ResetGlobalVariables()
 	MetadataSyncOnCommit = false;
 	InTopLevelDelegatedFunctionCall = false;
 	ResetWorkerErrorIndication();
-	AllowedDistributionColumnValue.isActive = false;
+	memset(&AllowedDistributionColumnValue, 0,
+		   sizeof(AllowedDistributionColumn));
 }
 
 
