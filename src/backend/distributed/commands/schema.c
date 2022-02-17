@@ -367,8 +367,7 @@ ShouldPropagateCreateSchemaStmt()
 		return false;
 	}
 
-	if (IsMultiStatementTransaction() &&
-		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
+	if (IsMultiStatementTransaction() && !ShouldPropagateCreateInCurrentTransaction())
 	{
 		return false;
 	}
