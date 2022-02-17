@@ -421,11 +421,11 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		if (distributionMethod != DISTRIBUTE_BY_NONE)
 		{
 			/*
-			* Because we create a new table when undistributing the table, attribute
-			* numbers might be changed, because of the dropped columns. To make sure we
-			* have the correct distribution column, we need to build it again, using the
-			* original column name that we have saved before.
-			*/
+			 * Because we create a new table when undistributing the table, attribute
+			 * numbers might be changed, because of the dropped columns. To make sure we
+			 * have the correct distribution column, we need to build it again, using the
+			 * original column name that we have saved before.
+			 */
 			Relation relation = try_relation_open(relationId, ExclusiveLock);
 			if (relation == NULL)
 			{
