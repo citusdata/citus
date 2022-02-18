@@ -93,3 +93,19 @@ DROP SCHEMA collation_tests CASCADE;
 DROP SCHEMA collation_tests2 CASCADE;
 DROP USER collationuser;
 SELECT run_command_on_workers($$DROP USER collationuser;$$);
+
+\c - - - :worker_1_port
+-- test creating a collation on a worker
+CREATE COLLATION another_german_phonebook (provider = icu, locale = 'de-u-co-phonebk');
+
+-- test if creating a collation on a worker on a local
+-- schema raises the right error
+SET citus.enable_ddl_propagation TO off;
+CREATE SCHEMA collation_creation_on_worker;
+SET citus.enable_ddl_propagation TO on;
+
+CREATE COLLATION collation_creation_on_worker.another_german_phonebook (provider = icu, locale = 'de-u-co-phonebk');
+
+SET citus.enable_ddl_propagation TO off;
+DROP SCHEMA collation_creation_on_worker;
+SET citus.enable_ddl_propagation TO on;
