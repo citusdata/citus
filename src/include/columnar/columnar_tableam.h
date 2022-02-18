@@ -50,7 +50,6 @@ typedef struct ColumnarScanDescData *ColumnarScanDesc;
 
 const TableAmRoutine * GetColumnarTableAmRoutine(void);
 extern void columnar_tableam_init(void);
-extern bool CheckCitusVersion(int elevel);
 extern TableScanDesc columnar_beginscan_extended(Relation relation, Snapshot snapshot,
 												 int nkeys, ScanKey key,
 												 ParallelTableScanDesc parallel_scan,
