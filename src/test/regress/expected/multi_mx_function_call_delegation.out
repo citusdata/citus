@@ -409,8 +409,11 @@ BEGIN
         WHERE id >= x
         ORDER BY 1, 2;
 END;$$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 -- before distribution ...
 select mx_call_func_tbl(10);
+DEBUG:  function does not have co-located tables
  mx_call_func_tbl
 ---------------------------------------------------------------------
  (10,-1)
@@ -441,6 +444,8 @@ BEGIN
     RAISE WARNING 'warning';
     RAISE EXCEPTION 'error';
 END;$$;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 select create_distributed_function('mx_call_func_raise(int)', '$1', 'mx_call_dist_table_1');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
@@ -593,6 +598,8 @@ SET citus.shard_replication_factor = 1;
 --
 CREATE FUNCTION mx_call_add(int, int) RETURNS int
     AS 'select $1 + $2;' LANGUAGE SQL IMMUTABLE;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 SELECT create_distributed_function('mx_call_add(int,int)', '$1');
 DEBUG:  switching to sequential query execution mode
 DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands

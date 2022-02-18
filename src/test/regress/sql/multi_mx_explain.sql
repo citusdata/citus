@@ -18,6 +18,7 @@ VACUUM ANALYZE supplier_mx;
 
 \c - - - :worker_1_port
 -- Function that parses explain output as JSON
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION explain_json(query text)
 RETURNS jsonb
 AS $BODY$
@@ -43,6 +44,7 @@ $BODY$ LANGUAGE plpgsql;
 
 \c - - - :worker_2_port
 -- Function that parses explain output as JSON
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION explain_json(query text)
 RETURNS jsonb
 AS $BODY$
@@ -65,6 +67,7 @@ BEGIN
   RETURN result;
 END;
 $BODY$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 
 -- Test Text format

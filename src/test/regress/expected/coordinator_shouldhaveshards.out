@@ -898,9 +898,11 @@ NOTICE:  executing the command locally: SELECT count(*) AS count FROM (SELECT in
 
 -- a helper function which return true if the coordinated
 -- trannsaction uses 2PC
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION coordinated_transaction_should_use_2PC()
 RETURNS BOOL LANGUAGE C STRICT VOLATILE AS 'citus',
 $$coordinated_transaction_should_use_2PC$$;
+RESET citus.enable_metadata_sync;
 -- a local SELECT followed by remote SELECTs
 -- does not trigger 2PC
 BEGIN;

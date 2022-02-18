@@ -459,6 +459,7 @@ RETURN $1 * $1;
 END;
 $function$;
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION square_func(int)
 RETURNS int
 LANGUAGE plpgsql
@@ -467,6 +468,7 @@ BEGIN
 RETURN $1 * $1;
 END;
 $function$;
+RESET citus.enable_metadata_sync;
 
 SELECT const_function(1), string_agg(a::character, ',') FROM t1;
 SELECT const_function(1), count(b) FROM t1;

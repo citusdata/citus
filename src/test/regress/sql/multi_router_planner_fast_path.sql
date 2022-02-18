@@ -531,6 +531,7 @@ SELECT word_count, rank() OVER (PARTITION BY author_id ORDER BY word_count)
 	WHERE author_id = 1 and 1=0;
 
 -- create a dummy function to be used in filtering
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION someDummyFunction(regclass)
     RETURNS text AS
 $$
@@ -554,6 +555,7 @@ BEGIN
         END IF;
 END;
 $$LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 SET client_min_messages TO ERROR;
 \set VERBOSITY terse

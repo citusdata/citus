@@ -282,18 +282,16 @@ SELECT * FROM researchers WHERE lab_id = 6;
 -- verify 2pc
 SELECT count(*) FROM pg_dist_transaction;
 
-
 -- create a check function
-SELECT * from run_command_on_workers('CREATE FUNCTION reject_large_id() RETURNS trigger AS $rli$
+CREATE FUNCTION reject_large_id() RETURNS trigger AS $rli$
     BEGIN
         IF (NEW.id > 30) THEN
-            RAISE ''illegal value'';
+            RAISE 'illegal value';
         END IF;
 
         RETURN NEW;
     END;
-$rli$ LANGUAGE plpgsql;')
-ORDER BY nodeport;
+$rli$ LANGUAGE plpgsql;
 
 -- register after insert trigger
 SELECT * FROM run_command_on_placements('researchers', 'CREATE CONSTRAINT TRIGGER reject_large_researcher_id AFTER INSERT ON %s DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE PROCEDURE  reject_large_id()')
@@ -344,9 +342,7 @@ SELECT * FROM researchers WHERE lab_id = 6;
 SELECT * from run_command_on_placements('researchers', 'drop trigger reject_large_researcher_id on %s')
 ORDER BY nodeport, shardid;
 
-SELECT * FROM run_command_on_workers('drop function reject_large_id()')
-ORDER BY nodeport;
-
+DROP FUNCTION reject_large_id();
 -- ALTER and copy are compatible
 BEGIN;
 ALTER TABLE labs ADD COLUMN motto text;
@@ -416,6 +412,7 @@ AND    s.logicalrelid = 'objects'::regclass;
 -- create trigger on one worker to reject certain values
 \c - - - :worker_2_port
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION reject_bad() RETURNS trigger AS $rb$
     BEGIN
         IF (NEW.name = 'BAD') THEN
@@ -425,6 +422,7 @@ CREATE FUNCTION reject_bad() RETURNS trigger AS $rb$
         RETURN NEW;
     END;
 $rb$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CREATE CONSTRAINT TRIGGER reject_bad
 AFTER INSERT ON objects_1200003
@@ -460,6 +458,7 @@ DELETE FROM objects;
 -- there cannot be errors on different shards at different times
 -- because the first failure will fail the whole transaction
 \c - - - :worker_1_port
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION reject_bad() RETURNS trigger AS $rb$
     BEGIN
         IF (NEW.name = 'BAD') THEN
@@ -469,6 +468,7 @@ CREATE FUNCTION reject_bad() RETURNS trigger AS $rb$
         RETURN NEW;
     END;
 $rb$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CREATE CONSTRAINT TRIGGER reject_bad
 AFTER INSERT ON labs_1200002
@@ -668,7 +668,7 @@ SELECT * FROM reference_modifying_xacts;
 
 -- lets fail on of the workers at before the commit time
 \c - - - :worker_1_port
-
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION reject_bad_reference() RETURNS trigger AS $rb$
     BEGIN
         IF (NEW.key = 999) THEN
@@ -678,6 +678,7 @@ CREATE FUNCTION reject_bad_reference() RETURNS trigger AS $rb$
         RETURN NEW;
     END;
 $rb$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CREATE CONSTRAINT TRIGGER reject_bad_reference
 AFTER INSERT ON reference_modifying_xacts_1200006
@@ -762,7 +763,7 @@ ABORT;
 
 -- lets fail one of the workers before COMMIT time for the hash table
 \c - - - :worker_1_port
-
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION reject_bad_hash() RETURNS trigger AS $rb$
     BEGIN
         IF (NEW.key = 997) THEN
@@ -772,6 +773,7 @@ CREATE FUNCTION reject_bad_hash() RETURNS trigger AS $rb$
         RETURN NEW;
     END;
 $rb$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CREATE CONSTRAINT TRIGGER reject_bad_hash
 AFTER INSERT ON hash_modifying_xacts_1200007

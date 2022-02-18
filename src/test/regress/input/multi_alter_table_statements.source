@@ -294,11 +294,13 @@ ALTER TABLE lineitem_alter_220000 DROP COLUMN first;
 CREATE TABLE ddl_commands (command text UNIQUE DEFERRABLE INITIALLY DEFERRED);
 
 -- Use an event trigger to log all DDL event tags in it
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION log_ddl_tag() RETURNS event_trigger AS $ldt$
 	BEGIN
 		INSERT INTO ddl_commands VALUES (tg_tag);
 	END;
 $ldt$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CREATE EVENT TRIGGER log_ddl_tag ON ddl_command_end EXECUTE PROCEDURE log_ddl_tag();
 
@@ -499,13 +501,14 @@ CREATE TABLE trigger_table (
 SELECT create_distributed_table('trigger_table', 'id');
 -- first set a trigger on a shard
 \c - - - :worker_1_port
-
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION update_value() RETURNS trigger AS $up$
     BEGIN
 		NEW.value := 'trigger enabled';
 		RETURN NEW;
     END;
 $up$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CREATE TRIGGER update_value
 BEFORE INSERT ON trigger_table_220017
