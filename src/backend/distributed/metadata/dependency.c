@@ -156,6 +156,8 @@ static bool FollowAllSupportedDependencies(ObjectAddressCollector *collector,
 										   DependencyDefinition *definition);
 static bool FollowNewSupportedDependencies(ObjectAddressCollector *collector,
 										   DependencyDefinition *definition);
+static bool FollowAllDependencies(ObjectAddressCollector *collector,
+								  DependencyDefinition *definition);
 static void ApplyAddToDependencyList(ObjectAddressCollector *collector,
 									 DependencyDefinition *definition);
 static List * ExpandCitusSupportedTypes(ObjectAddressCollector *collector,
@@ -212,13 +214,40 @@ GetDependenciesForObject(const ObjectAddress *target)
 
 
 /*
- * GetAllDependenciesForObject returns a list of all the ObjectAddresses to be
- * created in order before the target object could safely be created on a
- * worker. As a caller, you probably need GetDependenciesForObject() which
- * eliminates already distributed objects from the returned list.
+ * GetAllSupportedDependenciesForObject returns a list of all the ObjectAddresses to be
+ * created in order before the target object could safely be created on a worker, if all
+ * dependent objects are distributable. As a caller, you probably need to use
+ * GetDependenciesForObject() which eliminates already distributed objects from the returned
+ * list.
  *
  * Some of the object might already be created on a worker. It should be created
  * in an idempotent way.
+ */
+List *
+GetAllSupportedDependenciesForObject(const ObjectAddress *target)
+{
+	ObjectAddressCollector collector = { 0 };
+	InitObjectAddressCollector(&collector);
+
+	RecurseObjectDependencies(*target,
+							  &ExpandCitusSupportedTypes,
+							  &FollowAllSupportedDependencies,
+							  &ApplyAddToDependencyList,
+							  &collector);
+
+	return collector.dependencyList;
+}
+
+
+/*
+ * GetAllDependenciesForObject returns a list of all the dependent objects of the given
+ * object irrespective of whether the dependent object is supported by Citus or not, if
+ * the object can be found as dependency with RecurseObjectDependencies and
+ * ExpandCitusSupportedTypes.
+ *
+ * This function will be used to provide meaningful error messages if any dependent
+ * object for a given object is not supported. If you want to create dependencies for
+ * an object, you probably need to use GetDependenciesForObject().
  */
 List *
 GetAllDependenciesForObject(const ObjectAddress *target)
@@ -228,7 +257,7 @@ GetAllDependenciesForObject(const ObjectAddress *target)
 
 	RecurseObjectDependencies(*target,
 							  &ExpandCitusSupportedTypes,
-							  &FollowAllSupportedDependencies,
+							  &FollowAllDependencies,
 							  &ApplyAddToDependencyList,
 							  &collector);
 
@@ -903,10 +932,61 @@ FollowAllSupportedDependencies(ObjectAddressCollector *collector,
 
 
 /*
- * ApplyAddToDependencyList is an apply function for RecurseObjectDependencies that will collect
- * all the ObjectAddresses for pg_depend entries to the context. The context here is
- * assumed to be a (ObjectAddressCollector *) to the location where all ObjectAddresses
- * will be collected.
+ * FollowAllDependencies applies filters on pg_depend entries to follow the dependency
+ * tree of objects in depth first order. We will visit all objects irrespective of it is
+ * supported by Citus or not.
+ */
+static bool
+FollowAllDependencies(ObjectAddressCollector *collector,
+					  DependencyDefinition *definition)
+{
+	if (definition->mode == DependencyPgDepend)
+	{
+		/*
+		 *  For dependencies found in pg_depend:
+		 *
+		 *  Follow only normal and extension dependencies. The latter is used to reach the
+		 *  extensions, the objects that directly depend on the extension are eliminated
+		 *  during the "apply" phase.
+		 *
+		 *  Other dependencies are internal dependencies and managed by postgres.
+		 */
+		if (definition->data.pg_depend.deptype != DEPENDENCY_NORMAL &&
+			definition->data.pg_depend.deptype != DEPENDENCY_EXTENSION)
+		{
+			return false;
+		}
+	}
+
+	/* rest of the tests are to see if we want to follow the actual dependency */
+	ObjectAddress address = DependencyDefinitionObjectAddress(definition);
+
+	/*
+	 * If the object is already in our dependency list we do not have to follow any
+	 * further
+	 */
+	if (IsObjectAddressCollected(address, collector))
+	{
+		return false;
+	}
+
+	if (CitusExtensionObject(&address))
+	{
+		/* following citus extension could complicate role management */
+		return false;
+	}
+
+	return true;
+}
+
+
+/*
+ * ApplyAddToDependencyList is an apply function for RecurseObjectDependencies that will
+ * collect all the ObjectAddresses for pg_depend entries to the context, except it is
+ * extension owned one.
+ *
+ * The context here is assumed to be a (ObjectAddressCollector *) to the location where
+ * all ObjectAddresses will be collected.
  */
 static void
 ApplyAddToDependencyList(ObjectAddressCollector *collector,

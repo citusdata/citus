@@ -151,6 +151,8 @@ extern ObjectAddress AlterCollationSchemaStmtObjectAddress(Node *stmt,
 extern List * PostprocessAlterCollationSchemaStmt(Node *stmt, const char *queryString);
 extern char * GenerateBackupNameForCollationCollision(const ObjectAddress *address);
 extern ObjectAddress DefineCollationStmtObjectAddress(Node *stmt, bool missing_ok);
+extern List * PreprocessDefineCollationStmt(Node *stmt, const char *queryString,
+											ProcessUtilityContext processUtilityContext);
 extern List * PostprocessDefineCollationStmt(Node *stmt, const char *queryString);
 
 /* database.c - forward declarations */

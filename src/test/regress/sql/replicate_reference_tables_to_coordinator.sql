@@ -32,12 +32,13 @@ CREATE TABLE numbers(a int);
 SELECT create_reference_table('numbers');
 INSERT INTO numbers VALUES (20), (21);
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION my_volatile_fn()
 RETURNS INT AS $$
 BEGIN
   RETURN 1;
 END; $$ language plpgsql VOLATILE;
-
+RESET citus.enable_metadata_sync;
 
 -- INSERT ... SELECT between reference tables
 BEGIN;

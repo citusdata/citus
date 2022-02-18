@@ -145,9 +145,13 @@ CREATE TYPE myvarchar;
 CREATE FUNCTION myvarcharin(cstring, oid, integer) RETURNS myvarchar
 LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharin';
 NOTICE:  return type myvarchar is only a shell
+WARNING:  Citus can't distribute functions having dependency on unsupported object of type "type"
+DETAIL:  Function will be created only locally
 CREATE FUNCTION myvarcharout(myvarchar) RETURNS cstring
 LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharout';
 NOTICE:  argument type myvarchar is only a shell
+WARNING:  Citus can't distribute functions having dependency on unsupported object of type "type"
+DETAIL:  Function will be created only locally
 CREATE TYPE myvarchar (
     input = myvarcharin,
     output = myvarcharout,

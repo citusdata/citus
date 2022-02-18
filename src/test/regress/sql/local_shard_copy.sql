@@ -48,6 +48,7 @@ SET citus.log_local_commands TO ON;
 -- returns true of the distribution key filter
 -- on the distributed tables (e.g., WHERE key = 1), we'll hit a shard
 -- placement which is local to this not
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION shard_of_distribution_column_is_local(dist_key int) RETURNS bool AS $$
 
 		DECLARE shard_is_local BOOLEAN := FALSE;
@@ -70,6 +71,7 @@ CREATE OR REPLACE FUNCTION shard_of_distribution_column_is_local(dist_key int) R
 		RETURN shard_is_local;
         END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 -- pick some example values that reside on the shards locally and remote
 

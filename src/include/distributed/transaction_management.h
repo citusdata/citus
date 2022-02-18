@@ -70,6 +70,9 @@ typedef struct AllowedDistributionColumn
 	Const *distributionColumnValue;
 	uint32 colocationId;
 	bool isActive;
+
+	/* In nested executor, track the level at which value is set */
+	int executorLevel;
 } AllowedDistributionColumn;
 
 /*

@@ -5,6 +5,7 @@ CREATE SCHEMA proc_conflict;
 
 \c - - - :worker_1_port
 SET search_path TO proc_conflict;
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION existing_func(state int, i int) RETURNS int AS $$
 BEGIN
     RETURN state * 2 + i;
@@ -14,6 +15,7 @@ CREATE AGGREGATE existing_agg(int) (
     SFUNC = existing_func,
     STYPE = int
 );
+RESET citus.enable_metadata_sync;
 
 \c - - - :master_port
 SET search_path TO proc_conflict;
@@ -58,7 +60,7 @@ DROP FUNCTION existing_func(int, int) CASCADE;
 
 \c - - - :worker_1_port
 SET search_path TO proc_conflict;
-
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION existing_func(state int, i int) RETURNS int AS $$
 BEGIN
     RETURN state * 3 + i;
@@ -68,6 +70,7 @@ CREATE AGGREGATE existing_agg(int) (
     SFUNC = existing_func,
     STYPE = int
 );
+RESET citus.enable_metadata_sync;
 
 \c - - - :master_port
 SET search_path TO proc_conflict;

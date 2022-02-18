@@ -7,6 +7,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_shardid_seq RESTART 225000;
 SET citus.shard_count TO 2;
 
 -- this function is dropped in Citus10, added here for tests
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
                                                                       distribution_column text,
                                                                       distribution_method citus.distribution_type)
@@ -24,6 +25,7 @@ CREATE OR REPLACE FUNCTION pg_catalog.master_create_worker_shards(table_name tex
     RETURNS void
     AS 'citus', $$master_create_worker_shards$$
     LANGUAGE C STRICT;
+RESET citus.enable_metadata_sync;
 
 -- Verify that a table name > 56 characters gets hashed properly.
 CREATE TABLE too_long_12345678901234567890123456789012345678901234567890 (

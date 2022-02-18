@@ -175,7 +175,7 @@ static DistributeObjectOps Any_CreateFunction = {
 	.preprocess = PreprocessCreateFunctionStmt,
 	.postprocess = PostprocessCreateFunctionStmt,
 	.address = CreateFunctionStmtObjectAddress,
-	.markDistributed = false,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreatePolicy = {
 	.deparse = NULL,
@@ -276,7 +276,7 @@ static DistributeObjectOps Collation_AlterOwner = {
 static DistributeObjectOps Collation_Define = {
 	.deparse = NULL,
 	.qualify = NULL,
-	.preprocess = NULL,
+	.preprocess = PreprocessDefineCollationStmt,
 	.postprocess = PostprocessDefineCollationStmt,
 	.address = DefineCollationStmtObjectAddress,
 	.markDistributed = true,
