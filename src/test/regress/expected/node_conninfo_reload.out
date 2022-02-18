@@ -76,6 +76,10 @@ select count(*) from test where a = 0;
 (1 row)
 
 ALTER SYSTEM SET citus.node_conninfo = 'sslmode=doesnotexist';
+-- we cannot set application name
+ALTER SYSTEM SET citus.node_conninfo = 'application_name=XXX';
+ERROR:  invalid value for parameter "citus.node_conninfo": "application_name=XXX"
+DETAIL:  Prohibited conninfo keyword detected: application_name
 BEGIN;
 -- Should still work (no SIGHUP yet);
 select count(*) from test where a = 0;

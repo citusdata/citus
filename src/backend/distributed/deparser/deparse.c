@@ -17,6 +17,7 @@
 
 #include "distributed/commands.h"
 #include "distributed/deparser.h"
+#include "distributed/listutils.h"
 
 /*
  * DeparseTreeNode aims to be the inverse of postgres' ParseTreeNode. Currently with
@@ -34,4 +35,21 @@ DeparseTreeNode(Node *stmt)
 	}
 
 	return ops->deparse(stmt);
+}
+
+
+/*
+ * DeparseTreeNodes deparses all stmts in the list from the statement datastructure into
+ * sql statements.
+ */
+List *
+DeparseTreeNodes(List *stmts)
+{
+	List *sqls = NIL;
+	Node *stmt = NULL;
+	foreach_ptr(stmt, stmts)
+	{
+		sqls = lappend(sqls, DeparseTreeNode(stmt));
+	}
+	return sqls;
 }

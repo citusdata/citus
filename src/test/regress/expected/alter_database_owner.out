@@ -165,8 +165,8 @@ SELECT count(*) FROM t; -- parallel execution;
 (1 row)
 
 ALTER DATABASE regression OWNER TO database_owner_2; -- should ERROR
-ERROR:  cannot create or modify database because there was a parallel operation on a distributed table in the transaction
-DETAIL:  When creating or altering a database, Citus needs to perform all operations over a single connection per node to ensure consistency.
+ERROR:  cannot run database command because there was a parallel operation on a distributed table in the transaction
+DETAIL:  When running command on/for a distributed database, Citus needs to perform all operations over a single connection per node to ensure consistency.
 HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
 ROLLBACK;
 -- list the owners of the current database on all nodes

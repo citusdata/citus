@@ -50,6 +50,7 @@ typedef struct BackendData
 	Oid userId;
 	slock_t mutex;
 	bool cancelledDueToDeadlock;
+	uint64 globalPID;
 	CitusInitiatedBackend citusBackend;
 	DistributedTransactionId transactionId;
 } BackendData;
@@ -61,8 +62,12 @@ extern void InitializeBackendData(void);
 extern void LockBackendSharedMemory(LWLockMode lockMode);
 extern void UnlockBackendSharedMemory(void);
 extern void UnSetDistributedTransactionId(void);
+extern void UnSetGlobalPID(void);
 extern void AssignDistributedTransactionId(void);
 extern void MarkCitusInitiatedCoordinatorBackend(void);
+extern void AssignGlobalPID(void);
+extern uint64 GetGlobalPID(void);
+extern uint64 ExtractGlobalPID(char *applicationName);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
 extern void CancelTransactionDueToDeadlock(PGPROC *proc);
 extern bool MyBackendGotCancelledDueToDeadlock(bool clearState);
@@ -72,5 +77,7 @@ extern LocalTransactionId GetMyProcLocalTransactionId(void);
 extern int GetAllActiveClientBackendCount(void);
 extern void IncrementClientBackendCounter(void);
 extern void DecrementClientBackendCounter(void);
+
+#define INVALID_CITUS_INTERNAL_BACKEND_GPID 0
 
 #endif /* BACKEND_DATA_H */

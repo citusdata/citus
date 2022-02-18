@@ -187,34 +187,6 @@ SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 DROP SEQUENCE sequence_default_0.sequence_3 CASCADE;
 DROP SCHEMA sequence_default_0;
 
-
--- DROP SCHEMA problem: expected since we don't propagate DROP SCHEMA
-CREATE TABLE seq_test_5 (x int, y int);
-SELECT create_distributed_table('seq_test_5','x');
-CREATE SCHEMA sequence_default_1;
-CREATE SEQUENCE sequence_default_1.seq_5;
-ALTER TABLE seq_test_5 ADD COLUMN a bigint DEFAULT nextval('sequence_default_1.seq_5');
-DROP SCHEMA sequence_default_1 CASCADE;
--- sequence is gone from coordinator
-INSERT INTO seq_test_5 VALUES (1, 2) RETURNING *;
--- but is still present on worker
-\c - - - :worker_1_port
-INSERT INTO sequence_default.seq_test_5 VALUES (1, 2) RETURNING *;
-\c - - - :master_port
-SET citus.shard_replication_factor TO 1;
-SET search_path = sequence_default, public;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
--- apply workaround
-SELECT run_command_on_workers('DROP SCHEMA sequence_default_1 CASCADE');
--- now the sequence is gone from the worker as well
-\c - - - :worker_1_port
-INSERT INTO sequence_default.seq_test_5 VALUES (1, 2) RETURNING *;
-\c - - - :master_port
-SET citus.shard_replication_factor TO 1;
-SET search_path = sequence_default, public;
-SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-
-
 -- check some more complex cases
 CREATE SEQUENCE seq_6;
 CREATE TABLE seq_test_6 (x int, t timestamptz DEFAULT now(), s int DEFAULT nextval('seq_6'), m int) PARTITION BY RANGE (t);
@@ -287,8 +259,7 @@ ALTER TABLE sequence_default_8.seq_8 SET SCHEMA sequence_default;
 SET citus.shard_replication_factor TO 1;
 SET search_path = sequence_default, public;
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
-DROP SCHEMA sequence_default_8;
-SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default_8 CASCADE');
+DROP SCHEMA sequence_default_8 CASCADE;
 
 
 -- cannot use more than one sequence in a column default
@@ -442,10 +413,6 @@ SELECT nextval('seq_14');
 CREATE SCHEMA test_schema_for_sequence_default_propagation;
 CREATE SEQUENCE test_schema_for_sequence_default_propagation.seq_10;
 
--- Both should return 0 rows
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation.seq_10'::regclass);
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation'::regnamespace);
-
 -- Create distributed table with default column to propagate dependencies
 CREATE TABLE test_seq_dist(a int, x BIGINT DEFAULT nextval('test_schema_for_sequence_default_propagation.seq_10'));
 SELECT create_distributed_table('test_seq_dist', 'a');
@@ -487,6 +454,5 @@ DROP TABLE test_seq_dist;
 DROP TABLE sequence_default.seq_test_7_par;
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA sequence_default CASCADE;
-SELECT run_command_on_workers('DROP SCHEMA IF EXISTS sequence_default CASCADE');
 SELECT master_remove_node('localhost', :master_port);
 SET search_path TO public;

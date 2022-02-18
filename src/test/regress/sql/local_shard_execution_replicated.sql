@@ -384,6 +384,7 @@ BEGIN;
 ROLLBACK;
 
 -- make sure that functions can use local execution
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE PROCEDURE only_local_execution() AS $$
 		DECLARE cnt INT;
 		BEGIN
@@ -457,6 +458,7 @@ CREATE OR REPLACE PROCEDURE local_execution_followed_by_dist() AS $$
 			SELECT count(*) INTO cnt FROM distributed_table;
         END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CALL local_execution_followed_by_dist();
 

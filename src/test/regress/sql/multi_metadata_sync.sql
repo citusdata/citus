@@ -20,10 +20,12 @@ SELECT nextval('pg_catalog.pg_dist_groupid_seq') AS last_group_id \gset
 SELECT nextval('pg_catalog.pg_dist_node_nodeid_seq') AS last_node_id \gset
 
 -- Create the necessary test utility function
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION activate_node_snapshot()
     RETURNS text[]
     LANGUAGE C STRICT
     AS 'citus';
+RESET citus.enable_metadata_sync;
 
 COMMENT ON FUNCTION activate_node_snapshot()
     IS 'commands to activate node snapshot';
@@ -43,12 +45,14 @@ ALTER ROLE CURRENT_USER WITH PASSWORD 'dummypassword';
 SELECT unnest(activate_node_snapshot()) order by 1;
 
 -- this function is dropped in Citus10, added here for tests
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
                                                                       distribution_column text,
                                                                       distribution_method citus.distribution_type)
     RETURNS void
     LANGUAGE C STRICT
     AS 'citus', $$master_create_distributed_table$$;
+RESET citus.enable_metadata_sync;
 COMMENT ON FUNCTION pg_catalog.master_create_distributed_table(table_name regclass,
                                                                distribution_column text,
                                                                distribution_method citus.distribution_type)

@@ -670,16 +670,9 @@ SELECT stop_metadata_sync_to_node(nodename,nodeport) FROM pg_dist_node WHERE isa
 \c - - - :worker_1_port
 UPDATE pg_dist_local_group SET groupid = 0;
 TRUNCATE pg_dist_node;
-SET client_min_messages TO error; -- suppress cascading objects dropping
-DROP SCHEMA function_tests CASCADE;
-DROP SCHEMA function_tests2 CASCADE;
-SET search_path TO function_tests, function_tests2;
 \c - - - :worker_2_port
 UPDATE pg_dist_local_group SET groupid = 0;
 TRUNCATE pg_dist_node;
-SET client_min_messages TO error; -- suppress cascading objects dropping
-DROP SCHEMA function_tests CASCADE;
-DROP SCHEMA function_tests2 CASCADE;
 \c - - - :master_port
 
 SET client_min_messages TO ERROR;

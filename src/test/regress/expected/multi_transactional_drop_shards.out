@@ -292,11 +292,13 @@ SET citus.override_table_visibility TO false;
 (1 row)
 
 -- test DROP table with failing worker
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION fail_drop_table() RETURNS event_trigger AS $fdt$
     BEGIN
         RAISE 'illegal value';
     END;
 $fdt$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 CREATE EVENT TRIGGER fail_drop_table ON sql_drop EXECUTE PROCEDURE fail_drop_table();
 \c - - - :master_port
 \set VERBOSITY terse

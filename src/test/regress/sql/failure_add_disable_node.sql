@@ -124,5 +124,3 @@ ORDER BY placementid;
 
 RESET SEARCH_PATH;
 DROP SCHEMA add_remove_node CASCADE;
-SELECT * FROM run_command_on_workers('DROP SCHEMA IF EXISTS add_remove_node CASCADE')
-ORDER BY nodeport;

@@ -25,6 +25,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_aggregate.h"
+#include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
@@ -38,6 +39,7 @@
 #include "distributed/listutils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
@@ -77,15 +79,14 @@ static int GetFunctionColocationId(Oid functionOid, char *colocateWithName, Oid
 static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 												  distributionColumnType, Oid
 												  sourceRelationId);
-static void EnsureSequentialModeForFunctionDDL(void);
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
+static ObjectAddress * GetUndistributableDependency(ObjectAddress *functionAddress);
 static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
 											 bool missing_ok);
 static void ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt);
-static void ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress);
 static char * quote_qualified_func_name(Oid funcOid);
 static void DistributeFunctionWithDistributionArgument(RegProcedure funcOid,
 													   char *distributionArgumentName,
@@ -101,6 +102,9 @@ static void DistributeFunctionColocatedWithDistributedTable(RegProcedure funcOid
 static void DistributeFunctionColocatedWithReferenceTable(const
 														  ObjectAddress *functionAddress);
 
+static void EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
+													const ObjectAddress extensionAddress,
+													char *distributionArgumentName);
 
 PG_FUNCTION_INFO_V1(create_distributed_function);
 
@@ -127,6 +131,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	char *colocateWithTableName = NULL;
 	bool *forceDelegationAddress = NULL;
 	bool forceDelegation = false;
+	ObjectAddress extensionAddress = { 0 };
 
 	/* if called on NULL input, error out */
 	if (funcOid == InvalidOid)
@@ -187,22 +192,35 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	EnsureFunctionOwner(funcOid);
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
-	ErrorIfFunctionDependsOnExtension(&functionAddress);
 
 	/*
-	 * when we allow propagation within a transaction block we should make sure to only
-	 * allow this in sequential mode
+	 * If the function is owned by an extension, only update the
+	 * pg_dist_object, and not propagate the CREATE FUNCTION. Function
+	 * will be created by the virtue of the extension creation.
 	 */
-	EnsureSequentialModeForFunctionDDL();
+	if (IsObjectAddressOwnedByExtension(&functionAddress, &extensionAddress))
+	{
+		EnsureExtensionFunctionCanBeDistributed(functionAddress, extensionAddress,
+												distributionArgumentName);
+	}
+	else
+	{
+		/*
+		 * when we allow propagation within a transaction block we should make sure
+		 * to only allow this in sequential mode.
+		 */
+		EnsureSequentialMode(OBJECT_FUNCTION);
 
-	EnsureDependenciesExistOnAllNodes(&functionAddress);
+		EnsureDependenciesExistOnAllNodes(&functionAddress);
 
-	const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
-	const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
-	initStringInfo(&ddlCommand);
-	appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_METADATA_SYNC,
-					 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_METADATA_SYNC);
-	SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(), ddlCommand.data);
+		const char *createFunctionSQL = GetFunctionDDLCommand(funcOid, true);
+		const char *alterFunctionOwnerSQL = GetFunctionAlterOwnerCommand(funcOid);
+		initStringInfo(&ddlCommand);
+		appendStringInfo(&ddlCommand, "%s;%s;%s;%s", DISABLE_METADATA_SYNC,
+						 createFunctionSQL, alterFunctionOwnerSQL, ENABLE_METADATA_SYNC);
+		SendCommandToWorkersAsUser(NON_COORDINATOR_NODES, CurrentUserName(),
+								   ddlCommand.data);
+	}
 
 	MarkObjectDistributed(&functionAddress);
 
@@ -744,7 +762,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 
 /*
  * GetFunctionDDLCommand returns the complete "CREATE OR REPLACE FUNCTION ..." statement for
- * the specified function followed by "ALTER FUNCTION .. SET OWNER ..".
+ * the specified function.
  *
  * useCreateOrReplace is ignored for non-aggregate functions.
  */
@@ -1154,83 +1172,24 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 
 
 /*
- * EnsureSequentialModeForFunctionDDL makes sure that the current transaction is already in
- * sequential mode, or can still safely be put in sequential mode, it errors if that is
- * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginning.
- *
- * As functions are node scoped objects there exists only 1 instance of the function used by
- * potentially multiple shards. To make sure all shards in the transaction can interact
- * with the function the function needs to be visible on all connections used by the transaction,
- * meaning we can only use 1 connection per node.
- */
-static void
-EnsureSequentialModeForFunctionDDL(void)
-{
-	if (ParallelQueryExecutedInTransaction())
-	{
-		ereport(ERROR, (errmsg("cannot create function because there was a "
-							   "parallel operation on a distributed table in the "
-							   "transaction"),
-						errdetail("When creating a distributed function, Citus needs to "
-								  "perform all operations over a single connection per "
-								  "node to ensure consistency."),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
-	}
-
-	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-					 errdetail(
-						 "A distributed function is created. To make sure subsequent "
-						 "commands see the type correctly we need to make sure to "
-						 "use only one connection for all future commands")));
-	SetLocalMultiShardModifyModeToSequential();
-}
-
-
-/*
  * ShouldPropagateCreateFunction tests if we need to propagate a CREATE FUNCTION
- * statement. We only propagate replace's of distributed functions to keep the function on
- * the workers in sync with the one on the coordinator.
+ * statement.
  */
 static bool
 ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
 {
-	if (creating_extension)
+	if (!ShouldPropagate())
 	{
-		/*
-		 * extensions should be created separately on the workers, functions cascading
-		 * from an extension should therefore not be propagated.
-		 */
-		return false;
-	}
-
-	if (!EnableMetadataSync)
-	{
-		/*
-		 * we are configured to disable object propagation, should not propagate anything
-		 */
-		return false;
-	}
-
-	if (!stmt->replace)
-	{
-		/*
-		 * Since we only care for a replace of distributed functions if the statement is
-		 * not a replace we are going to ignore.
-		 */
 		return false;
 	}
 
 	/*
-	 * Even though its a replace we should accept an non-existing function, it will just
-	 * not be distributed
+	 * If the create command is a part of a multi-statement transaction that is not in
+	 * sequential mode, don't propagate.
 	 */
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, true);
-	if (!IsObjectDistributed(&address))
+	if (IsMultiStatementTransaction() &&
+		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
 	{
-		/* do not propagate alter function for non-distributed functions */
 		return false;
 	}
 
@@ -1274,12 +1233,10 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
 
 /*
  * PreprocessCreateFunctionStmt is called during the planning phase for CREATE [OR REPLACE]
- * FUNCTION. We primarily care for the replace variant of this statement to keep
- * distributed functions in sync. We bail via a check on ShouldPropagateCreateFunction
- * which checks for the OR REPLACE modifier.
+ * FUNCTION before it is created on the local node internally.
  *
  * Since we use pg_get_functiondef to get the ddl command we actually do not do any
- * planning here, instead we defer the plan creation to the processing step.
+ * planning here, instead we defer the plan creation to the postprocessing step.
  *
  * Instead we do our basic housekeeping where we make sure we are on the coordinator and
  * can propagate the function in sequential mode.
@@ -1297,10 +1254,10 @@ PreprocessCreateFunctionStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 
 	/*
-	 * ddl jobs will be generated during the Processing phase as we need the function to
+	 * ddl jobs will be generated during the postprocessing phase as we need the function to
 	 * be updated in the catalog to get its sql representation
 	 */
 	return NIL;
@@ -1310,6 +1267,11 @@ PreprocessCreateFunctionStmt(Node *node, const char *queryString,
 /*
  * PostprocessCreateFunctionStmt actually creates the plan we need to execute for function
  * propagation. This is the downside of using pg_get_functiondef to get the sql statement.
+ *
+ * If function depends on any non-distributed relation (except sequence and composite type),
+ * Citus can not distribute it. In order to not to prevent users from creating local
+ * functions on the coordinator WARNING message will be sent to the customer about the case
+ * instead of erroring out.
  *
  * Besides creating the plan we also make sure all (new) dependencies of the function are
  * created on all nodes.
@@ -1324,15 +1286,110 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
-	EnsureDependenciesExistOnAllNodes(&address);
+	ObjectAddress functionAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 
-	List *commands = list_make4(DISABLE_DDL_PROPAGATION,
-								GetFunctionDDLCommand(address.objectId, true),
-								GetFunctionAlterOwnerCommand(address.objectId),
-								ENABLE_DDL_PROPAGATION);
+	if (IsObjectAddressOwnedByExtension(&functionAddress, NULL))
+	{
+		return NIL;
+	}
+
+	/*
+	 * This check should have been valid for all objects not only for functions. Though,
+	 * we do this limited check for now as functions are more likely to be used with
+	 * such dependencies, and we want to scope it for now.
+	 */
+	ObjectAddress *undistributableDependency = GetUndistributableDependency(
+		&functionAddress);
+	if (undistributableDependency != NULL)
+	{
+		if (SupportedDependencyByCitus(undistributableDependency))
+		{
+			/*
+			 * Citus can't distribute some relations as dependency, although those
+			 * types as supported by Citus. So we can use get_rel_name directly
+			 */
+			RangeVar *functionRangeVar = makeRangeVarFromNameList(stmt->funcname);
+			char *functionName = functionRangeVar->relname;
+			char *dependentRelationName =
+				get_rel_name(undistributableDependency->objectId);
+
+			ereport(WARNING, (errmsg("Citus can't distribute function \"%s\" having "
+									 "dependency on non-distributed relation \"%s\"",
+									 functionName, dependentRelationName),
+							  errdetail("Function will be created only locally"),
+							  errhint("To distribute function, distribute dependent "
+									  "relations first. Then, re-create the function")));
+		}
+		else
+		{
+			char *objectType = NULL;
+			#if PG_VERSION_NUM >= PG_VERSION_14
+			objectType = getObjectTypeDescription(undistributableDependency, false);
+			#else
+			objectType = getObjectTypeDescription(undistributableDependency);
+			#endif
+			ereport(WARNING, (errmsg("Citus can't distribute functions having "
+									 "dependency on unsupported object of type \"%s\"",
+									 objectType),
+							  errdetail("Function will be created only locally")));
+		}
+
+		return NIL;
+	}
+
+	EnsureDependenciesExistOnAllNodes(&functionAddress);
+
+	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
+	commands = list_concat(commands, CreateFunctionDDLCommandsIdempotent(
+							   &functionAddress));
+	commands = list_concat(commands, list_make1(ENABLE_DDL_PROPAGATION));
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * GetUndistributableDependency checks whether object has any non-distributable
+ * dependency. If any one found, it will be returned.
+ */
+static ObjectAddress *
+GetUndistributableDependency(ObjectAddress *objectAddress)
+{
+	List *dependencies = GetAllDependenciesForObject(objectAddress);
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
+	{
+		if (IsObjectDistributed(dependency))
+		{
+			continue;
+		}
+
+		if (!SupportedDependencyByCitus(dependency))
+		{
+			/*
+			 * Since roles should be handled manually with Citus community, skip them.
+			 */
+			if (getObjectClass(dependency) != OCLASS_ROLE)
+			{
+				return dependency;
+			}
+		}
+
+		if (getObjectClass(dependency) == OCLASS_CLASS)
+		{
+			/*
+			 * Citus can only distribute dependent non-distributed sequence
+			 * and composite types.
+			 */
+			char relKind = get_rel_relkind(dependency->objectId);
+			if (relKind != RELKIND_SEQUENCE && relKind != RELKIND_COMPOSITE_TYPE)
+			{
+				return dependency;
+			}
+		}
+	}
+
+	return NULL;
 }
 
 
@@ -1416,7 +1473,7 @@ PreprocessAlterFunctionStmt(Node *node, const char *queryString,
 
 	EnsureCoordinator();
 	ErrorIfUnsupportedAlterFunctionStmt(stmt);
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1450,7 +1507,7 @@ PreprocessRenameFunctionStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1482,7 +1539,7 @@ PreprocessAlterFunctionSchemaStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1515,7 +1572,7 @@ PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString,
 	}
 
 	EnsureCoordinator();
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
@@ -1605,7 +1662,7 @@ PreprocessDropFunctionStmt(Node *node, const char *queryString,
 	 * types, so we block the call.
 	 */
 	EnsureCoordinator();
-	EnsureSequentialModeForFunctionDDL();
+	EnsureSequentialMode(OBJECT_FUNCTION);
 
 	/* remove the entries for the distributed objects on dropping */
 	ObjectAddress *address = NULL;
@@ -2013,33 +2070,6 @@ ErrorIfUnsupportedAlterFunctionStmt(AlterFunctionStmt *stmt)
 }
 
 
-/*
- * ErrorIfFunctionDependsOnExtension functions depending on extensions should raise an
- * error informing the user why they can't be distributed.
- */
-static void
-ErrorIfFunctionDependsOnExtension(const ObjectAddress *functionAddress)
-{
-	/* captures the extension address during lookup */
-	ObjectAddress extensionAddress = { 0 };
-
-	if (IsObjectAddressOwnedByExtension(functionAddress, &extensionAddress))
-	{
-		char *functionName =
-			getObjectIdentity_compat(functionAddress, /* missingOk: */ false);
-		char *extensionName =
-			getObjectIdentity_compat(&extensionAddress, /* missingOk: */ false);
-		ereport(ERROR, (errmsg("unable to create a distributed function from functions "
-							   "owned by an extension"),
-						errdetail("Function \"%s\" has a dependency on extension \"%s\". "
-								  "Functions depending on an extension cannot be "
-								  "distributed. Create the function by creating the "
-								  "extension on the workers.", functionName,
-								  extensionName)));
-	}
-}
-
-
 /* returns the quoted qualified name of a given function oid */
 static char *
 quote_qualified_func_name(Oid funcOid)
@@ -2047,4 +2077,55 @@ quote_qualified_func_name(Oid funcOid)
 	return quote_qualified_identifier(
 		get_namespace_name(get_func_namespace(funcOid)),
 		get_func_name(funcOid));
+}
+
+
+/*
+ * EnsureExtensionFuncionCanBeCreated checks if the dependent objects
+ * (including extension) exists on all nodes, if not, creates them. In
+ * addition, it also checks if distribution argument is passed.
+ */
+static void
+EnsureExtensionFunctionCanBeDistributed(const ObjectAddress functionAddress,
+										const ObjectAddress extensionAddress,
+										char *distributionArgumentName)
+{
+	if (CitusExtensionObject(&extensionAddress))
+	{
+		/*
+		 * Citus extension is a special case. It's the extension that
+		 * provides the 'distributed capabilities' in the first place.
+		 * Trying to distribute it's own function(s) doesn't make sense.
+		 */
+		ereport(ERROR, (errmsg("Citus extension functions(%s) "
+							   "cannot be distributed.",
+							   get_func_name(functionAddress.objectId))));
+	}
+
+	/*
+	 * Distributing functions from extensions has the most benefit when
+	 * distribution argument is specified.
+	 */
+	if (distributionArgumentName == NULL)
+	{
+		ereport(ERROR, (errmsg("Extension functions(%s) "
+							   "without distribution argument "
+							   "are not supported.",
+							   get_func_name(functionAddress.objectId))));
+	}
+
+	/*
+	 * Ensure corresponding extension is in pg_dist_object.
+	 * Functions owned by an extension are depending internally on that extension,
+	 * hence EnsureDependenciesExistOnAllNodes() creates the extension, which in
+	 * turn creates the function, and thus we don't have to create it ourself like
+	 * we do for non-extension functions.
+	 */
+	ereport(DEBUG1, (errmsg("Extension(%s) owning the "
+							"function(%s) is not distributed, "
+							"attempting to propogate the extension",
+							get_extension_name(extensionAddress.objectId),
+							get_func_name(functionAddress.objectId))));
+
+	EnsureDependenciesExistOnAllNodes(&functionAddress);
 }

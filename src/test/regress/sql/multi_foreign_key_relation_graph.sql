@@ -161,6 +161,7 @@ ROLLBACK;
 
 -- Test schemas
 BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     CREATE SCHEMA fkey_intermediate_schema_1;
     CREATE SCHEMA fkey_intermediate_schema_2;
     SET search_path TO fkey_graph, fkey_intermediate_schema_1, fkey_intermediate_schema_2;
@@ -192,6 +193,7 @@ BEGIN;
 ROLLBACK;
 
 BEGIN;
+    SET LOCAL citus.multi_shard_modify_mode TO 'sequential';
     CREATE SCHEMA fkey_intermediate_schema_1;
     CREATE SCHEMA fkey_intermediate_schema_2;
     SET search_path TO fkey_graph, fkey_intermediate_schema_1, fkey_intermediate_schema_2;

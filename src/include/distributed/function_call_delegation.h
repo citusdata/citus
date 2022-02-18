@@ -23,7 +23,7 @@ extern bool InTopLevelDelegatedFunctionCall;
 extern bool InDelegatedProcedureCall;
 
 PlannedStmt * TryToDelegateFunctionCall(DistributedPlanningContext *planContext);
-extern void ResetAllowedShardKeyValue(void);
+extern void CheckAndResetAllowedShardKeyValueIfNeeded(void);
 extern bool IsShardKeyValueAllowed(Const *shardKey, uint32 colocationId);
 
 #endif /* FUNCTION_CALL_DELEGATION_H */

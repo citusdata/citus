@@ -37,8 +37,7 @@ static char * CreateCollationDDLInternal(Oid collationId, Oid *collowner,
 										 char **quotedCollationName);
 static List * FilterNameListForDistributedCollations(List *objects, bool missing_ok,
 													 List **addresses);
-static void EnsureSequentialModeForCollationDDL(void);
-
+static bool ShouldPropagateDefineCollationStmt(void);
 
 /*
  * GetCreateCollationDDLInternal returns a CREATE COLLATE sql string for the
@@ -256,7 +255,7 @@ PreprocessDropCollationStmt(Node *node, const char *queryString,
 	char *dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldCollations;
 
-	EnsureSequentialModeForCollationDDL();
+	EnsureSequentialMode(OBJECT_COLLATION);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -292,7 +291,7 @@ PreprocessAlterCollationOwnerStmt(Node *node, const char *queryString,
 	QualifyTreeNode((Node *) stmt);
 	char *sql = DeparseTreeNode((Node *) stmt);
 
-	EnsureSequentialModeForCollationDDL();
+	EnsureSequentialMode(OBJECT_COLLATION);
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
@@ -328,7 +327,7 @@ PreprocessRenameCollationStmt(Node *node, const char *queryString,
 	/* deparse sql*/
 	char *renameStmtSql = DeparseTreeNode((Node *) stmt);
 
-	EnsureSequentialModeForCollationDDL();
+	EnsureSequentialMode(OBJECT_COLLATION);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -363,7 +362,7 @@ PreprocessAlterCollationSchemaStmt(Node *node, const char *queryString,
 	QualifyTreeNode((Node *) stmt);
 	char *sql = DeparseTreeNode((Node *) stmt);
 
-	EnsureSequentialModeForCollationDDL();
+	EnsureSequentialMode(OBJECT_COLLATION);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
@@ -454,47 +453,6 @@ AlterCollationSchemaStmtObjectAddress(Node *node, bool missing_ok)
 
 
 /*
- * EnsureSequentialModeForCollationDDL makes sure that the current transaction is already in
- * sequential mode, or can still safely be put in sequential mode, it errors if that is
- * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginning.
- *
- * As collations are node scoped objects there exists only 1 instance of the collation used by
- * potentially multiple shards. To make sure all shards in the transaction can interact
- * with the type the type needs to be visible on all connections used by the transaction,
- * meaning we can only use 1 connection per node.
- */
-static void
-EnsureSequentialModeForCollationDDL(void)
-{
-	if (!IsTransactionBlock())
-	{
-		/* we do not need to switch to sequential mode if we are not in a transaction */
-		return;
-	}
-
-	if (ParallelQueryExecutedInTransaction())
-	{
-		ereport(ERROR, (errmsg("cannot create or modify collation because there was a "
-							   "parallel operation on a distributed table in the "
-							   "transaction"),
-						errdetail("When creating or altering a collation, Citus needs to "
-								  "perform all operations over a single connection per "
-								  "node to ensure consistency."),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
-	}
-
-	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-					 errdetail("Collation is created or altered. To make sure subsequent "
-							   "commands see the collation correctly we need to make sure to "
-							   "use only one connection for all future commands")));
-	SetLocalMultiShardModifyModeToSequential();
-}
-
-
-/*
  * GenerateBackupNameForCollationCollision generates a new collation name for an existing collation.
  * The name is generated in such a way that the new name doesn't overlap with an existing collation
  * by adding a suffix with incrementing number after the new name.
@@ -562,6 +520,26 @@ DefineCollationStmtObjectAddress(Node *node, bool missing_ok)
 
 
 /*
+ * PreprocessDefineCollationStmt executed before the collation has been
+ * created locally to ensure that if the collation create statement will
+ * be propagated, the node is a coordinator node
+ */
+List *
+PreprocessDefineCollationStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
+{
+	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
+
+	if (ShouldPropagateDefineCollationStmt())
+	{
+		EnsureCoordinator();
+	}
+
+	return NIL;
+}
+
+
+/*
  * PostprocessDefineCollationStmt executed after the collation has been
  * created locally and before we create it on the worker nodes.
  * As we now have access to ObjectAddress of the collation that is just
@@ -573,16 +551,7 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 {
 	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
 
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	/*
-	 * If the create collation command is a part of a multi-statement transaction,
-	 * do not propagate it
-	 */
-	if (IsMultiStatementTransaction())
+	if (!ShouldPropagateDefineCollationStmt())
 	{
 		return NIL;
 	}
@@ -590,13 +559,38 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 	ObjectAddress collationAddress =
 		DefineCollationStmtObjectAddress(node, false);
 
-	if (IsObjectDistributed(&collationAddress))
-	{
-		EnsureCoordinator();
-	}
-
 	EnsureDependenciesExistOnAllNodes(&collationAddress);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, CreateCollationDDLsIdempotent(
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
+	commands = list_concat(commands, CreateCollationDDLsIdempotent(
 							   collationAddress.objectId));
+	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * ShouldPropagateDefineCollationStmt checks if collation define
+ * statement should be propagated. Don't propagate if:
+ * - metadata syncing if off
+ * - statement is part of a multi stmt transaction and the multi shard connection
+ *   type is not sequential
+ */
+static bool
+ShouldPropagateDefineCollationStmt()
+{
+	if (!ShouldPropagate())
+	{
+		return false;
+	}
+
+	if (IsMultiStatementTransaction() &&
+		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
+	{
+		return false;
+	}
+
+	return true;
 }

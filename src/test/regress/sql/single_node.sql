@@ -1017,8 +1017,21 @@ RESET citus.enable_manual_changes_to_shards ;
 TRUNCATE TABLE test_disabling_drop_and_truncate_102040;
 DROP TABLE test_disabling_drop_and_truncate_102040;
 
-RESET citus.shard_replication_factor;
 DROP TABLE test_disabling_drop_and_truncate;
+
+-- test creating distributed or reference tables from shards
+CREATE TABLE test_creating_distributed_relation_table_from_shard (a int);
+SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard', 'a');
+
+-- these should error because shards cannot be used to:
+-- create distributed table
+SELECT create_distributed_table('test_creating_distributed_relation_table_from_shard_102044', 'a');
+
+-- create reference table
+SELECT create_reference_table('test_creating_distributed_relation_table_from_shard_102044');
+
+RESET citus.shard_replication_factor;
+DROP TABLE test_creating_distributed_relation_table_from_shard;
 
 -- lets flush the copy often to make sure everyhing is fine
 SET citus.local_copy_flush_threshold TO 1;

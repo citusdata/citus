@@ -313,16 +313,6 @@ TryToDelegateFunctionCall(DistributedPlanningContext *planContext)
 		return NULL;
 	}
 
-	if (fromFuncExpr && !IsMultiStatementTransaction())
-	{
-		/*
-		 * For now, let's not push the function from the FROM clause unless it's in a
-		 * multistatement transaction with the forceDelegation flag ON.
-		 */
-		ereport(DEBUG2, (errmsg("function from the FROM clause is not pushed")));
-		return NULL;
-	}
-
 	/* dissuade the planner from trying a generic plan with parameters */
 	(void) expression_tree_walker((Node *) funcExpr->args, contain_param_walker,
 								  &walkerParamContext);
@@ -734,6 +724,16 @@ static void
 EnableInForceDelegatedFuncExecution(Const *distArgument, uint32 colocationId)
 {
 	/*
+	 * If the distribution key is already set, the key is fixed until
+	 * the force-delegation function returns. All nested force-delegation
+	 * functions must use the same key.
+	 */
+	if (AllowedDistributionColumnValue.isActive)
+	{
+		return;
+	}
+
+	/*
 	 * The saved distribution argument need to persist through the life
 	 * of the query, both during the planning (where we save) and execution
 	 * (where we compare)
@@ -744,6 +744,7 @@ EnableInForceDelegatedFuncExecution(Const *distArgument, uint32 colocationId)
 						   colocationId));
 	AllowedDistributionColumnValue.distributionColumnValue = copyObject(distArgument);
 	AllowedDistributionColumnValue.colocationId = colocationId;
+	AllowedDistributionColumnValue.executorLevel = ExecutorLevel;
 	AllowedDistributionColumnValue.isActive = true;
 	MemoryContextSwitchTo(oldcontext);
 }
@@ -757,15 +758,22 @@ EnableInForceDelegatedFuncExecution(Const *distArgument, uint32 colocationId)
  * the 2PC. Reset the distribution argument value once the function ends.
  */
 void
-ResetAllowedShardKeyValue(void)
+CheckAndResetAllowedShardKeyValueIfNeeded(void)
 {
-	if (AllowedDistributionColumnValue.isActive)
+	/*
+	 * If no distribution argument is pinned or the pinned argument was
+	 * set by a nested-executor from upper level, nothing to reset.
+	 */
+	if (!AllowedDistributionColumnValue.isActive ||
+		ExecutorLevel > AllowedDistributionColumnValue.executorLevel)
 	{
-		pfree(AllowedDistributionColumnValue.distributionColumnValue);
-		AllowedDistributionColumnValue.isActive = false;
+		return;
 	}
 
-	InTopLevelDelegatedFunctionCall = false;
+	Assert(ExecutorLevel == AllowedDistributionColumnValue.executorLevel);
+	pfree(AllowedDistributionColumnValue.distributionColumnValue);
+	AllowedDistributionColumnValue.isActive = false;
+	AllowedDistributionColumnValue.executorLevel = 0;
 }
 
 
@@ -777,6 +785,7 @@ bool
 IsShardKeyValueAllowed(Const *shardKey, uint32 colocationId)
 {
 	Assert(AllowedDistributionColumnValue.isActive);
+	Assert(ExecutorLevel > AllowedDistributionColumnValue.executorLevel);
 
 	ereport(DEBUG4, errmsg("Comparing saved:%s with Shard key: %s colocationid:%d:%d",
 						   pretty_format_node_dump(

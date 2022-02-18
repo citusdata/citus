@@ -1563,22 +1563,8 @@ LIMIT 10;
 (10 rows)
 
 -- this is one complex join query derived from a user's production query
--- first declare the function on workers on master
+-- declare the function on workers and master
 -- With array_index:
-SELECT * FROM  run_command_on_workers('CREATE OR REPLACE FUNCTION array_index(ANYARRAY, ANYELEMENT)
-      RETURNS INT AS $$
-        SELECT i
-        FROM (SELECT generate_series(array_lower($1, 1), array_upper($1, 1))) g(i)
-        WHERE $1 [i] = $2
-        LIMIT 1;
-    $$ LANGUAGE sql')
-ORDER BY 1,2;
- nodename  | nodeport | success |     result
----------------------------------------------------------------------
- localhost |    57637 | t       | CREATE FUNCTION
- localhost |    57638 | t       | CREATE FUNCTION
-(2 rows)
-
 CREATE OR REPLACE FUNCTION array_index(ANYARRAY, ANYELEMENT)
       RETURNS INT AS $$
         SELECT i
@@ -1745,14 +1731,6 @@ LIMIT 10;
 (10 rows)
 
 -- drop created functions
-SELECT * FROM run_command_on_workers('DROP FUNCTION array_index(ANYARRAY, ANYELEMENT)')
-ORDER BY 1,2;
- nodename  | nodeport | success |    result
----------------------------------------------------------------------
- localhost |    57637 | t       | DROP FUNCTION
- localhost |    57638 | t       | DROP FUNCTION
-(2 rows)
-
 DROP FUNCTION array_index(ANYARRAY, ANYELEMENT);
 -- a query with a constant subquery
 SELECT count(*) as subquery_count
@@ -1883,6 +1861,8 @@ CREATE OR REPLACE FUNCTION volatile_func_test()
       RETURNS INT AS $$
         SELECT 1;
     $$ LANGUAGE sql VOLATILE;
+DEBUG:  switching to sequential query execution mode
+DETAIL:  A command for a distributed function is run. To make sure subsequent commands see the function correctly we need to make sure to use only one connection for all future commands
 -- Citus should be able to evalute functions/row comparisons on the LIMIT/OFFSET
 SELECT user_id, array_length(events_table, 1)
 FROM (
@@ -1987,21 +1967,6 @@ CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
     LANGUAGE SQL
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
-SELECT run_command_on_workers($f$
-
-CREATE FUNCTION test_join_function_2(integer, integer) RETURNS bool
-    AS 'select $1 > $2;'
-    LANGUAGE SQL
-    IMMUTABLE
-    RETURNS NULL ON NULL INPUT;
-
-$f$);
-        run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"CREATE FUNCTION")
- (localhost,57638,t,"CREATE FUNCTION")
-(2 rows)
-
 -- we don't support joins via functions
 SELECT user_id, array_length(events_table, 1)
 FROM (
@@ -2285,16 +2250,5 @@ LIMIT 1;
 (1 row)
 
 DROP FUNCTION test_join_function_2(integer, integer);
-SELECT run_command_on_workers($f$
-
-  DROP FUNCTION test_join_function_2(integer, integer);
-
-$f$);
-       run_command_on_workers
----------------------------------------------------------------------
- (localhost,57637,t,"DROP FUNCTION")
- (localhost,57638,t,"DROP FUNCTION")
-(2 rows)
-
 SET citus.enable_router_execution TO TRUE;
 SET citus.subquery_pushdown to OFF;

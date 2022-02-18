@@ -19,6 +19,7 @@ test: isolation_cluster_management
 # the following tests depend on the distributed
 # transactionId, so should not be parallelized
 # and no tests should be added before these
+test: isolation_metadata_sync_vs_all
 test: isolation_distributed_transaction_id
 test: isolation_dump_global_wait_edges
 test: isolation_citus_dist_activity
@@ -63,6 +64,7 @@ test: shared_connection_waits
 test: isolation_cancellation
 test: isolation_undistribute_table
 test: isolation_fix_partition_shard_index_names
+test: isolation_global_pid
 
 # Rebalancer
 test: isolation_blocking_move_single_shard_commands

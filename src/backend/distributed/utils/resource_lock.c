@@ -1012,8 +1012,8 @@ CitusRangeVarCallbackForLockTable(const RangeVar *rangeVar, Oid relationId,
 		return;
 	}
 
-	/* we only allow tables and views to be locked */
-	if (!RegularTable(relationId))
+	/* we only allow tables, views and foreign tables to be locked */
+	if (!RegularTable(relationId) && !IsForeignTable(relationId))
 	{
 		ereport(ERROR, (errcode(ERRCODE_WRONG_OBJECT_TYPE),
 						errmsg("\"%s\" is not a table", rangeVar->relname)));

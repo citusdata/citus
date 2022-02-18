@@ -54,12 +54,6 @@ GRANT SELECT ON TABLE test_1420000 TO read_access;
 GRANT ALL ON TABLE test_1420002 TO full_access;
 GRANT SELECT ON TABLE test_1420002 TO read_access;
 
-CREATE SCHEMA full_access_user_schema;
-REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
-GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
-GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
-GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
-
 \c - - - :worker_2_port
 CREATE USER full_access;
 CREATE USER usage_access;
@@ -74,12 +68,6 @@ GRANT SELECT ON TABLE test_1420001 TO read_access;
 
 GRANT ALL ON TABLE test_1420003 TO full_access;
 GRANT SELECT ON TABLE test_1420003 TO read_access;
-
-CREATE SCHEMA full_access_user_schema;
-REVOKE ALL ON SCHEMA full_access_user_schema FROM PUBLIC;
-GRANT USAGE ON SCHEMA full_access_user_schema TO full_access;
-GRANT ALL ON SCHEMA full_access_user_schema TO full_access;
-GRANT USAGE ON SCHEMA full_access_user_schema TO usage_access;
 
 \c - - - :master_port
 
@@ -381,21 +369,24 @@ RESET ROLE;
 
 -- to test access to files created during repartition we will create some on worker 1
 \c - - - :worker_1_port
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION citus_rm_job_directory(bigint)
 	RETURNS void
 	AS 'citus'
 	LANGUAGE C STRICT;
+RESET citus.enable_metadata_sync;
 SET ROLE full_access;
 SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[-2147483648, -1073741824, 0, 1073741824]::int4[]);
 RESET ROLE;
 -- all attempts for transfer are initiated from other workers
 
 \c - - - :worker_2_port
-
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION citus_rm_job_directory(bigint)
 	RETURNS void
 	AS 'citus'
 	LANGUAGE C STRICT;
+RESET citus.enable_metadata_sync;
 -- super user should not be able to copy files created by a user
 SELECT worker_fetch_partition_file(42, 1, 1, 1, 'localhost', :worker_1_port);
 

@@ -253,11 +253,3 @@ ORDER BY placementid;
 RESET SEARCH_PATH;
 DROP SCHEMA add_remove_node CASCADE;
 NOTICE:  drop cascades to table add_remove_node.user_table
-SELECT * FROM run_command_on_workers('DROP SCHEMA IF EXISTS add_remove_node CASCADE')
-ORDER BY nodeport;
- nodename  | nodeport | success |   result
----------------------------------------------------------------------
- localhost |     9060 | t       | DROP SCHEMA
- localhost |    57637 | t       | DROP SCHEMA
-(2 rows)
-

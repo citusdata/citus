@@ -100,18 +100,6 @@ SELECT lock_shard_resources(8, ARRAY[2980000]);
 SET client_min_messages TO ERROR;
 DROP SCHEMA "Mx Super User" CASCADE;
 
-\c - postgres - :worker_1_port;
-SET client_min_messages TO ERROR;
-SET citus.enable_ddl_propagation TO OFF;
-CREATE SCHEMA "Mx Regular User";
-GRANT ALL ON SCHEMA "Mx Regular User" TO regular_mx_user;
-
-\c - postgres - :worker_2_port;
-SET client_min_messages TO ERROR;
-SET citus.enable_ddl_propagation TO OFF;
-CREATE SCHEMA "Mx Regular User";
-GRANT ALL ON SCHEMA "Mx Regular User" TO regular_mx_user;
-
 -- now connect with that user
 \c - regular_mx_user - :master_port
 SET search_path TO "Mx Regular User";

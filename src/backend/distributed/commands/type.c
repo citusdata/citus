@@ -92,7 +92,6 @@ bool EnableCreateTypePropagation = true;
 static List * FilterNameListForDistributedTypes(List *objects, bool missing_ok);
 static List * TypeNameListToObjectAddresses(List *objects);
 static TypeName * MakeTypeNameFromRangeVar(const RangeVar *relation);
-static void EnsureSequentialModeForTypeDDL(void);
 static Oid GetTypeOwner(Oid typeOid);
 
 /* recreate functions */
@@ -158,7 +157,7 @@ PreprocessCompositeTypeStmt(Node *node, const char *queryString,
 	 * when we allow propagation within a transaction block we should make sure to only
 	 * allow this in sequential mode
 	 */
-	EnsureSequentialModeForTypeDDL();
+	EnsureSequentialMode(OBJECT_TYPE);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) compositeTypeStmtSql,
@@ -223,7 +222,7 @@ PreprocessAlterTypeStmt(Node *node, const char *queryString,
 	 * regardless if in a transaction or not. If we would not propagate the alter
 	 * statement the types would be different on worker and coordinator.
 	 */
-	EnsureSequentialModeForTypeDDL();
+	EnsureSequentialMode(OBJECT_TYPE);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) alterTypeStmtSql,
@@ -266,7 +265,7 @@ PreprocessCreateEnumStmt(Node *node, const char *queryString,
 	 * when we allow propagation within a transaction block we should make sure to only
 	 * allow this in sequential mode
 	 */
-	EnsureSequentialModeForTypeDDL();
+	EnsureSequentialMode(OBJECT_TYPE);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -325,7 +324,7 @@ PreprocessAlterEnumStmt(Node *node, const char *queryString,
 	 * (adding values to an enum can not run in a transaction anyway and would error by
 	 * postgres already).
 	 */
-	EnsureSequentialModeForTypeDDL();
+	EnsureSequentialMode(OBJECT_TYPE);
 
 	/*
 	 * managing types can only be done on the coordinator if ddl propagation is on. when
@@ -405,7 +404,7 @@ PreprocessDropTypeStmt(Node *node, const char *queryString,
 	char *dropStmtSql = DeparseTreeNode((Node *) stmt);
 	stmt->objects = oldTypes;
 
-	EnsureSequentialModeForTypeDDL();
+	EnsureSequentialMode(OBJECT_TYPE);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -442,7 +441,7 @@ PreprocessRenameTypeStmt(Node *node, const char *queryString,
 	/* deparse sql*/
 	const char *renameStmtSql = DeparseTreeNode(node);
 
-	EnsureSequentialModeForTypeDDL();
+	EnsureSequentialMode(OBJECT_TYPE);
 
 	/* to prevent recursion with mx we disable ddl propagation */
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
@@ -480,7 +479,7 @@ PreprocessRenameTypeAttributeStmt(Node *node, const char *queryString,
 
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	EnsureSequentialModeForTypeDDL();
+	EnsureSequentialMode(OBJECT_TYPE);
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
@@ -513,7 +512,7 @@ PreprocessAlterTypeSchemaStmt(Node *node, const char *queryString,
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	EnsureSequentialModeForTypeDDL();
+	EnsureSequentialMode(OBJECT_TYPE);
 
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
@@ -572,7 +571,7 @@ PreprocessAlterTypeOwnerStmt(Node *node, const char *queryString,
 	QualifyTreeNode((Node *) stmt);
 	const char *sql = DeparseTreeNode((Node *) stmt);
 
-	EnsureSequentialModeForTypeDDL();
+	EnsureSequentialMode(OBJECT_TYPE);
 	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
 								(void *) sql,
 								ENABLE_DDL_PROPAGATION);
@@ -958,6 +957,20 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 		return NIL;
 	}
 
+	HeapTuple tup = SearchSysCacheCopy1(TYPEOID, ObjectIdGetDatum(typeAddress->objectId));
+	if (!HeapTupleIsValid(tup))
+	{
+		elog(ERROR, "cache lookup failed for type %u", typeAddress->objectId);
+	}
+
+	/* Don't send any command if the type is a table's row type */
+	Form_pg_type typTup = (Form_pg_type) GETSTRUCT(tup);
+	if (typTup->typtype == TYPTYPE_COMPOSITE &&
+		get_rel_relkind(typTup->typrelid) != RELKIND_COMPOSITE_TYPE)
+	{
+		return NIL;
+	}
+
 	Node *stmt = CreateTypeStmtByObjectAddress(typeAddress);
 
 	/* capture ddl command for recreation and wrap in create if not exists construct */
@@ -1113,47 +1126,6 @@ MakeTypeNameFromRangeVar(const RangeVar *relation)
 	names = lappend(names, makeString(relation->relname));
 
 	return makeTypeNameFromNameList(names);
-}
-
-
-/*
- * EnsureSequentialModeForTypeDDL makes sure that the current transaction is already in
- * sequential mode, or can still safely be put in sequential mode, it errors if that is
- * not possible. The error contains information for the user to retry the transaction with
- * sequential mode set from the beginning.
- *
- * As types are node scoped objects there exists only 1 instance of the type used by
- * potentially multiple shards. To make sure all shards in the transaction can interact
- * with the type the type needs to be visible on all connections used by the transaction,
- * meaning we can only use 1 connection per node.
- */
-static void
-EnsureSequentialModeForTypeDDL(void)
-{
-	if (!IsTransactionBlock())
-	{
-		/* we do not need to switch to sequential mode if we are not in a transaction */
-		return;
-	}
-
-	if (ParallelQueryExecutedInTransaction())
-	{
-		ereport(ERROR, (errmsg("cannot create or modify type because there was a "
-							   "parallel operation on a distributed table in the "
-							   "transaction"),
-						errdetail("When creating or altering a type, Citus needs to "
-								  "perform all operations over a single connection per "
-								  "node to ensure consistency."),
-						errhint("Try re-running the transaction with "
-								"\"SET LOCAL citus.multi_shard_modify_mode TO "
-								"\'sequential\';\"")));
-	}
-
-	ereport(DEBUG1, (errmsg("switching to sequential query execution mode"),
-					 errdetail("Type is created or altered. To make sure subsequent "
-							   "commands see the type correctly we need to make sure to "
-							   "use only one connection for all future commands")));
-	SetLocalMultiShardModifyModeToSequential();
 }
 
 

@@ -175,7 +175,7 @@ static DistributeObjectOps Any_CreateFunction = {
 	.preprocess = PreprocessCreateFunctionStmt,
 	.postprocess = PostprocessCreateFunctionStmt,
 	.address = CreateFunctionStmtObjectAddress,
-	.markDistributed = false,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreatePolicy = {
 	.deparse = NULL,
@@ -191,6 +191,14 @@ static DistributeObjectOps Any_CreateForeignServer = {
 	.preprocess = PreprocessCreateForeignServerStmt,
 	.postprocess = PostprocessCreateForeignServerStmt,
 	.address = CreateForeignServerStmtObjectAddress,
+	.markDistributed = true,
+};
+static DistributeObjectOps Any_CreateSchema = {
+	.deparse = DeparseCreateSchemaStmt,
+	.qualify = NULL,
+	.preprocess = PreprocessCreateSchemaStmt,
+	.postprocess = NULL,
+	.address = CreateSchemaStmtObjectAddress,
 	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreateStatistics = {
@@ -268,7 +276,7 @@ static DistributeObjectOps Collation_AlterOwner = {
 static DistributeObjectOps Collation_Define = {
 	.deparse = NULL,
 	.qualify = NULL,
-	.preprocess = NULL,
+	.preprocess = PreprocessDefineCollationStmt,
 	.postprocess = PostprocessDefineCollationStmt,
 	.address = DefineCollationStmtObjectAddress,
 	.markDistributed = true,
@@ -497,6 +505,62 @@ static DistributeObjectOps Sequence_Rename = {
 	.address = RenameSequenceStmtObjectAddress,
 	.markDistributed = false,
 };
+static DistributeObjectOps TextSearchConfig_Alter = {
+	.deparse = DeparseAlterTextSearchConfigurationStmt,
+	.qualify = QualifyAlterTextSearchConfigurationStmt,
+	.preprocess = PreprocessAlterTextSearchConfigurationStmt,
+	.postprocess = NULL,
+	.address = AlterTextSearchConfigurationStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchConfig_AlterObjectSchema = {
+	.deparse = DeparseAlterTextSearchConfigurationSchemaStmt,
+	.qualify = QualifyAlterTextSearchConfigurationSchemaStmt,
+	.preprocess = PreprocessAlterTextSearchConfigurationSchemaStmt,
+	.postprocess = PostprocessAlterTextSearchConfigurationSchemaStmt,
+	.address = AlterTextSearchConfigurationSchemaStmtObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchConfig_AlterOwner = {
+	.deparse = DeparseAlterTextSearchConfigurationOwnerStmt,
+	.qualify = QualifyAlterTextSearchConfigurationOwnerStmt,
+	.preprocess = PreprocessAlterTextSearchConfigurationOwnerStmt,
+	.postprocess = PostprocessAlterTextSearchConfigurationOwnerStmt,
+	.address = AlterTextSearchConfigurationOwnerObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchConfig_Comment = {
+	.deparse = DeparseTextSearchConfigurationCommentStmt,
+	.qualify = QualifyTextSearchConfigurationCommentStmt,
+	.preprocess = PreprocessTextSearchConfigurationCommentStmt,
+	.postprocess = NULL,
+	.address = TextSearchConfigurationCommentObjectAddress,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchConfig_Define = {
+	.deparse = DeparseCreateTextSearchStmt,
+	.qualify = NULL,
+	.preprocess = NULL,
+	.postprocess = PostprocessCreateTextSearchConfigurationStmt,
+	.address = CreateTextSearchConfigurationObjectAddress,
+	.markDistributed = true,
+};
+static DistributeObjectOps TextSearchConfig_Drop = {
+	.deparse = DeparseDropTextSearchConfigurationStmt,
+	.qualify = QualifyDropTextSearchConfigurationStmt,
+	.preprocess = PreprocessDropTextSearchConfigurationStmt,
+	.postprocess = NULL,
+	.address = NULL,
+	.markDistributed = false,
+};
+static DistributeObjectOps TextSearchConfig_Rename = {
+	.deparse = DeparseRenameTextSearchConfigurationStmt,
+	.qualify = QualifyRenameTextSearchConfigurationStmt,
+	.preprocess = PreprocessRenameTextSearchConfigurationStmt,
+	.postprocess = NULL,
+	.address = RenameTextSearchConfigurationStmtObjectAddress,
+	.markDistributed = false,
+};
 static DistributeObjectOps Trigger_AlterObjectDepends = {
 	.deparse = NULL,
 	.qualify = NULL,
@@ -538,7 +602,7 @@ static DistributeObjectOps Routine_Rename = {
 	.markDistributed = false,
 };
 static DistributeObjectOps Schema_Drop = {
-	.deparse = NULL,
+	.deparse = DeparseDropSchemaStmt,
 	.qualify = NULL,
 	.preprocess = PreprocessDropSchemaStmt,
 	.postprocess = NULL,
@@ -803,6 +867,11 @@ GetDistributeObjectOps(Node *node)
 					return &Table_AlterObjectSchema;
 				}
 
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_AlterObjectSchema;
+				}
+
 				case OBJECT_TYPE:
 				{
 					return &Type_AlterObjectSchema;
@@ -858,6 +927,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_STATISTIC_EXT:
 				{
 					return &Statistics_AlterOwner;
+				}
+
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_AlterOwner;
 				}
 
 				case OBJECT_TYPE:
@@ -941,9 +1015,31 @@ GetDistributeObjectOps(Node *node)
 			return &Any_AlterTableMoveAll;
 		}
 
+		case T_AlterTSConfigurationStmt:
+		{
+			return &TextSearchConfig_Alter;
+		}
+
 		case T_ClusterStmt:
 		{
 			return &Any_Cluster;
+		}
+
+		case T_CommentStmt:
+		{
+			CommentStmt *stmt = castNode(CommentStmt, node);
+			switch (stmt->objtype)
+			{
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_Comment;
+				}
+
+				default:
+				{
+					return &NoDistributeOps;
+				}
+			}
 		}
 
 		case T_CompositeTypeStmt:
@@ -976,6 +1072,11 @@ GetDistributeObjectOps(Node *node)
 			return &Any_CreatePolicy;
 		}
 
+		case T_CreateSchemaStmt:
+		{
+			return &Any_CreateSchema;
+		}
+
 		case T_CreateStatsStmt:
 		{
 			return &Any_CreateStatistics;
@@ -999,6 +1100,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_COLLATION:
 				{
 					return &Collation_Define;
+				}
+
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_Define;
 				}
 
 				default:
@@ -1076,6 +1182,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_TABLE:
 				{
 					return &Table_Drop;
+				}
+
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_Drop;
 				}
 
 				case OBJECT_TYPE:
@@ -1175,6 +1286,11 @@ GetDistributeObjectOps(Node *node)
 				case OBJECT_STATISTIC_EXT:
 				{
 					return &Statistics_Rename;
+				}
+
+				case OBJECT_TSCONFIGURATION:
+				{
+					return &TextSearchConfig_Rename;
 				}
 
 				case OBJECT_TYPE:

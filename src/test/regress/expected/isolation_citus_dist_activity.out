@@ -15,16 +15,16 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s3-begin:
- BEGIN;
+	BEGIN;
 
 step s1-alter-table:
     ALTER TABLE test_table ADD COLUMN x INT;
 
 step s2-sleep:
- SELECT pg_sleep(0.5);
+	SELECT pg_sleep(0.5);
 
 pg_sleep
 ---------------------------------------------------------------------
@@ -32,7 +32,7 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' and query not ILIKE '%BEGIN%' and query NOT ILIKE '%pg_catalog.pg_isolation_test_session_is_blocked%' ORDER BY query DESC;
 
 query                                         |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
@@ -42,7 +42,7 @@ query                                         |query_hostname  |query_hostport|d
 (1 row)
 
 step s3-view-worker:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query                                                                                                      |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
@@ -61,13 +61,13 @@ SELECT worker_apply_shard_ddl_command (1300001, 'public', '
 (4 rows)
 
 step s2-rollback:
- ROLLBACK;
+	ROLLBACK;
 
 step s1-commit:
     COMMIT;
 
 step s3-rollback:
- ROLLBACK;
+	ROLLBACK;
 
 
 starting permutation: s1-cache-connections s1-begin s2-begin s3-begin s1-insert s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
@@ -85,16 +85,16 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s3-begin:
- BEGIN;
+	BEGIN;
 
 step s1-insert:
-  INSERT INTO test_table VALUES (100, 100);
+ 	INSERT INTO test_table VALUES (100, 100);
 
 step s2-sleep:
- SELECT pg_sleep(0.5);
+	SELECT pg_sleep(0.5);
 
 pg_sleep
 ---------------------------------------------------------------------
@@ -102,17 +102,17 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' and query not ILIKE '%BEGIN%' and query NOT ILIKE '%pg_catalog.pg_isolation_test_session_is_blocked%' ORDER BY query DESC;
 
 query                                        |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
 
-  INSERT INTO test_table VALUES (100, 100);
+ 	INSERT INTO test_table VALUES (100, 100);
 |coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
 (1 row)
 
 step s3-view-worker:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query                                                                     |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
@@ -120,13 +120,13 @@ INSERT INTO public.test_table_1300008 (column1, column2) VALUES (100, 100)|local
 (1 row)
 
 step s2-rollback:
- ROLLBACK;
+	ROLLBACK;
 
 step s1-commit:
     COMMIT;
 
 step s3-rollback:
- ROLLBACK;
+	ROLLBACK;
 
 
 starting permutation: s1-cache-connections s1-begin s2-begin s3-begin s1-select s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
@@ -144,10 +144,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s3-begin:
- BEGIN;
+	BEGIN;
 
 step s1-select:
    SELECT count(*) FROM test_table;
@@ -158,7 +158,7 @@ count
 (1 row)
 
 step s2-sleep:
- SELECT pg_sleep(0.5);
+	SELECT pg_sleep(0.5);
 
 pg_sleep
 ---------------------------------------------------------------------
@@ -166,7 +166,7 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' and query not ILIKE '%BEGIN%' and query NOT ILIKE '%pg_catalog.pg_isolation_test_session_is_blocked%' ORDER BY query DESC;
 
 query                                |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
@@ -176,7 +176,7 @@ query                                |query_hostname  |query_hostport|distribute
 (1 row)
 
 step s3-view-worker:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query                                                                        |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
@@ -187,13 +187,13 @@ SELECT count(*) AS count FROM public.test_table_1300011 test_table WHERE true|lo
 (4 rows)
 
 step s2-rollback:
- ROLLBACK;
+	ROLLBACK;
 
 step s1-commit:
     COMMIT;
 
 step s3-rollback:
- ROLLBACK;
+	ROLLBACK;
 
 
 starting permutation: s1-cache-connections s1-begin s2-begin s3-begin s1-select-router s2-sleep s2-view-dist s3-view-worker s2-rollback s1-commit s3-rollback
@@ -211,10 +211,10 @@ step s1-begin:
     BEGIN;
 
 step s2-begin:
- BEGIN;
+	BEGIN;
 
 step s3-begin:
- BEGIN;
+	BEGIN;
 
 step s1-select-router:
    SELECT count(*) FROM test_table WHERE column1 = 55;
@@ -225,7 +225,7 @@ count
 (1 row)
 
 step s2-sleep:
- SELECT pg_sleep(0.5);
+	SELECT pg_sleep(0.5);
 
 pg_sleep
 ---------------------------------------------------------------------
@@ -233,7 +233,7 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' and query not ILIKE '%BEGIN%' and query NOT ILIKE '%pg_catalog.pg_isolation_test_session_is_blocked%' ORDER BY query DESC;
 
 query                                                   |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
@@ -243,7 +243,7 @@ query                                                   |query_hostname  |query_
 (1 row)
 
 step s3-view-worker:
- SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
 
 query                                                                                                       |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
@@ -251,11 +251,11 @@ SELECT count(*) AS count FROM public.test_table_1300017 test_table WHERE (column
 (1 row)
 
 step s2-rollback:
- ROLLBACK;
+	ROLLBACK;
 
 step s1-commit:
     COMMIT;
 
 step s3-rollback:
- ROLLBACK;
+	ROLLBACK;
 

@@ -460,6 +460,7 @@ StartupCitusBackend(void)
 	InitializeMaintenanceDaemonBackend();
 	InitializeBackendData();
 	RegisterConnectionCleanup();
+	AssignGlobalPID();
 }
 
 
@@ -514,6 +515,9 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 	 * are already given away.
 	 */
 	DeallocateReservedConnections();
+
+	/* we don't want any monitoring view/udf to show already exited backends */
+	UnSetGlobalPID();
 }
 
 
@@ -1985,7 +1989,6 @@ NodeConninfoGucCheckHook(char **newval, void **extra, GucSource source)
 {
 	/* this array _must_ be kept in an order usable by bsearch */
 	const char *allowedConninfoKeywords[] = {
-		"application_name",
 		"connect_timeout",
 			#if defined(ENABLE_GSS) && defined(ENABLE_SSPI)
 		"gsslib",

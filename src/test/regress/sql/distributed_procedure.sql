@@ -79,9 +79,7 @@ SELECT * FROM run_command_on_workers($$CALL procedure_tests.raise_info('hello');
 
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA procedure_tests CASCADE;
-SELECT run_command_on_workers($$DROP SCHEMA procedure_tests CASCADE;$$);
 DROP SCHEMA procedure_tests2 CASCADE;
-SELECT run_command_on_workers($$DROP SCHEMA procedure_tests2 CASCADE;$$);
 DROP USER procedureuser;
 SELECT 1 FROM run_command_on_workers($$DROP USER procedureuser;$$);
 
