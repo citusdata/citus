@@ -37,7 +37,7 @@ static char * CreateCollationDDLInternal(Oid collationId, Oid *collowner,
 										 char **quotedCollationName);
 static List * FilterNameListForDistributedCollations(List *objects, bool missing_ok,
 													 List **addresses);
-
+static bool ShouldPropagateDefineCollationStmt(void);
 
 /*
  * GetCreateCollationDDLInternal returns a CREATE COLLATE sql string for the
@@ -520,6 +520,26 @@ DefineCollationStmtObjectAddress(Node *node, bool missing_ok)
 
 
 /*
+ * PreprocessDefineCollationStmt executed before the collation has been
+ * created locally to ensure that if the collation create statement will
+ * be propagated, the node is a coordinator node
+ */
+List *
+PreprocessDefineCollationStmt(Node *node, const char *queryString,
+							  ProcessUtilityContext processUtilityContext)
+{
+	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
+
+	if (ShouldPropagateDefineCollationStmt())
+	{
+		EnsureCoordinator();
+	}
+
+	return NIL;
+}
+
+
+/*
  * PostprocessDefineCollationStmt executed after the collation has been
  * created locally and before we create it on the worker nodes.
  * As we now have access to ObjectAddress of the collation that is just
@@ -531,16 +551,7 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 {
 	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
 
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	/*
-	 * If the create collation command is a part of a multi-statement transaction,
-	 * do not propagate it
-	 */
-	if (IsMultiStatementTransaction())
+	if (!ShouldPropagateDefineCollationStmt())
 	{
 		return NIL;
 	}
@@ -548,13 +559,38 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
 	ObjectAddress collationAddress =
 		DefineCollationStmtObjectAddress(node, false);
 
-	if (IsObjectDistributed(&collationAddress))
-	{
-		EnsureCoordinator();
-	}
-
 	EnsureDependenciesExistOnAllNodes(&collationAddress);
 
-	return NodeDDLTaskList(NON_COORDINATOR_NODES, CreateCollationDDLsIdempotent(
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
+	commands = list_concat(commands, CreateCollationDDLsIdempotent(
 							   collationAddress.objectId));
+	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
+
+	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * ShouldPropagateDefineCollationStmt checks if collation define
+ * statement should be propagated. Don't propagate if:
+ * - metadata syncing if off
+ * - statement is part of a multi stmt transaction and the multi shard connection
+ *   type is not sequential
+ */
+static bool
+ShouldPropagateDefineCollationStmt()
+{
+	if (!ShouldPropagate())
+	{
+		return false;
+	}
+
+	if (IsMultiStatementTransaction() &&
+		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
+	{
+		return false;
+	}
+
+	return true;
 }
