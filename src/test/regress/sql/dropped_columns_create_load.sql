@@ -25,7 +25,6 @@ PARTITION BY RANGE(eventdatetime);
 -- drop column even before attaching any partitions
 ALTER TABLE sensors DROP COLUMN col_to_drop_1;
 
-SET citus.enable_local_execution TO ON;
 -- now attach the first partition and create the distributed table
 CREATE TABLE sensors_2000 PARTITION OF sensors FOR VALUES FROM ('2000-01-01') TO ('2001-01-01');
 SELECT create_distributed_table('sensors', 'measureid');
@@ -34,7 +33,6 @@ SELECT create_distributed_table('sensors', 'measureid');
 -- with .. PARTITION OF .. syntax
 ALTER TABLE sensors DROP COLUMN col_to_drop_0;
 CREATE TABLE sensors_2001 PARTITION OF sensors FOR VALUES FROM ('2001-01-01') TO ('2002-01-01');
-SET citus.enable_local_execution TO OFF;
 
 -- drop another column before attaching another partition
 -- with ALTER TABLE .. ATTACH PARTITION
@@ -61,6 +59,4 @@ col_to_drop_4 date, measureid integer NOT NULL, eventdatetime date NOT NULL, mea
 
 ALTER TABLE sensors ATTACH PARTITION sensors_2004 FOR VALUES FROM ('2004-01-01') TO ('2005-01-01');
 ALTER TABLE sensors DROP COLUMN col_to_drop_4;
-SET citus.enable_local_execution TO ON;
 SELECT alter_table_set_access_method('sensors_2004', 'columnar');
-SET citus.enable_local_execution TO OFF;
