@@ -453,6 +453,107 @@ SELECT * FROM field_indirection_test_2 ORDER BY 1,2,3;
        8 | (10," text10",20) | (40,50)
 (2 rows)
 
+-- test different ddl propagation modes
+SET citus.ddl_propagation_mode TO parallelism;
+BEGIN;
+CREATE TYPE parallel_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ parallel
+(1 row)
+
+CREATE TABLE parallel_table (a int, b parallel_type);
+SELECT create_distributed_table('parallel_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ parallel
+(1 row)
+
+COMMIT;
+SET citus.ddl_propagation_mode TO optimistic;
+BEGIN;
+CREATE TYPE optimistic_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+CREATE TABLE optimistic_table (a int, b optimistic_type);
+SELECT create_distributed_table('optimistic_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+COMMIT;
+SET citus.ddl_propagation_mode TO optimistic;
+BEGIN;
+-- force parallel execution by preceding with a analytical query
+SET LOCAL citus.force_max_query_parallelization TO on;
+SELECT count(*) FROM optimistic_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+CREATE TYPE optimistic2_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ parallel
+(1 row)
+
+CREATE TABLE optimistic2_table (a int, b optimistic2_type);
+SELECT create_distributed_table('optimistic2_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ parallel
+(1 row)
+
+COMMIT;
+SET citus.ddl_propagation_mode TO always;
+BEGIN;
+CREATE TYPE always_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+CREATE TABLE always_table (a int, b always_type);
+SELECT create_distributed_table('always_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+COMMIT;
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;
