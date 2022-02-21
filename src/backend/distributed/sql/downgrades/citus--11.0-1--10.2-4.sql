@@ -212,3 +212,6 @@ DROP FUNCTION pg_catalog.worker_create_or_replace_object(text[]);
 #include "../udfs/worker_create_or_replace_object/9.0-1.sql"
 
 RESET search_path;
+
+DROP FUNCTION IF EXISTS pg_catalog.pg_cancel_backend(bigint) CASCADE;
+DROP FUNCTION IF EXISTS pg_catalog.pg_terminate_backend(bigint, bigint) CASCADE;

@@ -68,6 +68,8 @@ extern void MarkCitusInitiatedCoordinatorBackend(void);
 extern void AssignGlobalPID(void);
 extern uint64 GetGlobalPID(void);
 extern uint64 ExtractGlobalPID(char *applicationName);
+extern int ExtractNodeIdFromGlobalPID(uint64 globalPID);
+extern int ExtractProcessIdFromGlobalPID(uint64 globalPID);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
 extern void CancelTransactionDueToDeadlock(PGPROC *proc);
 extern bool MyBackendGotCancelledDueToDeadlock(bool clearState);
@@ -78,6 +80,11 @@ extern int GetAllActiveClientBackendCount(void);
 extern void IncrementClientBackendCounter(void);
 extern void DecrementClientBackendCounter(void);
 
+extern bool ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort,
+										char *queryString, StringInfo queryResultString,
+										bool reportResultError);
+
 #define INVALID_CITUS_INTERNAL_BACKEND_GPID 0
+#define GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA 99999999
 
 #endif /* BACKEND_DATA_H */

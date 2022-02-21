@@ -172,6 +172,8 @@ ORDER BY 1;
  function master_update_shard_statistics(bigint)
  function master_update_table_statistics(regclass)
  function notify_constraint_dropped()
+ function pg_cancel_backend(bigint)
+ function pg_terminate_backend(bigint, bigint)
  function poolinfo_valid(text)
  function read_intermediate_result(text,citus_copy_format)
  function read_intermediate_results(text[],citus_copy_format)
@@ -268,5 +270,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(252 rows)
+(254 rows)
 

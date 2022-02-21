@@ -107,10 +107,10 @@ SELECT * FROM test WHERE x = 1;
 \c -reuse-previous=off regression - - :master_port
 SET search_path TO single_node;
 
-SELECT 1 FROM master_add_node('localhost', :follower_master_port, groupid => 0, noderole => 'secondary');
+SELECT 1 FROM master_add_node('localhost', :follower_master_port, groupid => 0, noderole => 'secondary', nodecluster => 'second-cluster');
 SELECT 1 FROM master_set_node_property('localhost', :master_port, 'shouldhaveshards', true);
 
-\c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always'"
+\c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
 SET search_path TO single_node;
 
 SELECT * FROM test WHERE x = 1;
@@ -168,6 +168,29 @@ INSERT INTO columnar_test(a, b) VALUES (1, 8);
 
 \c - - - :follower_master_port
 SELECT * FROM columnar_test ORDER BY 1,2;
+
+
+\c -reuse-previous=off regression - - :master_port
+SET citus.shard_replication_factor TO 1;
+SET search_path TO single_node;
+
+CREATE TABLE dist_table (a INT, b INT);
+SELECT create_distributed_table ('dist_table', 'a', shard_count:=4);
+INSERT INTO dist_table VALUES (1, 1);
+
+\c "port=9070 dbname=regression options='-c\ citus.use_secondary_nodes=always\ -c\ citus.cluster_name=second-cluster'"
+SET search_path TO single_node;
+
+SELECT * FROM dist_table;
+
+SELECT global_pid AS follower_coordinator_gpid FROM get_all_active_transactions() WHERE process_id = pg_backend_pid() \gset
+SELECT pg_typeof(:follower_coordinator_gpid);
+
+SELECT pg_cancel_backend(:follower_coordinator_gpid);
+
+SET citus.log_remote_commands TO ON;
+SELECT pg_cancel_backend(:follower_coordinator_gpid) FROM dist_table WHERE a = 1;
+
 
 -- Cleanup
 \c -reuse-previous=off regression - - :master_port
