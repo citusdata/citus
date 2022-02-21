@@ -74,7 +74,6 @@ extern List * GetSequencesFromAttrDef(Oid attrdefOid);
 extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 											  List **dependentSequenceList, AttrNumber
 											  attnum);
-extern List * GetDependentFunctionsWithRelation(Oid relationId);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 extern void SetLocalEnableMetadataSync(bool state);
 extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,

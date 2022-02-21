@@ -122,7 +122,6 @@ typedef struct ViewDependencyNode
 
 
 static List * GetRelationSequenceDependencyList(Oid relationId);
-static List * GetRelationFunctionDependencyList(Oid relationId);
 static List * GetRelationTriggerFunctionDependencyList(Oid relationId);
 static List * GetRelationStatsSchemaDependencyList(Oid relationId);
 static List * GetRelationIndicesDependencyList(Oid relationId);
@@ -742,6 +741,143 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 
 
 /*
+ * EnsureRelationDependenciesCanBeDistributed ensures all dependencies of the relation
+ * can be distributed.
+ */
+void
+EnsureRelationDependenciesCanBeDistributed(ObjectAddress *relationAddress)
+{
+	ObjectAddress *undistributableDependency =
+		GetUndistributableDependency(relationAddress);
+
+	if (undistributableDependency != NULL)
+	{
+		char *tableName = get_rel_name(relationAddress->objectId);
+
+		if (SupportedDependencyByCitus(undistributableDependency))
+		{
+			/*
+			 * Citus can't distribute some relations as dependency, although those
+			 * types as supported by Citus. So we can use get_rel_name directly
+			 *
+			 * For now the relations are the only type that is supported by Citus
+			 * but can not be distributed as dependency, though we've added an
+			 * explicit check below as well to not to break the logic here in case
+			 * GetUndistributableDependency changes.
+			 */
+			if (getObjectClass(undistributableDependency) == OCLASS_CLASS)
+			{
+				char *dependentRelationName = get_rel_name(
+					undistributableDependency->objectId);
+
+				ereport(ERROR, (errmsg(
+									"Relation \"%s\" has dependency on non-distributed "
+									"relation \"%s\"", tableName,
+									dependentRelationName),
+								errhint("Distribute dependent relation first.")));
+			}
+		}
+
+		char *objectType = NULL;
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		objectType = getObjectTypeDescription(undistributableDependency, false);
+		#else
+		objectType = getObjectTypeDescription(undistributableDependency);
+		#endif
+		ereport(ERROR, (errmsg("Relation \"%s\" has dependency on unsupported "
+							   "object of type \"%s\"", tableName, objectType)));
+	}
+}
+
+
+/*
+ * GetUndistributableDependency checks whether object has any non-distributable
+ * dependency. If any one found, it will be returned.
+ */
+ObjectAddress *
+GetUndistributableDependency(ObjectAddress *objectAddress)
+{
+	List *dependencies = GetAllDependenciesForObject(objectAddress);
+	ObjectAddress *dependency = NULL;
+
+	/*
+	 * Users can disable metadata sync by their own risk. If it is disabled, Citus
+	 * doesn't propagate dependencies. So, if it is disabled, there is no undistributable
+	 * dependency.
+	 */
+	if (!EnableMetadataSync)
+	{
+		return NULL;
+	}
+
+	foreach_ptr(dependency, dependencies)
+	{
+		/*
+		 * Objects with the id smaller than FirstNormalObjectId should be created within
+		 * initdb. Citus needs to have such objects as distributed, so we can not add
+		 * such check to dependency resolution logic. Though, Citus shouldn't error
+		 * out if such dependency is not supported. So, skip them here.
+		 */
+		if (dependency->objectId < FirstNormalObjectId)
+		{
+			continue;
+		}
+
+		/*
+		 * If object is distributed already, ignore it.
+		 */
+		if (IsObjectDistributed(dependency))
+		{
+			continue;
+		}
+
+		/*
+		 * If the dependency is not supported with Citus, return the dependency.
+		 */
+		if (!SupportedDependencyByCitus(dependency))
+		{
+			/*
+			 * Since roles should be handled manually with Citus community, skip them.
+			 */
+			if (getObjectClass(dependency) != OCLASS_ROLE)
+			{
+				return dependency;
+			}
+		}
+
+		if (getObjectClass(dependency) == OCLASS_CLASS)
+		{
+			char relKind = get_rel_relkind(dependency->objectId);
+
+			if (relKind == RELKIND_SEQUENCE || relKind == RELKIND_COMPOSITE_TYPE)
+			{
+				/* citus knows how to auto-distribute these dependencies */
+				continue;
+			}
+			else if (relKind == RELKIND_INDEX || relKind == RELKIND_PARTITIONED_INDEX)
+			{
+				/*
+				 * Indexes are only qualified for distributed objects for dependency
+				 * tracking purposes, so we can ignore those.
+				 */
+				continue;
+			}
+			else
+			{
+				/*
+				 * Citus doesn't know how to auto-distribute the rest of the RELKINDs
+				 * via dependency resolution
+				 */
+				return dependency;
+			}
+		}
+	}
+
+	return NULL;
+}
+
+
+/*
  * IsTableOwnedByExtension returns whether the table with the given relation ID is
  * owned by an extension.
  */
@@ -1092,6 +1228,7 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			 * with them.
 			 */
 			List *sequenceDependencyList = GetRelationSequenceDependencyList(relationId);
+			
 			result = list_concat(result, sequenceDependencyList);
 
 			/*
@@ -1138,21 +1275,6 @@ GetRelationSequenceDependencyList(Oid relationId)
 		CreateObjectAddressDependencyDefList(RelationRelationId, dependentSequenceList);
 
 	return sequenceDependencyDefList;
-}
-
-
-/*
- * GetRelationFunctionDependencyList returns the function dependency definition
- * list for the given relation.
- */
-static List *
-GetRelationFunctionDependencyList(Oid relationId)
-{
-	List *dependentFunctionOids = GetDependentFunctionsWithRelation(relationId);
-	List *functionDependencyDefList =
-		CreateObjectAddressDependencyDefList(ProcedureRelationId, dependentFunctionOids);
-
-	return functionDependencyDefList;
 }
 
 

@@ -1348,51 +1348,6 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 
 
 /*
- * GetUndistributableDependency checks whether object has any non-distributable
- * dependency. If any one found, it will be returned.
- */
-ObjectAddress *
-GetUndistributableDependency(ObjectAddress *objectAddress)
-{
-	List *dependencies = GetAllDependenciesForObject(objectAddress);
-	ObjectAddress *dependency = NULL;
-	foreach_ptr(dependency, dependencies)
-	{
-		if (IsObjectDistributed(dependency))
-		{
-			continue;
-		}
-
-		if (!SupportedDependencyByCitus(dependency))
-		{
-			/*
-			 * Since roles should be handled manually with Citus community, skip them.
-			 */
-			if (getObjectClass(dependency) != OCLASS_ROLE)
-			{
-				return dependency;
-			}
-		}
-
-		if (getObjectClass(dependency) == OCLASS_CLASS)
-		{
-			/*
-			 * Citus can only distribute dependent non-distributed sequence
-			 * and composite types.
-			 */
-			char relKind = get_rel_relkind(dependency->objectId);
-			if (relKind != RELKIND_SEQUENCE && relKind != RELKIND_COMPOSITE_TYPE)
-			{
-				return dependency;
-			}
-		}
-	}
-
-	return NULL;
-}
-
-
-/*
  * CreateFunctionStmtObjectAddress returns the ObjectAddress for the subject of the
  * CREATE [OR REPLACE] FUNCTION statement. If missing_ok is false it will error with the
  * normal postgres error for unfound functions.

@@ -443,6 +443,8 @@ CreateDistributedTable(Oid relationId, char *distributionColumnName,
 	 */
 	ObjectAddress tableAddress = { 0 };
 	ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+
+	EnsureRelationDependenciesCanBeDistributed(&tableAddress);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	char replicationModel = DecideReplicationModel(distributionMethod,

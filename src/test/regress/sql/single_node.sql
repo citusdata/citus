@@ -538,7 +538,11 @@ CREATE TABLE hpart1 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remaind
 CREATE TABLE hpart2 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 2);
 CREATE TABLE hpart3 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 3);
 
+-- Disable metadata sync since citus doesn't support distributing
+-- operator class for now.
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_table('hash_parted ', 'a');
+RESET citus.enable_metadata_sync;
 
 INSERT INTO hash_parted VALUES (1, generate_series(1, 10));
 
