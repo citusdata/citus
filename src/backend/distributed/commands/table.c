@@ -378,6 +378,8 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		}
 
 		Var *parentDistributionColumn = DistPartitionKeyOrError(parentRelationId);
+		char *distributionColumnName =
+			ColumnToColumnName(parentRelationId, (Node *) parentDistributionColumn);
 		char parentDistributionMethod = DISTRIBUTE_BY_HASH;
 		char *parentRelationName = generate_qualified_relation_name(parentRelationId);
 		bool viaDeprecatedAPI = false;
@@ -385,7 +387,7 @@ PostprocessCreateTableStmtPartitionOf(CreateStmt *createStatement, const
 		SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(parentRelationId,
 																  relationId);
 
-		CreateDistributedTable(relationId, parentDistributionColumn,
+		CreateDistributedTable(relationId, distributionColumnName,
 							   parentDistributionMethod, ShardCount, false,
 							   parentRelationName, viaDeprecatedAPI);
 	}
@@ -573,13 +575,8 @@ static void
 DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationId)
 {
 	Var *distributionColumn = DistPartitionKeyOrError(parentCitusRelationId);
-	char *distributionColumnName =
-		ColumnToColumnName(parentCitusRelationId,
-						   nodeToString(distributionColumn));
-	distributionColumn =
-		FindColumnWithNameOnTargetRelation(parentCitusRelationId,
-										   distributionColumnName,
-										   partitionRelationId);
+	char *distributionColumnName = ColumnToColumnName(parentCitusRelationId,
+													  (Node *) distributionColumn);
 
 	char distributionMethod = DISTRIBUTE_BY_HASH;
 	char *parentRelationName = generate_qualified_relation_name(parentCitusRelationId);
@@ -588,7 +585,7 @@ DistributePartitionUsingParent(Oid parentCitusRelationId, Oid partitionRelationI
 	SwitchToSequentialAndLocalExecutionIfPartitionNameTooLong(
 		parentCitusRelationId, partitionRelationId);
 
-	CreateDistributedTable(partitionRelationId, distributionColumn,
+	CreateDistributedTable(partitionRelationId, distributionColumnName,
 						   distributionMethod, ShardCount, false,
 						   parentRelationName, viaDeprecatedAPI);
 }

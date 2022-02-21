@@ -1059,7 +1059,8 @@ CreateTableConversion(TableConversionParameters *params)
 	}
 	relation_close(relation, NoLock);
 	con->distributionKey =
-		BuildDistributionKeyFromColumnName(relation, con->distributionColumn);
+		BuildDistributionKeyFromColumnName(con->relationId, con->distributionColumn,
+										   NoLock);
 
 	con->originalAccessMethod = NULL;
 	if (!PartitionedTable(con->relationId) && !IsForeignTable(con->relationId))
@@ -1175,6 +1176,9 @@ CreateDistributedTableLike(TableConversionState *con)
 		newShardCount = con->shardCount;
 	}
 
+	char *distributionColumnName =
+		ColumnToColumnName(con->newRelationId, (Node *) newDistributionKey);
+
 	Oid originalRelationId = con->relationId;
 	if (con->originalDistributionKey != NULL && PartitionTable(originalRelationId))
 	{
@@ -1190,16 +1194,13 @@ CreateDistributedTableLike(TableConversionState *con)
 		 */
 		Oid parentRelationId = PartitionParentOid(originalRelationId);
 		Var *parentDistKey = DistPartitionKeyOrError(parentRelationId);
-		char *parentDistKeyColumnName =
-			ColumnToColumnName(parentRelationId, nodeToString(parentDistKey));
-
-		newDistributionKey =
-			FindColumnWithNameOnTargetRelation(parentRelationId, parentDistKeyColumnName,
-											   con->newRelationId);
+		distributionColumnName =
+			ColumnToColumnName(parentRelationId, (Node *) parentDistKey);
 	}
 
 	char partitionMethod = PartitionMethod(con->relationId);
-	CreateDistributedTable(con->newRelationId, newDistributionKey, partitionMethod,
+
+	CreateDistributedTable(con->newRelationId, distributionColumnName, partitionMethod,
 						   newShardCount, true, newColocateWith, false);
 }
 
