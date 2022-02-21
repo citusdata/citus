@@ -7,6 +7,16 @@ setup
         LANGUAGE C STRICT VOLATILE
         AS 'citus', $$start_session_level_connection_to_node$$;
 
+    CREATE OR REPLACE FUNCTION override_backend_data_command_originator(bool)
+        RETURNS void
+        LANGUAGE C STRICT IMMUTABLE
+        AS 'citus', $$override_backend_data_command_originator$$;
+
+    SELECT run_command_on_workers($$SET citus.enable_metadata_sync TO off;CREATE OR REPLACE FUNCTION override_backend_data_command_originator(bool)
+        RETURNS void
+        LANGUAGE C STRICT IMMUTABLE
+        AS 'citus'$$);
+
     CREATE OR REPLACE FUNCTION run_commands_on_session_level_connection_to_node(text)
         RETURNS void
         LANGUAGE C STRICT VOLATILE
