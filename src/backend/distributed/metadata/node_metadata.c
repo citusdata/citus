@@ -180,9 +180,6 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 	Name nodeClusterName = PG_GETARG_NAME(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 
-	/* prevent concurrent modification */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
-
 	bool isCoordinatorInMetadata = false;
 	WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
 													  &isCoordinatorInMetadata);
@@ -1409,12 +1406,6 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	EnsureCoordinator();
 
 	*nodeAlreadyExists = false;
-
-	/*
-	 * Prevent / wait for concurrent modification before checking whether
-	 * the worker already exists in pg_dist_node.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode != NULL)

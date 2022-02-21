@@ -140,13 +140,6 @@ PostprocessAlterRoleStmt(Node *node, const char *queryString)
 
 	AlterRoleStmt *stmt = castNode(AlterRoleStmt, node);
 
-	/*
-	 * Make sure that no new nodes are added after this point until the end of the
-	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by citus_add_node.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
-
 	DefElem *option = NULL;
 	foreach_ptr(option, stmt->options)
 	{
