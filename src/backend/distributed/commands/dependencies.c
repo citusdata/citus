@@ -475,11 +475,16 @@ ShouldPropagate(void)
 bool
 ShouldPropagateCreateInCurrentTransaction()
 {
-	/*
-	 * we assume this has already been checked. if we are not in a multi statement
-	 * transaction this check doesn't make any sense
-	 */
-	Assert(IsMultiStatementTransaction());
+	if (!IsMultiStatementTransaction())
+	{
+		/*
+		 * If we are in a single statement transaction we will always propagate the
+		 * creation of objects. There are no downsides in regard to performance or
+		 * transactional limitations. These only arise with transaction blocks consisting
+		 * of multiple statements.
+		 */
+		return true;
+	}
 
 	switch (DDLPropagationMode)
 	{

@@ -585,7 +585,7 @@ ShouldPropagateDefineCollationStmt()
 		return false;
 	}
 
-	if (IsMultiStatementTransaction() && !ShouldPropagateCreateInCurrentTransaction())
+	if (!ShouldPropagateCreateInCurrentTransaction())
 	{
 		return false;
 	}

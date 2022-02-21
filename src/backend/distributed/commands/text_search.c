@@ -74,7 +74,7 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 	}
 
 	/* check creation against multi-statement transaction policy */
-	if (IsMultiStatementTransaction() && !ShouldPropagateCreateInCurrentTransaction())
+	if (!ShouldPropagateCreateInCurrentTransaction())
 	{
 		return NIL;
 	}
