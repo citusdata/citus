@@ -382,6 +382,36 @@ $$
 SELECT count(*) FROM pg_catalog.pg_tables WHERE tablename='citus_local_table_4'
 $$);
 
+-- verify that partitioned citus local tables with dropped columns can be distributed. issue: #5577
+CREATE TABLE parent_dropped_col(a int, eventtime date) PARTITION BY RANGE ( eventtime);
+SELECT citus_add_local_table_to_metadata('parent_dropped_col');
+ALTER TABLE parent_dropped_col DROP column a;
+CREATE TABLE parent_dropped_col_1 PARTITION OF parent_dropped_col for VALUES FROM ('2000-01-01') TO ('2001-01-01');
+SELECT create_distributed_table('parent_dropped_col', 'eventtime');
+-- another example to test
+CREATE TABLE parent_dropped_col_2(
+  col_to_drop_0 text,
+  col_to_drop_1 text,
+  col_to_drop_2 date,
+  col_to_drop_3 inet,
+  col_to_drop_4 date,
+  measureid integer,
+  eventdatetime date,
+  measure_data jsonb,
+  PRIMARY KEY (measureid, eventdatetime, measure_data))
+  PARTITION BY RANGE(eventdatetime);
+
+select citus_add_local_table_to_metadata('parent_dropped_col_2');
+ALTER TABLE parent_dropped_col_2 DROP COLUMN col_to_drop_1;
+CREATE TABLE parent_dropped_col_2_2000 PARTITION OF parent_dropped_col_2 FOR VALUES FROM ('2000-01-01') TO ('2001-01-01');
+
+SELECT create_distributed_table('parent_dropped_col_2', 'measureid');
+
+-- verify that the partitioned tables are distributed with the correct distribution column
+SELECT logicalrelid, partmethod, partkey FROM pg_dist_partition
+    WHERE logicalrelid IN ('parent_dropped_col'::regclass, 'parent_dropped_col_2'::regclass)
+        ORDER BY logicalrelid;
+
 -- cleanup at exit
 set client_min_messages to error;
 DROP SCHEMA citus_local_tables_mx CASCADE;

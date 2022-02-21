@@ -71,6 +71,7 @@ SET search_path TO local_shard_execution;
 -- returns true of the distribution key filter
 -- on the distributed tables (e.g., WHERE key = 1), we'll hit a shard
 -- placement which is local to this not
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION shard_of_distribution_column_is_local(dist_key int) RETURNS bool AS $$
 
 		DECLARE shard_is_local BOOLEAN := FALSE;
@@ -93,6 +94,7 @@ CREATE OR REPLACE FUNCTION shard_of_distribution_column_is_local(dist_key int) R
 		RETURN shard_is_local;
         END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 -- test case for issue #3556
 SET citus.log_intermediate_results TO TRUE;
@@ -418,6 +420,7 @@ BEGIN;
 ROLLBACK;
 
 -- make sure that functions can use local execution
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE PROCEDURE only_local_execution() AS $$
 		DECLARE cnt INT;
 		BEGIN
@@ -491,6 +494,7 @@ CREATE OR REPLACE PROCEDURE local_execution_followed_by_dist() AS $$
 			SELECT count(*) INTO cnt FROM distributed_table;
         END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CALL local_execution_followed_by_dist();
 

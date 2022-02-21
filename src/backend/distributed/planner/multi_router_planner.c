@@ -1018,9 +1018,9 @@ ModifyQuerySupported(Query *queryTree, Query *originalQuery, bool multiShardQuer
 				StringInfo errorHint = makeStringInfo();
 				CitusTableCacheEntry *cacheEntry = GetCitusTableCacheEntry(
 					distributedTableId);
-				char *partitionKeyString = cacheEntry->partitionKeyString;
-				char *partitionColumnName = ColumnToColumnName(distributedTableId,
-															   partitionKeyString);
+				char *partitionColumnName =
+					ColumnToColumnName(distributedTableId,
+									   (Node *) cacheEntry->partitionColumn);
 
 				appendStringInfo(errorHint, "Consider using an equality filter on "
 											"partition column \"%s\" to target a single shard.",
@@ -3058,8 +3058,8 @@ BuildRoutesForInsert(Query *query, DeferredErrorMessage **planningError)
 		if (prunedShardIntervalCount != 1)
 		{
 			char *partitionKeyString = cacheEntry->partitionKeyString;
-			char *partitionColumnName = ColumnToColumnName(distributedTableId,
-														   partitionKeyString);
+			char *partitionColumnName =
+				ColumnToColumnName(distributedTableId, stringToNode(partitionKeyString));
 			StringInfo errorMessage = makeStringInfo();
 			StringInfo errorHint = makeStringInfo();
 			const char *targetCountType = NULL;

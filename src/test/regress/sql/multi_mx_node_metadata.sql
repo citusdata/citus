@@ -367,11 +367,12 @@ UPDATE pg_dist_node SET hasmetadata = true;
 
 SELECT master_update_node(nodeid, 'localhost', 12345) FROM pg_dist_node;
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION trigger_metadata_sync()
     RETURNS void
     LANGUAGE C STRICT
     AS 'citus';
-
+RESET citus.enable_metadata_sync;
 SELECT trigger_metadata_sync();
 
 \c :datname - - :master_port

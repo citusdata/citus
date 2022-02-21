@@ -58,6 +58,7 @@ CREATE TABLE postgres_local_table(a int, b int);
 -- We shouldn't use LIMIT in INSERT SELECT queries to make the test faster as
 -- LIMIT would force planner to wrap SELECT query in an intermediate result and
 -- this might reduce the coverage of the test cases.
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION clear_and_init_test_tables() RETURNS void AS $$
     BEGIN
 		SET client_min_messages to ERROR;
@@ -74,6 +75,7 @@ CREATE FUNCTION clear_and_init_test_tables() RETURNS void AS $$
 		RESET client_min_messages;
     END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 ---------------------------------------------------------------------
 ---- SELECT ----
 ---------------------------------------------------------------------

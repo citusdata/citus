@@ -102,7 +102,6 @@ static GrantStmt * GenerateGrantStmtForRights(ObjectType objectType,
 											  bool withGrantOption);
 static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
-static RoleSpec * GetRoleSpecObjectForGrantStmt(Oid roleOid);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
 static void SetLocalEnableMetadataSync(bool state);
@@ -1023,7 +1022,6 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	StringInfo insertDistributionCommand = makeStringInfo();
 	Oid relationId = cacheEntry->relationId;
 	char distributionMethod = cacheEntry->partitionMethod;
-	char *partitionKeyString = cacheEntry->partitionKeyString;
 	char *qualifiedRelationName =
 		generate_qualified_relation_name(relationId);
 	uint32 colocationId = cacheEntry->colocationId;
@@ -1037,7 +1035,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	else
 	{
 		char *partitionKeyColumnName =
-			ColumnToColumnName(relationId, partitionKeyString);
+			ColumnToColumnName(relationId, (Node *) cacheEntry->partitionColumn);
 		appendStringInfo(tablePartitionKeyNameString, "%s",
 						 quote_literal_cstr(partitionKeyColumnName));
 	}
@@ -1782,7 +1780,7 @@ GenerateGrantStmtForRights(ObjectType objectType,
 	stmt->objtype = objectType;
 	stmt->objects = GetObjectsForGrantStmt(objectType, objectId);
 	stmt->privileges = list_make1(GetAccessPrivObjectForGrantStmt(permission));
-	stmt->grantees = list_make1(GetRoleSpecObjectForGrantStmt(roleOid));
+	stmt->grantees = list_make1(GetRoleSpecObjectForUser(roleOid));
 	stmt->grant_option = withGrantOption;
 
 	return stmt;
@@ -1828,22 +1826,6 @@ GetAccessPrivObjectForGrantStmt(char *permission)
 	accessPriv->cols = NULL;
 
 	return accessPriv;
-}
-
-
-/*
- * GetRoleSpecObjectForGrantStmt creates a RoleSpec object for the given roleOid.
- * It will be used when creating GrantStmt objects.
- */
-static RoleSpec *
-GetRoleSpecObjectForGrantStmt(Oid roleOid)
-{
-	RoleSpec *roleSpec = makeNode(RoleSpec);
-	roleSpec->roletype = OidIsValid(roleOid) ? ROLESPEC_CSTRING : ROLESPEC_PUBLIC;
-	roleSpec->rolename = OidIsValid(roleOid) ? GetUserNameFromId(roleOid, false) : NULL;
-	roleSpec->location = -1;
-
-	return roleSpec;
 }
 
 
@@ -2462,12 +2444,10 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 		distributionColumnText = PG_GETARG_TEXT_P(2);
 		distributionColumnString = text_to_cstring(distributionColumnText);
 
-		Relation relation = relation_open(relationId, AccessShareLock);
 		distributionColumnVar =
-			BuildDistributionKeyFromColumnName(relation, distributionColumnString);
+			BuildDistributionKeyFromColumnName(relationId, distributionColumnString,
+											   AccessShareLock);
 		Assert(distributionColumnVar != NULL);
-
-		relation_close(relation, NoLock);
 	}
 
 	if (!ShouldSkipMetadataChecks())

@@ -237,16 +237,17 @@ CitusExecutorRun(QueryDesc *queryDesc,
 			 * transactions.
 			 */
 			CitusTableCacheFlushInvalidatedEntries();
-
-			/*
-			 * Within a 2PC, when a function is delegated to a remote node, we pin
-			 * the distribution argument as the shard key for all the SQL in the
-			 * function's block. The restriction is imposed to not to access other
-			 * nodes from the current node and violate the transactional integrity
-			 * of the 2PC. Now that the query is ending, reset the shard key to NULL.
-			 */
-			ResetAllowedShardKeyValue();
+			InTopLevelDelegatedFunctionCall = false;
 		}
+
+		/*
+		 * Within a 2PC, when a function is delegated to a remote node, we pin
+		 * the distribution argument as the shard key for all the SQL in the
+		 * function's block. The restriction is imposed to not to access other
+		 * nodes from the current node, and violate the transactional integrity
+		 * of the 2PC. Now that the query is ending, reset the shard key to NULL.
+		 */
+		CheckAndResetAllowedShardKeyValueIfNeeded();
 	}
 	PG_CATCH();
 	{
@@ -260,12 +261,14 @@ CitusExecutorRun(QueryDesc *queryDesc,
 
 		if (ExecutorLevel == 0 && PlannerLevel == 0)
 		{
-			/*
-			 * In case of an exception, reset the pinned shard-key, for more
-			 * details see the function header.
-			 */
-			ResetAllowedShardKeyValue();
+			InTopLevelDelegatedFunctionCall = false;
 		}
+
+		/*
+		 * In case of an exception, reset the pinned shard-key, for more
+		 * details see the function header.
+		 */
+		CheckAndResetAllowedShardKeyValueIfNeeded();
 
 		PG_RE_THROW();
 	}
@@ -768,6 +771,11 @@ GetObjectTypeString(ObjectType objType)
 		case OBJECT_SCHEMA:
 		{
 			return "schema";
+		}
+
+		case OBJECT_TSCONFIGURATION:
+		{
+			return "text search configuration";
 		}
 
 		case OBJECT_TYPE:

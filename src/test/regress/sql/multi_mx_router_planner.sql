@@ -609,6 +609,7 @@ PREPARE author_articles(int) as
 EXECUTE author_articles(1);
 
 -- queries inside plpgsql functions could be router plannable
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION author_articles_max_id() RETURNS int AS $$
 DECLARE
   max_id integer;
@@ -635,6 +636,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 SELECT * FROM author_articles_id_word_count();
+RESET citus.enable_metadata_sync;
 
 -- materialized views can be created for router plannable queries
 CREATE MATERIALIZED VIEW mv_articles_hash_mx AS

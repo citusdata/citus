@@ -1540,6 +1540,31 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 
 
 /*
+ * FindNodeWithNodeId searches pg_dist_node and returns the node with the nodeId.
+ * If the node cannot be found this functions errors.
+ */
+WorkerNode *
+FindNodeWithNodeId(int nodeId)
+{
+	List *workerList = ActiveReadableNodeList();
+	WorkerNode *workerNode = NULL;
+
+	foreach_ptr(workerNode, workerList)
+	{
+		if (workerNode->nodeId == nodeId)
+		{
+			return workerNode;
+		}
+	}
+
+	/* there isn't any node with nodeId in pg_dist_node */
+	elog(ERROR, "worker node with node id %d could not be found", nodeId);
+
+	return NULL;
+}
+
+
+/*
  * ReadDistNode iterates over pg_dist_node table, converts each row
  * into it's memory representation (i.e., WorkerNode) and adds them into
  * a list. Lastly, the list is returned to the caller.

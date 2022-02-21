@@ -189,12 +189,16 @@ COMMIT;
 
 SELECT func_calls_forcepush_func();
 
+-- Block distributing that function as distributing it causes
+-- different test output on PG 14.
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION get_val()
 RETURNS INT AS $$
 BEGIN
         RETURN 100::INT;
 END;
 $$  LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 --
 -- UDF calling another UDF in a FROM clause
@@ -682,6 +686,250 @@ BEGIN
     PERFORM test(3);
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE TABLE testnested_table (x int, y int);
+SELECT create_distributed_table('testnested_table','x');
+
+CREATE OR REPLACE FUNCTION inner_fn(x int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (x,x);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Non-force function calling force-delegation function
+CREATE OR REPLACE FUNCTION outer_local_fn()
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    PERFORM 1 FROM inner_fn(1);
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (2,3);
+    PERFORM 1 FROM inner_fn(4);
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (5,6);
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT create_distributed_function('inner_fn(int)','x',
+		colocate_with:='testnested_table', force_delegation := true);
+
+SELECT outer_local_fn();
+-- Rows from 1-6 should appear
+SELECT * FROM testnested_table ORDER BY 1;
+
+BEGIN;
+SELECT outer_local_fn();
+END;
+SELECT * FROM testnested_table ORDER BY 1;
+
+DROP FUNCTION inner_fn(int);
+DROP FUNCTION outer_local_fn();
+TRUNCATE TABLE testnested_table;
+
+CREATE OR REPLACE FUNCTION inner_fn(x int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (x,x);
+END;
+$$ LANGUAGE plpgsql;
+
+-- Force-delegation function calling non-force function
+CREATE OR REPLACE FUNCTION outer_fn(y int, z int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    PERFORM 1 FROM forcepushdown_schema.inner_fn(y);
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (y,y);
+    PERFORM 1 FROM forcepushdown_schema.inner_fn(z);
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (z,z);
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT create_distributed_function('inner_fn(int)','x',
+		colocate_with:='testnested_table', force_delegation := false);
+SELECT create_distributed_function('outer_fn(int, int)','y',
+		colocate_with:='testnested_table', force_delegation := true);
+
+SELECT outer_fn(1, 2);
+BEGIN;
+SELECT outer_fn(1, 2);
+END;
+
+-- No rows
+SELECT * FROM testnested_table ORDER BY 1;
+
+-- Force-delegation function calling force-delegation function
+CREATE OR REPLACE FUNCTION force_push_inner(y int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (y,y);
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION force_push_outer(x int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (x,x);
+    PERFORM forcepushdown_schema.force_push_inner(x+1) LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT create_distributed_function(
+  'force_push_outer(int)', 'x',
+  colocate_with := 'testnested_table',
+  force_delegation := true
+);
+SELECT create_distributed_function(
+  'force_push_inner(int)', 'y',
+  colocate_with := 'testnested_table',
+  force_delegation := true
+);
+
+-- Keys 7,8,9,14 fall on one node and 15 on a different node
+
+-- Function gets delegated to node with shard-key = 7 and inner function
+-- will not be delegated but inserts shard-key = 8 locally
+SELECT force_push_outer(7);
+
+BEGIN;
+-- Function gets delegated to node with shard-key = 8 and inner function
+-- will not be delegated but inserts shard-key = 9 locally
+SELECT force_push_outer(8);
+END;
+
+BEGIN;
+-- Function gets delegated to node with shard-key = 14 and inner function
+-- will not be delegated but fails to insert shard-key = 15 remotely
+SELECT force_push_outer(14);
+END;
+SELECT * FROM testnested_table ORDER BY 1;
+
+--
+-- Function-1() --> function-2() --> function-3()
+--
+CREATE OR REPLACE FUNCTION force_push_1(x int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (x,x);
+    PERFORM forcepushdown_schema.force_push_2(x+1) LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION force_push_2(y int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (y,y);
+    PERFORM forcepushdown_schema.force_push_3(y+1) LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION force_push_3(z int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (z,z);
+END;
+$$ LANGUAGE plpgsql;
+
+SELECT create_distributed_function(
+  'force_push_1(int)', 'x',
+  colocate_with := 'testnested_table',
+  force_delegation := true
+);
+SELECT create_distributed_function(
+  'force_push_2(int)', 'y',
+  colocate_with := 'testnested_table',
+  force_delegation := true
+);
+SELECT create_distributed_function(
+  'force_push_3(int)', 'z',
+  colocate_with := 'testnested_table',
+  force_delegation := true
+);
+
+TRUNCATE TABLE testnested_table;
+BEGIN;
+-- All local inserts
+SELECT force_push_1(7);
+END;
+
+BEGIN;
+-- Local(shard-keys 13, 15) + remote insert (shard-key 14)
+SELECT force_push_1(13);
+END;
+
+SELECT * FROM testnested_table ORDER BY 1;
+
+TRUNCATE TABLE testnested_table;
+CREATE OR REPLACE FUNCTION force_push_inner(y int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (y,y);
+END;
+$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION force_push_outer(x int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    PERFORM FROM forcepushdown_schema.force_push_inner(x);
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (x+1,x+1);
+END;
+$$ LANGUAGE plpgsql;
+SELECT create_distributed_function(
+  'force_push_inner(int)', 'y',
+  colocate_with := 'testnested_table',
+  force_delegation := true
+);
+SELECT create_distributed_function(
+  'force_push_outer(int)', 'x',
+  colocate_with := 'testnested_table',
+  force_delegation := true
+);
+
+BEGIN;
+SELECT force_push_outer(7);
+END;
+TABLE testnested_table ORDER BY 1;
+
+CREATE OR REPLACE FUNCTION force_push_inner(y int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+	RAISE NOTICE '%', y;
+END;
+$$ LANGUAGE plpgsql;
+CREATE OR REPLACE FUNCTION force_push_outer(x int)
+RETURNS void
+AS $$
+DECLARE
+BEGIN
+    PERFORM FROM forcepushdown_schema.force_push_inner(x+1);
+    INSERT INTO forcepushdown_schema.testnested_table VALUES (x,x);
+END;
+$$ LANGUAGE plpgsql;
+
+BEGIN;
+SELECT force_push_outer(9);
+END;
+TABLE testnested_table ORDER BY 1;
 
 RESET client_min_messages;
 SET citus.log_remote_commands TO off;

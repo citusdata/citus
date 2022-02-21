@@ -58,6 +58,7 @@ static int64 GetRemoteProcessId(void);
 PG_FUNCTION_INFO_V1(start_session_level_connection_to_node);
 PG_FUNCTION_INFO_V1(run_commands_on_session_level_connection_to_node);
 PG_FUNCTION_INFO_V1(stop_session_level_connection_to_node);
+PG_FUNCTION_INFO_V1(override_backend_data_command_originator);
 
 
 /*
@@ -119,6 +120,17 @@ start_session_level_connection_to_node(PG_FUNCTION_ARGS)
 
 	ExecuteCriticalRemoteCommand(singleConnection, setAppName);
 
+	/*
+	 * We are hackily overriding the remote processes' worker_query to be false
+	 * such that relevant observibility UDFs work fine.
+	 */
+	StringInfo overrideBackendDataCommandOriginator = makeStringInfo();
+	appendStringInfo(overrideBackendDataCommandOriginator,
+					 "SELECT override_backend_data_command_originator(true);");
+	ExecuteCriticalRemoteCommand(singleConnection,
+								 overrideBackendDataCommandOriginator->data);
+
+
 	PG_RETURN_VOID();
 }
 
@@ -169,6 +181,23 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 	Oid pgReloadConfOid = FunctionOid("pg_catalog", "pg_reload_conf", 0);
 	OidFunctionCall0(pgReloadConfOid);
 
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * override_backend_data_command_originator is a wrapper around
+ * OverrideBackendDataDistributedCommandOriginator().
+ */
+Datum
+override_backend_data_command_originator(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	bool distributedCommandOriginator = PG_GETARG_BOOL(0);
+
+	OverrideBackendDataDistributedCommandOriginator(distributedCommandOriginator);
 
 	PG_RETURN_VOID();
 }

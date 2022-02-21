@@ -25,6 +25,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_aggregate.h"
+#include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
@@ -38,6 +39,7 @@
 #include "distributed/listutils.h"
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_utility.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
@@ -80,6 +82,7 @@ static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
+static ObjectAddress * GetUndistributableDependency(ObjectAddress *functionAddress);
 static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
 											 bool missing_ok);
@@ -759,7 +762,7 @@ UpdateFunctionDistributionInfo(const ObjectAddress *distAddress,
 
 /*
  * GetFunctionDDLCommand returns the complete "CREATE OR REPLACE FUNCTION ..." statement for
- * the specified function followed by "ALTER FUNCTION .. SET OWNER ..".
+ * the specified function.
  *
  * useCreateOrReplace is ignored for non-aggregate functions.
  */
@@ -1170,46 +1173,23 @@ GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace)
 
 /*
  * ShouldPropagateCreateFunction tests if we need to propagate a CREATE FUNCTION
- * statement. We only propagate replace's of distributed functions to keep the function on
- * the workers in sync with the one on the coordinator.
+ * statement.
  */
 static bool
 ShouldPropagateCreateFunction(CreateFunctionStmt *stmt)
 {
-	if (creating_extension)
+	if (!ShouldPropagate())
 	{
-		/*
-		 * extensions should be created separately on the workers, functions cascading
-		 * from an extension should therefore not be propagated.
-		 */
-		return false;
-	}
-
-	if (!EnableMetadataSync)
-	{
-		/*
-		 * we are configured to disable object propagation, should not propagate anything
-		 */
-		return false;
-	}
-
-	if (!stmt->replace)
-	{
-		/*
-		 * Since we only care for a replace of distributed functions if the statement is
-		 * not a replace we are going to ignore.
-		 */
 		return false;
 	}
 
 	/*
-	 * Even though its a replace we should accept an non-existing function, it will just
-	 * not be distributed
+	 * If the create command is a part of a multi-statement transaction that is not in
+	 * sequential mode, don't propagate.
 	 */
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, true);
-	if (!IsObjectDistributed(&address))
+	if (IsMultiStatementTransaction() &&
+		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
 	{
-		/* do not propagate alter function for non-distributed functions */
 		return false;
 	}
 
@@ -1253,12 +1233,10 @@ ShouldPropagateAlterFunction(const ObjectAddress *address)
 
 /*
  * PreprocessCreateFunctionStmt is called during the planning phase for CREATE [OR REPLACE]
- * FUNCTION. We primarily care for the replace variant of this statement to keep
- * distributed functions in sync. We bail via a check on ShouldPropagateCreateFunction
- * which checks for the OR REPLACE modifier.
+ * FUNCTION before it is created on the local node internally.
  *
  * Since we use pg_get_functiondef to get the ddl command we actually do not do any
- * planning here, instead we defer the plan creation to the processing step.
+ * planning here, instead we defer the plan creation to the postprocessing step.
  *
  * Instead we do our basic housekeeping where we make sure we are on the coordinator and
  * can propagate the function in sequential mode.
@@ -1279,7 +1257,7 @@ PreprocessCreateFunctionStmt(Node *node, const char *queryString,
 	EnsureSequentialMode(OBJECT_FUNCTION);
 
 	/*
-	 * ddl jobs will be generated during the Processing phase as we need the function to
+	 * ddl jobs will be generated during the postprocessing phase as we need the function to
 	 * be updated in the catalog to get its sql representation
 	 */
 	return NIL;
@@ -1289,6 +1267,11 @@ PreprocessCreateFunctionStmt(Node *node, const char *queryString,
 /*
  * PostprocessCreateFunctionStmt actually creates the plan we need to execute for function
  * propagation. This is the downside of using pg_get_functiondef to get the sql statement.
+ *
+ * If function depends on any non-distributed relation (except sequence and composite type),
+ * Citus can not distribute it. In order to not to prevent users from creating local
+ * functions on the coordinator WARNING message will be sent to the customer about the case
+ * instead of erroring out.
  *
  * Besides creating the plan we also make sure all (new) dependencies of the function are
  * created on all nodes.
@@ -1303,15 +1286,110 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
-	EnsureDependenciesExistOnAllNodes(&address);
+	ObjectAddress functionAddress = GetObjectAddressFromParseTree((Node *) stmt, false);
 
-	List *commands = list_make4(DISABLE_DDL_PROPAGATION,
-								GetFunctionDDLCommand(address.objectId, true),
-								GetFunctionAlterOwnerCommand(address.objectId),
-								ENABLE_DDL_PROPAGATION);
+	if (IsObjectAddressOwnedByExtension(&functionAddress, NULL))
+	{
+		return NIL;
+	}
+
+	/*
+	 * This check should have been valid for all objects not only for functions. Though,
+	 * we do this limited check for now as functions are more likely to be used with
+	 * such dependencies, and we want to scope it for now.
+	 */
+	ObjectAddress *undistributableDependency = GetUndistributableDependency(
+		&functionAddress);
+	if (undistributableDependency != NULL)
+	{
+		if (SupportedDependencyByCitus(undistributableDependency))
+		{
+			/*
+			 * Citus can't distribute some relations as dependency, although those
+			 * types as supported by Citus. So we can use get_rel_name directly
+			 */
+			RangeVar *functionRangeVar = makeRangeVarFromNameList(stmt->funcname);
+			char *functionName = functionRangeVar->relname;
+			char *dependentRelationName =
+				get_rel_name(undistributableDependency->objectId);
+
+			ereport(WARNING, (errmsg("Citus can't distribute function \"%s\" having "
+									 "dependency on non-distributed relation \"%s\"",
+									 functionName, dependentRelationName),
+							  errdetail("Function will be created only locally"),
+							  errhint("To distribute function, distribute dependent "
+									  "relations first. Then, re-create the function")));
+		}
+		else
+		{
+			char *objectType = NULL;
+			#if PG_VERSION_NUM >= PG_VERSION_14
+			objectType = getObjectTypeDescription(undistributableDependency, false);
+			#else
+			objectType = getObjectTypeDescription(undistributableDependency);
+			#endif
+			ereport(WARNING, (errmsg("Citus can't distribute functions having "
+									 "dependency on unsupported object of type \"%s\"",
+									 objectType),
+							  errdetail("Function will be created only locally")));
+		}
+
+		return NIL;
+	}
+
+	EnsureDependenciesExistOnAllNodes(&functionAddress);
+
+	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
+	commands = list_concat(commands, CreateFunctionDDLCommandsIdempotent(
+							   &functionAddress));
+	commands = list_concat(commands, list_make1(ENABLE_DDL_PROPAGATION));
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
+}
+
+
+/*
+ * GetUndistributableDependency checks whether object has any non-distributable
+ * dependency. If any one found, it will be returned.
+ */
+static ObjectAddress *
+GetUndistributableDependency(ObjectAddress *objectAddress)
+{
+	List *dependencies = GetAllDependenciesForObject(objectAddress);
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
+	{
+		if (IsObjectDistributed(dependency))
+		{
+			continue;
+		}
+
+		if (!SupportedDependencyByCitus(dependency))
+		{
+			/*
+			 * Since roles should be handled manually with Citus community, skip them.
+			 */
+			if (getObjectClass(dependency) != OCLASS_ROLE)
+			{
+				return dependency;
+			}
+		}
+
+		if (getObjectClass(dependency) == OCLASS_CLASS)
+		{
+			/*
+			 * Citus can only distribute dependent non-distributed sequence
+			 * and composite types.
+			 */
+			char relKind = get_rel_relkind(dependency->objectId);
+			if (relKind != RELKIND_SEQUENCE && relKind != RELKIND_COMPOSITE_TYPE)
+			{
+				return dependency;
+			}
+		}
+	}
+
+	return NULL;
 }
 
 

@@ -195,6 +195,7 @@ SELECT * FROM objects_mx WHERE id = 1;
 -- create trigger on one worker to reject certain values
 \c - - - :worker_1_port
 
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION reject_bad_mx() RETURNS trigger AS $rb$
     BEGIN
         IF (NEW.name = 'BAD') THEN
@@ -204,6 +205,7 @@ CREATE FUNCTION reject_bad_mx() RETURNS trigger AS $rb$
         RETURN NEW;
     END;
 $rb$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 CREATE CONSTRAINT TRIGGER reject_bad_mx
 AFTER INSERT ON objects_mx_1220103

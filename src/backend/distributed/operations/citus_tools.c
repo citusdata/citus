@@ -14,6 +14,7 @@
 
 #include "access/htup_details.h"
 #include "catalog/pg_type.h"
+#include "distributed/backend_data.h"
 #include "distributed/connection_management.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/multi_client_executor.h"
@@ -50,8 +51,6 @@ static void ExecuteCommandsAndStoreResults(StringInfo *nodeNameArray,
 										   bool *statusArray,
 										   StringInfo *resultStringArray,
 										   int commandCount);
-static bool ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort,
-										char *queryString, StringInfo queryResult);
 static Tuplestorestate * CreateTupleStore(TupleDesc tupleDescriptor,
 										  StringInfo *nodeNameArray, int *nodePortArray,
 										  bool *statusArray,
@@ -474,9 +473,10 @@ ExecuteCommandsAndStoreResults(StringInfo *nodeNameArray, int *nodePortArray,
 		int32 nodePort = nodePortArray[commandIndex];
 		char *queryString = commandStringArray[commandIndex]->data;
 		StringInfo queryResultString = resultStringArray[commandIndex];
+		bool reportResultError = false;
 
 		bool success = ExecuteRemoteQueryOrCommand(nodeName, nodePort, queryString,
-												   queryResultString);
+												   queryResultString, reportResultError);
 
 		statusArray[commandIndex] = success;
 
@@ -491,9 +491,9 @@ ExecuteCommandsAndStoreResults(StringInfo *nodeNameArray, int *nodePortArray,
  * (success/failure), and query result. The query is expected to return a single
  * target containing zero or one rows.
  */
-static bool
+bool
 ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort, char *queryString,
-							StringInfo queryResultString)
+							StringInfo queryResultString, bool reportResultError)
 {
 	int connectionFlags = FORCE_NEW_CONNECTION;
 	MultiConnection *connection =
@@ -516,6 +516,11 @@ ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort, char *queryString,
 
 	PGresult *queryResult = GetRemoteCommandResult(connection, raiseInterrupts);
 	bool success = EvaluateQueryResult(connection, queryResult, queryResultString);
+
+	if (!success && reportResultError)
+	{
+		ReportResultError(connection, queryResult, ERROR);
+	}
 
 	PQclear(queryResult);
 
