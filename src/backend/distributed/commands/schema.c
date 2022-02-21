@@ -86,19 +86,19 @@ PreprocessDropSchemaStmt(Node *node, const char *queryString,
 	DropStmt *dropStatement = castNode(DropStmt, node);
 	Assert(dropStatement->removeType == OBJECT_SCHEMA);
 
-	if (!ShouldPropagate())
-	{
-		return NIL;
-	}
-
-	EnsureCoordinator();
-
 	List *distributedSchemas = FilterDistributedSchemas(dropStatement->objects);
 
 	if (list_length(distributedSchemas) < 1)
 	{
 		return NIL;
 	}
+
+	if (!ShouldPropagate())
+	{
+		return NIL;
+	}
+
+	EnsureCoordinator();
 
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
