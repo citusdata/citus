@@ -46,8 +46,8 @@ CREATE TYPE nested_composite_type AS (
     a composite_type,
     b composite_type
 );
-select run_command_on_master_and_workers($$CREATE DOMAIN binary_protocol.composite_type_domain AS binary_protocol.composite_type$$);
-select run_command_on_master_and_workers($$CREATE DOMAIN binary_protocol.nested_composite_type_domain AS binary_protocol.nested_composite_type$$);
+CREATE DOMAIN binary_protocol.composite_type_domain AS binary_protocol.composite_type;
+CREATE DOMAIN binary_protocol.nested_composite_type_domain AS binary_protocol.nested_composite_type;
 
 
 INSERT INTO composite_type_table(col) VALUES  ((1, 2)::composite_type);
@@ -74,8 +74,8 @@ CREATE TYPE binaryless_composite_type AS (
     b aclitem
 );
 
-select run_command_on_master_and_workers($$CREATE DOMAIN binary_protocol.binaryless_domain AS aclitem$$);
-select run_command_on_master_and_workers($$CREATE DOMAIN binary_protocol.binaryless_composite_domain AS binary_protocol.binaryless_composite_type$$);
+CREATE DOMAIN binary_protocol.binaryless_domain AS aclitem;
+CREATE DOMAIN binary_protocol.binaryless_composite_domain AS binary_protocol.binaryless_composite_type;
 
 INSERT INTO binaryless_builtin VALUES ('user postgres=r/postgres', 'test');
 SELECT col1 FROM binaryless_builtin;

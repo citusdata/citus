@@ -10,6 +10,7 @@
 
 #include "postgres.h"
 
+#include "distributed/commands.h"
 #include "distributed/pg_version_constants.h"
 
 #include "access/genam.h"
@@ -21,6 +22,7 @@
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_proc_d.h"
@@ -127,6 +129,7 @@ static List * GetRelationTriggerFunctionDependencyList(Oid relationId);
 static List * GetRelationStatsSchemaDependencyList(Oid relationId);
 static List * GetRelationIndicesDependencyList(Oid relationId);
 static DependencyDefinition * CreateObjectAddressDependencyDef(Oid classId, Oid objectId);
+static List * GetTypeConstraintDependencyDefinition(Oid typeId);
 static List * CreateObjectAddressDependencyDefList(Oid classId, List *objectIdList);
 static ObjectAddress DependencyDefinitionObjectAddress(DependencyDefinition *definition);
 
@@ -630,6 +633,15 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			return IsObjectAddressOwnedByExtension(address, NULL);
 		}
 
+		case OCLASS_CONSTRAINT:
+		{
+			/*
+			 * Constraints are only supported when on domain types. Other constraints have
+			 * their typid set to InvalidOid.
+			 */
+			return OidIsValid(get_constraint_typid(address->objectId));
+		}
+
 		case OCLASS_COLLATION:
 		{
 			return true;
@@ -691,6 +703,7 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			{
 				case TYPTYPE_ENUM:
 				case TYPTYPE_COMPOSITE:
+				case TYPTYPE_DOMAIN:
 				{
 					return true;
 				}
@@ -1196,17 +1209,36 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 	{
 		case TypeRelationId:
 		{
-			/*
-			 * types depending on other types are not captured in pg_depend, instead they
-			 * are described with their dependencies by the relation that describes the
-			 * composite type.
-			 */
-			if (get_typtype(target.objectId) == TYPTYPE_COMPOSITE)
+			switch (get_typtype(target.objectId))
 			{
-				Oid typeRelationId = get_typ_typrelid(target.objectId);
-				DependencyDefinition *dependency =
-					CreateObjectAddressDependencyDef(RelationRelationId, typeRelationId);
-				result = lappend(result, dependency);
+				/*
+				 * types depending on other types are not captured in pg_depend, instead
+				 * they are described with their dependencies by the relation that
+				 * describes the composite type.
+				 */
+				case TYPTYPE_COMPOSITE:
+				{
+					Oid typeRelationId = get_typ_typrelid(target.objectId);
+					DependencyDefinition *dependency =
+						CreateObjectAddressDependencyDef(RelationRelationId,
+														 typeRelationId);
+					result = lappend(result, dependency);
+					break;
+				}
+
+				/*
+				 * Domains can have constraints associated with them. Constraints themself
+				 * can depend on things like functions. To support the propagation of
+				 * these functions we will add the constraints to the list of objects to
+				 * be created.
+				 */
+				case TYPTYPE_DOMAIN:
+				{
+					List *dependencies =
+						GetTypeConstraintDependencyDefinition(target.objectId);
+					result = list_concat(result, dependencies);
+					break;
+				}
 			}
 
 			/*
@@ -1378,6 +1410,49 @@ GetRelationTriggerFunctionDependencyList(Oid relationId)
 	}
 
 	return dependencyList;
+}
+
+
+/*
+ * GetTypeConstraintDependencyDefinition creates a list of constraint dependency
+ * definitions for a given type
+ */
+static List *
+GetTypeConstraintDependencyDefinition(Oid typeId)
+{
+	/* lookup and look all constraints to add them to the CreateDomainStmt */
+	Relation conRel = table_open(ConstraintRelationId, AccessShareLock);
+
+	/* Look for CHECK Constraints on this domain */
+	ScanKeyData key[1];
+	ScanKeyInit(&key[0],
+				Anum_pg_constraint_contypid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(typeId));
+
+	SysScanDesc scan = systable_beginscan(conRel, ConstraintTypidIndexId, true, NULL, 1,
+										  key);
+
+	List *dependencies = NIL;
+	HeapTuple conTup = NULL;
+	while (HeapTupleIsValid(conTup = systable_getnext(scan)))
+	{
+		Form_pg_constraint c = (Form_pg_constraint) GETSTRUCT(conTup);
+
+		if (c->contype != CONSTRAINT_CHECK)
+		{
+			/* Ignore non-CHECK constraints, shouldn't be any */
+			continue;
+		}
+
+		dependencies = lappend(dependencies, CreateObjectAddressDependencyDef(
+								   ConstraintRelationId, c->oid));
+	}
+
+	systable_endscan(scan);
+	table_close(conRel, NoLock);
+
+	return dependencies;
 }
 
 
