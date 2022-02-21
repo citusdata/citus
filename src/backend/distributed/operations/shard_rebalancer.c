@@ -235,6 +235,7 @@ static Form_pg_dist_rebalance_strategy GetRebalanceStrategy(Name name);
 static void EnsureShardCostUDF(Oid functionOid);
 static void EnsureNodeCapacityUDF(Oid functionOid);
 static void EnsureShardAllowedOnNodeUDF(Oid functionOid);
+static void EnsureNoActiveShardPlacementsOnDisabledNodes(List *shardPlacements);
 static void ConflictShardPlacementUpdateOnlyWithIsolationTesting(uint64 shardId);
 static HTAB * BuildWorkerShardStatisticsHash(PlacementUpdateEventProgress *steps,
 											 int stepCount);
@@ -396,6 +397,7 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 			placement->shardId = groupPlacement->shardId;
 			placement->shardLength = groupPlacement->shardLength;
 			placement->shardState = groupPlacement->shardState;
+			placement->nodeId = worker->nodeId;
 			placement->nodeName = pstrdup(worker->workerName);
 			placement->nodePort = worker->workerPort;
 			placement->placementId = groupPlacement->placementId;
@@ -453,6 +455,7 @@ GetRebalanceSteps(RebalanceOptions *options)
 	{
 		List *shardPlacementList = FullShardPlacementList(relationId,
 														  options->excludedShardArray);
+		EnsureNoActiveShardPlacementsOnDisabledNodes(shardPlacementList);
 		shardPlacementListList = lappend(shardPlacementListList, shardPlacementList);
 	}
 
@@ -795,7 +798,6 @@ rebalance_table_shards(PG_FUNCTION_ARGS)
 	{
 		Oid relationId = PG_GETARG_OID(0);
 		ErrorIfMoveUnsupportedTableType(relationId);
-
 		relationIdList = list_make1_oid(relationId);
 	}
 	else
@@ -951,6 +953,8 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 
 	List *activeWorkerList = SortedActiveWorkers();
 	List *shardPlacementList = FullShardPlacementList(relationId, excludedShardArray);
+
+	EnsureNoActiveShardPlacementsOnDisabledNodes(shardPlacementList);
 
 	List *placementUpdateList = ReplicationPlacementUpdates(activeWorkerList,
 															shardPlacementList,
@@ -2973,4 +2977,34 @@ EnsureShardAllowedOnNodeUDF(Oid functionOid)
 							"return type of %s should be boolean", name)));
 	}
 	ReleaseSysCache(proctup);
+}
+
+
+/*
+ * EnsureNoActiveShardPlacementsOnDisabledNodes raises an error if
+ * there are active shards on disabled worker nodes.
+ *
+ * This is used to disallow running rebalancing or replication operations on shards
+ * when some of the active shards are in diabled worker nodes
+ */
+static void
+EnsureNoActiveShardPlacementsOnDisabledNodes(List *shardPlacements)
+{
+	List *disabledNodes = DisabledNodeList();
+	WorkerNode *workerNode = NULL;
+	ShardPlacement *shardPlacement = NULL;
+
+	foreach_ptr(shardPlacement, shardPlacements)
+	{
+		foreach_ptr(workerNode, disabledNodes)
+		{
+			if (shardPlacement->shardState == SHARD_STATE_ACTIVE &&
+				shardPlacement->nodeId == workerNode->nodeId)
+			{
+				ereport(ERROR, (errmsg(
+									"There are active shard placements in disabled node %s:%d.",
+									workerNode->workerName, workerNode->workerPort)));
+			}
+		}
+	}
 }

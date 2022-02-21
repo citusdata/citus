@@ -385,6 +385,33 @@ NodeNamePortCompare(const char *workerLhsName, const char *workerRhsName,
 
 
 /*
+ * DisabledNodeList returns a list of disabled worker nodes
+ */
+List *
+DisabledNodeList(void)
+{
+	List *workerNodeList = NIL;
+	WorkerNode *workerNode = NULL;
+	HASH_SEQ_STATUS status;
+
+	HTAB *workerNodeHash = GetWorkerNodeHash();
+	hash_seq_init(&status, workerNodeHash);
+
+	while ((workerNode = hash_seq_search(&status)) != NULL)
+	{
+		if (!workerNode->isActive)
+		{
+			WorkerNode *workerNodeCopy = palloc0(sizeof(WorkerNode));
+			*workerNodeCopy = *workerNode;
+			workerNodeList = lappend(workerNodeList, workerNodeCopy);
+		}
+	}
+
+	return workerNodeList;
+}
+
+
+/*
  * GetFirstPrimaryWorkerNode returns the primary worker node with the
  * lowest rank based on CompareWorkerNodes.
  *

@@ -1417,3 +1417,22 @@ UPDATE pg_dist_node SET shouldhaveshards=true WHERE nodeport = :worker_2_port;
 SELECT rebalance_table_shards();
 CALL citus_cleanup_orphaned_shards();
 DROP TABLE test_rebalance_with_index CASCADE;
+
+
+-- Test rebalancer with disabled worker
+
+SET citus.shard_replication_factor TO 2;
+
+DROP TABLE IF EXISTS test_rebalance_with_disabled_worker;
+CREATE TABLE test_rebalance_with_disabled_worker (a int);
+SELECT create_distributed_table('test_rebalance_with_disabled_worker', 'a');
+SELECT public.wait_until_metadata_sync(30000);
+
+SELECT citus_disable_node('localhost', :worker_2_port);
+SELECT public.wait_until_metadata_sync(30000);
+
+SELECT rebalance_table_shards('test_rebalance_with_disabled_worker');
+
+SELECT citus_activate_node('localhost', :worker_2_port);
+
+DROP TABLE test_rebalance_with_disabled_worker CASCADE;

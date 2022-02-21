@@ -2378,3 +2378,40 @@ SELECT rebalance_table_shards();
 
 CALL citus_cleanup_orphaned_shards();
 DROP TABLE test_rebalance_with_index CASCADE;
+-- Test rebalancer with disabled worker
+SET citus.shard_replication_factor TO 2;
+DROP TABLE IF EXISTS test_rebalance_with_disabled_worker;
+CREATE TABLE test_rebalance_with_disabled_worker (a int);
+SELECT create_distributed_table('test_rebalance_with_disabled_worker', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT citus_disable_node('localhost', :worker_2_port);
+ citus_disable_node
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT public.wait_until_metadata_sync(30000);
+ wait_until_metadata_sync
+---------------------------------------------------------------------
+
+(1 row)
+
+SELECT rebalance_table_shards('test_rebalance_with_disabled_worker');
+ERROR:  There are active shard placements in disabled node localhost:xxxxx.
+SELECT citus_activate_node('localhost', :worker_2_port);
+ citus_activate_node
+---------------------------------------------------------------------
+                  35
+(1 row)
+
+DROP TABLE test_rebalance_with_disabled_worker CASCADE;
