@@ -50,7 +50,10 @@ get_adjacency_list_wait_graph(PG_FUNCTION_ARGS)
 	bool isNulls[2];
 
 	Tuplestorestate *tupleStore = SetupTuplestore(fcinfo, &tupleDescriptor);
-	WaitGraph *waitGraph = BuildGlobalWaitGraph();
+
+	/* distributed deadlock detection only considers distributed txs */
+	bool onlyDistributedTx = true;
+	WaitGraph *waitGraph = BuildGlobalWaitGraph(onlyDistributedTx);
 	HTAB *adjacencyList = BuildAdjacencyListsForWaitGraph(waitGraph);
 
 	/* iterate on all nodes */
