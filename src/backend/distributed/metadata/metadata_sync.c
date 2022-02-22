@@ -107,7 +107,6 @@ static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
-static void SetLocalEnableMetadataSync(bool state);
 static void SetLocalReplicateReferenceTablesOnActivate(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
@@ -1948,7 +1947,7 @@ GetAccessPrivObjectForGrantStmt(char *permission)
 /*
  * SetLocalEnableMetadataSync sets the enable_metadata_sync locally
  */
-static void
+void
 SetLocalEnableMetadataSync(bool state)
 {
 	set_config_option("citus.enable_metadata_sync", state == true ? "on" : "off",

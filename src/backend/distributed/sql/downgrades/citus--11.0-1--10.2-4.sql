@@ -90,7 +90,6 @@ DROP FUNCTION pg_catalog.citus_shard_indexes_on_worker();
 #include "../udfs/create_distributed_function/9.0-1.sql"
 ALTER TABLE citus.pg_dist_object DROP COLUMN force_delegation;
 
-
 SET search_path = 'pg_catalog';
 
 
@@ -346,5 +345,7 @@ JOIN
 
 ALTER VIEW citus.citus_lock_waits SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
+
+DROP FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(bool);
 
 RESET search_path;

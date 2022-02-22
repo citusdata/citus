@@ -75,6 +75,7 @@ extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 											  attnum);
 extern List * GetDependentFunctionsWithRelation(Oid relationId);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
+extern void SetLocalEnableMetadataSync(bool state);
 
 #define DELETE_ALL_NODES "DELETE FROM pg_dist_node"
 #define DELETE_ALL_PLACEMENTS "DELETE FROM pg_dist_placement"
