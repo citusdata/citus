@@ -348,10 +348,10 @@ _PG_init(void)
 	}
 
 	/*
- 	* For convenience and backwards compatibility, we avoid users having to add both
- 	* citus and columnar to shared_preload_libraries by loading columnar.so as part of
- 	* loading citus.so.
- 	*/
+	 * For convenience and backwards compatibility, we avoid users having to add both
+	 * citus and columnar to shared_preload_libraries by loading columnar.so as part of
+	 * loading citus.so.
+	 */
 	load_file("columnar.so", false);
 }
 
