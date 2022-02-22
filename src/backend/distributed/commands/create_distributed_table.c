@@ -1006,7 +1006,13 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	EnsureTableNotDistributed(relationId);
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod, viaDeprecatedAPI);
-	EnsureRelationHasNoTriggers(relationId);
+
+	/* user really wants triggers? */
+	if (!EnableUnsafeTriggers)
+	{
+		EnsureRelationHasNoTriggers(relationId);
+	}
+
 
 	/* we assume callers took necessary locks */
 	Relation relation = relation_open(relationId, NoLock);
@@ -1328,11 +1334,11 @@ EnsureRelationHasNoTriggers(Oid relationId)
 
 		Assert(relationName != NULL);
 		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" because it has "
-							   "triggers ", relationName),
-						errdetail("Citus does not support distributing tables with "
-								  "triggers."),
-						errhint("Drop all the triggers on \"%s\" and retry.",
-								relationName)));
+							   "triggers and \"citus.enable_unsafe_triggers\" is "
+							   "set to \"false\"", relationName),
+						errhint("Consider setting \"citus.enable_unsafe_triggers\" "
+								"to \"true\", or drop all the triggers on \"%s\" "
+								"and retry.", relationName)));
 	}
 }
 

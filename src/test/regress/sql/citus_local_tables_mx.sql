@@ -37,22 +37,19 @@ FOR EACH ROW EXECUTE FUNCTION dummy_function();
 -- the function that trigger needs in mx workers too.
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 
+-- show that the trigger is not allowed to depend(explicitly) on an extension.
 CREATE EXTENSION seg;
 ALTER TRIGGER dummy_function_trigger ON citus_local_table DEPENDS ON EXTENSION seg;
 ALTER TRIGGER dummy_function_trigger ON citus_local_table RENAME TO renamed_trigger;
 ALTER TABLE citus_local_table DISABLE TRIGGER ALL;
--- show that update trigger mx relation are depending on seg, renamed and disabled.
+-- show that update trigger mx relation is renamed and disabled.
 -- both workers should should print 1.
 SELECT run_command_on_workers(
 $$
-SELECT COUNT(*) FROM pg_depend, pg_trigger, pg_extension
+SELECT COUNT(*) FROM pg_trigger
 WHERE pg_trigger.tgrelid='citus_local_tables_mx.citus_local_table'::regclass AND
       pg_trigger.tgname='renamed_trigger' AND
-      pg_trigger.tgenabled='D' AND
-      pg_depend.classid='pg_trigger'::regclass AND
-      pg_depend.deptype='x' AND
-      pg_trigger.oid=pg_depend.objid AND
-      pg_extension.extname='seg'
+      pg_trigger.tgenabled='D'
 $$);
 
 CREATE FUNCTION another_dummy_function() RETURNS trigger AS $another_dummy_function$
