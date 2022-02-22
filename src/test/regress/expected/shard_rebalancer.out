@@ -2411,6 +2411,7 @@ SELECT rebalance_table_shards('test_rebalance_with_disabled_worker');
 ---------------------------------------------------------------------
 
 (1 row)
+
 SELECT citus_activate_node('localhost', :worker_2_port);
  citus_activate_node
 ---------------------------------------------------------------------
