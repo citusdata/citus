@@ -235,7 +235,6 @@ static Form_pg_dist_rebalance_strategy GetRebalanceStrategy(Name name);
 static void EnsureShardCostUDF(Oid functionOid);
 static void EnsureNodeCapacityUDF(Oid functionOid);
 static void EnsureShardAllowedOnNodeUDF(Oid functionOid);
-static void EnsureNoActiveShardPlacementsOnDisabledNodes(List *shardPlacements);
 static void ConflictShardPlacementUpdateOnlyWithIsolationTesting(uint64 shardId);
 static HTAB * BuildWorkerShardStatisticsHash(PlacementUpdateEventProgress *steps,
 											 int stepCount);
@@ -455,7 +454,6 @@ GetRebalanceSteps(RebalanceOptions *options)
 	{
 		List *shardPlacementList = FullShardPlacementList(relationId,
 														  options->excludedShardArray);
-		EnsureNoActiveShardPlacementsOnDisabledNodes(shardPlacementList);
 		shardPlacementListList = lappend(shardPlacementListList, shardPlacementList);
 	}
 
@@ -953,8 +951,6 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 
 	List *activeWorkerList = SortedActiveWorkers();
 	List *shardPlacementList = FullShardPlacementList(relationId, excludedShardArray);
-
-	EnsureNoActiveShardPlacementsOnDisabledNodes(shardPlacementList);
 
 	List *placementUpdateList = ReplicationPlacementUpdates(activeWorkerList,
 															shardPlacementList,
@@ -2592,6 +2588,8 @@ ShardActivePlacementCount(HTAB *activePlacementsHash, uint64 shardId,
 /*
  * ActivePlacementsHash creates and returns a hash set for the placements in
  * the given list of shard placements which are in active state.
+ * We define active state as a shard being active and it being in an
+ * active worker.
  */
 static HTAB *
 ActivePlacementsHash(List *shardPlacementList)
@@ -2613,7 +2611,17 @@ ActivePlacementsHash(List *shardPlacementList)
 	foreach(shardPlacementCell, shardPlacementList)
 	{
 		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
-		if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
+		WorkerNode *workerNode = FindWorkerNode(shardPlacement->nodeName,
+												shardPlacement->nodePort);
+
+		/*
+		 * If a worker can be found for the shard, that worker should be active.
+		 * For the sake of testing rebalance and replicate, having a null
+		 * worker is also allowed since the tests are done with dummy shard placements
+		 * and workers. The worker will not be NULL with actual shard placements.
+		 */
+		if (shardPlacement->shardState == SHARD_STATE_ACTIVE &&
+			(workerNode == NULL || workerNode->isActive))
 		{
 			void *hashKey = (void *) shardPlacement;
 			hash_search(shardPlacementsHash, hashKey, HASH_ENTER, NULL);
@@ -2977,34 +2985,4 @@ EnsureShardAllowedOnNodeUDF(Oid functionOid)
 							"return type of %s should be boolean", name)));
 	}
 	ReleaseSysCache(proctup);
-}
-
-
-/*
- * EnsureNoActiveShardPlacementsOnDisabledNodes raises an error if
- * there are active shards on disabled worker nodes.
- *
- * This is used to disallow running rebalancing or replication operations on shards
- * when some of the active shards are in diabled worker nodes
- */
-static void
-EnsureNoActiveShardPlacementsOnDisabledNodes(List *shardPlacements)
-{
-	List *disabledNodes = DisabledNodeList();
-	WorkerNode *workerNode = NULL;
-	ShardPlacement *shardPlacement = NULL;
-
-	foreach_ptr(shardPlacement, shardPlacements)
-	{
-		foreach_ptr(workerNode, disabledNodes)
-		{
-			if (shardPlacement->shardState == SHARD_STATE_ACTIVE &&
-				shardPlacement->nodeId == workerNode->nodeId)
-			{
-				ereport(ERROR, (errmsg(
-									"There are active shard placements in disabled node %s:%d.",
-									workerNode->workerName, workerNode->workerPort)));
-			}
-		}
-	}
 }
