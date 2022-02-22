@@ -333,8 +333,25 @@ SELECT table_schema AS "Shards' Schema"
     FROM information_schema.tables
     WHERE table_name LIKE 'table\_set\_schema\_%'
     GROUP BY table_schema;
+
+-- check that we can drop a user-defined schema from workers
+SET citus.enable_ddl_propagation TO OFF;
+CREATE SCHEMA localschema;
+RESET citus.enable_ddl_propagation;
+DROP SCHEMA localschema;
+
 \c - - - :master_port
 SELECT * FROM mx_new_schema.table_set_schema;
+
+-- verify local schema does not exist on the worker
+-- worker errors out as "schema does not exist"
+SET citus.enable_ddl_propagation TO OFF;
+CREATE SCHEMA localschema;
+
+-- should error out
+SELECT run_command_on_workers($$DROP SCHEMA localschema;$$);
+
+RESET citus.enable_ddl_propagation;
 
 DROP SCHEMA mx_old_schema CASCADE;
 DROP SCHEMA mx_new_schema CASCADE;

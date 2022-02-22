@@ -161,6 +161,7 @@ class CitusDefaultClusterConfig(CitusBaseClusterConfig):
         new_settings = {
             "client_min_messages": "WARNING",
             "citus.sort_returning": True,
+            "citus.use_citus_managed_tables": True,
         }
         self.settings.update(new_settings)
         self.add_coordinator_to_metadata = True
@@ -291,6 +292,7 @@ class CitusUnusualQuerySettingsConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
+            "citus.use_citus_managed_tables": False,
             "citus.task_assignment_policy": "first-replica",
             "citus.enable_fast_path_router_planner": False,
             "citus.enable_local_execution": False,

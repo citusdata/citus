@@ -159,29 +159,13 @@ master_create_distributed_table(PG_FUNCTION_ARGS)
 	char *colocateWithTableName = NULL;
 	bool viaDeprecatedAPI = true;
 
-	/*
-	 * Lock target relation with an exclusive lock - there's no way to make
-	 * sense of this table until we've committed, and we don't want multiple
-	 * backends manipulating this relation.
-	 */
-	Relation relation = try_relation_open(relationId, ExclusiveLock);
-
-	if (relation == NULL)
-	{
-		ereport(ERROR, (errmsg("could not create distributed table: "
-							   "relation does not exist")));
-	}
-
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
-	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
-																 distributionColumnName);
-	Assert(distributionColumn != NULL);
+	Assert(distributionColumnName != NULL);
+
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
-	CreateDistributedTable(relationId, distributionColumn, distributionMethod,
+	CreateDistributedTable(relationId, distributionColumnName, distributionMethod,
 						   ShardCount, false, colocateWithTableName, viaDeprecatedAPI);
-
-	relation_close(relation, NoLock);
 
 	PG_RETURN_VOID();
 }
@@ -249,9 +233,8 @@ create_distributed_table(PG_FUNCTION_ARGS)
 	relation_close(relation, NoLock);
 
 	char *distributionColumnName = text_to_cstring(distributionColumnText);
-	Var *distributionColumn = BuildDistributionKeyFromColumnName(relation,
-																 distributionColumnName);
-	Assert(distributionColumn != NULL);
+	Assert(distributionColumnName != NULL);
+
 	char distributionMethod = LookupDistributionMethod(distributionMethodOid);
 
 	if (shardCount < 1 || shardCount > MAX_SHARD_COUNT)
@@ -261,7 +244,7 @@ create_distributed_table(PG_FUNCTION_ARGS)
 							   shardCount, MAX_SHARD_COUNT)));
 	}
 
-	CreateDistributedTable(relationId, distributionColumn, distributionMethod,
+	CreateDistributedTable(relationId, distributionColumnName, distributionMethod,
 						   shardCount, shardCountIsStrict, colocateWithTableName,
 						   viaDeprecatedAPI);
 
@@ -281,7 +264,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 	Oid relationId = PG_GETARG_OID(0);
 
 	char *colocateWithTableName = NULL;
-	Var *distributionColumn = NULL;
+	char *distributionColumnName = NULL;
 
 	bool viaDeprecatedAPI = false;
 
@@ -317,7 +300,7 @@ create_reference_table(PG_FUNCTION_ARGS)
 						errdetail("There are no active worker nodes.")));
 	}
 
-	CreateDistributedTable(relationId, distributionColumn, DISTRIBUTE_BY_NONE,
+	CreateDistributedTable(relationId, distributionColumnName, DISTRIBUTE_BY_NONE,
 						   ShardCount, false, colocateWithTableName, viaDeprecatedAPI);
 	PG_RETURN_VOID();
 }
@@ -385,9 +368,10 @@ EnsureRelationExists(Oid relationId)
  * day, once we deprecate master_create_distribute_table completely.
  */
 void
-CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributionMethod,
-					   int shardCount, bool shardCountIsStrict,
-					   char *colocateWithTableName, bool viaDeprecatedAPI)
+CreateDistributedTable(Oid relationId, char *distributionColumnName,
+					   char distributionMethod, int shardCount,
+					   bool shardCountIsStrict, char *colocateWithTableName,
+					   bool viaDeprecatedAPI)
 {
 	/*
 	 * EnsureTableNotDistributed errors out when relation is a citus table but
@@ -443,6 +427,8 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 		DropFKeysRelationInvolvedWithTableType(relationId, INCLUDE_LOCAL_TABLES);
 	}
 
+	LockRelationOid(relationId, ExclusiveLock);
+
 	/*
 	 * Ensure that the sequences used in column defaults of the table
 	 * have proper types
@@ -463,22 +449,9 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 												   colocateWithTableName,
 												   viaDeprecatedAPI);
 
-	/*
-	 * Due to dropping columns, the parent's distribution key may not match the
-	 * partition's distribution key. The input distributionColumn belongs to
-	 * the parent. That's why we override the distribution column of partitions
-	 * here. See issue #5123 for details.
-	 */
-	if (PartitionTable(relationId))
-	{
-		Oid parentRelationId = PartitionParentOid(relationId);
-		char *distributionColumnName =
-			ColumnToColumnName(parentRelationId, nodeToString(distributionColumn));
-
-		distributionColumn =
-			FindColumnWithNameOnTargetRelation(parentRelationId, distributionColumnName,
-											   relationId);
-	}
+	Var *distributionColumn = BuildDistributionKeyFromColumnName(relationId,
+																 distributionColumnName,
+																 ExclusiveLock);
 
 	/*
 	 * ColocationIdForNewTable assumes caller acquires lock on relationId. In our case,
@@ -567,7 +540,7 @@ CreateDistributedTable(Oid relationId, Var *distributionColumn, char distributio
 
 		foreach_oid(partitionRelationId, partitionList)
 		{
-			CreateDistributedTable(partitionRelationId, distributionColumn,
+			CreateDistributedTable(partitionRelationId, distributionColumnName,
 								   distributionMethod, shardCount, false,
 								   parentRelationName, viaDeprecatedAPI);
 		}
@@ -1033,7 +1006,13 @@ EnsureRelationCanBeDistributed(Oid relationId, Var *distributionColumn,
 
 	EnsureTableNotDistributed(relationId);
 	EnsureLocalTableEmptyIfNecessary(relationId, distributionMethod, viaDeprecatedAPI);
-	EnsureRelationHasNoTriggers(relationId);
+
+	/* user really wants triggers? */
+	if (!EnableUnsafeTriggers)
+	{
+		EnsureRelationHasNoTriggers(relationId);
+	}
+
 
 	/* we assume callers took necessary locks */
 	Relation relation = relation_open(relationId, NoLock);
@@ -1355,11 +1334,11 @@ EnsureRelationHasNoTriggers(Oid relationId)
 
 		Assert(relationName != NULL);
 		ereport(ERROR, (errmsg("cannot distribute relation \"%s\" because it has "
-							   "triggers ", relationName),
-						errdetail("Citus does not support distributing tables with "
-								  "triggers."),
-						errhint("Drop all the triggers on \"%s\" and retry.",
-								relationName)));
+							   "triggers and \"citus.enable_unsafe_triggers\" is "
+							   "set to \"false\"", relationName),
+						errhint("Consider setting \"citus.enable_unsafe_triggers\" "
+								"to \"true\", or drop all the triggers on \"%s\" "
+								"and retry.", relationName)));
 	}
 }
 

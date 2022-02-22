@@ -1007,7 +1007,7 @@ SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
 (1 row)
 
 ALTER TABLE trigger_table DISABLE TRIGGER ALL;
-ERROR:  triggers are only supported for local tables added to metadata
+ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
       value      | count 
@@ -1016,7 +1016,7 @@ SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
 (1 row)
 
 ALTER TABLE trigger_table ENABLE TRIGGER ALL;
-ERROR:  triggers are only supported for local tables added to metadata
+ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
       value      | count 

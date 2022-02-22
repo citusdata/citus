@@ -19,11 +19,9 @@
 
 
 /* Remaining metadata utility functions  */
-extern Var * FindColumnWithNameOnTargetRelation(Oid sourceRelationId,
-												char *sourceColumnName,
-												Oid targetRelationId);
-extern Var * BuildDistributionKeyFromColumnName(Relation distributedRelation,
-												char *columnName);
-extern char * ColumnToColumnName(Oid relationId, char *columnNodeString);
+extern Var * BuildDistributionKeyFromColumnName(Oid relationId,
+												char *columnName,
+												LOCKMODE lockMode);
+extern char * ColumnToColumnName(Oid relationId, Node *columnNode);
 
 #endif   /* DISTRIBUTION_COLUMN_H */

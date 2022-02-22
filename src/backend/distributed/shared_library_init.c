@@ -986,6 +986,17 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
+		"citus.enable_unsafe_triggers",
+		gettext_noop("Enables arbitrary triggers on distributed tables which may cause "
+					 "visibility and deadlock issues. Use at your own risk."),
+		NULL,
+		&EnableUnsafeTriggers,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
 		"citus.enable_version_checks",
 		gettext_noop("Enables version checks during CREATE/ALTER EXTENSION commands"),
 		NULL,

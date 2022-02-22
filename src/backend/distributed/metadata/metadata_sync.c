@@ -1022,7 +1022,6 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	StringInfo insertDistributionCommand = makeStringInfo();
 	Oid relationId = cacheEntry->relationId;
 	char distributionMethod = cacheEntry->partitionMethod;
-	char *partitionKeyString = cacheEntry->partitionKeyString;
 	char *qualifiedRelationName =
 		generate_qualified_relation_name(relationId);
 	uint32 colocationId = cacheEntry->colocationId;
@@ -1036,7 +1035,7 @@ DistributionCreateCommand(CitusTableCacheEntry *cacheEntry)
 	else
 	{
 		char *partitionKeyColumnName =
-			ColumnToColumnName(relationId, partitionKeyString);
+			ColumnToColumnName(relationId, (Node *) cacheEntry->partitionColumn);
 		appendStringInfo(tablePartitionKeyNameString, "%s",
 						 quote_literal_cstr(partitionKeyColumnName));
 	}
@@ -2445,12 +2444,10 @@ citus_internal_add_partition_metadata(PG_FUNCTION_ARGS)
 		distributionColumnText = PG_GETARG_TEXT_P(2);
 		distributionColumnString = text_to_cstring(distributionColumnText);
 
-		Relation relation = relation_open(relationId, AccessShareLock);
 		distributionColumnVar =
-			BuildDistributionKeyFromColumnName(relation, distributionColumnString);
+			BuildDistributionKeyFromColumnName(relationId, distributionColumnString,
+											   AccessShareLock);
 		Assert(distributionColumnVar != NULL);
-
-		relation_close(relation, NoLock);
 	}
 
 	if (!ShouldSkipMetadataChecks())

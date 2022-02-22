@@ -194,29 +194,29 @@ NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1
 BEFORE INSERT ON "interesting!schema"."citus_local!_table"
 FOR EACH STATEMENT EXECUTE FUNCTION dummy_function();')
 CREATE EXTENSION seg;
+-- ALTER TRIGGER DEPENDS ON
+ALTER TRIGGER "trigger\'name" ON "interesting!schema"."citus_local!_table" DEPENDS ON EXTENSION seg;
+ERROR:  Triggers "trigger\'name" on distributed tables and local tables added to metadata are not allowed to depend on an extension
 BEGIN;
-    -- ALTER TRIGGER DEPENDS ON
-    ALTER TRIGGER "trigger\'name" ON "interesting!schema"."citus_local!_table" DEPENDS ON EXTENSION seg;
-NOTICE:  executing the command locally: SELECT worker_apply_shard_ddl_command (1507008, 'interesting!schema', E'ALTER TRIGGER "trigger\\''name" ON "interesting!schema"."citus_local!_table" DEPENDS ON EXTENSION seg;')
-    -- show that triggers on both shell relation and shard relation are depending on seg
+    -- show that triggers on both shell relation and shard relation are not depending on seg
     SELECT tgname FROM pg_depend, pg_trigger, pg_extension
     WHERE deptype = 'x' and classid='pg_trigger'::regclass and
         pg_trigger.oid=pg_depend.objid and extname='seg'
     ORDER BY 1;
-        tgname
+ tgname
 ---------------------------------------------------------------------
- trigger\'name
- trigger\'name_1507008
-(2 rows)
+(0 rows)
 
     DROP EXTENSION seg;
-    -- show that dropping extension drops the triggers automatically
+    -- show that dropping extension doesn't drop the triggers automatically
     SELECT * FROM citus_local_table_triggers
     WHERE tgname NOT LIKE 'RI_ConstraintTrigger%';
-         tgname         |                  tgrelid                  | tgenabled
+         tgname         |                      tgrelid                      | tgenabled
 ---------------------------------------------------------------------
- truncate_trigger_xxxxxxx | "interesting!schema"."citus_local!_table" | O
-(1 row)
+ trigger\'name          | "interesting!schema"."citus_local!_table"         | O
+ trigger\'name_1507008  | "interesting!schema"."citus_local!_table_1507008" | O
+ truncate_trigger_xxxxxxx | "interesting!schema"."citus_local!_table"         | O
+(3 rows)
 
 ROLLBACK;
 -- ALTER TRIGGER RENAME

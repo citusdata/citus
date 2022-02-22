@@ -101,13 +101,14 @@ step s2-view-worker:
     FROM citus_worker_stat_activity
     WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
           query NOT ILIKE '%COMMIT%' AND
-          query NOT ILIKE '%dump_local_wait_edges%'
+          query NOT ILIKE '%dump_local_%' AND
+          query NOT ILIKE '%citus_internal_local_blocked_processes%'
     ORDER BY query, query_hostport DESC;
 
 query                                                                         |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-UPDATE public.ref_table_1500767 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost     |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1500767 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost     |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500777 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost     |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500777 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost     |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
 (2 rows)
 
 step s2-end:

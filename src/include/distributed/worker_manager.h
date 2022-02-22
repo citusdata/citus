@@ -86,6 +86,7 @@ extern List * ActiveReadableNodeList(void);
 extern WorkerNode * FindWorkerNode(const char *nodeName, int32 nodePort);
 extern WorkerNode * FindWorkerNodeOrError(const char *nodeName, int32 nodePort);
 extern WorkerNode * FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort);
+extern WorkerNode * FindNodeWithNodeId(int nodeId);
 extern List * ReadDistNode(bool includeNodesFromOtherClusters);
 extern void EnsureCoordinator(void);
 extern void InsertCoordinatorIfClusterEmpty(void);
