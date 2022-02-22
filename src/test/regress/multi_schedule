@@ -94,6 +94,7 @@ test: alter_distributed_table
 test: issue_5248 issue_5099
 test: object_propagation_debug
 test: undistribute_table
+test: run_command_on_all_nodes
 
 
 # ---------

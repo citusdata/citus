@@ -105,6 +105,7 @@ ORDER BY 1;
  function citus_shard_indexes_on_worker()
  function citus_shard_sizes()
  function citus_shards_on_worker()
+ function citus_stat_activity()
  function citus_stat_statements()
  function citus_stat_statements_reset()
  function citus_table_is_visible(oid)
@@ -189,6 +190,7 @@ ORDER BY 1;
  function replicate_reference_tables()
  function replicate_table_shards(regclass,integer,integer,bigint[],citus.shard_transfer_mode)
  function role_exists(name)
+ function run_command_on_all_nodes(text,boolean,boolean)
  function run_command_on_colocated_placements(regclass,regclass,text,boolean)
  function run_command_on_placements(regclass,text,boolean)
  function run_command_on_shards(regclass,text,boolean)
@@ -271,9 +273,10 @@ ORDER BY 1;
  view citus_shard_indexes_on_worker
  view citus_shards
  view citus_shards_on_worker
+ view citus_stat_activity
  view citus_stat_statements
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(259 rows)
+(262 rows)
 

@@ -1021,14 +1021,17 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | function citus_run_local_command(text) void
                                                                                                                       | function citus_shard_indexes_on_worker() SETOF record
                                                                                                                       | function citus_shards_on_worker() SETOF record
+                                                                                                                      | function citus_stat_activity() SETOF record
                                                                                                                       | function create_distributed_function(regprocedure,text,text,boolean) void
                                                                                                                       | function pg_cancel_backend(bigint) boolean
                                                                                                                       | function pg_terminate_backend(bigint,bigint) boolean
+                                                                                                                      | function run_command_on_all_nodes(text,boolean,boolean) SETOF record
                                                                                                                       | function worker_create_or_replace_object(text[]) boolean
                                                                                                                       | function worker_drop_sequence_dependency(text) void
                                                                                                                       | function worker_drop_shell_table(text) void
                                                                                                                       | function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean,boolean,boolean) SETOF record
-(25 rows)
+                                                                                                                      | view citus_stat_activity
+(28 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
