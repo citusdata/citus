@@ -90,7 +90,7 @@ run_try_drop_marked_shards(PG_FUNCTION_ARGS)
 /*
  * IsActiveTestShardPlacement checks if the dummy shard placement created in tests
  * are labelled as active. Note that this function does not check if the worker is also
- * active, because
+ * active, because the dummy test workers are not registered as actual workers.
  */
 static inline bool
 IsActiveTestShardPlacement(ShardPlacement *shardPlacement)
@@ -154,7 +154,6 @@ shard_placement_rebalance_array(PG_FUNCTION_ARGS)
 			shardPlacementList = SortList(shardPlacementList, CompareShardPlacements);
 			shardPlacementListList = lappend(shardPlacementListList,
 											 FilterShardPlacementList(shardPlacementList,
-																	  &
 																	  IsActiveTestShardPlacement));
 			shardPlacementList = NIL;
 		}
@@ -308,7 +307,7 @@ shard_placement_replication_array(PG_FUNCTION_ARGS)
 	}
 
 	List *activeShardPlacementList = FilterShardPlacementList(shardPlacementList,
-															  &IsActiveTestShardPlacement);
+															  IsActiveTestShardPlacement);
 
 	/* sort the lists to make the function more deterministic */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
