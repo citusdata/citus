@@ -1006,6 +1006,15 @@ ApplyAddToDependencyList(ObjectAddressCollector *collector,
 		return;
 	}
 
+	/*
+	 * Objects with the id smaller than FirstNormalObjectId should be created within
+	 * initdb. So, we should skip such objects.
+	 */
+	if (address.objectId < FirstNormalObjectId)
+	{
+		return;
+	}
+
 	CollectObjectAddress(collector, &address);
 }
 
