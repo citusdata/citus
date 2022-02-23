@@ -14,7 +14,7 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
   AND deptype = 'e'
   AND e.extname='citus'
 ORDER BY 1;
-                                                   description
+                                                       description
 ---------------------------------------------------------------------
  access method columnar
  event trigger citus_cascade_to_partition
@@ -225,7 +225,7 @@ ORDER BY 1;
  function worker_partial_agg(oid,anyelement)
  function worker_partial_agg_ffunc(internal)
  function worker_partial_agg_sfunc(internal,oid,anyelement)
- function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean)
+ function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean,boolean,boolean)
  function worker_partitioned_relation_size(regclass)
  function worker_partitioned_relation_total_size(regclass)
  function worker_partitioned_table_size(regclass)

@@ -67,6 +67,7 @@ ALTER TABLE abcd DROP COLUMN a;
 -- connection worker and get ready for the tests
 \c - - - :worker_1_port
 SET search_path TO local_shard_execution;
+SET citus.enable_unique_job_ids TO off;
 
 -- returns true of the distribution key filter
 -- on the distributed tables (e.g., WHERE key = 1), we'll hit a shard

@@ -44,12 +44,8 @@
 #include "distributed/worker_transaction.h"
 
 
-static List * CreateTemporarySchemasForMergeTasks(Job *topLevelJob);
 static List * ExtractJobsInJobTree(Job *job);
 static void TraverseJobTree(Job *curJob, List **jobs);
-static char * GenerateCreateSchemasCommand(List *jobIds, char *schemaOwner);
-static char * GenerateJobCommands(List *jobIds, char *templateCommand);
-static char * GenerateDeleteJobsCommand(List *jobIds);
 
 
 /*
@@ -60,50 +56,11 @@ static char * GenerateDeleteJobsCommand(List *jobIds);
 List *
 ExecuteDependentTasks(List *topLevelTasks, Job *topLevelJob)
 {
-	EnsureNoModificationsHaveBeenDone();
-
 	List *allTasks = CreateTaskListForJobTree(topLevelTasks);
-
-	EnsureCompatibleLocalExecutionState(allTasks);
-
-	List *jobIds = CreateTemporarySchemasForMergeTasks(topLevelJob);
+	List *jobIds = ExtractJobsInJobTree(topLevelJob);
 
 	ExecuteTasksInDependencyOrder(allTasks, topLevelTasks, jobIds);
 
-	return jobIds;
-}
-
-
-/*
- * EnsureCompatibleLocalExecutionState makes sure that the tasks won't have
- * any visibility problems because of local execution.
- */
-void
-EnsureCompatibleLocalExecutionState(List *taskList)
-{
-	/*
-	 * We have LOCAL_EXECUTION_REQUIRED check here to avoid unnecessarily
-	 * iterating the task list in AnyTaskAccessesLocalNode.
-	 */
-	if (GetCurrentLocalExecutionStatus() == LOCAL_EXECUTION_REQUIRED &&
-		AnyTaskAccessesLocalNode(taskList))
-	{
-		ErrorIfTransactionAccessedPlacementsLocally();
-	}
-}
-
-
-/*
- * CreateTemporarySchemasForMergeTasks creates the necessary schemas that will be used
- * later in each worker. Single transaction is used to create the schemas.
- */
-static List *
-CreateTemporarySchemasForMergeTasks(Job *topLeveLJob)
-{
-	List *jobIds = ExtractJobsInJobTree(topLeveLJob);
-	char *createSchemasCommand = GenerateCreateSchemasCommand(jobIds, CurrentUserName());
-	SendCommandToWorkersInParallel(ALL_SHARD_NODES, createSchemasCommand,
-								   CitusExtensionOwnerName());
 	return jobIds;
 }
 
@@ -138,68 +95,4 @@ TraverseJobTree(Job *curJob, List **jobIds)
 	{
 		TraverseJobTree(childJob, jobIds);
 	}
-}
-
-
-/*
- * GenerateCreateSchemasCommand returns concatanated create schema commands.
- */
-static char *
-GenerateCreateSchemasCommand(List *jobIds, char *ownerName)
-{
-	StringInfo createSchemaCommand = makeStringInfo();
-
-	uint64 *jobIdPointer = NULL;
-	foreach_ptr(jobIdPointer, jobIds)
-	{
-		uint64 jobId = *jobIdPointer;
-		appendStringInfo(createSchemaCommand, WORKER_CREATE_SCHEMA_QUERY,
-						 jobId, quote_literal_cstr(ownerName));
-	}
-	return createSchemaCommand->data;
-}
-
-
-/*
- * GenerateJobCommands returns concatenated commands with the given template
- * command for each job id from the given job ids. The returned command is
- * exactly list_length(jobIds) subcommands.
- *  E.g create_schema(jobId1); create_schema(jobId2); ...
- * This way we can send the command in just one latency to a worker.
- */
-static char *
-GenerateJobCommands(List *jobIds, char *templateCommand)
-{
-	StringInfo createSchemaCommand = makeStringInfo();
-
-	uint64 *jobIdPointer = NULL;
-	foreach_ptr(jobIdPointer, jobIds)
-	{
-		uint64 jobId = *jobIdPointer;
-		appendStringInfo(createSchemaCommand, templateCommand, jobId);
-	}
-	return createSchemaCommand->data;
-}
-
-
-/*
- * DoRepartitionCleanup removes the temporary job directories and schemas that are
- * used for repartition queries for the given job ids.
- */
-void
-DoRepartitionCleanup(List *jobIds)
-{
-	SendCommandToWorkersOptionalInParallel(ALL_SHARD_NODES, GenerateDeleteJobsCommand(
-											   jobIds),
-										   CitusExtensionOwnerName());
-}
-
-
-/*
- * GenerateDeleteJobsCommand returns concatanated remove job dir commands.
- */
-static char *
-GenerateDeleteJobsCommand(List *jobIds)
-{
-	return GenerateJobCommands(jobIds, WORKER_REPARTITION_CLEANUP_QUERY);
 }

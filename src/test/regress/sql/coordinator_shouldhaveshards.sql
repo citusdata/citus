@@ -112,7 +112,7 @@ SET citus.enable_repartition_joins TO ON;
 SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
 
 BEGIN;
-SET citus.enable_repartition_joins TO ON;
+SET citus.enable_unique_job_ids TO off;
 SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
 END;
 

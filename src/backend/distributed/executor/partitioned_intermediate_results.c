@@ -86,6 +86,9 @@ typedef struct PartitionedResultDestReceiver
 
 	/* keeping track of which partitionDestReceivers have been started */
 	Bitmapset *startedDestReceivers;
+
+	/* whether NULL partition column values are allowed */
+	bool allowNullPartitionColumnValues;
 } PartitionedResultDestReceiver;
 
 static Portal StartPortalForQueryExecution(const char *queryString);
@@ -99,7 +102,8 @@ static DestReceiver * CreatePartitionedResultDestReceiver(int partitionColumnInd
 														  shardSearchInfo,
 														  DestReceiver **
 														  partitionedDestReceivers,
-														  bool lazyStartup);
+														  bool lazyStartup,
+														  bool allowNullPartitionValues);
 static void PartitionedResultDestReceiverStartup(DestReceiver *dest, int operation,
 												 TupleDesc inputTupleDescriptor);
 static bool PartitionedResultDestReceiverReceive(TupleTableSlot *slot,
@@ -148,6 +152,8 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 	int32 maxValuesCount = ArrayObjectCount(maxValuesArray);
 
 	bool binaryCopy = PG_GETARG_BOOL(6);
+	bool allowNullPartitionColumnValues = PG_GETARG_BOOL(7);
+	bool generateEmptyResults = PG_GETARG_BOOL(8);
 
 	if (!IsMultiStatementTransaction())
 	{
@@ -226,13 +232,21 @@ worker_partition_query_result(PG_FUNCTION_ARGS)
 		dests[partitionIndex] = partitionDest;
 	}
 
-	const bool lazyStartup = true;
+	/*
+	 * If we are asked to generated empty results, use non-lazy startup.
+	 *
+	 * The rStartup of the FileDestReceiver will be called for all partitions
+	 * and generate empty files, which may still have binary header/footer.
+	 */
+	const bool lazyStartup = !generateEmptyResults;
+
 	DestReceiver *dest = CreatePartitionedResultDestReceiver(
 		partitionColumnIndex,
 		partitionCount,
 		shardSearchInfo,
 		dests,
-		lazyStartup);
+		lazyStartup,
+		allowNullPartitionColumnValues);
 
 	/* execute the query */
 	PortalRun(portal, FETCH_ALL, false, true, dest, dest, NULL);
@@ -390,7 +404,8 @@ CreatePartitionedResultDestReceiver(int partitionColumnIndex,
 									int partitionCount,
 									CitusTableCacheEntry *shardSearchInfo,
 									DestReceiver **partitionedDestReceivers,
-									bool lazyStartup)
+									bool lazyStartup,
+									bool allowNullPartitionColumnValues)
 {
 	PartitionedResultDestReceiver *resultDest =
 		palloc0(sizeof(PartitionedResultDestReceiver));
@@ -409,6 +424,7 @@ CreatePartitionedResultDestReceiver(int partitionColumnIndex,
 	resultDest->partitionDestReceivers = partitionedDestReceivers;
 	resultDest->startedDestReceivers = NULL;
 	resultDest->lazyStartup = lazyStartup;
+	resultDest->allowNullPartitionColumnValues = allowNullPartitionColumnValues;
 
 	return (DestReceiver *) resultDest;
 }
@@ -458,23 +474,40 @@ PartitionedResultDestReceiverReceive(TupleTableSlot *slot, DestReceiver *dest)
 	Datum *columnValues = slot->tts_values;
 	bool *columnNulls = slot->tts_isnull;
 
+	int partitionIndex;
+
 	if (columnNulls[self->partitionColumnIndex])
 	{
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-						errmsg("the partition column value cannot be NULL")));
+		if (self->allowNullPartitionColumnValues)
+		{
+			/*
+			 * NULL values go into the first partition for both hash- and range-
+			 * partitioning, since that is the only way to guarantee that there is
+			 * always a partition for NULL and that it is always the same partition.
+			 */
+			partitionIndex = 0;
+		}
+		else
+		{
+			ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+							errmsg("the partition column value cannot be NULL")));
+		}
 	}
-
-	Datum partitionColumnValue = columnValues[self->partitionColumnIndex];
-	ShardInterval *shardInterval = FindShardInterval(partitionColumnValue,
-													 self->shardSearchInfo);
-	if (shardInterval == NULL)
+	else
 	{
-		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
-						errmsg("could not find shard for partition column "
-							   "value")));
+		Datum partitionColumnValue = columnValues[self->partitionColumnIndex];
+		ShardInterval *shardInterval = FindShardInterval(partitionColumnValue,
+														 self->shardSearchInfo);
+		if (shardInterval == NULL)
+		{
+			ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+							errmsg("could not find shard for partition column "
+								   "value")));
+		}
+
+		partitionIndex = shardInterval->shardIndex;
 	}
 
-	int partitionIndex = shardInterval->shardIndex;
 	DestReceiver *partitionDest = self->partitionDestReceivers[partitionIndex];
 
 	/* check if this partitionDestReceiver has been started before, start if not */
