@@ -343,3 +343,5 @@ ALTER VIEW citus.citus_lock_waits SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
 
 RESET search_path;
+
+DROP FUNCTION IF EXISTS pg_catalog.extract_node_id_from_global_pid;

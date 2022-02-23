@@ -131,6 +131,7 @@ ORDER BY 1;
  function drop_old_time_partitions(regclass,timestamp with time zone)
  function dump_global_wait_edges()
  function dump_local_wait_edges()
+ function extract_node_id_from_global_pid(bigint)
  function fetch_intermediate_results(text[],text,integer)
  function fix_all_partition_shard_index_names()
  function fix_partition_shard_index_names(regclass)
@@ -272,5 +273,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(256 rows)
+(257 rows)
 

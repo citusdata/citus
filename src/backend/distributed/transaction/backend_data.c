@@ -98,6 +98,7 @@ PG_FUNCTION_INFO_V1(assign_distributed_transaction_id);
 PG_FUNCTION_INFO_V1(get_current_transaction_id);
 PG_FUNCTION_INFO_V1(get_global_active_transactions);
 PG_FUNCTION_INFO_V1(get_all_active_transactions);
+PG_FUNCTION_INFO_V1(extract_node_id_from_global_pid);
 
 
 /*
@@ -348,6 +349,22 @@ get_all_active_transactions(PG_FUNCTION_ARGS)
 	StoreAllActiveTransactions(tupleStore, tupleDescriptor);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * extract_node_id_from_global_pid returns the originator node if for the given global pid
+ */
+Datum
+extract_node_id_from_global_pid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	uint64 globalPID = PG_GETARG_INT64(0);
+
+	int nodeId = ExtractNodeIdFromGlobalPID(globalPID);
+
+	PG_RETURN_INT32(nodeId);
 }
 
 

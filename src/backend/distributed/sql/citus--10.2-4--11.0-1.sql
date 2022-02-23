@@ -79,3 +79,5 @@ BEGIN
       UPDATE pg_dist_node_metadata SET metadata=jsonb_set(metadata, '{partitioned_citus_table_exists_pre_11}', to_jsonb(partitioned_table_exists), true);
 END;
 $$;
+
+#include "udfs/extract_node_id_from_global_pid/11.0-1.sql"
