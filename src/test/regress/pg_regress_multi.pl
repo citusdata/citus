@@ -456,6 +456,7 @@ if ($majorversion >= "14") {
 
 # Citus options set for the tests
 push(@pgOptions, "citus.shard_count=4");
+push(@pgOptions, "citus.enable_repartition_joins = on");
 push(@pgOptions, "citus.max_adaptive_executor_pool_size=4");
 push(@pgOptions, "citus.defer_shard_delete_interval=-1");
 push(@pgOptions, "citus.repartition_join_bucket_count_per_node=2");

@@ -903,6 +903,7 @@ static JoinOrderNode *
 LocalJoin(JoinOrderNode *currentJoinNode, TableEntry *candidateTable,
 		  List *applicableJoinClauses, JoinType joinType)
 {
+	return NULL;
 	Oid relationId = candidateTable->relationId;
 	uint32 tableId = candidateTable->rangeTableId;
 	Var *candidatePartitionColumn = PartitionColumn(relationId, tableId);
