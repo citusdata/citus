@@ -20,9 +20,11 @@
 #include "distributed/citus_ruleutils.h"
 #include "distributed/connection_management.h"
 #include "distributed/listutils.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_physical_planner.h"
 #include "distributed/shard_cleaner.h"
 #include "distributed/shard_rebalancer.h"
+#include "distributed/relay_utility.h"
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
@@ -86,6 +88,18 @@ run_try_drop_marked_shards(PG_FUNCTION_ARGS)
 
 
 /*
+ * IsActiveTestShardPlacement checks if the dummy shard placement created in tests
+ * are labelled as active. Note that this function does not check if the worker is also
+ * active, because
+ */
+static inline bool
+IsActiveTestShardPlacement(ShardPlacement *shardPlacement)
+{
+	return shardPlacement->shardState == SHARD_STATE_ACTIVE;
+}
+
+
+/*
  * shard_placement_rebalance_array returns a list of operations which can make a
  * cluster consisting of given shard placements and worker nodes balanced with
  * respect to the given threshold. Threshold is a value between 0 and 1 which
@@ -138,7 +152,10 @@ shard_placement_rebalance_array(PG_FUNCTION_ARGS)
 		if (shardPlacementTestInfo->nextColocationGroup)
 		{
 			shardPlacementList = SortList(shardPlacementList, CompareShardPlacements);
-			shardPlacementListList = lappend(shardPlacementListList, shardPlacementList);
+			shardPlacementListList = lappend(shardPlacementListList,
+											 FilterShardPlacementList(shardPlacementList,
+																	  &
+																	  IsActiveTestShardPlacement));
 			shardPlacementList = NIL;
 		}
 		shardPlacementList = lappend(shardPlacementList,
@@ -290,12 +307,15 @@ shard_placement_replication_array(PG_FUNCTION_ARGS)
 									 shardPlacementTestInfo->placement);
 	}
 
+	List *activeShardPlacementList = FilterShardPlacementList(shardPlacementList,
+															  &IsActiveTestShardPlacement);
+
 	/* sort the lists to make the function more deterministic */
 	workerNodeList = SortList(workerNodeList, CompareWorkerNodes);
-	shardPlacementList = SortList(shardPlacementList, CompareShardPlacements);
+	activeShardPlacementList = SortList(activeShardPlacementList, CompareShardPlacements);
 
 	List *placementUpdateList = ReplicationPlacementUpdates(workerNodeList,
-															shardPlacementList,
+															activeShardPlacementList,
 															shardReplicationFactor);
 	ArrayType *placementUpdateJsonArray = PlacementUpdateListToJsonArray(
 		placementUpdateList);
@@ -425,6 +445,9 @@ JsonArrayToWorkerTestInfoList(ArrayType *workerNodeJsonArrayObject)
 
 		workerTestInfo->capacity = JsonFieldValueUInt64Default(workerNodeJson,
 															   "capacity", 1);
+
+		workerNode->isActive = JsonFieldValueBoolDefault(workerNodeJson,
+														 "isActive", true);
 
 		workerTestInfoList = lappend(workerTestInfoList, workerTestInfo);
 		char *disallowedShardsString = JsonFieldValueString(

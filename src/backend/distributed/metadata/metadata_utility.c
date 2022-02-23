@@ -1292,6 +1292,47 @@ NodeGroupHasShardPlacements(int32 groupId, bool onlyConsiderActivePlacements)
 
 
 /*
+ * IsActiveShardPlacement checks if the shard placement is labelled as
+ * active, and that it is placed in an active worker.
+ * Expects shard worker to not be NULL.
+ */
+bool
+IsActiveShardPlacement(ShardPlacement *shardPlacement)
+{
+	WorkerNode *workerNode =
+		FindWorkerNode(shardPlacement->nodeName, shardPlacement->nodePort);
+
+	Assert(workerNode != NULL);
+
+	return shardPlacement->shardState == SHARD_STATE_ACTIVE &&
+		   workerNode->isActive;
+}
+
+
+/*
+ * FilterShardPlacementList filters a list of shard placements based on a filter.
+ * Keep only the shard for which the filter function returns true.
+ */
+List *
+FilterShardPlacementList(List *shardPlacementList, bool (*filter)(ShardPlacement *))
+{
+	List *filteredShardPlacementList = NIL;
+	ShardPlacement *shardPlacement = NULL;
+
+	foreach_ptr(shardPlacement, shardPlacementList)
+	{
+		if (filter(shardPlacement))
+		{
+			filteredShardPlacementList = lappend(filteredShardPlacementList,
+												 shardPlacement);
+		}
+	}
+
+	return filteredShardPlacementList;
+}
+
+
+/*
  * ActiveShardPlacementListOnGroup returns a list of active shard placements
  * that are sitting on group with groupId for given shardId.
  */
@@ -1323,53 +1364,39 @@ ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId)
 List *
 ActiveShardPlacementList(uint64 shardId)
 {
-	List *activePlacementList = NIL;
 	List *shardPlacementList =
 		ShardPlacementListIncludingOrphanedPlacements(shardId);
 
-	ShardPlacement *shardPlacement = NULL;
-	foreach_ptr(shardPlacement, shardPlacementList)
-	{
-		WorkerNode *workerNode =
-			FindWorkerNode(shardPlacement->nodeName, shardPlacement->nodePort);
-
-		/*
-		 * We have already resolved the placement to node, so would have
-		 * errored out earlier.
-		 */
-		Assert(workerNode != NULL);
-
-		if (shardPlacement->shardState == SHARD_STATE_ACTIVE &&
-			workerNode->isActive)
-		{
-			activePlacementList = lappend(activePlacementList, shardPlacement);
-		}
-	}
+	List *activePlacementList = FilterShardPlacementList(shardPlacementList,
+														 IsActiveShardPlacement);
 
 	return SortList(activePlacementList, CompareShardPlacementsByWorker);
 }
 
 
 /*
+ * IsShardPlacementNotOrphaned checks returns true if a shard placement is not orphaned
+ * Orphaned shards are shards marked to be deleted at a later point (shardstate = 4).
+ */
+static inline bool
+IsShardPlacementNotOrphaned(ShardPlacement *shardPlacement)
+{
+	return shardPlacement->shardState != SHARD_STATE_TO_DELETE;
+}
+
+
+/*
  * ShardPlacementListWithoutOrphanedPlacements returns shard placements exluding
- * the ones that are orphaned, because they are marked to be deleted at a later
- * point (shardstate = 4).
+ * the ones that are orphaned.
  */
 List *
 ShardPlacementListWithoutOrphanedPlacements(uint64 shardId)
 {
-	List *activePlacementList = NIL;
 	List *shardPlacementList =
 		ShardPlacementListIncludingOrphanedPlacements(shardId);
 
-	ShardPlacement *shardPlacement = NULL;
-	foreach_ptr(shardPlacement, shardPlacementList)
-	{
-		if (shardPlacement->shardState != SHARD_STATE_TO_DELETE)
-		{
-			activePlacementList = lappend(activePlacementList, shardPlacement);
-		}
-	}
+	List *activePlacementList = FilterShardPlacementList(shardPlacementList,
+														 IsShardPlacementNotOrphaned);
 
 	return SortList(activePlacementList, CompareShardPlacementsByWorker);
 }
