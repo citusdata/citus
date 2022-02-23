@@ -530,10 +530,13 @@ PreprocessDefineCollationStmt(Node *node, const char *queryString,
 {
 	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
 
-	if (ShouldPropagateDefineCollationStmt())
+	if (!ShouldPropagateDefineCollationStmt())
 	{
-		EnsureCoordinator();
+		return NIL;
 	}
+
+	EnsureCoordinator();
+	EnsureSequentialMode(OBJECT_COLLATION);
 
 	return NIL;
 }
