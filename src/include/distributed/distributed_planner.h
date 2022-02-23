@@ -222,6 +222,8 @@ extern List * ExtractRangeTableEntryList(Query *query);
 extern bool NeedsDistributedPlanning(Query *query);
 extern List * TranslatedVarsForRteIdentity(int rteIdentity);
 extern struct DistributedPlan * GetDistributedPlan(CustomScan *node);
+extern PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
+extern void PopPlannerRestrictionContext(void);
 extern void multi_relation_restriction_hook(PlannerInfo *root, RelOptInfo *relOptInfo,
 											Index restrictionIndex, RangeTblEntry *rte);
 extern void multi_join_restriction_hook(PlannerInfo *root,
@@ -236,6 +238,7 @@ extern void EnsurePartitionTableNotReplicated(Oid relationId);
 extern Node * ResolveExternalParams(Node *inputNode, ParamListInfo boundParams);
 extern bool IsMultiTaskPlan(struct DistributedPlan *distributedPlan);
 extern RangeTblEntry * RemoteScanRangeTableEntry(List *columnNameList);
+extern int AssignRTEIdentities(List *rangeTableList, int rteIdCounter);
 extern int GetRTEIdentity(RangeTblEntry *rte);
 extern bool GetOriginalInh(RangeTblEntry *rte);
 extern LOCKMODE GetQueryLockMode(Query *query);

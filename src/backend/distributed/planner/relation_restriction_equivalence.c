@@ -1149,37 +1149,13 @@ GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext *
 		{
 			RestrictInfo *rinfo = (RestrictInfo *) lfirst(restrictionInfoList);
 			Expr *restrictionClause = rinfo->clause;
+			Var *leftVar = NULL;
+			Var *rightVar = NULL;
 
-			if (!IsA(restrictionClause, OpExpr))
+			if (!IsColumnEquiJoinClause(restrictionClause, &leftVar, &rightVar))
 			{
 				continue;
 			}
-
-			OpExpr *restrictionOpExpr = (OpExpr *) restrictionClause;
-			if (list_length(restrictionOpExpr->args) != 2)
-			{
-				continue;
-			}
-			if (!OperatorImplementsEquality(restrictionOpExpr->opno))
-			{
-				continue;
-			}
-
-			Node *leftNode = linitial(restrictionOpExpr->args);
-			Node *rightNode = lsecond(restrictionOpExpr->args);
-
-			/* we also don't want implicit coercions */
-			Expr *strippedLeftExpr = (Expr *) strip_implicit_coercions((Node *) leftNode);
-			Expr *strippedRightExpr = (Expr *) strip_implicit_coercions(
-				(Node *) rightNode);
-
-			if (!(IsA(strippedLeftExpr, Var) && IsA(strippedRightExpr, Var)))
-			{
-				continue;
-			}
-
-			Var *leftVar = (Var *) strippedLeftExpr;
-			Var *rightVar = (Var *) strippedRightExpr;
 
 			AttributeEquivalenceClass *attributeEquivalence = palloc0(
 				sizeof(AttributeEquivalenceClass));
@@ -1198,6 +1174,47 @@ GenerateAttributeEquivalencesForJoinRestrictions(JoinRestrictionContext *
 	}
 
 	return attributeEquivalenceList;
+}
+
+
+/*
+ * IsColumEquiJoinClause returns whether a given clause is of the form
+ * <left var> = <right var> and sets leftVar and rightVar accordingly.
+ */
+bool
+IsColumnEquiJoinClause(Expr *restrictionClause, Var **leftVar, Var **rightVar)
+{
+	if (!IsA(restrictionClause, OpExpr))
+	{
+		return false;
+	}
+
+	OpExpr *restrictionOpExpr = (OpExpr *) restrictionClause;
+	if (list_length(restrictionOpExpr->args) != 2)
+	{
+		return false;
+	}
+	if (!OperatorImplementsEquality(restrictionOpExpr->opno))
+	{
+		return false;
+	}
+
+	Node *leftNode = linitial(restrictionOpExpr->args);
+	Node *rightNode = lsecond(restrictionOpExpr->args);
+
+	/* we also don't want implicit coercions */
+	Expr *strippedLeftExpr = (Expr *) strip_implicit_coercions((Node *) leftNode);
+	Expr *strippedRightExpr = (Expr *) strip_implicit_coercions((Node *) rightNode);
+
+	if (!(IsA(strippedLeftExpr, Var) && IsA(strippedRightExpr, Var)))
+	{
+		return false;
+	}
+
+	*leftVar = (Var *) strippedLeftExpr;
+	*rightVar = (Var *) strippedRightExpr;
+
+	return true;
 }
 
 

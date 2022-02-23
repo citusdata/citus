@@ -3,6 +3,8 @@
 -- bump version to 11.0-1
 #include "udfs/citus_disable_node/11.0-1.sql"
 #include "udfs/create_distributed_function/11.0-1.sql"
+#include "udfs/extract_equality_filters_from_query/11.0-1.sql"
+#include "udfs/citus_internal_null_wrapper/11.0-1.sql"
 
 #include "udfs/citus_check_connection_to_node/11.0-1.sql"
 #include "udfs/citus_check_cluster_node_health/11.0-1.sql"
