@@ -1,6 +1,9 @@
 -- citus--11.0-1--10.2-4
 
 DROP FUNCTION pg_catalog.create_distributed_function(regprocedure, text, text, bool);
+DROP FUNCTION pg_catalog.extract_equality_filters_from_query(text);
+DROP FUNCTION pg_catalog.citus_internal_null_wrapper(anyelement);
+
 CREATE FUNCTION pg_catalog.master_apply_delete_command(text)
     RETURNS integer
     LANGUAGE C STRICT

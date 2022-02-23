@@ -46,6 +46,7 @@ extern RelationRestriction * RelationRestrictionForRelation(
 	plannerRestrictionContext);
 extern JoinRestrictionContext * RemoveDuplicateJoinRestrictions(JoinRestrictionContext *
 																joinRestrictionContext);
+bool IsColumnEquiJoinClause(Expr *restrictionClause, Var **leftVar, Var **rightVar);
 
 extern bool EquivalenceListContainsRelationsEquality(List *attributeEquivalenceList,
 													 RelationRestrictionContext *

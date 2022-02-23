@@ -89,7 +89,6 @@ static PlannedStmt * TryCreateDistributedPlannedStmt(PlannedStmt *localPlan,
 static DeferredErrorMessage * DeferErrorIfPartitionTableNotSingleReplicated(Oid
 																			relationId);
 
-static int AssignRTEIdentities(List *rangeTableList, int rteIdCounter);
 static void AssignRTEIdentity(RangeTblEntry *rangeTableEntry, int rteIdentifier);
 static void AdjustPartitioningForDistributedPlanning(List *rangeTableList,
 													 bool setPartitionedTablesInherited);
@@ -114,9 +113,7 @@ static void AdjustReadIntermediateResultsCostInternal(RelOptInfo *relOptInfo,
 													  Const *resultFormatConst);
 static List * OuterPlanParamsList(PlannerInfo *root);
 static List * CopyPlanParamList(List *originalPlanParamList);
-static PlannerRestrictionContext * CreateAndPushPlannerRestrictionContext(void);
 static PlannerRestrictionContext * CurrentPlannerRestrictionContext(void);
-static void PopPlannerRestrictionContext(void);
 static void ResetPlannerRestrictionContext(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static PlannedStmt * PlanFastPathDistributedStmt(DistributedPlanningContext *planContext,
@@ -374,7 +371,7 @@ ListContainsDistributedTableRTE(List *rangeTableList,
  * Returns the next id. This can be used to call on a rangeTableList that may've
  * been partially assigned. Should be set to 1 initially.
  */
-static int
+int
 AssignRTEIdentities(List *rangeTableList, int rteIdCounter)
 {
 	ListCell *rangeTableCell = NULL;
@@ -2156,7 +2153,7 @@ CopyPlanParamList(List *originalPlanParamList)
  * plannerRestrictionContextList. Finally, the planner restriction context is
  * inserted to the beginning of the plannerRestrictionContextList and it is returned.
  */
-static PlannerRestrictionContext *
+PlannerRestrictionContext *
 CreateAndPushPlannerRestrictionContext(void)
 {
 	PlannerRestrictionContext *plannerRestrictionContext =
@@ -2237,7 +2234,7 @@ CurrentPlannerRestrictionContext(void)
  * PopPlannerRestrictionContext removes the most recently added restriction contexts from
  * the planner restriction context list. The function assumes the list is not empty.
  */
-static void
+void
 PopPlannerRestrictionContext(void)
 {
 	plannerRestrictionContextList = list_delete_first(plannerRestrictionContextList);
