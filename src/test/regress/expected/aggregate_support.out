@@ -282,6 +282,21 @@ create aggregate binstragg(text, text)(
     combinefunc=binstragg_combinefunc,
     stype=text
 );
+-- verify that the aggregate is added into pg_dist_object, on each worker
+SELECT run_command_on_workers($$SELECT count(*) from citus.pg_dist_object where objid = 'aggregate_support.binstragg'::regproc;$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1)
+ (localhost,57638,t,1)
+(2 rows)
+
+SELECT run_command_on_workers($$select count(*) from pg_aggregate where aggfnoid::text like '%binstragg%';$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1)
+ (localhost,57638,t,1)
+(2 rows)
+
 select create_distributed_function('binstragg(text,text)');
  create_distributed_function
 ---------------------------------------------------------------------
@@ -549,7 +564,6 @@ SELECT id%5, first(val ORDER BY key), last(val ORDER BY key)
 FROM aggdata GROUP BY id%5 ORDER BY id%5;
 ERROR:  unsupported aggregate function first
 -- test aggregate with stype which is not a by-value datum
--- also test our handling of the aggregate not existing on workers
 create function sumstring_sfunc(state text, x text)
 returns text immutable language plpgsql as $$
 begin return (state::float8 + x::float8)::text;
@@ -561,9 +575,20 @@ create aggregate sumstring(text) (
 	combinefunc = sumstring_sfunc,
 	initcond = '0'
 );
-select sumstring(valf::text) from aggdata where valf is not null;
-ERROR:  function "aggregate_support.sumstring(text)" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+-- verify that the aggregate is propagated
+select aggfnoid from pg_aggregate where aggfnoid::text like '%sumstring%';
+ aggfnoid
+---------------------------------------------------------------------
+ sumstring
+(1 row)
+
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%sumstring%';$$);
+             run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,aggregate_support.sumstring)
+ (localhost,57638,t,aggregate_support.sumstring)
+(2 rows)
+
 select create_distributed_function('sumstring(text)');
  create_distributed_function
 ---------------------------------------------------------------------
@@ -1041,6 +1066,123 @@ LEFT JOIN ref_table ON TRUE;
 ---------------------------------------------------------------------
    109
 (1 row)
+
+-- try createing aggregate having non-distributable dependency type
+create table dummy_tbl (a int);
+create function dummy_fnc(a dummy_tbl, d double precision) RETURNS dummy_tbl
+    AS $$SELECT 1;$$ LANGUAGE sql;
+WARNING:  Citus can't distribute function "dummy_fnc" having dependency on non-distributed relation "dummy_tbl"
+DETAIL:  Function will be created only locally
+HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
+-- should give warning and create aggregate local only
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+WARNING:  Citus can't distribute aggregate "dependent_agg" having dependency on non-distributed relation "dummy_tbl"
+DETAIL:  Aggregate will be created only locally
+HINT:  To distribute aggregate, distribute dependent relations first. Then, re-create the aggregate
+-- clear and try again with distributed table
+DROP TABLE dummy_tbl CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function dummy_fnc(dummy_tbl,double precision)
+drop cascades to function dependent_agg(double precision)
+create table dummy_tbl (a int);
+SELECT create_distributed_table('dummy_tbl','a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+create function dummy_fnc(a dummy_tbl, d double precision) RETURNS dummy_tbl
+    AS $$SELECT 1;$$ LANGUAGE sql;
+-- test in tx block
+-- shouldn't distribute, as citus.create_object_propagation is set to deferred
+BEGIN;
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+COMMIT;
+-- verify not distributed
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"")
+ (localhost,57638,t,"")
+(2 rows)
+
+drop aggregate dependent_agg ( double precision);
+-- now try with create_object_propagation = immediate
+SET citus.create_object_propagation TO immediate;
+-- should distribute, as citus.create_object_propagation is set to immediate
+-- will switch to sequential mode
+BEGIN;
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+COMMIT;
+-- verify distributed
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+               run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,aggregate_support.dependent_agg)
+ (localhost,57638,t,aggregate_support.dependent_agg)
+(2 rows)
+
+drop aggregate dependent_agg ( double precision);
+-- now try with create_object_propagation = automatic
+SET citus.create_object_propagation TO automatic;
+-- should distribute, as citus.create_object_propagation is set to automatic
+-- will switch to sequential mode
+BEGIN;
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+COMMIT;
+-- verify distributed
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+               run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,aggregate_support.dependent_agg)
+ (localhost,57638,t,aggregate_support.dependent_agg)
+(2 rows)
+
+-- verify that the aggregate is added into pg_dist_object, on each worker
+SELECT run_command_on_workers($$SELECT count(*) from citus.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1)
+ (localhost,57638,t,1)
+(2 rows)
+
+RESET citus.create_object_propagation;
+-- drop and test outside of tx block
+drop aggregate dependent_agg (float8);
+-- verify that the aggregate is removed from pg_dist_object, on each worker
+SELECT run_command_on_workers($$SELECT count(*) from citus.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
+                                  run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,f,"ERROR:  function ""aggregate_support.dependent_agg"" does not exist")
+ (localhost,57638,f,"ERROR:  function ""aggregate_support.dependent_agg"" does not exist")
+(2 rows)
+
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+--verify
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+               run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,aggregate_support.dependent_agg)
+ (localhost,57638,t,aggregate_support.dependent_agg)
+(2 rows)
+
+DROP TABLE dummy_tbl CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function dummy_fnc(dummy_tbl,double precision)
+drop cascades to function dependent_agg(double precision)
+SET citus.create_object_propagation TO automatic;
+begin;
+    create type typ1 as (a int);
+    create or replace function fnagg(a typ1, d double precision) RETURNS typ1 AS $$SELECT 1;$$LANGUAGE sql;
+    create aggregate dependent_agg (float8) (stype=typ1, sfunc=fnagg);
+commit;
+RESET citus.create_object_propagation;
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+               run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,aggregate_support.dependent_agg)
+ (localhost,57638,t,aggregate_support.dependent_agg)
+(2 rows)
 
 set client_min_messages to error;
 drop schema aggregate_support cascade;

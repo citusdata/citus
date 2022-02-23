@@ -7,6 +7,15 @@ SELECT citus_remove_node('localhost', :worker_1_port);
 
 (1 row)
 
+-- not related, but added here to test propagation of aggregates
+-- to newly added nodes
+CREATE AGGREGATE array_agg (anynonarray)
+(
+    sfunc = array_agg_transfn,
+    stype = internal,
+    finalfunc = array_agg_finalfn,
+    finalfunc_extra
+);
 -- create schema, extension and foreign server while the worker is removed
 SET citus.enable_ddl_propagation TO OFF;
 CREATE SCHEMA test_dependent_schema;
@@ -26,6 +35,20 @@ NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipp
  ?column?
 ---------------------------------------------------------------------
         1
+(1 row)
+
+-- verify that the aggregate is propagated to the new node
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%propagate_foreign_server.array_agg%';$$);
+                 run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57638,t,propagate_foreign_server.array_agg)
+(1 row)
+
+-- verify that the aggregate is added top pg_dist_object on the new node
+SELECT run_command_on_workers($$SELECT count(*) from citus.pg_dist_object where objid = 'propagate_foreign_server.array_agg'::regproc;$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57638,t,1)
 (1 row)
 
 SELECT citus_add_local_table_to_metadata('foreign_table');
@@ -163,4 +186,6 @@ ERROR:  operation is not allowed on this node
 HINT:  Connect to the coordinator and run it again.
 \c - - - :master_port
 DROP SCHEMA propagate_foreign_server CASCADE;
-NOTICE:  drop cascades to extension postgres_fdw
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to function propagate_foreign_server.array_agg(anynonarray)
+drop cascades to extension postgres_fdw
