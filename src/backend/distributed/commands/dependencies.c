@@ -501,7 +501,7 @@ ShouldPropagateCreateInCurrentTransaction()
 
 	switch (DDLPropagationMode)
 	{
-		case DDL_PROPAGATION_PARALLELISM:
+		case CREATE_OBJECT_PROPAGATION_DEFERRED:
 		{
 			/*
 			 * We prefer parallelism at this point. Since we did not already return while
@@ -511,7 +511,7 @@ ShouldPropagateCreateInCurrentTransaction()
 			return false;
 		}
 
-		case DDL_PROPAGATION_OPTIMISTIC:
+		case CREATE_OBJECT_PROPAGATION_AUTOMATIC:
 		{
 			/*
 			 * When we run in optimistic mode we want to switch to sequential mode, only
@@ -531,7 +531,7 @@ ShouldPropagateCreateInCurrentTransaction()
 			return true;
 		}
 
-		case DDL_PROPAGATION_ALWAYS:
+		case CREATE_OBJECT_PROPAGATION_IMMEDIATE:
 		{
 			return true;
 		}

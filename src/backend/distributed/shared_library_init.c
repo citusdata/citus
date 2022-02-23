@@ -218,11 +218,11 @@ static const struct config_enum_entry explain_analyze_sort_method_options[] = {
 	{ NULL, 0, false }
 };
 
-static const struct config_enum_entry ddl_propagation_mode_options[] = {
-		{"parallelism", DDL_PROPAGATION_PARALLELISM, false},
-		{"optimistic",  DDL_PROPAGATION_OPTIMISTIC,  false},
-		{"always",      DDL_PROPAGATION_ALWAYS,      false},
-		{NULL,          0,                           false}
+static const struct config_enum_entry create_object_propagation_options[] = {
+	{"deferred",  CREATE_OBJECT_PROPAGATION_DEFERRED,  false},
+	{"automatic", CREATE_OBJECT_PROPAGATION_AUTOMATIC, false},
+	{"immediate", CREATE_OBJECT_PROPAGATION_IMMEDIATE, false},
+	{NULL,        0,                                   false}
 };
 
 /* *INDENT-ON* */
@@ -677,7 +677,7 @@ RegisterCitusConfigVariables(void)
 		NULL, NULL, NULL);
 
 	DefineCustomEnumVariable(
-		"citus.ddl_propagation_mode",
+		"citus.create_object_propagation",
 		gettext_noop("Controls the behavior of CREATE statements in transactions for "
 					 "supported objects"),
 		gettext_noop("When creating new objects in transactions this setting is used to "
@@ -689,7 +689,7 @@ RegisterCitusConfigVariables(void)
 					 "off performance for full transactional consistency on the creation "
 					 "of new objects."),
 		&DDLPropagationMode,
-		DDL_PROPAGATION_PARALLELISM, ddl_propagation_mode_options,
+		CREATE_OBJECT_PROPAGATION_DEFERRED, create_object_propagation_options,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
