@@ -87,10 +87,11 @@ CitusSignalBackend(uint64 globalPID, uint64 timeout, int sig)
 	}
 #endif
 
-	int nodeId = ExtractNodeIdFromGlobalPID(globalPID);
+	bool missingOk = false;
+	int nodeId = ExtractNodeIdFromGlobalPID(globalPID, missingOk);
 	int processId = ExtractProcessIdFromGlobalPID(globalPID);
 
-	WorkerNode *workerNode = FindNodeWithNodeId(nodeId);
+	WorkerNode *workerNode = FindNodeWithNodeId(nodeId, missingOk);
 
 	StringInfo cancelQuery = makeStringInfo();
 
