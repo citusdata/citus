@@ -486,22 +486,29 @@ ShouldPropagateCreateInCurrentTransaction()
 		return true;
 	}
 
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	{
+		/*
+		 * If we are in a transaction that is already switched to sequential, either by
+		 * the user, or automatically by an other command, we will always propagate the
+		 * creation of new objects to the workers.
+		 *
+		 * This guarantees no strange anomalies when the transaction aborts or on
+		 * visibility of the newly created object.
+		 */
+		return true;
+	}
+
 	switch (DDLPropagationMode)
 	{
 		case DDL_PROPAGATION_PARALLELISM:
 		{
 			/*
-			 * When we run in parallelism mode we only allow propagation of the object if
-			 * the transaction has already been switched to sequential mode.
-			 *
-			 * When in sequential mode it is safe to propagate any ddl command and it
-			 * would follow postgres' normal visibility rules for ddl commands.
-			 *
-			 * However if we are not already in sequential mode we will not propagate ddl
-			 * commands. Propagating them would entail either a switch to sequential or
-			 * throwing an error if we can't switch.
+			 * We prefer parallelism at this point. Since we did not already return while
+			 * checking for sequential mode we are still in parallel mode. We don't want
+			 * to switch that now, thus not propagating the creation.
 			 */
-			return MultiShardConnectionType == SEQUENTIAL_CONNECTION;
+			return false;
 		}
 
 		case DDL_PROPAGATION_OPTIMISTIC:
@@ -509,18 +516,13 @@ ShouldPropagateCreateInCurrentTransaction()
 			/*
 			 * When we run in optimistic mode we want to switch to sequential mode, only
 			 * if this would _not_ give an error to the user. Meaning, we either are
-			 * already in sequential mode, or there has been no parallel execution in the
-			 * current transaction block.
+			 * already in sequential mode (checked earlier), or there has been no parallel
+			 * execution in the current transaction block.
 			 *
 			 * If switching to sequential would throw an error we would stay in parallel
-			 * mode while creating new objects. We will rely on backfilling the object i
-			 * it would be used in a sharded object.
+			 * mode while creating new objects. We will rely on Citus' mechanism to ensure
+			 * the existence if the object would be used in the same transaction.
 			 */
-			if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
-			{
-				return true;
-			}
-
 			if (ParallelQueryExecutedInTransaction())
 			{
 				return false;
