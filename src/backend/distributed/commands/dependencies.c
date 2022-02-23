@@ -247,7 +247,8 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			 * The commands will be added to both shards and metadata tables via the table
 			 * creation commands.
 			 */
-			if (relKind == RELKIND_INDEX)
+			if (relKind == RELKIND_INDEX ||
+				relKind == RELKIND_PARTITIONED_INDEX)
 			{
 				return NIL;
 			}
