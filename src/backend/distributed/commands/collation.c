@@ -588,7 +588,7 @@ ShouldPropagateDefineCollationStmt()
 		return false;
 	}
 
-	if (!ShouldPropagateCreateInCurrentTransaction())
+	if (!ShouldPropagateCreate())
 	{
 		return false;
 	}

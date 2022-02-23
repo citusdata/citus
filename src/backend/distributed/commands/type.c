@@ -1151,7 +1151,7 @@ ShouldPropagateTypeCreate()
 	 * this type will be used as a column in a table that will be created and distributed
 	 * in this same transaction.
 	 */
-	if (!ShouldPropagateCreateInCurrentTransaction())
+	if (!ShouldPropagateCreate())
 	{
 		return false;
 	}

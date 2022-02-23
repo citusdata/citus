@@ -462,9 +462,8 @@ ShouldPropagate(void)
 
 
 /*
- * ShouldPropagateCreateInCurrentTransaction returns based on configuration and the
- * current state of the transaction if Citus needs to propagate the creation of new
- * objects.
+ * ShouldPropagateCreate returns based the current state of the session and policies if
+ * Citus needs to propagate the creation of new objects.
  *
  * Creation of objects on other nodes could be postponed till the object is actually used
  * in a sharded object (eg. distributed table or index on a distributed table). In certain
@@ -473,7 +472,7 @@ ShouldPropagate(void)
  * the object is actually used.
  */
 bool
-ShouldPropagateCreateInCurrentTransaction()
+ShouldPropagateCreate()
 {
 	if (!IsMultiStatementTransaction())
 	{
