@@ -37,11 +37,11 @@ pg_cancel_backend(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	uint64 pid = PG_GETARG_INT64(0);
+	uint64 globalPID = PG_GETARG_INT64(0);
 
 	int sig = SIGINT;
 	uint64 timeout = 0;
-	bool success = CitusSignalBackend(pid, timeout, sig);
+	bool success = CitusSignalBackend(globalPID, timeout, sig);
 
 	PG_RETURN_BOOL(success);
 }
@@ -60,11 +60,11 @@ pg_terminate_backend(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	uint64 pid = PG_GETARG_INT64(0);
+	uint64 globalPID = PG_GETARG_INT64(0);
 	uint64 timeout = PG_GETARG_INT64(1);
 
 	int sig = SIGTERM;
-	bool success = CitusSignalBackend(pid, timeout, sig);
+	bool success = CitusSignalBackend(globalPID, timeout, sig);
 
 	PG_RETURN_BOOL(success);
 }
