@@ -29,7 +29,6 @@ setup
 
 teardown
 {
-	// drop all distributed tables
 	DROP TABLE IF EXISTS ref_table,
 						 dist_table,
 						 dist_partitioned_table,
@@ -39,7 +38,6 @@ teardown
 						 new_ref_table;
 
 
-	// drop all distributed objects
 	DROP FUNCTION activate_node_snapshot();
 	DROP FUNCTION IF EXISTS squares(int);
 	DROP TYPE IF EXISTS my_type;

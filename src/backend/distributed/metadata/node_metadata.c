@@ -1541,7 +1541,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
  * If the node cannot be found this functions errors.
  */
 WorkerNode *
-FindNodeWithNodeId(int nodeId)
+FindNodeWithNodeId(int nodeId, bool missingOk)
 {
 	List *workerList = ActiveReadableNodeList();
 	WorkerNode *workerNode = NULL;
@@ -1555,7 +1555,10 @@ FindNodeWithNodeId(int nodeId)
 	}
 
 	/* there isn't any node with nodeId in pg_dist_node */
-	elog(ERROR, "worker node with node id %d could not be found", nodeId);
+	if (!missingOk)
+	{
+		elog(ERROR, "worker node with node id %d could not be found", nodeId);
+	}
 
 	return NULL;
 }

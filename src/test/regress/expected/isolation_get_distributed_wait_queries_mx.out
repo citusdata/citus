@@ -33,7 +33,7 @@ blocked_statement                                  |current_statement_in_blockin
 ---------------------------------------------------------------------
 UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|
 	UPDATE ref_table SET value_1 = 15;
-|localhost        |coordinator_host  |            57638|             57636
+|coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit:
@@ -116,7 +116,7 @@ step s3-select-distributed-waiting-queries:
 
 blocked_statement                                  |current_statement_in_blocking_process              |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|localhost        |localhost         |            57638|             57637
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit-worker:
@@ -212,7 +212,7 @@ step s3-select-distributed-waiting-queries:
 
 blocked_statement         |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
-UPDATE tt1 SET value_1 = 5|UPDATE tt1 SET value_1 = 4           |localhost        |localhost         |            57638|             57637
+UPDATE tt1 SET value_1 = 5|UPDATE tt1 SET value_1 = 4           |coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit-worker:
@@ -308,7 +308,7 @@ step s3-select-distributed-waiting-queries:
 
 blocked_statement                                  |current_statement_in_blocking_process  |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|DELETE FROM ref_table WHERE user_id = 1|localhost        |localhost         |            57638|             57637
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|DELETE FROM ref_table WHERE user_id = 1|coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit-worker:
@@ -404,7 +404,7 @@ step s3-select-distributed-waiting-queries:
 
 blocked_statement                                  |current_statement_in_blocking_process    |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|INSERT INTO ref_table VALUES(8,81),(9,91)|localhost        |localhost         |            57638|             57637
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|INSERT INTO ref_table VALUES(8,81),(9,91)|coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit-worker:
@@ -594,7 +594,7 @@ step s3-select-distributed-waiting-queries:
 
 blocked_statement                                  |current_statement_in_blocking_process                              |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|COPY ref_table FROM PROGRAM 'echo 10, 101 && echo 11, 111' WITH CSV|localhost        |localhost         |            57638|             57637
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|COPY ref_table FROM PROGRAM 'echo 10, 101 && echo 11, 111' WITH CSV|coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit-worker:
@@ -878,7 +878,7 @@ step s3-select-distributed-waiting-queries:
 
 blocked_statement                                  |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|SELECT * FROM ref_table FOR UPDATE   |localhost        |localhost         |            57638|             57637
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|SELECT * FROM ref_table FOR UPDATE   |coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit-worker:
@@ -963,7 +963,7 @@ blocked_statement                                                     |current_s
 ---------------------------------------------------------------------
 
 	ALTER TABLE ref_table ADD CONSTRAINT rf_p_key PRIMARY KEY(user_id);
-|INSERT INTO ref_table VALUES(8,81),(9,91)|coordinator_host |localhost         |            57636|             57638
+|INSERT INTO ref_table VALUES(8,81),(9,91)|coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s2-commit-worker:
@@ -1073,7 +1073,7 @@ step s3-select-distributed-waiting-queries:
 
 blocked_statement         |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
-UPDATE tt1 SET value_1 = 5|UPDATE tt1 SET value_1 = 4           |localhost        |localhost         |            57637|             57637
+UPDATE tt1 SET value_1 = 5|UPDATE tt1 SET value_1 = 4           |coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit-worker:
@@ -1161,7 +1161,7 @@ step s3-select-distributed-waiting-queries:
 
 blocked_statement                           |current_statement_in_blocking_process       |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
 ---------------------------------------------------------------------
-UPDATE tt1 SET value_1 = 4 WHERE user_id = 1|UPDATE tt1 SET value_1 = 4 WHERE user_id = 1|localhost        |localhost         |            57638|             57637
+UPDATE tt1 SET value_1 = 4 WHERE user_id = 1|UPDATE tt1 SET value_1 = 4 WHERE user_id = 1|coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit-worker:
@@ -1225,7 +1225,7 @@ blocked_statement                                  |current_statement_in_blockin
 ---------------------------------------------------------------------
 UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|
 	UPDATE ref_table SET value_1 = 15;
-|localhost        |coordinator_host  |            57638|             57636
+|coordinator_host |coordinator_host  |            57636|             57636
 (1 row)
 
 step s1-commit:
