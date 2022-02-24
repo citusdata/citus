@@ -258,7 +258,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	else if (IsA(parsetree, DoStmt))
 	{
 		/*
-		 * All statements in a DO block are executed in a single transaciton,
+		 * All statements in a DO block are executed in a single transaction,
 		 * so we need to keep track of whether we are inside a DO block.
 		 */
 		DoBlockLevel += 1;
