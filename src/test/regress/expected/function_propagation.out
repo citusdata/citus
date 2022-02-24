@@ -316,6 +316,710 @@ BEGIN
     return 1;
 END;
 $$;
+-- Show that functions are propagated (or not) as a dependency
+-- Function as a default column
+BEGIN;
+CREATE OR REPLACE FUNCTION func_in_transaction_def()
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+-- Function shouldn't be propagated within transaction
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_def'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+CREATE TABLE table_to_prop_func(id int, col_1 int default func_in_transaction_def());
+SELECT create_distributed_table('table_to_prop_func','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Function should be marked as distributed after distributing the table that depends on it
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_def'::regproc::oid;
+                     pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_def}",{})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_def'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_def}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_def}",{})
+(2 rows)
+
+-- Multiple functions as a default column
+BEGIN;
+CREATE OR REPLACE FUNCTION func_in_transaction_1()
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+CREATE OR REPLACE FUNCTION func_in_transaction_2()
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+-- Functions shouldn't be propagated within transaction
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_1'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_2'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+CREATE TABLE table_to_prop_func_2(id int, col_1 int default func_in_transaction_1() + func_in_transaction_2());
+SELECT create_distributed_table('table_to_prop_func_2','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Functions should be marked as distribued after distributing the table that depends on it
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_1'::regproc::oid;
+                    pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_1}",{})
+(1 row)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_2'::regproc::oid;
+                    pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_2}",{})
+(1 row)
+
+COMMIT;
+-- Functions should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_1'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_1}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_1}",{})
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_2'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_2}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_2}",{})
+(2 rows)
+
+-- If function has dependency on non-distributed table it should error out
+BEGIN;
+CREATE TABLE non_dist_table(id int);
+CREATE OR REPLACE FUNCTION func_in_transaction_3(param_1 non_dist_table)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+CREATE TABLE table_to_prop_func_3(id int, col_1 int default func_in_transaction_3(NULL::non_dist_table));
+-- It should error out as there is a non-distributed table dependency
+SELECT create_distributed_table('table_to_prop_func_3','id');
+ERROR:  type function_propagation_schema.non_dist_table does not exist
+CONTEXT:  while executing command on localhost:xxxxx
+COMMIT;
+-- Adding a column with default value should propagate the function
+BEGIN;
+CREATE TABLE table_to_prop_func_4(id int);
+SELECT create_distributed_table('table_to_prop_func_4', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION func_in_transaction_4()
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+-- Function shouldn't be propagated within transaction
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_4'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+ALTER TABLE table_to_prop_func_4 ADD COLUMN col_1 int default function_propagation_schema.func_in_transaction_4();
+-- Function should be marked as distributed after adding the column
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_4'::regproc::oid;
+                    pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_4}",{})
+(1 row)
+
+COMMIT;
+-- Functions should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_4'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_4}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_4}",{})
+(2 rows)
+
+-- Adding multiple columns with default values should propagate the function
+BEGIN;
+CREATE OR REPLACE FUNCTION func_in_transaction_5()
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+CREATE OR REPLACE FUNCTION func_in_transaction_6()
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return 1;
+END;
+$$;
+-- Functions shouldn't be propagated within transaction
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_5'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_6'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+CREATE TABLE table_to_prop_func_5(id int, col_1 int default func_in_transaction_5(), col_2 int default func_in_transaction_6());
+SELECT create_distributed_table('table_to_prop_func_5', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Functions should be marked as distributed after adding the column
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_5'::regproc::oid;
+                    pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_5}",{})
+(1 row)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_6'::regproc::oid;
+                    pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_6}",{})
+(1 row)
+
+COMMIT;
+-- Functions should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_5'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_5}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_5}",{})
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_6'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_6}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_6}",{})
+(2 rows)
+
+-- Adding a constraint with function check should propagate the function
+BEGIN;
+CREATE OR REPLACE FUNCTION func_in_transaction_7(param_1 int)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+-- Functions shouldn't be propagated within transaction
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_7'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+CREATE TABLE table_to_prop_func_6(id int, col_1 int check (function_propagation_schema.func_in_transaction_7(col_1)));
+SELECT create_distributed_table('table_to_prop_func_6', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Function should be marked as distributed after adding the column
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_7'::regproc::oid;
+                       pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_7}",{integer})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_7'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_7}",{integer})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_7}",{integer})
+(2 rows)
+
+-- Adding a constraint with multiple functions check should propagate the function
+BEGIN;
+CREATE OR REPLACE FUNCTION func_in_transaction_8(param_1 int)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+CREATE OR REPLACE FUNCTION func_in_transaction_9(param_1 int)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+-- Functions shouldn't be propagated within transaction
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_8'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_9'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+CREATE TABLE table_to_prop_func_7(id int, col_1 int check (function_propagation_schema.func_in_transaction_8(col_1) and function_propagation_schema.func_in_transaction_9(col_1)));
+SELECT create_distributed_table('table_to_prop_func_7', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+-- Function should be marked as distributed after adding the column
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_8'::regproc::oid;
+                       pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_8}",{integer})
+(1 row)
+
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_9'::regproc::oid;
+                       pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_9}",{integer})
+(1 row)
+
+COMMIT;
+-- Functions should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_8'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_8}",{integer})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_8}",{integer})
+(2 rows)
+
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_9'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_9}",{integer})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_9}",{integer})
+(2 rows)
+
+-- Adding a column with constraint should propagate the function
+BEGIN;
+CREATE TABLE table_to_prop_func_8(id int, col_1 int);
+SELECT create_distributed_table('table_to_prop_func_8', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+CREATE OR REPLACE FUNCTION func_in_transaction_10(param_1 int)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+-- Functions shouldn't be propagated within transaction
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+ALTER TABLE table_to_prop_func_8 ADD CONSTRAINT col1_check CHECK (function_propagation_schema.func_in_transaction_10(col_1));
+-- Function should be marked as distributed after adding the constraint
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;
+                        pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_10}",{integer})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_10'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success | result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_10}",{integer})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_10}",{integer})
+(2 rows)
+
+-- If constraint depends on a non-distributed table it should error out
+BEGIN;
+CREATE TABLE local_table_for_const(id int);
+CREATE OR REPLACE FUNCTION func_in_transaction_11(param_1 int, param_2 local_table_for_const)
+RETURNS boolean
+LANGUAGE plpgsql AS
+$$
+BEGIN
+    return param_1 > 5;
+END;
+$$;
+CREATE TABLE table_to_prop_func_9(id int, col_1 int check (func_in_transaction_11(col_1, NULL::local_table_for_const)));
+-- It should error out since there is non-distributed table dependency exists
+SELECT create_distributed_table('table_to_prop_func_9', 'id');
+ERROR:  type function_propagation_schema.local_table_for_const does not exist
+CONTEXT:  while executing command on localhost:xxxxx
+COMMIT;
+-- Show that function as a part of generated always is supporte
+BEGIN;
+   CREATE OR REPLACE FUNCTION non_sense_func_for_generated_always()
+   RETURNS int
+   LANGUAGE plpgsql IMMUTABLE AS
+   $$
+   BEGIN
+       return 1;
+   END;
+   $$;
+    -- Functions shouldn't be propagated within transaction
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.non_sense_func_for_generated_always'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+   CREATE TABLE people (
+   id int,
+    height_cm numeric,
+    height_in numeric GENERATED ALWAYS AS (height_cm / non_sense_func_for_generated_always()) STORED);
+    SELECT create_distributed_table('people', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+ 
+(1 row)
+
+     -- Show that function is distributed after distributing the table
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.non_sense_func_for_generated_always'::regproc::oid;
+                           pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,non_sense_func_for_generated_always}",{})
+(1 row)
+
+COMMIT;
+-- Show that functions depending table via rule are also distributed
+BEGIN;
+CREATE OR REPLACE FUNCTION func_for_rule()
+RETURNS int
+LANGUAGE plpgsql STABLE AS
+$$
+BEGIN
+    return 4;
+END;
+$$;
+    -- Functions shouldn't be propagated within transaction
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_for_rule'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+CREATE TABLE table_1_for_rule(id int, col_1 int);
+CREATE TABLE table_2_for_rule(id int, col_1 int);
+CREATE RULE rule_1 AS ON UPDATE TO table_1_for_rule DO ALSO UPDATE table_2_for_rule SET col_1 = col_1 * func_for_rule();
+SELECT create_distributed_table('table_1_for_rule','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    -- Functions should be distributed after distributing the table
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_for_rule'::regproc::oid;
+                pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_for_rule}",{})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_for_rule'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                           result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_for_rule}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_for_rule}",{})
+(2 rows)
+
+-- Show that functions as partitioning functions are supported
+BEGIN;
+   CREATE OR REPLACE FUNCTION non_sense_func_for_partitioning(int)
+   RETURNS int
+   LANGUAGE plpgsql IMMUTABLE AS
+   $$
+   BEGIN
+       return 1;
+   END;
+   $$;
+    -- Functions shouldn't be propagated within transaction
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.non_sense_func_for_partitioning'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+    CREATE TABLE partitioned_table_to_test_func_prop(id INT, a INT) PARTITION BY RANGE (non_sense_func_for_partitioning(id));
+    SELECT create_distributed_table('partitioned_table_to_test_func_prop', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+     -- Show that function is distributed after distributing the table
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.non_sense_func_for_partitioning'::regproc::oid;
+                            pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,non_sense_func_for_partitioning}",{integer})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.non_sense_func_for_partitioning'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                        result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,non_sense_func_for_partitioning}",{integer})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,non_sense_func_for_partitioning}",{integer})
+(2 rows)
+
+-- Test function dependency on citus local table
+BEGIN;
+    CREATE OR REPLACE FUNCTION func_in_transaction_for_local_table()
+    RETURNS int
+    LANGUAGE plpgsql AS
+    $$
+    BEGIN
+        return 1;
+    END;
+    $$;
+    -- Function shouldn't be propagated within transaction
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_for_local_table'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+    CREATE TABLE citus_local_table_to_test_func(l1 int DEFAULT func_in_transaction_for_local_table());
+    SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
+NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
+ ?column?
+---------------------------------------------------------------------
+         1
+(1 row)
+
+    SELECT citus_add_local_table_to_metadata('citus_local_table_to_test_func');
+ citus_add_local_table_to_metadata
+---------------------------------------------------------------------
+
+(1 row)
+
+    -- Function should be marked as distributed after distributing the table that depends on it
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_for_local_table'::regproc::oid;
+                           pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_for_local_table}",{})
+(1 row)
+
+ROLLBACK;
+-- Show that having a function dependency on exlude also works
+BEGIN;
+    CREATE OR REPLACE FUNCTION exclude_bool_func()
+    RETURNS boolean
+    LANGUAGE plpgsql IMMUTABLE AS
+    $$
+    BEGIN
+        return true;
+    END;
+    $$;
+    -- Functions shouldn't be propagated within transaction
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.exclude_bool_func'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+    CREATE TABLE exclusion_func_prop_table (id int, EXCLUDE USING btree (id WITH =) WHERE (exclude_bool_func()));
+    SELECT create_distributed_table('exclusion_func_prop_table', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    -- Function should be marked as distributed after distributing the table that depends on it
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.exclude_bool_func'::regproc::oid;
+                  pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,exclude_bool_func}",{})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.exclude_bool_func'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                             result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,exclude_bool_func}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,exclude_bool_func}",{})
+(2 rows)
+
+-- Show that having a function dependency for index also works
+BEGIN;
+    CREATE OR REPLACE FUNCTION func_for_index_predicate(col_1 int)
+    RETURNS boolean
+    LANGUAGE plpgsql IMMUTABLE AS
+    $$
+    BEGIN
+        return col_1 > 5;
+    END;
+    $$;
+    -- Functions shouldn't be propagated within transaction
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_for_index_predicate'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+    CREATE TABLE table_to_check_func_index_dep (id int, col_2 int);
+    CREATE INDEX on table_to_check_func_index_dep(col_2) WHERE (func_for_index_predicate(col_2));
+    SELECT create_distributed_table('table_to_check_func_index_dep', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    -- Function should be marked as distributed after distributing the table that depends on it
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_for_index_predicate'::regproc::oid;
+                         pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_for_index_predicate}",{integer})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_for_index_predicate'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                    result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_for_index_predicate}",{integer})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_for_index_predicate}",{integer})
+(2 rows)
+
+-- Test function to function dependency
+BEGIN;
+    CREATE OR REPLACE FUNCTION func_for_func_dep_1()
+    RETURNS int
+    LANGUAGE plpgsql IMMUTABLE AS
+    $$
+    BEGIN
+        return 5;
+    END;
+    $$;
+    CREATE TABLE func_dep_table(a int, b int default func_for_func_dep_1());
+    CREATE OR REPLACE FUNCTION func_for_func_dep_2(col_1 func_dep_table)
+    RETURNS int
+    LANGUAGE plpgsql IMMUTABLE AS
+    $$
+    BEGIN
+        return 5;
+    END;
+    $$;
+    SELECT create_distributed_table('func_dep_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    -- Function should be marked as distributed after distributing the table that depends on it
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_for_func_dep_1'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_for_func_dep_1}",{})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_for_func_dep_1'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                    result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_for_func_dep_1}",{})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_for_func_dep_1}",{})
+(2 rows)
+
+-- Test function with SQL language and sequence dependency
+BEGIN;
+    CREATE OR REPLACE FUNCTION func_in_transaction_def_with_seq(val bigint)
+    RETURNS bigint
+    LANGUAGE SQL AS
+    $$
+    SELECT 2 * val;
+    $$;
+    CREATE OR REPLACE FUNCTION func_in_transaction_def_with_func(val bigint)
+    RETURNS bigint
+    LANGUAGE SQL AS
+    $$
+    SELECT func_in_transaction_def_with_seq(val);
+    $$;
+    -- Function shouldn't be propagated within transaction
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_def_with_seq'::regproc::oid;
+ pg_identify_object_as_address
+---------------------------------------------------------------------
+(0 rows)
+
+    CREATE SEQUENCE myseq;
+    CREATE TABLE table_to_prop_seq_func(id int, col_1 bigint default func_in_transaction_def_with_func(func_in_transaction_def_with_seq(nextval('myseq'))));
+    SELECT create_distributed_table('table_to_prop_seq_func','id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    -- Function should be marked as distributed after distributing the table that depends on it
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_def_with_seq'::regproc::oid;
+                            pg_identify_object_as_address
+---------------------------------------------------------------------
+ (function,"{function_propagation_schema,func_in_transaction_def_with_seq}",{bigint})
+(1 row)
+
+COMMIT;
+-- Function should be marked as distributed on the worker after committing changes
+SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_def_with_seq'::regproc::oid;$$) ORDER BY 1,2;
+ nodename  | nodeport | success |                                        result
+---------------------------------------------------------------------
+ localhost |    57637 | t       | (function,"{function_propagation_schema,func_in_transaction_def_with_seq}",{bigint})
+ localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_def_with_seq}",{bigint})
+(2 rows)
+
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;
