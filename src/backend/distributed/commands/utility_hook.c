@@ -1563,7 +1563,8 @@ DDLTaskList(Oid relationId, const char *commandString)
 List *
 NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
-	List *workerNodes = TargetWorkerSetNodeList(targets, NoLock);
+	/* don't allow concurrent node list changes that require an exclusive lock */
+	List *workerNodes = TargetWorkerSetNodeList(targets, RowShareLock);
 
 	if (list_length(workerNodes) <= 0)
 	{
