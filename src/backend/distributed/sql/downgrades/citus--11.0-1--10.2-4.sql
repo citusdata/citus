@@ -2,6 +2,7 @@
 
 DROP FUNCTION pg_catalog.create_distributed_function(regprocedure, text, text, bool);
 
+DROP FUNCTION pg_catalog.worker_partition_query_result(text, text, int, citus.distribution_type, text[], text[], boolean, boolean, boolean);
 #include "../udfs/worker_partition_query_result/9.2-1.sql"
 
 CREATE FUNCTION pg_catalog.master_apply_delete_command(text)
