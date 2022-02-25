@@ -1,6 +1,6 @@
 /*-------------------------------------------------------------------------
  *
- * ruleutils_13.c
+ * ruleutils_13_14.c
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
@@ -9,7 +9,7 @@
  *
  *
  * IDENTIFICATION
- *	  src/backend/distributed/deparser/ruleutils_13.c
+ *	  src/backend/distributed/deparser/ruleutils_13_14.c
  *
  * This needs to be closely in sync with the core code.
  *-------------------------------------------------------------------------
@@ -18,7 +18,7 @@
 
 #include "pg_config.h"
 
-#if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14)
+#if (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_15)
 
 #include "postgres.h"
 
@@ -31,8 +31,10 @@
 #include "access/relation.h"
 #include "access/sysattr.h"
 #include "access/table.h"
+#if (PG_VERSION_NUM < PG_VERSION_15)
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
+#endif
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_authid.h"
@@ -182,6 +184,12 @@ typedef struct
 	List	   *outer_tlist;	/* referent for OUTER_VAR Vars */
 	List	   *inner_tlist;	/* referent for INNER_VAR Vars */
 	List	   *index_tlist;	/* referent for INDEX_VAR Vars */
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+	/* Special namespace representing a function signature: */
+	char	   *funcname;
+	int			numargs;
+	char	  **argnames;
+#endif
 } deparse_namespace;
 
 /* Callback signature for resolve_special_varno() */
@@ -406,11 +414,18 @@ static bool looks_like_function(Node *node);
 static void get_oper_expr(OpExpr *expr, deparse_context *context);
 static void get_func_expr(FuncExpr *expr, deparse_context *context,
 			  bool showimplicit);
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+static void get_proc_expr(CallStmt *stmt, deparse_context *context,
+			  bool showimplicit);
+#endif
 static void get_agg_expr(Aggref *aggref, deparse_context *context,
 			 Aggref *original_aggref);
 static void get_agg_combine_expr(Node *node, deparse_context *context,
 					 void *callback_arg);
 static void get_windowfunc_expr(WindowFunc *wfunc, deparse_context *context);
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+static bool get_func_sql_syntax(FuncExpr *expr, deparse_context *context);
+#endif
 static void get_coercion_expr(Node *arg, deparse_context *context,
 				  Oid resulttype, int32 resulttypmod,
 				  Node *parentNode);
@@ -461,8 +476,11 @@ pg_get_query_def(Query *query, StringInfo buffer)
 }
 
 /*
- * get_merged_argument_list merges both IN and OUT arguments lists into one and also
- * eliminates the INOUT duplicates(present in both the lists).
+ * get_merged_argument_list merges both the IN and OUT arguments lists into one and
+ * also eliminates the INOUT duplicates(present in both the lists). After merging both
+ * the lists, it returns all the named-arguments in a list(mergedNamedArgList) along
+ * with their types(mergedNamedArgTypes), final argument list(mergedArgumentList), and
+ * the total number of arguments(totalArguments).
  */
 bool
 get_merged_argument_list(CallStmt *stmt, List **mergedNamedArgList,
@@ -470,10 +488,133 @@ get_merged_argument_list(CallStmt *stmt, List **mergedNamedArgList,
 					   List **mergedArgumentList,
 					   int *totalArguments)
 {
+#if (PG_VERSION_NUM < PG_VERSION_14)
 	/* No OUT argument support in Postgres 13 */
 	return false;
-}
+#else
+	Oid  functionOid = stmt->funcexpr->funcid;
+	List *namedArgList = NIL;
+	List *finalArgumentList = NIL;
+	Oid  finalArgTypes[FUNC_MAX_ARGS];
+	Oid  *argTypes = NULL;
+	char *argModes = NULL;
+	char **argNames = NULL;
+	int  argIndex = 0;
 
+	HeapTuple proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(functionOid));
+	if (!HeapTupleIsValid(proctup))
+	{
+		elog(ERROR, "cache lookup failed for function %u", functionOid);
+	}
+
+	int defArgs = get_func_arg_info(proctup, &argTypes, &argNames, &argModes);
+	ReleaseSysCache(proctup);
+
+	if (argModes == NULL)
+	{
+		/* No OUT arguments */
+		return false;
+	}
+
+	/*
+	 * Passed arguments Includes IN, OUT, INOUT (in both the lists) and VARIADIC arguments,
+	 * which means INOUT arguments are double counted.
+	 */
+	int numberOfArgs = list_length(stmt->funcexpr->args) + list_length(stmt->outargs);
+	int totalInoutArgs = 0;
+
+	/* Let's count INOUT arguments from the defined number of arguments */
+	for (argIndex=0; argIndex < defArgs; ++argIndex)
+	{
+		if (argModes[argIndex] == PROARGMODE_INOUT)
+			totalInoutArgs++;
+	}
+
+	/* Remove the duplicate INOUT counting */
+	numberOfArgs = numberOfArgs - totalInoutArgs;
+
+	ListCell *inArgCell = list_head(stmt->funcexpr->args);
+	ListCell *outArgCell = list_head(stmt->outargs);
+
+	for (argIndex=0; argIndex < numberOfArgs; ++argIndex)
+	{
+		switch (argModes[argIndex])
+		{
+			case PROARGMODE_IN:
+			case PROARGMODE_VARIADIC:
+			{
+				Node *arg = (Node *) lfirst(inArgCell);
+
+				if (IsA(arg, NamedArgExpr))
+					namedArgList = lappend(namedArgList, ((NamedArgExpr *) arg)->name);
+				finalArgTypes[argIndex] = exprType(arg);
+				finalArgumentList = lappend(finalArgumentList, arg);
+				inArgCell = lnext(stmt->funcexpr->args, inArgCell);
+				break;
+			}
+
+			case PROARGMODE_OUT:
+			{
+				Node *arg = (Node *) lfirst(outArgCell);
+
+				if (IsA(arg, NamedArgExpr))
+					namedArgList = lappend(namedArgList, ((NamedArgExpr *) arg)->name);
+				finalArgTypes[argIndex] = exprType(arg);
+				finalArgumentList = lappend(finalArgumentList, arg);
+				outArgCell = lnext(stmt->outargs, outArgCell);
+				break;
+			}
+
+			case PROARGMODE_INOUT:
+			{
+				Node *arg = (Node *) lfirst(inArgCell);
+
+				if (IsA(arg, NamedArgExpr))
+					namedArgList = lappend(namedArgList, ((NamedArgExpr *) arg)->name);
+				finalArgTypes[argIndex] = exprType(arg);
+				finalArgumentList = lappend(finalArgumentList, arg);
+				inArgCell = lnext(stmt->funcexpr->args, inArgCell);
+				outArgCell = lnext(stmt->outargs, outArgCell);
+				break;
+			}
+
+			case PROARGMODE_TABLE:
+			default:
+			{
+				elog(ERROR, "Unhandled procedure argument mode[%d]", argModes[argIndex]);
+				break;
+			}
+		}
+	}
+
+	/*
+	 * After eliminating INOUT duplicates and merging OUT arguments, we now
+	 * have the final list of arguments.
+	 */
+	if (defArgs != list_length(finalArgumentList))
+	{
+		elog(ERROR, "Insufficient number of args passed[%d] for function[%s]",
+											list_length(finalArgumentList),
+											get_func_name(functionOid));
+	}
+
+	if (list_length(finalArgumentList) > FUNC_MAX_ARGS)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_TOO_MANY_ARGUMENTS),
+				 errmsg("too many arguments[%d] for function[%s]",
+											list_length(finalArgumentList),
+											get_func_name(functionOid))));
+	}
+
+	*mergedNamedArgList =  namedArgList;
+	*mergedNamedArgTypes = finalArgTypes;
+	*mergedArgumentList = finalArgumentList;
+	*totalArguments = numberOfArgs;
+
+	return true;
+#endif
+}
 /*
  * pg_get_rule_expr deparses an expression and returns the result as a string.
  */
@@ -556,7 +697,11 @@ set_rtable_names(deparse_namespace *dpns, List *parent_namespaces,
 	names_hash = hash_create("set_rtable_names names",
 							 list_length(dpns->rtable),
 							 &hash_ctl,
+#if (PG_VERSION_NUM < PG_VERSION_14)
 							 HASH_ELEM | HASH_CONTEXT);
+#else
+							 HASH_ELEM | HASH_STRINGS | HASH_CONTEXT);
+#endif
 	/* Preload the hash table with names appearing in parent_namespaces */
 	foreach(lc, parent_namespaces)
 	{
@@ -638,11 +783,6 @@ set_rtable_names(deparse_namespace *dpns, List *parent_namespaces,
 					hentry->counter++;
 					for (;;)
 					{
-						/*
-						 * We avoid using %.*s here because it can misbehave
-						 * if the data is not valid in what libc thinks is the
-						 * prevailing encoding.
-						 */
 						memcpy(modname, refname, refnamelen);
 						sprintf(modname + refnamelen, "_%d", hentry->counter);
 						if (strlen(modname) < NAMEDATALEN)
@@ -1500,11 +1640,6 @@ make_colname_unique(char *colname, deparse_namespace *dpns,
 			i++;
 			for (;;)
 			{
-				/*
-				 * We avoid using %.*s here because it can misbehave if the
-				 * data is not valid in what libc thinks is the prevailing
-				 * encoding.
-				 */
 				memcpy(modname, colname, colnamelen);
 				sprintf(modname + colnamelen, "_%d", i);
 				if (strlen(modname) < NAMEDATALEN)
@@ -1644,16 +1779,21 @@ set_deparse_plan(deparse_namespace *dpns, Plan *plan)
 	 * We special-case Append and MergeAppend to pretend that the first child
 	 * plan is the OUTER referent; we have to interpret OUTER Vars in their
 	 * tlists according to one of the children, and the first one is the most
-	 * natural choice.  Likewise special-case ModifyTable to pretend that the
-	 * first child plan is the OUTER referent; this is to support RETURNING
-	 * lists containing references to non-target relations.
+	 * natural choice.
 	 */
 	if (IsA(plan, Append))
 		dpns->outer_plan = linitial(((Append *) plan)->appendplans);
 	else if (IsA(plan, MergeAppend))
 		dpns->outer_plan = linitial(((MergeAppend *) plan)->mergeplans);
+#if (PG_VERSION_NUM < PG_VERSION_14)
+	/*
+	 * Likewise special-case ModifyTable to pretend that the first child plan
+	 * is the OUTER referent; this is to support RETURNING lists containing
+	 * references to non-target relations.
+	 */
 	else if (IsA(plan, ModifyTable))
 		dpns->outer_plan = linitial(((ModifyTable *) plan)->plans);
+#endif
 	else
 		dpns->outer_plan = outerPlan(plan);
 
@@ -2030,6 +2170,65 @@ get_with_clause(Query *query, deparse_context *context)
 		if (PRETTY_INDENT(context))
 			appendContextKeyword(context, "", 0, 0, 0);
 		appendStringInfoChar(buf, ')');
+
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+		if (cte->search_clause)
+		{
+			bool		first = true;
+			ListCell   *lc;
+
+			appendStringInfo(buf, " SEARCH %s FIRST BY ",
+							 cte->search_clause->search_breadth_first ? "BREADTH" : "DEPTH");
+
+			foreach(lc, cte->search_clause->search_col_list)
+			{
+				if (first)
+					first = false;
+				else
+					appendStringInfoString(buf, ", ");
+				appendStringInfoString(buf,
+									   quote_identifier(strVal(lfirst(lc))));
+			}
+
+			appendStringInfo(buf, " SET %s", quote_identifier(cte->search_clause->search_seq_column));
+		}
+
+		if (cte->cycle_clause)
+		{
+			bool		first = true;
+			ListCell   *lc;
+
+			appendStringInfoString(buf, " CYCLE ");
+
+			foreach(lc, cte->cycle_clause->cycle_col_list)
+			{
+				if (first)
+					first = false;
+				else
+					appendStringInfoString(buf, ", ");
+				appendStringInfoString(buf,
+									   quote_identifier(strVal(lfirst(lc))));
+			}
+
+			appendStringInfo(buf, " SET %s", quote_identifier(cte->cycle_clause->cycle_mark_column));
+
+			{
+				Const	   *cmv = castNode(Const, cte->cycle_clause->cycle_mark_value);
+				Const	   *cmd = castNode(Const, cte->cycle_clause->cycle_mark_default);
+
+				if (!(cmv->consttype == BOOLOID && !cmv->constisnull && DatumGetBool(cmv->constvalue) == true &&
+					  cmd->consttype == BOOLOID && !cmd->constisnull && DatumGetBool(cmd->constvalue) == false))
+				{
+					appendStringInfoString(buf, " TO ");
+					get_rule_expr(cte->cycle_clause->cycle_mark_value, context, false);
+					appendStringInfoString(buf, " DEFAULT ");
+					get_rule_expr(cte->cycle_clause->cycle_mark_default, context, false);
+				}
+			}
+
+			appendStringInfo(buf, " USING %s", quote_identifier(cte->cycle_clause->cycle_path_column));
+		}
+#endif
 		sep = ", ";
 	}
 
@@ -2109,7 +2308,7 @@ get_select_query_def(Query *query, deparse_context *context,
 			appendContextKeyword(context, " FETCH FIRST (",
 								 -PRETTYINDENT_STD, PRETTYINDENT_STD, 0);
 			get_rule_expr(query->limitCount, context, false);
-			appendStringInfo(buf, ") ROWS WITH TIES");
+			appendStringInfoString(buf, ") ROWS WITH TIES");
 		}
 		else
 		{
@@ -2274,7 +2473,12 @@ get_basic_select_query(Query *query, deparse_context *context,
 	/*
 	 * Build up the query string - first we say SELECT
 	 */
-	appendStringInfoString(buf, "SELECT");
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+	if (query->isReturn)
+		appendStringInfoString(buf, "RETURN");
+	else
+#endif
+		appendStringInfoString(buf, "SELECT");
 
 	/* Add the DISTINCT clause if given */
 	if (query->distinctClause != NIL)
@@ -2319,6 +2523,10 @@ get_basic_select_query(Query *query, deparse_context *context,
 
 		appendContextKeyword(context, " GROUP BY ",
 							 -PRETTYINDENT_STD, PRETTYINDENT_STD, 1);
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+		if (query->groupDistinct)
+			appendStringInfoString(buf, "DISTINCT ");
+#endif
 
 		save_exprkind = context->special_exprkind;
 		context->special_exprkind = EXPR_KIND_GROUP_BY;
@@ -2675,8 +2883,8 @@ get_rule_sortgroupclause(Index ref, List *tlist, bool force_colno,
 		 */
 		bool		need_paren = (PRETTY_PAREN(context)
 								  || IsA(expr, FuncExpr)
-								  ||IsA(expr, Aggref)
-								  ||IsA(expr, WindowFunc));
+								  || IsA(expr, Aggref)
+								  || IsA(expr, WindowFunc));
 
 		if (need_paren)
 			appendStringInfoChar(context->buf, '(');
@@ -4428,7 +4636,7 @@ find_param_referent(Param *param, deparse_context *context,
 			 */
 			foreach(lc2, ((Plan *) ancestor)->initPlan)
 			{
-				SubPlan    *subplan = castNode(SubPlan, lfirst(lc2));
+				SubPlan    *subplan = lfirst_node(SubPlan, lc2);
 
 				if (child_plan != (Plan *) list_nth(dpns->subplans,
 													subplan->plan_id - 1))
@@ -4507,6 +4715,52 @@ get_parameter(Param *param, deparse_context *context)
 
 		return;
 	}
+
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+	/*
+	 * If it's an external parameter, see if the outermost namespace provides
+	 * function argument names.
+	 */
+	if (param->paramkind == PARAM_EXTERN)
+	{
+		dpns = lfirst(list_tail(context->namespaces));
+		if (dpns->argnames)
+		{
+			char	   *argname = dpns->argnames[param->paramid - 1];
+
+			if (argname)
+			{
+				bool		should_qualify = false;
+				ListCell   *lc;
+
+				/*
+				 * Qualify the parameter name if there are any other deparse
+				 * namespaces with range tables.  This avoids qualifying in
+				 * trivial cases like "RETURN a + b", but makes it safe in all
+				 * other cases.
+				 */
+				foreach(lc, context->namespaces)
+				{
+					deparse_namespace *dp_ns = lfirst(lc);
+
+					if (list_length(dp_ns->rtable_names) > 0)
+					{
+						should_qualify = true;
+						break;
+					}
+				}
+				if (should_qualify)
+				{
+					appendStringInfoString(context->buf, quote_identifier(dpns->funcname));
+					appendStringInfoChar(context->buf, '.');
+				}
+
+				appendStringInfoString(context->buf, quote_identifier(argname));
+				return;
+			}
+		}
+	}
+#endif
 
 	/*
 	 * Not PARAM_EXEC, or couldn't find referent: for base types just print $N.
@@ -5082,7 +5336,7 @@ get_rule_expr(Node *node, deparse_context *context,
 			{
 				BoolExpr   *expr = (BoolExpr *) node;
 				Node	   *first_arg = linitial(expr->args);
-				ListCell   *arg = list_second_cell(expr->args);
+				ListCell   *arg;
 
 				switch (expr->boolop)
 				{
@@ -5091,12 +5345,11 @@ get_rule_expr(Node *node, deparse_context *context,
 							appendStringInfoChar(buf, '(');
 						get_rule_expr_paren(first_arg, context,
 											false, node);
-						while (arg)
+						for_each_from(arg, expr->args, 1)
 						{
 							appendStringInfoString(buf, " AND ");
 							get_rule_expr_paren((Node *) lfirst(arg), context,
 												false, node);
-							arg = lnext(expr->args, arg);
 						}
 						if (!PRETTY_PAREN(context))
 							appendStringInfoChar(buf, ')');
@@ -5107,12 +5360,11 @@ get_rule_expr(Node *node, deparse_context *context,
 							appendStringInfoChar(buf, '(');
 						get_rule_expr_paren(first_arg, context,
 											false, node);
-						while (arg)
+						for_each_from(arg, expr->args, 1)
 						{
 							appendStringInfoString(buf, " OR ");
 							get_rule_expr_paren((Node *) lfirst(arg), context,
 												false, node);
-							arg = lnext(expr->args, arg);
 						}
 						if (!PRETTY_PAREN(context))
 							appendStringInfoChar(buf, ')');
@@ -5161,7 +5413,14 @@ get_rule_expr(Node *node, deparse_context *context,
 				AlternativeSubPlan *asplan = (AlternativeSubPlan *) node;
 				ListCell   *lc;
 
-				/* As above, this can only happen during EXPLAIN */
+				/*
+				 * Before pg14, this can only happen during EXPLAIN. For
+				 * the later versions, this case cannot be reached in
+				 * normal usage, since no AlternativeSubPlan can appear
+				 * either in parsetrees or finished plan trees.  We keep
+				 * it just in case somebody wants to use this code to print
+				 * planner data structures.
+				 */
 				appendStringInfoString(buf, "(alternatives: ");
 				foreach(lc, asplan->subplans)
 				{
@@ -6028,7 +6287,7 @@ get_rule_expr(Node *node, deparse_context *context,
 						sep = "";
 						foreach(cell, spec->listdatums)
 						{
-							Const	   *val = castNode(Const, lfirst(cell));
+							Const	   *val = lfirst_node(Const, cell);
 
 							appendStringInfoString(buf, sep);
 							get_const_expr(val, context, -1);
@@ -6077,7 +6336,11 @@ get_rule_expr(Node *node, deparse_context *context,
 			break;
 
 		case T_CallStmt:
+#if (PG_VERSION_NUM < PG_VERSION_14)
 			get_func_expr(((CallStmt *) node)->funcexpr, context, showimplicit);
+#else
+			get_proc_expr((CallStmt *) node, context, showimplicit);
+#endif
 			break;
 
 		default:
@@ -6151,7 +6414,11 @@ looks_like_function(Node *node)
 	{
 		case T_FuncExpr:
 			/* OK, unless it's going to deparse as a cast */
-			return (((FuncExpr *) node)->funcformat == COERCE_EXPLICIT_CALL);
+			return
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+					((FuncExpr *) node)->funcformat == COERCE_SQL_SYNTAX ||
+#endif
+                    ((FuncExpr *) node)->funcformat == COERCE_EXPLICIT_CALL;
 		case T_NullIfExpr:
 		case T_CoalesceExpr:
 		case T_MinMaxExpr:
@@ -6193,6 +6460,7 @@ get_oper_expr(OpExpr *expr, deparse_context *context)
 	}
 	else
 	{
+#if (PG_VERSION_NUM < PG_VERSION_14)
 		/* unary operator --- but which side? */
 		Node	   *arg = (Node *) linitial(args);
 		HeapTuple	tp;
@@ -6222,6 +6490,16 @@ get_oper_expr(OpExpr *expr, deparse_context *context)
 				elog(ERROR, "bogus oprkind: %d", optup->oprkind);
 		}
 		ReleaseSysCache(tp);
+#else
+		/* prefix operator */
+		Node	   *arg = (Node *) linitial(args);
+
+		appendStringInfo(buf, "%s ",
+						 generate_operator_name(opno,
+												InvalidOid,
+												exprType(arg)));
+		get_rule_expr_paren(arg, context, true, (Node *) expr);
+#endif
 	}
 	if (!PRETTY_PAREN(context))
 		appendStringInfoChar(buf, ')');
@@ -6274,6 +6552,19 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 		return;
 	}
 
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+	/*
+	 * If the function was called using one of the SQL spec's random special
+	 * syntaxes, try to reproduce that.  If we don't recognize the function,
+	 * fall through.
+	 */
+	if (expr->funcformat == COERCE_SQL_SYNTAX)
+	{
+		if (get_func_sql_syntax(expr, context))
+			return;
+	}
+#endif
+
 	/*
 	 * Normal function: display as proname(args).  First we need to extract
 	 * the argument datatypes.
@@ -6311,6 +6602,52 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 	}
 	appendStringInfoChar(buf, ')');
 }
+
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+/*
+ * get_proc_expr			- Parse back a CallStmt node
+ */
+static void
+get_proc_expr(CallStmt *stmt, deparse_context *context,
+			  bool showimplicit)
+{
+	StringInfo buf = context->buf;
+	Oid        functionOid = stmt->funcexpr->funcid;
+	bool       use_variadic;
+	Oid        *argumentTypes;
+	List       *finalArgumentList = NIL;
+	ListCell   *argumentCell;
+	List       *namedArgList = NIL;
+	int        numberOfArgs = -1;
+
+	if (!get_merged_argument_list(stmt, &namedArgList, &argumentTypes,
+										&finalArgumentList, &numberOfArgs))
+	{
+		/* Nothing merged i.e. no OUT arguments */
+		get_func_expr((FuncExpr *) stmt->funcexpr, context, showimplicit);
+		return;
+	}
+
+	appendStringInfo(buf, "%s(",
+					 generate_function_name(functionOid, numberOfArgs,
+										namedArgList, argumentTypes,
+										stmt->funcexpr->funcvariadic,
+										&use_variadic,
+										context->special_exprkind));
+	int argNumber = 0;
+	foreach(argumentCell, finalArgumentList)
+	{
+		if (argNumber++ > 0)
+			appendStringInfoString(buf, ", ");
+		if (use_variadic && lnext(finalArgumentList, argumentCell) == NULL)
+			appendStringInfoString(buf, "VARIADIC ");
+		get_rule_expr((Node *) lfirst(argumentCell), context, true);
+		argNumber++;
+	}
+
+	appendStringInfoChar(buf, ')');
+}
+#endif
 
 /*
  * get_agg_expr			- Parse back an Aggref node
@@ -6509,6 +6846,250 @@ get_windowfunc_expr(WindowFunc *wfunc, deparse_context *context)
 		appendStringInfoString(buf, "(?)");
 	}
 }
+
+
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+/*
+ * get_func_sql_syntax		- Parse back a SQL-syntax function call
+ *
+ * Returns true if we successfully deparsed, false if we did not
+ * recognize the function.
+ */
+static bool
+get_func_sql_syntax(FuncExpr *expr, deparse_context *context)
+{
+	StringInfo	buf = context->buf;
+	Oid			funcoid = expr->funcid;
+
+	switch (funcoid)
+	{
+		case F_TIMEZONE_INTERVAL_TIMESTAMP:
+		case F_TIMEZONE_INTERVAL_TIMESTAMPTZ:
+		case F_TIMEZONE_INTERVAL_TIMETZ:
+		case F_TIMEZONE_TEXT_TIMESTAMP:
+		case F_TIMEZONE_TEXT_TIMESTAMPTZ:
+		case F_TIMEZONE_TEXT_TIMETZ:
+			/* AT TIME ZONE ... note reversed argument order */
+			appendStringInfoChar(buf, '(');
+			get_rule_expr((Node *) lsecond(expr->args), context, false);
+			appendStringInfoString(buf, " AT TIME ZONE ");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_OVERLAPS_TIMESTAMPTZ_INTERVAL_TIMESTAMPTZ_INTERVAL:
+		case F_OVERLAPS_TIMESTAMPTZ_INTERVAL_TIMESTAMPTZ_TIMESTAMPTZ:
+		case F_OVERLAPS_TIMESTAMPTZ_TIMESTAMPTZ_TIMESTAMPTZ_INTERVAL:
+		case F_OVERLAPS_TIMESTAMPTZ_TIMESTAMPTZ_TIMESTAMPTZ_TIMESTAMPTZ:
+		case F_OVERLAPS_TIMESTAMP_INTERVAL_TIMESTAMP_INTERVAL:
+		case F_OVERLAPS_TIMESTAMP_INTERVAL_TIMESTAMP_TIMESTAMP:
+		case F_OVERLAPS_TIMESTAMP_TIMESTAMP_TIMESTAMP_INTERVAL:
+		case F_OVERLAPS_TIMESTAMP_TIMESTAMP_TIMESTAMP_TIMESTAMP:
+		case F_OVERLAPS_TIMETZ_TIMETZ_TIMETZ_TIMETZ:
+		case F_OVERLAPS_TIME_INTERVAL_TIME_INTERVAL:
+		case F_OVERLAPS_TIME_INTERVAL_TIME_TIME:
+		case F_OVERLAPS_TIME_TIME_TIME_INTERVAL:
+		case F_OVERLAPS_TIME_TIME_TIME_TIME:
+			/* (x1, x2) OVERLAPS (y1, y2) */
+			appendStringInfoString(buf, "((");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoString(buf, ", ");
+			get_rule_expr((Node *) lsecond(expr->args), context, false);
+			appendStringInfoString(buf, ") OVERLAPS (");
+			get_rule_expr((Node *) lthird(expr->args), context, false);
+			appendStringInfoString(buf, ", ");
+			get_rule_expr((Node *) lfourth(expr->args), context, false);
+			appendStringInfoString(buf, "))");
+			return true;
+
+		case F_EXTRACT_TEXT_DATE:
+		case F_EXTRACT_TEXT_TIME:
+		case F_EXTRACT_TEXT_TIMETZ:
+		case F_EXTRACT_TEXT_TIMESTAMP:
+		case F_EXTRACT_TEXT_TIMESTAMPTZ:
+		case F_EXTRACT_TEXT_INTERVAL:
+			/* EXTRACT (x FROM y) */
+			appendStringInfoString(buf, "EXTRACT(");
+			{
+				Const	   *con = (Const *) linitial(expr->args);
+
+				Assert(IsA(con, Const) &&
+					   con->consttype == TEXTOID &&
+					   !con->constisnull);
+				appendStringInfoString(buf, TextDatumGetCString(con->constvalue));
+			}
+			appendStringInfoString(buf, " FROM ");
+			get_rule_expr((Node *) lsecond(expr->args), context, false);
+			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_IS_NORMALIZED:
+			/* IS xxx NORMALIZED */
+			appendStringInfoString(buf, "((");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoString(buf, ") IS");
+			if (list_length(expr->args) == 2)
+			{
+				Const	   *con = (Const *) lsecond(expr->args);
+
+				Assert(IsA(con, Const) &&
+					   con->consttype == TEXTOID &&
+					   !con->constisnull);
+				appendStringInfo(buf, " %s",
+								 TextDatumGetCString(con->constvalue));
+			}
+			appendStringInfoString(buf, " NORMALIZED)");
+			return true;
+
+		case F_PG_COLLATION_FOR:
+			/* COLLATION FOR */
+			appendStringInfoString(buf, "COLLATION FOR (");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoChar(buf, ')');
+			return true;
+
+			/*
+			 * XXX EXTRACT, a/k/a date_part(), is intentionally not covered
+			 * yet.  Add it after we change the return type to numeric.
+			 */
+
+		case F_NORMALIZE:
+			/* NORMALIZE() */
+			appendStringInfoString(buf, "NORMALIZE(");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			if (list_length(expr->args) == 2)
+			{
+				Const	   *con = (Const *) lsecond(expr->args);
+
+				Assert(IsA(con, Const) &&
+					   con->consttype == TEXTOID &&
+					   !con->constisnull);
+				appendStringInfo(buf, ", %s",
+								 TextDatumGetCString(con->constvalue));
+			}
+			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_OVERLAY_BIT_BIT_INT4:
+		case F_OVERLAY_BIT_BIT_INT4_INT4:
+		case F_OVERLAY_BYTEA_BYTEA_INT4:
+		case F_OVERLAY_BYTEA_BYTEA_INT4_INT4:
+		case F_OVERLAY_TEXT_TEXT_INT4:
+		case F_OVERLAY_TEXT_TEXT_INT4_INT4:
+			/* OVERLAY() */
+			appendStringInfoString(buf, "OVERLAY(");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoString(buf, " PLACING ");
+			get_rule_expr((Node *) lsecond(expr->args), context, false);
+			appendStringInfoString(buf, " FROM ");
+			get_rule_expr((Node *) lthird(expr->args), context, false);
+			if (list_length(expr->args) == 4)
+			{
+				appendStringInfoString(buf, " FOR ");
+				get_rule_expr((Node *) lfourth(expr->args), context, false);
+			}
+			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_POSITION_BIT_BIT:
+		case F_POSITION_BYTEA_BYTEA:
+		case F_POSITION_TEXT_TEXT:
+			/* POSITION() ... extra parens since args are b_expr not a_expr */
+			appendStringInfoString(buf, "POSITION((");
+			get_rule_expr((Node *) lsecond(expr->args), context, false);
+			appendStringInfoString(buf, ") IN (");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoString(buf, "))");
+			return true;
+
+		case F_SUBSTRING_BIT_INT4:
+		case F_SUBSTRING_BIT_INT4_INT4:
+		case F_SUBSTRING_BYTEA_INT4:
+		case F_SUBSTRING_BYTEA_INT4_INT4:
+		case F_SUBSTRING_TEXT_INT4:
+		case F_SUBSTRING_TEXT_INT4_INT4:
+			/* SUBSTRING FROM/FOR (i.e., integer-position variants) */
+			appendStringInfoString(buf, "SUBSTRING(");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoString(buf, " FROM ");
+			get_rule_expr((Node *) lsecond(expr->args), context, false);
+			if (list_length(expr->args) == 3)
+			{
+				appendStringInfoString(buf, " FOR ");
+				get_rule_expr((Node *) lthird(expr->args), context, false);
+			}
+			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_SUBSTRING_TEXT_TEXT_TEXT:
+			/* SUBSTRING SIMILAR/ESCAPE */
+			appendStringInfoString(buf, "SUBSTRING(");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoString(buf, " SIMILAR ");
+			get_rule_expr((Node *) lsecond(expr->args), context, false);
+			appendStringInfoString(buf, " ESCAPE ");
+			get_rule_expr((Node *) lthird(expr->args), context, false);
+			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_BTRIM_BYTEA_BYTEA:
+		case F_BTRIM_TEXT:
+		case F_BTRIM_TEXT_TEXT:
+			/* TRIM() */
+			appendStringInfoString(buf, "TRIM(BOTH");
+			if (list_length(expr->args) == 2)
+			{
+				appendStringInfoChar(buf, ' ');
+				get_rule_expr((Node *) lsecond(expr->args), context, false);
+			}
+			appendStringInfoString(buf, " FROM ");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_LTRIM_BYTEA_BYTEA:
+		case F_LTRIM_TEXT:
+		case F_LTRIM_TEXT_TEXT:
+			/* TRIM() */
+			appendStringInfoString(buf, "TRIM(LEADING");
+			if (list_length(expr->args) == 2)
+			{
+				appendStringInfoChar(buf, ' ');
+				get_rule_expr((Node *) lsecond(expr->args), context, false);
+			}
+			appendStringInfoString(buf, " FROM ");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_RTRIM_BYTEA_BYTEA:
+		case F_RTRIM_TEXT:
+		case F_RTRIM_TEXT_TEXT:
+			/* TRIM() */
+			appendStringInfoString(buf, "TRIM(TRAILING");
+			if (list_length(expr->args) == 2)
+			{
+				appendStringInfoChar(buf, ' ');
+				get_rule_expr((Node *) lsecond(expr->args), context, false);
+			}
+			appendStringInfoString(buf, " FROM ");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoChar(buf, ')');
+			return true;
+
+		case F_XMLEXISTS:
+			/* XMLEXISTS ... extra parens because args are c_expr */
+			appendStringInfoString(buf, "XMLEXISTS((");
+			get_rule_expr((Node *) linitial(expr->args), context, false);
+			appendStringInfoString(buf, ") PASSING (");
+			get_rule_expr((Node *) lsecond(expr->args), context, false);
+			appendStringInfoString(buf, "))");
+			return true;
+	}
+	return false;
+}
+#endif
+
 
 /* ----------
  * get_coercion_expr
@@ -7174,7 +7755,11 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 						RangeTblFunction *rtfunc = (RangeTblFunction *) lfirst(lc);
 
 						if (!IsA(rtfunc->funcexpr, FuncExpr) ||
+#if (PG_VERSION_NUM < PG_VERSION_14)
 							((FuncExpr *) rtfunc->funcexpr)->funcid != F_ARRAY_UNNEST ||
+#else
+							((FuncExpr *) rtfunc->funcexpr)->funcid != F_UNNEST_ANYARRAY ||
+#endif
 							rtfunc->funccolnames != NIL)
 						{
 							all_unnest = false;
@@ -7333,7 +7918,7 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 
 		need_paren_on_right = PRETTY_PAREN(context) &&
 			!IsA(j->rarg, RangeTblRef) &&
-			!(IsA(j->rarg, JoinExpr) &&((JoinExpr *) j->rarg)->alias != NULL);
+			!(IsA(j->rarg, JoinExpr) && ((JoinExpr *) j->rarg)->alias != NULL);
 
 		if (!PRETTY_PAREN(context) || j->alias != NULL)
 			appendStringInfoChar(buf, '(');
@@ -7401,6 +7986,12 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				appendStringInfoString(buf, quote_identifier(colname));
 			}
 			appendStringInfoChar(buf, ')');
+
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+			if (j->join_using_alias)
+				appendStringInfo(buf, " AS %s",
+								 quote_identifier(j->join_using_alias->aliasname));
+#endif
 		}
 		else if (j->quals)
 		{
@@ -7980,6 +8571,9 @@ generate_function_name(Oid funcid, int nargs, List *argnames, Oid *argtypes,
 		p_result = func_get_detail(list_make1(makeString(proname)),
 								   NIL, argnames, nargs, argtypes,
 								   !use_variadic, true,
+#if (PG_VERSION_NUM >= PG_VERSION_14)
+								   false,
+#endif
 								   &p_funcid, &p_rettype,
 								   &p_retset, &p_nvargs, &p_vatype,
 								   &p_true_typeids, NULL);
@@ -8063,12 +8657,12 @@ get_range_partbound_string(List *bound_datums)
 	memset(&context, 0, sizeof(deparse_context));
 	context.buf = buf;
 
-	appendStringInfoString(buf, "(");
+	appendStringInfoChar(buf, '(');
 	sep = "";
 	foreach(cell, bound_datums)
 	{
 		PartitionRangeDatum *datum =
-		castNode(PartitionRangeDatum, lfirst(cell));
+		lfirst_node(PartitionRangeDatum, cell);
 
 		appendStringInfoString(buf, sep);
 		if (datum->kind == PARTITION_RANGE_DATUM_MINVALUE)
@@ -8148,4 +8742,4 @@ getOwnedSequences_internal(Oid relid, AttrNumber attnum, char deptype)
 	return result;
 }
 
-#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_14) */
+#endif /* (PG_VERSION_NUM >= PG_VERSION_13) && (PG_VERSION_NUM < PG_VERSION_15) */
