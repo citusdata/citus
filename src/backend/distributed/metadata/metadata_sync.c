@@ -823,6 +823,8 @@ MarkObjectsDistributedCreateCommand(List *addresses,
 									List *colocationIds,
 									List *forceDelegations)
 {
+	addresses = SortList(addresses, ObjectAddressComparator);
+
 	StringInfo insertDistributedObjectsCommand = makeStringInfo();
 
 	Assert(list_length(addresses) == list_length(distributionArgumentIndexes));

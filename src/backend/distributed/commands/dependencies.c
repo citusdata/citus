@@ -29,7 +29,6 @@
 
 typedef bool (*AddressPredicate)(const ObjectAddress *);
 
-static int ObjectAddressComparator(const void *a, const void *b);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
 												 AddressPredicate predicate);
@@ -136,7 +135,7 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 /*
  * Copied from PG object_address_comparator function to compare ObjectAddresses.
  */
-static int
+int
 ObjectAddressComparator(const void *a, const void *b)
 {
 	const ObjectAddress *obja = (const ObjectAddress *) a;
