@@ -1302,7 +1302,12 @@ IsActiveShardPlacement(ShardPlacement *shardPlacement)
 	WorkerNode *workerNode =
 		FindWorkerNode(shardPlacement->nodeName, shardPlacement->nodePort);
 
-	Assert(workerNode != NULL);
+	if (!workerNode)
+	{
+		ereport(ERROR, (errmsg("There is a shard placement on node %s:%d but "
+							   "could not find the node.", shardPlacement->nodeName,
+							   shardPlacement->nodePort)));
+	}
 
 	return shardPlacement->shardState == SHARD_STATE_ACTIVE &&
 		   workerNode->isActive;

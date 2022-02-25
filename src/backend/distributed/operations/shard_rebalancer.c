@@ -455,10 +455,10 @@ GetRebalanceSteps(RebalanceOptions *options)
 	{
 		List *shardPlacementList = FullShardPlacementList(relationId,
 														  options->excludedShardArray);
-		activeShardPlacementListList = lappend(activeShardPlacementListList,
-											   FilterShardPlacementList(
-												   shardPlacementList,
-												   IsActiveShardPlacement));
+		List *activeShardPlacementListForRelation =
+			FilterShardPlacementList(shardPlacementList, IsActiveShardPlacement);
+		activeShardPlacementListList =
+			lappend(activeShardPlacementListList, activeShardPlacementListForRelation);
 	}
 
 	if (options->threshold < options->rebalanceStrategy->minimumThreshold)
