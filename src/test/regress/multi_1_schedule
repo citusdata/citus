@@ -30,6 +30,7 @@ test: propagate_extension_commands
 test: escape_extension_name
 test: ref_citus_local_fkeys
 test: alter_database_owner
+test: distributed_triggers
 
 test: multi_test_catalog_views
 test: multi_table_ddl
@@ -282,6 +283,7 @@ test: create_citus_local_table_cascade
 test: fkeys_between_local_ref
 test: auto_undist_citus_local
 test: mx_regular_user
+test: global_cancel
 test: remove_coordinator
 
 # ----------
@@ -312,6 +314,8 @@ test: ssl_by_default
 
 # ---------
 # object distribution tests
+# TODO: After deprecating parameterless create_distributed_function combine
+# distributed_functions and function_propagation tests
 # ---------
 test: distributed_types distributed_types_conflict disable_object_propagation distributed_types_xact_add_enum_value text_search
 test: check_mx
@@ -319,6 +323,7 @@ test: distributed_functions distributed_functions_conflict
 test: distributed_collations
 test: distributed_procedure
 test: distributed_collations_conflict
+test: function_propagation
 test: check_mx
 
 # ---------

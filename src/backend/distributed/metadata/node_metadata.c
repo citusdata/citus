@@ -188,9 +188,6 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 	Name nodeClusterName = PG_GETARG_NAME(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 
-	/* prevent concurrent modification */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
-
 	bool isCoordinatorInMetadata = false;
 	WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
 													  &isCoordinatorInMetadata);
@@ -1540,6 +1537,34 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 
 
 /*
+ * FindNodeWithNodeId searches pg_dist_node and returns the node with the nodeId.
+ * If the node cannot be found this functions errors.
+ */
+WorkerNode *
+FindNodeWithNodeId(int nodeId, bool missingOk)
+{
+	List *workerList = ActiveReadableNodeList();
+	WorkerNode *workerNode = NULL;
+
+	foreach_ptr(workerNode, workerList)
+	{
+		if (workerNode->nodeId == nodeId)
+		{
+			return workerNode;
+		}
+	}
+
+	/* there isn't any node with nodeId in pg_dist_node */
+	if (!missingOk)
+	{
+		elog(ERROR, "worker node with node id %d could not be found", nodeId);
+	}
+
+	return NULL;
+}
+
+
+/*
  * ReadDistNode iterates over pg_dist_node table, converts each row
  * into it's memory representation (i.e., WorkerNode) and adds them into
  * a list. Lastly, the list is returned to the caller.
@@ -1754,12 +1779,6 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	EnsureCoordinator();
 
 	*nodeAlreadyExists = false;
-
-	/*
-	 * Prevent / wait for concurrent modification before checking whether
-	 * the worker already exists in pg_dist_node.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode != NULL)

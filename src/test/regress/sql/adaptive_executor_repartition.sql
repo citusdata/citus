@@ -24,7 +24,6 @@ ROLLBACK;
 
 BEGIN;
 INSERT INTO ab values(1, 2);
--- DDL happened before repartition query in a transaction block, so this should error.
 SELECT count(*) FROM (SELECT k.a FROM ab k, ab l WHERE k.a = l.b) first, (SELECT * FROM ab) second WHERE first.a = second.b;
 ROLLBACK;
 

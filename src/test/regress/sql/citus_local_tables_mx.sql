@@ -37,22 +37,19 @@ FOR EACH ROW EXECUTE FUNCTION dummy_function();
 -- the function that trigger needs in mx workers too.
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 
+-- show that the trigger is not allowed to depend(explicitly) on an extension.
 CREATE EXTENSION seg;
 ALTER TRIGGER dummy_function_trigger ON citus_local_table DEPENDS ON EXTENSION seg;
 ALTER TRIGGER dummy_function_trigger ON citus_local_table RENAME TO renamed_trigger;
 ALTER TABLE citus_local_table DISABLE TRIGGER ALL;
--- show that update trigger mx relation are depending on seg, renamed and disabled.
+-- show that update trigger mx relation is renamed and disabled.
 -- both workers should should print 1.
 SELECT run_command_on_workers(
 $$
-SELECT COUNT(*) FROM pg_depend, pg_trigger, pg_extension
+SELECT COUNT(*) FROM pg_trigger
 WHERE pg_trigger.tgrelid='citus_local_tables_mx.citus_local_table'::regclass AND
       pg_trigger.tgname='renamed_trigger' AND
-      pg_trigger.tgenabled='D' AND
-      pg_depend.classid='pg_trigger'::regclass AND
-      pg_depend.deptype='x' AND
-      pg_trigger.oid=pg_depend.objid AND
-      pg_extension.extname='seg'
+      pg_trigger.tgenabled='D'
 $$);
 
 CREATE FUNCTION another_dummy_function() RETURNS trigger AS $another_dummy_function$
@@ -381,6 +378,36 @@ SELECT run_command_on_workers(
 $$
 SELECT count(*) FROM pg_catalog.pg_tables WHERE tablename='citus_local_table_4'
 $$);
+
+-- verify that partitioned citus local tables with dropped columns can be distributed. issue: #5577
+CREATE TABLE parent_dropped_col(a int, eventtime date) PARTITION BY RANGE ( eventtime);
+SELECT citus_add_local_table_to_metadata('parent_dropped_col');
+ALTER TABLE parent_dropped_col DROP column a;
+CREATE TABLE parent_dropped_col_1 PARTITION OF parent_dropped_col for VALUES FROM ('2000-01-01') TO ('2001-01-01');
+SELECT create_distributed_table('parent_dropped_col', 'eventtime');
+-- another example to test
+CREATE TABLE parent_dropped_col_2(
+  col_to_drop_0 text,
+  col_to_drop_1 text,
+  col_to_drop_2 date,
+  col_to_drop_3 inet,
+  col_to_drop_4 date,
+  measureid integer,
+  eventdatetime date,
+  measure_data jsonb,
+  PRIMARY KEY (measureid, eventdatetime, measure_data))
+  PARTITION BY RANGE(eventdatetime);
+
+select citus_add_local_table_to_metadata('parent_dropped_col_2');
+ALTER TABLE parent_dropped_col_2 DROP COLUMN col_to_drop_1;
+CREATE TABLE parent_dropped_col_2_2000 PARTITION OF parent_dropped_col_2 FOR VALUES FROM ('2000-01-01') TO ('2001-01-01');
+
+SELECT create_distributed_table('parent_dropped_col_2', 'measureid');
+
+-- verify that the partitioned tables are distributed with the correct distribution column
+SELECT logicalrelid, partmethod, partkey FROM pg_dist_partition
+    WHERE logicalrelid IN ('parent_dropped_col'::regclass, 'parent_dropped_col_2'::regclass)
+        ORDER BY logicalrelid;
 
 -- cleanup at exit
 set client_min_messages to error;

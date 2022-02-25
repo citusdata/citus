@@ -157,10 +157,9 @@ FROM \
 WHERE \
 	backend_type = 'client backend' \
 	AND \
-	pg_stat_activity.query NOT ILIKE '%stat_activity%' \
+	worker_query = False \
 	AND \
-	pg_stat_activity.application_name NOT SIMILAR TO 'citus_internal gpid=\\d+'; \
-"
+	pg_stat_activity.query NOT ILIKE '%stat_activity%';"
 
 #define CITUS_WORKER_STAT_ACTIVITY_QUERY \
 	"\
@@ -195,7 +194,7 @@ FROM \
 	get_all_active_transactions() AS dist_txs(database_id, process_id, initiator_node_identifier, worker_query, transaction_number, transaction_stamp, global_id) \
 	ON pg_stat_activity.pid = dist_txs.process_id \
 WHERE \
-	pg_stat_activity.application_name SIMILAR TO 'citus_internal gpid=\\d+' \
+	worker_query = True \
 	AND \
 	pg_stat_activity.query NOT ILIKE '%stat_activity%';"
 
@@ -539,32 +538,34 @@ ReplaceInitiatorNodeIdentifier(int initiator_node_identifier,
 	 *     transaction. However, we cannot know which node has initiated
 	 *     the worker query.
 	 */
-	if (initiator_node_identifier > 0)
-	{
-		bool nodeExists = false;
-
-		initiatorWorkerNode = PrimaryNodeForGroup(initiator_node_identifier, &nodeExists);
-
-		/* a query should run on an existing node */
-		Assert(nodeExists);
-		if (initiatorWorkerNode == NULL)
-		{
-			ereport(ERROR, (errmsg("no primary node found for group %d",
-								   initiator_node_identifier)));
-		}
-		citusDistStat->master_query_host_name =
-			cstring_to_text(initiatorWorkerNode->workerName);
-		citusDistStat->master_query_host_port = initiatorWorkerNode->workerPort;
-	}
-	else if (initiator_node_identifier == 0 && IsCoordinator())
+	if (initiator_node_identifier == GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA &&
+		IsCoordinator())
 	{
 		citusDistStat->master_query_host_name = cstring_to_text(coordinator_host_name);
 		citusDistStat->master_query_host_port = PostPortNumber;
 	}
-	else if (initiator_node_identifier == 0)
+	else if (initiator_node_identifier == GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA)
 	{
 		citusDistStat->master_query_host_name = cstring_to_text(coordinator_host_name);
 		citusDistStat->master_query_host_port = 0;
+	}
+	else if (initiator_node_identifier > 0)
+	{
+		/* a query should run on an existing node, but lets be defensive */
+		bool missingOk = true;
+		initiatorWorkerNode = FindNodeWithNodeId(initiator_node_identifier, missingOk);
+
+		if (initiatorWorkerNode)
+		{
+			citusDistStat->master_query_host_name =
+				cstring_to_text(initiatorWorkerNode->workerName);
+			citusDistStat->master_query_host_port = initiatorWorkerNode->workerPort;
+		}
+		else
+		{
+			citusDistStat->master_query_host_name = NULL;
+			citusDistStat->master_query_host_port = 0;
+		}
 	}
 	else
 	{

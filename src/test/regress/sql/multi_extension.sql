@@ -105,6 +105,8 @@ SET citus.enable_metadata_sync TO 'false';
 
 SET citus.enable_version_checks TO 'false';
 
+SET columnar.enable_version_checks TO 'false';
+
 CREATE EXTENSION citus VERSION '8.0-1';
 ALTER EXTENSION citus UPDATE TO '8.0-2';
 ALTER EXTENSION citus UPDATE TO '8.0-3';
@@ -303,6 +305,7 @@ SELECT * FROM multi_extension.print_extension_changes();
 \set VERBOSITY terse
 CREATE TABLE columnar_table(a INT, b INT) USING columnar;
 SET citus.enable_version_checks TO ON;
+SET columnar.enable_version_checks TO ON;
 
 -- all should throw an error due to version mismatch
 VACUUM FULL columnar_table;
@@ -324,6 +327,7 @@ CREATE TABLE new_columnar_table (a int) USING columnar;
 
 -- do cleanup for the rest of the tests
 SET citus.enable_version_checks TO OFF;
+SET columnar.enable_version_checks TO OFF;
 DROP TABLE columnar_table;
 RESET columnar.enable_custom_scan;
 \set VERBOSITY default
@@ -472,13 +476,16 @@ ORDER BY 1, 2;
 
 -- see incompatible version errors out
 RESET citus.enable_version_checks;
+RESET columnar.enable_version_checks;
 DROP EXTENSION citus;
 CREATE EXTENSION citus VERSION '8.0-1';
 
 -- Test non-distributed queries work even in version mismatch
 SET citus.enable_version_checks TO 'false';
+SET columnar.enable_version_checks TO 'false';
 CREATE EXTENSION citus VERSION '8.1-1';
 SET citus.enable_version_checks TO 'true';
+SET columnar.enable_version_checks TO 'true';
 
 -- Test CREATE TABLE
 CREATE TABLE version_mismatch_table(column1 int);
@@ -517,14 +524,17 @@ END;
 $function$;
 
 SET citus.enable_version_checks TO 'false';
+SET columnar.enable_version_checks TO 'false';
 -- This will fail because of previous function declaration
 ALTER EXTENSION citus UPDATE TO '8.1-1';
 
 -- We can DROP problematic function and continue ALTER EXTENSION even when version checks are on
 SET citus.enable_version_checks TO 'true';
+SET columnar.enable_version_checks TO 'true';
 DROP FUNCTION pg_catalog.relation_is_a_known_shard(regclass);
 
 SET citus.enable_version_checks TO 'false';
+SET columnar.enable_version_checks TO 'false';
 ALTER EXTENSION citus UPDATE TO '8.1-1';
 
 -- Test updating to the latest version without specifying the version number
@@ -540,8 +550,10 @@ CREATE EXTENSION citus;
 
 DROP EXTENSION citus;
 SET citus.enable_version_checks TO 'false';
+SET columnar.enable_version_checks TO 'false';
 CREATE EXTENSION citus VERSION '8.0-1';
 SET citus.enable_version_checks TO 'true';
+SET columnar.enable_version_checks TO 'true';
 -- during ALTER EXTENSION, we should invalidate the cache
 ALTER EXTENSION citus UPDATE;
 

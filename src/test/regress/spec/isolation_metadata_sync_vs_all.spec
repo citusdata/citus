@@ -29,7 +29,6 @@ setup
 
 teardown
 {
-	// drop all distributed tables
 	DROP TABLE IF EXISTS ref_table,
 						 dist_table,
 						 dist_partitioned_table,
@@ -39,7 +38,6 @@ teardown
 						 new_ref_table;
 
 
-	// drop all distributed objects
 	DROP FUNCTION activate_node_snapshot();
 	DROP FUNCTION IF EXISTS squares(int);
 	DROP TYPE IF EXISTS my_type;
@@ -110,6 +108,19 @@ step "s2-create-dist-table"
 	SELECT create_distributed_table('new_dist_table', 'id');
 }
 
+step "s2-create-schema"
+{
+	CREATE SCHEMA dist_schema
+		CREATE TABLE dist_table_in_schema(id int, data int);
+
+	SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
+}
+
+step "s2-drop-schema"
+{
+	DROP SCHEMA dist_schema CASCADE;
+}
+
 step "s2-create-ref-table"
 {
 	CREATE TABLE new_ref_table(id int, data int);
@@ -136,6 +147,16 @@ step "s2-create-type"
 	CREATE TYPE my_type AS (a int, b int);
 }
 
+step "s2-drop-type"
+{
+	DROP TYPE my_type;
+}
+
+step "s2-alter-type"
+{
+	ALTER TYPE my_type ADD ATTRIBUTE x int;
+}
+
 step "s2-create-dist-func"
 {
 	CREATE FUNCTION squares(int) RETURNS SETOF RECORD
@@ -143,6 +164,11 @@ step "s2-create-dist-func"
     LANGUAGE SQL;
 
 	SELECT create_distributed_function('squares(int)');
+}
+
+step "s2-drop-dist-func"
+{
+	DROP FUNCTION squares(int);
 }
 
 session "s3"
@@ -168,6 +194,11 @@ step "s3-compare-snapshot"
 	) AS foo;
 }
 
+step "s3-compare-type-definition"
+{
+	SELECT run_command_on_workers($$SELECT '(1,1,1)'::my_type$$);
+}
+
 step "s3-debug"
 {
 	SELECT unnest(activate_node_snapshot());
@@ -186,6 +217,8 @@ permutation "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-start-metadata-sy
 // the following operations get blocked when a concurrent metadata sync is in progress
 permutation "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-alter-table" "s1-commit" "s2-commit" "s3-compare-snapshot"
 permutation "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-drop-table" "s1-commit" "s2-commit" "s3-compare-snapshot"
+permutation "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-create-schema" "s1-commit" "s2-commit" "s3-compare-snapshot" "s2-drop-schema"
+permutation "s2-create-schema" "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-drop-schema" "s1-commit" "s2-commit" "s3-compare-snapshot"
 permutation "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-create-dist-table" "s1-commit" "s2-commit" "s3-compare-snapshot"
 permutation "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-create-ref-table" "s1-commit" "s2-commit" "s3-compare-snapshot"
 permutation "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-attach-partition" "s1-commit" "s2-commit" "s3-compare-snapshot"
@@ -193,6 +226,16 @@ permutation "s2-attach-partition" "s1-begin" "s2-begin" "s1-start-metadata-sync"
 permutation "s2-attach-partition" "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-create-partition-of" "s1-commit" "s2-commit" "s3-compare-snapshot"
 permutation "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-add-fk" "s1-commit" "s2-commit" "s3-compare-snapshot"
 permutation "s2-add-fk" "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-drop-fk" "s1-commit" "s2-commit" "s3-compare-snapshot"
+permutation "s2-create-type" "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-drop-type" "s1-commit" "s2-commit" "s3-compare-snapshot"
+permutation "s2-create-dist-func" "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-drop-dist-func" "s1-commit" "s2-commit" "s3-compare-snapshot"
+permutation "s2-create-type" "s1-begin" "s1-start-metadata-sync" "s2-alter-type" "s1-commit" "s3-compare-snapshot" "s3-compare-type-definition"
+
+// the following operations block concurrent metadata sync calls
+permutation "s1-begin" "s2-begin" "s2-create-dist-table" "s1-start-metadata-sync" "s2-commit" "s1-commit" "s3-compare-snapshot"
+permutation "s2-create-dist-func" "s1-begin" "s2-begin" "s2-drop-dist-func" "s1-start-metadata-sync" "s2-commit" "s1-commit" "s3-compare-snapshot"
+permutation "s2-create-schema" "s1-begin" "s2-begin" "s2-drop-schema" "s1-start-metadata-sync" "s2-commit" "s1-commit" "s3-compare-snapshot"
+permutation "s2-create-type" "s1-begin" "s2-begin" "s2-alter-type" "s1-start-metadata-sync" "s2-commit" "s1-commit" "s3-compare-snapshot" "s3-compare-type-definition"
+
 
 // the following operations do not get blocked
 permutation "s1-begin" "s2-begin" "s1-start-metadata-sync" "s2-create-type" "s1-commit" "s2-commit" "s3-compare-snapshot"

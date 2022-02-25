@@ -39,6 +39,7 @@ static HTAB * CreateTaskHashTable(void);
 static bool IsAllDependencyCompleted(Task *task, HTAB *completedTasks);
 static void AddCompletedTasks(List *curCompletedTasks, HTAB *completedTasks);
 static List * FindExecutableTasks(List *allTasks, HTAB *completedTasks);
+static List * RemoveMergeTasks(List *taskList);
 static int TaskHashCompare(const void *key1, const void *key2, Size keysize);
 static uint32 TaskHash(const void *key, Size keysize);
 static bool IsTaskAlreadyCompleted(Task *task, HTAB *completedTasks);
@@ -64,8 +65,13 @@ ExecuteTasksInDependencyOrder(List *allTasks, List *excludedTasks, List *jobIds)
 		{
 			break;
 		}
-		ExecuteTaskListOutsideTransaction(ROW_MODIFY_NONE, curTasks,
-										  MaxAdaptiveExecutorPoolSize, jobIds);
+
+		/* merge tasks do not need to be executed */
+		List *executableTasks = RemoveMergeTasks(curTasks);
+		if (list_length(executableTasks) > 0)
+		{
+			ExecuteTaskList(ROW_MODIFY_NONE, executableTasks);
+		}
 
 		AddCompletedTasks(curTasks, completedTasks);
 		curTasks = NIL;
@@ -94,6 +100,29 @@ FindExecutableTasks(List *allTasks, HTAB *completedTasks)
 	}
 
 	return curTasks;
+}
+
+
+/*
+ * RemoveMergeTasks returns a copy of taskList that excludes all the
+ * merge tasks. We do this because merge tasks are currently only a
+ * logical concept that does not need to be executed.
+ */
+static List *
+RemoveMergeTasks(List *taskList)
+{
+	List *prunedTaskList = NIL;
+	Task *task = NULL;
+
+	foreach_ptr(task, taskList)
+	{
+		if (task->taskType != MERGE_TASK)
+		{
+			prunedTaskList = lappend(prunedTaskList, task);
+		}
+	}
+
+	return prunedTaskList;
 }
 
 

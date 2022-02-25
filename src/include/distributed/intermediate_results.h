@@ -48,6 +48,28 @@ typedef struct DistributedResultFragment
 } DistributedResultFragment;
 
 
+/*
+ * NodePair contains the source and destination node in a NodeToNodeFragmentsTransfer.
+ * It is a separate struct to use it as a key in a hash table.
+ */
+typedef struct NodePair
+{
+	uint32 sourceNodeId;
+	uint32 targetNodeId;
+} NodePair;
+
+
+/*
+ * NodeToNodeFragmentsTransfer contains all fragments that need to be fetched from
+ * the source node to the destination node in the NodePair.
+ */
+typedef struct NodeToNodeFragmentsTransfer
+{
+	NodePair nodes;
+	List *fragmentList;
+} NodeToNodeFragmentsTransfer;
+
+
 /* intermediate_results.c */
 extern DestReceiver * CreateRemoteFileDestReceiver(const char *resultId,
 												   EState *executorState,
@@ -72,5 +94,10 @@ extern List * PartitionTasklistResults(const char *resultIdPrefix, List *selectT
 									   int partitionColumnIndex,
 									   CitusTableCacheEntry *distributionScheme,
 									   bool binaryFormat);
+extern char * QueryStringForFragmentsTransfer(
+	NodeToNodeFragmentsTransfer *fragmentsTransfer);
+extern void ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shardCount,
+								   Oid intervalTypeId, ArrayType **minValueArray,
+								   ArrayType **maxValueArray);
 
 #endif /* INTERMEDIATE_RESULTS_H */

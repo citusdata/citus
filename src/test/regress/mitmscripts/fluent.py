@@ -20,9 +20,6 @@ logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=loggin
 
 # I. Command Strings
 
-class Stop(Exception):
-    pass
-
 class Handler:
     '''
     This class hierarchy serves two purposes:
@@ -46,19 +43,13 @@ class Handler:
             if not self.next:
                 raise Exception("we don't know what to do!")
 
-            try:
-                self.next._accept(flow, message)
-            except Stop:
+            if self.next._accept(flow, message) == 'stop':
                 if self.root is not self:
-                    raise
+                    return 'stop'
                 self.next = KillHandler(self)
                 flow.kill()
-        elif result == 'done':
-            # stop processing this packet, move on to the next one
-            return
-        elif result == 'stop':
-            # from now on kill all connections
-            raise Stop()
+        else:
+            return result
 
     def _handle(self, flow, message):
         '''

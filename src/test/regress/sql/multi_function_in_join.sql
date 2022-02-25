@@ -33,7 +33,6 @@ SELECT * FROM table1 JOIN nextval('numbers') n ON (id = n) ORDER BY id ASC;
 CREATE FUNCTION add(integer, integer) RETURNS integer
 AS 'SELECT $1 + $2;'
 LANGUAGE SQL;
-SELECT create_distributed_function('add(integer,integer)');
 SELECT * FROM table1 JOIN add(3,5) sum ON (id = sum) ORDER BY id ASC;
 
 -- Check join of plpgsql functions
@@ -46,6 +45,8 @@ $$ LANGUAGE plpgsql;
 SELECT * FROM table1 JOIN increment(2) val ON (id = val) ORDER BY id ASC;
 
 -- a function that returns a set of integers
+-- Block distributing function as we have tests below to test it locally
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION next_k_integers(IN first_value INTEGER,
                                            IN k INTEGER DEFAULT 3,
                                            OUT result INTEGER)
@@ -54,6 +55,7 @@ BEGIN
   RETURN QUERY SELECT x FROM generate_series(first_value, first_value+k-1) f(x);
 END;
 $$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 SELECT *
 FROM table1 JOIN next_k_integers(3,2) next_integers ON (id = next_integers.result)
 ORDER BY id ASC;
@@ -124,6 +126,7 @@ SET client_min_messages TO ERROR;
 -- function joins in CTE results can create lateral joins that are not supported
 -- we execute the query within a function to consolidate the error messages
 -- between different executors
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION raise_failed_execution_func_join(query text) RETURNS void AS $$
 BEGIN
         EXECUTE query;
@@ -135,6 +138,7 @@ BEGIN
         END IF;
 END;
 $$LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 
 SELECT raise_failed_execution_func_join($$
   WITH one_row AS (
@@ -146,8 +150,10 @@ SELECT raise_failed_execution_func_join($$
 $$);
 
 -- a user-defined immutable function
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION the_answer_to_life()
   RETURNS INTEGER IMMUTABLE AS 'SELECT 42' LANGUAGE SQL;
+RESET citus.enable_metadata_sync;
 
 SELECT raise_failed_execution_func_join($$
   SELECT * FROM table1 JOIN the_answer_to_life() the_answer ON (id = the_answer);

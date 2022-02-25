@@ -258,7 +258,7 @@ multi_ProcessUtility(PlannedStmt *pstmt,
 	else if (IsA(parsetree, DoStmt))
 	{
 		/*
-		 * All statements in a DO block are executed in a single transaciton,
+		 * All statements in a DO block are executed in a single transaction,
 		 * so we need to keep track of whether we are inside a DO block.
 		 */
 		DoBlockLevel += 1;
@@ -1563,7 +1563,8 @@ DDLTaskList(Oid relationId, const char *commandString)
 List *
 NodeDDLTaskList(TargetWorkerSet targets, List *commands)
 {
-	List *workerNodes = TargetWorkerSetNodeList(targets, NoLock);
+	/* don't allow concurrent node list changes that require an exclusive lock */
+	List *workerNodes = TargetWorkerSetNodeList(targets, RowShareLock);
 
 	if (list_length(workerNodes) <= 0)
 	{

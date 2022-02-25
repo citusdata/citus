@@ -19,12 +19,19 @@ test=$(basename "$file1" .out | sed -E "s/_[0-9]+$//")
 args=${@:1:$#-2}
 BASEDIR=$(dirname "$0")
 
-# whereis searches for standard unix places before $PATH. So select the first
-# entry as the original diff tool.
-DIFF=$(whereis diff | sed "s/diff://g" | awk '{print $1}')
-if [ -z "$DIFF" ]
+DIFF=/usr/bin/diff
+if [ ! -f "$DIFF" ]
 then
-    DIFF=/usr/bin/diff
+	# whereis searches for standard unix places before $PATH. So select the
+	# first entry as the original diff tool.
+	# With the default WSL2 configuration whereis is very slow though ~400ms,
+	# so we only use it if /usr/bin/diff does not exist.
+	DIFF=$(whereis diff | sed "s/diff://g" | awk '{print $1}')
+	if [ -z "$DIFF" ]
+	then
+		echo "ERROR: could not find diff command" 1>&2
+		exit 1
+	fi
 fi
 
 if test -z "${VANILLATEST:-}"

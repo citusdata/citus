@@ -112,7 +112,7 @@ SET citus.enable_repartition_joins TO ON;
 SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
 
 BEGIN;
-SET citus.enable_repartition_joins TO ON;
+SET citus.enable_unique_job_ids TO off;
 SELECT count(*) FROM test t1, test t2 WHERE t1.x = t2.y;
 END;
 
@@ -373,9 +373,11 @@ inserts AS (
 
 -- a helper function which return true if the coordinated
 -- trannsaction uses 2PC
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION coordinated_transaction_should_use_2PC()
 RETURNS BOOL LANGUAGE C STRICT VOLATILE AS 'citus',
 $$coordinated_transaction_should_use_2PC$$;
+RESET citus.enable_metadata_sync;
 
 -- a local SELECT followed by remote SELECTs
 -- does not trigger 2PC

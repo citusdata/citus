@@ -642,11 +642,13 @@ ALTER TABLE lineitem_alter_220000 DROP COLUMN first;
 -- Create table to trigger at-xact-end (deferred) failure
 CREATE TABLE ddl_commands (command text UNIQUE DEFERRABLE INITIALLY DEFERRED);
 -- Use an event trigger to log all DDL event tags in it
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION log_ddl_tag() RETURNS event_trigger AS $ldt$
 	BEGIN
 		INSERT INTO ddl_commands VALUES (tg_tag);
 	END;
 $ldt$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 CREATE EVENT TRIGGER log_ddl_tag ON ddl_command_end EXECUTE PROCEDURE log_ddl_tag();
 \c - - - :master_port
 -- The above trigger will cause failure at transaction end on one placement.
@@ -985,12 +987,14 @@ SELECT create_distributed_table('trigger_table', 'id');
 
 -- first set a trigger on a shard
 \c - - - :worker_1_port
+SET citus.enable_metadata_sync TO OFF;
 CREATE FUNCTION update_value() RETURNS trigger AS $up$
     BEGIN
 		NEW.value := 'trigger enabled';
 		RETURN NEW;
     END;
 $up$ LANGUAGE plpgsql;
+RESET citus.enable_metadata_sync;
 CREATE TRIGGER update_value
 BEFORE INSERT ON trigger_table_220017
 FOR EACH ROW EXECUTE PROCEDURE update_value();
@@ -1003,7 +1007,7 @@ SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
 (1 row)
 
 ALTER TABLE trigger_table DISABLE TRIGGER ALL;
-ERROR:  triggers are only supported for local tables added to metadata
+ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
       value      | count 
@@ -1012,7 +1016,7 @@ SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
 (1 row)
 
 ALTER TABLE trigger_table ENABLE TRIGGER ALL;
-ERROR:  triggers are only supported for local tables added to metadata
+ERROR:  triggers are not supported on distributed tables when "citus.enable_unsafe_triggers" is set to "false"
 INSERT INTO trigger_table VALUES (1, 'trigger disabled');
 SELECT value, count(*) FROM trigger_table GROUP BY value ORDER BY value;
       value      | count 

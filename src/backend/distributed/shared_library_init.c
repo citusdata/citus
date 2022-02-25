@@ -603,7 +603,7 @@ RegisterCitusConfigVariables(void)
 		false,
 #endif
 		PGC_SIGHUP,
-		GUC_STANDARD,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -977,6 +977,17 @@ RegisterCitusConfigVariables(void)
 		true,
 		PGC_USERSET,
 		GUC_SUPERUSER_ONLY | GUC_NO_SHOW_ALL,
+		NULL, NULL, NULL);
+
+	DefineCustomBoolVariable(
+		"citus.enable_unsafe_triggers",
+		gettext_noop("Enables arbitrary triggers on distributed tables which may cause "
+					 "visibility and deadlock issues. Use at your own risk."),
+		NULL,
+		&EnableUnsafeTriggers,
+		false,
+		PGC_USERSET,
+		GUC_STANDARD,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(

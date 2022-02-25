@@ -175,7 +175,7 @@ static DistributeObjectOps Any_CreateFunction = {
 	.preprocess = PreprocessCreateFunctionStmt,
 	.postprocess = PostprocessCreateFunctionStmt,
 	.address = CreateFunctionStmtObjectAddress,
-	.markDistributed = false,
+	.markDistributed = true,
 };
 static DistributeObjectOps Any_CreatePolicy = {
 	.deparse = NULL,
@@ -564,7 +564,7 @@ static DistributeObjectOps TextSearchConfig_Rename = {
 static DistributeObjectOps Trigger_AlterObjectDepends = {
 	.deparse = NULL,
 	.qualify = NULL,
-	.preprocess = NULL,
+	.preprocess = PreprocessAlterTriggerDependsStmt,
 	.postprocess = PostprocessAlterTriggerDependsStmt,
 	.address = NULL,
 	.markDistributed = false,

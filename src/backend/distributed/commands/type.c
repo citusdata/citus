@@ -129,16 +129,6 @@ PreprocessCompositeTypeStmt(Node *node, const char *queryString,
 	 */
 	EnsureCoordinator();
 
-	/*
-	 * Make sure that no new nodes are added after this point until the end of the
-	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by citus_add_node.
-	 * This guarantees that all active nodes will have the object, because they will
-	 * either get it now, or get it in citus_add_node after this transaction finishes and
-	 * the pg_dist_object record becomes visible.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
-
 	/* fully qualify before lookup and later deparsing */
 	QualifyTreeNode(node);
 
@@ -954,6 +944,20 @@ CreateTypeDDLCommandsIdempotent(const ObjectAddress *typeAddress)
 		 *
 		 * By returning an empty list we will not send any commands to create this type.
 		 */
+		return NIL;
+	}
+
+	HeapTuple tup = SearchSysCacheCopy1(TYPEOID, ObjectIdGetDatum(typeAddress->objectId));
+	if (!HeapTupleIsValid(tup))
+	{
+		elog(ERROR, "cache lookup failed for type %u", typeAddress->objectId);
+	}
+
+	/* Don't send any command if the type is a table's row type */
+	Form_pg_type typTup = (Form_pg_type) GETSTRUCT(tup);
+	if (typTup->typtype == TYPTYPE_COMPOSITE &&
+		get_rel_relkind(typTup->typrelid) != RELKIND_COMPOSITE_TYPE)
+	{
 		return NIL;
 	}
 

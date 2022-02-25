@@ -275,11 +275,13 @@ SET citus.log_local_commands TO ON;
 SET search_path TO coordinator_evaluation_combinations_modify;
 
 -- returns 2 on the worker
+SET citus.enable_metadata_sync TO OFF;
 CREATE OR REPLACE FUNCTION get_constant_stable()
 RETURNS INT AS $$
 BEGIN
   RETURN 2;
 END; $$ language plpgsql STABLE;
+RESET citus.enable_metadata_sync;
 
 
 -- all local values
