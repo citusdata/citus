@@ -34,6 +34,7 @@
 #include "distributed/lock_graph.h"
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/multi_client_executor.h"
 #include "distributed/multi_progress.h"
 #include "distributed/multi_server_executor.h"
@@ -190,7 +191,7 @@ static void UpdateShardPlacement(PlacementUpdateEvent *placementUpdateEvent,
 								 List *responsiveNodeList, Oid shardReplicationModeOid);
 
 /* static declarations for main logic's utility functions */
-static HTAB * ActivePlacementsHash(List *shardPlacementList);
+static HTAB * ShardPlacementsListToHash(List *shardPlacementList);
 static bool PlacementsHashFind(HTAB *placementsHash, uint64 shardId,
 							   WorkerNode *workerNode);
 static void PlacementsHashEnter(HTAB *placementsHash, uint64 shardId,
@@ -396,6 +397,7 @@ FullShardPlacementList(Oid relationId, ArrayType *excludedShardArray)
 			placement->shardId = groupPlacement->shardId;
 			placement->shardLength = groupPlacement->shardLength;
 			placement->shardState = groupPlacement->shardState;
+			placement->nodeId = worker->nodeId;
 			placement->nodeName = pstrdup(worker->workerName);
 			placement->nodePort = worker->workerPort;
 			placement->placementId = groupPlacement->placementId;
@@ -446,14 +448,17 @@ GetRebalanceSteps(RebalanceOptions *options)
 
 	/* sort the lists to make the function more deterministic */
 	List *activeWorkerList = SortedActiveWorkers();
-	List *shardPlacementListList = NIL;
+	List *activeShardPlacementListList = NIL;
 
 	Oid relationId = InvalidOid;
 	foreach_oid(relationId, options->relationIdList)
 	{
 		List *shardPlacementList = FullShardPlacementList(relationId,
 														  options->excludedShardArray);
-		shardPlacementListList = lappend(shardPlacementListList, shardPlacementList);
+		List *activeShardPlacementListForRelation =
+			FilterShardPlacementList(shardPlacementList, IsActiveShardPlacement);
+		activeShardPlacementListList =
+			lappend(activeShardPlacementListList, activeShardPlacementListForRelation);
 	}
 
 	if (options->threshold < options->rebalanceStrategy->minimumThreshold)
@@ -471,7 +476,7 @@ GetRebalanceSteps(RebalanceOptions *options)
 	}
 
 	return RebalancePlacementUpdates(activeWorkerList,
-									 shardPlacementListList,
+									 activeShardPlacementListList,
 									 options->threshold,
 									 options->maxShardMoves,
 									 options->drainOnly,
@@ -795,7 +800,6 @@ rebalance_table_shards(PG_FUNCTION_ARGS)
 	{
 		Oid relationId = PG_GETARG_OID(0);
 		ErrorIfMoveUnsupportedTableType(relationId);
-
 		relationIdList = list_make1_oid(relationId);
 	}
 	else
@@ -951,9 +955,11 @@ replicate_table_shards(PG_FUNCTION_ARGS)
 
 	List *activeWorkerList = SortedActiveWorkers();
 	List *shardPlacementList = FullShardPlacementList(relationId, excludedShardArray);
+	List *activeShardPlacementList = FilterShardPlacementList(shardPlacementList,
+															  IsActiveShardPlacement);
 
 	List *placementUpdateList = ReplicationPlacementUpdates(activeWorkerList,
-															shardPlacementList,
+															activeShardPlacementList,
 															shardReplicationFactor);
 	placementUpdateList = list_truncate(placementUpdateList, maxShardCopies);
 
@@ -1737,13 +1743,13 @@ ExecuteRebalancerCommandInSeparateTransaction(char *command)
  * which is placed in the source node but not in the target node as the shard to
  * move.
  *
- * The shardPlacementListList argument contains a list of lists of shard
+ * The activeShardPlacementListList argument contains a list of lists of active shard
  * placements. Each of these lists are balanced independently. This is used to
  * make sure different colocation groups are balanced separately, so each list
  * contains the placements of a colocation group.
  */
 List *
-RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
+RebalancePlacementUpdates(List *workerNodeList, List *activeShardPlacementListList,
 						  double threshold,
 						  int32 maxShardMoves,
 						  bool drainOnly,
@@ -1755,7 +1761,7 @@ RebalancePlacementUpdates(List *workerNodeList, List *shardPlacementListList,
 	List *shardPlacementList = NIL;
 	List *placementUpdateList = NIL;
 
-	foreach_ptr(shardPlacementList, shardPlacementListList)
+	foreach_ptr(shardPlacementList, activeShardPlacementListList)
 	{
 		state = InitRebalanceState(workerNodeList, shardPlacementList,
 								   functions);
@@ -1861,7 +1867,7 @@ InitRebalanceState(List *workerNodeList, List *shardPlacementList,
 
 	RebalanceState *state = palloc0(sizeof(RebalanceState));
 	state->functions = functions;
-	state->placementsHash = ActivePlacementsHash(shardPlacementList);
+	state->placementsHash = ShardPlacementsListToHash(shardPlacementList);
 
 	/* create empty fill state for all of the worker nodes */
 	foreach_ptr(workerNode, workerNodeList)
@@ -2413,29 +2419,25 @@ FindAndMoveShardCost(float4 utilizationLowerBound,
 /*
  * ReplicationPlacementUpdates returns a list of placement updates which
  * replicates shard placements that need re-replication. To do this, the
- * function loops over the shard placements, and for each shard placement
+ * function loops over the active shard placements, and for each shard placement
  * which needs to be re-replicated, it chooses an active worker node with
  * smallest number of shards as the target node.
  */
 List *
-ReplicationPlacementUpdates(List *workerNodeList, List *shardPlacementList,
+ReplicationPlacementUpdates(List *workerNodeList, List *activeShardPlacementList,
 							int shardReplicationFactor)
 {
 	List *placementUpdateList = NIL;
 	ListCell *shardPlacementCell = NULL;
 	uint32 workerNodeIndex = 0;
-	HTAB *placementsHash = ActivePlacementsHash(shardPlacementList);
+	HTAB *placementsHash = ShardPlacementsListToHash(activeShardPlacementList);
 	uint32 workerNodeCount = list_length(workerNodeList);
 
 	/* get number of shards per node */
 	uint32 *shardCountArray = palloc0(workerNodeCount * sizeof(uint32));
-	foreach(shardPlacementCell, shardPlacementList)
+	foreach(shardPlacementCell, activeShardPlacementList)
 	{
 		ShardPlacement *placement = lfirst(shardPlacementCell);
-		if (placement->shardState != SHARD_STATE_ACTIVE)
-		{
-			continue;
-		}
 
 		for (workerNodeIndex = 0; workerNodeIndex < workerNodeCount; workerNodeIndex++)
 		{
@@ -2449,7 +2451,7 @@ ReplicationPlacementUpdates(List *workerNodeList, List *shardPlacementList,
 		}
 	}
 
-	foreach(shardPlacementCell, shardPlacementList)
+	foreach(shardPlacementCell, activeShardPlacementList)
 	{
 		WorkerNode *sourceNode = NULL;
 		WorkerNode *targetNode = NULL;
@@ -2586,11 +2588,11 @@ ShardActivePlacementCount(HTAB *activePlacementsHash, uint64 shardId,
 
 
 /*
- * ActivePlacementsHash creates and returns a hash set for the placements in
- * the given list of shard placements which are in active state.
+ * ShardPlacementsListToHash creates and returns a hash set from a shard
+ * placement list.
  */
 static HTAB *
-ActivePlacementsHash(List *shardPlacementList)
+ShardPlacementsListToHash(List *shardPlacementList)
 {
 	ListCell *shardPlacementCell = NULL;
 	HASHCTL info;
@@ -2609,11 +2611,8 @@ ActivePlacementsHash(List *shardPlacementList)
 	foreach(shardPlacementCell, shardPlacementList)
 	{
 		ShardPlacement *shardPlacement = (ShardPlacement *) lfirst(shardPlacementCell);
-		if (shardPlacement->shardState == SHARD_STATE_ACTIVE)
-		{
-			void *hashKey = (void *) shardPlacement;
-			hash_search(shardPlacementsHash, hashKey, HASH_ENTER, NULL);
-		}
+		void *hashKey = (void *) shardPlacement;
+		hash_search(shardPlacementsHash, hashKey, HASH_ENTER, NULL);
 	}
 
 	return shardPlacementsHash;
