@@ -37,7 +37,7 @@ all:
 NO_PGXS = 1
 
 SHLIB_LINK = $(libpq)
-SHLIB_LINK_INTERNAL += -L../columnar -l:columnar.so
+SHLIB_LINK_INTERNAL += -L../columnar -l:citus_columnar.so
 override enable_rpath = yes
 include $(citus_top_builddir)/Makefile.global
 
@@ -85,7 +85,8 @@ endif
 .PHONY: clean-full install install-downgrades install-all
 
 cleanup-before-install:
-	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus*
+	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus.control
+	rm -f $(DESTDIR)$(datadir)/$(datamoduledir)/citus--*
 
 install: cleanup-before-install
 

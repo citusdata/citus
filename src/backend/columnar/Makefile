@@ -7,7 +7,7 @@ ENSURE_SUBDIRS_EXIST := $(shell mkdir -p $(SUBDIRS))
 OBJS += \
 	$(patsubst $(citus_abs_srcdir)/%.c,%.o,$(foreach dir,$(SUBDIRS), $(sort $(wildcard $(citus_abs_srcdir)/$(dir)/*.c))))
 
-MODULE_big = columnar
+MODULE_big = citus_columnar
 
 PG_CPPFLAGS += -I$(libpq_srcdir) -I$(safestringlib_srcdir)/include
 
