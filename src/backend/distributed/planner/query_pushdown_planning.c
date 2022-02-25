@@ -90,6 +90,9 @@ static List * CreateSubqueryTargetListAndAdjustVars(List *columnList);
 static AttrNumber FindResnoForVarInTargetList(List *targetList, int varno, int varattno);
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													Relids relids);
+static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(
+	PlannerInfo *plannerInfo,
+	Relids relids);
 static Var * PartitionColumnForPushedDownSubquery(Query *query);
 
 
@@ -844,6 +847,33 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 				break;
 			}
 		}
+		else if (joinType == JOIN_INNER && plannerInfo->hasLateralRTEs)
+		{
+			bool innerrelOnlyRecurring = RelationInfoContainsOnlyRecurringTuples(
+				plannerInfo, innerrelRelids);
+			bool outerrelOnlyRecurring = RelationInfoContainsOnlyRecurringTuples(
+				plannerInfo, outerrelRelids);
+			if (innerrelOnlyRecurring && !outerrelOnlyRecurring)
+			{
+				DeferredErrorMessage *deferredError =
+					DeferredErrorIfUnsupportedLateralSubquery(plannerInfo,
+															  outerrelRelids);
+				if (deferredError)
+				{
+					return deferredError;
+				}
+			}
+			else if (!innerrelOnlyRecurring && outerrelOnlyRecurring)
+			{
+				DeferredErrorMessage *deferredError =
+					DeferredErrorIfUnsupportedLateralSubquery(plannerInfo,
+															  innerrelRelids);
+				if (deferredError)
+				{
+					return deferredError;
+				}
+			}
+		}
 	}
 
 	if (recurType == RECURRING_TUPLES_REFERENCE_TABLE)
@@ -1394,6 +1424,40 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo, Relids relids)
 	}
 
 	return true;
+}
+
+
+/*
+ * DeferredErrorIfUnsupportedLateralSubquery returns true if any of the
+ * relations in a RelOptInfo contain a lateral subquery that has a merge step.
+ */
+static DeferredErrorMessage *
+DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo, Relids relids)
+{
+	int relationId = -1;
+
+	while ((relationId = bms_next_member(relids, relationId)) >= 0)
+	{
+		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
+
+		if (!rangeTableEntry->lateral)
+		{
+			continue;
+		}
+
+		/* TODO: What about others kinds? */
+		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
+		{
+			DeferredErrorMessage *deferredError = DeferErrorIfSubqueryRequiresMerge(
+				rangeTableEntry->subquery);
+			if (deferredError)
+			{
+				return deferredError;
+			}
+		}
+	}
+
+	return NULL;
 }
 
 

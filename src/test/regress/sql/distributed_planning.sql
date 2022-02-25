@@ -359,3 +359,294 @@ SELECT count(*), event FROM date_part_table WHERE event_time > '2020-01-05' GROU
 SELECT count(*), event FROM date_part_table WHERE user_id = 12 AND event_time = '2020-01-12 12:00:00' GROUP BY event ORDER BY count(*) DESC, event DESC LIMIT 5;
 SELECT count(*), t1.event FROM date_part_table t1 JOIN date_part_table t2 USING (user_id) WHERE t1.user_id = 1 AND t2.event_time > '2020-01-03' GROUP BY t1.event ORDER BY count(*) DESC, t1.event DESC LIMIT 5;
 
+TRUNCATE test;
+TRUNCATE ref;
+insert into test(x, y) SELECT 1, i FROM generate_series(1, 10) i;
+insert into test(x, y) SELECT 3, i FROM generate_series(11, 40) i;
+insert into test(x, y) SELECT i, 1 FROM generate_series(1, 10) i;
+insert into test(x, y) SELECT i, 3 FROM generate_series(11, 40) i;
+
+insert into ref(a, b) SELECT i, 1 FROM generate_series(1, 10) i;
+insert into ref(a, b) SELECT i, 3 FROM generate_series(11, 40) i;
+insert into ref(a, b) SELECT 1, i FROM generate_series(1, 10) i;
+insert into ref(a, b) SELECT 3, i FROM generate_series(11, 40) i;
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            ref.a
+        FROM ref
+        WHERE
+            ref.b = test.x
+        LIMIT 2
+    ) q;
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            ref.a
+        FROM ref
+        WHERE
+            ref.b = test.y
+        LIMIT 2
+    ) q;
+
+-- Since the only correlates on the distribution column, this can be safely
+-- pushed down. But this is currently considered to hard to detect, so we fail.
+--
+-- SELECT count(*)
+-- FROM ref,
+--     LATERAL (
+--         SELECT
+--             test.x
+--         FROM test
+--         WHERE
+--             test.x = ref.a
+--         LIMIT 2
+--     ) q;
+
+-- This returns wrong results when pushed down. Instead of returning 2 rows,
+-- for each row in the reference table. It would return (2 * number of shards)
+-- rows for each row in the reference table.
+-- See issue #5327
+--
+-- SELECT count(*)
+-- FROM ref,
+--     LATERAL (
+--         SELECT
+--             test.y
+--         FROM test
+--         WHERE
+--             test.y = ref.a
+--         LIMIT 2
+--     ) q;
+
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+        LIMIT 2
+    ) q;
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            test_2.y
+        FROM test test_2
+        WHERE
+            test_2.x = test.x
+        LIMIT 2
+    ) q;
+
+-- Would require repartitioning to work with subqueries
+--
+-- SELECT count(*)
+-- FROM test,
+--     LATERAL (
+--         SELECT
+--             test_2.x
+--         FROM test test_2
+--         WHERE
+--             test_2.x = test.y
+--         LIMIT 2
+--     ) q ;
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+        LIMIT 2
+    ) q
+;
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.y,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+        LIMIT 2
+    ) q
+;
+
+-- Too complex joins for Citus to handle currently
+--
+-- SELECT count(*)
+-- FROM ref JOIN test on ref.b = test.x,
+--     LATERAL (
+--         SELECT
+--             test_2.x
+--         FROM test test_2
+--         WHERE
+--             test_2.x = ref.a
+--         LIMIT 2
+--     ) q
+-- ;
+
+-- Would require repartitioning to work with subqueries
+--
+-- SELECT count(*)
+-- FROM ref JOIN test on ref.b = test.x,
+--     LATERAL (
+--         SELECT
+--             test_2.y
+--         FROM test test_2
+--         WHERE
+--             test_2.y = ref.a
+--         LIMIT 2
+--     ) q
+-- ;
+
+-- Since the only correlates on the distribution column, this can be safely
+-- pushed down. But this is currently considered to hard to detect, so we fail.
+--
+-- SELECT count(*)
+-- FROM ref JOIN test on ref.b = test.x,
+--     LATERAL (
+--         SELECT
+--             test_2.x
+--         FROM test test_2
+--         WHERE
+--             test_2.x = test.x
+--         LIMIT 2
+--     ) q
+-- ;
+
+-- Without LIMIT clauses
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            ref.a
+        FROM ref
+        WHERE
+            ref.b = test.x
+    ) q;
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            ref.a
+        FROM ref
+        WHERE
+            ref.b = test.y
+    ) q;
+
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            test.x
+        FROM test
+        WHERE
+            test.x = ref.a
+    ) q;
+
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            test.y
+        FROM test
+        WHERE
+            test.y = ref.a
+    ) q;
+
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+    ) q;
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            test_2.y
+        FROM test test_2
+        WHERE
+            test_2.x = test.x
+    ) q;
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            test_2.x
+        FROM test test_2
+        WHERE
+            test_2.x = test.y
+    ) q ;
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+    ) q
+;
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.y,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+    ) q
+;
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            test_2.x
+        FROM test test_2
+        WHERE
+            test_2.x = ref.a
+    ) q
+;
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            test_2.y
+        FROM test test_2
+        WHERE
+            test_2.y = ref.a
+    ) q
+;
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            test_2.x
+        FROM test test_2
+        WHERE
+            test_2.x = test.x
+    ) q
+;

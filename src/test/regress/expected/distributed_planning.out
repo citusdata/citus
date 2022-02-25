@@ -831,3 +831,359 @@ SELECT count(*), t1.event FROM date_part_table t1 JOIN date_part_table t2 USING 
      4 |     1
 (5 rows)
 
+TRUNCATE test;
+TRUNCATE ref;
+insert into test(x, y) SELECT 1, i FROM generate_series(1, 10) i;
+insert into test(x, y) SELECT 3, i FROM generate_series(11, 40) i;
+insert into test(x, y) SELECT i, 1 FROM generate_series(1, 10) i;
+insert into test(x, y) SELECT i, 3 FROM generate_series(11, 40) i;
+insert into ref(a, b) SELECT i, 1 FROM generate_series(1, 10) i;
+insert into ref(a, b) SELECT i, 3 FROM generate_series(11, 40) i;
+insert into ref(a, b) SELECT 1, i FROM generate_series(1, 10) i;
+insert into ref(a, b) SELECT 3, i FROM generate_series(11, 40) i;
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            ref.a
+        FROM ref
+        WHERE
+            ref.b = test.x
+        LIMIT 2
+    ) q;
+ count
+---------------------------------------------------------------------
+   122
+(1 row)
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            ref.a
+        FROM ref
+        WHERE
+            ref.b = test.y
+        LIMIT 2
+    ) q;
+ count
+---------------------------------------------------------------------
+   122
+(1 row)
+
+-- Since the only correlates on the distribution column, this can be safely
+-- pushed down. But this is currently considered to hard to detect, so we fail.
+--
+-- SELECT count(*)
+-- FROM ref,
+--     LATERAL (
+--         SELECT
+--             test.x
+--         FROM test
+--         WHERE
+--             test.x = ref.a
+--         LIMIT 2
+--     ) q;
+-- This returns wrong results when pushed down. Instead of returning 2 rows,
+-- for each row in the reference table. It would return (2 * number of shards)
+-- rows for each row in the reference table.
+-- See issue #5327
+--
+-- SELECT count(*)
+-- FROM ref,
+--     LATERAL (
+--         SELECT
+--             test.y
+--         FROM test
+--         WHERE
+--             test.y = ref.a
+--         LIMIT 2
+--     ) q;
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+        LIMIT 2
+    ) q;
+ count
+---------------------------------------------------------------------
+   122
+(1 row)
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            test_2.y
+        FROM test test_2
+        WHERE
+            test_2.x = test.x
+        LIMIT 2
+    ) q;
+ count
+---------------------------------------------------------------------
+   122
+(1 row)
+
+-- Would require repartitioning to work with subqueries
+--
+-- SELECT count(*)
+-- FROM test,
+--     LATERAL (
+--         SELECT
+--             test_2.x
+--         FROM test test_2
+--         WHERE
+--             test_2.x = test.y
+--         LIMIT 2
+--     ) q ;
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+        LIMIT 2
+    ) q
+;
+ count
+---------------------------------------------------------------------
+  1222
+(1 row)
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.y,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+        LIMIT 2
+    ) q
+;
+ count
+---------------------------------------------------------------------
+  1222
+(1 row)
+
+-- Too complex joins for Citus to handle currently
+--
+-- SELECT count(*)
+-- FROM ref JOIN test on ref.b = test.x,
+--     LATERAL (
+--         SELECT
+--             test_2.x
+--         FROM test test_2
+--         WHERE
+--             test_2.x = ref.a
+--         LIMIT 2
+--     ) q
+-- ;
+-- Would require repartitioning to work with subqueries
+--
+-- SELECT count(*)
+-- FROM ref JOIN test on ref.b = test.x,
+--     LATERAL (
+--         SELECT
+--             test_2.y
+--         FROM test test_2
+--         WHERE
+--             test_2.y = ref.a
+--         LIMIT 2
+--     ) q
+-- ;
+-- Since the only correlates on the distribution column, this can be safely
+-- pushed down. But this is currently considered to hard to detect, so we fail.
+--
+-- SELECT count(*)
+-- FROM ref JOIN test on ref.b = test.x,
+--     LATERAL (
+--         SELECT
+--             test_2.x
+--         FROM test test_2
+--         WHERE
+--             test_2.x = test.x
+--         LIMIT 2
+--     ) q
+-- ;
+-- Without LIMIT clauses
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            ref.a
+        FROM ref
+        WHERE
+            ref.b = test.x
+    ) q;
+ count
+---------------------------------------------------------------------
+  1120
+(1 row)
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            ref.a
+        FROM ref
+        WHERE
+            ref.b = test.y
+    ) q;
+ count
+---------------------------------------------------------------------
+  1120
+(1 row)
+
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            test.x
+        FROM test
+        WHERE
+            test.x = ref.a
+    ) q;
+ count
+---------------------------------------------------------------------
+  1120
+(1 row)
+
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            test.y
+        FROM test
+        WHERE
+            test.y = ref.a
+    ) q;
+ count
+---------------------------------------------------------------------
+  1120
+(1 row)
+
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+    ) q;
+ count
+---------------------------------------------------------------------
+  1120
+(1 row)
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            test_2.y
+        FROM test test_2
+        WHERE
+            test_2.x = test.x
+    ) q;
+ count
+---------------------------------------------------------------------
+  1120
+(1 row)
+
+SELECT count(*)
+FROM test,
+    LATERAL (
+        SELECT
+            test_2.x
+        FROM test test_2
+        WHERE
+            test_2.x = test.y
+    ) q ;
+ count
+---------------------------------------------------------------------
+  1120
+(1 row)
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+    ) q
+;
+ count
+---------------------------------------------------------------------
+  2960
+(1 row)
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.y,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+    ) q
+;
+ count
+---------------------------------------------------------------------
+  2960
+(1 row)
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            test_2.x
+        FROM test test_2
+        WHERE
+            test_2.x = ref.a
+    ) q
+;
+ count
+---------------------------------------------------------------------
+  2960
+(1 row)
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            test_2.y
+        FROM test test_2
+        WHERE
+            test_2.y = ref.a
+    ) q
+;
+ count
+---------------------------------------------------------------------
+  2960
+(1 row)
+
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            test_2.x
+        FROM test test_2
+        WHERE
+            test_2.x = test.x
+    ) q
+;
+ count
+---------------------------------------------------------------------
+ 31160
+(1 row)
+
