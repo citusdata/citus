@@ -1421,6 +1421,7 @@ DROP TABLE test_rebalance_with_index CASCADE;
 
 -- Test rebalancer with disabled worker
 
+SET citus.next_shard_id TO 433500;
 SET citus.shard_replication_factor TO 2;
 
 DROP TABLE IF EXISTS test_rebalance_with_disabled_worker;
@@ -1439,7 +1440,7 @@ DROP TABLE test_rebalance_with_disabled_worker;
 -- Test rebalance with all shards excluded
 
 DROP TABLE IF EXISTS test_with_all_shards_excluded;
-CREATE TABLE test_with_all_shards_excluded(a int);
+CREATE TABLE test_with_all_shards_excluded(a int PRIMARY KEY);
 SELECT create_distributed_table('test_with_all_shards_excluded', 'a', colocate_with:='none', shard_count:=4);
 
 SELECT shardid FROM pg_dist_shard;
