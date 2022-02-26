@@ -16,7 +16,7 @@ generated_sql_files = $(patsubst %,$(citus_abs_srcdir)/build/%,$(template_sql_fi
 generated_downgrade_sql_files += $(patsubst %,$(citus_abs_srcdir)/build/sql/%,$(template_downgrade_sql_files))
 # All citus--*.sql files that are used to upgrade between versions
 DATA_built = $(generated_sql_files)
-
+DATA = citus--11.0-2.control
 # directories with source files
 SUBDIRS = . commands connection ddl deparser executor metadata operations planner progress relay safeclib test transaction utils worker
 # enterprise modules

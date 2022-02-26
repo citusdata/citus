@@ -9,7 +9,16 @@ GRANT ALL ON FUNCTION pg_catalog.worker_record_sequence_dependency(regclass,regc
 ALTER TABLE pg_catalog.pg_dist_placement ADD CONSTRAINT placement_shardid_groupid_unique_index UNIQUE (shardid, groupid);
 
 #include "udfs/stop_metadata_sync_to_node/10.2-1.sql"
-#include "../../columnar/sql/columnar--10.1-1--10.2-1.sql"
+
+DO $check_columnar$
+BEGIN
+  PERFORM 1 FROM pg_extension WHERE extname = 'citus_columnar';
+  IF NOT FOUND THEN  
+    #include "../../columnar/sql/columnar--10.1-1--10.2-1.sql"   
+  END IF;
+END;
+$check_columnar$;
+
 #include "udfs/citus_internal_add_partition_metadata/10.2-1.sql";
 #include "udfs/citus_internal_add_shard_metadata/10.2-1.sql";
 #include "udfs/citus_internal_add_placement_metadata/10.2-1.sql";

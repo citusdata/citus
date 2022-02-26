@@ -1,6 +1,15 @@
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION citus" to load this file. \quit
 
+DO $check_columnar$
+BEGIN
+  IF NOT EXISTS (select 1 from pg_extension where extname='citus_columnar') THEN  
+    RAISE EXCEPTION 'citus_columnar extension is missing'
+    USING HINT = 'Please install citus_columnar extension first';   
+  END IF;
+END;
+$check_columnar$;
+
 CREATE SCHEMA citus;
 
 SET search_path = 'pg_catalog';

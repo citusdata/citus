@@ -1,0 +1,4 @@
+# Citus extension 11.0-2
+relocatable = false
+schema = pg_catalog
+requires = 'citus_columnar'
