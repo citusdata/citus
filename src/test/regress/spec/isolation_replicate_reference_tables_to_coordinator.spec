@@ -93,7 +93,8 @@ step "s2-view-worker"
           query NOT ILIKE '%COMMIT%' AND
           query NOT ILIKE '%dump_local_%' AND
           query NOT ILIKE '%citus_internal_local_blocked_processes%' AND
-          query NOT ILIKE '%add_node%'
+          query NOT ILIKE '%add_node%' AND
+          backend_type = 'client backend'
     ORDER BY query, query_hostport DESC;
 }
 

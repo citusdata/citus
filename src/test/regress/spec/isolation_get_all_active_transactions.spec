@@ -77,7 +77,11 @@ step "s3-as-admin"
 
 step "s3-as-user-1"
 {
-	-- User should only be able to see its own transactions
+	-- Even though we change the user via SET ROLE, the backends' (e.g., s1/2-begin-insert)
+	-- userId (e.g., PG_PROC->userId) does not change, and hence none of the
+	-- transactions show up because here we are using test_user_1. This is a
+	-- limitation of isolation tester, we should be able to re-connect with
+	-- test_user_1 on s1/2-begin-insert to show that test_user_1 sees only its own processes
 	SET ROLE test_user_1;
 	SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
 	SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
@@ -85,7 +89,12 @@ step "s3-as-user-1"
 
 step "s3-as-readonly"
 {
-	-- Other user should not see transactions
+	-- Even though we change the user via SET ROLE, the backends' (e.g., s1/2-begin-insert)
+	-- userId (e.g., PG_PROC->userId) does not change, and hence none of the
+	-- transactions show up because here we are using test_readonly. This is a
+	-- limitation of isolation tester, we should be able to re-connect with
+	-- test_readonly on s1/2-begin-insert to show that test_readonly sees only
+	-- its own processes
 	SET ROLE test_readonly;
 	SELECT count(*) FROM get_all_active_transactions() WHERE transaction_number != 0;
 	SELECT count(*) FROM get_global_active_transactions() WHERE transaction_number != 0;
