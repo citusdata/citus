@@ -526,7 +526,7 @@ $function$;
 SET citus.enable_version_checks TO 'false';
 SET columnar.enable_version_checks TO 'false';
 -- This will fail because of previous function declaration
-ALTER EXTENSION citus UPDATE TO '8.1-1';
+ALTER EXTENSION citus UPDATE TO '9.1-1';
 
 -- We can DROP problematic function and continue ALTER EXTENSION even when version checks are on
 SET citus.enable_version_checks TO 'true';
@@ -535,7 +535,7 @@ DROP FUNCTION pg_catalog.relation_is_a_known_shard(regclass);
 
 SET citus.enable_version_checks TO 'false';
 SET columnar.enable_version_checks TO 'false';
-ALTER EXTENSION citus UPDATE TO '8.1-1';
+ALTER EXTENSION citus UPDATE TO '9.1-1';
 
 -- Test updating to the latest version without specifying the version number
 ALTER EXTENSION citus UPDATE;
