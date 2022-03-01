@@ -89,6 +89,7 @@ extract_equality_filters_from_query(PG_FUNCTION_ARGS)
 	char *queryString = text_to_cstring(PG_GETARG_TEXT_P(0));
 
 	MemoryContext oldContext = CurrentMemoryContext;
+	ResourceOwner oldOwner = CurrentResourceOwner;
 
 	/* capture filters via hooks */
 	PlannerRestrictionContext *plannerRestrictionContext =
@@ -152,6 +153,12 @@ extract_equality_filters_from_query(PG_FUNCTION_ARGS)
 			{
 				Var *leftVar = NULL;
 				Const *rightConst = NULL;
+
+				if (!NodeIsEqualsOpExpr((Node *) clause))
+				{
+					/* not an equals expression */
+					continue;
+				}
 
 				if (!VarConstOpExprClause((OpExpr *) clause, &leftVar, &rightConst) &&
 					!VarNullWrapperOpExprClause(clause, wrapperFunctionId, &leftVar))
@@ -273,6 +280,8 @@ extract_equality_filters_from_query(PG_FUNCTION_ARGS)
 
 		FlushErrorState();
 		RollbackAndReleaseCurrentSubTransaction();
+		MemoryContextSwitchTo(oldContext);
+		CurrentResourceOwner = oldOwner;
 	}
 	PG_END_TRY();
 
