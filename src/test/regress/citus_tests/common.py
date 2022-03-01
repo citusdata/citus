@@ -62,7 +62,7 @@ def add_settings(abs_data_path, settings):
             conf_file.write(setting)
 
 
-def create_role(pg_path, coordinator_port, node_ports, user_name):
+def create_role(pg_path, node_ports, user_name):
     def create(port):
         command = "SELECT worker_create_or_alter_role('{}', 'CREATE ROLE {} WITH LOGIN CREATEROLE CREATEDB;', NULL)".format(
             user_name, user_name
@@ -106,7 +106,7 @@ def start_databases(pg_path, rel_data_path, node_name_to_ports, logfile_prefix, 
 
     parallel_run(start, node_name_to_ports.keys())
 
-    # We don't want parallel shutdown, here because that will fail when it's
+    # We don't want parallel shutdown here because that will fail when it's
     # tried in this atexit call with an error like:
     # cannot schedule new futures after interpreter shutdown
     atexit.register(

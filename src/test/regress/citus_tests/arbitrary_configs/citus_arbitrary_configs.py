@@ -55,7 +55,6 @@ def run_for_config(config, lock, sql_schedule_name):
     if config.user == cfg.REGULAR_USER_NAME:
         common.create_role(
             config.bindir,
-            config.coordinator_port(),
             config.node_name_to_ports.values(),
             config.user,
         )
