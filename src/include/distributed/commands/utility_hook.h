@@ -39,7 +39,7 @@ typedef enum
 } PropSetCmdBehavior;
 extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
-extern int DDLPropagationMode;
+extern int CreateObjectPropagationMode;
 extern bool EnableCreateTypePropagation;
 extern bool EnableAlterRolePropagation;
 extern bool EnableAlterRoleSetPropagation;

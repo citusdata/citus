@@ -688,7 +688,7 @@ RegisterCitusConfigVariables(void)
 					 "not always desired. By changing this behavior the user can trade "
 					 "off performance for full transactional consistency on the creation "
 					 "of new objects."),
-		&DDLPropagationMode,
+		&CreateObjectPropagationMode,
 		CREATE_OBJECT_PROPAGATION_DEFERRED, create_object_propagation_options,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,

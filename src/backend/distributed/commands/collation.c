@@ -588,7 +588,7 @@ ShouldPropagateDefineCollationStmt()
 		return false;
 	}
 
-	if (!ShouldPropagateCreate())
+	if (!ShouldPropagateCreateInCoordinatedTransction())
 	{
 		return false;
 	}

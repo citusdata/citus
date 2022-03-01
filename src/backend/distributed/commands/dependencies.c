@@ -462,8 +462,8 @@ ShouldPropagate(void)
 
 
 /*
- * ShouldPropagateCreate returns based the current state of the session and policies if
- * Citus needs to propagate the creation of new objects.
+ * ShouldPropagateCreateInCoordinatedTransction returns based the current state of the
+ * session and policies if Citus needs to propagate the creation of new objects.
  *
  * Creation of objects on other nodes could be postponed till the object is actually used
  * in a sharded object (eg. distributed table or index on a distributed table). In certain
@@ -472,7 +472,7 @@ ShouldPropagate(void)
  * the object is actually used.
  */
 bool
-ShouldPropagateCreate()
+ShouldPropagateCreateInCoordinatedTransction()
 {
 	if (!IsMultiStatementTransaction())
 	{
@@ -498,7 +498,7 @@ ShouldPropagateCreate()
 		return true;
 	}
 
-	switch (DDLPropagationMode)
+	switch (CreateObjectPropagationMode)
 	{
 		case CREATE_OBJECT_PROPAGATION_DEFERRED:
 		{

@@ -137,7 +137,7 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 	}
 
 	/* check creation against multi-statement transaction policy */
-	if (!ShouldPropagateCreate())
+	if (!ShouldPropagateCreateInCoordinatedTransction())
 	{
 		return NIL;
 	}
