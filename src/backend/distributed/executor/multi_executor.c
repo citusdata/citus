@@ -763,6 +763,11 @@ GetObjectTypeString(ObjectType objType)
 			return "extension";
 		}
 
+		case OBJECT_FOREIGN_SERVER:
+		{
+			return "foreign server";
+		}
+
 		case OBJECT_FUNCTION:
 		{
 			return "function";

@@ -23,16 +23,6 @@
 
 
 /*
- * CitusInitiatedBackend keeps some information about the backends that are
- * initiated by Citus.
- */
-typedef struct CitusInitiatedBackend
-{
-	int initiatorNodeIdentifier;
-} CitusInitiatedBackend;
-
-
-/*
  * Each backend's active distributed transaction information is tracked via
  * BackendData in shared memory.
  *
@@ -51,7 +41,6 @@ typedef struct BackendData
 	bool cancelledDueToDeadlock;
 	uint64 globalPID;
 	bool distributedCommandOriginator;
-	CitusInitiatedBackend citusBackend;
 	DistributedTransactionId transactionId;
 } BackendData;
 
@@ -64,13 +53,12 @@ extern void UnlockBackendSharedMemory(void);
 extern void UnSetDistributedTransactionId(void);
 extern void UnSetGlobalPID(void);
 extern void AssignDistributedTransactionId(void);
-extern void MarkCitusInitiatedCoordinatorBackend(void);
 extern void AssignGlobalPID(void);
 extern uint64 GetGlobalPID(void);
 extern void OverrideBackendDataDistributedCommandOriginator(bool
 															distributedCommandOriginator);
 extern uint64 ExtractGlobalPID(char *applicationName);
-extern int ExtractNodeIdFromGlobalPID(uint64 globalPID);
+extern int ExtractNodeIdFromGlobalPID(uint64 globalPID, bool missingOk);
 extern int ExtractProcessIdFromGlobalPID(uint64 globalPID);
 extern void GetBackendDataForProc(PGPROC *proc, BackendData *result);
 extern void CancelTransactionDueToDeadlock(PGPROC *proc);

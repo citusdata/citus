@@ -36,15 +36,6 @@
 /* Definitions local to the physical planner */
 #define NON_PRUNABLE_JOIN -1
 #define RESERVED_HASHED_COLUMN_ID MaxAttrNumber
-#define MERGE_COLUMN_FORMAT "merge_column_%u"
-#define MAP_OUTPUT_FETCH_COMMAND "SELECT worker_fetch_partition_file \
- (" UINT64_FORMAT ", %u, %u, %u, '%s', %u)"
-#define RANGE_PARTITION_COMMAND "SELECT worker_range_partition_table \
- (" UINT64_FORMAT ", %d, %s, '%s', '%s'::regtype, %s)"
-#define HASH_PARTITION_COMMAND "SELECT worker_hash_partition_table \
- (" UINT64_FORMAT ", %d, %s, '%s', '%s'::regtype, %s)"
-#define MERGE_FILES_INTO_TABLE_COMMAND "SELECT worker_merge_files_into_table \
- (" UINT64_FORMAT ", %d, '%s', '%s')"
 
 extern int RepartitionJoinBucketCountPerNode;
 
@@ -262,6 +253,10 @@ typedef struct Task
 	uint32 upstreamTaskId;         /* only applies to data fetch tasks */
 	ShardInterval *shardInterval;  /* only applies to merge tasks */
 	bool assignmentConstrained;    /* only applies to merge tasks */
+
+	/* for merge tasks, this is set to the target list of the map task */
+	List *mapJobTargetList;
+
 	char replicationModel;         /* only applies to modify tasks */
 
 	/*

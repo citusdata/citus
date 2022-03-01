@@ -188,9 +188,6 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 	Name nodeClusterName = PG_GETARG_NAME(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
 
-	/* prevent concurrent modification */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
-
 	bool isCoordinatorInMetadata = false;
 	WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
 													  &isCoordinatorInMetadata);
@@ -1544,7 +1541,7 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
  * If the node cannot be found this functions errors.
  */
 WorkerNode *
-FindNodeWithNodeId(int nodeId)
+FindNodeWithNodeId(int nodeId, bool missingOk)
 {
 	List *workerList = ActiveReadableNodeList();
 	WorkerNode *workerNode = NULL;
@@ -1558,7 +1555,10 @@ FindNodeWithNodeId(int nodeId)
 	}
 
 	/* there isn't any node with nodeId in pg_dist_node */
-	elog(ERROR, "worker node with node id %d could not be found", nodeId);
+	if (!missingOk)
+	{
+		elog(ERROR, "worker node with node id %d could not be found", nodeId);
+	}
 
 	return NULL;
 }
@@ -1779,12 +1779,6 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	EnsureCoordinator();
 
 	*nodeAlreadyExists = false;
-
-	/*
-	 * Prevent / wait for concurrent modification before checking whether
-	 * the worker already exists in pg_dist_node.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode != NULL)

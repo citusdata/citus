@@ -122,6 +122,7 @@ typedef struct ViewDependencyNode
 
 
 static List * GetRelationSequenceDependencyList(Oid relationId);
+static List * GetRelationFunctionDependencyList(Oid relationId);
 static List * GetRelationTriggerFunctionDependencyList(Oid relationId);
 static List * GetRelationStatsSchemaDependencyList(Oid relationId);
 static List * GetRelationIndicesDependencyList(Oid relationId);
@@ -722,7 +723,8 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 				relKind == RELKIND_PARTITIONED_TABLE ||
 				relKind == RELKIND_FOREIGN_TABLE ||
 				relKind == RELKIND_SEQUENCE ||
-				relKind == RELKIND_INDEX)
+				relKind == RELKIND_INDEX ||
+				relKind == RELKIND_PARTITIONED_INDEX)
 			{
 				return true;
 			}
@@ -1090,8 +1092,14 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 			 * with them.
 			 */
 			List *sequenceDependencyList = GetRelationSequenceDependencyList(relationId);
-
 			result = list_concat(result, sequenceDependencyList);
+
+			/*
+			 * Get the dependent functions for tables as columns has default values
+			 * and contraints, then expand dependency list with them.
+			 */
+			List *functionDependencyList = GetRelationFunctionDependencyList(relationId);
+			result = list_concat(result, functionDependencyList);
 
 			/*
 			 * Tables could have indexes. Indexes themself could have dependencies that
@@ -1130,6 +1138,21 @@ GetRelationSequenceDependencyList(Oid relationId)
 		CreateObjectAddressDependencyDefList(RelationRelationId, dependentSequenceList);
 
 	return sequenceDependencyDefList;
+}
+
+
+/*
+ * GetRelationFunctionDependencyList returns the function dependency definition
+ * list for the given relation.
+ */
+static List *
+GetRelationFunctionDependencyList(Oid relationId)
+{
+	List *dependentFunctionOids = GetDependentFunctionsWithRelation(relationId);
+	List *functionDependencyDefList =
+		CreateObjectAddressDependencyDefList(ProcedureRelationId, dependentFunctionOids);
+
+	return functionDependencyDefList;
 }
 
 

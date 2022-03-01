@@ -152,9 +152,6 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 	MyBackendData->transactionId.timestamp = timestamp;
 	MyBackendData->transactionId.transactionOriginator = false;
 
-	MyBackendData->citusBackend.initiatorNodeIdentifier =
-		MyBackendData->transactionId.initiatorNodeIdentifier;
-
 	SpinLockRelease(&MyBackendData->mutex);
 
 	PG_RETURN_VOID();
@@ -385,7 +382,6 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 			&backendManagementShmemData->backends[backendIndex];
 
 		/* to work on data after releasing g spinlock to protect against errors */
-		int initiatorNodeIdentifier = -1;
 		uint64 transactionNumber = 0;
 
 		SpinLockAcquire(&currentBackend->mutex);
@@ -408,7 +404,6 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		Oid databaseId = currentBackend->databaseId;
 		int backendPid = ProcGlobal->allProcs[backendIndex].pid;
-		initiatorNodeIdentifier = currentBackend->citusBackend.initiatorNodeIdentifier;
 
 		/*
 		 * We prefer to use worker_query instead of distributedCommandOriginator in
@@ -423,9 +418,12 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		SpinLockRelease(&currentBackend->mutex);
 
+		bool missingOk = true;
+		int nodeId = ExtractNodeIdFromGlobalPID(currentBackend->globalPID, missingOk);
+
 		values[0] = ObjectIdGetDatum(databaseId);
 		values[1] = Int32GetDatum(backendPid);
-		values[2] = Int32GetDatum(initiatorNodeIdentifier);
+		values[2] = Int32GetDatum(nodeId);
 		values[3] = !distributedCommandOriginator;
 		values[4] = UInt64GetDatum(transactionNumber);
 		values[5] = TimestampTzGetDatum(transactionIdTimestamp);
@@ -520,7 +518,6 @@ BackendManagementShmemInit(void)
 		{
 			BackendData *backendData =
 				&backendManagementShmemData->backends[backendIndex];
-			backendData->citusBackend.initiatorNodeIdentifier = -1;
 			SpinLockInit(&backendData->mutex);
 		}
 	}
@@ -660,8 +657,6 @@ UnSetDistributedTransactionId(void)
 		MyBackendData->transactionId.transactionNumber = 0;
 		MyBackendData->transactionId.timestamp = 0;
 
-		MyBackendData->citusBackend.initiatorNodeIdentifier = -1;
-
 		SpinLockRelease(&MyBackendData->mutex);
 	}
 }
@@ -771,29 +766,6 @@ AssignDistributedTransactionId(void)
 	MyBackendData->transactionId.transactionOriginator = true;
 	MyBackendData->transactionId.transactionNumber = nextTransactionNumber;
 	MyBackendData->transactionId.timestamp = currentTimestamp;
-
-	MyBackendData->citusBackend.initiatorNodeIdentifier = localGroupId;
-
-	SpinLockRelease(&MyBackendData->mutex);
-}
-
-
-/*
- * MarkCitusInitiatedCoordinatorBackend sets that coordinator backend is
- * initiated by Citus.
- */
-void
-MarkCitusInitiatedCoordinatorBackend(void)
-{
-	/*
-	 * GetLocalGroupId may throw exception which can cause leaving spin lock
-	 * unreleased. Calling GetLocalGroupId function before the lock to avoid this.
-	 */
-	int32 localGroupId = GetLocalGroupId();
-
-	SpinLockAcquire(&MyBackendData->mutex);
-
-	MyBackendData->citusBackend.initiatorNodeIdentifier = localGroupId;
 
 	SpinLockRelease(&MyBackendData->mutex);
 }
@@ -926,11 +898,12 @@ ExtractGlobalPID(char *applicationName)
  * gives us the node id.
  */
 int
-ExtractNodeIdFromGlobalPID(uint64 globalPID)
+ExtractNodeIdFromGlobalPID(uint64 globalPID, bool missingOk)
 {
 	int nodeId = (int) (globalPID / GLOBAL_PID_NODE_ID_MULTIPLIER);
 
-	if (nodeId == GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA)
+	if (!missingOk &&
+		nodeId == GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA)
 	{
 		ereport(ERROR, (errmsg("originator node of the query with the global pid "
 							   "%lu is not in Citus' metadata", globalPID),

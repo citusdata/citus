@@ -43,6 +43,7 @@ extern void ExecuteUtilityCommand(const char *utilityCommand);
 extern bool ShouldExecuteTasksLocally(List *taskList);
 extern bool AnyTaskAccessesLocalNode(List *taskList);
 extern bool TaskAccessesLocalNode(Task *task);
+extern void EnsureCompatibleLocalExecutionState(List *taskList);
 extern void ErrorIfTransactionAccessedPlacementsLocally(void);
 extern void DisableLocalExecution(void);
 extern void SetLocalExecutionStatus(LocalExecutionStatus newStatus);

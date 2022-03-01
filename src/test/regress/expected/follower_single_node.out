@@ -157,25 +157,50 @@ SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is read-only
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
 SET citus.enable_single_hash_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is read-only
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
 SET citus.task_assignment_policy TO 'round-robin';
 SET citus.enable_single_hash_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is read-only
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
 SET citus.task_assignment_policy TO 'greedy';
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is read-only
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
 SET citus.task_assignment_policy TO 'first-replica';
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is read-only
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
 RESET citus.enable_repartition_joins;
 RESET citus.enable_single_hash_repartition_joins;
 -- Confirm that dummy placements work
@@ -319,12 +344,22 @@ SELECT * FROM ref, local WHERE a = c ORDER BY a;
 
 SET citus.enable_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is read-only
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
 SET citus.enable_single_hash_repartition_joins TO ON;
 SELECT * FROM test t1, test t2 WHERE t1.x = t2.y ORDER BY t1.x;
-ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is read-only
+ x | y | x | y
+---------------------------------------------------------------------
+ 2 | 7 | 1 | 2
+ 4 | 5 | 3 | 4
+ 5 | 6 | 4 | 5
+(3 rows)
+
 RESET citus.enable_repartition_joins;
 RESET citus.enable_single_hash_repartition_joins;
 -- Confirm that dummy placements work

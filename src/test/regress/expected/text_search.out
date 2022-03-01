@@ -484,6 +484,26 @@ SELECT create_distributed_table('t5', 'name');
 
 (1 row)
 
+-- make sure partial indices propagate their dependencies
+-- first have a TEXT SEARCH CONFIGURATION that is not distributed
+SET citus.enable_ddl_propagation TO off;
+CREATE TEXT SEARCH CONFIGURATION partial_index_test_config ( parser = default );
+RESET citus.enable_ddl_propagation;
+CREATE TABLE sensors(
+    measureid integer,
+    eventdatetime date,
+    measure_data jsonb,
+    name text,
+    PRIMARY KEY (measureid, eventdatetime, measure_data)
+) PARTITION BY RANGE(eventdatetime);
+CREATE TABLE sensors_a_partition PARTITION OF sensors FOR VALUES FROM ('2000-01-01') TO ('2020-01-01');
+CREATE INDEX sensors_search_name ON sensors USING gin (to_tsvector('partial_index_test_config'::regconfig, (COALESCE(name, ''::character varying))::text));
+SELECT create_distributed_table('sensors', 'measureid');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2, "Text Search Requiring Quote's" CASCADE;
 DROP ROLE text_search_owner;

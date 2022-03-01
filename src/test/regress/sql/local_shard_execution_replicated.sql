@@ -348,6 +348,7 @@ ROLLBACK;
 
 BEGIN;
 SET citus.enable_repartition_joins TO ON;
+SET citus.enable_unique_job_ids TO off;
 SELECT count(*) FROM distributed_table;
 SELECT count(*) FROM distributed_table d1 join distributed_table d2 using(age);
 ROLLBACK;

@@ -20,6 +20,8 @@
 #include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/multi_executor.h"
+#include "distributed/relation_access_tracking.h"
 #include "distributed/remote_commands.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
@@ -247,7 +249,8 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			 * The commands will be added to both shards and metadata tables via the table
 			 * creation commands.
 			 */
-			if (relKind == RELKIND_INDEX)
+			if (relKind == RELKIND_INDEX ||
+				relKind == RELKIND_PARTITIONED_INDEX)
 			{
 				return NIL;
 			}
@@ -455,6 +458,88 @@ ShouldPropagate(void)
 	}
 
 	return true;
+}
+
+
+/*
+ * ShouldPropagateCreateInCoordinatedTransction returns based the current state of the
+ * session and policies if Citus needs to propagate the creation of new objects.
+ *
+ * Creation of objects on other nodes could be postponed till the object is actually used
+ * in a sharded object (eg. distributed table or index on a distributed table). In certain
+ * use cases the opportunity for parallelism in a transaction block is preferred. When
+ * configured like that the creation of an object might be postponed and backfilled till
+ * the object is actually used.
+ */
+bool
+ShouldPropagateCreateInCoordinatedTransction()
+{
+	if (!IsMultiStatementTransaction())
+	{
+		/*
+		 * If we are in a single statement transaction we will always propagate the
+		 * creation of objects. There are no downsides in regard to performance or
+		 * transactional limitations. These only arise with transaction blocks consisting
+		 * of multiple statements.
+		 */
+		return true;
+	}
+
+	if (MultiShardConnectionType == SEQUENTIAL_CONNECTION)
+	{
+		/*
+		 * If we are in a transaction that is already switched to sequential, either by
+		 * the user, or automatically by an other command, we will always propagate the
+		 * creation of new objects to the workers.
+		 *
+		 * This guarantees no strange anomalies when the transaction aborts or on
+		 * visibility of the newly created object.
+		 */
+		return true;
+	}
+
+	switch (CreateObjectPropagationMode)
+	{
+		case CREATE_OBJECT_PROPAGATION_DEFERRED:
+		{
+			/*
+			 * We prefer parallelism at this point. Since we did not already return while
+			 * checking for sequential mode we are still in parallel mode. We don't want
+			 * to switch that now, thus not propagating the creation.
+			 */
+			return false;
+		}
+
+		case CREATE_OBJECT_PROPAGATION_AUTOMATIC:
+		{
+			/*
+			 * When we run in optimistic mode we want to switch to sequential mode, only
+			 * if this would _not_ give an error to the user. Meaning, we either are
+			 * already in sequential mode (checked earlier), or there has been no parallel
+			 * execution in the current transaction block.
+			 *
+			 * If switching to sequential would throw an error we would stay in parallel
+			 * mode while creating new objects. We will rely on Citus' mechanism to ensure
+			 * the existence if the object would be used in the same transaction.
+			 */
+			if (ParallelQueryExecutedInTransaction())
+			{
+				return false;
+			}
+
+			return true;
+		}
+
+		case CREATE_OBJECT_PROPAGATION_IMMEDIATE:
+		{
+			return true;
+		}
+
+		default:
+		{
+			elog(ERROR, "unsupported ddl propagation mode");
+		}
+	}
 }
 
 

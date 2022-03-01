@@ -12,4 +12,4 @@ CREATE OR REPLACE FUNCTION pg_catalog.worker_create_or_replace_object(statements
   AS 'MODULE_PATHNAME', $$worker_create_or_replace_object_array$$;
 
 COMMENT ON FUNCTION pg_catalog.worker_create_or_replace_object(statements text[])
-    IS 'takes a lost of sql statements, before executing these it will check if the object already exists in that exact state otherwise replaces that named object with the new object';
+    IS 'takes an array of sql statements, before executing these it will check if the object already exists in that exact state otherwise replaces that named object with the new object';

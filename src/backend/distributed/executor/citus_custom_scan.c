@@ -150,8 +150,6 @@ RegisterCitusCustomScanMethods(void)
 static void
 CitusBeginScan(CustomScanState *node, EState *estate, int eflags)
 {
-	MarkCitusInitiatedCoordinatorBackend();
-
 	CitusScanState *scanState = (CitusScanState *) node;
 
 	/*
