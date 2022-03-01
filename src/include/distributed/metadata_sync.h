@@ -73,6 +73,7 @@ extern List * GetSequencesFromAttrDef(Oid attrdefOid);
 extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 											  List **dependentSequenceList, AttrNumber
 											  attnum);
+extern List * GetDependentFunctionsWithRelation(Oid relationId);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
 
 #define DELETE_ALL_NODES "DELETE FROM pg_dist_node"
