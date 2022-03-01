@@ -353,7 +353,13 @@ _PG_init(void)
 	{
 		DoInitialCleanup();
 	}
-	columnar_init();
+
+	/*
+	 * For convenience and backwards compatibility, we avoid users having to add both
+	 * citus and columnar to shared_preload_libraries by loading citus_columnar.so as part of
+	 * loading citus.so.
+	 */
+	load_file(COLUMNAR_LIB_NAME, false);
 }
 
 
