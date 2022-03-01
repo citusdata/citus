@@ -24,6 +24,13 @@
 
 typedef enum
 {
+	CREATE_OBJECT_PROPAGATION_DEFERRED = 0,
+	CREATE_OBJECT_PROPAGATION_AUTOMATIC = 1,
+	CREATE_OBJECT_PROPAGATION_IMMEDIATE = 2
+} CreateObjectPropagationOptions;
+
+typedef enum
+{
 	PROPSETCMD_INVALID = -1,
 	PROPSETCMD_NONE, /* do not propagate SET commands */
 	PROPSETCMD_LOCAL, /* propagate SET LOCAL commands */
@@ -32,6 +39,7 @@ typedef enum
 } PropSetCmdBehavior;
 extern PropSetCmdBehavior PropagateSetCommands;
 extern bool EnableDDLPropagation;
+extern int CreateObjectPropagationMode;
 extern bool EnableCreateTypePropagation;
 extern bool EnableAlterRolePropagation;
 extern bool EnableAlterRoleSetPropagation;

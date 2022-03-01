@@ -218,6 +218,13 @@ static const struct config_enum_entry explain_analyze_sort_method_options[] = {
 	{ NULL, 0, false }
 };
 
+static const struct config_enum_entry create_object_propagation_options[] = {
+	{"deferred",  CREATE_OBJECT_PROPAGATION_DEFERRED,  false},
+	{"automatic", CREATE_OBJECT_PROPAGATION_AUTOMATIC, false},
+	{"immediate", CREATE_OBJECT_PROPAGATION_IMMEDIATE, false},
+	{NULL,        0,                                   false}
+};
+
 /* *INDENT-ON* */
 
 
@@ -667,6 +674,24 @@ RegisterCitusConfigVariables(void)
 		0.0, 0.0, 1.0,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.create_object_propagation",
+		gettext_noop("Controls the behavior of CREATE statements in transactions for "
+					 "supported objects"),
+		gettext_noop("When creating new objects in transactions this setting is used to "
+					 "determine the behavior for propagating. When objects are created "
+					 "in a multi-statement transaction block Citus needs to switch to "
+					 "sequential mode (if not already) to make sure the objects are "
+					 "visible to later statements on shards. The switch to sequential is "
+					 "not always desired. By changing this behavior the user can trade "
+					 "off performance for full transactional consistency on the creation "
+					 "of new objects."),
+		&CreateObjectPropagationMode,
+		CREATE_OBJECT_PROPAGATION_DEFERRED, create_object_propagation_options,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
