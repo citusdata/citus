@@ -218,7 +218,7 @@ ORDER BY shard_key_value, object_id, change_id;
 -- Triggers (tables) which are not colocated
 --
 CREATE TABLE emptest (
-    empname           text NOT NULL,
+    empname           text NOT NULL PRIMARY KEY,
     salary            integer
 );
 
@@ -227,7 +227,8 @@ CREATE TABLE emptest_audit(
     stamp             timestamp NOT NULL,
     userid            text      NOT NULL,
     empname           text      NOT NULL,
-    salary integer
+    salary            integer,
+    PRIMARY KEY (empname, userid, stamp, operation, salary)
 );
 
 SELECT create_distributed_table('emptest','empname',colocate_with :='none');
@@ -282,6 +283,8 @@ CREATE TABLE record_op (
     operation_type text not null,
     stamp          timestamp NOT NULL
 );
+ALTER TABLE record_op REPLICA IDENTITY FULL;
+
 SELECT create_distributed_table('record_op', 'empname', colocate_with := 'emptest');
 CREATE OR REPLACE FUNCTION record_emp() RETURNS TRIGGER AS $rec_audit$
     BEGIN
@@ -376,7 +379,7 @@ ALTER TABLE sale ADD CONSTRAINT sale_pk PRIMARY KEY (state_code, sale_date);
 CREATE TABLE sale_newyork PARTITION OF sale FOR VALUES IN ('NY');
 CREATE TABLE sale_california PARTITION OF sale FOR VALUES IN ('CA');
 
-CREATE TABLE record_sale(operation_type text not null, product_sku text, state_code text);
+CREATE TABLE record_sale(operation_type text not null, product_sku text, state_code text, units integer, PRIMARY KEY(state_code, product_sku, operation_type, units));
 
 SELECT create_distributed_table('sale', 'state_code');
 SELECT create_distributed_table('record_sale', 'state_code', colocate_with := 'sale');
@@ -385,8 +388,8 @@ CREATE OR REPLACE FUNCTION record_sale()
 RETURNS trigger
 AS $$
 BEGIN
-    INSERT INTO distributed_triggers.record_sale(operation_type, product_sku, state_code)
-    VALUES (TG_OP, NEW.product_sku, NEW.state_code);
+    INSERT INTO distributed_triggers.record_sale(operation_type, product_sku, state_code, units)
+    VALUES (TG_OP, NEW.product_sku, NEW.state_code, NEW.units);
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
@@ -403,7 +406,7 @@ INSERT INTO sale(sale_date,state_code,product_sku,units) VALUES
 ('2019-02-03', 'NY', 'AZ-000A1',   47);
 
 TABLE sale ORDER BY state_code, sale_date;
-TABLE record_sale ORDER BY 1,2,3;
+SELECT operation_type, product_sku, state_code FROM record_sale ORDER BY 1,2,3;
 
 --
 --Test ALTER TRIGGER
