@@ -4,3 +4,4 @@ test: upgrade_basic_after
 test: upgrade_partition_constraints_after
 test: upgrade_pg_dist_object_test_after
 test: upgrade_columnar_metapage_after
+test: upgrade_post_11_after
