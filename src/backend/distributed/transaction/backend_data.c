@@ -83,6 +83,7 @@ typedef struct BackendManagementShmemData
 
 static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
 									   tupleDescriptor);
+static bool UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId);
 static uint64 GenerateGlobalPID(void);
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
@@ -114,8 +115,6 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 {
 	CheckCitusVersion(ERROR);
 
-	Oid userId = GetUserId();
-
 	/* prepare data before acquiring spinlock to protect against errors */
 	int32 initiatorNodeIdentifier = PG_GETARG_INT32(0);
 	uint64 transactionNumber = PG_GETARG_INT64(1);
@@ -144,16 +143,10 @@ assign_distributed_transaction_id(PG_FUNCTION_ARGS)
 							   "transaction id")));
 	}
 
-	MyBackendData->databaseId = MyDatabaseId;
-	MyBackendData->userId = userId;
-
 	MyBackendData->transactionId.initiatorNodeIdentifier = initiatorNodeIdentifier;
 	MyBackendData->transactionId.transactionNumber = transactionNumber;
 	MyBackendData->transactionId.timestamp = timestamp;
 	MyBackendData->transactionId.transactionOriginator = false;
-
-	MyBackendData->citusBackend.initiatorNodeIdentifier =
-		MyBackendData->transactionId.initiatorNodeIdentifier;
 
 	SpinLockRelease(&MyBackendData->mutex);
 
@@ -360,55 +353,48 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 {
 	Datum values[ACTIVE_TRANSACTION_COLUMN_COUNT];
 	bool isNulls[ACTIVE_TRANSACTION_COLUMN_COUNT];
-	bool showAllTransactions = superuser();
+	bool showAllBackends = superuser();
 	const Oid userId = GetUserId();
 
-	/*
-	 * We don't want to initialize memory while spinlock is held so we
-	 * prefer to do it here. This initialization is done only for the first
-	 * row.
-	 */
-	memset(values, 0, sizeof(values));
-	memset(isNulls, false, sizeof(isNulls));
-
-	if (is_member_of_role(userId, ROLE_PG_MONITOR))
+	if (!showAllBackends && is_member_of_role(userId, ROLE_PG_MONITOR))
 	{
-		showAllTransactions = true;
+		showAllBackends = true;
 	}
 
 	/* we're reading all distributed transactions, prevent new backends */
 	LockBackendSharedMemory(LW_SHARED);
 
-	for (int backendIndex = 0; backendIndex < MaxBackends; ++backendIndex)
+	for (int backendIndex = 0; backendIndex < TotalProcCount(); ++backendIndex)
 	{
+		bool showCurrentBackendDetails = showAllBackends;
 		BackendData *currentBackend =
 			&backendManagementShmemData->backends[backendIndex];
+		PGPROC *currentProc = &ProcGlobal->allProcs[backendIndex];
 
 		/* to work on data after releasing g spinlock to protect against errors */
-		int initiatorNodeIdentifier = -1;
 		uint64 transactionNumber = 0;
 
 		SpinLockAcquire(&currentBackend->mutex);
 
-		if (currentBackend->globalPID == INVALID_CITUS_INTERNAL_BACKEND_GPID)
+		if (currentProc->pid == 0)
 		{
+			/* unused PGPROC slot */
 			SpinLockRelease(&currentBackend->mutex);
 			continue;
 		}
 
 		/*
 		 * Unless the user has a role that allows seeing all transactions (superuser,
-		 * pg_monitor), skip over transactions belonging to other users.
+		 * pg_monitor), we only follow pg_stat_statements owner checks.
 		 */
-		if (!showAllTransactions && currentBackend->userId != userId)
+		if (!showCurrentBackendDetails &&
+			UserHasPermissionToViewStatsOf(userId, currentProc->roleId))
 		{
-			SpinLockRelease(&currentBackend->mutex);
-			continue;
+			showCurrentBackendDetails = true;
 		}
 
 		Oid databaseId = currentBackend->databaseId;
 		int backendPid = ProcGlobal->allProcs[backendIndex].pid;
-		initiatorNodeIdentifier = currentBackend->citusBackend.initiatorNodeIdentifier;
 
 		/*
 		 * We prefer to use worker_query instead of distributedCommandOriginator in
@@ -423,13 +409,42 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 
 		SpinLockRelease(&currentBackend->mutex);
 
-		values[0] = ObjectIdGetDatum(databaseId);
-		values[1] = Int32GetDatum(backendPid);
-		values[2] = Int32GetDatum(initiatorNodeIdentifier);
-		values[3] = !distributedCommandOriginator;
-		values[4] = UInt64GetDatum(transactionNumber);
-		values[5] = TimestampTzGetDatum(transactionIdTimestamp);
-		values[6] = UInt64GetDatum(currentBackend->globalPID);
+		memset(values, 0, sizeof(values));
+		memset(isNulls, false, sizeof(isNulls));
+
+		/*
+		 * We imitate pg_stat_activity such that if a user doesn't have enough
+		 * privileges, we only show the minimal information including the pid,
+		 * global pid and distributedCommandOriginator.
+		 *
+		 * pid is already can be found in pg_stat_activity for any process, and
+		 * the rest doesn't reveal anything critial for under priviledge users
+		 * but still could be useful for monitoring purposes of Citus.
+		 */
+		if (showCurrentBackendDetails)
+		{
+			bool missingOk = true;
+			int initiatorNodeId =
+				ExtractNodeIdFromGlobalPID(currentBackend->globalPID, missingOk);
+
+			values[0] = ObjectIdGetDatum(databaseId);
+			values[1] = Int32GetDatum(backendPid);
+			values[2] = Int32GetDatum(initiatorNodeId);
+			values[3] = !distributedCommandOriginator;
+			values[4] = UInt64GetDatum(transactionNumber);
+			values[5] = TimestampTzGetDatum(transactionIdTimestamp);
+			values[6] = UInt64GetDatum(currentBackend->globalPID);
+		}
+		else
+		{
+			isNulls[0] = true;
+			values[1] = Int32GetDatum(backendPid);
+			isNulls[2] = true;
+			values[3] = !distributedCommandOriginator;
+			isNulls[4] = true;
+			isNulls[5] = true;
+			values[6] = UInt64GetDatum(currentBackend->globalPID);
+		}
 
 		tuplestore_putvalues(tupleStore, tupleDescriptor, values, isNulls);
 
@@ -443,6 +458,35 @@ StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc tupleDescripto
 	}
 
 	UnlockBackendSharedMemory();
+}
+
+
+/*
+ * UserHasPermissionToViewStatsOf returns true if currentUserId can
+ * see backends of backendOwnedId.
+ *
+ * We follow the same approach with pg_stat_activity.
+ */
+static
+bool
+UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId)
+{
+	if (has_privs_of_role(currentUserId, backendOwnedId))
+	{
+		return true;
+	}
+
+	if (is_member_of_role(currentUserId,
+#if PG_VERSION_NUM >= PG_VERSION_14
+						  ROLE_PG_READ_ALL_STATS))
+#else
+						  DEFAULT_ROLE_READ_ALL_STATS))
+#endif
+	{
+		return true;
+	}
+
+	return false;
 }
 
 
@@ -520,7 +564,6 @@ BackendManagementShmemInit(void)
 		{
 			BackendData *backendData =
 				&backendManagementShmemData->backends[backendIndex];
-			backendData->citusBackend.initiatorNodeIdentifier = -1;
 			SpinLockInit(&backendData->mutex);
 		}
 	}
@@ -652,15 +695,11 @@ UnSetDistributedTransactionId(void)
 	{
 		SpinLockAcquire(&MyBackendData->mutex);
 
-		MyBackendData->databaseId = 0;
-		MyBackendData->userId = 0;
 		MyBackendData->cancelledDueToDeadlock = false;
 		MyBackendData->transactionId.initiatorNodeIdentifier = 0;
 		MyBackendData->transactionId.transactionOriginator = false;
 		MyBackendData->transactionId.transactionNumber = 0;
 		MyBackendData->transactionId.timestamp = 0;
-
-		MyBackendData->citusBackend.initiatorNodeIdentifier = -1;
 
 		SpinLockRelease(&MyBackendData->mutex);
 	}
@@ -679,6 +718,8 @@ UnSetGlobalPID(void)
 		SpinLockAcquire(&MyBackendData->mutex);
 
 		MyBackendData->globalPID = 0;
+		MyBackendData->databaseId = 0;
+		MyBackendData->userId = 0;
 
 		SpinLockRelease(&MyBackendData->mutex);
 	}
@@ -760,40 +801,13 @@ AssignDistributedTransactionId(void)
 	uint64 nextTransactionNumber = pg_atomic_fetch_add_u64(transactionNumberSequence, 1);
 	int32 localGroupId = GetLocalGroupId();
 	TimestampTz currentTimestamp = GetCurrentTimestamp();
-	Oid userId = GetUserId();
 
 	SpinLockAcquire(&MyBackendData->mutex);
-
-	MyBackendData->databaseId = MyDatabaseId;
-	MyBackendData->userId = userId;
 
 	MyBackendData->transactionId.initiatorNodeIdentifier = localGroupId;
 	MyBackendData->transactionId.transactionOriginator = true;
 	MyBackendData->transactionId.transactionNumber = nextTransactionNumber;
 	MyBackendData->transactionId.timestamp = currentTimestamp;
-
-	MyBackendData->citusBackend.initiatorNodeIdentifier = localGroupId;
-
-	SpinLockRelease(&MyBackendData->mutex);
-}
-
-
-/*
- * MarkCitusInitiatedCoordinatorBackend sets that coordinator backend is
- * initiated by Citus.
- */
-void
-MarkCitusInitiatedCoordinatorBackend(void)
-{
-	/*
-	 * GetLocalGroupId may throw exception which can cause leaving spin lock
-	 * unreleased. Calling GetLocalGroupId function before the lock to avoid this.
-	 */
-	int32 localGroupId = GetLocalGroupId();
-
-	SpinLockAcquire(&MyBackendData->mutex);
-
-	MyBackendData->citusBackend.initiatorNodeIdentifier = localGroupId;
 
 	SpinLockRelease(&MyBackendData->mutex);
 }
@@ -821,9 +835,15 @@ AssignGlobalPID(void)
 		globalPID = ExtractGlobalPID(application_name);
 	}
 
+	Oid userId = GetUserId();
+
 	SpinLockAcquire(&MyBackendData->mutex);
+
 	MyBackendData->globalPID = globalPID;
 	MyBackendData->distributedCommandOriginator = distributedCommandOriginator;
+	MyBackendData->databaseId = MyDatabaseId;
+	MyBackendData->userId = userId;
+
 	SpinLockRelease(&MyBackendData->mutex);
 }
 
@@ -926,11 +946,12 @@ ExtractGlobalPID(char *applicationName)
  * gives us the node id.
  */
 int
-ExtractNodeIdFromGlobalPID(uint64 globalPID)
+ExtractNodeIdFromGlobalPID(uint64 globalPID, bool missingOk)
 {
 	int nodeId = (int) (globalPID / GLOBAL_PID_NODE_ID_MULTIPLIER);
 
-	if (nodeId == GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA)
+	if (!missingOk &&
+		nodeId == GLOBAL_PID_NODE_ID_FOR_NODES_NOT_IN_METADATA)
 	{
 		ereport(ERROR, (errmsg("originator node of the query with the global pid "
 							   "%lu is not in Citus' metadata", globalPID),

@@ -28,9 +28,11 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_attrdef.h"
+#include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_namespace.h"
+#include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/async.h"
 #include "distributed/argutils.h"
@@ -85,6 +87,7 @@ char *EnableManualMetadataChangesForUser = "";
 
 static void EnsureObjectMetadataIsSane(int distributionArgumentIndex,
 									   int colocationId);
+static List * GetFunctionDependenciesForObjects(ObjectAddress *objectAddress);
 static char * SchemaOwnerName(Oid objectId);
 static bool HasMetadataWorkers(void);
 static void CreateShellTableOnWorkers(Oid relationId);
@@ -104,7 +107,6 @@ static List * GetObjectsForGrantStmt(ObjectType objectType, Oid objectId);
 static AccessPriv * GetAccessPrivObjectForGrantStmt(char *permission);
 static List * GenerateGrantOnSchemaQueriesFromAclItem(Oid schemaOid,
 													  AclItem *aclItem);
-static void SetLocalEnableMetadataSync(bool state);
 static void SetLocalReplicateReferenceTablesOnActivate(bool state);
 static char * GenerateSetRoleQuery(Oid roleOid);
 static void MetadataSyncSigTermHandler(SIGNAL_ARGS);
@@ -1545,6 +1547,119 @@ GetSequencesFromAttrDef(Oid attrdefOid)
 
 
 /*
+ * GetDependentFunctionsWithRelation returns the dependent functions for the
+ * given relation id.
+ */
+List *
+GetDependentFunctionsWithRelation(Oid relationId)
+{
+	List *referencingObjects = NIL;
+	List *functionOids = NIL;
+	ScanKeyData key[2];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(RelationRelationId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(relationId));
+
+	SysScanDesc scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+										  NULL, 2, key);
+
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		/*
+		 * objsubid is nonzero only for table columns and zero for anything else.
+		 * Since we are trying to find a dependency from the column of a table to
+		 * function we've added deprec->refobjsubid != 0 check.
+		 *
+		 * We are following DEPENDENCY_AUTO for dependencies via column and
+		 * DEPENDENCY_NORMAL anything else. Since only procedure dependencies
+		 * for those dependencies will be obtained in GetFunctionDependenciesForObjects
+		 * following both dependency types are not harmful.
+		 */
+		if ((deprec->refobjsubid != 0 && deprec->deptype == DEPENDENCY_AUTO) ||
+			deprec->deptype == DEPENDENCY_NORMAL)
+		{
+			ObjectAddress *refAddress = palloc(sizeof(ObjectAddress));
+			ObjectAddressSubSet(*refAddress, deprec->classid,
+								deprec->objid,
+								deprec->objsubid);
+			referencingObjects = lappend(referencingObjects, refAddress);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	ObjectAddress *referencingObject = NULL;
+	foreach_ptr(referencingObject, referencingObjects)
+	{
+		functionOids = list_concat(functionOids,
+								   GetFunctionDependenciesForObjects(referencingObject));
+	}
+
+	return functionOids;
+}
+
+
+/*
+ * GetFunctionDependenciesForObjects returns a list of function OIDs that have
+ * dependency with the given object
+ */
+static List *
+GetFunctionDependenciesForObjects(ObjectAddress *objectAddress)
+{
+	List *functionOids = NIL;
+	ScanKeyData key[3];
+	HeapTuple tup;
+
+	Relation depRel = table_open(DependRelationId, AccessShareLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_classid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(objectAddress->classId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_objid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(objectAddress->objectId));
+	ScanKeyInit(&key[2],
+				Anum_pg_depend_objsubid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(objectAddress->objectSubId));
+
+	SysScanDesc scan = systable_beginscan(depRel, DependDependerIndexId, true,
+										  NULL, 3, key);
+
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend deprec = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (deprec->refclassid == ProcedureRelationId)
+		{
+			functionOids = lappend_oid(functionOids, deprec->refobjid);
+		}
+	}
+
+	systable_endscan(scan);
+
+	table_close(depRel, AccessShareLock);
+
+	return functionOids;
+}
+
+
+/*
  * SequenceDependencyCommandList generates commands to record the dependency
  * of sequences on tables on the worker. This dependency does not exist by
  * default since the sequences and table are created separately, but it is
@@ -1832,7 +1947,7 @@ GetAccessPrivObjectForGrantStmt(char *permission)
 /*
  * SetLocalEnableMetadataSync sets the enable_metadata_sync locally
  */
-static void
+void
 SetLocalEnableMetadataSync(bool state)
 {
 	set_config_option("citus.enable_metadata_sync", state == true ? "on" : "off",

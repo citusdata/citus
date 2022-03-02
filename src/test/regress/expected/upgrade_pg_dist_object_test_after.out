@@ -39,12 +39,38 @@ drop cascades to table upgrade_basic.t_range
 SELECT i.* FROM citus.pg_dist_object, pg_identify_object_as_address(classid, objid, objsubid) i ORDER BY 1, 2, 3;
       type      | object_names | object_args
 ---------------------------------------------------------------------
-  database       | {postgres}          | {}
-  extension      | {isn}               | {}
-  role           | {postgres}          | {}
-  schema         | {fooschema}         | {}
-  schema         | {new_schema}        | {}
-  schema         | {public}            | {}
-  type           | {fooschema.footype} | {}
- (7 rows)
+  collation                 | {post_11_upgrade,german_phonebook_unpropagated}          | {}
+  database                  | {postgres}                                               | {}
+  extension                 | {isn}                                                    | {}
+  extension                 | {plpgsql}                                                | {}
+  function                  | {post_11_upgrade,func_in_transaction_def}                | {}
+  role                      | {postgres}                                               | {}
+  schema                    | {fooschema}                                              | {}
+  schema                    | {new_schema}                                             | {}
+  schema                    | {post_11_upgrade}                                        | {}
+  schema                    | {public}                                                 | {}
+  table                     | {fooschema,footable}                                     | {}
+  table                     | {new_schema,another_dist_table}                          | {}
+  table                     | {post_11_upgrade,colocated_dist_table}                   | {}
+  table                     | {post_11_upgrade,colocated_partitioned_table}            | {}
+  table                     | {post_11_upgrade,colocated_partitioned_table_2020_01_01} | {}
+  table                     | {post_11_upgrade,dist}                                   | {}
+  table                     | {post_11_upgrade,index_backed_rep_identity}              | {}
+  table                     | {post_11_upgrade,part_table}                             | {}
+  table                     | {post_11_upgrade,part_table_p202008}                     | {}
+  table                     | {post_11_upgrade,part_table_p202009}                     | {}
+  table                     | {post_11_upgrade,reference_table}                        | {}
+  table                     | {post_11_upgrade,sensors}                                | {}
+  table                     | {post_11_upgrade,sensors_2020_01_01}                     | {}
+  table                     | {post_11_upgrade,sensors_news}                           | {}
+  table                     | {post_11_upgrade,sensors_old}                            | {}
+  table                     | {post_11_upgrade,sensors_parser}                         | {}
+  table                     | {post_11_upgrade,sensors_parser_a_partition}             | {}
+  table                     | {post_11_upgrade,test_propagate_collate}                 | {}
+  table                     | {public,dist_table}                                      | {}
+  table                     | {public,isn_dist_table}                                  | {}
+  text search configuration | {post_11_upgrade,partial_index_test_config}              | {}
+  type                      | {fooschema.footype}                                      | {}
+  type                      | {post_11_upgrade.my_type}                                | {}
+ (33 rows)
 

@@ -1,6 +1,10 @@
 -- citus--11.0-1--10.2-4
 
 DROP FUNCTION pg_catalog.create_distributed_function(regprocedure, text, text, bool);
+
+DROP FUNCTION pg_catalog.worker_partition_query_result(text, text, int, citus.distribution_type, text[], text[], boolean, boolean, boolean);
+#include "../udfs/worker_partition_query_result/9.2-1.sql"
+
 CREATE FUNCTION pg_catalog.master_apply_delete_command(text)
     RETURNS integer
     LANGUAGE C STRICT
@@ -21,6 +25,7 @@ CREATE FUNCTION pg_catalog.master_get_table_metadata(
     AS 'MODULE_PATHNAME', $$master_get_table_metadata$$;
 COMMENT ON FUNCTION master_get_table_metadata(relation_name text)
     IS 'fetch metadata values for the table';
+
 ALTER TABLE pg_catalog.pg_dist_partition DROP COLUMN autoconverted;
 
 CREATE FUNCTION master_append_table_to_shard(bigint, text, text, integer)
@@ -84,7 +89,6 @@ DROP FUNCTION pg_catalog.citus_shards_on_worker();
 DROP FUNCTION pg_catalog.citus_shard_indexes_on_worker();
 #include "../udfs/create_distributed_function/9.0-1.sql"
 ALTER TABLE citus.pg_dist_object DROP COLUMN force_delegation;
-
 
 SET search_path = 'pg_catalog';
 
@@ -341,5 +345,7 @@ JOIN
 
 ALTER VIEW citus.citus_lock_waits SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
+
+DROP FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(bool);
 
 RESET search_path;

@@ -49,11 +49,11 @@ step "s1-verify-current-xact-is-on-worker"
 {
 	SELECT
 	    remote.nodeport,
-	    remote.result = row(xact.initiator_node_identifier, xact.transaction_number)::text AS xact_exists
+	    remote.result = row(xact.transaction_number)::text AS xact_exists
 	FROM
 	    get_current_transaction_id() as xact,
 	    run_command_on_workers($$
-	        SELECT row(initiator_node_identifier, transaction_number)
+	        SELECT row(transaction_number)
             FROM get_all_active_transactions()
 			WHERE transaction_number != 0;
         $$) as remote

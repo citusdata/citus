@@ -819,6 +819,9 @@ AdaptiveExecutor(CitusScanState *scanState)
 	bool hasDependentJobs = HasDependentJobs(job);
 	if (hasDependentJobs)
 	{
+		/* jobs use intermediate results, which require a distributed transaction */
+		UseCoordinatedTransaction();
+
 		jobIdList = ExecuteDependentTasks(taskList, job);
 	}
 
@@ -828,9 +831,10 @@ AdaptiveExecutor(CitusScanState *scanState)
 		targetPoolSize = 1;
 	}
 
+	bool excludeFromXact = false;
+
 	TransactionProperties xactProperties = DecideTransactionPropertiesForTaskList(
-		distributedPlan->modLevel, taskList,
-		hasDependentJobs);
+		distributedPlan->modLevel, taskList, excludeFromXact);
 
 	bool localExecutionSupported = true;
 	DistributedExecution *execution = CreateDistributedExecution(
@@ -872,11 +876,6 @@ AdaptiveExecutor(CitusScanState *scanState)
 	}
 
 	FinishDistributedExecution(execution);
-
-	if (hasDependentJobs)
-	{
-		DoRepartitionCleanup(jobIdList);
-	}
 
 	if (SortReturning && distributedPlan->expectResults && commandType != CMD_SELECT)
 	{
@@ -958,6 +957,26 @@ ExecuteUtilityTaskListExtended(List *utilityTaskList, int poolSize,
 		DecideTransactionPropertiesForTaskList(modLevel, utilityTaskList,
 											   excludeFromXact);
 	executionParams->isUtilityCommand = true;
+
+	return ExecuteTaskListExtended(executionParams);
+}
+
+
+/*
+ * ExecuteTaskList is a proxy to ExecuteTaskListExtended
+ * with defaults for some of the arguments.
+ */
+uint64
+ExecuteTaskList(RowModifyLevel modLevel, List *taskList)
+{
+	bool localExecutionSupported = true;
+	ExecutionParams *executionParams = CreateBasicExecutionParams(
+		modLevel, taskList, MaxAdaptiveExecutorPoolSize, localExecutionSupported
+		);
+
+	bool excludeFromXact = false;
+	executionParams->xactProperties = DecideTransactionPropertiesForTaskList(
+		modLevel, taskList, excludeFromXact);
 
 	return ExecuteTaskListExtended(executionParams);
 }
@@ -2638,12 +2657,6 @@ RunDistributedExecution(DistributedExecution *execution)
 		 * unclaim all connections to allow that.
 		 */
 		UnclaimAllSessionConnections(execution->sessionList);
-
-		/* do repartition cleanup if this is a repartition query*/
-		if (list_length(execution->jobIdList) > 0)
-		{
-			DoRepartitionCleanup(execution->jobIdList);
-		}
 
 		if (execution->waitEventSet != NULL)
 		{

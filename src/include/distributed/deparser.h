@@ -33,6 +33,9 @@ extern void QualifyTreeNode(Node *stmt);
 extern char * DeparseTreeNode(Node *stmt);
 extern List * DeparseTreeNodes(List *stmts);
 
+/* forward declarations for qualify_aggregate_stmts.c */
+extern void QualifyDefineAggregateStmt(Node *node);
+
 /* forward declarations for deparse_attribute_stmts.c */
 extern char * DeparseRenameAttributeStmt(Node *);
 

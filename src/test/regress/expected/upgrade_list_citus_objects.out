@@ -14,7 +14,7 @@ WHERE refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
   AND deptype = 'e'
   AND e.extname='citus'
 ORDER BY 1;
-                                                   description
+                                                       description
 ---------------------------------------------------------------------
  access method columnar
  event trigger citus_cascade_to_partition
@@ -57,6 +57,7 @@ ORDER BY 1;
  function citus_drop_trigger()
  function citus_executor_name(integer)
  function citus_extradata_container(internal)
+ function citus_finalize_upgrade_to_citus11(boolean)
  function citus_finish_pg_upgrade()
  function citus_get_active_worker_nodes()
  function citus_internal.columnar_ensure_am_depends_catalog()
@@ -225,7 +226,7 @@ ORDER BY 1;
  function worker_partial_agg(oid,anyelement)
  function worker_partial_agg_ffunc(internal)
  function worker_partial_agg_sfunc(internal,oid,anyelement)
- function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean)
+ function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean,boolean,boolean)
  function worker_partitioned_relation_size(regclass)
  function worker_partitioned_relation_total_size(regclass)
  function worker_partitioned_table_size(regclass)
@@ -272,5 +273,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(256 rows)
+(257 rows)
 

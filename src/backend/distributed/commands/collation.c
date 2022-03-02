@@ -530,10 +530,13 @@ PreprocessDefineCollationStmt(Node *node, const char *queryString,
 {
 	Assert(castNode(DefineStmt, node)->kind == OBJECT_COLLATION);
 
-	if (ShouldPropagateDefineCollationStmt())
+	if (!ShouldPropagateDefineCollationStmt())
 	{
-		EnsureCoordinator();
+		return NIL;
 	}
+
+	EnsureCoordinator();
+	EnsureSequentialMode(OBJECT_COLLATION);
 
 	return NIL;
 }
@@ -575,8 +578,7 @@ PostprocessDefineCollationStmt(Node *node, const char *queryString)
  * ShouldPropagateDefineCollationStmt checks if collation define
  * statement should be propagated. Don't propagate if:
  * - metadata syncing if off
- * - statement is part of a multi stmt transaction and the multi shard connection
- *   type is not sequential
+ * - create statement should be propagated according the the ddl propagation policy
  */
 static bool
 ShouldPropagateDefineCollationStmt()
@@ -586,8 +588,7 @@ ShouldPropagateDefineCollationStmt()
 		return false;
 	}
 
-	if (IsMultiStatementTransaction() &&
-		MultiShardConnectionType != SEQUENTIAL_CONNECTION)
+	if (!ShouldPropagateCreateInCoordinatedTransction())
 	{
 		return false;
 	}

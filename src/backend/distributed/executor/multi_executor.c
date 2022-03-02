@@ -748,6 +748,11 @@ GetObjectTypeString(ObjectType objType)
 {
 	switch (objType)
 	{
+		case OBJECT_AGGREGATE:
+		{
+			return "aggregate";
+		}
+
 		case OBJECT_COLLATION:
 		{
 			return "collation";
@@ -761,6 +766,11 @@ GetObjectTypeString(ObjectType objType)
 		case OBJECT_EXTENSION:
 		{
 			return "extension";
+		}
+
+		case OBJECT_FOREIGN_SERVER:
+		{
+			return "foreign server";
 		}
 
 		case OBJECT_FUNCTION:

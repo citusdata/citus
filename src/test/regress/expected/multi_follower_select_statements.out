@@ -117,12 +117,18 @@ order by s_i_id;
 
 SET citus.enable_repartition_joins TO ON;
 SELECT count(*) FROM the_table t1 JOIN the_table t2 USING(b);
-ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is read-only
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
 SET citus.enable_single_hash_repartition_joins TO ON;
 SELECT count(*) FROM the_table t1 , the_table t2 WHERE t1.a = t2.b;
-ERROR:  writing to worker nodes is not currently allowed
-DETAIL:  the database is read-only
+ count
+---------------------------------------------------------------------
+     2
+(1 row)
+
 SELECT
   node_name, node_port
 FROM

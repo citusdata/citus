@@ -209,6 +209,9 @@ extern ShardInterval * CopyShardInterval(ShardInterval *srcInterval);
 extern uint64 ShardLength(uint64 shardId);
 extern bool NodeGroupHasShardPlacements(int32 groupId,
 										bool onlyConsiderActivePlacements);
+extern bool IsActiveShardPlacement(ShardPlacement *ShardPlacement);
+extern List * FilterShardPlacementList(List *shardPlacementList, bool (*filter)(
+										   ShardPlacement *));
 extern List * ActiveShardPlacementListOnGroup(uint64 shardId, int32 groupId);
 extern List * ActiveShardPlacementList(uint64 shardId);
 extern List * ShardPlacementListWithoutOrphanedPlacements(uint64 shardId);
@@ -248,6 +251,7 @@ extern TableConversionReturn * UndistributeTable(TableConversionParameters *para
 extern void EnsureDependenciesExistOnAllNodes(const ObjectAddress *target);
 extern List * GetDistributableDependenciesForObject(const ObjectAddress *target);
 extern bool ShouldPropagate(void);
+extern bool ShouldPropagateCreateInCoordinatedTransction(void);
 extern bool ShouldPropagateObject(const ObjectAddress *address);
 extern List * ReplicateAllObjectsToNodeCommandList(const char *nodeName, int nodePort);
 

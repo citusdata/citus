@@ -3,8 +3,6 @@ setup
   SELECT citus_internal.replace_isolation_tester_func();
   SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
-  SELECT master_add_node('localhost', 57636, groupid => 0);
-
   CREATE TABLE ref_table(a int primary key);
   SELECT create_reference_table('ref_table');
   INSERT INTO ref_table VALUES (1), (3), (5), (7);
@@ -83,7 +81,7 @@ step "s2-lock-ref-table-placement-on-coordinator"
 
 step "s2-view-dist"
 {
-        SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND query NOT ILIKE '%pg_isolation_test_session_is_blocked%' AND query NOT ILIKE '%BEGIN%' ORDER BY query DESC;
+        SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND query NOT ILIKE '%pg_isolation_test_session_is_blocked%' AND query NOT ILIKE '%BEGIN%' AND query NOT ILIKE '%add_node%' ORDER BY query DESC;
 }
 
 step "s2-view-worker"
@@ -94,7 +92,9 @@ step "s2-view-worker"
     WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
           query NOT ILIKE '%COMMIT%' AND
           query NOT ILIKE '%dump_local_%' AND
-          query NOT ILIKE '%citus_internal_local_blocked_processes%'
+          query NOT ILIKE '%citus_internal_local_blocked_processes%' AND
+          query NOT ILIKE '%add_node%' AND
+          backend_type = 'client backend'
     ORDER BY query, query_hostport DESC;
 }
 
@@ -123,14 +123,25 @@ step "deadlock-checker-call"
   SELECT check_distributed_deadlocks();
 }
 
+
+// adding node in setup stage prevents getting a gpid with proper nodeid
+session "add-node"
+
+// we issue the checker not only when there are deadlocks to ensure that we never cancel
+// backend inappropriately
+step "add-node"
+{
+  SELECT 1 FROM master_add_node('localhost', 57636, groupid => 0);
+}
+
 // verify that locks on the placement of the reference table on the coordinator is
 // taken into account when looking for distributed deadlocks
-permutation "s1-begin" "s2-begin" "s1-update-dist-table" "s2-lock-ref-table-placement-on-coordinator" "s1-lock-ref-table-placement-on-coordinator" "s2-update-dist-table" "deadlock-checker-call" "s1-end" "s2-end"
+permutation "add-node" "s1-begin" "s2-begin" "s1-update-dist-table" "s2-lock-ref-table-placement-on-coordinator" "s1-lock-ref-table-placement-on-coordinator" "s2-update-dist-table" "deadlock-checker-call" "s1-end" "s2-end"
 
 // verify that *_dist_stat_activity() functions return the correct result when query
 // has a task on the coordinator.
-permutation "s1-begin" "s2-begin" "s1-update-ref-table" "s2-sleep" "s2-view-dist" "s2-view-worker" "s2-end" "s1-end"
+permutation "add-node" "s1-begin" "s2-begin" "s1-update-ref-table" "s2-sleep" "s2-view-dist" "s2-view-worker" "s2-end" "s1-end"
 
 // verify that get_*_active_transactions() functions return the correct result when
 // the query has a task on the coordinator.
-permutation "s1-begin" "s2-begin" "s1-update-ref-table" "s2-active-transactions" "s1-end" "s2-end"
+permutation "add-node" "s1-begin" "s2-begin" "s1-update-ref-table" "s2-active-transactions" "s1-end" "s2-end"

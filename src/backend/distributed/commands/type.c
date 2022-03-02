@@ -129,16 +129,6 @@ PreprocessCompositeTypeStmt(Node *node, const char *queryString,
 	 */
 	EnsureCoordinator();
 
-	/*
-	 * Make sure that no new nodes are added after this point until the end of the
-	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by citus_add_node.
-	 * This guarantees that all active nodes will have the object, because they will
-	 * either get it now, or get it in citus_add_node after this transaction finishes and
-	 * the pg_dist_object record becomes visible.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
-
 	/* fully qualify before lookup and later deparsing */
 	QualifyTreeNode(node);
 
@@ -1161,7 +1151,7 @@ ShouldPropagateTypeCreate()
 	 * this type will be used as a column in a table that will be created and distributed
 	 * in this same transaction.
 	 */
-	if (IsMultiStatementTransaction())
+	if (!ShouldPropagateCreateInCoordinatedTransction())
 	{
 		return false;
 	}

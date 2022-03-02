@@ -430,7 +430,7 @@ DELETE FROM pg_dist_shard WHERE shardid = 1;
 CREATE TABLE e_transactions(order_id varchar(255) NULL, transaction_id int) PARTITION BY LIST(transaction_id);
 CREATE TABLE orders_2020_07_01
 PARTITION OF e_transactions FOR VALUES IN (1,2,3);
-INSERT INTO pg_dist_partition VALUES ('e_transactions'::regclass,'h', NULL, 7, 's');
+INSERT INTO pg_dist_partition VALUES ('e_transactions'::regclass,'h', '{VAR :varno 1 :varattno 1 :vartype 1043 :vartypmod 259 :varcollid 100 :varlevelsup 0 :varnosyn 1 :varattnosyn 1 :location -1}', 7, 's');
 
 SELECT
 	(metadata->>'partitioned_citus_table_exists_pre_11')::boolean as partitioned_citus_table_exists_pre_11,
@@ -526,7 +526,7 @@ $function$;
 SET citus.enable_version_checks TO 'false';
 SET columnar.enable_version_checks TO 'false';
 -- This will fail because of previous function declaration
-ALTER EXTENSION citus UPDATE TO '8.1-1';
+ALTER EXTENSION citus UPDATE TO '9.1-1';
 
 -- We can DROP problematic function and continue ALTER EXTENSION even when version checks are on
 SET citus.enable_version_checks TO 'true';
@@ -535,7 +535,7 @@ DROP FUNCTION pg_catalog.relation_is_a_known_shard(regclass);
 
 SET citus.enable_version_checks TO 'false';
 SET columnar.enable_version_checks TO 'false';
-ALTER EXTENSION citus UPDATE TO '8.1-1';
+ALTER EXTENSION citus UPDATE TO '9.1-1';
 
 -- Test updating to the latest version without specifying the version number
 ALTER EXTENSION citus UPDATE;

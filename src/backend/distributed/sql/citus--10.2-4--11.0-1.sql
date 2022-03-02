@@ -42,8 +42,9 @@ GRANT SELECT ON pg_catalog.citus_dist_stat_activity TO PUBLIC;
 
 #include "udfs/pg_cancel_backend/11.0-1.sql"
 #include "udfs/pg_terminate_backend/11.0-1.sql"
+#include "udfs/worker_partition_query_result/11.0-1.sql"
 
-DROP FUNCTION IF EXISTS pg_catalog.master_apply_delete_command(text);
+DROP FUNCTION pg_catalog.master_apply_delete_command(text);
 DROP FUNCTION pg_catalog.master_get_table_metadata(text);
 DROP FUNCTION pg_catalog.master_append_table_to_shard(bigint, text, text, integer);
 
@@ -79,3 +80,6 @@ BEGIN
       UPDATE pg_dist_node_metadata SET metadata=jsonb_set(metadata, '{partitioned_citus_table_exists_pre_11}', to_jsonb(partitioned_table_exists), true);
 END;
 $$;
+
+#include "udfs/citus_finalize_upgrade_to_citus11/11.0-1.sql"
+

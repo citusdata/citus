@@ -122,6 +122,9 @@ typedef enum SearchForeignKeyColumnFlags
 } SearchForeignKeyColumnFlags;
 
 
+/* aggregate.c - forward declarations */
+extern List * PostprocessDefineAggregateStmt(Node *node, const char *queryString);
+
 /* cluster.c - forward declarations */
 extern List * PreprocessClusterStmt(Node *node, const char *clusterCommand,
 									ProcessUtilityContext processUtilityContext);
@@ -264,6 +267,7 @@ extern List * PreprocessCreateFunctionStmt(Node *stmt, const char *queryString,
 										   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessCreateFunctionStmt(Node *stmt,
 											const char *queryString);
+extern ObjectAddress * GetUndistributableDependency(ObjectAddress *functionAddress);
 extern ObjectAddress CreateFunctionStmtObjectAddress(Node *stmt,
 													 bool missing_ok);
 extern ObjectAddress DefineAggregateStmtObjectAddress(Node *stmt,
