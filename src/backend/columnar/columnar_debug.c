@@ -11,6 +11,7 @@
 #include "postgres.h"
 
 #include "funcapi.h"
+#include "pg_config.h"
 #include "access/nbtree.h"
 #include "access/table.h"
 #include "catalog/pg_am.h"
