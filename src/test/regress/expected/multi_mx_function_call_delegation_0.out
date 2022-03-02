@@ -132,30 +132,45 @@ select mx_call_func(2, 0);
 
 -- Mark both functions as distributed ...
 select create_distributed_function('mx_call_func(int,int)');
+NOTICE:  function multi_mx_function_call_delegation.mx_call_func is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
 select create_distributed_function('mx_call_func_bigint(bigint,bigint)');
+NOTICE:  function multi_mx_function_call_delegation.mx_call_func_bigint is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
 select create_distributed_function('mx_call_func_custom_types(mx_call_enum,mx_call_enum)');
+NOTICE:  function multi_mx_function_call_delegation.mx_call_func_custom_types is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
 select create_distributed_function('mx_call_func_copy(int)');
+NOTICE:  function multi_mx_function_call_delegation.mx_call_func_copy is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
 select create_distributed_function('squares(int)');
+NOTICE:  function multi_mx_function_call_delegation.squares is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 

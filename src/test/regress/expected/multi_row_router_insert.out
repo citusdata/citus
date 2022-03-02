@@ -71,6 +71,7 @@ BEGIN
     RETURN a*a;
 END; $$ LANGUAGE PLPGSQL STABLE;
 SELECT create_distributed_function('square(int)');
+NOTICE:  function multi_row_router_insert.square is already distributed
  create_distributed_function
 ---------------------------------------------------------------------
 

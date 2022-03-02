@@ -33,6 +33,9 @@ BEGIN
 END;
 $$;
 SELECT create_distributed_function('notice(text)');
+NOTICE:  function function_tests.notice is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -486,6 +489,9 @@ AS 'select $1 = $2;'
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 select create_distributed_function('eq(macaddr,macaddr)');
+NOTICE:  function function_tests.eq is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -797,6 +803,9 @@ BEGIN
 END;
 $$;
 SELECT create_distributed_function('func_with_return_table(int)');
+NOTICE:  function function_tests.func_with_return_table is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -824,6 +833,9 @@ CREATE OR REPLACE FUNCTION func_with_out_param(a int, out b int)
   RETURNS int
 LANGUAGE sql AS $$ select 1; $$;
 SELECT create_distributed_function('func_with_out_param(int)');
+NOTICE:  function function_tests.func_with_out_param is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -869,6 +881,9 @@ SELECT create_distributed_function('func_with_inout_param(int)');
 ERROR:  function "func_with_inout_param(int)" does not exist
 -- this should work
 SELECT create_distributed_function('func_with_inout_param(int,int)');
+NOTICE:  function function_tests.func_with_inout_param is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -893,6 +908,9 @@ CREATE OR REPLACE FUNCTION func_with_variadic_param(a int, variadic b int[])
 LANGUAGE sql AS $$ select 1; $$;
 -- this should work
 SELECT create_distributed_function('func_with_variadic_param(int,int[])');
+NOTICE:  function function_tests.func_with_variadic_param is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -923,6 +941,9 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 SELECT create_distributed_function('func_returning_setof_int(date,interval)');
+NOTICE:  function function_tests.func_returning_setof_int is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -961,6 +982,9 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 SELECT create_distributed_function('func_returning_setof_int_with_variadic_param(date,int[])');
+NOTICE:  function function_tests.func_returning_setof_int_with_variadic_param is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -997,6 +1021,9 @@ SELECT create_distributed_function('proc_with_variadic_param(date)');
 ERROR:  function "proc_with_variadic_param(date)" does not exist
 -- this should work
 SELECT create_distributed_function('proc_with_variadic_param(date,int[])');
+NOTICE:  function function_tests.proc_with_variadic_param is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1028,6 +1055,9 @@ SELECT create_distributed_function('proc_with_inout_param(date)');
 ERROR:  function "proc_with_inout_param(date)" does not exist
 -- this should work
 SELECT create_distributed_function('proc_with_inout_param(date,int)');
+NOTICE:  function function_tests.proc_with_inout_param is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 

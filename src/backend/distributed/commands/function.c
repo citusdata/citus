@@ -69,6 +69,10 @@
 	(strncmp(arg, prefix, strlen(prefix)) == 0)
 
 /* forward declaration for helper functions*/
+static bool IsCreateDistributedFunctionCallIdempotent(ObjectAddress functionAddress,
+													  char *distributionArgumentName,
+													  bool colocateWithTableNameDefault,
+													  bool *forceDelegationAddress);
 static void ErrorIfAnyNodeDoesNotHaveMetadata(void);
 static char * GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace);
 static char * GetFunctionAlterOwnerCommand(const RegProcedure funcOid);
@@ -128,6 +132,7 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	char *distributionArgumentName = NULL;
 	char *colocateWithTableName = NULL;
+	bool colocateWithTableNameDefault = false;
 	bool *forceDelegationAddress = NULL;
 	bool forceDelegation = false;
 	ObjectAddress extensionAddress = { 0 };
@@ -167,8 +172,13 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		colocateWithText = PG_GETARG_TEXT_P(2);
 		colocateWithTableName = text_to_cstring(colocateWithText);
 
+		if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) == 0)
+		{
+			colocateWithTableNameDefault = true;
+		}
+
 		/* check if the colocation belongs to a reference table */
-		if (pg_strncasecmp(colocateWithTableName, "default", NAMEDATALEN) != 0)
+		if (!colocateWithTableNameDefault)
 		{
 			Oid colocationRelationId = ResolveRelationId(colocateWithText, false);
 			colocatedWithReferenceTable = IsCitusTableType(colocationRelationId,
@@ -191,6 +201,23 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	EnsureFunctionOwner(funcOid);
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
+
+	if (IsCreateDistributedFunctionCallIdempotent(functionAddress,
+												  distributionArgumentName,
+												  colocateWithTableNameDefault,
+												  forceDelegationAddress))
+	{
+		char *schemaName = get_namespace_name(get_func_namespace(funcOid));
+		char *functionName = get_func_name(funcOid);
+		char *qualifiedName = quote_qualified_identifier(schemaName, functionName);
+		ereport(NOTICE, (errmsg("function %s is already distributed", qualifiedName),
+						 errdetail("Citus distributes functions with CREATE "
+								   "(OR REPLACE) FUNCTION command"),
+						 errhint("To delegate the function, please provide parameters "
+								 "distribution_arg_name, colocate_with or "
+								 "force_delegation, for create_distributed_function")));
+		PG_RETURN_VOID();
+	}
 
 	/*
 	 * If the function is owned by an extension, only update the
@@ -256,6 +283,61 @@ create_distributed_function(PG_FUNCTION_ARGS)
 	}
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * IsCreateDistributedFunctionCallIdempotent returns true if the given parameters of
+ * create_distributed_function will not change anything on the given function.
+ * Returns false otherwise.
+ */
+static bool
+IsCreateDistributedFunctionCallIdempotent(ObjectAddress functionAddress,
+										  char *distributionArgumentName,
+										  bool colocateWithTableNameDefault,
+										  bool *forceDelegationAddress)
+{
+	if (!IsObjectDistributed(&functionAddress))
+	{
+		return false;
+	}
+
+	DistObjectCacheEntry *cacheEntry =
+		LookupDistObjectCacheEntry(ProcedureRelationId,
+								   functionAddress.objectId,
+								   InvalidOid);
+
+	if (cacheEntry == NULL)
+	{
+		return false;
+	}
+
+	/*
+	 * If the colocationId, forceDelegation and distributionArgIndex fields of a
+	 * pg_dist_object entry of a distributed function are all set to zero, it means
+	 * that function is either automatically distributed by ddl propagation, without
+	 * calling create_distributed_function. Or, it could be distributed via
+	 * create_distributed_function, but with no parameters.
+	 *
+	 * For these cases, calling create_distributed_function for that function,
+	 * without parameters would be idempotent. Hence we can simply early return here,
+	 * by providing a notice message to the user.
+	 */
+	bool functionDistributedWithoutParams =
+
+		/* are pg_dist_object fields set to zero? */
+		cacheEntry->colocationId == 0 &&
+		cacheEntry->forceDelegation == 0 &&
+		cacheEntry->distributionArgIndex == 0;
+
+	bool distributingAgainWithNoParams =
+
+		/* called create_distributed_function without parameters? */
+		distributionArgumentName == NULL &&
+		colocateWithTableNameDefault &&
+		forceDelegationAddress == NULL;
+
+	return functionDistributedWithoutParams && distributingAgainWithNoParams;
 }
 
 

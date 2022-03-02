@@ -40,12 +40,18 @@ create aggregate sum2_strict (int) (
     combinefunc = sum2_sfunc_strict
 );
 select create_distributed_function('sum2(int)');
+NOTICE:  function aggregate_support.sum2 is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
 select create_distributed_function('sum2_strict(int)');
+NOTICE:  function aggregate_support.sum2_strict is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -96,12 +102,18 @@ create aggregate psum_strict(int, int)(
     initcond=0
 );
 select create_distributed_function('psum(int,int)');
+NOTICE:  function aggregate_support.psum is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
 select create_distributed_function('psum_strict(int,int)');
+NOTICE:  function aggregate_support.psum_strict is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -298,6 +310,9 @@ SELECT run_command_on_workers($$select count(*) from pg_aggregate where aggfnoid
 (2 rows)
 
 select create_distributed_function('binstragg(text,text)');
+NOTICE:  function aggregate_support.binstragg is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -527,12 +542,18 @@ CREATE AGGREGATE last (
 	combinefunc = last_agg
 );
 SELECT create_distributed_function('first(anyelement)');
+NOTICE:  function aggregate_support.first is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
 (1 row)
 
 SELECT create_distributed_function('last(anyelement)');
+NOTICE:  function aggregate_support.last is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -590,6 +611,9 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
 (2 rows)
 
 select create_distributed_function('sumstring(text)');
+NOTICE:  function aggregate_support.sumstring is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -614,6 +638,9 @@ create aggregate array_collect_sort(el int) (
 	initcond = '{}'
 );
 select create_distributed_function('array_collect_sort(int)');
+NOTICE:  function aggregate_support.array_collect_sort is already distributed
+DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
+HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 

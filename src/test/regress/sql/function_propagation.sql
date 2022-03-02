@@ -709,6 +709,18 @@ CREATE TABLE table_non_for_func_dist (
     b int DEFAULT non_sense_func_for_default_val(NULL::loc_for_func_dist));
 
 SELECT create_distributed_table('table_non_for_func_dist', 'a');
+SET citus.shard_replication_factor = 1;
+-- test creating a colocated function
+CREATE TABLE tbl_to_colocate (a int);
+SELECT create_distributed_table('tbl_to_colocate', 'a');
+CREATE FUNCTION func_to_colocate (a int) returns int as $$select 1;$$ language sql;
+SELECT create_distributed_function('func_to_colocate(int)','$1','tbl_to_colocate');
+-- see the pg_dist_object entry
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+-- try create or replace the same func
+CREATE OR REPLACE FUNCTION func_to_colocate (a int) returns int as $$select 1;$$ language sql;
+-- verify the pg_dist_object entry is the same
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
 
 RESET search_path;
 SET client_min_messages TO WARNING;
