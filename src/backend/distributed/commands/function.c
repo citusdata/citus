@@ -82,7 +82,6 @@ static void EnsureFunctionCanBeColocatedWithTable(Oid functionOid, Oid
 static bool ShouldPropagateCreateFunction(CreateFunctionStmt *stmt);
 static bool ShouldPropagateAlterFunction(const ObjectAddress *address);
 static bool ShouldAddFunctionSignature(FunctionParameterMode mode);
-static ObjectAddress * GetUndistributableDependency(ObjectAddress *functionAddress);
 static ObjectAddress FunctionToObjectAddress(ObjectType objectType,
 											 ObjectWithArgs *objectWithArgs,
 											 bool missing_ok);
@@ -1352,7 +1351,7 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
  * GetUndistributableDependency checks whether object has any non-distributable
  * dependency. If any one found, it will be returned.
  */
-static ObjectAddress *
+ObjectAddress *
 GetUndistributableDependency(ObjectAddress *objectAddress)
 {
 	List *dependencies = GetAllDependenciesForObject(objectAddress);
@@ -1443,10 +1442,18 @@ DefineAggregateStmtObjectAddress(Node *node, bool missing_ok)
 	ObjectWithArgs *objectWithArgs = makeNode(ObjectWithArgs);
 	objectWithArgs->objname = stmt->defnames;
 
-	FunctionParameter *funcParam = NULL;
-	foreach_ptr(funcParam, linitial(stmt->args))
+	if (stmt->args != NIL)
 	{
-		objectWithArgs->objargs = lappend(objectWithArgs->objargs, funcParam->argType);
+		FunctionParameter *funcParam = NULL;
+		foreach_ptr(funcParam, linitial(stmt->args))
+		{
+			objectWithArgs->objargs = lappend(objectWithArgs->objargs,
+											  funcParam->argType);
+		}
+	}
+	else
+	{
+		objectWithArgs->objargs = list_make1(makeTypeName("anyelement"));
 	}
 
 	return FunctionToObjectAddress(OBJECT_AGGREGATE, objectWithArgs, missing_ok);
@@ -2019,10 +2026,10 @@ ShouldAddFunctionSignature(FunctionParameterMode mode)
 
 
 /*
- * FunctionToObjectAddress returns the ObjectAddress of a Function or Procedure based on
- * its type and ObjectWithArgs describing the Function/Procedure. If missing_ok is set to
- * false an error will be raised by postgres explaining the Function/Procedure could not
- * be found.
+ * FunctionToObjectAddress returns the ObjectAddress of a Function, Procedure or
+ * Aggregate based on its type and ObjectWithArgs describing the
+ * Function/Procedure/Aggregate. If missing_ok is set to false an error will be
+ * raised by postgres explaining the Function/Procedure could not be found.
  */
 static ObjectAddress
 FunctionToObjectAddress(ObjectType objectType, ObjectWithArgs *objectWithArgs,

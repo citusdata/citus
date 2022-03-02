@@ -12,15 +12,22 @@ BEGIN
 
     IF substring(current_Setting('server_version'), '\d+')::int >= 14 THEN
     EXECUTE $cmd$
+        -- disable propagation to prevent EnsureCoordinator errors
+        -- the aggregate created here does not depend on Citus extension (yet)
+        -- since we add the dependency with the next command
+        SET citus.enable_ddl_propagation TO OFF;
         CREATE AGGREGATE array_cat_agg(anycompatiblearray) (SFUNC = array_cat, STYPE = anycompatiblearray);
         COMMENT ON AGGREGATE array_cat_agg(anycompatiblearray)
         IS 'concatenate input arrays into a single array';
+        RESET citus.enable_ddl_propagation;
     $cmd$;
     ELSE
     EXECUTE $cmd$
+        SET citus.enable_ddl_propagation TO OFF;
         CREATE AGGREGATE array_cat_agg(anyarray) (SFUNC = array_cat, STYPE = anyarray);
         COMMENT ON AGGREGATE array_cat_agg(anyarray)
         IS 'concatenate input arrays into a single array';
+        RESET citus.enable_ddl_propagation;
     $cmd$;
     END IF;
 

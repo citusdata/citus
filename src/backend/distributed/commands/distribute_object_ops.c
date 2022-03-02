@@ -43,11 +43,11 @@ static DistributeObjectOps Aggregate_AlterOwner = {
 };
 static DistributeObjectOps Aggregate_Define = {
 	.deparse = NULL,
-	.qualify = NULL,
+	.qualify = QualifyDefineAggregateStmt,
 	.preprocess = NULL,
-	.postprocess = NULL,
+	.postprocess = PostprocessDefineAggregateStmt,
 	.address = DefineAggregateStmtObjectAddress,
-	.markDistributed = false,
+	.markDistributed = true,
 };
 static DistributeObjectOps Aggregate_Drop = {
 	.deparse = DeparseDropFunctionStmt,
