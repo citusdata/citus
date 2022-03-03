@@ -1097,6 +1097,15 @@ ActivateNode(char *nodeName, int nodePort)
 	if (syncMetadata)
 	{
 		/*
+		 * If the worker is not coordinator, check that its
+		 * pg_dist_node is not locked by the current connection
+		 */
+		if (workerNode->groupId != 0)
+		{
+			ErrorIfWorkerDistNodeIsLocked(workerNode);
+		}
+
+		/*
 		 * We are going to sync the metadata anyway in this transaction, so do
 		 * not fail just because the current metadata is not synced.
 		 */

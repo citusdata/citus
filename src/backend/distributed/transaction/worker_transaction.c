@@ -50,6 +50,7 @@ static void SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerS
 												   const char *command, const char *user,
 												   bool
 												   failOnError);
+void ErrorIfWorkerDistNodeIsLocked(WorkerNode *workerNode);
 
 /*
  * SendCommandToWorker sends a command to a particular worker as part of the
@@ -638,4 +639,54 @@ ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList)
 									" gets synced to it and try again.")));
 		}
 	}
+}
+
+
+/*
+ * ErrorIfWorkerDistNodeIsLocked checks if the current process has taken
+ * an ExlusiveLock on the pg_dist_node table of the worker and raises an error
+ * if that is the case
+ */
+void
+ErrorIfWorkerDistNodeIsLocked(WorkerNode *workerNode)
+{
+	int connectionFlags = REQUIRE_METADATA_CONNECTION;
+
+	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
+																	  workerNode->
+																	  workerName,
+																	  workerNode->
+																	  workerPort,
+																	  CurrentUserName(),
+																	  NULL);
+	const char *partialCommand =
+		"SELECT COUNT(*) FROM pg_locks JOIN pg_class ON pg_locks.relation = pg_class.oid "
+		"WHERE pg_class.relname = 'pg_dist_node' AND pg_locks.granted AND pg_locks.mode = 'ExclusiveLock' AND pid = ";
+
+	char command[1000];
+
+	char *pgBackendPid;
+	if (asprintf(&pgBackendPid, "%d", MyProcPid) == -1)
+	{
+		ereport(ERROR, errmsg("Internal Error"));
+	}
+	strcat(strcpy(command, partialCommand), pgBackendPid);
+
+	SendRemoteCommand(workerConnection, command);
+
+	PGresult *result = GetRemoteCommandResult(workerConnection, true);
+	List *commandResult = ReadFirstColumnAsText(result);
+
+	StringInfo resultInfo = (StringInfo) linitial(commandResult);
+	char *resultText = resultInfo->data;
+
+	int firstColIntResult = atoi(resultText);
+	if (firstColIntResult > 0)
+	{
+		ereport(ERROR, errmsg("Node cannot add itself as a worker."), errhint(
+					"Either try to add the node as a coordinator (groupid:=0) or add another node as worker."));
+	}
+
+	PQclear(result);
+	ForgetResults(workerConnection);
 }

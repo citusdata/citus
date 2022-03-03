@@ -70,4 +70,6 @@ extern void RemoveWorkerTransaction(const char *nodeName, int32 nodePort);
 /* helper functions for worker transactions */
 extern bool IsWorkerTransactionActive(void);
 
+extern void ErrorIfWorkerDistNodeIsLocked(WorkerNode *workerNode);
+
 #endif /* WORKER_TRANSACTION_H */
