@@ -46,6 +46,7 @@ SELECT * FROM rebalance_table_shards();
 -- TODO: Figure out why this is necessary, rebalance_table_shards shouldn't
 -- insert stuff into pg_dist_colocation
 TRUNCATE pg_dist_colocation;
+SELECT run_command_on_workers('TRUNCATE pg_dist_colocation');
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);

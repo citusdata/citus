@@ -10,6 +10,8 @@
 #include "udfs/citus_shard_indexes_on_worker/11.0-1.sql"
 
 #include "udfs/citus_internal_add_object_metadata/11.0-1.sql"
+#include "udfs/citus_internal_add_colocation_metadata/11.0-1.sql"
+#include "udfs/citus_internal_delete_colocation_metadata/11.0-1.sql"
 #include "udfs/citus_run_local_command/11.0-1.sql"
 #include "udfs/worker_drop_sequence_dependency/11.0-1.sql"
 #include "udfs/worker_drop_shell_table/11.0-1.sql"

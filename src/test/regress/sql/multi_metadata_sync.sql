@@ -129,7 +129,7 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_testing_schema.mx_index'::regclass;
 
--- Check that pg_dist_colocation is not synced
+-- Check that pg_dist_colocation is synced
 SELECT * FROM pg_dist_colocation ORDER BY colocationid;
 
 -- Make sure that truncate trigger has been set for the MX table on worker
@@ -636,6 +636,9 @@ ORDER BY
  	nodeport;
 
 SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
+
+-- make sure we have the pg_dist_colocation record on the worker
+SELECT count(*) FROM pg_dist_colocation WHERE distributioncolumntype = 0;
 
 -- Check that DDL commands are propagated to reference tables on workers
 \c - - - :master_port
