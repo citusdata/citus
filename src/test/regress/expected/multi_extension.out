@@ -428,20 +428,20 @@ SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDE
 ALTER EXTENSION citus UPDATE TO '9.4-2';
 -- should see the old source code
 SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
-                                  prosrc
+                               prosrc
 ---------------------------------------------------------------------
-                                                                          +
- DECLARE                                                                  +
-         colocated_tables regclass[];                                     +
- BEGIN                                                                    +
-         SELECT get_colocated_table_array(relation) INTO colocated_tables;+
-         PERFORM                                                          +
-                 master_update_shard_statistics(shardid)                  +
-         FROM                                                             +
-                 pg_dist_shard                                            +
-         WHERE                                                            +
-                 logicalrelid = ANY (colocated_tables);                   +
- END;                                                                     +
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
 
 (1 row)
 
@@ -469,20 +469,20 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 -- should see the old source code
 SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
-                                  prosrc
+                               prosrc
 ---------------------------------------------------------------------
-                                                                          +
- DECLARE                                                                  +
-         colocated_tables regclass[];                                     +
- BEGIN                                                                    +
-         SELECT get_colocated_table_array(relation) INTO colocated_tables;+
-         PERFORM                                                          +
-                 master_update_shard_statistics(shardid)                  +
-         FROM                                                             +
-                 pg_dist_shard                                            +
-         WHERE                                                            +
-                 logicalrelid = ANY (colocated_tables);                   +
- END;                                                                     +
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
 
 (1 row)
 
@@ -578,20 +578,20 @@ SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDE
 ALTER EXTENSION citus UPDATE TO '9.5-2';
 -- should see the old source code
 SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
-                                  prosrc
+                               prosrc
 ---------------------------------------------------------------------
-                                                                          +
- DECLARE                                                                  +
-         colocated_tables regclass[];                                     +
- BEGIN                                                                    +
-         SELECT get_colocated_table_array(relation) INTO colocated_tables;+
-         PERFORM                                                          +
-                 master_update_shard_statistics(shardid)                  +
-         FROM                                                             +
-                 pg_dist_shard                                            +
-         WHERE                                                            +
-                 logicalrelid = ANY (colocated_tables);                   +
- END;                                                                     +
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
 
 (1 row)
 
@@ -619,20 +619,20 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 -- should see the old source code
 SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
-                                  prosrc
+                               prosrc
 ---------------------------------------------------------------------
-                                                                          +
- DECLARE                                                                  +
-         colocated_tables regclass[];                                     +
- BEGIN                                                                    +
-         SELECT get_colocated_table_array(relation) INTO colocated_tables;+
-         PERFORM                                                          +
-                 master_update_shard_statistics(shardid)                  +
-         FROM                                                             +
-                 pg_dist_shard                                            +
-         WHERE                                                            +
-                 logicalrelid = ANY (colocated_tables);                   +
- END;                                                                     +
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
 
 (1 row)
 
@@ -1013,7 +1013,9 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | function citus_check_connection_to_node(text,integer) boolean
                                                                                                                       | function citus_disable_node(text,integer,boolean) void
                                                                                                                       | function citus_finalize_upgrade_to_citus11(boolean) boolean
+                                                                                                                      | function citus_internal_add_colocation_metadata(integer,integer,integer,regtype,oid) void
                                                                                                                       | function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean) void
+                                                                                                                      | function citus_internal_delete_colocation_metadata(integer) void
                                                                                                                       | function citus_internal_global_blocked_processes() SETOF record
                                                                                                                       | function citus_internal_local_blocked_processes() SETOF record
                                                                                                                       | function citus_run_local_command(text) void
@@ -1026,7 +1028,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | function worker_drop_sequence_dependency(text) void
                                                                                                                       | function worker_drop_shell_table(text) void
                                                                                                                       | function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean,boolean,boolean) SETOF record
-(23 rows)
+(25 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version

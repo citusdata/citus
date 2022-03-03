@@ -583,6 +583,25 @@ CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionCol
 					  Oid distributionColumnCollation)
 {
 	uint32 colocationId = GetNextColocationId();
+
+	InsertColocationGroupLocally(colocationId, shardCount, replicationFactor,
+								 distributionColumnType, distributionColumnCollation);
+
+	SyncNewColocationGroupToNodes(colocationId, shardCount, replicationFactor,
+								  distributionColumnType, distributionColumnCollation);
+
+	return colocationId;
+}
+
+
+/*
+ * InsertColocationGroupLocally inserts a record into pg_dist_colocation.
+ */
+void
+InsertColocationGroupLocally(uint32 colocationId, int shardCount, int replicationFactor,
+							 Oid distributionColumnType,
+							 Oid distributionColumnCollation)
+{
 	Datum values[Natts_pg_dist_colocation];
 	bool isNulls[Natts_pg_dist_colocation];
 
@@ -610,8 +629,6 @@ CreateColocationGroup(int shardCount, int replicationFactor, Oid distributionCol
 	/* increment the counter so that next command can see the row */
 	CommandCounterIncrement();
 	table_close(pgDistColocation, RowExclusiveLock);
-
-	return colocationId;
 }
 
 
@@ -1215,10 +1232,22 @@ DeleteColocationGroupIfNoTablesBelong(uint32 colocationId)
 
 
 /*
- * DeleteColocationGroup deletes the colocation group from pg_dist_colocation.
+ * DeleteColocationGroup deletes the colocation group from pg_dist_colocation
+ * throughout the cluster.
  */
 static void
 DeleteColocationGroup(uint32 colocationId)
+{
+	DeleteColocationGroupLocally(colocationId);
+	SyncDeleteColocationGroupToNodes(colocationId);
+}
+
+
+/*
+ * DeleteColocationGroupLocally deletes the colocation group from pg_dist_colocation.
+ */
+void
+DeleteColocationGroupLocally(uint32 colocationId)
 {
 	int scanKeyCount = 1;
 	ScanKeyData scanKey[1];

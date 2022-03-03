@@ -50,6 +50,8 @@ DROP FUNCTION pg_catalog.citus_check_connection_to_node (text, integer);
 DROP FUNCTION pg_catalog.citus_check_cluster_node_health ();
 
 DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer, boolean);
+DROP FUNCTION pg_catalog.citus_internal_add_colocation_metadata(int, int, int, regtype, oid);
+DROP FUNCTION pg_catalog.citus_internal_delete_colocation_metadata(int);
 DROP FUNCTION pg_catalog.citus_run_local_command(text);
 DROP FUNCTION pg_catalog.worker_drop_sequence_dependency(text);
 DROP FUNCTION pg_catalog.worker_drop_shell_table(table_name text);

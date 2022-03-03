@@ -70,10 +70,12 @@ ORDER BY 1;
  function citus_internal.replace_isolation_tester_func()
  function citus_internal.restore_isolation_tester_func()
  function citus_internal.upgrade_columnar_storage(regclass)
+ function citus_internal_add_colocation_metadata(integer,integer,integer,regtype,oid)
  function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean)
  function citus_internal_add_partition_metadata(regclass,"char",text,integer,"char")
  function citus_internal_add_placement_metadata(bigint,integer,bigint,integer,bigint)
  function citus_internal_add_shard_metadata(regclass,bigint,"char",text,text)
+ function citus_internal_delete_colocation_metadata(integer)
  function citus_internal_delete_shard_metadata(bigint)
  function citus_internal_global_blocked_processes()
  function citus_internal_local_blocked_processes()
@@ -176,7 +178,7 @@ ORDER BY 1;
  function master_update_table_statistics(regclass)
  function notify_constraint_dropped()
  function pg_cancel_backend(bigint)
- function pg_terminate_backend(bigint, bigint)
+ function pg_terminate_backend(bigint,bigint)
  function poolinfo_valid(text)
  function read_intermediate_result(text,citus_copy_format)
  function read_intermediate_results(text[],citus_copy_format)
@@ -273,5 +275,5 @@ ORDER BY 1;
  view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(257 rows)
+(259 rows)
 

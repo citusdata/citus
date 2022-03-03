@@ -28,6 +28,7 @@
 #include "catalog/indexing.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_attrdef.h"
+#include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_foreign_server.h"
@@ -48,12 +49,14 @@
 #include "distributed/maintenanced.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata_sync.h"
+#include "distributed/metadata_utility.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_join_order.h"
 #include "distributed/multi_partitioning_utils.h"
 #include "distributed/multi_physical_planner.h"
+#include "distributed/pg_dist_colocation.h"
 #include "distributed/pg_dist_node.h"
 #include "distributed/pg_dist_shard.h"
 #include "distributed/relation_access_tracking.h"
@@ -124,6 +127,11 @@ static void EnsureShardMetadataIsSane(Oid relationId, int64 shardId, char storag
 static void EnsureShardPlacementMetadataIsSane(Oid relationId, int64 shardId,
 											   int64 placementId, int32 shardState,
 											   int64 shardLength, int32 groupId);
+static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
+										   int replicationFactor,
+										   Oid distributionColumnType,
+										   Oid distributionColumnCollation);
+static char * ColocationGroupDeleteCommand(uint32 colocationId);
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
@@ -142,6 +150,8 @@ PG_FUNCTION_INFO_V1(citus_internal_update_placement_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_delete_shard_metadata);
 PG_FUNCTION_INFO_V1(citus_internal_update_relation_colocation);
 PG_FUNCTION_INFO_V1(citus_internal_add_object_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_add_colocation_metadata);
+PG_FUNCTION_INFO_V1(citus_internal_delete_colocation_metadata);
 
 
 static bool got_SIGTERM = false;
@@ -558,6 +568,7 @@ DropMetadataSnapshotOnNode(WorkerNode *workerNode)
 	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_PLACEMENTS);
 	dropMetadataCommandList = lappend(dropMetadataCommandList,
 									  DELETE_ALL_DISTRIBUTED_OBJECTS);
+	dropMetadataCommandList = lappend(dropMetadataCommandList, DELETE_ALL_COLOCATION);
 
 	Assert(superuser());
 	SendOptionalMetadataCommandListToWorkerInCoordinatedTransaction(
@@ -3160,4 +3171,233 @@ citus_internal_update_relation_colocation(PG_FUNCTION_ARGS)
 	UpdateRelationColocationGroup(relationId, targetColocationId, localOnly);
 
 	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_add_colocation_metadata is an internal UDF to
+ * add a row to pg_dist_colocation.
+ */
+Datum
+citus_internal_add_colocation_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	int colocationId = PG_GETARG_INT32(0);
+	int shardCount = PG_GETARG_INT32(1);
+	int replicationFactor = PG_GETARG_INT32(2);
+	Oid distributionColumnType = PG_GETARG_INT32(3);
+	Oid distributionColumnCollation = PG_GETARG_INT32(4);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	InsertColocationGroupLocally(colocationId, shardCount, replicationFactor,
+								 distributionColumnType, distributionColumnCollation);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * citus_internal_delete_colocation_metadata is an internal UDF to
+ * delte row from pg_dist_colocation.
+ */
+Datum
+citus_internal_delete_colocation_metadata(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+	EnsureSuperUser();
+
+	int colocationId = PG_GETARG_INT32(0);
+
+	if (!ShouldSkipMetadataChecks())
+	{
+		/* this UDF is not allowed allowed for executing as a separate command */
+		EnsureCoordinatorInitiatedOperation();
+	}
+
+	DeleteColocationGroupLocally(colocationId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * SyncNewColocationGroup synchronizes a new pg_dist_colocation entry to a worker.
+ */
+void
+SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount, int replicationFactor,
+							  Oid distributionColumnType, Oid distributionColumnCollation)
+{
+	char *command = ColocationGroupCreateCommand(colocationId, shardCount,
+												 replicationFactor,
+												 distributionColumnType,
+												 distributionColumnCollation);
+
+	/*
+	 * We require superuser for all pg_dist_colocation operations because we have
+	 * no reasonable way of restricting access.
+	 */
+	SendCommandToWorkersWithMetadataViaSuperUser(command);
+}
+
+
+/*
+ * ColocationGroupCreateCommand returns a command for creating a colocation group.
+ */
+static char *
+ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicationFactor,
+							 Oid distributionColumnType, Oid distributionColumnCollation)
+{
+	StringInfo insertColocationCommand = makeStringInfo();
+
+	appendStringInfo(insertColocationCommand,
+					 "SELECT pg_catalog.citus_internal_add_colocation_metadata("
+					 "%d, %d, %d, ",
+					 colocationId,
+					 shardCount,
+					 replicationFactor);
+
+	/* we also have pg_dist_colocation entries for reference tables */
+	if (distributionColumnType != InvalidOid)
+	{
+		char *typeName = format_type_extended(distributionColumnType, -1,
+											  FORMAT_TYPE_FORCE_QUALIFY |
+											  FORMAT_TYPE_ALLOW_INVALID);
+
+		/* format_type_extended returns ??? in case of an unknown type */
+		if (strcmp(typeName, "???") != 0)
+		{
+			appendStringInfo(insertColocationCommand,
+							 "%s::regtype",
+							 quote_literal_cstr(typeName));
+		}
+		else
+		{
+			/* pg_dist_colocation contains an invalid type ID, just insert 0 */
+			appendStringInfoString(insertColocationCommand, "0");
+		}
+	}
+	else
+	{
+		appendStringInfoString(insertColocationCommand, "0");
+	}
+
+	appendStringInfoString(insertColocationCommand, ", ");
+
+	if (distributionColumnCollation != InvalidOid)
+	{
+		/* would be great if we could use regcollation, but it's not available on PG12 */
+
+		Datum collationIdDatum = ObjectIdGetDatum(distributionColumnCollation);
+		HeapTuple collationTuple = SearchSysCache1(COLLOID, collationIdDatum);
+
+		if (HeapTupleIsValid(collationTuple))
+		{
+			Form_pg_collation collationform =
+				(Form_pg_collation) GETSTRUCT(collationTuple);
+			char *collationName = NameStr(collationform->collname);
+			char *collationSchemaName = get_namespace_name(collationform->collnamespace);
+
+			appendStringInfo(insertColocationCommand,
+							 "(select oid from pg_collation"
+							 " where collname = %s"
+							 " and collnamespace = %s::regnamespace)",
+							 quote_literal_cstr(collationName),
+							 quote_literal_cstr(collationSchemaName));
+		}
+		else
+		{
+			/* pg_dist_colocation contains an invalid collation, just insert 0 */
+			appendStringInfoString(insertColocationCommand, "0");
+		}
+
+		ReleaseSysCache(collationTuple);
+	}
+	else
+	{
+		appendStringInfoString(insertColocationCommand, "0");
+	}
+
+	appendStringInfoString(insertColocationCommand, ")");
+
+	return insertColocationCommand->data;
+}
+
+
+/*
+ * SyncDeleteColocationGroupToNodes deletes a pg_dist_colocation record from workers.
+ */
+void
+SyncDeleteColocationGroupToNodes(uint32 colocationId)
+{
+	char *command = ColocationGroupDeleteCommand(colocationId);
+
+	/*
+	 * We require superuser for all pg_dist_colocation operations because we have
+	 * no reasonable way of restricting access.
+	 */
+	SendCommandToWorkersWithMetadataViaSuperUser(command);
+}
+
+
+/*
+ * ColocationGroupDeleteCommand returns a command for deleting a colocation group.
+ */
+static char *
+ColocationGroupDeleteCommand(uint32 colocationId)
+{
+	StringInfo deleteColocationCommand = makeStringInfo();
+
+	appendStringInfo(deleteColocationCommand,
+					 "SELECT pg_catalog.citus_internal_delete_colocation_metadata(%d)",
+					 colocationId);
+
+	return deleteColocationCommand->data;
+}
+
+
+/*
+ * ColocationGroupCreateCommandList returns the full list of commands for syncing
+ * pg_dist_colocation.
+ */
+List *
+ColocationGroupCreateCommandList(void)
+{
+	List *commandList = NIL;
+
+	Relation pgDistColocation = table_open(DistColocationRelationId(), AccessShareLock);
+
+	bool indexOK = false;
+	SysScanDesc scanDescriptor = systable_beginscan(pgDistColocation, InvalidOid, indexOK,
+													NULL, 0, NULL);
+
+	HeapTuple colocationTuple = systable_getnext(scanDescriptor);
+
+	while (HeapTupleIsValid(colocationTuple))
+	{
+		Form_pg_dist_colocation colocationForm =
+			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
+
+		char *command =
+			ColocationGroupCreateCommand(colocationForm->colocationid,
+										 colocationForm->shardcount,
+										 colocationForm->replicationfactor,
+										 colocationForm->distributioncolumntype,
+										 colocationForm->distributioncolumncollation);
+
+		commandList = lappend(commandList, command);
+
+		colocationTuple = systable_getnext(scanDescriptor);
+	}
+
+	systable_endscan(scanDescriptor);
+	table_close(pgDistColocation, AccessShareLock);
+
+	return commandList;
 }
