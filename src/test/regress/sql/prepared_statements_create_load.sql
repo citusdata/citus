@@ -54,16 +54,24 @@ SELECT create_distributed_table('text_partition_column_table', 'key');
 -- and we use offset to prevent output diverging
 
 CREATE DOMAIN test_key AS text CHECK(VALUE ~ '^test-\d$');
+
+-- TODO: Once domains are supported, remove enable_metadata_sync off/on change
+-- on dependent table distribution below. Also uncomment related tests on
+-- prepared_statements_4 test file.
 SELECT run_command_on_workers($$
   CREATE DOMAIN "prepared statements".test_key AS text CHECK(VALUE ~ '^test-\d$')
 $$) OFFSET 10000;
 
+-- Disable metadata sync since citus doesn't support distributing
+-- domains for now.
+SET citus.enable_metadata_sync TO OFF;
 CREATE TABLE domain_partition_column_table (
     key test_key NOT NULL,
     value int
 );
-SELECT create_distributed_table('domain_partition_column_table', 'key');
 
+SELECT create_distributed_table('domain_partition_column_table', 'key');
+RESET citus.enable_metadata_sync;
 
 -- verify we re-evaluate volatile functions every time
 CREATE TABLE http_request (

@@ -546,6 +546,9 @@ DROP TABLE text_partition_column_table;
 
 -- Domain type columns can give issues
 CREATE DOMAIN test_key AS text CHECK(VALUE ~ '^test-\d$');
+
+-- TODO: Once domains are supported, remove enable_metadata_sync off/on change
+-- on dependent table distribution below.
 SELECT run_command_on_workers($$
   CREATE DOMAIN test_key AS text CHECK(VALUE ~ '^test-\d$')
 $$);
@@ -554,7 +557,12 @@ CREATE TABLE domain_partition_column_table (
     key test_key NOT NULL,
     value int
 );
+
+-- Disable metadata sync since citus doesn't support distributing
+-- domains for now.
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_table('domain_partition_column_table', 'key');
+RESET citus.enable_metadata_sync;
 
 PREPARE prepared_coercion_to_domain_insert(text) AS
 	INSERT INTO domain_partition_column_table VALUES ($1, 1);

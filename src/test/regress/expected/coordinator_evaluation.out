@@ -586,6 +586,8 @@ SELECT count(*) FROM coordinator_evaluation_table_2 WHERE key = 101;
 CREATE TYPE comptype_int as (int_a int);
 CREATE DOMAIN domain_comptype_int AS comptype_int CHECK ((VALUE).int_a > 0);
 -- citus does not propagate domain types
+-- TODO: Once domains are supported, remove enable_metadata_sync off/on change
+-- on dependent table distribution below.
 SELECT run_command_on_workers(
 $$
     CREATE DOMAIN coordinator_evaluation.domain_comptype_int AS coordinator_evaluation.comptype_int CHECK ((VALUE).int_a > 0)
@@ -597,12 +599,16 @@ $$);
 (2 rows)
 
 CREATE TABLE reference_table(column_a coordinator_evaluation.domain_comptype_int);
+-- Disable metadata sync since citus doesn't support distributing
+-- domains for now.
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_reference_table('reference_table');
  create_reference_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET citus.enable_metadata_sync;
 INSERT INTO reference_table (column_a) VALUES ('(1)');
 INSERT INTO reference_table (column_a) VALUES ('(2)'), ('(3)');
 INSERT INTO reference_table VALUES ('(4)'), ('(5)');

@@ -262,12 +262,19 @@ UPDATE field_indirection_test_2 SET (ct2_col.text_1, ct1_col.int_2) = ('text2', 
 CREATE TYPE two_ints as (if1 int, if2 int);
 CREATE DOMAIN domain AS two_ints CHECK ((VALUE).if1 > 0);
 -- citus does not propagate domain objects
+-- TODO: Once domains are supported, remove enable_metadata_sync off/on change
+-- on dependent table distribution below.
 SELECT run_command_on_workers(
 $$
     CREATE DOMAIN type_tests.domain AS type_tests.two_ints CHECK ((VALUE).if1 > 0);
 $$);
 CREATE TABLE domain_indirection_test (f1 int, f3 domain, domain_array domain[]);
+
+-- Disable metadata sync since citus doesn't support distributing
+-- domains for now.
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_table('domain_indirection_test', 'f1');
+RESET citus.enable_metadata_sync;
 
 -- not supported (field indirection to underlying composite type)
 INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) VALUES (0, 1, 2);

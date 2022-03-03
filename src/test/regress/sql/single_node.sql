@@ -538,6 +538,9 @@ CREATE TABLE hpart1 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remaind
 CREATE TABLE hpart2 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 2);
 CREATE TABLE hpart3 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 3);
 
+-- Disable metadata sync since citus doesn't support distributing
+-- operator class for now.
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_table('hash_parted ', 'a');
 
 INSERT INTO hash_parted VALUES (1, generate_series(1, 10));
@@ -548,6 +551,7 @@ ALTER TABLE hash_parted DETACH PARTITION hpart0;
 ALTER TABLE hash_parted DETACH PARTITION hpart1;
 ALTER TABLE hash_parted DETACH PARTITION hpart2;
 ALTER TABLE hash_parted DETACH PARTITION hpart3;
+RESET citus.enable_metadata_sync;
 
 -- test range partition without creating partitions and inserting with generate_series()
 -- should error out even in plain PG since no partition of relation "parent_tab" is found for row
