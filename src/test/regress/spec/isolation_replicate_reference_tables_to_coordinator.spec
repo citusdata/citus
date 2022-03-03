@@ -81,21 +81,24 @@ step "s2-lock-ref-table-placement-on-coordinator"
 
 step "s2-view-dist"
 {
-        SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND query NOT ILIKE '%pg_isolation_test_session_is_blocked%' AND query NOT ILIKE '%BEGIN%' AND query NOT ILIKE '%add_node%' ORDER BY query DESC;
+        SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE backend_type = 'client backend' AND query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%pg_isolation_test_session_is_blocked%'), ('%BEGIN%'), ('%add_node%')) ORDER BY query DESC;
 }
 
 step "s2-view-worker"
 {
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name,
-           distributed_query_host_port, state, wait_event_type, wait_event, usename, datname
-    FROM citus_worker_stat_activity
-    WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
-          query NOT ILIKE '%COMMIT%' AND
-          query NOT ILIKE '%dump_local_%' AND
-          query NOT ILIKE '%citus_internal_local_blocked_processes%' AND
-          query NOT ILIKE '%add_node%' AND
-          backend_type = 'client backend'
-    ORDER BY query, query_hostport DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname
+    FROM citus_stat_activity
+    WHERE query NOT ILIKE ALL(VALUES
+      ('%pg_prepared_xacts%'),
+      ('%COMMIT%'),
+      ('%dump_local_%'),
+      ('%citus_internal_local_blocked_processes%'),
+      ('%add_node%'),
+      ('%csa_from_one_node%'))
+    AND is_worker_query = true
+    AND backend_type = 'client backend'
+    AND query != ''
+    ORDER BY query DESC;
 }
 
 
