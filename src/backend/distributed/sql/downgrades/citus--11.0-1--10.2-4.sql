@@ -119,10 +119,13 @@ CREATE FUNCTION get_global_active_transactions(OUT datid oid, OUT process_id int
 
 RESET search_path;
 
-DROP FUNCTION citus_internal_local_blocked_processes CASCADE;
-DROP FUNCTION citus_internal_global_blocked_processes CASCADE;
+DROP VIEW pg_catalog.citus_lock_waits;
 
-DROP FUNCTION pg_catalog.citus_dist_stat_activity CASCADE;
+DROP FUNCTION citus_internal_local_blocked_processes;
+DROP FUNCTION citus_internal_global_blocked_processes;
+
+DROP VIEW pg_catalog.citus_dist_stat_activity;
+DROP FUNCTION pg_catalog.citus_dist_stat_activity;
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_dist_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
                                                     OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
@@ -148,7 +151,8 @@ ALTER VIEW citus.citus_dist_stat_activity SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_dist_stat_activity TO PUBLIC;
 
 SET search_path = 'pg_catalog';
-DROP FUNCTION citus_worker_stat_activity CASCADE;
+DROP VIEW citus_worker_stat_activity;
+DROP FUNCTION citus_worker_stat_activity;
 
 CREATE OR REPLACE FUNCTION citus_worker_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
                                                       OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
@@ -171,10 +175,10 @@ IS 'returns distributed transaction activity on shards of distributed tables';
 DROP FUNCTION pg_catalog.worker_create_or_replace_object(text[]);
 #include "../udfs/worker_create_or_replace_object/9.0-1.sql"
 
-DROP FUNCTION IF EXISTS pg_catalog.pg_cancel_backend(bigint) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.pg_terminate_backend(bigint, bigint) CASCADE;
+DROP FUNCTION IF EXISTS pg_catalog.pg_cancel_backend(bigint);
+DROP FUNCTION IF EXISTS pg_catalog.pg_terminate_backend(bigint, bigint);
 
-DROP FUNCTION pg_catalog.dump_local_wait_edges CASCADE;
+DROP FUNCTION pg_catalog.dump_local_wait_edges;
 CREATE FUNCTION pg_catalog.dump_local_wait_edges(
                     OUT waiting_pid int4,
                     OUT waiting_node_id int4,
@@ -191,7 +195,7 @@ AS $$MODULE_PATHNAME$$, $$dump_local_wait_edges$$;
 COMMENT ON FUNCTION pg_catalog.dump_local_wait_edges()
 IS 'returns all local lock wait chains, that start from distributed transactions';
 
-DROP FUNCTION pg_catalog.dump_global_wait_edges CASCADE;
+DROP FUNCTION pg_catalog.dump_global_wait_edges;
 CREATE FUNCTION pg_catalog.dump_global_wait_edges(
                     OUT waiting_pid int4,
                     OUT waiting_node_id int4,
@@ -351,3 +355,7 @@ GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
 DROP FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(bool);
 
 RESET search_path;
+
+DROP VIEW IF EXISTS pg_catalog.citus_stat_activity;
+DROP FUNCTION IF EXISTS pg_catalog.citus_stat_activity;
+DROP FUNCTION IF EXISTS pg_catalog.run_command_on_all_nodes;

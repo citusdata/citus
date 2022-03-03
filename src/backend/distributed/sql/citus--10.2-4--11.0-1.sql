@@ -85,3 +85,5 @@ $$;
 
 #include "udfs/citus_finalize_upgrade_to_citus11/11.0-1.sql"
 
+#include "udfs/run_command_on_all_nodes/11.0-1.sql"
+#include "udfs/citus_stat_activity/11.0-1.sql"
