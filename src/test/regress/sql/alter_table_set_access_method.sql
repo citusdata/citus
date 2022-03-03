@@ -173,10 +173,10 @@ CREATE TABLE table_type_pg_local (a INT);
 SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
 
-SELECT alter_table_set_access_method('table_type_dist', 'fake_am');
-SELECT alter_table_set_access_method('table_type_ref', 'fake_am');
-SELECT alter_table_set_access_method('table_type_pg_local', 'fake_am');
-SELECT alter_table_set_access_method('table_type_citus_local', 'fake_am');
+SELECT alter_table_set_access_method('table_type_dist', 'columnar');
+SELECT alter_table_set_access_method('table_type_ref', 'columnar');
+SELECT alter_table_set_access_method('table_type_pg_local', 'columnar');
+SELECT alter_table_set_access_method('table_type_citus_local', 'columnar');
 
 SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;

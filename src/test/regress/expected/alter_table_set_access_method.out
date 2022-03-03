@@ -474,11 +474,8 @@ SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO '
  table_type_ref         | heap
 (4 rows)
 
-SELECT alter_table_set_access_method('table_type_dist', 'fake_am');
+SELECT alter_table_set_access_method('table_type_dist', 'columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.table_type_dist
-WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT TRUE FROM alter_table_set_access_method.table_type_dist_1533505599 LIMIT 1"
-WARNING:  fake_scan_getnextslot
 NOTICE:  moving the data of alter_table_set_access_method.table_type_dist
 NOTICE:  dropping the old alter_table_set_access_method.table_type_dist
 NOTICE:  renaming the new table to alter_table_set_access_method.table_type_dist
@@ -487,11 +484,8 @@ NOTICE:  renaming the new table to alter_table_set_access_method.table_type_dist
 
 (1 row)
 
-SELECT alter_table_set_access_method('table_type_ref', 'fake_am');
+SELECT alter_table_set_access_method('table_type_ref', 'columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.table_type_ref
-WARNING:  fake_scan_getnextslot
-CONTEXT:  SQL statement "SELECT TRUE FROM alter_table_set_access_method.table_type_ref_1037855087 LIMIT 1"
-WARNING:  fake_scan_getnextslot
 NOTICE:  moving the data of alter_table_set_access_method.table_type_ref
 NOTICE:  dropping the old alter_table_set_access_method.table_type_ref
 NOTICE:  renaming the new table to alter_table_set_access_method.table_type_ref
@@ -500,7 +494,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.table_type_ref
 
 (1 row)
 
-SELECT alter_table_set_access_method('table_type_pg_local', 'fake_am');
+SELECT alter_table_set_access_method('table_type_pg_local', 'columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.table_type_pg_local
 NOTICE:  moving the data of alter_table_set_access_method.table_type_pg_local
 NOTICE:  dropping the old alter_table_set_access_method.table_type_pg_local
@@ -510,7 +504,7 @@ NOTICE:  renaming the new table to alter_table_set_access_method.table_type_pg_l
 
 (1 row)
 
-SELECT alter_table_set_access_method('table_type_citus_local', 'fake_am');
+SELECT alter_table_set_access_method('table_type_citus_local', 'columnar');
 NOTICE:  creating a new table for alter_table_set_access_method.table_type_citus_local
 NOTICE:  moving the data of alter_table_set_access_method.table_type_citus_local
 NOTICE:  dropping the old alter_table_set_access_method.table_type_citus_local
@@ -523,17 +517,17 @@ NOTICE:  renaming the new table to alter_table_set_access_method.table_type_citu
 SELECT table_name, citus_table_type, distribution_column, shard_count, access_method FROM public.citus_tables WHERE table_name::text LIKE 'table\_type%' ORDER BY 1;
    table_name    | citus_table_type | distribution_column | shard_count | access_method
 ---------------------------------------------------------------------
- table_type_dist | distributed      | a                   |           4 | fake_am
- table_type_ref  | reference        | <none>              |           1 | fake_am
+ table_type_dist | distributed      | a                   |           4 | columnar
+ table_type_ref  | reference        | <none>              |           1 | columnar
 (2 rows)
 
 SELECT c.relname, a.amname FROM pg_class c, pg_am a where c.relname SIMILAR TO 'table_type\D*' AND c.relnamespace = 'alter_table_set_access_method'::regnamespace AND c.relam = a.oid;
         relname         | amname
 ---------------------------------------------------------------------
- table_type_citus_local | fake_am
- table_type_dist        | fake_am
- table_type_pg_local    | fake_am
- table_type_ref         | fake_am
+ table_type_citus_local | columnar
+ table_type_dist        | columnar
+ table_type_pg_local    | columnar
+ table_type_ref         | columnar
 (4 rows)
 
 -- test when the parent of a partition has foreign key to a reference table

@@ -299,6 +299,27 @@ COMMIT;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_4'::regproc::oid;$$) ORDER BY 1,2;
 
 
+-- Adding a column with default function depending on non-distributable table should fail
+BEGIN;
+    CREATE TABLE non_dist_table_for_function(id int);
+
+    CREATE OR REPLACE FUNCTION non_dist_func(col_1 non_dist_table_for_function)
+    RETURNS int
+    LANGUAGE plpgsql AS
+    $$
+    BEGIN
+        return 1;
+    END;
+    $$;
+
+    CREATE TABLE table_to_dist(id int);
+    SELECT create_distributed_table('table_to_dist', 'id');
+
+    ALTER TABLE table_to_dist ADD COLUMN col_1 int default function_propagation_schema.non_dist_func(NULL::non_dist_table_for_function);
+
+ROLLBACK;
+
+
 -- Adding multiple columns with default values should propagate the function
 BEGIN;
     CREATE OR REPLACE FUNCTION func_in_transaction_5()

@@ -435,8 +435,8 @@ $$;
 CREATE TABLE table_to_prop_func_3(id int, col_1 int default func_in_transaction_3(NULL::non_dist_table));
 -- It should error out as there is a non-distributed table dependency
 SELECT create_distributed_table('table_to_prop_func_3','id');
-ERROR:  type function_propagation_schema.non_dist_table does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  Relation "table_to_prop_func_3" has dependency on non-distributed relation "non_dist_table"
+HINT:  Distribute dependent relation first.
 COMMIT;
 -- Adding a column with default value should propagate the function
 BEGIN;
@@ -478,6 +478,28 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
  localhost |    57638 | t       | (function,"{function_propagation_schema,func_in_transaction_4}",{})
 (2 rows)
 
+-- Adding a column with default function depending on non-distributable table should fail
+BEGIN;
+    CREATE TABLE non_dist_table_for_function(id int);
+    CREATE OR REPLACE FUNCTION non_dist_func(col_1 non_dist_table_for_function)
+    RETURNS int
+    LANGUAGE plpgsql AS
+    $$
+    BEGIN
+        return 1;
+    END;
+    $$;
+    CREATE TABLE table_to_dist(id int);
+    SELECT create_distributed_table('table_to_dist', 'id');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+    ALTER TABLE table_to_dist ADD COLUMN col_1 int default function_propagation_schema.non_dist_func(NULL::non_dist_table_for_function);
+ERROR:  Relation "table_to_dist" has dependency on non-distributed relation "non_dist_table_for_function"
+HINT:  Distribute dependent relation first.
+ROLLBACK;
 -- Adding multiple columns with default values should propagate the function
 BEGIN;
 CREATE OR REPLACE FUNCTION func_in_transaction_5()
@@ -701,8 +723,8 @@ $$;
 CREATE TABLE table_to_prop_func_9(id int, col_1 int check (func_in_transaction_11(col_1, NULL::local_table_for_const)));
 -- It should error out since there is non-distributed table dependency exists
 SELECT create_distributed_table('table_to_prop_func_9', 'id');
-ERROR:  type function_propagation_schema.local_table_for_const does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+ERROR:  Relation "table_to_prop_func_9" has dependency on non-distributed relation "local_table_for_const"
+HINT:  Distribute dependent relation first.
 COMMIT;
 -- Show that function as a part of generated always is supporte
 BEGIN;
