@@ -132,6 +132,9 @@ static char * ColocationGroupCreateCommand(uint32 colocationId, int shardCount,
 										   Oid distributionColumnType,
 										   Oid distributionColumnCollation);
 static char * ColocationGroupDeleteCommand(uint32 colocationId);
+static char * RemoteTypeIdExpression(Oid typeId);
+static char * RemoteCollationIdExpression(Oid colocationId);
+
 
 PG_FUNCTION_INFO_V1(start_metadata_sync_to_node);
 PG_FUNCTION_INFO_V1(stop_metadata_sync_to_node);
@@ -3258,43 +3261,67 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 
 	appendStringInfo(insertColocationCommand,
 					 "SELECT pg_catalog.citus_internal_add_colocation_metadata("
-					 "%d, %d, %d, ",
+					 "%d, %d, %d, %s, %s)",
 					 colocationId,
 					 shardCount,
-					 replicationFactor);
+					 replicationFactor,
+					 RemoteTypeIdExpression(distributionColumnType),
+					 RemoteCollationIdExpression(distributionColumnCollation));
+
+	return insertColocationCommand->data;
+}
+
+
+/*
+ * RemoteTypeIdExpression returns an expression in text form that can
+ * be used to obtain the OID of a type on a different node when included
+ * in a query string.
+ */
+static char *
+RemoteTypeIdExpression(Oid typeId)
+{
+	/* by default, use 0 (InvalidOid) */
+	char *expression = "0";
 
 	/* we also have pg_dist_colocation entries for reference tables */
-	if (distributionColumnType != InvalidOid)
+	if (typeId != InvalidOid)
 	{
-		char *typeName = format_type_extended(distributionColumnType, -1,
+		char *typeName = format_type_extended(typeId, -1,
 											  FORMAT_TYPE_FORCE_QUALIFY |
 											  FORMAT_TYPE_ALLOW_INVALID);
 
 		/* format_type_extended returns ??? in case of an unknown type */
 		if (strcmp(typeName, "???") != 0)
 		{
-			appendStringInfo(insertColocationCommand,
+			StringInfo regtypeExpression = makeStringInfo();
+
+			appendStringInfo(regtypeExpression,
 							 "%s::regtype",
 							 quote_literal_cstr(typeName));
-		}
-		else
-		{
-			/* pg_dist_colocation contains an invalid type ID, just insert 0 */
-			appendStringInfoString(insertColocationCommand, "0");
+
+			expression = regtypeExpression->data;
 		}
 	}
-	else
+
+	return expression;
+}
+
+
+/*
+ * RemoteCollationIdExpression returns an expression in text form that can
+ * be used to obtain the OID of a type on a different node when included
+ * in a query string. Currently this is a sublink because regcollation type
+ * is not available in PG12.
+ */
+static char *
+RemoteCollationIdExpression(Oid colocationId)
+{
+	/* by default, use 0 (InvalidOid) */
+	char *expression = "0";
+
+	if (colocationId != InvalidOid)
 	{
-		appendStringInfoString(insertColocationCommand, "0");
-	}
-
-	appendStringInfoString(insertColocationCommand, ", ");
-
-	if (distributionColumnCollation != InvalidOid)
-	{
-		/* would be great if we could use regcollation, but it's not available on PG12 */
-
-		Datum collationIdDatum = ObjectIdGetDatum(distributionColumnCollation);
+		Datum collationIdDatum = ObjectIdGetDatum(colocationId);
 		HeapTuple collationTuple = SearchSysCache1(COLLOID, collationIdDatum);
 
 		if (HeapTupleIsValid(collationTuple))
@@ -3304,29 +3331,21 @@ ColocationGroupCreateCommand(uint32 colocationId, int shardCount, int replicatio
 			char *collationName = NameStr(collationform->collname);
 			char *collationSchemaName = get_namespace_name(collationform->collnamespace);
 
-			appendStringInfo(insertColocationCommand,
+			StringInfo colocationIdQuery = makeStringInfo();
+			appendStringInfo(colocationIdQuery,
 							 "(select oid from pg_collation"
 							 " where collname = %s"
 							 " and collnamespace = %s::regnamespace)",
 							 quote_literal_cstr(collationName),
 							 quote_literal_cstr(collationSchemaName));
-		}
-		else
-		{
-			/* pg_dist_colocation contains an invalid collation, just insert 0 */
-			appendStringInfoString(insertColocationCommand, "0");
+
+			expression = colocationIdQuery->data;
 		}
 
 		ReleaseSysCache(collationTuple);
 	}
-	else
-	{
-		appendStringInfoString(insertColocationCommand, "0");
-	}
 
-	appendStringInfoString(insertColocationCommand, ")");
-
-	return insertColocationCommand->data;
+	return expression;
 }
 
 
@@ -3369,7 +3388,14 @@ ColocationGroupDeleteCommand(uint32 colocationId)
 List *
 ColocationGroupCreateCommandList(void)
 {
-	List *commandList = NIL;
+	bool hasColocations = false;
+
+	StringInfo colocationGroupCreateCommand = makeStringInfo();
+	appendStringInfo(colocationGroupCreateCommand,
+					 "WITH colocation_group_data (colocationid, shardcount, "
+					 "replicationfactor, distributioncolumntype, "
+					 "distributioncolumncollationname, "
+					 "distributioncolumncollationschema)  AS (VALUES ");
 
 	Relation pgDistColocation = table_open(DistColocationRelationId(), AccessShareLock);
 
@@ -3381,17 +3407,59 @@ ColocationGroupCreateCommandList(void)
 
 	while (HeapTupleIsValid(colocationTuple))
 	{
+		if (hasColocations)
+		{
+			appendStringInfo(colocationGroupCreateCommand, ", ");
+		}
+
+		hasColocations = true;
+
 		Form_pg_dist_colocation colocationForm =
 			(Form_pg_dist_colocation) GETSTRUCT(colocationTuple);
 
-		char *command =
-			ColocationGroupCreateCommand(colocationForm->colocationid,
-										 colocationForm->shardcount,
-										 colocationForm->replicationfactor,
-										 colocationForm->distributioncolumntype,
-										 colocationForm->distributioncolumncollation);
+		appendStringInfo(colocationGroupCreateCommand,
+						 "(%d, %d, %d, %s, ",
+						 colocationForm->colocationid,
+						 colocationForm->shardcount,
+						 colocationForm->replicationfactor,
+						 RemoteTypeIdExpression(colocationForm->distributioncolumntype));
 
-		commandList = lappend(commandList, command);
+		/*
+		 * For collations, include the names in the VALUES section and then
+		 * join with pg_collation.
+		 */
+		Oid distributionColumCollation = colocationForm->distributioncolumncollation;
+		if (distributionColumCollation != InvalidOid)
+		{
+			Datum collationIdDatum = ObjectIdGetDatum(distributionColumCollation);
+			HeapTuple collationTuple = SearchSysCache1(COLLOID, collationIdDatum);
+
+			if (HeapTupleIsValid(collationTuple))
+			{
+				Form_pg_collation collationform =
+					(Form_pg_collation) GETSTRUCT(collationTuple);
+				char *collationName = NameStr(collationform->collname);
+				char *collationSchemaName = get_namespace_name(
+					collationform->collnamespace);
+
+				appendStringInfo(colocationGroupCreateCommand,
+								 "%s, %s)",
+								 quote_literal_cstr(collationName),
+								 quote_literal_cstr(collationSchemaName));
+
+				ReleaseSysCache(collationTuple);
+			}
+			else
+			{
+				appendStringInfo(colocationGroupCreateCommand,
+								 "NULL, NULL)");
+			}
+		}
+		else
+		{
+			appendStringInfo(colocationGroupCreateCommand,
+							 "NULL, NULL)");
+		}
 
 		colocationTuple = systable_getnext(scanDescriptor);
 	}
@@ -3399,5 +3467,19 @@ ColocationGroupCreateCommandList(void)
 	systable_endscan(scanDescriptor);
 	table_close(pgDistColocation, AccessShareLock);
 
-	return commandList;
+	if (!hasColocations)
+	{
+		return NIL;
+	}
+
+	appendStringInfo(colocationGroupCreateCommand,
+					 ") SELECT pg_catalog.citus_internal_add_colocation_metadata("
+					 "colocationid, shardcount, replicationfactor, "
+					 "distributioncolumntype, coalesce(c.oid, 0)) "
+					 "FROM colocation_group_data d LEFT JOIN pg_collation c "
+					 "ON (d.distributioncolumncollationname = c.collname "
+					 "AND d.distributioncolumncollationschema::regnamespace"
+					 " = c.collnamespace)");
+
+	return list_make1(colocationGroupCreateCommand->data);
 }
