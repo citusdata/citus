@@ -22,12 +22,17 @@ SELECT public.run_command_on_coordinator_and_workers($Q$
 	CREATE ACCESS METHOD fake_am TYPE TABLE HANDLER fake_am_handler;
 $Q$);
 
+-- Since Citus assumes access methods are part of the extension, make fake_am
+-- owned manually to be able to pass checks on Citus while distributing tables.
+ALTER EXTENSION citus ADD ACCESS METHOD fake_am;
+
 --
 -- Hash distributed table using a non-default table access method
 --
 
 create table test_hash_dist(id int, val int) using fake_am;
 insert into test_hash_dist values (1, 1);
+
 select create_distributed_table('test_hash_dist','id');
 
 select * from test_hash_dist;
@@ -48,6 +53,7 @@ SELECT * FROM master_get_table_ddl_events('test_hash_dist');
 
 create table test_ref(a int) using fake_am;
 insert into test_ref values (1);
+
 select create_reference_table('test_ref');
 
 select * from test_ref;
@@ -62,20 +68,14 @@ RESET client_min_messages;
 -- ddl events should include "USING fake_am"
 SELECT * FROM master_get_table_ddl_events('test_ref');
 
--- replicate to coordinator
-SET client_min_messages TO WARNING;
-\set VERBOSIY terse
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
-RESET client_min_messages;
-delete from test_ref;
-SELECT master_remove_node('localhost', :master_port);
-
 --
 -- Range partitioned table using a non-default table access method
 --
 
 CREATE TABLE test_range_dist(id int, val int) using fake_am;
+
 SELECT create_distributed_table('test_range_dist', 'id', 'range');
+
 CALL public.create_range_partitioned_shards('test_range_dist', '{"0","25"}','{"24","49"}');
 
 select * from test_range_dist;
@@ -148,4 +148,5 @@ CREATE TABLE test_partitioned(id int, p int, val int)
 PARTITION BY RANGE (p) USING fake_am;
 
 \set VERBOSITY terse
+ALTER EXTENSION citus DROP ACCESS METHOD fake_am;
 drop schema test_tableam cascade;
