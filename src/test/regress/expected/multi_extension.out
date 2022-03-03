@@ -1009,6 +1009,8 @@ SELECT * FROM multi_extension.print_extension_changes();
  function master_apply_delete_command(text) integer                                                                   |
  function master_get_table_metadata(text) record                                                                      |
  function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean) SETOF record |
+                                                                                                                       | function citus_backend_gpid() bigint
+                                                                                                                      | function citus_calculate_gpid(integer,integer) bigint
                                                                                                                       | function citus_check_cluster_node_health() SETOF record
                                                                                                                       | function citus_check_connection_to_node(text,integer) boolean
                                                                                                                       | function citus_disable_node(text,integer,boolean) void
@@ -1031,7 +1033,7 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                                                                                       | function worker_drop_shell_table(text) void
                                                                                                                       | function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean,boolean,boolean) SETOF record
                                                                                                                       | view citus_stat_activity
-(28 rows)
+(30 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
