@@ -915,11 +915,11 @@ SELECT table_name, citus_table_type, distribution_column, shard_count FROM publi
 SELECT pg_sleep(0.1);
 -- since max_cached_conns_per_worker == 0 at this point, the
 -- backend(s) that execute on the shards will be terminated
--- so show that there is only a single client backend,
--- which is actually the backend that executes here
+-- so show that there no internal backends
 SET search_path TO single_node;
 SELECT count(*) from should_commit;
-SELECT pg_catalog.get_all_active_client_backend_count();
+SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'citus_internal%';
+SELECT get_all_active_client_backend_count();
 BEGIN;
 	SET LOCAL citus.shard_count TO 32;
 	SET LOCAL citus.force_max_query_parallelization TO ON;
@@ -931,7 +931,10 @@ BEGIN;
 	SELECT count(*) FROM test;
 
 	-- now, we should have additional 32 connections
-	SELECT pg_catalog.get_all_active_client_backend_count();
+    SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'citus_internal%';
+
+    -- single external connection
+    SELECT get_all_active_client_backend_count();
 ROLLBACK;
 
 

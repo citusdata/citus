@@ -14,15 +14,18 @@
 #define ADJUST_POOLSIZE_AUTOMATICALLY 0
 #define DISABLE_CONNECTION_THROTTLING -1
 #define DISABLE_REMOTE_CONNECTIONS_FOR_LOCAL_QUERIES -1
+#define ALLOW_ALL_EXTERNAL_CONNECTIONS -1
 
 
 extern int MaxSharedPoolSize;
 extern int LocalSharedPoolSize;
+extern int MaxClientConnections;
 
 
 extern void InitializeSharedConnectionStats(void);
 extern void WaitForSharedConnection(void);
 extern void WakeupWaiterBackendsForSharedConnection(void);
+extern int GetMaxClientConnections(void);
 extern int GetMaxSharedPoolSize(void);
 extern int GetLocalSharedPoolSize(void);
 extern bool TryToIncrementSharedConnectionCounter(const char *hostname, int port);

@@ -68,14 +68,12 @@ typedef struct BackendManagementShmemData
 	pg_atomic_uint64 nextTransactionNumber;
 
 	/*
-	 * Total number of client backends that are authenticated.
-	 * We only care about activeClientBackendCounter when adaptive
-	 * connection management is enabled, otherwise always zero.
+	 * Total number of external client backends that are authenticated.
 	 *
 	 * Note that the counter does not consider any background workers
-	 * or such, it only counts client_backends.
+	 * or such, and also exludes internal connections between nodes.
 	 */
-	pg_atomic_uint32 activeClientBackendCounter;
+	pg_atomic_uint32 externalClientBackendCounter;
 
 	BackendData backends[FLEXIBLE_ARRAY_MEMBER];
 } BackendManagementShmemData;
@@ -548,7 +546,7 @@ BackendManagementShmemInit(void)
 		pg_atomic_init_u64(&backendManagementShmemData->nextTransactionNumber, 1);
 
 		/* there are no active backends yet, so start with zero */
-		pg_atomic_init_u32(&backendManagementShmemData->activeClientBackendCounter, 0);
+		pg_atomic_init_u32(&backendManagementShmemData->externalClientBackendCounter, 0);
 
 		/*
 		 * We need to init per backend's spinlock before any backend
@@ -1166,36 +1164,37 @@ GetMyProcLocalTransactionId(void)
 
 
 /*
- * GetAllActiveClientBackendCount returns activeClientBackendCounter in
+ * GetExternalClientBackendCount returns externalClientBackendCounter in
  * the shared memory.
  */
 int
-GetAllActiveClientBackendCount(void)
+GetExternalClientBackendCount(void)
 {
 	uint32 activeBackendCount =
-		pg_atomic_read_u32(&backendManagementShmemData->activeClientBackendCounter);
+		pg_atomic_read_u32(&backendManagementShmemData->externalClientBackendCounter);
 
 	return activeBackendCount;
 }
 
 
 /*
- * IncrementClientBackendCounter increments activeClientBackendCounter in
+ * IncrementExternalClientBackendCounter increments externalClientBackendCounter in
  * the shared memory by one.
  */
-void
-IncrementClientBackendCounter(void)
+uint32
+IncrementExternalClientBackendCounter(void)
 {
-	pg_atomic_add_fetch_u32(&backendManagementShmemData->activeClientBackendCounter, 1);
+	return pg_atomic_add_fetch_u32(
+		&backendManagementShmemData->externalClientBackendCounter, 1);
 }
 
 
 /*
- * DecrementClientBackendCounter decrements activeClientBackendCounter in
+ * DecrementExternalClientBackendCounter decrements externalClientBackendCounter in
  * the shared memory by one.
  */
 void
-DecrementClientBackendCounter(void)
+DecrementExternalClientBackendCounter(void)
 {
-	pg_atomic_sub_fetch_u32(&backendManagementShmemData->activeClientBackendCounter, 1);
+	pg_atomic_sub_fetch_u32(&backendManagementShmemData->externalClientBackendCounter, 1);
 }
