@@ -323,16 +323,15 @@ IsCreateDistributedFunctionCallIdempotent(ObjectAddress functionAddress,
 	 * without parameters would be idempotent. Hence we can simply early return here,
 	 * by providing a notice message to the user.
 	 */
-	bool functionDistributedWithoutParams =
 
-		/* are pg_dist_object fields set to zero? */
+	/* are pg_dist_object fields set to zero? */
+	bool functionDistributedWithoutParams =
 		cacheEntry->colocationId == 0 &&
 		cacheEntry->forceDelegation == 0 &&
 		cacheEntry->distributionArgIndex == 0;
 
+	/* called create_distributed_function without parameters? */
 	bool distributingAgainWithNoParams =
-
-		/* called create_distributed_function without parameters? */
 		distributionArgumentName == NULL &&
 		colocateWithTableNameDefault &&
 		forceDelegationAddress == NULL;
