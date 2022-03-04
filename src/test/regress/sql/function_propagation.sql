@@ -710,6 +710,35 @@ CREATE TABLE table_non_for_func_dist (
 
 SELECT create_distributed_table('table_non_for_func_dist', 'a');
 
+
+-- Show that causing circular dependency via functions are not allowed
+CREATE TABLE table_1_for_circ_dep(id int);
+select create_distributed_table('table_1_for_circ_dep','id');
+
+CREATE OR REPLACE FUNCTION func_1_for_circ_dep(col_1 table_1_for_circ_dep)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+return 1;
+END;
+$$;
+
+CREATE TABLE table_2_for_circ_dep(id int, col_2 int default func_1_for_circ_dep(NULL::table_1_for_circ_dep));
+select create_distributed_table('table_2_for_circ_dep','id');
+CREATE OR REPLACE FUNCTION func_2_for_circ_dep(col_3 table_2_for_circ_dep)
+RETURNS int
+LANGUAGE plpgsql AS
+$$
+BEGIN
+return 1;
+END;
+$$;
+
+-- It should error out due to circular dependency
+ALTER TABLE table_1_for_circ_dep ADD COLUMN col_2 int default func_2_for_circ_dep(NULL::table_2_for_circ_dep);
+
+
 RESET search_path;
 SET client_min_messages TO WARNING;
 DROP SCHEMA function_propagation_schema CASCADE;
