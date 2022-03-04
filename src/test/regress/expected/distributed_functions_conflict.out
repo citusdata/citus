@@ -26,6 +26,8 @@ CREATE AGGREGATE existing_agg(int) (
     STYPE = int
 );
 SELECT create_distributed_function('existing_agg(int)');
+NOTICE:  procedure proc_conflict.existing_agg is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -87,6 +89,8 @@ CREATE AGGREGATE existing_agg(int) (
     STYPE = int
 );
 SELECT create_distributed_function('existing_agg(int)');
+NOTICE:  procedure proc_conflict.existing_agg is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 

@@ -709,6 +709,52 @@ CREATE TABLE table_non_for_func_dist (
     b int DEFAULT non_sense_func_for_default_val(NULL::loc_for_func_dist));
 
 SELECT create_distributed_table('table_non_for_func_dist', 'a');
+SET citus.shard_replication_factor = 1;
+-- test creating a colocated function
+CREATE TABLE tbl_to_colocate (a int);
+SELECT create_distributed_table('tbl_to_colocate', 'a');
+-- first test colocating function with a ref table
+CREATE TABLE tbl_to_colocate_ref (a int);
+SELECT create_reference_table('tbl_to_colocate_ref');
+
+CREATE FUNCTION func_to_colocate (a int) returns int as $$select 1;$$ language sql;
+-- see the empty pg_dist_object entries
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+
+-- colocate the function with ref table
+SELECT create_distributed_function('func_to_colocate(int)', colocate_with:='tbl_to_colocate_ref');
+-- see the pg_dist_object entry
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+
+-- convert to non-delegated
+SELECT create_distributed_function('func_to_colocate(int)');
+-- show that the pg_dist_object fields are gone
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+
+-- colocate the function with distributed table
+SELECT create_distributed_function('func_to_colocate(int)','$1','tbl_to_colocate');
+-- see the pg_dist_object entry
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+
+-- try create or replace the same func
+CREATE OR REPLACE FUNCTION func_to_colocate (a int) returns int as $$select 1;$$ language sql;
+-- verify the pg_dist_object entry is the same
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+
+-- convert to non-delegated
+SELECT create_distributed_function('func_to_colocate(int)');
+-- show that the pg_dist_object fields are gone
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+
+-- force delegate
+SELECT create_distributed_function('func_to_colocate(int)','$1','tbl_to_colocate', true);
+-- show pg_dist_object fields
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
+
+-- convert to non-delegated
+SELECT create_distributed_function('func_to_colocate(int)');
+-- show that the pg_dist_object fields are gone
+SELECT distribution_argument_index, colocationid, force_delegation FROM citus.pg_dist_object WHERE objid = 'func_to_colocate'::regproc;
 
 RESET search_path;
 SET client_min_messages TO WARNING;

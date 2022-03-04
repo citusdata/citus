@@ -60,6 +60,8 @@ BEGIN
   RETURN localGroupId;
 END; $$ language plpgsql VOLATILE;
 SELECT create_distributed_function('get_local_node_id_volatile()');
+NOTICE:  procedure local_shard_execution_replicated.get_local_node_id_volatile is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -2284,6 +2286,8 @@ BEGIN
 END;
 $fn$;
 SELECT create_distributed_function('register_for_event(int,int,invite_resp)');
+NOTICE:  procedure local_shard_execution_replicated.register_for_event is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
