@@ -299,6 +299,27 @@ COMMIT;
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_4'::regproc::oid;$$) ORDER BY 1,2;
 
 
+-- Adding a column with default function depending on non-distributable table should fail
+BEGIN;
+    CREATE TABLE non_dist_table_for_function(id int);
+
+    CREATE OR REPLACE FUNCTION non_dist_func(col_1 non_dist_table_for_function)
+    RETURNS int
+    LANGUAGE plpgsql AS
+    $$
+    BEGIN
+        return 1;
+    END;
+    $$;
+
+    CREATE TABLE table_to_dist(id int);
+    SELECT create_distributed_table('table_to_dist', 'id');
+
+    ALTER TABLE table_to_dist ADD COLUMN col_1 int default function_propagation_schema.non_dist_func(NULL::non_dist_table_for_function);
+
+ROLLBACK;
+
+
 -- Adding multiple columns with default values should propagate the function
 BEGIN;
     CREATE OR REPLACE FUNCTION func_in_transaction_5()
@@ -664,6 +685,30 @@ COMMIT;
 
 -- Function should be marked as distributed on the worker after committing changes
 SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction_def_with_seq'::regproc::oid;$$) ORDER BY 1,2;
+
+
+-- Show that having a dependency on another dist table work out tx
+CREATE TABLE loc_for_func_dist (
+    product_no integer,
+    name text,
+    price numeric CONSTRAINT positive_price CHECK (price > 0));
+
+SELECT create_distributed_table('loc_for_func_dist', 'product_no');
+
+CREATE OR REPLACE FUNCTION non_sense_func_for_default_val(loc_for_func_dist)
+RETURNS int
+LANGUAGE plpgsql IMMUTABLE AS
+$$
+BEGIN
+return 1;
+END;
+$$;
+
+CREATE TABLE table_non_for_func_dist (
+    a int,
+    b int DEFAULT non_sense_func_for_default_val(NULL::loc_for_func_dist));
+
+SELECT create_distributed_table('table_non_for_func_dist', 'a');
 
 RESET search_path;
 SET client_min_messages TO WARNING;
