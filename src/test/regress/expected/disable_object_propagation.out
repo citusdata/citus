@@ -77,7 +77,7 @@ SELECT create_distributed_table('t4','a');
 DROP TABLE t4; -- as long as the table is using the type some operations are hard to force
 COMMIT;
 -- verify the type is distributed
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = 'disabled_object_propagation.tt3'::regtype::oid;
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = 'disabled_object_propagation.tt3'::regtype::oid;
  count
 ---------------------------------------------------------------------
      1

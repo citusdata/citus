@@ -180,7 +180,7 @@ SELECT create_distributed_table('streaming_table','id');
 -- if not paremeters are supplied, we'd see that function doesn't have
 -- distribution_argument_index and colocationid
 SELECT create_distributed_function('"eq_mi''xed_param_names"(macaddr, macaddr)');
-SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
+SELECT distribution_argument_index is NULL, colocationid is NULL from pg_catalog.pg_dist_object
 WHERE objid = 'eq_mi''xed_param_names(macaddr, macaddr)'::regprocedure;
 
 -- also show that we can use the function
@@ -380,7 +380,7 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1'
 
 -- show that the colocationIds are the same
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects
+FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'eq_with_param_names(macaddr, macaddr)'::regprocedure;
 
@@ -388,7 +388,7 @@ WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass 
 -- group preserved, because we're using the default shard creation settings
 SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val1');
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects
+FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'eq_with_param_names(macaddr, macaddr)'::regprocedure;
 
@@ -405,13 +405,13 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', colo
 -- to coerce the values
 SELECT create_distributed_function('eq8(macaddr8, macaddr8)', '$1', colocate_with:='replicated_table_func_test_4');
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects
+FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'eq8(macaddr8, macaddr8)'::regprocedure;
 
 SELECT create_distributed_function('add_text(text, text)', '$1', colocate_with:='replicated_table_func_test_4');
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects
+FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_text(text, text)'::regprocedure;
 

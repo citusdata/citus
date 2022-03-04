@@ -221,7 +221,7 @@ SELECT * FROM run_command_on_workers($$ SELECT 'text_search.concurrent_index_con
 
 -- verify the objid is correctly committed locally due to the somewhat convoluted commit and new transaction starting when creating an index concurrently
 SELECT pg_catalog.pg_identify_object_as_address(classid, objid, objsubid)
-  FROM citus.pg_dist_object
+  FROM pg_catalog.pg_dist_object
  WHERE classid = 3602 AND objid = 'text_search.concurrent_index_config'::regconfig::oid;
 
 -- verify old text search configurations get renamed if they are not the same as the newly propagated configuration.

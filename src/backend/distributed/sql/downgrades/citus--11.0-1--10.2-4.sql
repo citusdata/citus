@@ -361,3 +361,5 @@ RESET search_path;
 DROP VIEW IF EXISTS pg_catalog.citus_stat_activity;
 DROP FUNCTION IF EXISTS pg_catalog.citus_stat_activity;
 DROP FUNCTION IF EXISTS pg_catalog.run_command_on_all_nodes;
+
+ALTER TABLE pg_catalog.pg_dist_object SET SCHEMA citus;
