@@ -31,6 +31,7 @@
 
 typedef bool (*AddressPredicate)(const ObjectAddress *);
 
+static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
 static List * FilterObjectAddressListByPredicate(List *objectAddressList,
@@ -55,6 +56,13 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 {
 	List *dependenciesWithCommands = NIL;
 	List *ddlCommands = NULL;
+
+	/*
+	 * Having circular dependency between distributed objects prevents Citus from
+	 * adding a new node. So, error out if circular dependency exists for the given
+	 * target object.
+	 */
+	ErrorIfCircularDependencyExists(target);
 
 	/* collect all dependencies in creation order and get their ddl commands */
 	List *dependencies = GetDependenciesForObject(target);
@@ -131,6 +139,40 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		 * Metadata of the table itself must be propagated with the current user.
 		 */
 		MarkObjectDistributedViaSuperUser(dependency);
+	}
+}
+
+
+/*
+ * ErrorIfCircularDependencyExists checks whether given object has circular dependency
+ * with itself via existing objects of pg_dist_object.
+ */
+static void
+ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
+{
+	List *dependencies = GetAllSupportedDependenciesForObject(objectAddress);
+
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
+	{
+		if (dependency->classId == objectAddress->classId &&
+			dependency->objectId == objectAddress->objectId &&
+			dependency->objectSubId == objectAddress->objectSubId)
+		{
+			char *objectDescription = NULL;
+
+			#if PG_VERSION_NUM >= PG_VERSION_14
+			objectDescription = getObjectDescription(objectAddress, false);
+			#else
+			objectDescription = getObjectDescription(objectAddress);
+			#endif
+
+			ereport(ERROR, (errmsg("Citus can not handle circular dependencies "
+								   "between distributed objects"),
+							errdetail("\"%s\" circularly depends itself, resolve "
+									  "circular dependency first",
+									  objectDescription)));
+		}
 	}
 }
 
