@@ -79,3 +79,5 @@ END;
 $$;
 
 #include "udfs/citus_finalize_upgrade_to_citus11/11.0-1.sql"
+
+ALTER TABLE citus.pg_dist_object SET SCHEMA pg_catalog;

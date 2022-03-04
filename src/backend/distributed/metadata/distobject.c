@@ -209,8 +209,9 @@ MarkObjectDistributedLocally(const ObjectAddress *distAddress)
 		ObjectIdGetDatum(distAddress->objectId),
 		Int32GetDatum(distAddress->objectSubId)
 	};
-	char *insertQuery = "INSERT INTO citus.pg_dist_object (classid, objid, objsubid) "
-						"VALUES ($1, $2, $3) ON CONFLICT DO NOTHING";
+	char *insertQuery =
+		"INSERT INTO pg_catalog.pg_dist_object (classid, objid, objsubid) "
+		"VALUES ($1, $2, $3) ON CONFLICT DO NOTHING";
 	int spiStatus = ExecuteCommandAsSuperuser(insertQuery, paramCount, paramTypes,
 											  paramValues);
 	if (spiStatus < 0)
