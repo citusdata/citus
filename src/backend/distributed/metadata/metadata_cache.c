@@ -2334,17 +2334,20 @@ DistObjectRelationId(void)
 	 *
 	 * During upgrades it could therefore be that we simply need to look in the old
 	 * catalog. Since we expect to find it most of the time in the pg_catalog schema from
-	 * now on we will start there. And only if we are not creating/altering the extension
-	 * we allow the table to be missing from pg_catalog. When it is missing we will load
-	 * the table from the ol schema.
+	 * now on we will start there.
 	 *
 	 * even after the table has been moved, the oid's stay the same, so we don't have to
 	 * invalidate the cache after a move
+	 *
+	 * Note: during testing we also up/downgrade the extension, and sometimes interact
+	 * with the database when the schema and the binary are not in sync. Hance we always
+	 * allow the catalog to be missing on our first lookup. The error message might
+	 * therefore become misleading as it will complain about citus.pg_dist_object not
+	 * being found when called too early.
 	 */
-	const bool missing_ok = creating_extension;
 	CachedRelationLookup("pg_dist_object",
 						 &MetadataCache.distObjectRelationId,
-						 missing_ok);
+						 true);
 	if (!OidIsValid(MetadataCache.distObjectRelationId))
 	{
 		/*
@@ -2371,17 +2374,20 @@ DistObjectPrimaryKeyIndexId(void)
 	 *
 	 * During upgrades it could therefore be that we simply need to look in the old
 	 * catalog. Since we expect to find it most of the time in the pg_catalog schema from
-	 * now on we will start there. And only if we are not creating/altering the extension
-	 * we allow the table to be missing from pg_catalog. When it is missing we will load
-	 * the table from the ol schema.
+	 * now on we will start there.
 	 *
 	 * even after the table has been moved, the oid's stay the same, so we don't have to
 	 * invalidate the cache after a move
+	 *
+	 * Note: during testing we also up/downgrade the extension, and sometimes interact
+	 * with the database when the schema and the binary are not in sync. Hance we always
+	 * allow the catalog to be missing on our first lookup. The error message might
+	 * therefore become misleading as it will complain about citus.pg_dist_object not
+	 * being found when called too early.
 	 */
-	const bool missing_ok = creating_extension;
 	CachedRelationLookup("pg_dist_object_pkey",
 						 &MetadataCache.distObjectPrimaryKeyIndexId,
-						 missing_ok);
+						 true);
 
 	if (!OidIsValid(MetadataCache.distObjectPrimaryKeyIndexId))
 	{
