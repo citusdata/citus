@@ -26,6 +26,8 @@
 #include "udfs/worker_create_or_replace_object/11.0-1.sql"
 #include "udfs/citus_isolation_test_session_is_blocked/11.0-1.sql"
 #include "udfs/citus_blocking_pids/11.0-1.sql"
+#include "udfs/citus_calculate_gpid/11.0-1.sql"
+#include "udfs/citus_backend_gpid/11.0-1.sql"
 
 CREATE VIEW citus.citus_worker_stat_activity AS
 SELECT * FROM pg_catalog.citus_worker_stat_activity();

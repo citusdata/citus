@@ -82,6 +82,7 @@ typedef struct BackendManagementShmemData
 static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
 									   tupleDescriptor);
 static bool UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId);
+static uint64 CalculateGlobalPID(int32 nodeId, pid_t pid);
 static uint64 GenerateGlobalPID(void);
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
@@ -97,6 +98,8 @@ PG_FUNCTION_INFO_V1(assign_distributed_transaction_id);
 PG_FUNCTION_INFO_V1(get_current_transaction_id);
 PG_FUNCTION_INFO_V1(get_global_active_transactions);
 PG_FUNCTION_INFO_V1(get_all_active_transactions);
+PG_FUNCTION_INFO_V1(citus_calculate_gpid);
+PG_FUNCTION_INFO_V1(citus_backend_gpid);
 
 
 /*
@@ -880,10 +883,27 @@ GetGlobalPID(void)
 
 
 /*
- * GenerateGlobalPID generates the global process id for the current backend.
+ * citus_calculate_gpid calculates the gpid for any given process on any
+ * given node.
+ */
+Datum
+citus_calculate_gpid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int32 nodeId = PG_GETARG_INT32(0);
+	int32 pid = PG_GETARG_INT32(1);
+
+	PG_RETURN_UINT64(CalculateGlobalPID(nodeId, pid));
+}
+
+
+/*
+ * CalculateGlobalPID gets a nodeId and pid, and returns the global pid
+ * that can be assigned for a process with the given input.
  */
 static uint64
-GenerateGlobalPID(void)
+CalculateGlobalPID(int32 nodeId, pid_t pid)
 {
 	/*
 	 * We try to create a human readable global pid that consists of node id and process id.
@@ -894,7 +914,31 @@ GenerateGlobalPID(void)
 	 * node ids might cause overflow. But even for the applications that scale around 50 nodes every
 	 * day it'd take about 100K years. So we are not worried.
 	 */
-	return (((uint64) GetLocalNodeId()) * GLOBAL_PID_NODE_ID_MULTIPLIER) + getpid();
+	return (((uint64) nodeId) * GLOBAL_PID_NODE_ID_MULTIPLIER) + pid;
+}
+
+
+/*
+ * GenerateGlobalPID generates the global process id for the current backend.
+ * See CalculateGlobalPID for the details.
+ */
+static uint64
+GenerateGlobalPID(void)
+{
+	return CalculateGlobalPID(GetLocalNodeId(), getpid());
+}
+
+
+/*
+ * citus_backend_gpid similar to pg_backend_pid, but returns Citus
+ * assigned gpid.
+ */
+Datum
+citus_backend_gpid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_RETURN_UINT64(GetGlobalPID());
 }
 
 
