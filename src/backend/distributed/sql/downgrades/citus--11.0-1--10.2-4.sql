@@ -1,5 +1,5 @@
 -- citus--11.0-1--10.2-4
-
+REVOKE SELECT ON pg_catalog.pg_dist_object FROM public;
 ALTER TABLE pg_catalog.pg_dist_object SET SCHEMA citus;
 
 DROP FUNCTION pg_catalog.create_distributed_function(regprocedure, text, text, bool);
