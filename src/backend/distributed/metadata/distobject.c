@@ -325,7 +325,7 @@ UnmarkObjectDistributed(const ObjectAddress *address)
 		Int32GetDatum(address->objectSubId)
 	};
 
-	char *deleteQuery = "DELETE FROM citus.pg_dist_object WHERE classid = $1 AND "
+	char *deleteQuery = "DELETE FROM pg_catalog.pg_dist_object WHERE classid = $1 AND "
 						"objid = $2 AND objsubid = $3";
 
 	int spiStatus = ExecuteCommandAsSuperuser(deleteQuery, paramCount, paramTypes,
