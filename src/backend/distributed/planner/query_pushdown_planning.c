@@ -76,7 +76,9 @@ static RecurringTuplesType FromClauseRecurringTupleType(Query *queryTree);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedRecurringTuplesJoin(
 	PlannerRestrictionContext *plannerRestrictionContext);
 static DeferredErrorMessage * DeferErrorIfUnsupportedTableCombination(Query *queryTree);
-static DeferredErrorMessage * DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree);
+static DeferredErrorMessage * DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool
+																lateral,
+																char *referencedThing);
 static bool ExtractSetOperationStatementWalker(Node *node, List **setOperationList);
 static RecurringTuplesType FetchFirstRecurType(PlannerInfo *plannerInfo,
 											   Relids relids);
@@ -91,8 +93,7 @@ static AttrNumber FindResnoForVarInTargetList(List *targetList, int varno, int v
 static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 													Relids relids);
 static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(
-	PlannerInfo *plannerInfo,
-	Relids relids);
+	PlannerInfo *plannerInfo, Relids recurringRelIds, Relids nonRecurringRelIds);
 static Var * PartitionColumnForPushedDownSubquery(Query *query);
 
 
@@ -857,6 +858,7 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 			{
 				DeferredErrorMessage *deferredError =
 					DeferredErrorIfUnsupportedLateralSubquery(plannerInfo,
+															  innerrelRelids,
 															  outerrelRelids);
 				if (deferredError)
 				{
@@ -867,6 +869,7 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 			{
 				DeferredErrorMessage *deferredError =
 					DeferredErrorIfUnsupportedLateralSubquery(plannerInfo,
+															  outerrelRelids,
 															  innerrelRelids);
 				if (deferredError)
 				{
@@ -980,7 +983,8 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
 	 */
 	if (!ContainsReferencesToOuterQuery(subqueryTree))
 	{
-		deferredError = DeferErrorIfSubqueryRequiresMerge(subqueryTree);
+		deferredError = DeferErrorIfSubqueryRequiresMerge(subqueryTree, false,
+														  "another query");
 		if (deferredError)
 		{
 			return deferredError;
@@ -1058,24 +1062,29 @@ DeferErrorIfCannotPushdownSubquery(Query *subqueryTree, bool outerMostQueryHasLi
  * column, etc.).
  */
 static DeferredErrorMessage *
-DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree)
+DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree, bool lateral,
+								  char *referencedThing)
 {
 	bool preconditionsSatisfied = true;
 	char *errorDetail = NULL;
 
+	char *lateralString = lateral ? "lateral " : "";
+
 	if (subqueryTree->limitOffset)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Offset clause is currently unsupported when a subquery "
-					  "references a column from another query";
+		errorDetail = psprintf("Offset clause is currently unsupported when a %ssubquery "
+							   "references a column from %s", lateralString,
+							   referencedThing);
 	}
 
 	/* limit is not supported when SubqueryPushdown is not set */
 	if (subqueryTree->limitCount && !SubqueryPushdown)
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Limit in subquery is currently unsupported when a "
-					  "subquery references a column from another query";
+		errorDetail = psprintf("Limit clause is currently unsupported when a "
+							   "%ssubquery references a column from %s", lateralString,
+							   referencedThing);
 	}
 
 	/* group clause list must include partition column */
@@ -1090,9 +1099,9 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree)
 		if (!groupOnPartitionColumn)
 		{
 			preconditionsSatisfied = false;
-			errorDetail = "Group by list without partition column is currently "
-						  "unsupported when a subquery references a column "
-						  "from another query";
+			errorDetail = psprintf("Group by list without partition column is currently "
+								   "unsupported when a %ssubquery references a column "
+								   "from %s", lateralString, referencedThing);
 		}
 	}
 
@@ -1100,17 +1109,18 @@ DeferErrorIfSubqueryRequiresMerge(Query *subqueryTree)
 	if (subqueryTree->hasAggs && (subqueryTree->groupClause == NULL))
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Aggregates without group by are currently unsupported "
-					  "when a subquery references a column from another query";
+		errorDetail = psprintf("Aggregates without group by are currently unsupported "
+							   "when a %ssubquery references a column from %s",
+							   lateralString, referencedThing);
 	}
 
 	/* having clause without group by on partition column is not supported */
 	if (subqueryTree->havingQual && (subqueryTree->groupClause == NULL))
 	{
 		preconditionsSatisfied = false;
-		errorDetail = "Having qual without group by on partition column is "
-					  "currently unsupported when a subquery references "
-					  "a column from another query";
+		errorDetail = psprintf("Having qual without group by on partition column is "
+							   "currently unsupported when a %ssubquery references "
+							   "a column from %s", lateralString, referencedThing);
 	}
 
 	/*
@@ -1432,11 +1442,55 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo, Relids relids)
  * relations in a RelOptInfo contain a lateral subquery that has a merge step.
  */
 static DeferredErrorMessage *
-DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo, Relids relids)
+DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo, Relids
+										  recurringRelids, Relids nonRecurringRelids)
 {
 	int relationId = -1;
+	RecurringTuplesType recurType = FetchFirstRecurType(plannerInfo, recurringRelids);
+	char *recurTypeName = NULL;
+	switch (recurType)
+	{
+		case RECURRING_TUPLES_REFERENCE_TABLE:
+		{
+			recurTypeName = "a reference table";
+			break;
+		}
 
-	while ((relationId = bms_next_member(relids, relationId)) >= 0)
+		case RECURRING_TUPLES_FUNCTION:
+		{
+			recurTypeName = "a table function";
+			break;
+		}
+
+		case RECURRING_TUPLES_EMPTY_JOIN_TREE:
+		{
+			recurTypeName = "a subquery without FROM";
+			break;
+		}
+
+		case RECURRING_TUPLES_RESULT_FUNCTION:
+		{
+			recurTypeName = "complex subqueries, CTEs or local tables";
+			break;
+		}
+
+		case RECURRING_TUPLES_VALUES:
+		{
+			recurTypeName = "a VALUES clause";
+			break;
+		}
+
+		case RECURRING_TUPLES_INVALID:
+		{
+			/*
+			 * This branch should never be hit, but it's here just in case it
+			 * happens.
+			 */
+			recurTypeName = "an unknown recurring tuple";
+		}
+	}
+
+	while ((relationId = bms_next_member(nonRecurringRelids, relationId)) >= 0)
 	{
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
@@ -1449,7 +1503,7 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo, Relids relid
 		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
 		{
 			DeferredErrorMessage *deferredError = DeferErrorIfSubqueryRequiresMerge(
-				rangeTableEntry->subquery);
+				rangeTableEntry->subquery, true, recurTypeName);
 			if (deferredError)
 			{
 				return deferredError;

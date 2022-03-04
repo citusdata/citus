@@ -1275,7 +1275,7 @@ ORDER BY
   user_id
 limit 50;
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+DETAIL:  Limit clause is currently unsupported when a lateral subquery references a column from complex subqueries, CTEs or local tables
 SELECT "some_users_data".user_id, lastseen
 FROM
      (SELECT 2 * user_id as user_id, max(time) AS lastseen
@@ -1309,7 +1309,7 @@ ORDER BY
   user_id
 limit 50;
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+DETAIL:  Limit clause is currently unsupported when a lateral subquery references a column from complex subqueries, CTEs or local tables
 -- LATERAL JOINs used with INNER JOINs
 SET citus.subquery_pushdown to ON;
 NOTICE:  Setting citus.subquery_pushdown flag is discouraged becuase it forces the planner to pushdown certain queries, skipping relevant correctness checks.
@@ -1500,7 +1500,7 @@ DEBUG:  Router planner cannot handle multi-shard select queries
 DEBUG:  generating subplan XXX_1 for subquery SELECT user_id FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_2 OPERATOR(pg_catalog.>) 3))
 DEBUG:  Router planner cannot handle multi-shard select queries
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+DETAIL:  Limit clause is currently unsupported when a lateral subquery references a column from complex subqueries, CTEs or local tables
 SET citus.enable_repartition_joins to ON;
 SET client_min_messages TO DEBUG1;
 -- recursively planner since the inner JOIN is not on the partition key
@@ -1558,7 +1558,7 @@ ORDER BY
 LIMIT 10;
 DEBUG:  generating subplan XXX_1 for subquery SELECT user_id, value_1 FROM public.users_table users WHERE ((user_id OPERATOR(pg_catalog.>) 1) AND (user_id OPERATOR(pg_catalog.<) 4) AND (value_2 OPERATOR(pg_catalog.>) 3))
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+DETAIL:  Limit clause is currently unsupported when a lateral subquery references a column from complex subqueries, CTEs or local tables
 SET citus.enable_repartition_joins to OFF;
 RESET client_min_messages;
 -- not supported since upper LATERAL JOIN is not equi join
@@ -1669,7 +1669,7 @@ ORDER BY
   user_id DESC, lastseen DESC
 LIMIT 10;
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+DETAIL:  Limit clause is currently unsupported when a lateral subquery references a column from complex subqueries, CTEs or local tables
 -- NESTED INNER JOINs
 SELECT
  count(*) AS value, "generated_group_field"
@@ -2312,7 +2312,7 @@ ORDER BY
     value_2 DESC, user_id DESC
 LIMIT 10;
 ERROR:  cannot push down this subquery
-DETAIL:  Limit in subquery is currently unsupported when a subquery references a column from another query
+DETAIL:  Limit clause is currently unsupported when a lateral subquery references a column from complex subqueries, CTEs or local tables
 -- lets test some unsupported set operations
 -- not supported since we use INTERSECT
 SELECT ("final_query"."event_types") as types, count(*) AS sumOfEventType

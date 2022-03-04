@@ -10,7 +10,76 @@ SELECT create_distributed_table('test','x');
 CREATE TABLE ref(a bigint, b bigint);
 SELECT create_reference_table('ref');
 
--- Since the only correlates on the distribution column, this can be safely
+insert into test(x, y) SELECT 1, i FROM generate_series(1, 10) i;
+insert into test(x, y) SELECT 3, i FROM generate_series(11, 40) i;
+insert into test(x, y) SELECT i, 1 FROM generate_series(1, 10) i;
+insert into test(x, y) SELECT i, 3 FROM generate_series(11, 40) i;
+
+insert into ref(a, b) SELECT i, 1 FROM generate_series(1, 10) i;
+insert into ref(a, b) SELECT i, 3 FROM generate_series(11, 40) i;
+insert into ref(a, b) SELECT 1, i FROM generate_series(1, 10) i;
+insert into ref(a, b) SELECT 3, i FROM generate_series(11, 40) i;
+
+-- The following queries return wrong results when pushed down. Instead of
+-- returning 2 rows, for each row in ref table. They would return (2 * number
+-- of shards) rows for each row in the reference table. See issue #5327
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            test.y
+        FROM test
+        WHERE
+            test.y = ref.a
+        LIMIT 2
+    ) q;
+
+SELECT count(*)
+FROM (VALUES (1), (3)) ref(a),
+    LATERAL (
+        SELECT
+            test.y
+        FROM test
+        WHERE
+            test.y = ref.a
+        LIMIT 2
+    ) q;
+
+WITH ref(a) as (select y from test)
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            test.y
+        FROM test
+        WHERE
+            test.y = ref.a
+        LIMIT 2
+    ) q;
+
+SELECT count(*)
+FROM generate_series(1, 3) ref(a),
+    LATERAL (
+        SELECT
+            test.y
+        FROM test
+        WHERE
+            test.y = ref.a
+        LIMIT 2
+    ) q;
+
+SELECT count(*)
+FROM (SELECT generate_series(1, 3)) ref(a),
+    LATERAL (
+        SELECT
+            test.y
+        FROM test
+        WHERE
+            test.y = ref.a
+        LIMIT 2
+    ) q;
+
+-- Since this only correlates on the distribution column, this can be safely
 -- pushed down. But this is currently considered to hard to detect, so we fail.
 SELECT count(*)
 FROM ref,
@@ -20,21 +89,6 @@ FROM ref,
         FROM test
         WHERE
             test.x = ref.a
-        LIMIT 2
-    ) q;
-
--- This returns wrong results when pushed down. Instead of returning 2 rows,
--- for each row in the reference table. It would return (2 * number of shards)
--- rows for each row in the reference table.
--- See issue #5327
-SELECT count(*)
-FROM ref,
-    LATERAL (
-        SELECT
-            test.y
-        FROM test
-        WHERE
-            test.y = ref.a
         LIMIT 2
     ) q;
 
