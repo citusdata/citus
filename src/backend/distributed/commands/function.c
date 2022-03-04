@@ -210,9 +210,10 @@ create_distributed_function(PG_FUNCTION_ARGS)
 		char *schemaName = get_namespace_name(get_func_namespace(funcOid));
 		char *functionName = get_func_name(funcOid);
 		char *qualifiedName = quote_qualified_identifier(schemaName, functionName);
-		ereport(NOTICE, (errmsg("function %s is already distributed", qualifiedName),
-						 errdetail("Citus distributes functions with CREATE "
-								   "(OR REPLACE) FUNCTION command"),
+		char *objectType = getObjectTypeDescription(&functionAddress, false);
+		ereport(NOTICE, (errmsg("%s %s is already distributed", objectType, qualifiedName),
+						 errdetail("Citus distributes %ss with CREATE "
+								   "(OR REPLACE) FUNCTION command", objectType),
 						 errhint("To delegate the function, please provide parameters "
 								 "distribution_arg_name, colocate_with or "
 								 "force_delegation, for create_distributed_function")));
