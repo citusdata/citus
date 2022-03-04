@@ -246,9 +246,10 @@ static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMe
 									  Oid *columnTypeId, int32 *columnTypeMod,
 									  Oid *intervalTypeId, int32 *intervalTypeMod);
 static void CachedNamespaceLookup(const char *nspname, Oid *cachedOid);
-static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
+static void CachedRelationLookup(const char *relationName, Oid *cachedOid, bool
+								 missing_ok);
 static void CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
-										  Oid *cachedOid);
+										  Oid *cachedOid, bool missing_ok);
 static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement, CitusTableCacheEntry *tableEntry,
 	int shardIndex);
@@ -2247,7 +2248,8 @@ Oid
 DistShardRelationId(void)
 {
 	CachedRelationLookup("pg_dist_shard",
-						 &MetadataCache.distShardRelationId);
+						 &MetadataCache.distShardRelationId,
+						 false);
 
 	return MetadataCache.distShardRelationId;
 }
@@ -2258,7 +2260,8 @@ Oid
 DistPlacementRelationId(void)
 {
 	CachedRelationLookup("pg_dist_placement",
-						 &MetadataCache.distPlacementRelationId);
+						 &MetadataCache.distPlacementRelationId,
+						 false);
 
 	return MetadataCache.distPlacementRelationId;
 }
@@ -2269,7 +2272,8 @@ Oid
 DistNodeRelationId(void)
 {
 	CachedRelationLookup("pg_dist_node",
-						 &MetadataCache.distNodeRelationId);
+						 &MetadataCache.distNodeRelationId,
+						 false);
 
 	return MetadataCache.distNodeRelationId;
 }
@@ -2280,7 +2284,8 @@ Oid
 DistNodeNodeIdIndexId(void)
 {
 	CachedRelationLookup("pg_dist_node_pkey",
-						 &MetadataCache.distNodeNodeIdIndexId);
+						 &MetadataCache.distNodeNodeIdIndexId,
+						 false);
 
 	return MetadataCache.distNodeNodeIdIndexId;
 }
@@ -2291,7 +2296,8 @@ Oid
 DistLocalGroupIdRelationId(void)
 {
 	CachedRelationLookup("pg_dist_local_group",
-						 &MetadataCache.distLocalGroupRelationId);
+						 &MetadataCache.distLocalGroupRelationId,
+						 false);
 
 	return MetadataCache.distLocalGroupRelationId;
 }
@@ -2302,7 +2308,8 @@ Oid
 DistRebalanceStrategyRelationId(void)
 {
 	CachedRelationLookup("pg_dist_rebalance_strategy",
-						 &MetadataCache.distRebalanceStrategyRelationId);
+						 &MetadataCache.distRebalanceStrategyRelationId,
+						 false);
 
 	return MetadataCache.distRebalanceStrategyRelationId;
 }
@@ -2321,8 +2328,34 @@ CitusCatalogNamespaceId(void)
 Oid
 DistObjectRelationId(void)
 {
-	CachedRelationNamespaceLookup("pg_dist_object", CitusCatalogNamespaceId(),
-								  &MetadataCache.distObjectRelationId);
+	/*
+	 * In older versions pg_dist_object was living in the `citus` namespace, With Citus 11
+	 * this has been moved to pg_dist_catalog.
+	 *
+	 * During upgrades it could therefore be that we simply need to look in the old
+	 * catalog. Since we expect to find it most of the time in the pg_catalog schema from
+	 * now on we will start there. And only if we are not creating/altering the extension
+	 * we allow the table to be missing from pg_catalog. When it is missing we will load
+	 * the table from the ol schema.
+	 *
+	 * even after the table has been moved, the oid's stay the same, so we don't have to
+	 * invalidate the cache after a move
+	 */
+	const bool missing_ok = creating_extension;
+	CachedRelationLookup("pg_dist_object",
+						 &MetadataCache.distObjectRelationId,
+						 missing_ok);
+	if (!OidIsValid(MetadataCache.distObjectRelationId))
+	{
+		/*
+		 * We can only ever reach here while we are creating/altering our extension before
+		 * the table is moved to pg_catalog.
+		 */
+		CachedRelationNamespaceLookup("pg_dist_object",
+									  CitusCatalogNamespaceId(),
+									  &MetadataCache.distObjectRelationId,
+									  false);
+	}
 
 	return MetadataCache.distObjectRelationId;
 }
@@ -2332,9 +2365,35 @@ DistObjectRelationId(void)
 Oid
 DistObjectPrimaryKeyIndexId(void)
 {
-	CachedRelationNamespaceLookup("pg_dist_object_pkey",
-								  CitusCatalogNamespaceId(),
-								  &MetadataCache.distObjectPrimaryKeyIndexId);
+	/*
+	 * In older versions pg_dist_object was living in the `citus` namespace, With Citus 11
+	 * this has been moved to pg_dist_catalog.
+	 *
+	 * During upgrades it could therefore be that we simply need to look in the old
+	 * catalog. Since we expect to find it most of the time in the pg_catalog schema from
+	 * now on we will start there. And only if we are not creating/altering the extension
+	 * we allow the table to be missing from pg_catalog. When it is missing we will load
+	 * the table from the ol schema.
+	 *
+	 * even after the table has been moved, the oid's stay the same, so we don't have to
+	 * invalidate the cache after a move
+	 */
+	const bool missing_ok = creating_extension;
+	CachedRelationLookup("pg_dist_object_pkey",
+						 &MetadataCache.distObjectPrimaryKeyIndexId,
+						 missing_ok);
+
+	if (!OidIsValid(MetadataCache.distObjectPrimaryKeyIndexId))
+	{
+		/*
+		 * We can only ever reach here while we are creating/altering our extension before
+		 * the table is moved to pg_catalog.
+		 */
+		CachedRelationNamespaceLookup("pg_dist_object_pkey",
+									  CitusCatalogNamespaceId(),
+									  &MetadataCache.distObjectPrimaryKeyIndexId,
+									  false);
+	}
 
 	return MetadataCache.distObjectPrimaryKeyIndexId;
 }
@@ -2345,7 +2404,8 @@ Oid
 DistColocationRelationId(void)
 {
 	CachedRelationLookup("pg_dist_colocation",
-						 &MetadataCache.distColocationRelationId);
+						 &MetadataCache.distColocationRelationId,
+						 false);
 
 	return MetadataCache.distColocationRelationId;
 }
@@ -2356,7 +2416,8 @@ Oid
 DistColocationConfigurationIndexId(void)
 {
 	CachedRelationLookup("pg_dist_colocation_configuration_index",
-						 &MetadataCache.distColocationConfigurationIndexId);
+						 &MetadataCache.distColocationConfigurationIndexId,
+						 false);
 
 	return MetadataCache.distColocationConfigurationIndexId;
 }
@@ -2367,7 +2428,8 @@ Oid
 DistPartitionRelationId(void)
 {
 	CachedRelationLookup("pg_dist_partition",
-						 &MetadataCache.distPartitionRelationId);
+						 &MetadataCache.distPartitionRelationId,
+						 false);
 
 	return MetadataCache.distPartitionRelationId;
 }
@@ -2378,7 +2440,8 @@ Oid
 DistPartitionLogicalRelidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_partition_logical_relid_index",
-						 &MetadataCache.distPartitionLogicalRelidIndexId);
+						 &MetadataCache.distPartitionLogicalRelidIndexId,
+						 false);
 
 	return MetadataCache.distPartitionLogicalRelidIndexId;
 }
@@ -2389,7 +2452,8 @@ Oid
 DistPartitionColocationidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_partition_colocationid_index",
-						 &MetadataCache.distPartitionColocationidIndexId);
+						 &MetadataCache.distPartitionColocationidIndexId,
+						 false);
 
 	return MetadataCache.distPartitionColocationidIndexId;
 }
@@ -2400,7 +2464,8 @@ Oid
 DistShardLogicalRelidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_shard_logical_relid_index",
-						 &MetadataCache.distShardLogicalRelidIndexId);
+						 &MetadataCache.distShardLogicalRelidIndexId,
+						 false);
 
 	return MetadataCache.distShardLogicalRelidIndexId;
 }
@@ -2411,7 +2476,8 @@ Oid
 DistShardShardidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_shard_shardid_index",
-						 &MetadataCache.distShardShardidIndexId);
+						 &MetadataCache.distShardShardidIndexId,
+						 false);
 
 	return MetadataCache.distShardShardidIndexId;
 }
@@ -2422,7 +2488,8 @@ Oid
 DistPlacementShardidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_placement_shardid_index",
-						 &MetadataCache.distPlacementShardidIndexId);
+						 &MetadataCache.distPlacementShardidIndexId,
+						 false);
 
 	return MetadataCache.distPlacementShardidIndexId;
 }
@@ -2433,7 +2500,8 @@ Oid
 DistPlacementPlacementidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_placement_placementid_index",
-						 &MetadataCache.distPlacementPlacementidIndexId);
+						 &MetadataCache.distPlacementPlacementidIndexId,
+						 false);
 
 	return MetadataCache.distPlacementPlacementidIndexId;
 }
@@ -2444,7 +2512,8 @@ Oid
 DistTransactionRelationId(void)
 {
 	CachedRelationLookup("pg_dist_transaction",
-						 &MetadataCache.distTransactionRelationId);
+						 &MetadataCache.distTransactionRelationId,
+						 false);
 
 	return MetadataCache.distTransactionRelationId;
 }
@@ -2455,7 +2524,8 @@ Oid
 DistTransactionGroupIndexId(void)
 {
 	CachedRelationLookup("pg_dist_transaction_group_index",
-						 &MetadataCache.distTransactionGroupIndexId);
+						 &MetadataCache.distTransactionGroupIndexId,
+						 false);
 
 	return MetadataCache.distTransactionGroupIndexId;
 }
@@ -2466,7 +2536,8 @@ Oid
 DistPlacementGroupidIndexId(void)
 {
 	CachedRelationLookup("pg_dist_placement_groupid_index",
-						 &MetadataCache.distPlacementGroupidIndexId);
+						 &MetadataCache.distPlacementGroupidIndexId,
+						 false);
 
 	return MetadataCache.distPlacementGroupidIndexId;
 }
@@ -4585,15 +4656,16 @@ CachedNamespaceLookup(const char *nspname, Oid *cachedOid)
  * relationName, with the result cached in *cachedOid.
  */
 static void
-CachedRelationLookup(const char *relationName, Oid *cachedOid)
+CachedRelationLookup(const char *relationName, Oid *cachedOid, bool missing_ok)
 {
-	CachedRelationNamespaceLookup(relationName, PG_CATALOG_NAMESPACE, cachedOid);
+	CachedRelationNamespaceLookup(relationName, PG_CATALOG_NAMESPACE, cachedOid,
+								  missing_ok);
 }
 
 
 static void
 CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
-							  Oid *cachedOid)
+							  Oid *cachedOid, bool missing_ok)
 {
 	/* force callbacks to be registered, so we always get notified upon changes */
 	InitializeCaches();
@@ -4602,7 +4674,7 @@ CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
 	{
 		*cachedOid = get_relname_relid(relationName, relnamespace);
 
-		if (*cachedOid == InvalidOid)
+		if (*cachedOid == InvalidOid && !missing_ok)
 		{
 			ereport(ERROR, (errmsg(
 								"cache lookup failed for %s, called too early?",
