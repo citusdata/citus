@@ -86,7 +86,7 @@ extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 #define DELETE_ALL_NODES "DELETE FROM pg_dist_node"
 #define DELETE_ALL_PLACEMENTS "DELETE FROM pg_dist_placement"
 #define DELETE_ALL_SHARDS "DELETE FROM pg_dist_shard"
-#define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM citus.pg_dist_object"
+#define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM pg_catalog.pg_dist_object"
 #define DELETE_ALL_PARTITIONS "DELETE FROM pg_dist_partition"
 #define DELETE_ALL_COLOCATION "DELETE FROM pg_catalog.pg_dist_colocation"
 #define REMOVE_ALL_SHELL_TABLES_COMMAND \

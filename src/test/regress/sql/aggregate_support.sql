@@ -161,7 +161,7 @@ create aggregate binstragg(text, text)(
     stype=text
 );
 -- verify that the aggregate is added into pg_dist_object, on each worker
-SELECT run_command_on_workers($$SELECT count(*) from citus.pg_dist_object where objid = 'aggregate_support.binstragg'::regproc;$$);
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.binstragg'::regproc;$$);
 
 SELECT run_command_on_workers($$select count(*) from pg_aggregate where aggfnoid::text like '%binstragg%';$$);
 
@@ -588,14 +588,14 @@ COMMIT;
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
 
 -- verify that the aggregate is added into pg_dist_object, on each worker
-SELECT run_command_on_workers($$SELECT count(*) from citus.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
 
 RESET citus.create_object_propagation;
 
 -- drop and test outside of tx block
 drop aggregate dependent_agg (float8);
 -- verify that the aggregate is removed from pg_dist_object, on each worker
-SELECT run_command_on_workers($$SELECT count(*) from citus.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
 create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
 --verify
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);

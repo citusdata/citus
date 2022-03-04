@@ -45,7 +45,7 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
 (1 row)
 
 -- verify that the aggregate is added top pg_dist_object on the new node
-SELECT run_command_on_workers($$SELECT count(*) from citus.pg_dist_object where objid = 'propagate_foreign_server.array_agg'::regproc;$$);
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'propagate_foreign_server.array_agg'::regproc;$$);
  run_command_on_workers
 ---------------------------------------------------------------------
  (localhost,57638,t,1)

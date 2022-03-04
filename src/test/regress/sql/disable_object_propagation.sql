@@ -45,7 +45,7 @@ DROP TABLE t4; -- as long as the table is using the type some operations are har
 COMMIT;
 
 -- verify the type is distributed
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = 'disabled_object_propagation.tt3'::regtype::oid;
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = 'disabled_object_propagation.tt3'::regtype::oid;
 
 ALTER TYPE tt3 ADD ATTRIBUTE c int, DROP ATTRIBUTE b, ALTER ATTRIBUTE a SET DATA TYPE text COLLATE "POSIX";
 ALTER TYPE tt3 OWNER TO typeowner_for_disabled_object_propagation_guc;

@@ -79,3 +79,8 @@ END;
 $$;
 
 #include "udfs/citus_finalize_upgrade_to_citus11/11.0-1.sql"
+
+ALTER TABLE citus.pg_dist_object SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_object TO public;
+#include "udfs/citus_prepare_pg_upgrade/11.0-1.sql"
+#include "udfs/citus_finish_pg_upgrade/11.0-1.sql"

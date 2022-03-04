@@ -36,7 +36,7 @@ drop cascades to table upgrade_basic.t_range
  --   "seg" extension
  -- will not be marked as distributed
 -- see underlying objects
-SELECT i.* FROM citus.pg_dist_object, pg_identify_object_as_address(classid, objid, objsubid) i ORDER BY 1, 2, 3;
+SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid, objid, objsubid) i ORDER BY 1, 2, 3;
       type      | object_names | object_args
 ---------------------------------------------------------------------
   collation                 | {post_11_upgrade,german_phonebook_unpropagated}          | {}
