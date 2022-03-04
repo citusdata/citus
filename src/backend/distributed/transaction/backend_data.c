@@ -721,6 +721,7 @@ UnSetGlobalPID(void)
 		MyBackendData->globalPID = 0;
 		MyBackendData->databaseId = 0;
 		MyBackendData->userId = 0;
+		MyBackendData->distributedCommandOriginator = false;
 
 		SpinLockRelease(&MyBackendData->mutex);
 	}
@@ -850,12 +851,16 @@ AssignGlobalPID(void)
 
 
 /*
- * OverrideBackendDataDistributedCommandOriginator should only be used for isolation testing.
- * See how it is used in the relevant functions.
+ * SetBackendDataDistributedCommandOriginator is used to set the distributedCommandOriginator
+ * field on MyBackendData.
  */
 void
-OverrideBackendDataDistributedCommandOriginator(bool distributedCommandOriginator)
+SetBackendDataDistributedCommandOriginator(bool distributedCommandOriginator)
 {
+	if (!MyBackendData)
+	{
+		return;
+	}
 	SpinLockAcquire(&MyBackendData->mutex);
 	MyBackendData->distributedCommandOriginator =
 		distributedCommandOriginator;

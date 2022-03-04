@@ -35,6 +35,16 @@ DROP FUNCTION IF EXISTS pg_catalog.citus_dist_stat_activity() CASCADE;
 DROP FUNCTION IF EXISTS pg_catalog.citus_worker_stat_activity() CASCADE;
 #include "udfs/citus_dist_stat_activity/11.0-1.sql"
 
+-- a very simple helper function defined for citus_lock_waits
+CREATE OR REPLACE FUNCTION get_nodeid_for_groupid(groupIdInput int) RETURNS int AS $$
+DECLARE
+	returnNodeNodeId int := 0;
+begin
+	SELECT nodeId into returnNodeNodeId FROM pg_dist_node WHERE groupid = groupIdInput and nodecluster = current_setting('citus.cluster_name');
+	RETURN returnNodeNodeId;
+end
+$$ LANGUAGE plpgsql;
+
 #include "udfs/citus_lock_waits/11.0-1.sql"
 
 #include "udfs/pg_cancel_backend/11.0-1.sql"

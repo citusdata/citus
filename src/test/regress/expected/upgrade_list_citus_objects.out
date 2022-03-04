@@ -146,6 +146,7 @@ ORDER BY 1;
  function get_current_transaction_id()
  function get_global_active_transactions()
  function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone)
+ function get_nodeid_for_groupid(integer)
  function get_rebalance_progress()
  function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name,real)
  function get_shard_id_for_distribution_column(regclass,"any")
@@ -277,5 +278,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(261 rows)
+(262 rows)
 

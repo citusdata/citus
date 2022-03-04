@@ -357,6 +357,7 @@ GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
 DROP FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(bool);
 DROP FUNCTION pg_catalog.citus_calculate_gpid(integer,integer);
 DROP FUNCTION pg_catalog.citus_backend_gpid();
+DROP FUNCTION get_nodeid_for_groupid(integer);
 
 RESET search_path;
 

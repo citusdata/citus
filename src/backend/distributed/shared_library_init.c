@@ -2226,6 +2226,19 @@ CitusAuthHook(Port *port, int status)
 									  "regular client connections",
 									  MaxClientConnections)));
 		}
+
+		/*
+		 * Right after this, before we assign global pid, this backend
+		 * might get blocked by a DDL as that happens during parsing.
+		 *
+		 * That's why, lets mark the backend as an external backend
+		 * which is likely to execute a distributed command.
+		 *
+		 * We do this so that this backend gets the chance to show
+		 * up in citus_lock_waits.
+		 */
+		InitializeBackendData();
+		SetBackendDataDistributedCommandOriginator(true);
 	}
 
 	/* let other authentication hooks to kick in first */
