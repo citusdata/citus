@@ -32,32 +32,32 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' and query not ILIKE '%BEGIN%' and query NOT ILIKE '%pg_catalog.pg_isolation_test_session_is_blocked%' ORDER BY query DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%BEGIN%'), ('%pg_catalog.pg_isolation_test_session_is_blocked%')) AND backend_type = 'client backend' ORDER BY query DESC;
 
-query                                         |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                         |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
 
     ALTER TABLE test_table ADD COLUMN x INT;
-|coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+|idle in transaction|Client         |ClientRead|postgres|regression
 (1 row)
 
 step s3-view-worker:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND backend_type = 'client backend' ORDER BY query DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%csa_from_one_node%')) AND is_worker_query = true AND backend_type = 'client backend' ORDER BY query DESC;
 
-query                                                                                                      |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                                                                                      |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
 SELECT worker_apply_shard_ddl_command (1300004, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
-')|localhost     |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+')|idle in transaction|Client         |ClientRead|postgres|regression
 SELECT worker_apply_shard_ddl_command (1300003, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
-')|localhost     |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+')|idle in transaction|Client         |ClientRead|postgres|regression
 SELECT worker_apply_shard_ddl_command (1300002, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
-')|localhost     |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+')|idle in transaction|Client         |ClientRead|postgres|regression
 SELECT worker_apply_shard_ddl_command (1300001, 'public', '
     ALTER TABLE test_table ADD COLUMN x INT;
-')|localhost     |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+')|idle in transaction|Client         |ClientRead|postgres|regression
 (4 rows)
 
 step s2-rollback:
@@ -102,21 +102,21 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' and query not ILIKE '%BEGIN%' and query NOT ILIKE '%pg_catalog.pg_isolation_test_session_is_blocked%' ORDER BY query DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%BEGIN%'), ('%pg_catalog.pg_isolation_test_session_is_blocked%')) AND backend_type = 'client backend' ORDER BY query DESC;
 
-query                                        |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                        |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
 
  	INSERT INTO test_table VALUES (100, 100);
-|coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+|idle in transaction|Client         |ClientRead|postgres|regression
 (1 row)
 
 step s3-view-worker:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND backend_type = 'client backend' ORDER BY query DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%csa_from_one_node%')) AND is_worker_query = true AND backend_type = 'client backend' ORDER BY query DESC;
 
-query                                                                     |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                                                     |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-INSERT INTO public.test_table_1300008 (column1, column2) VALUES (100, 100)|localhost     |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+INSERT INTO public.test_table_1300008 (column1, column2) VALUES (100, 100)|idle in transaction|Client         |ClientRead|postgres|regression
 (1 row)
 
 step s2-rollback:
@@ -166,24 +166,24 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' and query not ILIKE '%BEGIN%' and query NOT ILIKE '%pg_catalog.pg_isolation_test_session_is_blocked%' ORDER BY query DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%BEGIN%'), ('%pg_catalog.pg_isolation_test_session_is_blocked%')) AND backend_type = 'client backend' ORDER BY query DESC;
 
-query                                |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
 
    SELECT count(*) FROM test_table;
-|coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+|idle in transaction|Client         |ClientRead|postgres|regression
 (1 row)
 
 step s3-view-worker:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND backend_type = 'client backend' ORDER BY query DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%csa_from_one_node%')) AND is_worker_query = true AND backend_type = 'client backend' ORDER BY query DESC;
 
-query                                                                        |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                                                        |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-SELECT count(*) AS count FROM public.test_table_1300014 test_table WHERE true|localhost     |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-SELECT count(*) AS count FROM public.test_table_1300013 test_table WHERE true|localhost     |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-SELECT count(*) AS count FROM public.test_table_1300012 test_table WHERE true|localhost     |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-SELECT count(*) AS count FROM public.test_table_1300011 test_table WHERE true|localhost     |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300014 test_table WHERE true|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300013 test_table WHERE true|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300012 test_table WHERE true|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300011 test_table WHERE true|idle in transaction|Client         |ClientRead|postgres|regression
 (4 rows)
 
 step s2-rollback:
@@ -233,21 +233,21 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' and query not ILIKE '%BEGIN%' and query NOT ILIKE '%pg_catalog.pg_isolation_test_session_is_blocked%' ORDER BY query DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%BEGIN%'), ('%pg_catalog.pg_isolation_test_session_is_blocked%')) AND backend_type = 'client backend' ORDER BY query DESC;
 
-query                                                   |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                                   |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
 
    SELECT count(*) FROM test_table WHERE column1 = 55;
-|coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+|idle in transaction|Client         |ClientRead|postgres|regression
 (1 row)
 
 step s3-view-worker:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND backend_type = 'client backend' ORDER BY query DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%csa_from_one_node%')) AND is_worker_query = true AND backend_type = 'client backend' ORDER BY query DESC;
 
-query                                                                                                       |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                                                                                       |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-SELECT count(*) AS count FROM public.test_table_1300017 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)|localhost     |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+SELECT count(*) AS count FROM public.test_table_1300017 test_table WHERE (column1 OPERATOR(pg_catalog.=) 55)|idle in transaction|Client         |ClientRead|postgres|regression
 (1 row)
 
 step s2-rollback:

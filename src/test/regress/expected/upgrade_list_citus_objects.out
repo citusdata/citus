@@ -53,7 +53,6 @@ ORDER BY 1;
  function citus_dist_partition_cache_invalidate()
  function citus_dist_placement_cache_invalidate()
  function citus_dist_shard_cache_invalidate()
- function citus_dist_stat_activity()
  function citus_drain_node(text,integer,citus.shard_transfer_mode,name)
  function citus_drop_all_shards(regclass,text,text,boolean)
  function citus_drop_trigger()
@@ -121,7 +120,6 @@ ORDER BY 1;
  function citus_update_table_statistics(regclass)
  function citus_validate_rebalance_strategy_functions(regproc,regproc,regproc)
  function citus_version()
- function citus_worker_stat_activity()
  function column_name_to_column(regclass,text)
  function column_to_column_name(regclass,text)
  function columnar.columnar_handler(internal)
@@ -277,8 +275,7 @@ ORDER BY 1;
  view citus_shards_on_worker
  view citus_stat_activity
  view citus_stat_statements
- view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(264 rows)
+(261 rows)
 

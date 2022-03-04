@@ -27,13 +27,13 @@ step s2-update-ref-table:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement                                  |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement                                  |current_statement_in_blocking_process
 ---------------------------------------------------------------------
 UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|
 	UPDATE ref_table SET value_1 = 15;
-|coordinator_host |coordinator_host  |            57636|             57636
+
 (1 row)
 
 step s1-commit:
@@ -112,11 +112,11 @@ step s2-update-ref-table:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement                                  |current_statement_in_blocking_process              |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement                                  |current_statement_in_blocking_process
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|coordinator_host |coordinator_host  |            57636|             57636
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|UPDATE ref_table SET value_1 = 12 WHERE user_id = 1
 (1 row)
 
 step s1-commit-worker:
@@ -208,11 +208,11 @@ step s2-update-dist-table:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 5');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement         |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement         |current_statement_in_blocking_process
 ---------------------------------------------------------------------
-UPDATE tt1 SET value_1 = 5|UPDATE tt1 SET value_1 = 4           |coordinator_host |coordinator_host  |            57636|             57636
+UPDATE tt1 SET value_1 = 5|UPDATE tt1 SET value_1 = 4
 (1 row)
 
 step s1-commit-worker:
@@ -304,11 +304,11 @@ step s2-update-ref-table:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement                                  |current_statement_in_blocking_process  |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement                                  |current_statement_in_blocking_process
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|DELETE FROM ref_table WHERE user_id = 1|coordinator_host |coordinator_host  |            57636|             57636
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|DELETE FROM ref_table WHERE user_id = 1
 (1 row)
 
 step s1-commit-worker:
@@ -400,11 +400,11 @@ step s2-update-ref-table:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement                                  |current_statement_in_blocking_process    |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement                                  |current_statement_in_blocking_process
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|INSERT INTO ref_table VALUES(8,81),(9,91)|coordinator_host |coordinator_host  |            57636|             57636
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|INSERT INTO ref_table VALUES(8,81),(9,91)
 (1 row)
 
 step s1-commit-worker:
@@ -501,9 +501,9 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s3-select-distributed-waiting-queries:
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement|current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement|current_statement_in_blocking_process
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -590,11 +590,11 @@ step s2-update-ref-table:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement                                  |current_statement_in_blocking_process                              |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement                                  |current_statement_in_blocking_process
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|COPY ref_table FROM PROGRAM 'echo 10, 101 && echo 11, 111' WITH CSV|coordinator_host |coordinator_host  |            57636|             57636
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|COPY ref_table FROM PROGRAM 'echo 10, 101 && echo 11, 111' WITH CSV
 (1 row)
 
 step s1-commit-worker:
@@ -691,9 +691,9 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s3-select-distributed-waiting-queries:
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement|current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement|current_statement_in_blocking_process
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -785,9 +785,9 @@ run_commands_on_session_level_connection_to_node
 (1 row)
 
 step s3-select-distributed-waiting-queries:
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement|current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement|current_statement_in_blocking_process
 ---------------------------------------------------------------------
 (0 rows)
 
@@ -874,11 +874,11 @@ step s2-update-ref-table:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement                                  |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement                                  |current_statement_in_blocking_process
 ---------------------------------------------------------------------
-UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|SELECT * FROM ref_table FOR UPDATE   |coordinator_host |coordinator_host  |            57636|             57636
+UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|SELECT * FROM ref_table FOR UPDATE
 (1 row)
 
 step s1-commit-worker:
@@ -957,13 +957,13 @@ step s1-alter-table:
 	ALTER TABLE ref_table ADD CONSTRAINT rf_p_key PRIMARY KEY(user_id);
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement                                                     |current_statement_in_blocking_process    |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement                                                     |current_statement_in_blocking_process
 ---------------------------------------------------------------------
 
 	ALTER TABLE ref_table ADD CONSTRAINT rf_p_key PRIMARY KEY(user_id);
-|INSERT INTO ref_table VALUES(8,81),(9,91)|coordinator_host |coordinator_host  |            57636|             57636
+|INSERT INTO ref_table VALUES(8,81),(9,91)
 (1 row)
 
 step s2-commit-worker:
@@ -1003,15 +1003,15 @@ step s2-update-on-the-coordinator:
 	UPDATE tt1 SET value_1 = 4;
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement             |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement             |current_statement_in_blocking_process
 ---------------------------------------------------------------------
 
 	UPDATE tt1 SET value_1 = 4;
 |
 	UPDATE tt1 SET value_1 = 4;
-       |coordinator_host |coordinator_host  |            57636|             57636
+
 (1 row)
 
 step s1-commit:
@@ -1069,11 +1069,11 @@ step s4-update-dist-table:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 5');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement         |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement         |current_statement_in_blocking_process
 ---------------------------------------------------------------------
-UPDATE tt1 SET value_1 = 5|UPDATE tt1 SET value_1 = 4           |coordinator_host |coordinator_host  |            57636|             57636
+UPDATE tt1 SET value_1 = 5|UPDATE tt1 SET value_1 = 4
 (1 row)
 
 step s1-commit-worker:
@@ -1157,11 +1157,11 @@ step s2-update-dist-table-id-1:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE tt1 SET value_1 = 4 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement                           |current_statement_in_blocking_process       |waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement                           |current_statement_in_blocking_process
 ---------------------------------------------------------------------
-UPDATE tt1 SET value_1 = 4 WHERE user_id = 1|UPDATE tt1 SET value_1 = 4 WHERE user_id = 1|coordinator_host |coordinator_host  |            57636|             57636
+UPDATE tt1 SET value_1 = 4 WHERE user_id = 1|UPDATE tt1 SET value_1 = 4 WHERE user_id = 1
 (1 row)
 
 step s1-commit-worker:
@@ -1219,13 +1219,13 @@ step s2-update-ref-table:
 	SELECT run_commands_on_session_level_connection_to_node('UPDATE ref_table SET value_1 = 12 WHERE user_id = 1');
  <waiting ...>
 step s3-select-distributed-waiting-queries: 
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
-blocked_statement                                  |current_statement_in_blocking_process|waiting_node_name|blocking_node_name|waiting_node_port|blocking_node_port
+blocked_statement                                  |current_statement_in_blocking_process
 ---------------------------------------------------------------------
 UPDATE ref_table SET value_1 = 12 WHERE user_id = 1|
 	UPDATE ref_table SET value_1 = 15;
-|coordinator_host |coordinator_host  |            57636|             57636
+
 (1 row)
 
 step s1-commit:

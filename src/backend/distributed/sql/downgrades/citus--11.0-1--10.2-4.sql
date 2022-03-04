@@ -124,8 +124,8 @@ DROP VIEW pg_catalog.citus_lock_waits;
 DROP FUNCTION citus_internal_local_blocked_processes;
 DROP FUNCTION citus_internal_global_blocked_processes;
 
-DROP VIEW pg_catalog.citus_dist_stat_activity;
-DROP FUNCTION pg_catalog.citus_dist_stat_activity;
+DROP VIEW IF EXISTS pg_catalog.citus_dist_stat_activity;
+DROP FUNCTION IF EXISTS pg_catalog.citus_dist_stat_activity;
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_dist_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
                                                     OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
@@ -151,8 +151,8 @@ ALTER VIEW citus.citus_dist_stat_activity SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_dist_stat_activity TO PUBLIC;
 
 SET search_path = 'pg_catalog';
-DROP VIEW citus_worker_stat_activity;
-DROP FUNCTION citus_worker_stat_activity;
+DROP VIEW IF EXISTS citus_worker_stat_activity;
+DROP FUNCTION IF EXISTS citus_worker_stat_activity;
 
 CREATE OR REPLACE FUNCTION citus_worker_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
                                                       OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
