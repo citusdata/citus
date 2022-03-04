@@ -353,6 +353,8 @@ ALTER VIEW citus.citus_lock_waits SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
 
 DROP FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(bool);
+DROP FUNCTION pg_catalog.citus_calculate_gpid(integer,integer);
+DROP FUNCTION pg_catalog.citus_backend_gpid();
 
 RESET search_path;
 

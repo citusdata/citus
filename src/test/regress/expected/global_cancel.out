@@ -45,7 +45,7 @@ SELECT 1 FROM run_command_on_workers('CREATE USER global_cancel_user');
 (2 rows)
 
 RESET client_min_messages;
-SET ROLE global_cancel_user;
+\c - global_cancel_user - :master_port
 SELECT pg_typeof(:maintenance_daemon_gpid);
  pg_typeof
 ---------------------------------------------------------------------
@@ -58,7 +58,10 @@ CONTEXT:  while executing command on localhost:xxxxx
 SELECT pg_terminate_backend(:maintenance_daemon_gpid);
 ERROR:  must be a superuser to terminate superuser process
 CONTEXT:  while executing command on localhost:xxxxx
-RESET ROLE;
+-- we can cancel our own backend
+SELECT pg_cancel_backend(citus_backend_gpid());
+ERROR:  canceling statement due to user request
+\c - postgres - :master_port
 SELECT nodeid AS coordinator_node_id FROM pg_dist_node WHERE nodeport = :master_port \gset
 SET client_min_messages TO DEBUG;
 -- 10000000000 is the node id multiplier for global pid
@@ -79,5 +82,11 @@ DETAIL:  from localhost:xxxxx
 (1 row)
 
 RESET client_min_messages;
+SELECT citus_backend_gpid() = citus_calculate_gpid(:coordinator_node_id, pg_backend_pid());
+ ?column?
+---------------------------------------------------------------------
+ t
+(1 row)
+
 DROP SCHEMA global_cancel CASCADE;
-NOTICE:  drop cascades to table dist_table
+NOTICE:  drop cascades to table global_cancel.dist_table
