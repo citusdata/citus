@@ -683,9 +683,9 @@ CREATE FUNCTION func_custom_param(IN param intpair, OUT total INT)
     LANGUAGE SQL;
 SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('func_custom_param(intpair)');
-NOTICE:  function function_tests.func_custom_param is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure function_tests.func_custom_param is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -700,9 +700,9 @@ CREATE FUNCTION func_returns_table(IN count INT)
     LANGUAGE SQL;
 SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_function('func_returns_table(INT)');
-NOTICE:  function function_tests.func_returns_table is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure function_tests.func_returns_table is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 

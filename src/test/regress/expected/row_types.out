@@ -15,9 +15,9 @@ BEGIN
 END;
 $$ language plpgsql;
 SELECT create_distributed_function('table_returner(int)');
-NOTICE:  function row_types.table_returner is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure row_types.table_returner is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -32,9 +32,9 @@ BEGIN
 END;
 $$ language plpgsql;
 SELECT create_distributed_function('record_returner(int)');
-NOTICE:  function row_types.record_returner is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure row_types.record_returner is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -48,9 +48,9 @@ BEGIN
 END;
 $$ language plpgsql;
 SELECT create_distributed_function('identity_returner(anyelement)');
-NOTICE:  function row_types.identity_returner is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure row_types.identity_returner is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 

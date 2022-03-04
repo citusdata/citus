@@ -84,9 +84,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT create_distributed_function('value_plus_one(int)');
-NOTICE:  function multi_index_statements.value_plus_one is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure multi_index_statements.value_plus_one is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -99,9 +99,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 SELECT create_distributed_function('multi_index_statements_2.value_plus_one(int)');
-NOTICE:  function multi_index_statements_2.value_plus_one is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure multi_index_statements_2.value_plus_one is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 

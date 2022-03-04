@@ -26,9 +26,9 @@ CREATE AGGREGATE existing_agg(int) (
     STYPE = int
 );
 SELECT create_distributed_function('existing_agg(int)');
-NOTICE:  function proc_conflict.existing_agg is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure proc_conflict.existing_agg is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -90,9 +90,9 @@ CREATE AGGREGATE existing_agg(int) (
     STYPE = int
 );
 SELECT create_distributed_function('existing_agg(int)');
-NOTICE:  function proc_conflict.existing_agg is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure proc_conflict.existing_agg is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 

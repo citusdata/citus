@@ -1232,9 +1232,9 @@ SELECT create_distributed_function('proc_with_out_param(date,int)');
 ERROR:  function "proc_with_out_param(date,int)" does not exist
 -- this should work
 SELECT create_distributed_function('proc_with_out_param(date)');
-NOTICE:  function pg14.proc_with_out_param is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure pg14.proc_with_out_param is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 

@@ -169,9 +169,9 @@ BEGIN
 END;
 $function$;
 SELECT create_distributed_function('stable_squared(int)');
-NOTICE:  function multi_function_evaluation.stable_squared is already distributed
-DETAIL:  Citus distributes functions with CREATE (OR REPLACE) FUNCTION command
-HINT:  To delegate the function, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+NOTICE:  procedure multi_function_evaluation.stable_squared is already distributed
+DETAIL:  Citus distributes procedures with CREATE commands
+HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
  create_distributed_function
 ---------------------------------------------------------------------
 
