@@ -1,5 +1,7 @@
 -- citus--11.0-1--10.2-4
 
+ALTER TABLE pg_catalog.pg_dist_object SET SCHEMA citus;
+
 DROP FUNCTION pg_catalog.create_distributed_function(regprocedure, text, text, bool);
 
 DROP FUNCTION pg_catalog.worker_partition_query_result(text, text, int, citus.distribution_type, text[], text[], boolean, boolean, boolean);
@@ -361,5 +363,3 @@ RESET search_path;
 DROP VIEW IF EXISTS pg_catalog.citus_stat_activity;
 DROP FUNCTION IF EXISTS pg_catalog.citus_stat_activity;
 DROP FUNCTION IF EXISTS pg_catalog.run_command_on_all_nodes;
-
-ALTER TABLE pg_catalog.pg_dist_object SET SCHEMA citus;
