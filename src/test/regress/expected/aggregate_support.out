@@ -41,8 +41,7 @@ create aggregate sum2_strict (int) (
 );
 select create_distributed_function('sum2(int)');
 NOTICE:  procedure aggregate_support.sum2 is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -50,8 +49,7 @@ HINT:  To delegate the procedure, please provide parameters distribution_arg_nam
 
 select create_distributed_function('sum2_strict(int)');
 NOTICE:  procedure aggregate_support.sum2_strict is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -103,8 +101,7 @@ create aggregate psum_strict(int, int)(
 );
 select create_distributed_function('psum(int,int)');
 NOTICE:  procedure aggregate_support.psum is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -112,8 +109,7 @@ HINT:  To delegate the procedure, please provide parameters distribution_arg_nam
 
 select create_distributed_function('psum_strict(int,int)');
 NOTICE:  procedure aggregate_support.psum_strict is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -311,8 +307,7 @@ SELECT run_command_on_workers($$select count(*) from pg_aggregate where aggfnoid
 
 select create_distributed_function('binstragg(text,text)');
 NOTICE:  procedure aggregate_support.binstragg is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -543,8 +538,7 @@ CREATE AGGREGATE last (
 );
 SELECT create_distributed_function('first(anyelement)');
 NOTICE:  procedure aggregate_support.first is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -552,8 +546,7 @@ HINT:  To delegate the procedure, please provide parameters distribution_arg_nam
 
 SELECT create_distributed_function('last(anyelement)');
 NOTICE:  procedure aggregate_support.last is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -612,8 +605,7 @@ SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid
 
 select create_distributed_function('sumstring(text)');
 NOTICE:  procedure aggregate_support.sumstring is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -639,8 +631,7 @@ create aggregate array_collect_sort(el int) (
 );
 select create_distributed_function('array_collect_sort(int)');
 NOTICE:  procedure aggregate_support.array_collect_sort is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 

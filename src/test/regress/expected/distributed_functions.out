@@ -34,8 +34,7 @@ END;
 $$;
 SELECT create_distributed_function('notice(text)');
 NOTICE:  procedure function_tests.notice is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -490,8 +489,7 @@ AS 'select $1 = $2;'
     RETURNS NULL ON NULL INPUT;
 select create_distributed_function('eq(macaddr,macaddr)');
 NOTICE:  procedure function_tests.eq is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -804,8 +802,7 @@ END;
 $$;
 SELECT create_distributed_function('func_with_return_table(int)');
 NOTICE:  procedure function_tests.func_with_return_table is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -834,8 +831,7 @@ CREATE OR REPLACE FUNCTION func_with_out_param(a int, out b int)
 LANGUAGE sql AS $$ select 1; $$;
 SELECT create_distributed_function('func_with_out_param(int)');
 NOTICE:  procedure function_tests.func_with_out_param is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -882,8 +878,7 @@ ERROR:  function "func_with_inout_param(int)" does not exist
 -- this should work
 SELECT create_distributed_function('func_with_inout_param(int,int)');
 NOTICE:  procedure function_tests.func_with_inout_param is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -909,8 +904,7 @@ LANGUAGE sql AS $$ select 1; $$;
 -- this should work
 SELECT create_distributed_function('func_with_variadic_param(int,int[])');
 NOTICE:  procedure function_tests.func_with_variadic_param is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -942,8 +936,7 @@ $BODY$
   COST 100;
 SELECT create_distributed_function('func_returning_setof_int(date,interval)');
 NOTICE:  procedure function_tests.func_returning_setof_int is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -983,8 +976,7 @@ $BODY$
   COST 100;
 SELECT create_distributed_function('func_returning_setof_int_with_variadic_param(date,int[])');
 NOTICE:  procedure function_tests.func_returning_setof_int_with_variadic_param is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1022,8 +1014,7 @@ ERROR:  function "proc_with_variadic_param(date)" does not exist
 -- this should work
 SELECT create_distributed_function('proc_with_variadic_param(date,int[])');
 NOTICE:  procedure function_tests.proc_with_variadic_param is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1056,8 +1047,7 @@ ERROR:  function "proc_with_inout_param(date)" does not exist
 -- this should work
 SELECT create_distributed_function('proc_with_inout_param(date,int)');
 NOTICE:  procedure function_tests.proc_with_inout_param is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 

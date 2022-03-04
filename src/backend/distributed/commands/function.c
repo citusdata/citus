@@ -69,10 +69,10 @@
 	(strncmp(arg, prefix, strlen(prefix)) == 0)
 
 /* forward declaration for helper functions*/
-static bool IsCreateDistributedFunctionCallIdempotent(ObjectAddress functionAddress,
-													  char *distributionArgumentName,
-													  bool colocateWithTableNameDefault,
-													  bool *forceDelegationAddress);
+static bool RecreateSameNonColocatedFunction(ObjectAddress functionAddress,
+											 char *distributionArgumentName,
+											 bool colocateWithTableNameDefault,
+											 bool *forceDelegationAddress);
 static void ErrorIfAnyNodeDoesNotHaveMetadata(void);
 static char * GetAggregateDDLCommand(const RegProcedure funcOid, bool useCreateOrReplace);
 static char * GetFunctionAlterOwnerCommand(const RegProcedure funcOid);
@@ -202,19 +202,17 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 	ObjectAddressSet(functionAddress, ProcedureRelationId, funcOid);
 
-	if (IsCreateDistributedFunctionCallIdempotent(functionAddress,
-												  distributionArgumentName,
-												  colocateWithTableNameDefault,
-												  forceDelegationAddress))
+	if (RecreateSameNonColocatedFunction(functionAddress,
+										 distributionArgumentName,
+										 colocateWithTableNameDefault,
+										 forceDelegationAddress))
 	{
 		char *schemaName = get_namespace_name(get_func_namespace(funcOid));
 		char *functionName = get_func_name(funcOid);
 		char *qualifiedName = quote_qualified_identifier(schemaName, functionName);
 		ereport(NOTICE, (errmsg("procedure %s is already distributed", qualifiedName),
-						 errdetail("Citus distributes procedures with CREATE commands"),
-						 errhint("To delegate the procedure, please provide parameters "
-								 "distribution_arg_name, colocate_with or "
-								 "force_delegation, for create_distributed_function")));
+						 errdetail("Citus distributes procedures with CREATE "
+								   "[PROCEDURE|FUNCTION|AGGREGATE] commands")));
 		PG_RETURN_VOID();
 	}
 
@@ -286,15 +284,15 @@ create_distributed_function(PG_FUNCTION_ARGS)
 
 
 /*
- * IsCreateDistributedFunctionCallIdempotent returns true if the given parameters of
+ * RecreateSameNonColocatedFunction returns true if the given parameters of
  * create_distributed_function will not change anything on the given function.
  * Returns false otherwise.
  */
 static bool
-IsCreateDistributedFunctionCallIdempotent(ObjectAddress functionAddress,
-										  char *distributionArgumentName,
-										  bool colocateWithTableNameDefault,
-										  bool *forceDelegationAddress)
+RecreateSameNonColocatedFunction(ObjectAddress functionAddress,
+								 char *distributionArgumentName,
+								 bool colocateWithTableNameDefault,
+								 bool *forceDelegationAddress)
 {
 	DistObjectCacheEntry *cacheEntry =
 		LookupDistObjectCacheEntry(ProcedureRelationId,

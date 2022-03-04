@@ -56,8 +56,7 @@ BEGIN
 END; $$ language plpgsql VOLATILE;
 SELECT create_distributed_function('get_local_node_id_volatile()');
 NOTICE:  procedure local_shard_execution.get_local_node_id_volatile is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 

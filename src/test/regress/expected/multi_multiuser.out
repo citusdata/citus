@@ -472,8 +472,7 @@ ERROR:  must be owner of function usage_access_func
 SET ROLE usage_access;
 SELECT create_distributed_function('usage_access_func(usage_access_type,int[])');
 NOTICE:  procedure public.usage_access_func is already distributed
-DETAIL:  Citus distributes procedures with CREATE commands
-HINT:  To delegate the procedure, please provide parameters distribution_arg_name, colocate_with or force_delegation, for create_distributed_function
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
