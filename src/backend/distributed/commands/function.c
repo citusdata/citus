@@ -297,17 +297,12 @@ IsCreateDistributedFunctionCallIdempotent(ObjectAddress functionAddress,
 										  bool colocateWithTableNameDefault,
 										  bool *forceDelegationAddress)
 {
-	if (!IsObjectDistributed(&functionAddress))
-	{
-		return false;
-	}
-
 	DistObjectCacheEntry *cacheEntry =
 		LookupDistObjectCacheEntry(ProcedureRelationId,
 								   functionAddress.objectId,
 								   InvalidOid);
 
-	if (cacheEntry == NULL)
+	if (cacheEntry == NULL || !cacheEntry->isValid || !cacheEntry->isDistributed)
 	{
 		return false;
 	}
