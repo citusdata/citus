@@ -247,7 +247,6 @@ ORDER BY 1;
  sequence pg_dist_node_nodeid_seq
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
- table citus.pg_dist_object
  table columnar.chunk
  table columnar.chunk_group
  table columnar.options
@@ -257,6 +256,7 @@ ORDER BY 1;
  table pg_dist_local_group
  table pg_dist_node
  table pg_dist_node_metadata
+ table pg_dist_object
  table pg_dist_partition
  table pg_dist_placement
  table pg_dist_poolinfo
