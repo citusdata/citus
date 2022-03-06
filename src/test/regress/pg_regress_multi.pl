@@ -465,6 +465,9 @@ push(@pgOptions, "citus.node_connection_timeout=${connectionTimeout}");
 push(@pgOptions, "citus.explain_analyze_sort_method='taskId'");
 push(@pgOptions, "citus.enable_manual_changes_to_shards=on");
 
+# We currently have too many tests that omit coordinator from metadata
+push(@pgOptions, "citus.require_coordinator_in_metadata=off");
+
 # Some tests look at shards in pg_class, make sure we can usually see them:
 push(@pgOptions, "citus.hide_shards_from_app_name_prefixes='psql,pg_dump'");
 

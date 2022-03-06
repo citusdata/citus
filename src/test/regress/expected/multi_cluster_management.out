@@ -115,6 +115,13 @@ SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 (1 row)
 
 CREATE TABLE cluster_management_test (col_1 text, col_2 int);
+-- coordinator was not yet added to the metadata yet, should fail
+SET citus.require_coordinator_in_metadata TO on;
+SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
+ERROR:  coordinator is not yet added to the Citus node metadata
+DETAIL:  Worker nodes need to be able to connect to the coordinator to transfer data.
+HINT:  Use SELECT citus_set_coordinator_host('<hostname>') to configure the coordinator hostname
+RESET citus.require_coordinator_in_metadata;
 SELECT create_distributed_table('cluster_management_test', 'col_1', 'hash');
  create_distributed_table
 ---------------------------------------------------------------------

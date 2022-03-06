@@ -77,6 +77,13 @@ bool ReplicateReferenceTablesOnActivate = true;
 /* did current transaction modify pg_dist_node? */
 bool TransactionModifiedNodeMetadata = false;
 
+/*
+ * IsCoordinatorInMetadataRequired is a GUC that specifies whether operations
+ * like create_distributed_table should fail if the coordinator is not in the
+ * metadata.
+ */
+bool IsCoordinatorInMetadataRequired = true;
+
 bool EnableMetadataSync = true;
 
 typedef struct NodeMetadata
@@ -2352,6 +2359,34 @@ EnsureCoordinator(void)
 	{
 		ereport(ERROR, (errmsg("operation is not allowed on this node"),
 						errhint("Connect to the coordinator and run it again.")));
+	}
+}
+
+
+/*
+ * EnsureCoordinatorInMetadata throws an error if the coordinator is not
+ * in the metadata.
+ */
+void
+EnsureCoordinatorInMetadata(void)
+{
+	if (!IsCoordinatorInMetadataRequired)
+	{
+		return;
+	}
+
+	bool isCoordinatorInMetadata = false;
+
+	PrimaryNodeForGroup(COORDINATOR_GROUP_ID, &isCoordinatorInMetadata);
+
+	if (!isCoordinatorInMetadata)
+	{
+		ereport(ERROR, (errcode(ERRCODE_OBJECT_NOT_IN_PREREQUISITE_STATE),
+						errmsg("coordinator is not yet added to the Citus node metadata"),
+						errdetail("Worker nodes need to be able to connect to the "
+								  "coordinator to transfer data."),
+						errhint("Use SELECT citus_set_coordinator_host('<hostname>') "
+								"to configure the coordinator hostname")));
 	}
 }
 
