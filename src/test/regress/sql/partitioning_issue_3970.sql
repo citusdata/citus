@@ -42,7 +42,7 @@ WHERE relname LIKE 'part_table%'
 ORDER BY 1,2,3;
 
 -- check the constraint names on the worker node
--- verify that check constraınts do not have a shardId suffix
+-- verify that check constraints do not have a shardId suffix
 \c - - - :worker_1_port
 SELECT relname, conname, pg_catalog.pg_get_constraintdef(con.oid, true)
 FROM pg_constraint con JOIN pg_class rel ON (rel.oid=con.conrelid)
