@@ -367,3 +367,6 @@ DROP FUNCTION pg_catalog.run_command_on_all_nodes;
 
 DROP FUNCTION pg_catalog.citus_nodename_for_nodeid(integer);
 DROP FUNCTION pg_catalog.citus_nodeport_for_nodeid(integer);
+
+DROP FUNCTION pg_catalog.citus_nodeid_for_gpid(bigint);
+DROP FUNCTION pg_catalog.citus_pid_for_gpid(bigint);

@@ -97,3 +97,6 @@ GRANT SELECT ON pg_catalog.pg_dist_object TO public;
 
 #include "udfs/citus_nodename_for_nodeid/11.0-1.sql"
 #include "udfs/citus_nodeport_for_nodeid/11.0-1.sql"
+
+#include "udfs/citus_nodeid_for_gpid/11.0-1.sql"
+#include "udfs/citus_pid_for_gpid/11.0-1.sql"
