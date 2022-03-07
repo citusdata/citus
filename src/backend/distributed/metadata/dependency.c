@@ -385,6 +385,12 @@ RecurseObjectDependencies(ObjectAddress target, expandFn expand, followFn follow
 void
 ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
 {
+
+	/*
+	 * We need to get the see dependencies created in this command.
+	 */
+	CommandCounterIncrement();
+
 	List *dependencies = GetAllSupportedDependenciesForObject(objectAddress);
 
 	ObjectAddress *dependency = NULL;

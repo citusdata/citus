@@ -669,7 +669,22 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		if (ops && ops->address)
 		{
 			ObjectAddress targetObject = GetObjectAddressFromParseTree(parsetree, true);
-			ErrorIfCircularDependencyExists(&targetObject);
+			char *objectDescription = NULL;
+
+			#if PG_VERSION_NUM >= PG_VERSION_14
+			objectDescription = getObjectDescription(&targetObject, true);
+			#else
+			objectDescription = getObjectDescription(&targetObject);
+			#endif
+
+			/*
+			 * Having object description as NULL means the target object is either dropped
+			 * or it's name has been changed
+			 */
+			if (objectDescription != NULL)
+			{
+				ErrorIfCircularDependencyExists(&targetObject);
+			}
 		}
 
 		if (ops && ops->postprocess)
