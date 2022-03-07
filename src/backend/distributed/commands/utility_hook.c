@@ -58,7 +58,6 @@
 #include "distributed/metadata_cache.h"
 #endif
 #include "distributed/metadata_sync.h"
-#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/multi_executor.h"
 #include "distributed/multi_explain.h"
@@ -657,36 +656,6 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 	 */
 	if (EnableDDLPropagation)
 	{
-		/*
-		 * Having circular dependency between distributed objects prevents Citus from
-		 * adding a new node. So, error out if circular dependency exists for the given
-		 * target object.
-		 *
-		 * We need to check circular dependency here in addition to checking it within
-		 * MarkObjectDistributedLocally since altering already distributed object won't
-		 * call MarkObjectDistributedLocally but will hit the check here.
-		 */
-		if (ops && ops->address)
-		{
-			ObjectAddress targetObject = GetObjectAddressFromParseTree(parsetree, true);
-			char *objectDescription = NULL;
-
-			#if PG_VERSION_NUM >= PG_VERSION_14
-			objectDescription = getObjectDescription(&targetObject, true);
-			#else
-			objectDescription = getObjectDescription(&targetObject);
-			#endif
-
-			/*
-			 * Having object description as NULL means the target object is either dropped
-			 * or it's name has been changed
-			 */
-			if (objectDescription != NULL)
-			{
-				ErrorIfCircularDependencyExists(&targetObject);
-			}
-		}
-
 		if (ops && ops->postprocess)
 		{
 			List *processJobs = ops->postprocess(parsetree, queryString);

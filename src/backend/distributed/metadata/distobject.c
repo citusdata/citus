@@ -30,7 +30,6 @@
 #include "commands/extension.h"
 #include "distributed/colocation_utils.h"
 #include "distributed/commands/utility_hook.h"
-#include "distributed/metadata/dependency.h"
 #include "distributed/metadata/distobject.h"
 #include "distributed/metadata/pg_dist_object.h"
 #include "distributed/metadata_cache.h"
@@ -199,16 +198,6 @@ MarkObjectDistributedViaSuperUser(const ObjectAddress *distAddress)
 static void
 MarkObjectDistributedLocally(const ObjectAddress *distAddress)
 {
-	/*
-	 * Having circular dependency between distributed objects prevents Citus from
-	 * adding a new node. So, error out if circular dependency exists for the given
-	 * target object.
-	 *
-	 * Similar check also added to postprocess phase of ProcessUtilityInternal to
-	 * handle altering already distributed objects.
-	 */
-	ErrorIfCircularDependencyExists(distAddress);
-
 	int paramCount = 3;
 	Oid paramTypes[3] = {
 		OIDOID,
