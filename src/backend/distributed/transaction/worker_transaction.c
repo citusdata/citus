@@ -690,13 +690,24 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 
 	char *currentServerId = TextDatumGetCString(currentServerIdDatum);
 
+	if(isNull)
+	{
+		return false;
+	}
+
 	#else
 
-	JsonbValue jv = getKeyJsonValueFromContainer(jsonbMetadata->root, serverId, strlen(
+	JsonbValue *jbv = getKeyJsonValueFromContainer(jsonbMetadata->root, serverId, strlen(
 													 serverId), NULL);
-	char *currentServerId = jv->val->string.val;
+
+	if(jbv != NULL || jbv->type != jbvString)
+	{
+		return false;
+	}
+
+	char *currentServerId = jbv->val->string.val;
 
 	#endif
 
-	return !isNull && strcmp(workerServerId, currentServerId) == 0;
+	return strcmp(workerServerId, currentServerId) == 0;
 }
