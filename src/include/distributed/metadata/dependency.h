@@ -24,6 +24,7 @@ extern List * GetAllDependenciesForObject(const ObjectAddress *target);
 extern void EnsureRelationDependenciesCanBeDistributed(ObjectAddress *relationAddress);
 extern ObjectAddress * GetUndistributableDependency(ObjectAddress *target);
 extern List * OrderObjectAddressListInDependencyOrder(List *objectAddressList);
+extern void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 extern bool SupportedDependencyByCitus(const ObjectAddress *address);
 extern List * GetPgDependTuplesForDependingObjects(Oid targetObjectClassId,
 												   Oid targetObjectId);

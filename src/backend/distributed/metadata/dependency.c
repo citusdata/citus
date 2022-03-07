@@ -379,6 +379,40 @@ RecurseObjectDependencies(ObjectAddress target, expandFn expand, followFn follow
 
 
 /*
+ * ErrorIfCircularDependencyExists checks whether given object has circular dependency
+ * with itself via existing objects of pg_dist_object.
+ */
+void
+ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress)
+{
+	List *dependencies = GetAllSupportedDependenciesForObject(objectAddress);
+
+	ObjectAddress *dependency = NULL;
+	foreach_ptr(dependency, dependencies)
+	{
+		if (dependency->classId == objectAddress->classId &&
+			dependency->objectId == objectAddress->objectId &&
+			dependency->objectSubId == objectAddress->objectSubId)
+		{
+			char *objectDescription = NULL;
+
+			#if PG_VERSION_NUM >= PG_VERSION_14
+			objectDescription = getObjectDescription(objectAddress, false);
+			#else
+			objectDescription = getObjectDescription(objectAddress);
+			#endif
+
+			ereport(ERROR, (errmsg("Citus can not handle circular dependencies "
+								   "between distributed objects"),
+							errdetail("\"%s\" circularly depends itself, resolve "
+									  "circular dependency first",
+									  objectDescription)));
+		}
+	}
+}
+
+
+/*
  * DependencyDefinitionFromPgDepend loads all pg_depend records describing the
  * dependencies of target.
  */
