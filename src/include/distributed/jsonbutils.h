@@ -14,7 +14,7 @@
 #include "postgres.h"
 
 bool ExtractFieldJsonbDatum(Datum jsonbDoc, const char *fieldName, Datum *result);
-text* ExtractFieldTextP(Datum jsonbDoc, const char *fieldName);
+text * ExtractFieldTextP(Datum jsonbDoc, const char *fieldName);
 bool ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue);
 
 #endif /* CITUS_JSONBUTILS_H */

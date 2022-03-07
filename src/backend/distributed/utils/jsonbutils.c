@@ -50,7 +50,7 @@ ExtractFieldJsonb(Datum jsonbDoc, const char *fieldName, Datum *result, bool as_
 	 */
 	FmgrInfo fmgrInfo;
 
-	if(as_text)
+	if (as_text)
 	{
 		fmgr_info(JsonbExtractPathTextFuncId(), &fmgrInfo);
 	}
@@ -70,6 +70,7 @@ ExtractFieldJsonb(Datum jsonbDoc, const char *fieldName, Datum *result, bool as_
 	return !functionCallInfo->isnull;
 }
 
+
 /*
  * ExtractFieldBoolean gets value of fieldName from jsonbDoc, or returns
  * defaultValue if it doesn't exist.
@@ -88,11 +89,12 @@ ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue)
 	return DatumGetBool(boolDatum);
 }
 
+
 /*
  * ExtractFieldTextP gets value of fieldName as text* from jsonbDoc, or
  * returns NULL if it doesn't exist.
  */
-text*
+text *
 ExtractFieldTextP(Datum jsonbDoc, const char *fieldName)
 {
 	Datum jsonbDatum = 0;
@@ -105,6 +107,7 @@ ExtractFieldTextP(Datum jsonbDoc, const char *fieldName)
 
 	return DatumGetTextP(jsonbDatum);
 }
+
 
 /*
  * ExtractFieldJsonbDatum gets value of fieldName from jsonbDoc and puts it
