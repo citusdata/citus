@@ -286,15 +286,13 @@ CreateStmtListByObjectAddress(const ObjectAddress *address)
 
 		case OCLASS_TSCONFIG:
 		{
-			/*
-			 * We do support TEXT SEARCH CONFIGURATION, however, we can't recreate the
-			 * object in 1 command. Since the returned text is compared to the create
-			 * statement sql we always want the sql to be different compared to the
-			 * canonical creation sql we return here, hence we return an empty string, as
-			 * that should never match the sql we have passed in for the creation.
-			 */
-
 			List *stmts = GetCreateTextSearchConfigStatements(address);
+			return DeparseTreeNodes(stmts);
+		}
+
+		case OCLASS_TSDICT:
+		{
+			List *stmts = GetCreateTextSearchDictionaryStatements(address);
 			return DeparseTreeNodes(stmts);
 		}
 

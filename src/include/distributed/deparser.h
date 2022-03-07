@@ -63,14 +63,21 @@ extern char * DeparseAlterTableStmt(Node *node);
 
 extern void QualifyAlterTableSchemaStmt(Node *stmt);
 
-/* foward declarations fro deparse_text_search.c */
-extern char * DeparseCreateTextSearchStmt(Node *node);
-extern char * DeparseDropTextSearchConfigurationStmt(Node *node);
-extern char * DeparseRenameTextSearchConfigurationStmt(Node *node);
-extern char * DeparseAlterTextSearchConfigurationStmt(Node *node);
-extern char * DeparseAlterTextSearchConfigurationSchemaStmt(Node *node);
-extern char * DeparseTextSearchConfigurationCommentStmt(Node *node);
+/* forward declarations for deparse_text_search.c */
 extern char * DeparseAlterTextSearchConfigurationOwnerStmt(Node *node);
+extern char * DeparseAlterTextSearchConfigurationSchemaStmt(Node *node);
+extern char * DeparseAlterTextSearchConfigurationStmt(Node *node);
+extern char * DeparseAlterTextSearchDictionaryOwnerStmt(Node *node);
+extern char * DeparseAlterTextSearchDictionarySchemaStmt(Node *node);
+extern char * DeparseAlterTextSearchDictionaryStmt(Node *node);
+extern char * DeparseCreateTextSearchConfigurationStmt(Node *node);
+extern char * DeparseCreateTextSearchDictionaryStmt(Node *node);
+extern char * DeparseDropTextSearchConfigurationStmt(Node *node);
+extern char * DeparseDropTextSearchDictionaryStmt(Node *node);
+extern char * DeparseRenameTextSearchConfigurationStmt(Node *node);
+extern char * DeparseRenameTextSearchDictionaryStmt(Node *node);
+extern char * DeparseTextSearchConfigurationCommentStmt(Node *node);
+extern char * DeparseTextSearchDictionaryCommentStmt(Node *node);
 
 /* forward declarations for deparse_schema_stmts.c */
 extern char * DeparseCreateSchemaStmt(Node *node);
@@ -153,13 +160,19 @@ extern char * DeparseAlterExtensionStmt(Node *stmt);
 /* forward declarations for deparse_database_stmts.c */
 extern char * DeparseAlterDatabaseOwnerStmt(Node *node);
 
-/* forward declatations for depatse_text_search_stmts.c */
-extern void QualifyDropTextSearchConfigurationStmt(Node *node);
-extern void QualifyAlterTextSearchConfigurationStmt(Node *node);
-extern void QualifyRenameTextSearchConfigurationStmt(Node *node);
-extern void QualifyAlterTextSearchConfigurationSchemaStmt(Node *node);
-extern void QualifyTextSearchConfigurationCommentStmt(Node *node);
+/* forward declatations for deparse_text_search_stmts.c */
 extern void QualifyAlterTextSearchConfigurationOwnerStmt(Node *node);
+extern void QualifyAlterTextSearchConfigurationSchemaStmt(Node *node);
+extern void QualifyAlterTextSearchConfigurationStmt(Node *node);
+extern void QualifyAlterTextSearchDictionaryOwnerStmt(Node *node);
+extern void QualifyAlterTextSearchDictionarySchemaStmt(Node *node);
+extern void QualifyAlterTextSearchDictionaryStmt(Node *node);
+extern void QualifyDropTextSearchConfigurationStmt(Node *node);
+extern void QualifyDropTextSearchDictionaryStmt(Node *node);
+extern void QualifyRenameTextSearchConfigurationStmt(Node *node);
+extern void QualifyRenameTextSearchDictionaryStmt(Node *node);
+extern void QualifyTextSearchConfigurationCommentStmt(Node *node);
+extern void QualifyTextSearchDictionaryCommentStmt(Node *node);
 
 /* forward declarations for deparse_sequence_stmts.c */
 extern char * DeparseDropSequenceStmt(Node *node);

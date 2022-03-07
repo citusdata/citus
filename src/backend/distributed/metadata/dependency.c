@@ -676,6 +676,11 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 			return true;
 		}
 
+		case OCLASS_TSDICT:
+		{
+			return true;
+		}
+
 		case OCLASS_TYPE:
 		{
 			switch (get_typtype(address->objectId))
@@ -857,9 +862,13 @@ GetUndistributableDependency(const ObjectAddress *objectAddress)
 		if (!SupportedDependencyByCitus(dependency))
 		{
 			/*
-			 * Since roles should be handled manually with Citus community, skip them.
+			 * Skip roles and text search templates.
+			 *
+			 * Roles should be handled manually with Citus community whereas text search
+			 * templates should be handled manually in both community and enterprise
 			 */
-			if (getObjectClass(dependency) != OCLASS_ROLE)
+			if (getObjectClass(dependency) != OCLASS_ROLE &&
+				getObjectClass(dependency) != OCLASS_TSTEMPLATE)
 			{
 				return dependency;
 			}

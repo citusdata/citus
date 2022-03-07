@@ -398,6 +398,11 @@ GetDependencyCreateDDLCommands(const ObjectAddress *dependency)
 			return CreateTextSearchConfigDDLCommandsIdempotent(dependency);
 		}
 
+		case OCLASS_TSDICT:
+		{
+			return CreateTextSearchDictDDLCommandsIdempotent(dependency);
+		}
+
 		case OCLASS_TYPE:
 		{
 			return CreateTypeDDLCommandsIdempotent(dependency);

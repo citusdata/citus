@@ -503,6 +503,122 @@ SELECT create_distributed_table('sensors', 'measureid');
 
 (1 row)
 
+--  create a new dictionary from scratch
+CREATE TEXT SEARCH DICTIONARY my_english_dict (
+    template = snowball,
+    language = english,
+    stopwords = english
+);
+-- verify that the dictionary definition is the same in all nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'my_english_dict';
+$$);
+                                            result
+---------------------------------------------------------------------
+ (my_english_dict,text_search,postgres,snowball,"language = 'english', stopwords = 'english'")
+ (my_english_dict,text_search,postgres,snowball,"language = 'english', stopwords = 'english'")
+ (my_english_dict,text_search,postgres,snowball,"language = 'english', stopwords = 'english'")
+(3 rows)
+
+-- use the new dictionary in a configuration mapping
+CREATE TEXT SEARCH CONFIGURATION my_english_config ( COPY = english );
+ALTER TEXT SEARCH CONFIGURATION my_english_config ALTER MAPPING FOR asciiword WITH my_english_dict;
+-- verify that the dictionary is available on the worker nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.my_english_config', 'The Brightest supernovaes') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+                 result
+---------------------------------------------------------------------
+ (asciiword,text_search.my_english_dict)
+ (asciiword,text_search.my_english_dict)
+ (asciiword,text_search.my_english_dict)
+(3 rows)
+
+-- comment on a text search dictionary
+COMMENT ON TEXT SEARCH DICTIONARY my_english_dict IS 'a text search dictionary that is butchered to test all edge cases';
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT obj_description('text_search.my_english_dict'::regdictionary);
+$$);
+                              result
+---------------------------------------------------------------------
+ a text search dictionary that is butchered to test all edge cases
+ a text search dictionary that is butchered to test all edge cases
+ a text search dictionary that is butchered to test all edge cases
+(3 rows)
+
+-- remove a comment
+COMMENT ON TEXT SEARCH DICTIONARY my_english_dict IS NULL;
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT obj_description('text_search.my_english_dict'::regdictionary);
+$$);
+ result
+---------------------------------------------------------------------
+
+
+
+(3 rows)
+
+-- test various ALTER TEXT SEARCH DICTIONARY commands
+ALTER TEXT SEARCH DICTIONARY my_english_dict RENAME TO my_turkish_dict;
+ALTER TEXT SEARCH DICTIONARY my_turkish_dict (language = turkish, stopwords);
+ALTER TEXT SEARCH DICTIONARY my_turkish_dict OWNER TO text_search_owner;
+ALTER TEXT SEARCH DICTIONARY my_turkish_dict SET SCHEMA "Text Search Requiring Quote's";
+-- verify that the dictionary definition is the same in all nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT ROW(dictname, dictnamespace::regnamespace, dictowner::regrole, tmplname, dictinitoption)
+    FROM pg_ts_dict d JOIN pg_ts_template t ON ( d.dicttemplate = t.oid )
+    WHERE dictname = 'my_turkish_dict';
+$$);
+                                                 result
+---------------------------------------------------------------------
+ (my_turkish_dict,"""Text Search Requiring Quote's""",text_search_owner,snowball,"language = 'turkish'")
+ (my_turkish_dict,"""Text Search Requiring Quote's""",text_search_owner,snowball,"language = 'turkish'")
+ (my_turkish_dict,"""Text Search Requiring Quote's""",text_search_owner,snowball,"language = 'turkish'")
+(3 rows)
+
+-- verify that the configuration dictionary is changed in all nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT ROW(alias,dictionary) FROM ts_debug('text_search.my_english_config', 'The Brightest supernovaes') WHERE alias = 'asciiword' LIMIT 1;
+$$);
+                             result
+---------------------------------------------------------------------
+ (asciiword,"""Text Search Requiring Quote's"".my_turkish_dict")
+ (asciiword,"""Text Search Requiring Quote's"".my_turkish_dict")
+ (asciiword,"""Text Search Requiring Quote's"".my_turkish_dict")
+(3 rows)
+
+-- before testing drops, check that the dictionary exists on all nodes
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT '"Text Search Requiring Quote''s".my_turkish_dict'::regdictionary;
+$$);
+                     result
+---------------------------------------------------------------------
+ "Text Search Requiring Quote's".my_turkish_dict
+ "Text Search Requiring Quote's".my_turkish_dict
+ "Text Search Requiring Quote's".my_turkish_dict
+(3 rows)
+
+ALTER TEXT SEARCH DICTIONARY "Text Search Requiring Quote's".my_turkish_dict SET SCHEMA text_search;
+-- verify that we can drop the dictionary only with cascade option
+DROP TEXT SEARCH DICTIONARY my_turkish_dict;
+ERROR:  cannot drop text search dictionary my_turkish_dict because other objects depend on it
+DETAIL:  text search configuration my_english_config depends on text search dictionary my_turkish_dict
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+DROP TEXT SEARCH DICTIONARY my_turkish_dict CASCADE;
+NOTICE:  drop cascades to text search configuration my_english_config
+-- verify that it is dropped now
+SELECT result FROM run_command_on_all_nodes($$
+    SELECT 'my_turkish_dict'::regdictionary;
+$$);
+                             result
+---------------------------------------------------------------------
+ ERROR:  text search dictionary "my_turkish_dict" does not exist
+ ERROR:  text search dictionary "my_turkish_dict" does not exist
+ ERROR:  text search dictionary "my_turkish_dict" does not exist
+(3 rows)
+
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2, "Text Search Requiring Quote's" CASCADE;
 DROP ROLE text_search_owner;

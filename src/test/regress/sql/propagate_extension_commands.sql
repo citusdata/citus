@@ -1,3 +1,7 @@
+-- print whether we're using version > 12 to make version-specific tests clear
+SHOW server_version \gset
+SELECT substring(:'server_version', '\d+')::int > 12 AS version_above_twelve;
+
 CREATE SCHEMA "extension'test";
 
 -- use  a schema name with escape character
@@ -114,26 +118,33 @@ SELECT create_reference_table('ref_table_2');
 CREATE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
 CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
 CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
-CREATE TEXT SEARCH DICTIONARY intdict (TEMPLATE = intdict_template);
-COMMENT ON TEXT SEARCH DICTIONARY intdict IS 'dictionary for integers';
 
 SELECT run_command_on_workers($$
 CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
 $$);
 
-SELECT run_command_on_workers($$
 CREATE TEXT SEARCH DICTIONARY intdict (TEMPLATE = intdict_template);
-$$);
-
-SELECT run_command_on_workers($$
 COMMENT ON TEXT SEARCH DICTIONARY intdict IS 'dictionary for integers';
-$$);
 
 CREATE EXTENSION dict_int FROM unpackaged;
 SELECT run_command_on_workers($$SELECT count(extnamespace) FROM pg_extension WHERE extname = 'dict_int'$$);
 SELECT run_command_on_workers($$SELECT extversion FROM pg_extension WHERE extname = 'dict_int'$$);
 
--- and add the other node
+-- adding the second node will fail as the text search template needs to be created manually
+SELECT 1 from master_add_node('localhost', :worker_2_port);
+
+-- create the text search template manually on the worker
+\c - - - :worker_2_port
+SET citus.enable_metadata_sync TO false;
+CREATE FUNCTION dintdict_init(internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+CREATE FUNCTION dintdict_lexize(internal, internal, internal, internal) RETURNS internal AS 'dict_int.so' LANGUAGE C STRICT;
+CREATE TEXT SEARCH TEMPLATE intdict_template (LEXIZE = dintdict_lexize, INIT   = dintdict_init );
+RESET citus.enable_metadata_sync;
+
+\c - - - :master_port
+SET client_min_messages TO WARNING;
+
+-- add the second node now
 SELECT 1 from master_add_node('localhost', :worker_2_port);
 
 -- show that the extension is created on both existing and new node
