@@ -867,32 +867,19 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 		else if (joinType == JOIN_INNER && plannerInfo->hasLateralRTEs)
 		{
 			/*
-			 * If there is an inner join with a lateral subqueries we cannot
-			 * push down when the following properties all hold:
-			 * 1. The lateral subquery references a recurring tuple from
-			 *    outside of the subquery
-			 * 2. The lateral subquery only contains non recurring tuples
-			 * 3. The lateral subquery requires a merge step (e.g. a LIMIT)
-			 * 4. The reference to the recurring tuple should be something else than an
-			 *    equality check on the distribution column, e.g. equality on a non
-			 *    distribution column.
+			 * Sometimes we cannot push down INNER JOINS when they have only
+			 * recurring tuples on one side and a lateral on the other side.
+			 * See comment on DeferredErrorIfUnsupportedLateralSubquery for
+			 * details.
 			 *
-			 * Property number four is considered both hard to detect and
-			 * probably not used very often, so we only check for 1, 2 and 3.
-			 */
-			bool innerrelOnlyRecurring = RelationInfoContainsOnlyRecurringTuples(
-				plannerInfo, innerrelRelids);
-			bool outerrelOnlyRecurring = RelationInfoContainsOnlyRecurringTuples(
-				plannerInfo, outerrelRelids);
-
-			/*
-			 * When planning inner joins postgres can move them from left to
+			 * When planning inner joins postgres can move RTEs from left to
 			 * right and from right to left. So we don't know on which side the
-			 * lateral join wil appear. Thus we check both sides for recurring
-			 * tuples and then check if the lateral join is in the side with
-			 * non recurring tuples.
+			 * lateral join wil appear. Thus we try to find a side of the join
+			 * that only contains recurring tuples. And then we check the other
+			 * side to see if it contains an unsupported lateral join.
+			 *
 			 */
-			if (innerrelOnlyRecurring && !outerrelOnlyRecurring)
+			if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, innerrelRelids))
 			{
 				DeferredErrorMessage *deferredError =
 					DeferredErrorIfUnsupportedLateralSubquery(plannerInfo,
@@ -903,8 +890,13 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 					return deferredError;
 				}
 			}
-			else if (!innerrelOnlyRecurring && outerrelOnlyRecurring)
+			else if (RelationInfoContainsOnlyRecurringTuples(plannerInfo, outerrelRelids))
 			{
+				/*
+				 * This branch uses "else if" instead of "if", because if both
+				 * sides contain only recurring tuples there will never be an
+				 * unsupported lateral subquery.
+				 */
 				DeferredErrorMessage *deferredError =
 					DeferredErrorIfUnsupportedLateralSubquery(plannerInfo,
 															  outerrelRelids,
@@ -1640,9 +1632,21 @@ ContainsReferencesToRelidsWalker(Node *node, RelidsReferenceWalkerContext *conte
 
 
 /*
- * DeferredErrorIfUnsupportedLateralSubquery returns true if any of the
- * relations in innerRelids contains a lateral subquery that, both references a
- * recurring tuple and has a merge step.
+ * DeferredErrorIfUnsupportedLateralSubquery returns true if
+ * notFullyRecurringRelids contains a lateral subquery that we do not support.
+ *
+ * If there is an inner join with a lateral subquery we cannot
+ * push it down when the following properties all hold:
+ * 1. The lateral subquery contains some non recurring tuples
+ * 2. The lateral subquery references a recurring tuple from
+ *    outside of the subquery (recurringRelids)
+ * 3. The lateral subquery requires a merge step (e.g. a LIMIT)
+ * 4. The reference to the recurring tuple should be something else than an
+ *    equality check on the distribution column, e.g. equality on a non
+ *    distribution column.
+ *
+ * Property number four is considered both hard to detect and
+ * probably not used very often, so we only check for 1, 2 and 3.
  */
 static DeferredErrorMessage *
 DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
@@ -1662,6 +1666,14 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
 		/* TODO: What about others kinds? */
 		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
 		{
+			/* property number 1, contains non-recurring tuples */
+			if (!FindNodeMatchingCheckFunctionInRangeTableList(
+					list_make1(rangeTableEntry), IsDistributedTableRTE))
+			{
+				continue;
+			}
+
+			/* property number 2, references recurring tuple */
 			int recurringRelid = INVALID_RELID;
 			if (!ContainsReferencesToRelids(rangeTableEntry->subquery, recurringRelids,
 											&recurringRelid))
@@ -1694,6 +1706,7 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
 				}
 			}
 
+			/* property number 3, has a merge step */
 			DeferredErrorMessage *deferredError = DeferErrorIfSubqueryRequiresMerge(
 				rangeTableEntry->subquery, true, recurTypeDescription);
 			if (deferredError)

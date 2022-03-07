@@ -445,6 +445,17 @@ FROM test,
         LIMIT 2
     ) q;
 
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+        LIMIT 2
+    ) q JOIN test ON test.x = q.y;
+
 -- Would require repartitioning to work with subqueries
 --
 -- SELECT count(*)
@@ -647,3 +658,14 @@ FROM ref JOIN test on ref.b = test.x,
             test_2.x = test.x
     ) q
 ;
+
+SELECT count(*)
+FROM ref,
+    LATERAL (
+        SELECT
+            ref_2.b y
+        FROM ref ref_2
+        WHERE
+            ref_2.b = ref.a
+    ) q JOIN test ON test.x = q.y;
+
