@@ -510,20 +510,17 @@ FROM ref JOIN test on ref.b = test.y,
 --     ) q
 -- ;
 
--- Since the only correlates on the distribution column, this can be safely
--- pushed down. But this is currently considered to hard to detect, so we fail.
---
--- SELECT count(*)
--- FROM ref JOIN test on ref.b = test.x,
---     LATERAL (
---         SELECT
---             test_2.x
---         FROM test test_2
---         WHERE
---             test_2.x = test.x
---         LIMIT 2
---     ) q
--- ;
+SELECT count(*)
+FROM ref JOIN test on ref.b = test.x,
+    LATERAL (
+        SELECT
+            test_2.x
+        FROM test test_2
+        WHERE
+            test_2.x = test.x
+        LIMIT 2
+    ) q
+;
 
 -- Without LIMIT clauses
 SELECT count(*)

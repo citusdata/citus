@@ -79,6 +79,69 @@ FROM (SELECT generate_series(1, 3)) ref(a),
         LIMIT 2
     ) q;
 
+
+-- make sure right error message is chosen
+SELECT count(*)
+FROM ref ref_table,
+    (VALUES (1), (3)) rec_values(a),
+    LATERAL (
+        SELECT
+            test.y
+        FROM test
+        WHERE
+            test.y = ref_table.a
+        LIMIT 2
+    ) q;
+
+SELECT count(*)
+FROM ref as ref_table,
+    (VALUES (1), (3)) ref_values(a),
+    LATERAL (
+        SELECT
+            test.y
+        FROM test
+        WHERE
+            test.y = ref_values.a
+        LIMIT 2
+    ) q;
+
+SELECT count(*) FROM
+    ref ref_outer,
+    LATERAL (
+        SELECT * FROM
+            LATERAL ( SELECT *
+            FROM ref ref_inner,
+                LATERAL (
+                    SELECT
+                        test.y
+                    FROM test
+                    WHERE
+                        test.y = ref_outer.a
+                    LIMIT 2
+                ) q
+            ) q2
+    ) q3;
+
+SELECT count(*) FROM
+    ref ref_outer,
+    LATERAL (
+        SELECT * FROM
+            LATERAL ( SELECT *
+            FROM ref ref_inner,
+                LATERAL (
+                    SELECT
+                        test.y
+                    FROM test
+                    WHERE
+                        test.y = ref_inner.a
+                    LIMIT 2
+                ) q
+            ) q2
+    ) q3;
+
+
+
+
 -- Since this only correlates on the distribution column, this can be safely
 -- pushed down. But this is currently considered to hard to detect, so we fail.
 SELECT count(*)
@@ -126,20 +189,6 @@ FROM ref JOIN test on ref.b = test.x,
         FROM test test_2
         WHERE
             test_2.y = ref.a
-        LIMIT 2
-    ) q
-;
-
--- Since the only correlates on the distribution column, this can be safely
--- pushed down. But this is currently considered to hard to detect, so we fail.
-SELECT count(*)
-FROM ref JOIN test on ref.b = test.x,
-    LATERAL (
-        SELECT
-            test_2.x
-        FROM test test_2
-        WHERE
-            test_2.x = test.x
         LIMIT 2
     ) q
 ;

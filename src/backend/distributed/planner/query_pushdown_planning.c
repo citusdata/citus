@@ -45,6 +45,8 @@
 #include "parser/parsetree.h"
 
 
+#define INVALID_RELID -1
+
 /*
  * RecurringTuplesType is used to distinguish different types of expressions
  * that always produce the same set of tuples when a shard is queried. We make
@@ -60,6 +62,17 @@ typedef enum RecurringTuplesType
 	RECURRING_TUPLES_RESULT_FUNCTION,
 	RECURRING_TUPLES_VALUES
 } RecurringTuplesType;
+
+/*
+ * RelidsReferenceWalkerContext is used to find Vars in a (sub)query that
+ * refer to certain relids from the upper query.
+ */
+typedef struct RelidsReferenceWalkerContext
+{
+	int level;
+	Relids relids;
+	int foundRelid;
+} RelidsReferenceWalkerContext;
 
 
 /* Config variable managed via guc.c */
@@ -95,6 +108,9 @@ static bool RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo,
 static DeferredErrorMessage * DeferredErrorIfUnsupportedLateralSubquery(
 	PlannerInfo *plannerInfo, Relids recurringRelIds, Relids nonRecurringRelIds);
 static Var * PartitionColumnForPushedDownSubquery(Query *query);
+static bool ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid);
+static bool ContainsReferencesToRelidsWalker(Node *node,
+											 RelidsReferenceWalkerContext *context);
 
 
 /*
@@ -850,10 +866,32 @@ DeferredErrorIfUnsupportedRecurringTuplesJoin(
 		}
 		else if (joinType == JOIN_INNER && plannerInfo->hasLateralRTEs)
 		{
+			/*
+			 * If there is an inner join with a lateral subqueries we cannot
+			 * push down when the following properties all hold:
+			 * 1. The lateral subquery references a recurring tuple from
+			 *    outside of the subquery
+			 * 2. The lateral subquery only contains non recurring tuples
+			 * 3. The lateral subquery requires a merge step (e.g. a LIMIT)
+			 * 4. The reference to the recurring tuple should be something else than an
+			 *    equality check on the distribution column, e.g. equality on a non
+			 *    distribution column.
+			 *
+			 * Property number four is considered both hard to detect and
+			 * probably not used very often, so we only check for 1, 2 and 3.
+			 */
 			bool innerrelOnlyRecurring = RelationInfoContainsOnlyRecurringTuples(
 				plannerInfo, innerrelRelids);
 			bool outerrelOnlyRecurring = RelationInfoContainsOnlyRecurringTuples(
 				plannerInfo, outerrelRelids);
+
+			/*
+			 * When planning inner joins postgres can move them from left to
+			 * right and from right to left. So we don't know on which side the
+			 * lateral join wil appear. Thus we check both sides for recurring
+			 * tuples and then check if the lateral join is in the side with
+			 * non recurring tuples.
+			 */
 			if (innerrelOnlyRecurring && !outerrelOnlyRecurring)
 			{
 				DeferredErrorMessage *deferredError =
@@ -1438,46 +1476,38 @@ RelationInfoContainsOnlyRecurringTuples(PlannerInfo *plannerInfo, Relids relids)
 
 
 /*
- * DeferredErrorIfUnsupportedLateralSubquery returns true if any of the
- * relations in a RelOptInfo contain a lateral subquery that has a merge step.
+ * RecurringTypeDescription returns a discriptive string for the given
+ * recurType. This string can be used in error messages to help the users
+ * understand why a query cannot be planned.
  */
-static DeferredErrorMessage *
-DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo, Relids
-										  recurringRelids, Relids nonRecurringRelids)
+static char *
+RecurringTypeDescription(RecurringTuplesType recurType)
 {
-	int relationId = -1;
-	RecurringTuplesType recurType = FetchFirstRecurType(plannerInfo, recurringRelids);
-	char *recurTypeName = NULL;
 	switch (recurType)
 	{
 		case RECURRING_TUPLES_REFERENCE_TABLE:
 		{
-			recurTypeName = "a reference table";
-			break;
+			return "a reference table";
 		}
 
 		case RECURRING_TUPLES_FUNCTION:
 		{
-			recurTypeName = "a table function";
-			break;
+			return "a table function";
 		}
 
 		case RECURRING_TUPLES_EMPTY_JOIN_TREE:
 		{
-			recurTypeName = "a subquery without FROM";
-			break;
+			return "a subquery without FROM";
 		}
 
 		case RECURRING_TUPLES_RESULT_FUNCTION:
 		{
-			recurTypeName = "complex subqueries, CTEs or local tables";
-			break;
+			return "complex subqueries, CTEs or local tables";
 		}
 
 		case RECURRING_TUPLES_VALUES:
 		{
-			recurTypeName = "a VALUES clause";
-			break;
+			return "a VALUES clause";
 		}
 
 		case RECURRING_TUPLES_INVALID:
@@ -1486,11 +1516,141 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo, Relids
 			 * This branch should never be hit, but it's here just in case it
 			 * happens.
 			 */
-			recurTypeName = "an unknown recurring tuple";
+			return "an unknown recurring tuple";
 		}
 	}
 
-	while ((relationId = bms_next_member(nonRecurringRelids, relationId)) >= 0)
+	/*
+	 * This should never be hit, but is needed to fix compiler warnings.
+	 */
+	return "an unknown recurring tuple";
+}
+
+
+/*
+ * ContainsReferencesToRelids determines whether the given query contains
+ * any references that point to columns of the given relids. The given relids
+ * should be from exactly one query level above the given query.
+ *
+ * If the function returns true, then foundRelid is set to the first relid that
+ * was referenced.
+ *
+ * There are some queries where it cannot easily be determined if the relids
+ * are used, e.g because the query contains placeholder vars. In those cases
+ * this function returns true, because it's better to error out than to return
+ * wrong results. But in these cases foundRelid is set to INVALID_RELID.
+ */
+static bool
+ContainsReferencesToRelids(Query *query, Relids relids, int *foundRelid)
+{
+	RelidsReferenceWalkerContext context = { 0 };
+	context.level = 1;
+	context.relids = relids;
+	context.foundRelid = INVALID_RELID;
+	int flags = 0;
+
+	if (query_tree_walker(query, ContainsReferencesToRelidsWalker,
+						  &context, flags))
+	{
+		*foundRelid = context.foundRelid;
+		return true;
+	}
+	return false;
+}
+
+
+/*
+ * ContainsReferencesToRelidsWalker determines whether the given query
+ * contains any Vars that reference the relids in the context.
+ *
+ * ContainsReferencesToRelidsWalker recursively descends into subqueries
+ * and increases the level by 1 before recursing.
+ */
+static bool
+ContainsReferencesToRelidsWalker(Node *node, RelidsReferenceWalkerContext *context)
+{
+	if (node == NULL)
+	{
+		return false;
+	}
+
+	if (IsA(node, Var))
+	{
+		Var *var = (Var *) node;
+		if (var->varlevelsup == context->level && bms_is_member(var->varno,
+																context->relids))
+		{
+			context->foundRelid = var->varno;
+			return true;
+		}
+
+		return false;
+	}
+	else if (IsA(node, Aggref))
+	{
+		if (((Aggref *) node)->agglevelsup > context->level)
+		{
+			/*
+			 * TODO: Only return true when aggref points to an aggregate that
+			 * uses vars from a recurring tuple.
+			 */
+			return true;
+		}
+	}
+	else if (IsA(node, GroupingFunc))
+	{
+		if (((GroupingFunc *) node)->agglevelsup > context->level)
+		{
+			/*
+			 * TODO: Only return true when groupingfunc points to a grouping
+			 * func that uses vars from a recurring tuple.
+			 */
+			return true;
+		}
+
+		return false;
+	}
+	else if (IsA(node, PlaceHolderVar))
+	{
+		if (((PlaceHolderVar *) node)->phlevelsup > context->level)
+		{
+			/*
+			 * TODO: Only return true when aggref points to a placeholdervar
+			 * that uses vars from a recurring tuple.
+			 */
+			return true;
+		}
+	}
+	else if (IsA(node, Query))
+	{
+		Query *query = (Query *) node;
+		int flags = 0;
+
+		context->level += 1;
+		bool found = query_tree_walker(query, ContainsReferencesToRelidsWalker,
+									   context, flags);
+		context->level -= 1;
+
+		return found;
+	}
+
+	return expression_tree_walker(node, ContainsReferencesToRelidsWalker,
+								  context);
+}
+
+
+/*
+ * DeferredErrorIfUnsupportedLateralSubquery returns true if any of the
+ * relations in innerRelids contains a lateral subquery that, both references a
+ * recurring tuple and has a merge step.
+ */
+static DeferredErrorMessage *
+DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo,
+										  Relids recurringRelids,
+										  Relids notFullyRecurringRelids)
+{
+	int relationId = -1;
+	while ((relationId = bms_next_member(notFullyRecurringRelids, relationId)) >= 0)
 	{
 		RangeTblEntry *rangeTableEntry = plannerInfo->simple_rte_array[relationId];
 
@@ -1502,8 +1662,40 @@ DeferredErrorIfUnsupportedLateralSubquery(PlannerInfo *plannerInfo, Relids
 		/* TODO: What about others kinds? */
 		if (rangeTableEntry->rtekind == RTE_SUBQUERY)
 		{
+			int recurringRelid = INVALID_RELID;
+			if (!ContainsReferencesToRelids(rangeTableEntry->subquery, recurringRelids,
+											&recurringRelid))
+			{
+				continue;
+			}
+
+			char *recurTypeDescription =
+				"an aggregate, grouping func or placeholder var coming from the outer query";
+			if (recurringRelid != INVALID_RELID)
+			{
+				RangeTblEntry *recurringRangeTableEntry =
+					plannerInfo->simple_rte_array[recurringRelid];
+				RecurringTuplesType recurType = RECURRING_TUPLES_INVALID;
+				ContainsRecurringRTE(recurringRangeTableEntry, &recurType);
+				recurTypeDescription = RecurringTypeDescription(recurType);
+
+				/*
+				 * Add the alias for all recuring tuples where it is useful to
+				 * see them. We don't add it for VALUES and intermediate
+				 * results, because there the aliases are currently hardcoded
+				 * strings anyway.
+				 */
+				if (recurType != RECURRING_TUPLES_VALUES &&
+					recurType != RECURRING_TUPLES_RESULT_FUNCTION)
+				{
+					recurTypeDescription = psprintf("%s (%s)", recurTypeDescription,
+													recurringRangeTableEntry->eref->
+													aliasname);
+				}
+			}
+
 			DeferredErrorMessage *deferredError = DeferErrorIfSubqueryRequiresMerge(
-				rangeTableEntry->subquery, true, recurTypeName);
+				rangeTableEntry->subquery, true, recurTypeDescription);
 			if (deferredError)
 			{
 				return deferredError;
