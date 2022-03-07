@@ -30,10 +30,9 @@
 #include "distributed/transaction_recovery.h"
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
+#include "distributed/jsonbutils.h"
 #include "utils/memutils.h"
 #include "utils/builtins.h"
-#include "utils/jsonb.h"
-
 
 static void SendCommandToMetadataWorkersParams(const char *command,
 											   const char *user, int parameterCount,
@@ -675,39 +674,14 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	ForgetResults(workerConnection);
 
 	Datum metadata = DistNodeMetadata();
-	Jsonb *jsonbMetadata = DatumGetJsonbP(metadata);
+	text *currentServerIdTextP = ExtractFieldTextP(metadata, "server_id");
 
-	const char *serverId = "server_id";
-
-	#if PG_VERSION_NUM >= PG_VERSION_14
-	Datum path[1] = { PointerGetDatum(cstring_to_text(serverId)) };
-
-	bool isNull,
-		 as_text = true;
-
-	Datum currentServerIdDatum = jsonb_get_element(jsonbMetadata, path, 1, &isNull,
-												   as_text);
-
-	char *currentServerId = TextDatumGetCString(currentServerIdDatum);
-
-	if(isNull)
+	if (!currentServerIdTextP)
 	{
 		return false;
 	}
 
-	#else
-
-	JsonbValue *jbv = getKeyJsonValueFromContainer(jsonbMetadata->root, serverId, strlen(
-													 serverId), NULL);
-
-	if(jbv != NULL || jbv->type != jbvString)
-	{
-		return false;
-	}
-
-	char *currentServerId = jbv->val->string.val;
-
-	#endif
+	char *currentServerId = text_to_cstring(currentServerIdTextP);
 
 	return strcmp(workerServerId, currentServerId) == 0;
 }

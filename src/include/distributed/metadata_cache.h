@@ -256,6 +256,7 @@ extern Oid PgTableVisibleFuncId(void);
 extern Oid CitusTableVisibleFuncId(void);
 extern Oid RelationIsAKnownShardFuncId(void);
 extern Oid JsonbExtractPathFuncId(void);
+extern Oid JsonbExtractPathTextFuncId(void);
 
 /* enum oids */
 extern Oid PrimaryNodeRoleId(void);

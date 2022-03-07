@@ -169,6 +169,7 @@ typedef struct MetadataCacheData
 	Oid citusTableIsVisibleFuncId;
 	Oid relationIsAKnownShardFuncId;
 	Oid jsonbExtractPathFuncId;
+	Oid jsonbExtractPathTextFuncId;
 	bool databaseNameValid;
 	char databaseName[NAMEDATALEN];
 } MetadataCacheData;
@@ -2723,6 +2724,21 @@ JsonbExtractPathFuncId(void)
 	}
 
 	return MetadataCache.jsonbExtractPathFuncId;
+}
+
+
+Oid
+JsonbExtractPathTextFuncId(void)
+{
+	if (MetadataCache.jsonbExtractPathTextFuncId == InvalidOid)
+	{
+		const int argCount = 2;
+
+		MetadataCache.jsonbExtractPathTextFuncId =
+			FunctionOid("pg_catalog", "jsonb_extract_path_text", argCount);
+	}
+
+	return MetadataCache.jsonbExtractPathTextFuncId;
 }
 
 
