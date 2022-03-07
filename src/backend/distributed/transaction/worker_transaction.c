@@ -677,7 +677,10 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	Datum metadata = DistNodeMetadata();
 	Jsonb *jsonbMetadata = DatumGetJsonbP(metadata);
 
-	Datum path[1] = { PointerGetDatum(cstring_to_text("server_id")) };
+	const char *serverId = "server_id";
+
+	#if PG_VERSION_NUM >= PG_VERSION_14
+	Datum path[1] = { PointerGetDatum(cstring_to_text(serverId)) };
 
 	bool isNull,
 		 as_text = true;
@@ -686,6 +689,14 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 												   as_text);
 
 	char *currentServerId = TextDatumGetCString(currentServerIdDatum);
+
+	#else
+
+	JsonbValue jv = getKeyJsonValueFromContainer(jsonbMetadata->root, serverId, strlen(
+													 serverId), NULL);
+	char *currentServerId = jv->val->string.val;
+
+	#endif
 
 	return !isNull && strcmp(workerServerId, currentServerId) == 0;
 }
