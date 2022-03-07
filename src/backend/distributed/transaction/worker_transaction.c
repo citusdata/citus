@@ -31,6 +31,8 @@
 #include "distributed/worker_manager.h"
 #include "distributed/worker_transaction.h"
 #include "utils/memutils.h"
+#include "utils/builtins.h"
+#include "utils/jsonb.h"
 
 
 static void SendCommandToMetadataWorkersParams(const char *command,
@@ -50,7 +52,7 @@ static void SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerS
 												   const char *command, const char *user,
 												   bool
 												   failOnError);
-void ErrorIfWorkerDistNodeIsLocked(WorkerNode *workerNode);
+bool IsWorkerTheCurrentNode(WorkerNode *workerNode);
 
 /*
  * SendCommandToWorker sends a command to a particular worker as part of the
@@ -643,34 +645,23 @@ ErrorIfAnyMetadataNodeOutOfSync(List *metadataNodeList)
 
 
 /*
- * ErrorIfWorkerDistNodeIsLocked checks if the current process has taken
- * an ExlusiveLock on the pg_dist_node table of the worker and raises an error
- * if that is the case
+ * IsWorkerTheCurrentNode checks if the given worker refers to the
+ * the current node by comparing the server id of the worker and of the
+ * current nodefrom pg_dist_node_metadata
  */
-void
-ErrorIfWorkerDistNodeIsLocked(WorkerNode *workerNode)
+bool
+IsWorkerTheCurrentNode(WorkerNode *workerNode)
 {
 	int connectionFlags = REQUIRE_METADATA_CONNECTION;
 
-	MultiConnection *workerConnection = GetNodeUserDatabaseConnection(connectionFlags,
-																	  workerNode->
-																	  workerName,
-																	  workerNode->
-																	  workerPort,
-																	  CurrentUserName(),
-																	  NULL);
-	const char *partialCommand =
-		"SELECT COUNT(*) FROM pg_locks JOIN pg_class ON pg_locks.relation = pg_class.oid "
-		"WHERE pg_class.relname = 'pg_dist_node' AND pg_locks.granted AND pg_locks.mode = 'ExclusiveLock' AND pid = ";
-
-	char command[1000];
-
-	char *pgBackendPid;
-	if (asprintf(&pgBackendPid, "%d", MyProcPid) == -1)
-	{
-		ereport(ERROR, errmsg("Internal Error"));
-	}
-	strcat(strcpy(command, partialCommand), pgBackendPid);
+	MultiConnection *workerConnection =
+		GetNodeUserDatabaseConnection(connectionFlags,
+									  workerNode->workerName,
+									  workerNode->workerPort,
+									  CurrentUserName(),
+									  NULL);
+	const char *command =
+		"SELECT metadata ->> 'server_id' AS server_id FROM pg_dist_node_metadata";
 
 	SendRemoteCommand(workerConnection, command);
 
@@ -678,15 +669,23 @@ ErrorIfWorkerDistNodeIsLocked(WorkerNode *workerNode)
 	List *commandResult = ReadFirstColumnAsText(result);
 
 	StringInfo resultInfo = (StringInfo) linitial(commandResult);
-	char *resultText = resultInfo->data;
-
-	int firstColIntResult = atoi(resultText);
-	if (firstColIntResult > 0)
-	{
-		ereport(ERROR, errmsg("Node cannot add itself as a worker."), errhint(
-					"Either try to add the node as a coordinator (groupid:=0) or add another node as worker."));
-	}
+	char *workerServerId = resultInfo->data;
 
 	PQclear(result);
 	ForgetResults(workerConnection);
+
+	Datum metadata = DistNodeMetadata();
+	Jsonb *jsonbMetadata = DatumGetJsonbP(metadata);
+
+	Datum path[1] = { PointerGetDatum(cstring_to_text("server_id")) };
+
+	bool isNull,
+		 as_text = true;
+
+	Datum currentServerIdDatum = jsonb_get_element(jsonbMetadata, path, 1, &isNull,
+												   as_text);
+
+	char *currentServerId = TextDatumGetCString(currentServerIdDatum);
+
+	return !isNull && strcmp(workerServerId, currentServerId) == 0;
 }

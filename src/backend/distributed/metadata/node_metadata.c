@@ -273,6 +273,19 @@ citus_add_node(PG_FUNCTION_ARGS)
 	 */
 	if (!nodeAlreadyExists)
 	{
+		WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeNameString, nodePort);
+
+		/*
+		 * If the worker is not marked as a coordinator, check that
+		 * the node is not trying to add itself
+		 */
+		if (workerNode->groupId != 0 && IsWorkerTheCurrentNode(workerNode))
+		{
+			ereport(ERROR, (errmsg("Node cannot add itself as a worker."),
+							errhint("Either try to add the node as a coordinator "
+									"(groupid:=0) or add another node as worker.")));
+		}
+
 		ActivateNode(nodeNameString, nodePort);
 	}
 
@@ -1096,15 +1109,6 @@ ActivateNode(char *nodeName, int nodePort)
 
 	if (syncMetadata)
 	{
-		/*
-		 * If the worker is not coordinator, check that its
-		 * pg_dist_node is not locked by the current connection
-		 */
-		if (workerNode->groupId != 0)
-		{
-			ErrorIfWorkerDistNodeIsLocked(workerNode);
-		}
-
 		/*
 		 * We are going to sync the metadata anyway in this transaction, so do
 		 * not fail just because the current metadata is not synced.
