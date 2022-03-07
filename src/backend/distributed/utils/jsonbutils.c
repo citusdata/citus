@@ -20,6 +20,8 @@
 /*
  * ExtractFieldJsonb gets value of fieldName from jsonbDoc and puts it
  * into result. If not found, returns false. Otherwise, returns true.
+ * The field is returned as a Text* Datum if as_text is true, or a Jsonb*
+ * Datum if as_text is false.
  */
 static bool
 ExtractFieldJsonb(Datum jsonbDoc, const char *fieldName, Datum *result, bool as_text)
@@ -86,6 +88,10 @@ ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue)
 	return DatumGetBool(boolDatum);
 }
 
+/*
+ * ExtractFieldTextP gets value of fieldName as text* from jsonbDoc, or
+ * returns NULL if it doesn't exist.
+ */
 text*
 ExtractFieldTextP(Datum jsonbDoc, const char *fieldName)
 {
@@ -100,6 +106,10 @@ ExtractFieldTextP(Datum jsonbDoc, const char *fieldName)
 	return DatumGetTextP(jsonbDatum);
 }
 
+/*
+ * ExtractFieldJsonbDatum gets value of fieldName from jsonbDoc and puts it
+ * into result. If not found, returns false. Otherwise, returns true.
+ */
 bool
 ExtractFieldJsonbDatum(Datum jsonbDoc, const char *fieldName, Datum *result)
 {
