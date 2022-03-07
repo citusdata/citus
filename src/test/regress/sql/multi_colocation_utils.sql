@@ -66,11 +66,6 @@ CREATE FUNCTION find_shard_interval_index(bigint)
     AS 'citus'
     LANGUAGE C STRICT;
 
--- remove tables from pg_dist_partition, if they don't exist i.e not found in pg_class
-delete from pg_dist_partition where not exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid);
-select 1 from run_command_on_workers($$
-    delete from pg_dist_partition where not exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid);$$);
-
 -- ===================================================================
 -- test co-location util functions
 -- ===================================================================

@@ -29,6 +29,7 @@
 #include "distributed/coordinator_protocol.h"
 #include "distributed/metadata_cache.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/multi_partitioning_utils.h"
 #include "foreign/foreign.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -37,11 +38,12 @@ PG_FUNCTION_INFO_V1(worker_drop_distributed_table);
 PG_FUNCTION_INFO_V1(worker_drop_shell_table);
 PG_FUNCTION_INFO_V1(worker_drop_sequence_dependency);
 
-
+static void WorkerDropDistributedTable(Oid relationId);
 #if PG_VERSION_NUM < PG_VERSION_13
 static long deleteDependencyRecordsForSpecific(Oid classId, Oid objectId, char deptype,
 											   Oid refclassId, Oid refobjectId);
 #endif
+
 
 /*
  * worker_drop_distributed_table drops the distributed table with the given oid,
@@ -64,8 +66,6 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	text *relationName = PG_GETARG_TEXT_P(0);
 	Oid relationId = ResolveRelationId(relationName, true);
 
-	ObjectAddress distributedTableObject = { InvalidOid, InvalidOid, 0 };
-
 	if (!OidIsValid(relationId))
 	{
 		ereport(NOTICE, (errmsg("relation %s does not exist, skipping",
@@ -75,8 +75,45 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 
 	EnsureTableOwner(relationId);
 
-	List *shardList = LoadShardList(relationId);
+	if (PartitionedTable(relationId))
+	{
+		/*
+		 * When "DROP SCHEMA .. CASCADE" happens, we rely on Postgres' drop trigger
+		 * to send the individual DROP TABLE commands for tables.
+		 *
+		 * In case of partitioned tables, we have no control on the order of DROP
+		 * commands that is sent to the extension. We can try to sort while processing
+		 * on the coordinator, but we prefer to handle it in a more flexible manner.
+		 *
+		 * That's why, whenever we see a partitioned table, we drop all the corresponding
+		 * partitions first. Otherwise, WorkerDropDistributedTable() would already drop
+		 * the shell tables of the partitions (e.g., due to performDeletion(..CASCADE),
+		 * and further WorkerDropDistributedTable() on the partitions would become no-op.
+		 *
+		 * If, say one partition has already been dropped earlier, that should also be fine
+		 * because we read the existing partitions.
+		 */
+		List *partitionList = PartitionList(relationId);
+		Oid partitionOid = InvalidOid;
+		foreach_oid(partitionOid, partitionList)
+		{
+			WorkerDropDistributedTable(partitionOid);
+		}
+	}
 
+	WorkerDropDistributedTable(relationId);
+
+	PG_RETURN_VOID();
+}
+
+
+/*
+ * WorkerDropDistributedTable is a helper function for worker_drop_distributed_table, see
+ * tha function for the details.
+ */
+static void
+WorkerDropDistributedTable(Oid relationId)
+{
 	/* first check the relation type */
 	Relation distributedRelation = relation_open(relationId, AccessShareLock);
 
@@ -86,9 +123,7 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	relation_close(distributedRelation, AccessShareLock);
 
 	/* prepare distributedTableObject for dropping the table */
-	distributedTableObject.classId = RelationRelationId;
-	distributedTableObject.objectId = relationId;
-	distributedTableObject.objectSubId = 0;
+	ObjectAddress distributedTableObject = { RelationRelationId, relationId, 0 };
 
 	/* Drop dependent sequences from pg_dist_object */
 	#if PG_VERSION_NUM >= PG_VERSION_13
@@ -121,6 +156,7 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 	}
 
 	/* iterate over shardList to delete the corresponding rows */
+	List *shardList = LoadShardList(relationId);
 	uint64 *shardIdPointer = NULL;
 	foreach_ptr(shardIdPointer, shardList)
 	{
@@ -140,8 +176,6 @@ worker_drop_distributed_table(PG_FUNCTION_ARGS)
 
 	/* delete the row from pg_dist_partition */
 	DeletePartitionRow(relationId);
-
-	PG_RETURN_VOID();
 }
 
 
