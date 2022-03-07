@@ -361,6 +361,9 @@ DROP FUNCTION get_nodeid_for_groupid(integer);
 
 RESET search_path;
 
-DROP VIEW IF EXISTS pg_catalog.citus_stat_activity;
-DROP FUNCTION IF EXISTS pg_catalog.citus_stat_activity;
-DROP FUNCTION IF EXISTS pg_catalog.run_command_on_all_nodes;
+DROP VIEW pg_catalog.citus_stat_activity;
+DROP FUNCTION pg_catalog.citus_stat_activity;
+DROP FUNCTION pg_catalog.run_command_on_all_nodes;
+
+DROP FUNCTION pg_catalog.citus_nodename_for_nodeid(integer);
+DROP FUNCTION pg_catalog.citus_nodeport_for_nodeid(integer);

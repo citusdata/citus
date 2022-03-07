@@ -90,6 +90,8 @@ ORDER BY 1;
  function citus_local_disk_space_stats()
  function citus_move_shard_placement(bigint,text,integer,text,integer,citus.shard_transfer_mode)
  function citus_node_capacity_1(integer)
+ function citus_nodename_for_nodeid(integer)
+ function citus_nodeport_for_nodeid(integer)
  function citus_prepare_pg_upgrade()
  function citus_query_stats()
  function citus_relation_size(regclass)
@@ -278,5 +280,5 @@ ORDER BY 1;
  view citus_stat_statements
  view pg_dist_shard_placement
  view time_partitions
-(262 rows)
+(264 rows)
 
