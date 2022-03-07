@@ -24,6 +24,8 @@ CREATE FUNCTION square(int) RETURNS INT
     AS $$ SELECT $1 * $1 $$
     LANGUAGE SQL;
 select create_distributed_function('square(int)');
+NOTICE:  procedure multi_mx_insert_select_repartition.square is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 

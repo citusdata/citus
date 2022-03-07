@@ -123,7 +123,7 @@ from
     (select
          pg_catalog.websearch_to_tsquery(
              cast(pg_catalog.regconfigin(cast(cast(null as cstring) as cstring)) as regconfig),
-             cast((select type from citus.pg_dist_object limit 1 offset 1) as text)
+             cast((select type from pg_catalog.pg_dist_object limit 1 offset 1) as text)
          ) as c0,
          sample_0.org_id as c1,
          sample_0.id as c2,

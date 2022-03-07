@@ -666,6 +666,8 @@ PgDistTableMetadataSyncCommandList(void)
 										  DELETE_ALL_PLACEMENTS);
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 										  DELETE_ALL_DISTRIBUTED_OBJECTS);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  DELETE_ALL_COLOCATION);
 
 	/* create pg_dist_partition, pg_dist_shard and pg_dist_placement entries */
 	foreach_ptr(cacheEntry, propagatedTableList)
@@ -676,6 +678,11 @@ PgDistTableMetadataSyncCommandList(void)
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  tableMetadataCreateCommandList);
 	}
+
+	/* commands to insert pg_dist_colocation entries */
+	List *colocationGroupSyncCommandList = ColocationGroupCreateCommandList();
+	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+											  colocationGroupSyncCommandList);
 
 	/* As the last step, propagate the pg_dist_object entities */
 	Assert(ShouldPropagate());

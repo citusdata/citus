@@ -27,5 +27,5 @@ PG_FUNCTION_INFO_V1(get_all_active_client_backend_count);
 Datum
 get_all_active_client_backend_count(PG_FUNCTION_ARGS)
 {
-	PG_RETURN_UINT32(GetAllActiveClientBackendCount());
+	PG_RETURN_UINT32(GetExternalClientBackendCount());
 }

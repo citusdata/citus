@@ -260,3 +260,6 @@ s/NOTICE:  issuing WITH placement_data\(shardid, shardstate, shardlength, groupi
 # global_pid when pg_cancel_backend is sent to workers
 s/pg_cancel_backend\('[0-9]+'::bigint\)/pg_cancel_backend('xxxxx'::bigint)/g
 s/issuing SELECT pg_cancel_backend\([0-9]+::integer\)/issuing SELECT pg_cancel_backend(xxxxx::integer)/g
+
+# node id in run_command_on_all_nodes warning
+s/Error on node with node id [0-9]+/Error on node with node id xxxxx/g

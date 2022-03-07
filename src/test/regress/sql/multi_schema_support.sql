@@ -672,7 +672,7 @@ SELECT create_distributed_table('old_schema.table_set_schema', 'id');
 CREATE SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
-    FROM citus.pg_dist_object
+    FROM pg_catalog.pg_dist_object
     WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
@@ -685,7 +685,7 @@ SELECT table_schema AS "Shards' Schema"
 ALTER TABLE old_schema.table_set_schema SET SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
-    FROM citus.pg_dist_object
+    FROM pg_catalog.pg_dist_object
     WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
@@ -706,7 +706,7 @@ SELECT create_distributed_table('table_set_schema', 'id');
 CREATE SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
-    FROM citus.pg_dist_object
+    FROM pg_catalog.pg_dist_object
     WHERE objid='new_schema'::regnamespace::oid;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
@@ -719,7 +719,7 @@ SELECT table_schema AS "Shards' Schema"
 ALTER TABLE table_set_schema SET SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
-    FROM citus.pg_dist_object
+    FROM pg_catalog.pg_dist_object
     WHERE objid='new_schema'::regnamespace::oid;
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema"
@@ -743,7 +743,7 @@ SELECT create_distributed_table('table_set_schema', 'id');
 CREATE SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
-    FROM citus.pg_dist_object
+    FROM pg_catalog.pg_dist_object
     WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
@@ -757,7 +757,7 @@ SET search_path TO old_schema;
 ALTER TABLE table_set_schema SET SCHEMA new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
-    FROM citus.pg_dist_object
+    FROM pg_catalog.pg_dist_object
     WHERE objid::oid::regnamespace IN ('old_schema', 'new_schema');
 \c - - - :worker_1_port
 SELECT table_schema AS "Shards' Schema", COUNT(*) AS "Counts"
@@ -969,9 +969,9 @@ ROLLBACK;
 -- Clean up the created schema
 SET client_min_messages TO WARNING;
 
-SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object
+SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object
     WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');
 DROP SCHEMA run_test_schema, test_schema_support_join_1, test_schema_support_join_2, "Citus'Teen123", "CiTUS.TEEN2", bar, test_schema_support CASCADE;
 -- verify that the dropped schema is removed from worker's pg_dist_object
-SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object
+SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object
     WHERE classid=2615 and objid IN (select oid from pg_namespace where nspname='run_test_schema');

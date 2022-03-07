@@ -1,4 +1,6 @@
 -- citus--11.0-1--10.2-4
+REVOKE SELECT ON pg_catalog.pg_dist_object FROM public;
+ALTER TABLE pg_catalog.pg_dist_object SET SCHEMA citus;
 
 DROP FUNCTION pg_catalog.create_distributed_function(regprocedure, text, text, bool);
 
@@ -50,6 +52,8 @@ DROP FUNCTION pg_catalog.citus_check_connection_to_node (text, integer);
 DROP FUNCTION pg_catalog.citus_check_cluster_node_health ();
 
 DROP FUNCTION pg_catalog.citus_internal_add_object_metadata(text, text[], text[], integer, integer, boolean);
+DROP FUNCTION pg_catalog.citus_internal_add_colocation_metadata(int, int, int, regtype, oid);
+DROP FUNCTION pg_catalog.citus_internal_delete_colocation_metadata(int);
 DROP FUNCTION pg_catalog.citus_run_local_command(text);
 DROP FUNCTION pg_catalog.worker_drop_sequence_dependency(text);
 DROP FUNCTION pg_catalog.worker_drop_shell_table(table_name text);
@@ -117,10 +121,13 @@ CREATE FUNCTION get_global_active_transactions(OUT datid oid, OUT process_id int
 
 RESET search_path;
 
-DROP FUNCTION citus_internal_local_blocked_processes CASCADE;
-DROP FUNCTION citus_internal_global_blocked_processes CASCADE;
+DROP VIEW pg_catalog.citus_lock_waits;
 
-DROP FUNCTION pg_catalog.citus_dist_stat_activity CASCADE;
+DROP FUNCTION citus_internal_local_blocked_processes;
+DROP FUNCTION citus_internal_global_blocked_processes;
+
+DROP VIEW IF EXISTS pg_catalog.citus_dist_stat_activity;
+DROP FUNCTION IF EXISTS pg_catalog.citus_dist_stat_activity;
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_dist_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
                                                     OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
@@ -146,7 +153,8 @@ ALTER VIEW citus.citus_dist_stat_activity SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_dist_stat_activity TO PUBLIC;
 
 SET search_path = 'pg_catalog';
-DROP FUNCTION citus_worker_stat_activity CASCADE;
+DROP VIEW IF EXISTS citus_worker_stat_activity;
+DROP FUNCTION IF EXISTS citus_worker_stat_activity;
 
 CREATE OR REPLACE FUNCTION citus_worker_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
                                                       OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
@@ -169,10 +177,10 @@ IS 'returns distributed transaction activity on shards of distributed tables';
 DROP FUNCTION pg_catalog.worker_create_or_replace_object(text[]);
 #include "../udfs/worker_create_or_replace_object/9.0-1.sql"
 
-DROP FUNCTION IF EXISTS pg_catalog.pg_cancel_backend(bigint) CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.pg_terminate_backend(bigint, bigint) CASCADE;
+DROP FUNCTION IF EXISTS pg_catalog.pg_cancel_backend(bigint);
+DROP FUNCTION IF EXISTS pg_catalog.pg_terminate_backend(bigint, bigint);
 
-DROP FUNCTION pg_catalog.dump_local_wait_edges CASCADE;
+DROP FUNCTION pg_catalog.dump_local_wait_edges;
 CREATE FUNCTION pg_catalog.dump_local_wait_edges(
                     OUT waiting_pid int4,
                     OUT waiting_node_id int4,
@@ -189,7 +197,7 @@ AS $$MODULE_PATHNAME$$, $$dump_local_wait_edges$$;
 COMMENT ON FUNCTION pg_catalog.dump_local_wait_edges()
 IS 'returns all local lock wait chains, that start from distributed transactions';
 
-DROP FUNCTION pg_catalog.dump_global_wait_edges CASCADE;
+DROP FUNCTION pg_catalog.dump_global_wait_edges;
 CREATE FUNCTION pg_catalog.dump_global_wait_edges(
                     OUT waiting_pid int4,
                     OUT waiting_node_id int4,
@@ -347,5 +355,11 @@ ALTER VIEW citus.citus_lock_waits SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
 
 DROP FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(bool);
+DROP FUNCTION pg_catalog.citus_calculate_gpid(integer,integer);
+DROP FUNCTION pg_catalog.citus_backend_gpid();
 
 RESET search_path;
+
+DROP VIEW IF EXISTS pg_catalog.citus_stat_activity;
+DROP FUNCTION IF EXISTS pg_catalog.citus_stat_activity;
+DROP FUNCTION IF EXISTS pg_catalog.run_command_on_all_nodes;

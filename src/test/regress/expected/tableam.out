@@ -23,6 +23,11 @@ $Q$);
 
 (1 row)
 
+-- Since Citus assumes access methods are part of the extension, make fake_am
+-- owned manually to be able to pass checks on Citus while distributing tables.
+ALTER EXTENSION citus ADD ACCESS METHOD fake_am;
+NOTICE:  Citus does not propagate adding/dropping member objects
+HINT:  You can add/drop the member objects on the workers as well.
 --
 -- Hash distributed table using a non-default table access method
 --
@@ -128,27 +133,6 @@ SELECT * FROM master_get_table_ddl_events('test_ref');
  CREATE TABLE test_tableam.test_ref (a integer) USING fake_am
  ALTER TABLE test_tableam.test_ref OWNER TO postgres
 (2 rows)
-
--- replicate to coordinator
-SET client_min_messages TO WARNING;
-\set VERBOSIY terse
-SELECT 1 FROM master_add_node('localhost', :master_port, groupid => 0);
- ?column?
----------------------------------------------------------------------
-        1
-(1 row)
-
-RESET client_min_messages;
-delete from test_ref;
-WARNING:  fake_scan_getnextslot
-DETAIL:  from localhost:xxxxx
-ERROR:  fake_tuple_delete not implemented
-CONTEXT:  while executing command on localhost:xxxxx
-SELECT master_remove_node('localhost', :master_port);
- master_remove_node
----------------------------------------------------------------------
-
-(1 row)
 
 --
 -- Range partitioned table using a non-default table access method
@@ -323,5 +307,7 @@ CREATE TABLE test_partitioned(id int, p int, val int)
 PARTITION BY RANGE (p) USING fake_am;
 ERROR:  specifying a table access method is not supported on a partitioned table
 \set VERBOSITY terse
+ALTER EXTENSION citus DROP ACCESS METHOD fake_am;
+NOTICE:  Citus does not propagate adding/dropping member objects
 drop schema test_tableam cascade;
-NOTICE:  drop cascades to 6 other objects
+NOTICE:  drop cascades to 5 other objects

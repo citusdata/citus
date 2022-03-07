@@ -224,12 +224,16 @@ CREATE FOREIGN TABLE foreign_table (
 ) SERVER fake_fdw_server OPTIONS (encoding 'utf-8', compression 'true');
 -- observe that we do not create fdw server for shell table, both shard relation
 -- & shell relation points to the same same server object
+-- Disable metadata sync since citus doesn't support distributing
+-- foreign data wrappers for now.
+SET citus.enable_metadata_sync TO OFF;
 SELECT citus_add_local_table_to_metadata('foreign_table');
  citus_add_local_table_to_metadata
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET citus.enable_metadata_sync;
 DROP FOREIGN TABLE foreign_table;
 NOTICE:  executing the command locally: DROP FOREIGN TABLE IF EXISTS citus_local_tables_test_schema.foreign_table_xxxxx CASCADE
 -- drop them for next tests

@@ -68,14 +68,12 @@ typedef struct BackendManagementShmemData
 	pg_atomic_uint64 nextTransactionNumber;
 
 	/*
-	 * Total number of client backends that are authenticated.
-	 * We only care about activeClientBackendCounter when adaptive
-	 * connection management is enabled, otherwise always zero.
+	 * Total number of external client backends that are authenticated.
 	 *
 	 * Note that the counter does not consider any background workers
-	 * or such, it only counts client_backends.
+	 * or such, and also exludes internal connections between nodes.
 	 */
-	pg_atomic_uint32 activeClientBackendCounter;
+	pg_atomic_uint32 externalClientBackendCounter;
 
 	BackendData backends[FLEXIBLE_ARRAY_MEMBER];
 } BackendManagementShmemData;
@@ -84,6 +82,7 @@ typedef struct BackendManagementShmemData
 static void StoreAllActiveTransactions(Tuplestorestate *tupleStore, TupleDesc
 									   tupleDescriptor);
 static bool UserHasPermissionToViewStatsOf(Oid currentUserId, Oid backendOwnedId);
+static uint64 CalculateGlobalPID(int32 nodeId, pid_t pid);
 static uint64 GenerateGlobalPID(void);
 
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
@@ -99,6 +98,8 @@ PG_FUNCTION_INFO_V1(assign_distributed_transaction_id);
 PG_FUNCTION_INFO_V1(get_current_transaction_id);
 PG_FUNCTION_INFO_V1(get_global_active_transactions);
 PG_FUNCTION_INFO_V1(get_all_active_transactions);
+PG_FUNCTION_INFO_V1(citus_calculate_gpid);
+PG_FUNCTION_INFO_V1(citus_backend_gpid);
 
 
 /*
@@ -548,7 +549,7 @@ BackendManagementShmemInit(void)
 		pg_atomic_init_u64(&backendManagementShmemData->nextTransactionNumber, 1);
 
 		/* there are no active backends yet, so start with zero */
-		pg_atomic_init_u32(&backendManagementShmemData->activeClientBackendCounter, 0);
+		pg_atomic_init_u32(&backendManagementShmemData->externalClientBackendCounter, 0);
 
 		/*
 		 * We need to init per backend's spinlock before any backend
@@ -882,10 +883,27 @@ GetGlobalPID(void)
 
 
 /*
- * GenerateGlobalPID generates the global process id for the current backend.
+ * citus_calculate_gpid calculates the gpid for any given process on any
+ * given node.
+ */
+Datum
+citus_calculate_gpid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int32 nodeId = PG_GETARG_INT32(0);
+	int32 pid = PG_GETARG_INT32(1);
+
+	PG_RETURN_UINT64(CalculateGlobalPID(nodeId, pid));
+}
+
+
+/*
+ * CalculateGlobalPID gets a nodeId and pid, and returns the global pid
+ * that can be assigned for a process with the given input.
  */
 static uint64
-GenerateGlobalPID(void)
+CalculateGlobalPID(int32 nodeId, pid_t pid)
 {
 	/*
 	 * We try to create a human readable global pid that consists of node id and process id.
@@ -896,7 +914,31 @@ GenerateGlobalPID(void)
 	 * node ids might cause overflow. But even for the applications that scale around 50 nodes every
 	 * day it'd take about 100K years. So we are not worried.
 	 */
-	return (((uint64) GetLocalNodeId()) * GLOBAL_PID_NODE_ID_MULTIPLIER) + getpid();
+	return (((uint64) nodeId) * GLOBAL_PID_NODE_ID_MULTIPLIER) + pid;
+}
+
+
+/*
+ * GenerateGlobalPID generates the global process id for the current backend.
+ * See CalculateGlobalPID for the details.
+ */
+static uint64
+GenerateGlobalPID(void)
+{
+	return CalculateGlobalPID(GetLocalNodeId(), getpid());
+}
+
+
+/*
+ * citus_backend_gpid similar to pg_backend_pid, but returns Citus
+ * assigned gpid.
+ */
+Datum
+citus_backend_gpid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	PG_RETURN_UINT64(GetGlobalPID());
 }
 
 
@@ -1166,36 +1208,37 @@ GetMyProcLocalTransactionId(void)
 
 
 /*
- * GetAllActiveClientBackendCount returns activeClientBackendCounter in
+ * GetExternalClientBackendCount returns externalClientBackendCounter in
  * the shared memory.
  */
 int
-GetAllActiveClientBackendCount(void)
+GetExternalClientBackendCount(void)
 {
 	uint32 activeBackendCount =
-		pg_atomic_read_u32(&backendManagementShmemData->activeClientBackendCounter);
+		pg_atomic_read_u32(&backendManagementShmemData->externalClientBackendCounter);
 
 	return activeBackendCount;
 }
 
 
 /*
- * IncrementClientBackendCounter increments activeClientBackendCounter in
+ * IncrementExternalClientBackendCounter increments externalClientBackendCounter in
  * the shared memory by one.
  */
-void
-IncrementClientBackendCounter(void)
+uint32
+IncrementExternalClientBackendCounter(void)
 {
-	pg_atomic_add_fetch_u32(&backendManagementShmemData->activeClientBackendCounter, 1);
+	return pg_atomic_add_fetch_u32(
+		&backendManagementShmemData->externalClientBackendCounter, 1);
 }
 
 
 /*
- * DecrementClientBackendCounter decrements activeClientBackendCounter in
+ * DecrementExternalClientBackendCounter decrements externalClientBackendCounter in
  * the shared memory by one.
  */
 void
-DecrementClientBackendCounter(void)
+DecrementExternalClientBackendCounter(void)
 {
-	pg_atomic_sub_fetch_u32(&backendManagementShmemData->activeClientBackendCounter, 1);
+	pg_atomic_sub_fetch_u32(&backendManagementShmemData->externalClientBackendCounter, 1);
 }

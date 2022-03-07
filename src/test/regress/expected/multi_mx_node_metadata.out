@@ -860,6 +860,13 @@ NOTICE:  drop cascades to default value for column a of table reference_table
 DROP TABLE ref_table;
 DROP TABLE reference_table;
 TRUNCATE pg_dist_colocation;
+SELECT run_command_on_workers('TRUNCATE pg_dist_colocation');
+        run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"TRUNCATE TABLE")
+ (localhost,57638,t,"TRUNCATE TABLE")
+(2 rows)
+
 SELECT count(*) FROM (SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node) t;
  count
 ---------------------------------------------------------------------

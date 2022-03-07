@@ -1,6 +1,6 @@
 Parsed test spec with 2 sessions
 
-starting permutation: s1-start-session-level-connection s1-worker-begin s1-worker-select s2-coordinator-citus_dist_stat_activity s2-coordinator-citus_worker_stat_activity s1-worker-commit s1-stop-session-level-connection
+starting permutation: s1-start-session-level-connection s1-worker-begin s1-worker-select s2-coordinator-citus_stat_activity s2-coordinator-citus_dist_stat_activity s2-coordinator-citus_stat_activity-in-workers s1-worker-commit s1-stop-session-level-connection
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -30,18 +30,32 @@ run_commands_on_session_level_connection_to_node
 
 (1 row)
 
-step s2-coordinator-citus_dist_stat_activity:
-    SELECT global_pid != 0 FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%' and query NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+step s2-coordinator-citus_stat_activity:
+    SELECT global_pid != 0 FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%' AND query NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 ?column?
 ---------------------------------------------------------------------
 t
 (1 row)
 
-step s2-coordinator-citus_worker_stat_activity:
-    SELECT query FROM citus_worker_stat_activity() WHERE global_pid IN (
-        SELECT global_pid FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%'
+step s2-coordinator-citus_dist_stat_activity:
+    SELECT query FROM citus_dist_stat_activity WHERE global_pid IN (
+        SELECT global_pid FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%'
     )
+    AND query NOT ILIKE '%run_commands_on_session_level_connection_to_node%'
+    ORDER BY 1;
+
+query
+---------------------------------------------------------------------
+SET citus.enable_local_execution TO off; SET citus.force_max_query_parallelization TO ON; SELECT * FROM dist_table
+(1 row)
+
+step s2-coordinator-citus_stat_activity-in-workers:
+    SELECT query FROM citus_stat_activity WHERE global_pid IN (
+        SELECT global_pid FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%'
+    )
+    AND is_worker_query = true
+    AND backend_type = 'client backend'
     ORDER BY 1;
 
 query
@@ -68,13 +82,13 @@ stop_session_level_connection_to_node
 
 (1 row)
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)
 
 
-starting permutation: s1-coordinator-begin s1-coordinator-select s2-coordinator-citus_dist_stat_activity s2-coordinator-citus_worker_stat_activity s2-coordinator-get_all_active_transactions s2-coordinator-get_global_active_transactions s1-coordinator-commit
+starting permutation: s1-coordinator-begin s1-coordinator-select s2-coordinator-citus_stat_activity s2-coordinator-citus_dist_stat_activity s2-coordinator-citus_stat_activity-in-workers s2-coordinator-get_all_active_transactions s2-coordinator-get_global_active_transactions s1-coordinator-commit
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -92,18 +106,36 @@ a|b
 ---------------------------------------------------------------------
 (0 rows)
 
-step s2-coordinator-citus_dist_stat_activity:
-    SELECT global_pid != 0 FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%' and query NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+step s2-coordinator-citus_stat_activity:
+    SELECT global_pid != 0 FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%' AND query NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
 
 ?column?
 ---------------------------------------------------------------------
 t
 (1 row)
 
-step s2-coordinator-citus_worker_stat_activity:
-    SELECT query FROM citus_worker_stat_activity() WHERE global_pid IN (
-        SELECT global_pid FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%'
+step s2-coordinator-citus_dist_stat_activity:
+    SELECT query FROM citus_dist_stat_activity WHERE global_pid IN (
+        SELECT global_pid FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%'
     )
+    AND query NOT ILIKE '%run_commands_on_session_level_connection_to_node%'
+    ORDER BY 1;
+
+query
+---------------------------------------------------------------------
+
+    SET citus.enable_local_execution TO off;
+    SET citus.force_max_query_parallelization TO ON;
+    SELECT * FROM dist_table;
+
+(1 row)
+
+step s2-coordinator-citus_stat_activity-in-workers:
+    SELECT query FROM citus_stat_activity WHERE global_pid IN (
+        SELECT global_pid FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%'
+    )
+    AND is_worker_query = true
+    AND backend_type = 'client backend'
     ORDER BY 1;
 
 query
@@ -116,7 +148,7 @@ SELECT a, b FROM public.dist_table_12345003 dist_table WHERE true
 
 step s2-coordinator-get_all_active_transactions:
     SELECT count(*) FROM get_all_active_transactions() WHERE global_pid IN (
-        SELECT global_pid FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%'
+        SELECT global_pid FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%'
     );
 
 count
@@ -126,7 +158,7 @@ count
 
 step s2-coordinator-get_global_active_transactions:
     SELECT count(*) FROM get_global_active_transactions() WHERE global_pid IN (
-        SELECT global_pid FROM citus_dist_stat_activity() WHERE query LIKE '%SELECT * FROM dist\_table%'
+        SELECT global_pid FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%'
     )
     AND transaction_number != 0;
 
@@ -138,7 +170,7 @@ count
 step s1-coordinator-commit:
     COMMIT;
 
-restore_isolation_tester_func
+citus_remove_node
 ---------------------------------------------------------------------
 
 (1 row)

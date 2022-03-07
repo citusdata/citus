@@ -66,9 +66,9 @@ extern bool MyBackendGotCancelledDueToDeadlock(bool clearState);
 extern bool MyBackendIsInDisributedTransaction(void);
 extern List * ActiveDistributedTransactionNumbers(void);
 extern LocalTransactionId GetMyProcLocalTransactionId(void);
-extern int GetAllActiveClientBackendCount(void);
-extern void IncrementClientBackendCounter(void);
-extern void DecrementClientBackendCounter(void);
+extern int GetExternalClientBackendCount(void);
+extern uint32 IncrementExternalClientBackendCounter(void);
+extern void DecrementExternalClientBackendCounter(void);
 
 extern bool ExecuteRemoteQueryOrCommand(char *nodeName, uint32 nodePort,
 										char *queryString, StringInfo queryResultString,

@@ -129,7 +129,7 @@ SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
 SELECT "Column", "Type", "Definition" FROM index_attrs WHERE
     relid = 'mx_testing_schema.mx_index'::regclass;
 
--- Check that pg_dist_colocation is not synced
+-- Check that pg_dist_colocation is synced
 SELECT * FROM pg_dist_colocation ORDER BY colocationid;
 
 -- Make sure that truncate trigger has been set for the MX table on worker
@@ -544,10 +544,10 @@ DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 -- owner
 CREATE TABLE pg_dist_placement_temp AS SELECT * FROM pg_dist_placement;
 CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
-CREATE TABLE pg_dist_object_temp AS SELECT * FROM citus.pg_dist_object;
+CREATE TABLE pg_dist_object_temp AS SELECT * FROM pg_catalog.pg_dist_object;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_partition;
-DELETE FROM citus.pg_dist_object;
+DELETE FROM pg_catalog.pg_dist_object;
 SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_remove_node('localhost', :worker_2_port);
 
@@ -586,7 +586,7 @@ DROP TABLE mx_table;
 \c - postgres - :master_port
 INSERT INTO pg_dist_placement SELECT * FROM pg_dist_placement_temp;
 INSERT INTO pg_dist_partition SELECT * FROM pg_dist_partition_temp;
-INSERT INTO citus.pg_dist_object SELECT * FROM pg_dist_object_temp ON CONFLICT ON CONSTRAINT pg_dist_object_pkey DO NOTHING;
+INSERT INTO pg_catalog.pg_dist_object SELECT * FROM pg_dist_object_temp ON CONFLICT ON CONSTRAINT pg_dist_object_pkey DO NOTHING;
 DROP TABLE pg_dist_placement_temp;
 DROP TABLE pg_dist_partition_temp;
 DROP TABLE pg_dist_object_temp;
@@ -636,6 +636,9 @@ ORDER BY
  	nodeport;
 
 SELECT shardid AS ref_table_shardid FROM pg_dist_shard WHERE logicalrelid='mx_ref'::regclass \gset
+
+-- make sure we have the pg_dist_colocation record on the worker
+SELECT count(*) FROM pg_dist_colocation WHERE distributioncolumntype = 0;
 
 -- Check that DDL commands are propagated to reference tables on workers
 \c - - - :master_port

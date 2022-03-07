@@ -1955,6 +1955,7 @@ PostprocessAlterTableStmt(AlterTableStmt *alterTableStatement)
 		/* changing a relation could introduce new dependencies */
 		ObjectAddress tableAddress = { 0 };
 		ObjectAddressSet(tableAddress, RelationRelationId, relationId);
+		EnsureRelationDependenciesCanBeDistributed(&tableAddress);
 		EnsureDependenciesExistOnAllNodes(&tableAddress);
 	}
 

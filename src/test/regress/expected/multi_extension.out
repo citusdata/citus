@@ -77,8 +77,6 @@ END
 $func$ LANGUAGE plpgsql;
 CREATE SCHEMA test;
 :create_function_test_maintenance_worker
-WARNING:  Citus can't distribute functions having dependency on unsupported object of type "view"
-DETAIL:  Function will be created only locally
 -- check maintenance daemon is started
 SELECT datname, current_database(),
     usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')
@@ -428,20 +426,20 @@ SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDE
 ALTER EXTENSION citus UPDATE TO '9.4-2';
 -- should see the old source code
 SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
-                                  prosrc
+                               prosrc
 ---------------------------------------------------------------------
-                                                                          +
- DECLARE                                                                  +
-         colocated_tables regclass[];                                     +
- BEGIN                                                                    +
-         SELECT get_colocated_table_array(relation) INTO colocated_tables;+
-         PERFORM                                                          +
-                 master_update_shard_statistics(shardid)                  +
-         FROM                                                             +
-                 pg_dist_shard                                            +
-         WHERE                                                            +
-                 logicalrelid = ANY (colocated_tables);                   +
- END;                                                                     +
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
 
 (1 row)
 
@@ -469,20 +467,20 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 -- should see the old source code
 SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
-                                  prosrc
+                               prosrc
 ---------------------------------------------------------------------
-                                                                          +
- DECLARE                                                                  +
-         colocated_tables regclass[];                                     +
- BEGIN                                                                    +
-         SELECT get_colocated_table_array(relation) INTO colocated_tables;+
-         PERFORM                                                          +
-                 master_update_shard_statistics(shardid)                  +
-         FROM                                                             +
-                 pg_dist_shard                                            +
-         WHERE                                                            +
-                 logicalrelid = ANY (colocated_tables);                   +
- END;                                                                     +
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
 
 (1 row)
 
@@ -494,30 +492,17 @@ SELECT * FROM multi_extension.print_extension_changes();
 
 -- Test downgrade to 9.4-1 from 9.5-1
 ALTER EXTENSION citus UPDATE TO '9.5-1';
-BEGIN;
-  SET citus.enable_metadata_sync TO on;
-  SELECT master_add_node('localhost', :master_port, groupId=>0);
-NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
- master_add_node
----------------------------------------------------------------------
-               1
-(1 row)
-
-  CREATE TABLE citus_local_table (a int);
-  SELECT create_citus_local_table('citus_local_table');
-NOTICE:  create_citus_local_table is deprecated in favour of citus_add_local_table_to_metadata
- create_citus_local_table
----------------------------------------------------------------------
-
-(1 row)
-
-  RESET citus.enable_metadata_sync;
-  -- downgrade from 9.5-1 to 9.4-1 should fail as we have a citus local table
-  ALTER EXTENSION citus UPDATE TO '9.4-1';
-ERROR:  citus local tables are introduced in Citus 9.5
-HINT:  To downgrade Citus to an older version, you should first convert each citus local table to a postgres table by executing SELECT undistribute_table("%s")
-CONTEXT:  PL/pgSQL function inline_code_block line XX at RAISE
-ROLLBACK;
+-- TODO: This test should be moved to a valid downgrade testing suite where the downgrade is done, both on the schema and the binaries. Later changes in Citus made a C vs Schema discrepancy error here
+-- BEGIN;
+--   SET citus.enable_metadata_sync TO on;
+--   SELECT master_add_node('localhost', :master_port, groupId=>0);
+--   CREATE TABLE citus_local_table (a int);
+--   SELECT create_citus_local_table('citus_local_table');
+--   RESET citus.enable_metadata_sync;
+--
+--   -- downgrade from 9.5-1 to 9.4-1 should fail as we have a citus local table
+--   ALTER EXTENSION citus UPDATE TO '9.4-1';
+-- ROLLBACK;
 -- now we can downgrade as there is no citus local table
 ALTER EXTENSION citus UPDATE TO '9.4-1';
 -- Should be empty result since upgrade+downgrade should be a no-op
@@ -578,20 +563,20 @@ SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDE
 ALTER EXTENSION citus UPDATE TO '9.5-2';
 -- should see the old source code
 SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
-                                  prosrc
+                               prosrc
 ---------------------------------------------------------------------
-                                                                          +
- DECLARE                                                                  +
-         colocated_tables regclass[];                                     +
- BEGIN                                                                    +
-         SELECT get_colocated_table_array(relation) INTO colocated_tables;+
-         PERFORM                                                          +
-                 master_update_shard_statistics(shardid)                  +
-         FROM                                                             +
-                 pg_dist_shard                                            +
-         WHERE                                                            +
-                 logicalrelid = ANY (colocated_tables);                   +
- END;                                                                     +
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
 
 (1 row)
 
@@ -619,20 +604,20 @@ SELECT * FROM multi_extension.print_extension_changes();
 ALTER EXTENSION citus UPDATE TO '9.5-1';
 -- should see the old source code
 SELECT prosrc FROM pg_proc WHERE proname = 'master_update_table_statistics' ORDER BY 1;
-                                  prosrc
+                               prosrc
 ---------------------------------------------------------------------
-                                                                          +
- DECLARE                                                                  +
-         colocated_tables regclass[];                                     +
- BEGIN                                                                    +
-         SELECT get_colocated_table_array(relation) INTO colocated_tables;+
-         PERFORM                                                          +
-                 master_update_shard_statistics(shardid)                  +
-         FROM                                                             +
-                 pg_dist_shard                                            +
-         WHERE                                                            +
-                 logicalrelid = ANY (colocated_tables);                   +
- END;                                                                     +
+                                                                   +
+ DECLARE                                                           +
+  colocated_tables regclass[];                                     +
+ BEGIN                                                             +
+  SELECT get_colocated_table_array(relation) INTO colocated_tables;+
+  PERFORM                                                          +
+   master_update_shard_statistics(shardid)                         +
+  FROM                                                             +
+   pg_dist_shard                                                   +
+  WHERE                                                            +
+   logicalrelid = ANY (colocated_tables);                          +
+ END;                                                              +
 
 (1 row)
 
@@ -1004,29 +989,41 @@ SELECT * FROM multi_extension.print_extension_changes();
                                                    previous_object                                                    |                                                            current_object
 ---------------------------------------------------------------------
  function citus_disable_node(text,integer) void                                                                       |
+ function citus_dist_stat_activity() SETOF record                                                                     |
+ function citus_worker_stat_activity() SETOF record                                                                   |
  function create_distributed_function(regprocedure,text,text) void                                                    |
  function master_append_table_to_shard(bigint,text,text,integer) real                                                 |
  function master_apply_delete_command(text) integer                                                                   |
  function master_get_table_metadata(text) record                                                                      |
  function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean) SETOF record |
+ table citus.pg_dist_object                                                                                           |
+ view citus_worker_stat_activity                                                                                      |
+                                                                                                                      | function citus_backend_gpid() bigint
+                                                                                                                      | function citus_calculate_gpid(integer,integer) bigint
                                                                                                                       | function citus_check_cluster_node_health() SETOF record
                                                                                                                       | function citus_check_connection_to_node(text,integer) boolean
                                                                                                                       | function citus_disable_node(text,integer,boolean) void
                                                                                                                       | function citus_finalize_upgrade_to_citus11(boolean) boolean
+                                                                                                                      | function citus_internal_add_colocation_metadata(integer,integer,integer,regtype,oid) void
                                                                                                                       | function citus_internal_add_object_metadata(text,text[],text[],integer,integer,boolean) void
+                                                                                                                      | function citus_internal_delete_colocation_metadata(integer) void
                                                                                                                       | function citus_internal_global_blocked_processes() SETOF record
                                                                                                                       | function citus_internal_local_blocked_processes() SETOF record
                                                                                                                       | function citus_run_local_command(text) void
                                                                                                                       | function citus_shard_indexes_on_worker() SETOF record
                                                                                                                       | function citus_shards_on_worker() SETOF record
+                                                                                                                      | function citus_stat_activity() SETOF record
                                                                                                                       | function create_distributed_function(regprocedure,text,text,boolean) void
                                                                                                                       | function pg_cancel_backend(bigint) boolean
                                                                                                                       | function pg_terminate_backend(bigint,bigint) boolean
+                                                                                                                      | function run_command_on_all_nodes(text,boolean,boolean) SETOF record
                                                                                                                       | function worker_create_or_replace_object(text[]) boolean
                                                                                                                       | function worker_drop_sequence_dependency(text) void
                                                                                                                       | function worker_drop_shell_table(text) void
                                                                                                                       | function worker_partition_query_result(text,text,integer,citus.distribution_type,text[],text[],boolean,boolean,boolean) SETOF record
-(23 rows)
+                                                                                                                      | table pg_dist_object
+                                                                                                                      | view citus_stat_activity
+(35 rows)
 
 DROP TABLE multi_extension.prev_objects, multi_extension.extension_diff;
 -- show running version
@@ -1217,8 +1214,6 @@ HINT:  You can manually create a database and its extensions on workers.
 CREATE EXTENSION citus;
 CREATE SCHEMA test;
 :create_function_test_maintenance_worker
-WARNING:  Citus can't distribute functions having dependency on unsupported object of type "view"
-DETAIL:  Function will be created only locally
 -- see that the daemon started
 SELECT datname, current_database(),
     usename, (SELECT extowner::regrole::text FROM pg_extension WHERE extname = 'citus')

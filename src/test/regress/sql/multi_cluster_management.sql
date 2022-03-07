@@ -46,6 +46,7 @@ SELECT * FROM rebalance_table_shards();
 -- TODO: Figure out why this is necessary, rebalance_table_shards shouldn't
 -- insert stuff into pg_dist_colocation
 TRUNCATE pg_dist_colocation;
+SELECT run_command_on_workers('TRUNCATE pg_dist_colocation');
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1390000;
 
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
@@ -107,8 +108,8 @@ SELECT run_command_on_workers('GRANT ALL ON SCHEMA citus TO node_metadata_user')
 SELECT master_remove_node('localhost', :worker_2_port);
 
 -- Removing public schema from pg_dist_object because it breaks the next tests
-DELETE FROM citus.pg_dist_object WHERE objid = 'public'::regnamespace::oid;
-DELETE FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'plpgsql');
+DELETE FROM pg_catalog.pg_dist_object WHERE objid = 'public'::regnamespace::oid;
+DELETE FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'plpgsql');
 
 -- try to manipulate node metadata via non-super user
 SET ROLE non_super_user;

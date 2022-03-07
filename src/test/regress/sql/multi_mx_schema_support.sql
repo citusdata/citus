@@ -308,7 +308,7 @@ SELECT create_distributed_table('mx_old_schema.table_set_schema', 'id');
 CREATE SCHEMA mx_new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
-    FROM citus.pg_dist_object
+    FROM pg_catalog.pg_dist_object
     WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema')
     ORDER BY "Distributed Schemas";
 \c - - - :worker_1_port
@@ -325,7 +325,7 @@ ALTER SCHEMA mx_old_schema RENAME TO temp_mx_old_schema;
 ALTER TABLE mx_old_schema.table_set_schema SET SCHEMA mx_new_schema;
 
 SELECT objid::oid::regnamespace as "Distributed Schemas"
-    FROM citus.pg_dist_object
+    FROM pg_catalog.pg_dist_object
     WHERE objid::oid::regnamespace IN ('mx_old_schema', 'mx_new_schema');
 \c - - - :worker_1_port
 SELECT table_schema AS "Table's Schema" FROM information_schema.tables WHERE table_name='table_set_schema';

@@ -35,7 +35,7 @@ SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
 SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%propagate_foreign_server.array_agg%';$$);
 
 -- verify that the aggregate is added top pg_dist_object on the new node
-SELECT run_command_on_workers($$SELECT count(*) from citus.pg_dist_object where objid = 'propagate_foreign_server.array_agg'::regproc;$$);
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'propagate_foreign_server.array_agg'::regproc;$$);
 
 SELECT citus_add_local_table_to_metadata('foreign_table');
 ALTER TABLE foreign_table OWNER TO pg_monitor;

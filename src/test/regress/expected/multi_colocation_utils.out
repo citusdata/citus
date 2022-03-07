@@ -2,6 +2,13 @@ SET citus.next_shard_id TO 1300000;
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 4;
 -- Delete orphaned entries from pg_dist_colocation
 DELETE FROM pg_dist_colocation where colocationid = 5 or colocationid = 6;
+SELECT 1 FROM run_command_on_workers('DELETE FROM pg_dist_colocation where colocationid = 5 or colocationid = 6');
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
 -- ===================================================================
 -- create test utility function
 -- ===================================================================
@@ -356,6 +363,13 @@ SELECT count(*) FROM pg_dist_partition WHERE colocationid IN (4, 5);
 (1 row)
 
 DELETE FROM pg_dist_colocation WHERE colocationid IN (4, 5);
+SELECT 1 FROM run_command_on_workers('DELETE FROM pg_dist_colocation WHERE colocationid IN (4, 5)');
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
 SET citus.shard_count = 2;
 CREATE TABLE table1_groupA ( id int );
 SELECT create_distributed_table('table1_groupA', 'id');
@@ -449,6 +463,23 @@ SELECT * FROM pg_dist_colocation
             7 |          8 |                 2 |                     23 |                           0
 (4 rows)
 
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c) ORDER BY colocationid) FROM pg_dist_colocation c
+    WHERE colocationid >= 1 AND colocationid < 1000
+$$);
+ nodeport |                                                               unnest
+---------------------------------------------------------------------
+    57637 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 6, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
+    57637 | {"shardcount": 8, "colocationid": 7, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 6, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
+    57638 | {"shardcount": 8, "colocationid": 7, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+(8 rows)
+
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY logicalrelid;
@@ -472,6 +503,16 @@ SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
             4 |          2 |                 2 |                     23 |                           0
 (1 row)
 
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c)) FROM pg_dist_colocation c WHERE colocationid = 4
+$$);
+ nodeport |                                                              unnest
+---------------------------------------------------------------------
+    57637 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+(2 rows)
+
 -- dropping all tables in a colocation group also deletes the colocation group
 DROP TABLE table2_groupA;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
@@ -479,6 +520,16 @@ SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
 ---------------------------------------------------------------------
             4 |          2 |                 2 |                     23 |                           0
 (1 row)
+
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c)) FROM pg_dist_colocation c WHERE colocationid = 4
+$$);
+ nodeport |                                                              unnest
+---------------------------------------------------------------------
+    57637 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+(2 rows)
 
 -- create dropped colocation group again
 SET citus.shard_count = 2;
@@ -820,6 +871,13 @@ ORDER BY
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
 DELETE FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000;
+SELECT 1 FROM run_command_on_workers('DELETE FROM pg_dist_colocation WHERE colocationid >= 1 AND colocationid < 1000');
+ ?column?
+---------------------------------------------------------------------
+        1
+        1
+(2 rows)
+
 UPDATE pg_dist_partition SET colocationid = 0
     WHERE colocationid >= 1 AND colocationid < 1000;
 -- check metadata
@@ -933,6 +991,25 @@ SELECT * FROM pg_dist_colocation
             5 |          2 |                 2 |                     23 |                           0
 (5 rows)
 
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c) ORDER BY colocationid) FROM pg_dist_colocation c
+    WHERE colocationid >= 1 AND colocationid < 1000
+$$);
+ nodeport |                                                               unnest
+---------------------------------------------------------------------
+    57637 | {"shardcount": 2, "colocationid": 1, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 2, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
+    57637 | {"shardcount": 8, "colocationid": 3, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 1, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 2, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
+    57638 | {"shardcount": 8, "colocationid": 3, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+(10 rows)
+
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
@@ -971,11 +1048,11 @@ SELECT update_distributed_table_colocation('table1_group_none', colocate_with =>
 (1 row)
 
 -- activate nodes to get rid of inconsistencies in pg_dist tables
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table1_group1'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table2_group1'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table3_group2'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table4_group2'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table5_groupX'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table1_group1'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table2_group1'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table3_group2'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table4_group2'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table5_groupX'::regclass::oid, 0);
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------
@@ -1007,6 +1084,25 @@ SELECT * FROM pg_dist_colocation
             4 |          2 |                 2 |                     23 |                           0
             5 |          2 |                 2 |                     23 |                           0
 (5 rows)
+
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c) ORDER BY colocationid) FROM pg_dist_colocation c
+    WHERE colocationid >= 1 AND colocationid < 1000
+$$);
+ nodeport |                                                               unnest
+---------------------------------------------------------------------
+    57637 | {"shardcount": 2, "colocationid": 1, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 2, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
+    57637 | {"shardcount": 8, "colocationid": 3, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57637 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 1, "replicationfactor": 1, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 2, "replicationfactor": 2, "distributioncolumntype": "25", "distributioncolumncollation": "100"}
+    57638 | {"shardcount": 8, "colocationid": 3, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 4, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+    57638 | {"shardcount": 2, "colocationid": 5, "replicationfactor": 2, "distributioncolumntype": "23", "distributioncolumncollation": "0"}
+(10 rows)
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
