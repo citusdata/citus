@@ -666,8 +666,11 @@ ProcessUtilityInternal(PlannedStmt *pstmt,
 		 * MarkObjectDistributedLocally since altering already distributed object won't
 		 * call MarkObjectDistributedLocally but will hit the check here.
 		 */
-		ObjectAddress targetObject = GetObjectAddressFromParseTree(parsetree, false);
-		ErrorIfCircularDependencyExists(&targetObject);
+		if (ops && ops->address)
+		{
+			ObjectAddress targetObject = GetObjectAddressFromParseTree(parsetree, true);
+			ErrorIfCircularDependencyExists(&targetObject);
+		}
 
 		if (ops && ops->postprocess)
 		{
