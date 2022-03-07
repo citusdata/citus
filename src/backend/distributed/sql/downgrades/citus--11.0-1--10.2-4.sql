@@ -1,4 +1,6 @@
 -- citus--11.0-1--10.2-4
+REVOKE SELECT ON pg_catalog.pg_dist_object FROM public;
+ALTER TABLE pg_catalog.pg_dist_object SET SCHEMA citus;
 
 DROP FUNCTION pg_catalog.create_distributed_function(regprocedure, text, text, bool);
 
@@ -124,8 +126,8 @@ DROP VIEW pg_catalog.citus_lock_waits;
 DROP FUNCTION citus_internal_local_blocked_processes;
 DROP FUNCTION citus_internal_global_blocked_processes;
 
-DROP VIEW pg_catalog.citus_dist_stat_activity;
-DROP FUNCTION pg_catalog.citus_dist_stat_activity;
+DROP VIEW IF EXISTS pg_catalog.citus_dist_stat_activity;
+DROP FUNCTION IF EXISTS pg_catalog.citus_dist_stat_activity;
 
 CREATE OR REPLACE FUNCTION pg_catalog.citus_dist_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
                                                     OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
@@ -151,8 +153,8 @@ ALTER VIEW citus.citus_dist_stat_activity SET SCHEMA pg_catalog;
 GRANT SELECT ON pg_catalog.citus_dist_stat_activity TO PUBLIC;
 
 SET search_path = 'pg_catalog';
-DROP VIEW citus_worker_stat_activity;
-DROP FUNCTION citus_worker_stat_activity;
+DROP VIEW IF EXISTS citus_worker_stat_activity;
+DROP FUNCTION IF EXISTS citus_worker_stat_activity;
 
 CREATE OR REPLACE FUNCTION citus_worker_stat_activity(OUT query_hostname text, OUT query_hostport int, OUT distributed_query_host_name text, OUT distributed_query_host_port int,
                                                       OUT transaction_number int8, OUT transaction_stamp timestamptz, OUT datid oid, OUT datname name,
@@ -355,6 +357,7 @@ GRANT SELECT ON pg_catalog.citus_lock_waits TO PUBLIC;
 DROP FUNCTION pg_catalog.citus_finalize_upgrade_to_citus11(bool);
 DROP FUNCTION pg_catalog.citus_calculate_gpid(integer,integer);
 DROP FUNCTION pg_catalog.citus_backend_gpid();
+DROP FUNCTION get_nodeid_for_groupid(integer);
 
 RESET search_path;
 

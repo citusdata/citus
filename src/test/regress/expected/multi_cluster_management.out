@@ -242,8 +242,8 @@ SELECT master_remove_node('localhost', :worker_2_port);
 (1 row)
 
 -- Removing public schema from pg_dist_object because it breaks the next tests
-DELETE FROM citus.pg_dist_object WHERE objid = 'public'::regnamespace::oid;
-DELETE FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'plpgsql');
+DELETE FROM pg_catalog.pg_dist_object WHERE objid = 'public'::regnamespace::oid;
+DELETE FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'plpgsql');
 -- try to manipulate node metadata via non-super user
 SET ROLE non_super_user;
 SELECT 1 FROM master_add_inactive_node('localhost', :worker_2_port + 1);

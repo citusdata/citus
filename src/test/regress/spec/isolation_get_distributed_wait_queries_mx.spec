@@ -1,6 +1,7 @@
 #include "isolation_mx_common.include.spec"
 
 setup {
+	SELECT citus_add_node('localhost', 57636, groupid:=0);
 	CREATE TABLE ref_table(user_id int, value_1 int);
 	SELECT create_reference_table('ref_table');
 	INSERT INTO ref_table VALUES (1, 11), (2, 21), (3, 31), (4, 41), (5, 51), (6, 61), (7, 71);
@@ -17,6 +18,7 @@ teardown
 	DROP TABLE ref_table;
 	DROP TABLE tt1;
 	SELECT citus_internal.restore_isolation_tester_func();
+	SELECT citus_remove_node('localhost', 57636);
 }
 
 session "s1"
@@ -159,7 +161,13 @@ session "s3"
 
 step "s3-select-distributed-waiting-queries"
 {
-	SELECT blocked_statement, current_statement_in_blocking_process, waiting_node_name, blocking_node_name, waiting_node_port, blocking_node_port FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+	SELECT blocked_statement, current_statement_in_blocking_process FROM citus_lock_waits WHERE blocked_statement NOT ILIKE '%run_commands_on_session_level_connection_to_node%' AND current_statement_in_blocking_process NOT ILIKE '%run_commands_on_session_level_connection_to_node%';
+}
+
+// only works for the coordinator
+step "s3-show-actual-gpids"
+{
+	SELECT global_pid > 0 as gpid_exists, query FROM citus_stat_activity WHERE state = 'active' AND query IN (SELECT blocked_statement FROM citus_lock_waits UNION SELECT current_statement_in_blocking_process FROM citus_lock_waits) ORDER BY 1 DESC;
 }
 
 // session s1 and s4 executes the commands on the same worker node
@@ -189,6 +197,59 @@ step "s4-commit-worker"
     SELECT run_commands_on_session_level_connection_to_node('COMMIT');
 }
 
+
+
+// on the coordinator, show that even if a backend is blocked on a DDL as the first command
+// (e.g., as of today global pid has not been assigned), we can still show the blocking activity
+// we use the following 4 sessions 5,6,7,8 for this purpose
+session "s5"
+
+step "s5-begin"
+{
+	BEGIN;
+}
+
+step "s5-alter"
+{
+	ALTER TABLE tt1 ADD COLUMN new_column INT;
+}
+
+step "s5-rollback"
+{
+	ROLLBACK;
+}
+
+session "s6"
+
+step "s6-select"
+{
+	SELECT user_id FROM tt1 ORDER BY user_id DESC LIMIT 1;
+}
+
+session "s7"
+
+step "s7-alter"
+{
+	ALTER TABLE tt1 ADD COLUMN new_column INT;
+}
+
+session "s8"
+
+step "s8-begin"
+{
+	BEGIN;
+}
+
+step "s8-select"
+{
+	SELECT user_id FROM tt1 ORDER BY user_id DESC LIMIT 1;
+}
+
+step "s8-rollback"
+{
+	ROLLBACK;
+}
+
 permutation "s1-begin" "s1-update-ref-table-from-coordinator" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update-ref-table" "s3-select-distributed-waiting-queries" "s1-commit" "s2-commit-worker" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update-ref-table" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update-ref-table" "s3-select-distributed-waiting-queries" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update-dist-table" "s2-start-session-level-connection" "s2-begin-on-worker" "s2-update-dist-table" "s3-select-distributed-waiting-queries" "s1-commit-worker" "s2-commit-worker" "s1-stop-connection" "s2-stop-connection"
@@ -212,3 +273,10 @@ permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update-
 // we can find the blocking relationship
 permutation "s1-start-session-level-connection" "s1-begin-on-worker" "s1-update-dist-table-id-1" "s2-start-session-level-connection" "s2-update-dist-table-id-1" "s3-select-distributed-waiting-queries" "s1-commit-worker" "s1-stop-connection" "s2-stop-connection"
 permutation "s1-begin" "s1-update-ref-table-from-coordinator" "s2-start-session-level-connection" "s2-update-ref-table" "s3-select-distributed-waiting-queries" "s1-commit" "s2-stop-connection"
+
+// show that we can see blocking activity even if these are the first commands in the sessions
+// such that global_pids have not been assigned
+// in the second permutation, s3-show-actual-gpids shows the gpid for ALTER TABLE
+// because ALTER TABLE is not blocked on the parser but during the execution (hence gpid already asssigned)
+"s5-begin" "s5-alter" "s6-select" "s3-select-distributed-waiting-queries" "s3-show-actual-gpids" "s5-rollback"
+"s8-begin" "s8-select" "s7-alter" "s3-select-distributed-waiting-queries" "s3-show-actual-gpids" "s8-rollback"

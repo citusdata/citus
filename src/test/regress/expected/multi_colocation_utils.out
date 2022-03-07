@@ -61,16 +61,6 @@ CREATE FUNCTION find_shard_interval_index(bigint)
     RETURNS int
     AS 'citus'
     LANGUAGE C STRICT;
--- remove tables from pg_dist_partition, if they don't exist i.e not found in pg_class
-delete from pg_dist_partition where not exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid);
-select 1 from run_command_on_workers($$
-    delete from pg_dist_partition where not exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid);$$);
- ?column?
----------------------------------------------------------------------
-        1
-        1
-(2 rows)
-
 -- ===================================================================
 -- test co-location util functions
 -- ===================================================================
@@ -1048,11 +1038,11 @@ SELECT update_distributed_table_colocation('table1_group_none', colocate_with =>
 (1 row)
 
 -- activate nodes to get rid of inconsistencies in pg_dist tables
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table1_group1'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table2_group1'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table3_group2'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table4_group2'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table5_groupX'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table1_group1'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table2_group1'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table3_group2'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table4_group2'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table5_groupX'::regclass::oid, 0);
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
  ?column?
 ---------------------------------------------------------------------

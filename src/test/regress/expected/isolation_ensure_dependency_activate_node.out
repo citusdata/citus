@@ -9,7 +9,7 @@ starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-pub
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -102,7 +102,7 @@ create_distributed_table
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -180,7 +180,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-work
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -279,7 +279,7 @@ step s2-commit:
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -357,7 +357,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-public-s
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -456,7 +456,7 @@ step s1-commit:
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -534,7 +534,7 @@ starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-cre
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -628,7 +628,7 @@ create_distributed_table
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -707,7 +707,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s1-add-work
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -807,7 +807,7 @@ step s2-commit:
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -886,7 +886,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-s
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -986,7 +986,7 @@ step s1-commit:
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1065,7 +1065,7 @@ starting permutation: s1-print-distributed-objects s2-create-schema s1-begin s2-
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1165,7 +1165,7 @@ step s2-commit:
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1244,7 +1244,7 @@ starting permutation: s1-print-distributed-objects s1-add-worker s2-create-schem
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1358,7 +1358,7 @@ step s3-commit:
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1438,7 +1438,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s3-begin s1
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1560,7 +1560,7 @@ step s2-commit:
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1641,7 +1641,7 @@ starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-pub
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1726,7 +1726,7 @@ step s1-commit:
 step s2-create-type: <... completed>
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1804,7 +1804,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1888,7 +1888,7 @@ step s1-commit:
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -1966,7 +1966,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-begin s2-create-s
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -2069,7 +2069,7 @@ step s1-commit:
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -2149,7 +2149,7 @@ starting permutation: s1-print-distributed-objects s1-begin s1-add-worker s2-pub
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -2254,7 +2254,7 @@ wait_until_metadata_sync
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -2332,7 +2332,7 @@ starting permutation: s1-print-distributed-objects s1-begin s2-public-schema s2-
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -2444,7 +2444,7 @@ wait_until_metadata_sync
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -2522,7 +2522,7 @@ starting permutation: s1-print-distributed-objects s2-begin s2-create-schema s2-
 step s1-print-distributed-objects:
     SELECT 1 FROM master_add_node('localhost', 57638);
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
@@ -2635,7 +2635,7 @@ wait_until_metadata_sync
 
 step s2-print-distributed-objects:
     -- print an overview of all distributed objects
-    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM citus.pg_dist_object ORDER BY 1;
+    SELECT pg_identify_object_as_address(classid, objid, objsubid) FROM pg_catalog.pg_dist_object ORDER BY 1;
     -- print if the schema has been created
     SELECT count(*) FROM pg_namespace where nspname = 'myschema';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);

@@ -33,6 +33,8 @@ BEGIN
 END;
 $$;
 SELECT create_distributed_function('notice(text)');
+NOTICE:  procedure function_tests.notice is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -193,7 +195,7 @@ SELECT create_distributed_function('"eq_mi''xed_param_names"(macaddr, macaddr)')
 
 (1 row)
 
-SELECT distribution_argument_index is NULL, colocationid is NULL from citus.pg_dist_object
+SELECT distribution_argument_index is NULL, colocationid is NULL from pg_catalog.pg_dist_object
 WHERE objid = 'eq_mi''xed_param_names(macaddr, macaddr)'::regprocedure;
  ?column? | ?column?
 ---------------------------------------------------------------------
@@ -486,6 +488,8 @@ AS 'select $1 = $2;'
     IMMUTABLE
     RETURNS NULL ON NULL INPUT;
 select create_distributed_function('eq(macaddr,macaddr)');
+NOTICE:  procedure function_tests.eq is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -648,7 +652,7 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', '$1'
 
 -- show that the colocationIds are the same
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects
+FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'eq_with_param_names(macaddr, macaddr)'::regprocedure;
  table_and_function_colocated
@@ -665,7 +669,7 @@ SELECT create_distributed_function('eq_with_param_names(macaddr, macaddr)', 'val
 (1 row)
 
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects
+FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'eq_with_param_names(macaddr, macaddr)'::regprocedure;
  table_and_function_colocated
@@ -700,7 +704,7 @@ SELECT create_distributed_function('eq8(macaddr8, macaddr8)', '$1', colocate_wit
 (1 row)
 
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects
+FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'eq8(macaddr8, macaddr8)'::regprocedure;
  table_and_function_colocated
@@ -715,7 +719,7 @@ SELECT create_distributed_function('add_text(text, text)', '$1', colocate_with:=
 (1 row)
 
 SELECT pg_dist_partition.colocationid = objects.colocationid as table_and_function_colocated
-FROM pg_dist_partition, citus.pg_dist_object as objects
+FROM pg_dist_partition, pg_catalog.pg_dist_object as objects
 WHERE pg_dist_partition.logicalrelid = 'replicated_table_func_test_4'::regclass AND
 	  objects.objid = 'add_text(text, text)'::regprocedure;
  table_and_function_colocated
@@ -797,6 +801,8 @@ BEGIN
 END;
 $$;
 SELECT create_distributed_function('func_with_return_table(int)');
+NOTICE:  procedure function_tests.func_with_return_table is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -824,6 +830,8 @@ CREATE OR REPLACE FUNCTION func_with_out_param(a int, out b int)
   RETURNS int
 LANGUAGE sql AS $$ select 1; $$;
 SELECT create_distributed_function('func_with_out_param(int)');
+NOTICE:  procedure function_tests.func_with_out_param is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -869,6 +877,8 @@ SELECT create_distributed_function('func_with_inout_param(int)');
 ERROR:  function "func_with_inout_param(int)" does not exist
 -- this should work
 SELECT create_distributed_function('func_with_inout_param(int,int)');
+NOTICE:  procedure function_tests.func_with_inout_param is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -893,6 +903,8 @@ CREATE OR REPLACE FUNCTION func_with_variadic_param(a int, variadic b int[])
 LANGUAGE sql AS $$ select 1; $$;
 -- this should work
 SELECT create_distributed_function('func_with_variadic_param(int,int[])');
+NOTICE:  procedure function_tests.func_with_variadic_param is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -923,6 +935,8 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 SELECT create_distributed_function('func_returning_setof_int(date,interval)');
+NOTICE:  procedure function_tests.func_returning_setof_int is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -961,6 +975,8 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 SELECT create_distributed_function('func_returning_setof_int_with_variadic_param(date,int[])');
+NOTICE:  procedure function_tests.func_returning_setof_int_with_variadic_param is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -997,6 +1013,8 @@ SELECT create_distributed_function('proc_with_variadic_param(date)');
 ERROR:  function "proc_with_variadic_param(date)" does not exist
 -- this should work
 SELECT create_distributed_function('proc_with_variadic_param(date,int[])');
+NOTICE:  procedure function_tests.proc_with_variadic_param is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -1028,6 +1046,8 @@ SELECT create_distributed_function('proc_with_inout_param(date)');
 ERROR:  function "proc_with_inout_param(date)" does not exist
 -- this should work
 SELECT create_distributed_function('proc_with_inout_param(date,int)');
+NOTICE:  procedure function_tests.proc_with_inout_param is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 

@@ -55,8 +55,8 @@ extern void UnSetGlobalPID(void);
 extern void AssignDistributedTransactionId(void);
 extern void AssignGlobalPID(void);
 extern uint64 GetGlobalPID(void);
-extern void OverrideBackendDataDistributedCommandOriginator(bool
-															distributedCommandOriginator);
+extern void SetBackendDataDistributedCommandOriginator(bool
+													   distributedCommandOriginator);
 extern uint64 ExtractGlobalPID(char *applicationName);
 extern int ExtractNodeIdFromGlobalPID(uint64 globalPID, bool missingOk);
 extern int ExtractProcessIdFromGlobalPID(uint64 globalPID);

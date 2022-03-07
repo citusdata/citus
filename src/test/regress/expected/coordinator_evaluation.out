@@ -11,6 +11,8 @@ BEGIN
   RETURN localGroupId;
 END; $$ language plpgsql VOLATILE;
 SELECT create_distributed_function('get_local_node_id_volatile()');
+NOTICE:  procedure coordinator_evaluation.get_local_node_id_volatile is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -24,6 +26,8 @@ BEGIN
   RETURN localGroupId;
 END; $$ language plpgsql VOLATILE;
 SELECT create_distributed_function('get_local_node_id_volatile_sum_with_param(int)');
+NOTICE:  procedure coordinator_evaluation.get_local_node_id_volatile_sum_with_param is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 

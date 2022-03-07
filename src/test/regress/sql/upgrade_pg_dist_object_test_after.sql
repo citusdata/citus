@@ -26,4 +26,4 @@ DROP SCHEMA upgrade_basic CASCADE;
 -- will not be marked as distributed
 
 -- see underlying objects
-SELECT i.* FROM citus.pg_dist_object, pg_identify_object_as_address(classid, objid, objsubid) i ORDER BY 1, 2, 3;
+SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid, objid, objsubid) i ORDER BY 1, 2, 3;

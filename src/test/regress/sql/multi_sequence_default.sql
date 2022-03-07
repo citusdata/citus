@@ -418,8 +418,8 @@ CREATE TABLE test_seq_dist(a int, x BIGINT DEFAULT nextval('test_schema_for_sequ
 SELECT create_distributed_table('test_seq_dist', 'a');
 
 -- Both sequence and dependency schema should be distributed
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation.seq_10'::regclass);
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation'::regnamespace);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation.seq_10'::regclass);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation'::regnamespace);
 
 -- Show that sequence can stay on the worker node if the transaction is
 -- rollbacked after distributing the table

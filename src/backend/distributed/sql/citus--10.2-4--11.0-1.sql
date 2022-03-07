@@ -22,26 +22,29 @@
 #include "udfs/citus_internal_local_blocked_processes/11.0-1.sql"
 #include "udfs/citus_internal_global_blocked_processes/11.0-1.sql"
 
-#include "udfs/citus_worker_stat_activity/11.0-1.sql"
+#include "udfs/run_command_on_all_nodes/11.0-1.sql"
+#include "udfs/citus_stat_activity/11.0-1.sql"
+
 #include "udfs/worker_create_or_replace_object/11.0-1.sql"
 #include "udfs/citus_isolation_test_session_is_blocked/11.0-1.sql"
 #include "udfs/citus_blocking_pids/11.0-1.sql"
 #include "udfs/citus_calculate_gpid/11.0-1.sql"
 #include "udfs/citus_backend_gpid/11.0-1.sql"
 
-CREATE VIEW citus.citus_worker_stat_activity AS
-SELECT * FROM pg_catalog.citus_worker_stat_activity();
-ALTER VIEW citus.citus_worker_stat_activity SET SCHEMA pg_catalog;
-GRANT SELECT ON pg_catalog.citus_worker_stat_activity TO PUBLIC;
-
+DROP FUNCTION IF EXISTS pg_catalog.citus_dist_stat_activity() CASCADE;
+DROP FUNCTION IF EXISTS pg_catalog.citus_worker_stat_activity() CASCADE;
 #include "udfs/citus_dist_stat_activity/11.0-1.sql"
 
-CREATE VIEW citus.citus_dist_stat_activity AS
-SELECT * FROM pg_catalog.citus_dist_stat_activity();
-ALTER VIEW citus.citus_dist_stat_activity SET SCHEMA pg_catalog;
-GRANT SELECT ON pg_catalog.citus_dist_stat_activity TO PUBLIC;
+-- a very simple helper function defined for citus_lock_waits
+CREATE OR REPLACE FUNCTION get_nodeid_for_groupid(groupIdInput int) RETURNS int AS $$
+DECLARE
+	returnNodeNodeId int := 0;
+begin
+	SELECT nodeId into returnNodeNodeId FROM pg_dist_node WHERE groupid = groupIdInput and nodecluster = current_setting('citus.cluster_name');
+	RETURN returnNodeNodeId;
+end
+$$ LANGUAGE plpgsql;
 
--- we have to recreate this view because recreated citus_dist_stat_activity that this view depends
 #include "udfs/citus_lock_waits/11.0-1.sql"
 
 #include "udfs/pg_cancel_backend/11.0-1.sql"
@@ -87,5 +90,7 @@ $$;
 
 #include "udfs/citus_finalize_upgrade_to_citus11/11.0-1.sql"
 
-#include "udfs/run_command_on_all_nodes/11.0-1.sql"
-#include "udfs/citus_stat_activity/11.0-1.sql"
+ALTER TABLE citus.pg_dist_object SET SCHEMA pg_catalog;
+GRANT SELECT ON pg_catalog.pg_dist_object TO public;
+#include "udfs/citus_prepare_pg_upgrade/11.0-1.sql"
+#include "udfs/citus_finish_pg_upgrade/11.0-1.sql"

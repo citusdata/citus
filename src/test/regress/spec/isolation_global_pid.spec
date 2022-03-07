@@ -69,18 +69,20 @@ step "s2-coordinator-citus_stat_activity"
 
 step "s2-coordinator-citus_dist_stat_activity"
 {
-    SELECT query FROM citus_dist_stat_activity() WHERE global_pid IN (
+    SELECT query FROM citus_dist_stat_activity WHERE global_pid IN (
         SELECT global_pid FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%'
     )
     AND query NOT ILIKE '%run_commands_on_session_level_connection_to_node%'
     ORDER BY 1;
 }
 
-step "s2-coordinator-citus_worker_stat_activity"
+step "s2-coordinator-citus_stat_activity-in-workers"
 {
-    SELECT query FROM citus_worker_stat_activity() WHERE global_pid IN (
+    SELECT query FROM citus_stat_activity WHERE global_pid IN (
         SELECT global_pid FROM citus_stat_activity WHERE query LIKE '%SELECT * FROM dist\_table%'
     )
+    AND is_worker_query = true
+    AND backend_type = 'client backend'
     ORDER BY 1;
 }
 
@@ -101,7 +103,7 @@ step "s2-coordinator-get_global_active_transactions"
 
 
 // worker - coordinator
-permutation "s1-start-session-level-connection" "s1-worker-begin" "s1-worker-select" "s2-coordinator-citus_stat_activity" "s2-coordinator-citus_dist_stat_activity" "s2-coordinator-citus_worker_stat_activity" "s1-worker-commit" "s1-stop-session-level-connection"
+permutation "s1-start-session-level-connection" "s1-worker-begin" "s1-worker-select" "s2-coordinator-citus_stat_activity" "s2-coordinator-citus_dist_stat_activity" "s2-coordinator-citus_stat_activity-in-workers" "s1-worker-commit" "s1-stop-session-level-connection"
 
 // coordinator - coordinator
-permutation "s1-coordinator-begin" "s1-coordinator-select" "s2-coordinator-citus_stat_activity" "s2-coordinator-citus_dist_stat_activity" "s2-coordinator-citus_worker_stat_activity" "s2-coordinator-get_all_active_transactions" "s2-coordinator-get_global_active_transactions" "s1-coordinator-commit"
+permutation "s1-coordinator-begin" "s1-coordinator-select" "s2-coordinator-citus_stat_activity" "s2-coordinator-citus_dist_stat_activity" "s2-coordinator-citus_stat_activity-in-workers" "s2-coordinator-get_all_active_transactions" "s2-coordinator-get_global_active_transactions" "s1-coordinator-commit"

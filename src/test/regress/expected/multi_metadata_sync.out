@@ -62,8 +62,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
                                                                                                                                                                                                                                                                      unnest
 ---------------------------------------------------------------------
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
- DELETE FROM citus.pg_dist_object
  DELETE FROM pg_catalog.pg_dist_colocation
+ DELETE FROM pg_catalog.pg_dist_object
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -131,8 +131,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  ALTER TABLE public.mx_test_table OWNER TO postgres
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM citus.pg_dist_object
  DELETE FROM pg_catalog.pg_dist_colocation
+ DELETE FROM pg_catalog.pg_dist_object
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -180,8 +180,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE INDEX mx_index ON public.mx_test_table USING btree (col_2)
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE public.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('public.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM citus.pg_dist_object
  DELETE FROM pg_catalog.pg_dist_colocation
+ DELETE FROM pg_catalog.pg_dist_object
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -231,8 +231,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM citus.pg_dist_object
  DELETE FROM pg_catalog.pg_dist_colocation
+ DELETE FROM pg_catalog.pg_dist_object
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -288,8 +288,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM citus.pg_dist_object
  DELETE FROM pg_catalog.pg_dist_colocation
+ DELETE FROM pg_catalog.pg_dist_object
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -338,8 +338,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE SCHEMA IF NOT EXISTS mx_testing_schema AUTHORIZATION postgres
  CREATE SCHEMA IF NOT EXISTS public AUTHORIZATION postgres
  CREATE TABLE mx_testing_schema.mx_test_table (col_1 integer, col_2 text NOT NULL, col_3 bigint DEFAULT nextval('mx_testing_schema.mx_test_table_col_3_seq'::regclass) NOT NULL, col_4 bigint DEFAULT nextval('public.user_defined_seq'::regclass))
- DELETE FROM citus.pg_dist_object
  DELETE FROM pg_catalog.pg_dist_colocation
+ DELETE FROM pg_catalog.pg_dist_object
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement
@@ -1379,10 +1379,10 @@ DROP TABLE mx_table_with_small_sequence, mx_table_with_sequence;
 -- owner
 CREATE TABLE pg_dist_placement_temp AS SELECT * FROM pg_dist_placement;
 CREATE TABLE pg_dist_partition_temp AS SELECT * FROM pg_dist_partition;
-CREATE TABLE pg_dist_object_temp AS SELECT * FROM citus.pg_dist_object;
+CREATE TABLE pg_dist_object_temp AS SELECT * FROM pg_catalog.pg_dist_object;
 DELETE FROM pg_dist_placement;
 DELETE FROM pg_dist_partition;
-DELETE FROM citus.pg_dist_object;
+DELETE FROM pg_catalog.pg_dist_object;
 SELECT groupid AS old_worker_2_group FROM pg_dist_node WHERE nodeport = :worker_2_port \gset
 SELECT master_remove_node('localhost', :worker_2_port);
  master_remove_node
@@ -1459,7 +1459,7 @@ DROP TABLE mx_table;
 \c - postgres - :master_port
 INSERT INTO pg_dist_placement SELECT * FROM pg_dist_placement_temp;
 INSERT INTO pg_dist_partition SELECT * FROM pg_dist_partition_temp;
-INSERT INTO citus.pg_dist_object SELECT * FROM pg_dist_object_temp ON CONFLICT ON CONSTRAINT pg_dist_object_pkey DO NOTHING;
+INSERT INTO pg_catalog.pg_dist_object SELECT * FROM pg_dist_object_temp ON CONFLICT ON CONSTRAINT pg_dist_object_pkey DO NOTHING;
 DROP TABLE pg_dist_placement_temp;
 DROP TABLE pg_dist_partition_temp;
 DROP TABLE pg_dist_object_temp;
@@ -1875,8 +1875,8 @@ SELECT unnest(activate_node_snapshot()) order by 1;
  CREATE TABLE public.dist_table_1 (a integer)
  CREATE TABLE public.mx_ref (col_1 integer, col_2 text)
  CREATE TABLE public.test_table (id integer DEFAULT worker_nextval('public.mx_test_sequence_0'::regclass), id2 integer DEFAULT worker_nextval('public.mx_test_sequence_1'::regclass))
- DELETE FROM citus.pg_dist_object
  DELETE FROM pg_catalog.pg_dist_colocation
+ DELETE FROM pg_catalog.pg_dist_object
  DELETE FROM pg_dist_node
  DELETE FROM pg_dist_partition
  DELETE FROM pg_dist_placement

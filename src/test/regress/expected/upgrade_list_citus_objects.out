@@ -53,7 +53,6 @@ ORDER BY 1;
  function citus_dist_partition_cache_invalidate()
  function citus_dist_placement_cache_invalidate()
  function citus_dist_shard_cache_invalidate()
- function citus_dist_stat_activity()
  function citus_drain_node(text,integer,citus.shard_transfer_mode,name)
  function citus_drop_all_shards(regclass,text,text,boolean)
  function citus_drop_trigger()
@@ -121,7 +120,6 @@ ORDER BY 1;
  function citus_update_table_statistics(regclass)
  function citus_validate_rebalance_strategy_functions(regproc,regproc,regproc)
  function citus_version()
- function citus_worker_stat_activity()
  function column_name_to_column(regclass,text)
  function column_to_column_name(regclass,text)
  function columnar.columnar_handler(internal)
@@ -148,6 +146,7 @@ ORDER BY 1;
  function get_current_transaction_id()
  function get_global_active_transactions()
  function get_missing_time_partition_ranges(regclass,interval,timestamp with time zone,timestamp with time zone)
+ function get_nodeid_for_groupid(integer)
  function get_rebalance_progress()
  function get_rebalance_table_shards_plan(regclass,real,integer,bigint[],boolean,name,real)
  function get_shard_id_for_distribution_column(regclass,"any")
@@ -249,7 +248,6 @@ ORDER BY 1;
  sequence pg_dist_node_nodeid_seq
  sequence pg_dist_placement_placementid_seq
  sequence pg_dist_shardid_seq
- table citus.pg_dist_object
  table columnar.chunk
  table columnar.chunk_group
  table columnar.options
@@ -259,6 +257,7 @@ ORDER BY 1;
  table pg_dist_local_group
  table pg_dist_node
  table pg_dist_node_metadata
+ table pg_dist_object
  table pg_dist_partition
  table pg_dist_placement
  table pg_dist_poolinfo
@@ -277,8 +276,7 @@ ORDER BY 1;
  view citus_shards_on_worker
  view citus_stat_activity
  view citus_stat_statements
- view citus_worker_stat_activity
  view pg_dist_shard_placement
  view time_partitions
-(264 rows)
+(262 rows)
 
