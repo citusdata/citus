@@ -769,12 +769,22 @@ RecreateExtensionStmt(Oid extensionOid)
 
 	/* make DefEleme for extensionSchemaName */
 	Node *schemaNameArg = (Node *) makeString(extensionSchemaName);
-
 	DefElem *schemaDefElement = makeDefElem("schema", schemaNameArg, location);
 
 	/* append the schema name DefElem finally */
 	createExtensionStmt->options = lappend(createExtensionStmt->options,
 										   schemaDefElement);
+
+	char *extensionVersion = get_extension_version(extensionOid);
+	if (extensionVersion != NULL)
+	{
+		Node *extensionVersionArg = (Node *) makeString(extensionVersion);
+		DefElem *extensionVersionElement =
+			makeDefElem("new_version", extensionVersionArg, location);
+
+		createExtensionStmt->options = lappend(createExtensionStmt->options,
+											   extensionVersionElement);
+	}
 
 	return (Node *) createExtensionStmt;
 }
