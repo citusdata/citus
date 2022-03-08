@@ -190,6 +190,9 @@ class PostgresConfig(CitusDefaultClusterConfig):
         super().__init__(arguments)
         self.worker_amount = 0
         self.is_citus = False
+        self.new_settings = {
+            "citus.use_citus_managed_tables": False,
+        }
 
 
 class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
