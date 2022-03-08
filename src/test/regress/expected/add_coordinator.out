@@ -1,6 +1,13 @@
 --
 -- ADD_COORDINATOR
 --
+-- node trying to add itself without specifying groupid => 0 should error out
+SELECT master_add_node('localhost', :master_port);
+ERROR:  Node cannot add itself as a worker.
+HINT:  Either add the node as a coordinator by using one of
+- SELECT citus_add_node(localhost, xxxxx, groupid => 0)
+- SELECT citus_set_coordinator_host(localhost, xxxxx)
+OR add another node as worker.
 SELECT master_add_node('localhost', :master_port, groupid => 0) AS master_nodeid \gset
 NOTICE:  localhost:xxxxx is the coordinator and already contains metadata, skipping syncing the metadata
 -- adding the same node again should return the existing nodeid
