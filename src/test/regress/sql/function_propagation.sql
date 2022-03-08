@@ -45,6 +45,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Have a separate check for type created in transaction
 BEGIN;
+    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE TYPE function_prop_type_3 AS (a int, b int);
 COMMIT;
 
@@ -132,7 +133,6 @@ BEGIN;
     END;
     $$;
 
-    -- Within transaction functions are not distributed
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
 COMMIT;

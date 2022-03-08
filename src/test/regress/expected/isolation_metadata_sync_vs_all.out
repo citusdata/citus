@@ -253,8 +253,8 @@ start_metadata_sync_to_node
 (1 row)
 
 step s2-create-schema:
- CREATE SCHEMA dist_schema
-  CREATE TABLE dist_table_in_schema(id int, data int);
+ CREATE SCHEMA dist_schema;
+ CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
  SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
  <waiting ...>
 step s1-commit: 
@@ -290,7 +290,7 @@ step s3-compare-snapshot:
 
 same_metadata_in_workers
 ---------------------------------------------------------------------
-t
+f
 (1 row)
 
 step s2-drop-schema:
@@ -299,8 +299,8 @@ step s2-drop-schema:
 
 starting permutation: s2-create-schema s1-begin s2-begin s1-start-metadata-sync s2-drop-schema s1-commit s2-commit s3-compare-snapshot
 step s2-create-schema:
- CREATE SCHEMA dist_schema
-  CREATE TABLE dist_table_in_schema(id int, data int);
+ CREATE SCHEMA dist_schema;
+ CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
  SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
 
 create_distributed_table
@@ -1017,8 +1017,8 @@ t
 
 starting permutation: s2-create-schema s1-begin s2-begin s2-drop-schema s1-start-metadata-sync s2-commit s1-commit s3-compare-snapshot
 step s2-create-schema:
- CREATE SCHEMA dist_schema
-  CREATE TABLE dist_table_in_schema(id int, data int);
+ CREATE SCHEMA dist_schema;
+ CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
  SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
 
 create_distributed_table
@@ -1154,10 +1154,11 @@ start_metadata_sync_to_node
 
 step s2-create-type:
  CREATE TYPE my_type AS (a int, b int);
-
-step s1-commit:
+ <waiting ...>
+step s1-commit: 
     COMMIT;
 
+step s2-create-type: <... completed>
 step s2-commit:
  COMMIT;
 

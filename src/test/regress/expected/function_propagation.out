@@ -92,6 +92,7 @@ SELECT * FROM run_command_on_workers($$SELECT pg_identify_object_as_address(clas
 
 -- Have a separate check for type created in transaction
 BEGIN;
+    SET LOCAL citus.create_object_propagation TO deferred;
     CREATE TYPE function_prop_type_3 AS (a int, b int);
 COMMIT;
 -- Objects in the body part is not found as dependency
@@ -209,16 +210,17 @@ BEGIN;
         return 1;
     END;
     $$;
-    -- Within transaction functions are not distributed
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.type_in_transaction'::regtype::oid;
- pg_identify_object_as_address
+                pg_identify_object_as_address
 ---------------------------------------------------------------------
-(0 rows)
+ (type,{function_propagation_schema.type_in_transaction},{})
+(1 row)
 
     SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object where objid = 'function_propagation_schema.func_in_transaction'::regproc::oid;
- pg_identify_object_as_address
+                                          pg_identify_object_as_address
 ---------------------------------------------------------------------
-(0 rows)
+ (function,"{function_propagation_schema,func_in_transaction}",{function_propagation_schema.type_in_transaction})
+(1 row)
 
 COMMIT;
 -- Show that recreating it outside transaction distributes the function and dependencies
