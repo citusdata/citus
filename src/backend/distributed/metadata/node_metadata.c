@@ -279,7 +279,9 @@ citus_add_node(PG_FUNCTION_ARGS)
 		 * If the worker is not marked as a coordinator, check that
 		 * the node is not trying to add itself
 		 */
-		if (workerNode->groupId != 0 && IsWorkerTheCurrentNode(workerNode))
+		if (workerNode != NULL &&
+			workerNode->groupId != 0 &&
+			IsWorkerTheCurrentNode(workerNode))
 		{
 			ereport(ERROR, (errmsg("Node cannot add itself as a worker."),
 							errhint(

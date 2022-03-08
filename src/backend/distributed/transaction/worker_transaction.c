@@ -667,6 +667,11 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	PGresult *result = GetRemoteCommandResult(workerConnection, true);
 	List *commandResult = ReadFirstColumnAsText(result);
 
+	if (commandResult == NIL)
+	{
+		return false;
+	}
+
 	StringInfo resultInfo = (StringInfo) linitial(commandResult);
 	char *workerServerId = resultInfo->data;
 
@@ -676,7 +681,7 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	Datum metadata = DistNodeMetadata();
 	text *currentServerIdTextP = ExtractFieldTextP(metadata, "server_id");
 
-	if (!currentServerIdTextP)
+	if (currentServerIdTextP == NULL)
 	{
 		return false;
 	}

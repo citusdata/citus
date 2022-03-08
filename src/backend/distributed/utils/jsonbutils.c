@@ -79,7 +79,7 @@ bool
 ExtractFieldBoolean(Datum jsonbDoc, const char *fieldName, bool defaultValue)
 {
 	Datum jsonbDatum = 0;
-	bool found = ExtractFieldJsonbDatum(jsonbDoc, fieldName, &jsonbDatum);
+	bool found = ExtractFieldJsonb(jsonbDoc, fieldName, &jsonbDatum, false);
 	if (!found)
 	{
 		return defaultValue;

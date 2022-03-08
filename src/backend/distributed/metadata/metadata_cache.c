@@ -2727,6 +2727,9 @@ JsonbExtractPathFuncId(void)
 }
 
 
+/*
+ * JsonbExtractPathTextFuncId returns oid of the jsonb_extract_path_text function.
+ */
 Oid
 JsonbExtractPathTextFuncId(void)
 {
