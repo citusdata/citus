@@ -742,60 +742,11 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 
 
 /*
- * EnsureRelationDependenciesCanBeDistributed ensures all dependencies of the relation
- * can be distributed.
- */
-void
-EnsureRelationDependenciesCanBeDistributed(ObjectAddress *relationAddress)
-{
-	ObjectAddress *undistributableDependency =
-		GetUndistributableDependency(relationAddress);
-
-	if (undistributableDependency != NULL)
-	{
-		char *tableName = get_rel_name(relationAddress->objectId);
-
-		if (SupportedDependencyByCitus(undistributableDependency))
-		{
-			/*
-			 * Citus can't distribute some relations as dependency, although those
-			 * types as supported by Citus. So we can use get_rel_name directly
-			 *
-			 * For now the relations are the only type that is supported by Citus
-			 * but can not be distributed as dependency, though we've added an
-			 * explicit check below as well to not to break the logic here in case
-			 * GetUndistributableDependency changes.
-			 */
-			if (getObjectClass(undistributableDependency) == OCLASS_CLASS)
-			{
-				char *dependentRelationName = get_rel_name(
-					undistributableDependency->objectId);
-
-				ereport(ERROR, (errmsg("Relation \"%s\" has dependency to a table"
-									   " \"%s\" that is not in Citus' metadata",
-									   tableName, dependentRelationName),
-								errhint("Distribute dependent relation first.")));
-			}
-		}
-
-		char *objectType = NULL;
-		#if PG_VERSION_NUM >= PG_VERSION_14
-		objectType = getObjectDescription(undistributableDependency, false);
-		#else
-		objectType = getObjectDescription(undistributableDependency);
-		#endif
-		ereport(ERROR, (errmsg("Relation \"%s\" has dependency on unsupported "
-							   "object \"%s\"", tableName, objectType)));
-	}
-}
-
-
-/*
  * GetUndistributableDependency checks whether object has any non-distributable
  * dependency. If any one found, it will be returned.
  */
 ObjectAddress *
-GetUndistributableDependency(ObjectAddress *objectAddress)
+GetUndistributableDependency(const ObjectAddress *objectAddress)
 {
 	List *dependencies = GetAllDependenciesForObject(objectAddress);
 	ObjectAddress *dependency = NULL;

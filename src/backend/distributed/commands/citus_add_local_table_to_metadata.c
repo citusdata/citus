@@ -318,7 +318,6 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * Ensure dependencies exist as we will create shell table on the other nodes
 	 * in the MX case.
 	 */
-	EnsureRelationDependenciesCanBeDistributed(&tableAddress);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/*

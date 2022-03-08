@@ -31,6 +31,7 @@
 
 typedef bool (*AddressPredicate)(const ObjectAddress *);
 
+static void EnsureDependenciesCanBeDistributed(const ObjectAddress *relationAddress);
 static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
@@ -58,11 +59,10 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 	List *ddlCommands = NULL;
 
 	/*
-	 * Having circular dependency between distributed objects prevents Citus from
-	 * adding a new node. So, error out if circular dependency exists for the given
-	 * target object.
+	 * If there is any unsupported dependency or circular dependency exists, Citus can
+	 * not ensure dependencies will exist on all nodes.
 	 */
-	ErrorIfCircularDependencyExists(target);
+	EnsureDependenciesCanBeDistributed(target);
 
 	/* collect all dependencies in creation order and get their ddl commands */
 	List *dependencies = GetDependenciesForObject(target);
@@ -139,6 +139,61 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 		 * Metadata of the table itself must be propagated with the current user.
 		 */
 		MarkObjectDistributedViaSuperUser(dependency);
+	}
+}
+
+
+/*
+ * EnsureDependenciesCanBeDistributed ensures all dependencies of the given object
+ * can be distributed.
+ */
+static void
+EnsureDependenciesCanBeDistributed(const ObjectAddress *objectAddress)
+{
+	/* If an object circularcly depends to itself, Citus can not handle it */
+	ErrorIfCircularDependencyExists(objectAddress);
+
+	/* If any of the dependency of the object can not be distributed, error out */
+	ObjectAddress *undistributableDependency = GetUndistributableDependency(
+		objectAddress);
+	if (undistributableDependency != NULL)
+	{
+		if (SupportedDependencyByCitus(undistributableDependency))
+		{
+			/*
+			 * Citus can't distribute some relations as dependency, although those
+			 * types as supported by Citus. So we can use get_rel_name directly
+			 *
+			 * For now the relations are the only type that is supported by Citus
+			 * but can not be distributed as dependency, though we've added an
+			 * explicit check below as well to not to break the logic here in case
+			 * GetUndistributableDependency changes.
+			 */
+			if (getObjectClass(undistributableDependency) == OCLASS_CLASS)
+			{
+				char *tableName = get_rel_name(objectAddress->objectId);
+				char *dependentRelationName = get_rel_name(
+					undistributableDependency->objectId);
+
+				ereport(ERROR, (errmsg("Relation \"%s\" has dependency to a table"
+									   " \"%s\" that is not in Citus' metadata",
+									   tableName, dependentRelationName),
+								errhint("Distribute dependent relation first.")));
+			}
+		}
+
+		char *dependencyDescription = NULL;
+		char *objectDescription = NULL;
+		#if PG_VERSION_NUM >= PG_VERSION_14
+		dependencyDescription = getObjectDescription(undistributableDependency, false);
+		objectDescription = getObjectDescription(objectAddress, false);
+		#else
+		dependencyDescription = getObjectDescription(undistributableDependency);
+		objectDescription = getObjectDescription(objectAddress);
+		#endif
+		ereport(ERROR, (errmsg("Object \"%s\" has dependency on unsupported "
+							   "object \"%s\"", objectDescription,
+							   dependencyDescription)));
 	}
 }
 

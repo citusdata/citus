@@ -21,8 +21,7 @@ extern List * GetUniqueDependenciesList(List *objectAddressesList);
 extern List * GetDependenciesForObject(const ObjectAddress *target);
 extern List * GetAllSupportedDependenciesForObject(const ObjectAddress *target);
 extern List * GetAllDependenciesForObject(const ObjectAddress *target);
-extern void EnsureRelationDependenciesCanBeDistributed(ObjectAddress *relationAddress);
-extern ObjectAddress * GetUndistributableDependency(ObjectAddress *target);
+extern ObjectAddress * GetUndistributableDependency(const ObjectAddress *target);
 extern List * OrderObjectAddressListInDependencyOrder(List *objectAddressList);
 extern bool SupportedDependencyByCitus(const ObjectAddress *address);
 extern List * GetPgDependTuplesForDependingObjects(Oid targetObjectClassId,

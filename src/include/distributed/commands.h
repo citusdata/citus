@@ -267,7 +267,6 @@ extern List * PreprocessCreateFunctionStmt(Node *stmt, const char *queryString,
 										   ProcessUtilityContext processUtilityContext);
 extern List * PostprocessCreateFunctionStmt(Node *stmt,
 											const char *queryString);
-extern ObjectAddress * GetUndistributableDependency(ObjectAddress *functionAddress);
 extern ObjectAddress CreateFunctionStmtObjectAddress(Node *stmt,
 													 bool missing_ok);
 extern ObjectAddress DefineAggregateStmtObjectAddress(Node *stmt,
