@@ -12,3 +12,5 @@ select max(z)<nextval('seq_0') as check_sanity from seq_test_0 ;
  check_sanity
 ---------------------------------------------------------------------
  t
+(1 row)
+
