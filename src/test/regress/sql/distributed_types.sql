@@ -329,6 +329,12 @@ SELECT create_distributed_table('immediate_table', 'a');
 SHOW citus.multi_shard_modify_mode;
 COMMIT;
 
+-- Show that PG does not allow adding a circular dependency btw types
+-- We added here to make sure we can catch it if PG changes it's behaviour
+CREATE TYPE circ_type1 AS (a int);
+CREATE TYPE circ_type2 AS (a int, b circ_type1);
+ALTER TYPE circ_type1 ADD ATTRIBUTE b circ_type2;
+
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

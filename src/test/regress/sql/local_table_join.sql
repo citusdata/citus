@@ -43,7 +43,10 @@ CREATE FOREIGN DATA WRAPPER fake_fdw_1 HANDLER fake_fdw_handler;
 SELECT run_command_on_workers($$
     CREATE FOREIGN DATA WRAPPER fake_fdw_1 HANDLER fake_fdw_handler;
 $$);
+-- Since we are assuming fdw should be part of the extension, add it manually.
+ALTER EXTENSION citus ADD FOREIGN DATA WRAPPER fake_fdw_1;
 CREATE SERVER fake_fdw_server_1 FOREIGN DATA WRAPPER fake_fdw_1;
+ALTER EXTENSION citus DROP FOREIGN DATA WRAPPER fake_fdw_1;
 
 CREATE FOREIGN TABLE foreign_table (
   key int,
