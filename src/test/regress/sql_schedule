@@ -6,3 +6,4 @@ test: intermediate_result_pruning_queries_1 intermediate_result_pruning_queries_
 test: dropped_columns_1 distributed_planning
 test: local_dist_join
 test: connectivity_checks citus_run_command
+test: sequences

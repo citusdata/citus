@@ -1,20 +1,24 @@
-CREATE SCHEMA sequences_schema;
 SET search_path TO sequences_schema;
 
-CREATE SEQUENCE seq_0;
-CREATE SEQUENCE seq_0_local_table;
-ALTER SEQUENCE seq_0 AS smallint;
+INSERT INTO seq_test_0 VALUES (1,2) RETURNING *;
+INSERT INTO seq_test_0_local_table VALUES (1,2) RETURNING *;
 
-CREATE TABLE seq_test_0 (x int, y int);
-CREATE TABLE seq_test_0_local_table (x int, y int);
-SELECT create_distributed_table('seq_test_0','x');
+ALTER SEQUENCE seq_0 RENAME TO sequence_0;
+ALTER SEQUENCE seq_0_local_table RENAME TO sequence_0_local_table;
 
-INSERT INTO seq_test_0 SELECT 1, s FROM generate_series(1, 50) s;
-INSERT INTO seq_test_0_local_table SELECT 1, s FROM generate_series(1, 50) s;
-SELECT * FROM seq_test_0 ORDER BY 1, 2 LIMIT 5;
+-- see the renamed sequence objects
+select * from pg_sequence where seqrelid = 'sequence_0'::regclass;
+select * from pg_sequence where seqrelid = 'sequence_0_local_table'::regclass;
 
-ALTER TABLE seq_test_0_local_table ADD COLUMN z int;
-ALTER TABLE seq_test_0_local_table ALTER COLUMN z SET DEFAULT nextval('seq_0_local_table');
-SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
+ALTER SEQUENCE sequence_0 OWNED BY seq_test_0.x;
+ALTER SEQUENCE sequence_0_local_table OWNED BY seq_test_0_local_table.x;
+
+-- dropping the tables should cascade to sequence objects
+DROP TABLE seq_test_0 CASCADE;
+DROP TABLE seq_test_0_local_table CASCADE;
+
+-- verify dropped
+select * from pg_sequence where seqrelid = 'sequence_0'::regclass;
+select * from pg_sequence where seqrelid = 'sequence_0_local_table'::regclass;
 
 DROP SCHEMA sequences_schema CASCADE;
