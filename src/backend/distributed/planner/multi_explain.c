@@ -1485,7 +1485,19 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
 		Form_pg_attribute attr = &tupleDesc->attrs[columnIndex];
 		char *attrType = format_type_extended(attr->atttypid, attr->atttypmod,
 											  FORMAT_TYPE_TYPEMOD_GIVEN |
+											  FORMAT_TYPE_INVALID_AS_NULL |
 											  FORMAT_TYPE_FORCE_QUALIFY);
+
+		/*
+		 * Since we passed FORMAT_TYPE_INVALID_AS_NULL flag, format_type_extended
+		 * would return NULL instead of ??? or such when the type OID is invalid
+		 * or unknown. To be on the safe side, throw an error if that is the case.
+		 */
+		if (!attrType)
+		{
+			ereport(ERROR, (errmsg("got unknown format type when preparing "
+								   "task list for EXPLAIN ANALYZE")));
+		}
 
 		appendStringInfo(columnDef, "field_%d %s", columnIndex, attrType);
 	}
