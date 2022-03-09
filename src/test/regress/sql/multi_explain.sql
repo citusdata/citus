@@ -1085,7 +1085,7 @@ PREPARE dummy_prep_stmt(int) AS SELECT FROM distributed_table_1;
 EXPLAIN :default_analyze_flags EXECUTE dummy_prep_stmt(50);
 
 CREATE TYPE multi_explain.int_wrapper_type AS (int_field int);
-CREATE TABLE tbl (a multi_explain.int_wrapper_type);
+CREATE TABLE tbl (a int, b multi_explain.int_wrapper_type);
 SELECT create_distributed_table('tbl', 'a');
 
 EXPLAIN :default_analyze_flags SELECT * FROM tbl;
