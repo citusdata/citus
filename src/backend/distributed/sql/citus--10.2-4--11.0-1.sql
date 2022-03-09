@@ -31,8 +31,11 @@
 #include "udfs/citus_calculate_gpid/11.0-1.sql"
 #include "udfs/citus_backend_gpid/11.0-1.sql"
 
-DROP FUNCTION IF EXISTS pg_catalog.citus_dist_stat_activity() CASCADE;
-DROP FUNCTION IF EXISTS pg_catalog.citus_worker_stat_activity() CASCADE;
+DROP VIEW IF EXISTS pg_catalog.citus_lock_waits;
+DROP VIEW IF EXISTS pg_catalog.citus_dist_stat_activity;
+DROP VIEW IF EXISTS pg_catalog.citus_worker_stat_activity;
+DROP FUNCTION IF EXISTS pg_catalog.citus_dist_stat_activity();
+DROP FUNCTION IF EXISTS pg_catalog.citus_worker_stat_activity();
 #include "udfs/citus_dist_stat_activity/11.0-1.sql"
 
 -- a very simple helper function defined for citus_lock_waits
