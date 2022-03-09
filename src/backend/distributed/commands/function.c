@@ -1365,47 +1365,12 @@ PostprocessCreateFunctionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	/*
-	 * This check should have been valid for all objects not only for functions. Though,
-	 * we do this limited check for now as functions are more likely to be used with
-	 * such dependencies, and we want to scope it for now.
-	 */
-	ObjectAddress *undistributableDependency = GetUndistributableDependency(
-		&functionAddress);
-	if (undistributableDependency != NULL)
+	/* If the function has any unsupported dependency, create it locally */
+	DeferredErrorMessage *errMsg = DeferErrorIfHasUnsupportedDependency(&functionAddress);
+
+	if (errMsg != NULL)
 	{
-		if (SupportedDependencyByCitus(undistributableDependency))
-		{
-			/*
-			 * Citus can't distribute some relations as dependency, although those
-			 * types as supported by Citus. So we can use get_rel_name directly
-			 */
-			RangeVar *functionRangeVar = makeRangeVarFromNameList(stmt->funcname);
-			char *functionName = functionRangeVar->relname;
-			char *dependentRelationName =
-				get_rel_name(undistributableDependency->objectId);
-
-			ereport(WARNING, (errmsg("Citus can't distribute function \"%s\" having "
-									 "dependency on non-distributed relation \"%s\"",
-									 functionName, dependentRelationName),
-							  errdetail("Function will be created only locally"),
-							  errhint("To distribute function, distribute dependent "
-									  "relations first. Then, re-create the function")));
-		}
-		else
-		{
-			char *objectType = NULL;
-			#if PG_VERSION_NUM >= PG_VERSION_14
-			objectType = getObjectTypeDescription(undistributableDependency, false);
-			#else
-			objectType = getObjectTypeDescription(undistributableDependency);
-			#endif
-			ereport(WARNING, (errmsg("Citus can't distribute functions having "
-									 "dependency on unsupported object of type \"%s\"",
-									 objectType),
-							  errdetail("Function will be created only locally")));
-		}
-
+		RaiseDeferredError(errMsg, WARNING);
 		return NIL;
 	}
 
