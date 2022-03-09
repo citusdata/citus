@@ -8,6 +8,7 @@ setup
 
 teardown
 {
+    DROP TABLE IF EXISTS test;
     SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node;
     SELECT nodeid, nodename, nodeport from pg_dist_node ORDER BY 1 DESC;
 }
@@ -103,43 +104,47 @@ step "s2-execute-prepared" {
     EXECUTE foo;
 }
 
-step "s2-verify-metadata"
-{
-    SELECT nodeid, groupid, nodename, nodeport FROM pg_dist_node ORDER BY nodeid;
-    SELECT master_run_on_worker(
-        ARRAY['localhost'], ARRAY[57638],
-        ARRAY['SELECT jsonb_agg(ROW(nodeid, groupid, nodename, nodeport) ORDER BY nodeid) FROM  pg_dist_node'],
-        false);
-}
-
-step "s2-start-metadata-sync-node-2"
-{
-    SELECT start_metadata_sync_to_node('localhost', 57638);
-}
-
-step "s2-drop-table" {
-    DROP TABLE test;
-}
-
 step "s2-abort"
 {
 	ABORT;
 }
 
+session "s3"
+
+step "s3-update-node-1-back"
+{
+    SELECT 1 FROM master_update_node(
+        (select nodeid from pg_dist_node where nodeport = 58637),
+        'localhost',
+        57637);
+}
+
+step "s3-update-node-2-back"
+{
+    SELECT 1 FROM master_update_node(
+        (select nodeid from pg_dist_node where nodeport = 58638),
+        'localhost',
+        57638);
+}
+
+
+// since we update the nodes to unexistent nodes we break metadata, so here we fix it manually
+step "s3-manually-fix-metadata"
+{
+    UPDATE pg_dist_node SET metadatasynced = 't' WHERE nodeport = 57637;
+    UPDATE pg_dist_node SET metadatasynced = 't' WHERE nodeport = 57638;
+    SELECT start_metadata_sync_to_node('localhost', 57637);
+    SELECT start_metadata_sync_to_node('localhost', 57638);
+}
+
+
 // session 1 updates node 1, session 2 updates node 2, should be ok
-permutation "s1-begin" "s1-update-node-1" "s2-update-node-2" "s1-commit" "s1-show-nodes"
+permutation "s1-begin" "s1-update-node-1" "s2-update-node-2" "s1-commit" "s1-show-nodes" "s3-update-node-1-back" "s3-update-node-2-back" "s3-manually-fix-metadata"
 
 // sessions 1 updates node 1, session 2 tries to do the same
-permutation "s1-begin" "s1-update-node-1" "s2-begin" "s2-update-node-1" "s1-commit" "s2-abort" "s1-show-nodes"
-
-// master_update_node should block start_metadata_sync_to_node. Note that we
-// cannot run start_metadata_sync_to_node in a transaction, so we're not
-// testing the reverse order here.
-// Having different result on coordinator and worker is expected for now since
-// we run test after disabling mx.
-permutation "s1-begin" "s1-update-node-1" "s2-start-metadata-sync-node-2" "s1-commit" "s2-verify-metadata"
+permutation "s1-begin" "s1-update-node-1" "s2-begin" "s2-update-node-1" "s1-commit" "s2-abort" "s1-show-nodes" "s3-update-node-1-back" "s3-manually-fix-metadata"
 
 // make sure we have entries in prepared statement cache
 // then make sure that after we update pg_dist_node, the changes are visible to
 // the prepared statement
-permutation "s2-create-table" "s1-begin" "s1-update-node-nonexistent" "s1-prepare-transaction" "s2-cache-prepared-statement" "s1-commit-prepared" "s2-execute-prepared" "s1-update-node-existent" "s2-drop-table"
+permutation "s2-create-table" "s1-begin" "s1-update-node-nonexistent" "s1-prepare-transaction" "s2-cache-prepared-statement" "s1-commit-prepared" "s2-execute-prepared" "s1-update-node-existent" "s3-manually-fix-metadata"
