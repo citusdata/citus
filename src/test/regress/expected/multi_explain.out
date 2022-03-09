@@ -3048,8 +3048,14 @@ CREATE TABLE tbl (a multi_explain.int_wrapper_type);
 SELECT create_distributed_table('tbl', 'a');
 
 EXPLAIN :default_analyze_flags SELECT * FROM tbl;
-ERROR:  type "int_wrapper_type" does not exist
-CONTEXT:  while executing command on localhost:xxxxx
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;
 ERROR:  cache lookup failed for type 17628
