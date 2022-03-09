@@ -145,13 +145,13 @@ CREATE TYPE myvarchar;
 CREATE FUNCTION myvarcharin(cstring, oid, integer) RETURNS myvarchar
 LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharin';
 NOTICE:  return type myvarchar is only a shell
-WARNING:  Citus can't distribute functions having dependency on unsupported object of type "type"
-DETAIL:  Function will be created only locally
+WARNING:  "function myvarcharin(cstring,oid,integer)" has dependency on unsupported object "type myvarchar"
+DETAIL:  "function myvarcharin(cstring,oid,integer)" will be created only locally
 CREATE FUNCTION myvarcharout(myvarchar) RETURNS cstring
 LANGUAGE internal IMMUTABLE PARALLEL SAFE STRICT AS 'varcharout';
 NOTICE:  argument type myvarchar is only a shell
-WARNING:  Citus can't distribute functions having dependency on unsupported object of type "type"
-DETAIL:  Function will be created only locally
+WARNING:  "function myvarcharout(myvarchar)" has dependency on unsupported object "type myvarchar"
+DETAIL:  "function myvarcharout(myvarchar)" will be created only locally
 CREATE TYPE myvarchar (
     input = myvarcharin,
     output = myvarcharout,
@@ -164,7 +164,7 @@ CREATE TABLE my_table (a int, b myvarchar);
 -- """Add ALTER TYPE options useful for extensions,
 -- like TOAST and I/O functions control (Tomas Vondra, Tom Lane)"""
 SELECT create_distributed_table('my_table', 'a');
-ERROR:  Object "table my_table" has dependency on unsupported object "type myvarchar"
+ERROR:  "table my_table" has dependency on unsupported object "type myvarchar"
 CREATE TABLE test_table(a int, b tsvector);
 SELECT create_distributed_table('test_table', 'a');
  create_distributed_table

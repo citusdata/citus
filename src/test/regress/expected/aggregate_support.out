@@ -1089,14 +1089,14 @@ LEFT JOIN ref_table ON TRUE;
 create table dummy_tbl (a int);
 create function dummy_fnc(a dummy_tbl, d double precision) RETURNS dummy_tbl
     AS $$SELECT 1;$$ LANGUAGE sql;
-WARNING:  Citus can't distribute function "dummy_fnc" having dependency on non-distributed relation "dummy_tbl"
-DETAIL:  Function will be created only locally
-HINT:  To distribute function, distribute dependent relations first. Then, re-create the function
+WARNING:  "function dummy_fnc(dummy_tbl,double precision)" has dependency to "table dummy_tbl" that is not in Citus' metadata
+DETAIL:  "function dummy_fnc(dummy_tbl,double precision)" will be created only locally
+HINT:  Distribute "table dummy_tbl" first to distribute "function dummy_fnc(dummy_tbl,double precision)"
 -- should give warning and create aggregate local only
 create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
-WARNING:  Citus can't distribute aggregate "dependent_agg" having dependency on non-distributed relation "dummy_tbl"
-DETAIL:  Aggregate will be created only locally
-HINT:  To distribute aggregate, distribute dependent relations first. Then, re-create the aggregate
+WARNING:  "function dependent_agg(double precision)" has dependency to "table dummy_tbl" that is not in Citus' metadata
+DETAIL:  "function dependent_agg(double precision)" will be created only locally
+HINT:  Distribute "table dummy_tbl" first to distribute "function dependent_agg(double precision)"
 -- clear and try again with distributed table
 DROP TABLE dummy_tbl CASCADE;
 NOTICE:  drop cascades to 2 other objects

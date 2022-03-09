@@ -136,6 +136,7 @@ static void CollectObjectAddress(ObjectAddressCollector *collector,
 								 const ObjectAddress *address);
 static bool IsObjectAddressCollected(ObjectAddress findAddress,
 									 ObjectAddressCollector *collector);
+static ObjectAddress * GetUndistributableDependency(const ObjectAddress *objectAddress);
 static void MarkObjectVisited(ObjectAddressCollector *collector,
 							  ObjectAddress target);
 static bool TargetObjectVisited(ObjectAddressCollector *collector,
@@ -742,10 +743,82 @@ SupportedDependencyByCitus(const ObjectAddress *address)
 
 
 /*
+ * DeferErrorIfHasUnsupportedDependency returns deferred error message if the given
+ * object has any undistributable dependency.
+ */
+DeferredErrorMessage *
+DeferErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
+{
+	ObjectAddress *undistributableDependency = GetUndistributableDependency(
+		objectAddress);
+
+	if (undistributableDependency == NULL)
+	{
+		return NULL;
+	}
+
+	char *objectDescription = NULL;
+	char *dependencyDescription = NULL;
+	StringInfo errorMessage = makeStringInfo();
+	StringInfo detailMessage = makeStringInfo();
+
+	#if PG_VERSION_NUM >= PG_VERSION_14
+	objectDescription = getObjectDescription(objectAddress, false);
+	dependencyDescription = getObjectDescription(undistributableDependency, false);
+	#else
+	objectDescription = getObjectDescription(objectAddress);
+	dependencyDescription = getObjectDescription(undistributableDependency);
+	#endif
+
+	/*
+	 * If the given object is a procedure, we want to create it locally,
+	 * so provide that information in the error detail.
+	 */
+	if (getObjectClass(objectAddress) == OCLASS_PROC)
+	{
+		appendStringInfo(detailMessage, "\"%s\" will be created only locally",
+						 objectDescription);
+	}
+	else
+	{
+		detailMessage->data = NULL;
+	}
+
+	if (SupportedDependencyByCitus(undistributableDependency))
+	{
+		StringInfo hintMessage = makeStringInfo();
+
+		appendStringInfo(errorMessage, "\"%s\" has dependency to \"%s\" that is not in "
+									   "Citus' metadata",
+						 objectDescription,
+						 dependencyDescription);
+
+		appendStringInfo(hintMessage, "Distribute \"%s\" first to distribute \"%s\"",
+						 dependencyDescription,
+						 objectDescription);
+
+		return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+							 errorMessage->data,
+							 detailMessage->data,
+							 hintMessage->data);
+	}
+
+	appendStringInfo(errorMessage, "\"%s\" has dependency on unsupported "
+								   "object \"%s\"", objectDescription,
+					 dependencyDescription);
+
+	return DeferredError(ERRCODE_FEATURE_NOT_SUPPORTED,
+						 errorMessage->data,
+						 detailMessage->data,
+						 NULL);
+}
+
+
+/*
  * GetUndistributableDependency checks whether object has any non-distributable
  * dependency. If any one found, it will be returned.
  */
-ObjectAddress *
+static ObjectAddress *
 GetUndistributableDependency(const ObjectAddress *objectAddress)
 {
 	List *dependencies = GetAllDependenciesForObject(objectAddress);
