@@ -13,21 +13,14 @@ SELECT create_distributed_table('seq_test_0','x');
 
 INSERT INTO seq_test_0 SELECT 1, s FROM generate_series(1, 50) s;
 INSERT INTO seq_test_0_local_table SELECT 1, s FROM generate_series(1, 50) s;
-ALTER TABLE seq_test_0 ADD COLUMN z int DEFAULT nextval('seq_0');
-ERROR:  cannot add a column involving DEFAULT nextval('..') because the table is not empty
-HINT:  You can first call ALTER TABLE .. ADD COLUMN .. smallint/int/bigint
-Then set the default by ALTER TABLE .. ALTER COLUMN .. SET DEFAULT nextval('..')
--- follow hint
-ALTER TABLE seq_test_0 ADD COLUMN z int;
-ALTER TABLE seq_test_0 ALTER COLUMN z SET DEFAULT nextval('seq_0');
 SELECT * FROM seq_test_0 ORDER BY 1, 2 LIMIT 5;
- x | y | z
+ x | y
 ---------------------------------------------------------------------
- 1 | 1 |
- 1 | 2 |
- 1 | 3 |
- 1 | 4 |
- 1 | 5 |
+ 1 | 1
+ 1 | 2
+ 1 | 3
+ 1 | 4
+ 1 | 5
 (5 rows)
 
 ALTER TABLE seq_test_0_local_table ADD COLUMN z int;
@@ -42,8 +35,4 @@ SELECT * FROM seq_test_0_local_table ORDER BY 1, 2 LIMIT 5;
  1 | 5 |
 (5 rows)
 
--- cannot alter a sequence used in a distributed table
--- since the metadata is synced to workers
-ALTER SEQUENCE seq_0 AS bigint;
-ERROR:  Altering a distributed sequence is currently not supported.
 DROP SCHEMA sequences_schema CASCADE;
