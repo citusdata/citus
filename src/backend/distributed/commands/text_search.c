@@ -73,16 +73,10 @@ PostprocessCreateTextSearchConfigurationStmt(Node *node, const char *queryString
 		return NIL;
 	}
 
-	/*
-	 * If the create command is a part of a multi-statement transaction that is not in
-	 * sequential mode, don't propagate. Instead we will rely on back filling.
-	 */
-	if (IsMultiStatementTransaction())
+	/* check creation against multi-statement transaction policy */
+	if (!ShouldPropagateCreateInCoordinatedTransction())
 	{
-		if (MultiShardConnectionType != SEQUENTIAL_CONNECTION)
-		{
-			return NIL;
-		}
+		return NIL;
 	}
 
 	EnsureCoordinator();

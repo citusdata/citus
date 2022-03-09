@@ -146,6 +146,8 @@ PG_FUNCTION_INFO_V1(master_activate_node);
 PG_FUNCTION_INFO_V1(citus_update_node);
 PG_FUNCTION_INFO_V1(master_update_node);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
+PG_FUNCTION_INFO_V1(citus_nodename_for_nodeid);
+PG_FUNCTION_INFO_V1(citus_nodeport_for_nodeid);
 
 
 /*
@@ -187,9 +189,6 @@ citus_set_coordinator_host(PG_FUNCTION_ARGS)
 
 	Name nodeClusterName = PG_GETARG_NAME(3);
 	nodeMetadata.nodeCluster = NameStr(*nodeClusterName);
-
-	/* prevent concurrent modification */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	bool isCoordinatorInMetadata = false;
 	WorkerNode *coordinatorNode = PrimaryNodeForGroup(COORDINATOR_GROUP_ID,
@@ -656,6 +655,8 @@ PgDistTableMetadataSyncCommandList(void)
 										  DELETE_ALL_PLACEMENTS);
 	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
 										  DELETE_ALL_DISTRIBUTED_OBJECTS);
+	metadataSnapshotCommandList = lappend(metadataSnapshotCommandList,
+										  DELETE_ALL_COLOCATION);
 
 	/* create pg_dist_partition, pg_dist_shard and pg_dist_placement entries */
 	foreach_ptr(cacheEntry, propagatedTableList)
@@ -666,6 +667,11 @@ PgDistTableMetadataSyncCommandList(void)
 		metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
 												  tableMetadataCreateCommandList);
 	}
+
+	/* commands to insert pg_dist_colocation entries */
+	List *colocationGroupSyncCommandList = ColocationGroupCreateCommandList();
+	metadataSnapshotCommandList = list_concat(metadataSnapshotCommandList,
+											  colocationGroupSyncCommandList);
 
 	/* As the last step, propagate the pg_dist_object entities */
 	Assert(ShouldPropagate());
@@ -1470,6 +1476,50 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_nodename_for_nodeid returns the node name for the node with given node id
+ */
+Datum
+citus_nodename_for_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int nodeId = PG_GETARG_INT32(0);
+
+	bool missingOk = true;
+	WorkerNode *node = FindNodeWithNodeId(nodeId, missingOk);
+
+	if (node == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	PG_RETURN_TEXT_P(cstring_to_text(node->workerName));
+}
+
+
+/*
+ * citus_nodeport_for_nodeid returns the node port for the node with given node id
+ */
+Datum
+citus_nodeport_for_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int nodeId = PG_GETARG_INT32(0);
+
+	bool missingOk = true;
+	WorkerNode *node = FindNodeWithNodeId(nodeId, missingOk);
+
+	if (node == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	PG_RETURN_INT32(node->workerPort);
+}
+
+
+/*
  * FindWorkerNode searches over the worker nodes and returns the workerNode
  * if it already exists. Else, the function returns NULL.
  */
@@ -1544,21 +1594,24 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
  * If the node cannot be found this functions errors.
  */
 WorkerNode *
-FindNodeWithNodeId(int nodeId)
+FindNodeWithNodeId(int nodeId, bool missingOk)
 {
-	List *workerList = ActiveReadableNodeList();
-	WorkerNode *workerNode = NULL;
+	List *nodeList = ActiveReadableNodeList();
+	WorkerNode *node = NULL;
 
-	foreach_ptr(workerNode, workerList)
+	foreach_ptr(node, nodeList)
 	{
-		if (workerNode->nodeId == nodeId)
+		if (node->nodeId == nodeId)
 		{
-			return workerNode;
+			return node;
 		}
 	}
 
 	/* there isn't any node with nodeId in pg_dist_node */
-	elog(ERROR, "worker node with node id %d could not be found", nodeId);
+	if (!missingOk)
+	{
+		elog(ERROR, "node with node id %d could not be found", nodeId);
+	}
 
 	return NULL;
 }
@@ -1779,12 +1832,6 @@ AddNodeMetadata(char *nodeName, int32 nodePort,
 	EnsureCoordinator();
 
 	*nodeAlreadyExists = false;
-
-	/*
-	 * Prevent / wait for concurrent modification before checking whether
-	 * the worker already exists in pg_dist_node.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeName, nodePort);
 	if (workerNode != NULL)

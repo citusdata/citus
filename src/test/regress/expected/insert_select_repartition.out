@@ -1182,6 +1182,7 @@ END;
 $$
 LANGUAGE plpgsql STABLE;
 SELECT create_distributed_function('dist_func(int, int)');
+NOTICE:  procedure insert_select_repartition.dist_func is already distributed
  create_distributed_function
 ---------------------------------------------------------------------
 

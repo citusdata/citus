@@ -136,27 +136,14 @@ PostprocessCreateExtensionStmt(Node *node, const char *queryString)
 		return NIL;
 	}
 
-	/*
-	 * If the extension command is a part of a multi-statement transaction,
-	 * do not propagate it
-	 */
-	if (IsMultiStatementTransaction())
+	/* check creation against multi-statement transaction policy */
+	if (!ShouldPropagateCreateInCoordinatedTransction())
 	{
 		return NIL;
 	}
 
 	/* extension management can only be done via coordinator node */
 	EnsureCoordinator();
-
-	/*
-	 * Make sure that no new nodes are added after this point until the end of the
-	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by citus_add_node.
-	 * This guarantees that all active nodes will have the extension, because they will
-	 * either get it now, or get it in citus_add_node after this transaction finishes and
-	 * the pg_dist_object record becomes visible.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	/*
 	 * Make sure that the current transaction is already in sequential mode,
@@ -258,16 +245,6 @@ PreprocessDropExtensionStmt(Node *node, const char *queryString,
 
 	/* extension management can only be done via coordinator node */
 	EnsureCoordinator();
-
-	/*
-	 * Make sure that no new nodes are added after this point until the end of the
-	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by citus_add_node.
-	 * This guarantees that all active nodes will drop the extension, because they will
-	 * either get it now, or get it in citus_add_node after this transaction finishes and
-	 * the pg_dist_object record becomes visible.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	/*
 	 * Make sure that the current transaction is already in sequential mode,
@@ -396,15 +373,6 @@ PreprocessAlterExtensionSchemaStmt(Node *node, const char *queryString,
 	EnsureCoordinator();
 
 	/*
-	 * Make sure that no new nodes are added after this point until the end of the
-	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by citus_add_node.
-	 * This guarantees that all active nodes will update the extension schema after
-	 * this transaction finishes and the pg_dist_object record becomes visible.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
-
-	/*
 	 * Make sure that the current transaction is already in sequential mode,
 	 * or can still safely be put in sequential mode
 	 */
@@ -462,16 +430,6 @@ PreprocessAlterExtensionUpdateStmt(Node *node, const char *queryString,
 
 	/* extension management can only be done via coordinator node */
 	EnsureCoordinator();
-
-	/*
-	 * Make sure that no new nodes are added after this point until the end of the
-	 * transaction by taking a RowShareLock on pg_dist_node, which conflicts with the
-	 * ExclusiveLock taken by citus_add_node.
-	 * This guarantees that all active nodes will update the extension version, because
-	 * they will either get it now, or get it in citus_add_node after this transaction
-	 * finishes and the pg_dist_object record becomes visible.
-	 */
-	LockRelationOid(DistNodeRelationId(), RowShareLock);
 
 	/*
 	 * Make sure that the current transaction is already in sequential mode,
@@ -555,6 +513,16 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 		ObjectAddress tableAddress = { 0 };
 		ObjectAddressSet(tableAddress, RelationRelationId, citusTableId);
 
+		if (ShouldSyncTableMetadata(citusTableId))
+		{
+			/* we need to pass pointer allocated in the heap */
+			ObjectAddress *addressPointer = palloc0(sizeof(ObjectAddress));
+			*addressPointer = tableAddress;
+
+			/* as of Citus 11, tables that should be synced are also considered object */
+			resultingObjectAddresses = lappend(resultingObjectAddresses, addressPointer);
+		}
+
 		List *distributableDependencyObjectAddresses =
 			GetDistributableDependenciesForObject(&tableAddress);
 
@@ -578,11 +546,22 @@ MarkExistingObjectDependenciesDistributedIfSupported()
 	/* remove duplicates from object addresses list for efficiency */
 	List *uniqueObjectAddresses = GetUniqueDependenciesList(resultingObjectAddresses);
 
+	/*
+	 * We should sync the new dependencies during ALTER EXTENSION because
+	 * we cannot know whether the nodes has already been upgraded or not. If
+	 * the nodes are not upgraded at this point, we cannot sync the object. Also,
+	 * when the workers upgraded, they'd get the same objects anyway.
+	 */
+	bool prevMetadataSyncValue = EnableMetadataSync;
+	SetLocalEnableMetadataSync(false);
+
 	ObjectAddress *objectAddress = NULL;
 	foreach_ptr(objectAddress, uniqueObjectAddresses)
 	{
 		MarkObjectDistributed(objectAddress);
 	}
+
+	SetLocalEnableMetadataSync(prevMetadataSyncValue);
 }
 
 

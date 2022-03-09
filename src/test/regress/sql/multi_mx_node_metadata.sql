@@ -388,6 +388,7 @@ DROP SEQUENCE sequence CASCADE;
 DROP TABLE ref_table;
 DROP TABLE reference_table;
 TRUNCATE pg_dist_colocation;
+SELECT run_command_on_workers('TRUNCATE pg_dist_colocation');
 SELECT count(*) FROM (SELECT master_remove_node(nodename, nodeport) FROM pg_dist_node) t;
 ALTER SEQUENCE pg_catalog.pg_dist_groupid_seq RESTART :last_group_id;
 ALTER SEQUENCE pg_catalog.pg_dist_node_nodeid_seq RESTART :last_node_id;

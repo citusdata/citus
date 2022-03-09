@@ -93,8 +93,8 @@ SELECT count(*) FROM history;
 SET citus.shard_replication_factor TO 1;
 
 -- metadata sync will succeed even if we have rep > 1 tables
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'public.articles'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'public.articles_single_shard'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'public.articles'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'public.articles_single_shard'::regclass::oid, 0);
 SELECT start_metadata_sync_to_node('localhost', :worker_1_port);
 
 CREATE TABLE mx_table(a int);

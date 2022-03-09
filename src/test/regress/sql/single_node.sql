@@ -538,6 +538,9 @@ CREATE TABLE hpart1 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remaind
 CREATE TABLE hpart2 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 2);
 CREATE TABLE hpart3 PARTITION OF hash_parted FOR VALUES WITH (modulus 4, remainder 3);
 
+-- Disable metadata sync since citus doesn't support distributing
+-- operator class for now.
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_table('hash_parted ', 'a');
 
 INSERT INTO hash_parted VALUES (1, generate_series(1, 10));
@@ -548,6 +551,7 @@ ALTER TABLE hash_parted DETACH PARTITION hpart0;
 ALTER TABLE hash_parted DETACH PARTITION hpart1;
 ALTER TABLE hash_parted DETACH PARTITION hpart2;
 ALTER TABLE hash_parted DETACH PARTITION hpart3;
+RESET citus.enable_metadata_sync;
 
 -- test range partition without creating partitions and inserting with generate_series()
 -- should error out even in plain PG since no partition of relation "parent_tab" is found for row
@@ -915,11 +919,11 @@ SELECT table_name, citus_table_type, distribution_column, shard_count FROM publi
 SELECT pg_sleep(0.1);
 -- since max_cached_conns_per_worker == 0 at this point, the
 -- backend(s) that execute on the shards will be terminated
--- so show that there is only a single client backend,
--- which is actually the backend that executes here
+-- so show that there no internal backends
 SET search_path TO single_node;
 SELECT count(*) from should_commit;
-SELECT pg_catalog.get_all_active_client_backend_count();
+SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'citus_internal%';
+SELECT get_all_active_client_backend_count();
 BEGIN;
 	SET LOCAL citus.shard_count TO 32;
 	SET LOCAL citus.force_max_query_parallelization TO ON;
@@ -931,7 +935,10 @@ BEGIN;
 	SELECT count(*) FROM test;
 
 	-- now, we should have additional 32 connections
-	SELECT pg_catalog.get_all_active_client_backend_count();
+    SELECT count(*) FROM pg_stat_activity WHERE application_name LIKE 'citus_internal%';
+
+    -- single external connection
+    SELECT get_all_active_client_backend_count();
 ROLLBACK;
 
 

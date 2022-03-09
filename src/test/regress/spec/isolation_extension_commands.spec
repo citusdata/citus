@@ -41,7 +41,7 @@ step "s1-create-extension-with-schema2"
 
 step "s1-print"
 {
-	select count(*) from citus.pg_dist_object ;
+	select count(*) from pg_catalog.pg_dist_object ;
 	select extname, extversion, nspname from pg_extension, pg_namespace where pg_namespace.oid=pg_extension.extnamespace and extname='seg';
 	SELECT run_command_on_workers($$select extname from pg_extension where extname='seg'$$);
 	SELECT run_command_on_workers($$select extversion from pg_extension where extname='seg'$$);

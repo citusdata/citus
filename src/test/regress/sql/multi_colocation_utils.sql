@@ -4,6 +4,7 @@ ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 4;
 
 -- Delete orphaned entries from pg_dist_colocation
 DELETE FROM pg_dist_colocation where colocationid = 5 or colocationid = 6;
+SELECT 1 FROM run_command_on_workers('DELETE FROM pg_dist_colocation where colocationid = 5 or colocationid = 6');
 
 -- ===================================================================
 -- create test utility function
@@ -64,11 +65,6 @@ CREATE FUNCTION find_shard_interval_index(bigint)
     RETURNS int
     AS 'citus'
     LANGUAGE C STRICT;
-
--- remove tables from pg_dist_partition, if they don't exist i.e not found in pg_class
-delete from pg_dist_partition where not exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid);
-select 1 from run_command_on_workers($$
-    delete from pg_dist_partition where not exists(select * from pg_class where pg_class.oid=pg_dist_partition.logicalrelid);$$);
 
 -- ===================================================================
 -- test co-location util functions
@@ -161,6 +157,7 @@ SELECT find_shard_interval_index(1300016);
 
 SELECT count(*) FROM pg_dist_partition WHERE colocationid IN (4, 5);
 DELETE FROM pg_dist_colocation WHERE colocationid IN (4, 5);
+SELECT 1 FROM run_command_on_workers('DELETE FROM pg_dist_colocation WHERE colocationid IN (4, 5)');
 
 SET citus.shard_count = 2;
 
@@ -213,6 +210,12 @@ SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
 
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c) ORDER BY colocationid) FROM pg_dist_colocation c
+    WHERE colocationid >= 1 AND colocationid < 1000
+$$);
+
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY logicalrelid;
@@ -221,9 +224,20 @@ SELECT logicalrelid, colocationid FROM pg_dist_partition
 DROP TABLE table1_groupA;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
 
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c)) FROM pg_dist_colocation c WHERE colocationid = 4
+$$);
+
+
 -- dropping all tables in a colocation group also deletes the colocation group
 DROP TABLE table2_groupA;
 SELECT * FROM pg_dist_colocation WHERE colocationid = 4;
+
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c)) FROM pg_dist_colocation c WHERE colocationid = 4
+$$);
 
 -- create dropped colocation group again
 SET citus.shard_count = 2;
@@ -350,6 +364,7 @@ ORDER BY
 ALTER SEQUENCE pg_catalog.pg_dist_colocationid_seq RESTART 1;
 DELETE FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000;
+SELECT 1 FROM run_command_on_workers('DELETE FROM pg_dist_colocation WHERE colocationid >= 1 AND colocationid < 1000');
 UPDATE pg_dist_partition SET colocationid = 0
     WHERE colocationid >= 1 AND colocationid < 1000;
 
@@ -401,6 +416,12 @@ SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
 
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c) ORDER BY colocationid) FROM pg_dist_colocation c
+    WHERE colocationid >= 1 AND colocationid < 1000
+$$);
+
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid, logicalrelid;
@@ -411,11 +432,11 @@ SELECT update_distributed_table_colocation('table1_group_none', colocate_with =>
 SELECT update_distributed_table_colocation('table1_group_none', colocate_with => 'table3_groupE');
 
 -- activate nodes to get rid of inconsistencies in pg_dist tables
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table1_group1'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table2_group1'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table3_group2'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table4_group2'::regclass::oid, 0);
-INSERT INTO citus.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table5_groupX'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table1_group1'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table2_group1'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table3_group2'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table4_group2'::regclass::oid, 0);
+INSERT INTO pg_catalog.pg_dist_object(classid, objid, objsubid) values('pg_class'::regclass::oid, 'table5_groupX'::regclass::oid, 0);
 SELECT 1 FROM citus_activate_node('localhost', :worker_1_port);
 SELECT 1 FROM citus_activate_node('localhost', :worker_2_port);
 
@@ -426,6 +447,12 @@ SELECT update_distributed_table_colocation('table1_group_none', colocate_with =>
 SELECT * FROM pg_dist_colocation
     WHERE colocationid >= 1 AND colocationid < 1000
     ORDER BY colocationid;
+
+-- check to see whether metadata is synced
+SELECT nodeport, unnest(result::jsonb[]) FROM run_command_on_workers($$
+SELECT array_agg(row_to_json(c) ORDER BY colocationid) FROM pg_dist_colocation c
+    WHERE colocationid >= 1 AND colocationid < 1000
+$$);
 
 SELECT logicalrelid, colocationid FROM pg_dist_partition
     WHERE colocationid >= 1 AND colocationid < 1000

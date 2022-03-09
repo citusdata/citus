@@ -415,6 +415,8 @@ HINT:  Use the column name to insert or update the composite type as a single va
 CREATE TYPE two_ints as (if1 int, if2 int);
 CREATE DOMAIN domain AS two_ints CHECK ((VALUE).if1 > 0);
 -- citus does not propagate domain objects
+-- TODO: Once domains are supported, remove enable_metadata_sync off/on change
+-- on dependent table distribution below.
 SELECT run_command_on_workers(
 $$
     CREATE DOMAIN type_tests.domain AS type_tests.two_ints CHECK ((VALUE).if1 > 0);
@@ -426,12 +428,16 @@ $$);
 (2 rows)
 
 CREATE TABLE domain_indirection_test (f1 int, f3 domain, domain_array domain[]);
+-- Disable metadata sync since citus doesn't support distributing
+-- domains for now.
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_table('domain_indirection_test', 'f1');
  create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
+RESET citus.enable_metadata_sync;
 -- not supported (field indirection to underlying composite type)
 INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) VALUES (0, 1, 2);
 ERROR:  inserting or modifying composite type fields is not supported
@@ -453,6 +459,107 @@ SELECT * FROM field_indirection_test_2 ORDER BY 1,2,3;
        8 | (10," text10",20) | (40,50)
 (2 rows)
 
+-- test different ddl propagation modes
+SET citus.create_object_propagation TO deferred;
+BEGIN;
+CREATE TYPE deferred_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ parallel
+(1 row)
+
+CREATE TABLE deferred_table(a int,b deferred_type);
+SELECT create_distributed_table('deferred_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ parallel
+(1 row)
+
+COMMIT;
+SET citus.create_object_propagation TO automatic;
+BEGIN;
+CREATE TYPE automatic_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+CREATE TABLE automatic_table(a int,b automatic_type);
+SELECT create_distributed_table('automatic_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+COMMIT;
+SET citus.create_object_propagation TO automatic;
+BEGIN;
+-- force parallel execution by preceding with a analytical query
+SET LOCAL citus.force_max_query_parallelization TO on;
+SELECT count(*) FROM automatic_table;
+ count
+---------------------------------------------------------------------
+     0
+(1 row)
+
+CREATE TYPE automatic2_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ parallel
+(1 row)
+
+CREATE TABLE automatic2_table(a int,b automatic2_type);
+SELECT create_distributed_table('automatic2_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ parallel
+(1 row)
+
+COMMIT;
+SET citus.create_object_propagation TO immediate;
+BEGIN;
+CREATE TYPE immediate_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+CREATE TABLE immediate_table(a int,b immediate_type);
+SELECT create_distributed_table('immediate_table', 'a');
+ create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+SHOW citus.multi_shard_modify_mode;
+ citus.multi_shard_modify_mode
+---------------------------------------------------------------------
+ sequential
+(1 row)
+
+COMMIT;
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping
 DROP SCHEMA type_tests CASCADE;

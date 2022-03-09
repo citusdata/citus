@@ -1,0 +1,55 @@
+Parsed test spec with 3 sessions
+
+starting permutation: s1-grant s1-connect s2-connect s2-connect-superuser s3-select
+run_command_on_workers
+---------------------------------------------------------------------
+(localhost,57637,t,t)
+(localhost,57638,t,t)
+(2 rows)
+
+step s1-grant:
+ SELECT result FROM run_command_on_placements('my_table', 'GRANT SELECT ON TABLE %s TO my_user');
+
+result
+---------------------------------------------------------------------
+GRANT
+GRANT
+GRANT
+GRANT
+(4 rows)
+
+step s1-connect:
+ SELECT make_external_connection_to_node('localhost', 57637, 'my_user', current_database());
+
+make_external_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s2-connect:
+ SELECT make_external_connection_to_node('localhost', 57637, 'my_user', current_database());
+
+ERROR:  connection failed
+step s2-connect-superuser:
+ SELECT make_external_connection_to_node('localhost', 57637, 'postgres', current_database());
+
+make_external_connection_to_node
+---------------------------------------------------------------------
+
+(1 row)
+
+step s3-select:
+ SET ROLE my_user;
+ SELECT count(*) FROM my_table;
+
+count
+---------------------------------------------------------------------
+    0
+(1 row)
+
+run_command_on_workers
+---------------------------------------------------------------------
+(localhost,57637,t,t)
+(localhost,57638,t,t)
+(2 rows)
+

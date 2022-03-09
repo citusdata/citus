@@ -190,6 +190,9 @@ class PostgresConfig(CitusDefaultClusterConfig):
         super().__init__(arguments)
         self.worker_amount = 0
         self.is_citus = False
+        self.new_settings = {
+            "citus.use_citus_managed_tables": False,
+        }
 
 
 class CitusSingleNodeClusterConfig(CitusDefaultClusterConfig):
@@ -227,8 +230,7 @@ class CitusSmallSharedPoolSizeConfig(CitusMXBaseClusterConfig):
     def __init__(self, arguments):
         super().__init__(arguments)
         self.new_settings = {
-            # can be uncommented after https://github.com/citusdata/citus/issues/5342
-            # "citus.local_shared_pool_size": 5,
+             "citus.local_shared_pool_size": 5,
             "citus.max_shared_pool_size": 5,
         }
 

@@ -188,7 +188,7 @@ run_commands_on_session_level_connection_to_node(PG_FUNCTION_ARGS)
 
 /*
  * override_backend_data_command_originator is a wrapper around
- * OverrideBackendDataDistributedCommandOriginator().
+ * SetBackendDataDistributedCommandOriginator().
  */
 Datum
 override_backend_data_command_originator(PG_FUNCTION_ARGS)
@@ -197,7 +197,7 @@ override_backend_data_command_originator(PG_FUNCTION_ARGS)
 
 	bool distributedCommandOriginator = PG_GETARG_BOOL(0);
 
-	OverrideBackendDataDistributedCommandOriginator(distributedCommandOriginator);
+	SetBackendDataDistributedCommandOriginator(distributedCommandOriginator);
 
 	PG_RETURN_VOID();
 }

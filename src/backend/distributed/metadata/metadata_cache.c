@@ -247,8 +247,13 @@ static void GetPartitionTypeInputInfo(char *partitionKeyString, char partitionMe
 									  Oid *intervalTypeId, int32 *intervalTypeMod);
 static void CachedNamespaceLookup(const char *nspname, Oid *cachedOid);
 static void CachedRelationLookup(const char *relationName, Oid *cachedOid);
+static void CachedRelationLookupExtended(const char *relationName, Oid *cachedOid,
+										 bool missing_ok);
 static void CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
 										  Oid *cachedOid);
+static void CachedRelationNamespaceLookupExtended(const char *relationName,
+												  Oid renamespace, Oid *cachedOid,
+												  bool missing_ok);
 static ShardPlacement * ResolveGroupShardPlacement(
 	GroupShardPlacement *groupShardPlacement, CitusTableCacheEntry *tableEntry,
 	int shardIndex);
@@ -2321,8 +2326,37 @@ CitusCatalogNamespaceId(void)
 Oid
 DistObjectRelationId(void)
 {
-	CachedRelationNamespaceLookup("pg_dist_object", CitusCatalogNamespaceId(),
-								  &MetadataCache.distObjectRelationId);
+	/*
+	 * In older versions pg_dist_object was living in the `citus` namespace, With Citus 11
+	 * this has been moved to pg_dist_catalog.
+	 *
+	 * During upgrades it could therefore be that we simply need to look in the old
+	 * catalog. Since we expect to find it most of the time in the pg_catalog schema from
+	 * now on we will start there.
+	 *
+	 * even after the table has been moved, the oid's stay the same, so we don't have to
+	 * invalidate the cache after a move
+	 *
+	 * Note: during testing we also up/downgrade the extension, and sometimes interact
+	 * with the database when the schema and the binary are not in sync. Hance we always
+	 * allow the catalog to be missing on our first lookup. The error message might
+	 * therefore become misleading as it will complain about citus.pg_dist_object not
+	 * being found when called too early.
+	 */
+	CachedRelationLookupExtended("pg_dist_object",
+								 &MetadataCache.distObjectRelationId,
+								 true);
+	if (!OidIsValid(MetadataCache.distObjectRelationId))
+	{
+		/*
+		 * We can only ever reach here while we are creating/altering our extension before
+		 * the table is moved to pg_catalog.
+		 */
+		CachedRelationNamespaceLookupExtended("pg_dist_object",
+											  CitusCatalogNamespaceId(),
+											  &MetadataCache.distObjectRelationId,
+											  false);
+	}
 
 	return MetadataCache.distObjectRelationId;
 }
@@ -2332,9 +2366,38 @@ DistObjectRelationId(void)
 Oid
 DistObjectPrimaryKeyIndexId(void)
 {
-	CachedRelationNamespaceLookup("pg_dist_object_pkey",
-								  CitusCatalogNamespaceId(),
-								  &MetadataCache.distObjectPrimaryKeyIndexId);
+	/*
+	 * In older versions pg_dist_object was living in the `citus` namespace, With Citus 11
+	 * this has been moved to pg_dist_catalog.
+	 *
+	 * During upgrades it could therefore be that we simply need to look in the old
+	 * catalog. Since we expect to find it most of the time in the pg_catalog schema from
+	 * now on we will start there.
+	 *
+	 * even after the table has been moved, the oid's stay the same, so we don't have to
+	 * invalidate the cache after a move
+	 *
+	 * Note: during testing we also up/downgrade the extension, and sometimes interact
+	 * with the database when the schema and the binary are not in sync. Hance we always
+	 * allow the catalog to be missing on our first lookup. The error message might
+	 * therefore become misleading as it will complain about citus.pg_dist_object not
+	 * being found when called too early.
+	 */
+	CachedRelationLookupExtended("pg_dist_object_pkey",
+								 &MetadataCache.distObjectPrimaryKeyIndexId,
+								 true);
+
+	if (!OidIsValid(MetadataCache.distObjectPrimaryKeyIndexId))
+	{
+		/*
+		 * We can only ever reach here while we are creating/altering our extension before
+		 * the table is moved to pg_catalog.
+		 */
+		CachedRelationNamespaceLookupExtended("pg_dist_object_pkey",
+											  CitusCatalogNamespaceId(),
+											  &MetadataCache.distObjectPrimaryKeyIndexId,
+											  false);
+	}
 
 	return MetadataCache.distObjectPrimaryKeyIndexId;
 }
@@ -4591,9 +4654,30 @@ CachedRelationLookup(const char *relationName, Oid *cachedOid)
 }
 
 
+/*
+ * CachedRelationLookupExtended performs a cached lookup for the relation
+ * relationName, with the result cached in *cachedOid. Will _not_ throw an error when
+ * missing_ok is set to true.
+ */
+static void
+CachedRelationLookupExtended(const char *relationName, Oid *cachedOid, bool missing_ok)
+{
+	CachedRelationNamespaceLookupExtended(relationName, PG_CATALOG_NAMESPACE, cachedOid,
+										  missing_ok);
+}
+
+
 static void
 CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
 							  Oid *cachedOid)
+{
+	CachedRelationNamespaceLookupExtended(relationName, relnamespace, cachedOid, false);
+}
+
+
+static void
+CachedRelationNamespaceLookupExtended(const char *relationName, Oid relnamespace,
+									  Oid *cachedOid, bool missing_ok)
 {
 	/* force callbacks to be registered, so we always get notified upon changes */
 	InitializeCaches();
@@ -4602,7 +4686,7 @@ CachedRelationNamespaceLookup(const char *relationName, Oid relnamespace,
 	{
 		*cachedOid = get_relname_relid(relationName, relnamespace);
 
-		if (*cachedOid == InvalidOid)
+		if (*cachedOid == InvalidOid && !missing_ok)
 		{
 			ereport(ERROR, (errmsg(
 								"cache lookup failed for %s, called too early?",

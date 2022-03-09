@@ -221,7 +221,7 @@ SELECT * FROM run_command_on_workers($$ SELECT 'text_search.concurrent_index_con
 
 -- verify the objid is correctly committed locally due to the somewhat convoluted commit and new transaction starting when creating an index concurrently
 SELECT pg_catalog.pg_identify_object_as_address(classid, objid, objsubid)
-  FROM citus.pg_dist_object
+  FROM pg_catalog.pg_dist_object
  WHERE classid = 3602 AND objid = 'text_search.concurrent_index_config'::regconfig::oid;
 
 -- verify old text search configurations get renamed if they are not the same as the newly propagated configuration.
@@ -257,6 +257,23 @@ CREATE TEXT SEARCH CONFIGURATION "Text Search Requiring Quote's"."Quoted Config 
 CREATE TABLE t5(id int, name text);
 CREATE INDEX t5_search_name ON t5 USING gin (to_tsvector('"Text Search Requiring Quote''s"."Quoted Config Name"'::regconfig, (COALESCE(name, ''::character varying))::text));
 SELECT create_distributed_table('t5', 'name');
+
+-- make sure partial indices propagate their dependencies
+-- first have a TEXT SEARCH CONFIGURATION that is not distributed
+SET citus.enable_ddl_propagation TO off;
+CREATE TEXT SEARCH CONFIGURATION partial_index_test_config ( parser = default );
+RESET citus.enable_ddl_propagation;
+
+CREATE TABLE sensors(
+    measureid integer,
+    eventdatetime date,
+    measure_data jsonb,
+    name text,
+    PRIMARY KEY (measureid, eventdatetime, measure_data)
+) PARTITION BY RANGE(eventdatetime);
+CREATE TABLE sensors_a_partition PARTITION OF sensors FOR VALUES FROM ('2000-01-01') TO ('2020-01-01');
+CREATE INDEX sensors_search_name ON sensors USING gin (to_tsvector('partial_index_test_config'::regconfig, (COALESCE(name, ''::character varying))::text));
+SELECT create_distributed_table('sensors', 'measureid');
 
 SET client_min_messages TO 'warning';
 DROP SCHEMA text_search, text_search2, "Text Search Requiring Quote's" CASCADE;

@@ -59,28 +59,6 @@ typedef struct PartitioningTupleDest
 } PartitioningTupleDest;
 
 
-/*
- * NodePair contains the source and destination node in a NodeToNodeFragmentsTransfer.
- * It is a separate struct to use it as a key in a hash table.
- */
-typedef struct NodePair
-{
-	uint32 sourceNodeId;
-	uint32 targetNodeId;
-} NodePair;
-
-
-/*
- * NodeToNodeFragmentsTransfer contains all fragments that need to be fetched from
- * the source node to the destination node in the NodePair.
- */
-typedef struct NodeToNodeFragmentsTransfer
-{
-	NodePair nodes;
-	List *fragmentList;
-} NodeToNodeFragmentsTransfer;
-
-
 /* forward declarations of local functions */
 static List * WrapTasksForPartitioning(const char *resultIdPrefix,
 									   List *selectTaskList,
@@ -98,9 +76,6 @@ static TupleDesc PartitioningTupleDestTupleDescForQuery(TupleDestination *self, 
 														queryNumber);
 static ArrayType * CreateArrayFromDatums(Datum *datumArray, bool *nullsArray, int
 										 datumCount, Oid typeId);
-static void ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shardCount,
-								   Oid intervalTypeId, ArrayType **minValueArray,
-								   ArrayType **maxValueArray);
 static char * SourceShardPrefix(const char *resultPrefix, uint64 shardId);
 static DistributedResultFragment * TupleToDistributedResultFragment(HeapTuple heapTuple,
 																	TupleDesc tupleDesc,
@@ -115,8 +90,6 @@ static List ** ColocateFragmentsWithRelation(List *fragmentList,
 static List * ColocationTransfers(List *fragmentList,
 								  CitusTableCacheEntry *targetRelation);
 static List * FragmentTransferTaskList(List *fragmentListTransfers);
-static char * QueryStringForFragmentsTransfer(
-	NodeToNodeFragmentsTransfer *fragmentsTransfer);
 static void ExecuteFetchTaskList(List *fetchTaskList);
 
 
@@ -360,7 +333,7 @@ SourceShardPrefix(const char *resultPrefix, uint64 shardId)
  * ShardMinMaxValueArrays returns min values and max values of given shard
  * intervals. Returned arrays are text arrays.
  */
-static void
+void
 ShardMinMaxValueArrays(ShardInterval **shardIntervalArray, int shardCount,
 					   Oid intervalTypeOutFunc, ArrayType **minValueArray,
 					   ArrayType **maxValueArray)
@@ -632,7 +605,7 @@ FragmentTransferTaskList(List *fragmentListTransfers)
  * result fragments from source node to target node. See the structure of
  * NodeToNodeFragmentsTransfer for details of how these are decided.
  */
-static char *
+char *
 QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 {
 	StringInfo queryString = makeStringInfo();
@@ -667,7 +640,7 @@ QueryStringForFragmentsTransfer(NodeToNodeFragmentsTransfer *fragmentsTransfer)
 					 quote_literal_cstr(sourceNode->workerName),
 					 sourceNode->workerPort);
 
-	ereport(DEBUG3, (errmsg("fetch task on %s:%d: %s", sourceNode->workerName,
+	ereport(DEBUG4, (errmsg("fetch task on %s:%d: %s", sourceNode->workerName,
 							sourceNode->workerPort, queryString->data)));
 
 	return queryString->data;

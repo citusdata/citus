@@ -13,7 +13,7 @@ assign_distributed_transaction_id
 (1 row)
 
 step s1-get-all-transactions:
- SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
 initiator_node_identifier|transaction_number|transaction_stamp
 ---------------------------------------------------------------------
@@ -32,7 +32,7 @@ assign_distributed_transaction_id
 (1 row)
 
 step s2-get-all-transactions:
- SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
 initiator_node_identifier|transaction_number|transaction_stamp
 ---------------------------------------------------------------------
@@ -51,7 +51,7 @@ assign_distributed_transaction_id
 (1 row)
 
 step s3-get-all-transactions:
- SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
+	SELECT initiator_node_identifier, transaction_number, transaction_stamp FROM get_current_transaction_id() ORDER BY 1,2,3;
 
 initiator_node_identifier|transaction_number|transaction_stamp
 ---------------------------------------------------------------------
@@ -70,10 +70,10 @@ step s3-commit:
 
 starting permutation: s1-create-table s1-begin s1-insert s1-verify-current-xact-is-on-worker s1-drop-table s1-commit
 step s1-create-table:
- -- some tests also use distributed table
- CREATE TABLE distributed_transaction_id_table(some_value int, other_value int);
- SET citus.shard_count TO 4;
- SELECT create_distributed_table('distributed_transaction_id_table', 'some_value');
+	-- some tests also use distributed table
+	CREATE TABLE distributed_transaction_id_table(some_value int, other_value int);
+	SET citus.shard_count TO 4;
+	SELECT create_distributed_table('distributed_transaction_id_table', 'some_value');
 
 create_distributed_table
 ---------------------------------------------------------------------
@@ -84,16 +84,16 @@ step s1-begin:
     BEGIN;
 
 step s1-insert:
- INSERT INTO distributed_transaction_id_table VALUES (1, 1);
+	INSERT INTO distributed_transaction_id_table VALUES (1, 1);
 
 step s1-verify-current-xact-is-on-worker:
- SELECT
-     remote.nodeport,
-     remote.result = row(xact.initiator_node_identifier, xact.transaction_number)::text AS xact_exists
- FROM
-     get_current_transaction_id() as xact,
-     run_command_on_workers($$
-         SELECT row(initiator_node_identifier, transaction_number)
+	SELECT
+	    remote.nodeport,
+	    remote.result = row(xact.transaction_number)::text AS xact_exists
+	FROM
+	    get_current_transaction_id() as xact,
+	    run_command_on_workers($$
+	        SELECT row(transaction_number)
             FROM get_all_active_transactions()
 			WHERE transaction_number != 0;
         $$) as remote
@@ -106,7 +106,7 @@ nodeport|xact_exists
 (2 rows)
 
 step s1-drop-table:
- DROP TABLE distributed_transaction_id_table;
+	DROP TABLE distributed_transaction_id_table;
 
 step s1-commit:
     COMMIT;

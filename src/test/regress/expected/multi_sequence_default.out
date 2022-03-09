@@ -852,13 +852,13 @@ SELECT create_distributed_table('test_seq_dist', 'a');
 (1 row)
 
 -- Both sequence and dependency schema should be distributed
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation.seq_10'::regclass);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation.seq_10'::regclass);
                      pg_identify_object_as_address
 ---------------------------------------------------------------------
  (sequence,"{test_schema_for_sequence_default_propagation,seq_10}",{})
 (1 row)
 
-SELECT pg_identify_object_as_address(classid, objid, objsubid) from citus.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation'::regnamespace);
+SELECT pg_identify_object_as_address(classid, objid, objsubid) from pg_catalog.pg_dist_object WHERE objid IN ('test_schema_for_sequence_default_propagation'::regnamespace);
                pg_identify_object_as_address
 ---------------------------------------------------------------------
  (schema,{test_schema_for_sequence_default_propagation},{})

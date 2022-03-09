@@ -29,14 +29,17 @@ CREATE USER global_cancel_user;
 SELECT 1 FROM run_command_on_workers('CREATE USER global_cancel_user');
 RESET client_min_messages;
 
-SET ROLE global_cancel_user;
+\c - global_cancel_user - :master_port
 
 SELECT pg_typeof(:maintenance_daemon_gpid);
 
 SELECT pg_cancel_backend(:maintenance_daemon_gpid);
 SELECT pg_terminate_backend(:maintenance_daemon_gpid);
 
-RESET ROLE;
+-- we can cancel our own backend
+SELECT pg_cancel_backend(citus_backend_gpid());
+
+\c - postgres - :master_port
 
 SELECT nodeid AS coordinator_node_id FROM pg_dist_node WHERE nodeport = :master_port \gset
 
@@ -47,5 +50,14 @@ SELECT pg_cancel_backend(10000000000 * :coordinator_node_id + 0);
 SELECT pg_terminate_backend(10000000000 * :coordinator_node_id + 0);
 
 RESET client_min_messages;
+
+SELECT citus_backend_gpid() = citus_calculate_gpid(:coordinator_node_id, pg_backend_pid());
+
+SELECT nodename = citus_nodename_for_nodeid(nodeid) AND nodeport = citus_nodeport_for_nodeid(nodeid)
+FROM pg_dist_node
+WHERE isactive = true AND noderole = 'primary';
+
+SELECT citus_nodeid_for_gpid(10000000000 * 2 + 3);
+SELECT citus_pid_for_gpid(10000000000 * 2 + 3);
 
 DROP SCHEMA global_cancel CASCADE;

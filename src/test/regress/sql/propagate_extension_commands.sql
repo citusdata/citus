@@ -10,8 +10,8 @@ SET client_min_messages TO WARNING;
 CREATE EXTENSION seg;
 
 --  make sure that both the schema and the extension is distributed
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_namespace WHERE nspname = 'extension''test');
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_namespace WHERE nspname = 'extension''test');
 
 CREATE TABLE test_table (key int, value seg);
 SELECT create_distributed_table('test_table', 'key');
@@ -22,7 +22,7 @@ SELECT count(*) from pg_dist_partition where logicalrelid='extension''test.test_
 CREATE TYPE two_segs AS (seg_1 seg, seg_2 seg);
 
 -- verify that the type that depends on the extension is also marked as distributed
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_type WHERE typname = 'two_segs' AND typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'extension''test'));
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_type WHERE typname = 'two_segs' AND typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'extension''test'));
 
 -- now try to run CREATE EXTENSION within a transction block, all should work fine
 BEGIN;
@@ -40,7 +40,7 @@ BEGIN;
 COMMIT;
 
 -- make sure that the extension is distributed even if we run create extension in a transaction block
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'isn');
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'isn');
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'isn'$$);
 
 
@@ -72,7 +72,7 @@ ALTER EXTENSION isn SET SCHEMA public;
 SET search_path TO public;
 
 -- make sure that the extension is distributed
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'isn');
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'isn');
 
 -- show that the ALTER EXTENSION command is propagated
 SELECT run_command_on_workers($$SELECT nspname from pg_namespace where oid=(SELECT extnamespace FROM pg_extension WHERE extname = 'isn')$$);
@@ -156,7 +156,7 @@ ROLLBACK;
 
 -- at the end of the transaction block, we did not create isn extension in coordinator or worker nodes as we rollback'ed
 -- make sure that the extension is not distributed
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'isn');
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'isn');
 
 -- and the extension does not exist on workers
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'isn'$$);
@@ -184,11 +184,11 @@ SELECT count(*) FROM pg_extension WHERE extname IN ('pg_buffercache', 'isn');
 -- drop extension should just work
 DROP EXTENSION seg CASCADE;
 
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname = 'seg'$$);
 
 -- make sure that the extension is not avaliable anymore as a distributed object
-SELECT count(*) FROM citus.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid = (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
 
 CREATE SCHEMA "extension'test";
 SET search_path TO "extension'test";
@@ -257,16 +257,16 @@ COMMIT;
 
 -- Check the pg_dist_object
 SELECT pg_proc.proname as DistributedFunction
-FROM citus.pg_dist_object, pg_proc
+FROM pg_catalog.pg_dist_object, pg_proc
 WHERE pg_proc.proname = 'seg_in' and
-pg_proc.oid = citus.pg_dist_object.objid and
+pg_proc.oid = pg_catalog.pg_dist_object.objid and
 classid = 'pg_proc'::regclass;
 
 SELECT run_command_on_workers($$
 SELECT count(*)
-FROM citus.pg_dist_object, pg_proc
+FROM pg_catalog.pg_dist_object, pg_proc
 WHERE pg_proc.proname = 'seg_in' and
-pg_proc.oid = citus.pg_dist_object.objid and
+pg_proc.oid = pg_catalog.pg_dist_object.objid and
 classid = 'pg_proc'::regclass;
 $$);
 
@@ -274,15 +274,15 @@ $$);
 SELECT 1 from master_add_node('localhost', :worker_2_port);
 
 -- make sure that both extensions are created on both nodes
-SELECT count(*) FROM citus.pg_dist_object WHERE objid IN (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE objid IN (SELECT oid FROM pg_extension WHERE extname IN ('seg', 'isn'));
 SELECT run_command_on_workers($$SELECT count(*) FROM pg_extension WHERE extname IN ('seg', 'isn')$$);
 
 -- Check the pg_dist_object on the both nodes
 SELECT run_command_on_workers($$
 SELECT count(*)
-FROM citus.pg_dist_object, pg_proc
+FROM pg_catalog.pg_dist_object, pg_proc
 WHERE pg_proc.proname = 'seg_in' and
-pg_proc.oid = citus.pg_dist_object.objid and
+pg_proc.oid = pg_catalog.pg_dist_object.objid and
 classid = 'pg_proc'::regclass;
 $$);
 
@@ -290,16 +290,16 @@ DROP EXTENSION seg CASCADE;
 
 -- Recheck the pg_dist_object
 SELECT pg_proc.proname as DistributedFunction
-FROM citus.pg_dist_object, pg_proc
+FROM pg_catalog.pg_dist_object, pg_proc
 WHERE pg_proc.proname = 'seg_in' and
-pg_proc.oid = citus.pg_dist_object.objid and
+pg_proc.oid = pg_catalog.pg_dist_object.objid and
 classid = 'pg_proc'::regclass;
 
 SELECT run_command_on_workers($$
 SELECT count(*)
-FROM citus.pg_dist_object, pg_proc
+FROM pg_catalog.pg_dist_object, pg_proc
 WHERE pg_proc.proname = 'seg_in' and
-pg_proc.oid = citus.pg_dist_object.objid and
+pg_proc.oid = pg_catalog.pg_dist_object.objid and
 classid = 'pg_proc'::regclass;
 $$);
 
@@ -309,33 +309,33 @@ CREATE EXTENSION seg;
 SET citus.enable_ddl_propagation TO true;
 
 -- Check the extension in pg_dist_object
-SELECT count(*) FROM citus.pg_dist_object WHERE classid = 'pg_catalog.pg_extension'::pg_catalog.regclass AND
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_extension'::pg_catalog.regclass AND
 objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
 SELECT run_command_on_workers($$
 SELECT count(*)
-FROM citus.pg_dist_object, pg_proc
+FROM pg_catalog.pg_dist_object, pg_proc
 WHERE pg_proc.proname = 'seg_in' and
-pg_proc.oid = citus.pg_dist_object.objid and
+pg_proc.oid = pg_catalog.pg_dist_object.objid and
 classid = 'pg_proc'::regclass;
 $$);
 
 SELECT create_distributed_function('seg_in(cstring)', '$1', 'test_extension_function');
 
 -- Recheck the extension in pg_dist_object
-SELECT count(*) FROM citus.pg_dist_object WHERE classid = 'pg_catalog.pg_extension'::pg_catalog.regclass AND
+SELECT count(*) FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_extension'::pg_catalog.regclass AND
 objid = (SELECT oid FROM pg_extension WHERE extname = 'seg');
 
 SELECT pg_proc.proname as DistributedFunction
-FROM citus.pg_dist_object, pg_proc
+FROM pg_catalog.pg_dist_object, pg_proc
 WHERE pg_proc.proname = 'seg_in' and
-pg_proc.oid = citus.pg_dist_object.objid and
+pg_proc.oid = pg_catalog.pg_dist_object.objid and
 classid = 'pg_proc'::regclass;
 
 SELECT run_command_on_workers($$
 SELECT count(*)
-FROM citus.pg_dist_object, pg_proc
+FROM pg_catalog.pg_dist_object, pg_proc
 WHERE pg_proc.proname = 'seg_in' and
-pg_proc.oid = citus.pg_dist_object.objid and
+pg_proc.oid = pg_catalog.pg_dist_object.objid and
 classid = 'pg_proc'::regclass;
 $$);
 DROP EXTENSION seg;
@@ -350,11 +350,11 @@ SELECT create_distributed_table('test_extension_function', 'col1', colocate_with
 CREATE EXTENSION cube;
 
 SELECT create_distributed_function('cube(float8[], float8[])', '$1', 'test_extension_function');
-SELECT distribution_argument_index FROM citus.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::pg_catalog.regclass AND
+SELECT distribution_argument_index FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::pg_catalog.regclass AND
 objid = (SELECT oid FROM pg_proc WHERE prosrc = 'cube_a_f8_f8');
 
 SELECT create_distributed_function('cube(float8[], float8[])', '$2', 'test_extension_function');
-SELECT distribution_argument_index FROM citus.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::pg_catalog.regclass AND
+SELECT distribution_argument_index FROM pg_catalog.pg_dist_object WHERE classid = 'pg_catalog.pg_proc'::pg_catalog.regclass AND
 objid = (SELECT oid FROM pg_proc WHERE prosrc = 'cube_a_f8_f8');
 ROLLBACK;
 

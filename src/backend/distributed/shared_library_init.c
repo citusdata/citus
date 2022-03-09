@@ -23,6 +23,7 @@
 
 #include "safe_lib.h"
 
+#include "catalog/pg_authid.h"
 #include "citus_version.h"
 #include "commands/explain.h"
 #include "common/string.h"
@@ -84,12 +85,14 @@
 #include "libpq/auth.h"
 #include "port/atomics.h"
 #include "postmaster/postmaster.h"
+#include "replication/walsender.h"
 #include "storage/ipc.h"
 #include "optimizer/planner.h"
 #include "optimizer/paths.h"
 #include "tcop/tcopprot.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
+#include "utils/syscache.h"
 #include "utils/varlena.h"
 
 #include "columnar/mod.h"
@@ -113,9 +116,9 @@ static void DoInitialCleanup(void);
 static void ResizeStackToMaximumDepth(void);
 static void multi_log_hook(ErrorData *edata);
 static void RegisterConnectionCleanup(void);
-static void RegisterClientBackendCounterDecrement(void);
+static void RegisterExternalClientBackendCounterDecrement(void);
 static void CitusCleanupConnectionsAtExit(int code, Datum arg);
-static void DecrementClientBackendCounterAtExit(int code, Datum arg);
+static void DecrementExternalClientBackendCounterAtExit(int code, Datum arg);
 static void CreateRequiredDirectories(void);
 static void RegisterCitusConfigVariables(void);
 static void OverridePostgresConfigAssignHooks(void);
@@ -135,6 +138,7 @@ static const char * LocalPoolSizeGucShowHook(void);
 static bool StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource
 											 source);
 static void CitusAuthHook(Port *port, int status);
+static bool IsSuperuser(char *userName);
 
 
 static ClientAuthentication_hook_type original_client_auth_hook = NULL;
@@ -216,6 +220,13 @@ static const struct config_enum_entry explain_analyze_sort_method_options[] = {
 	{ "execution-time", EXPLAIN_ANALYZE_SORT_BY_TIME, false },
 	{ "taskId", EXPLAIN_ANALYZE_SORT_BY_TASK_ID, false },
 	{ NULL, 0, false }
+};
+
+static const struct config_enum_entry create_object_propagation_options[] = {
+	{"deferred",  CREATE_OBJECT_PROPAGATION_DEFERRED,  false},
+	{"automatic", CREATE_OBJECT_PROPAGATION_AUTOMATIC, false},
+	{"immediate", CREATE_OBJECT_PROPAGATION_IMMEDIATE, false},
+	{NULL,        0,                                   false}
 };
 
 /* *INDENT-ON* */
@@ -481,16 +492,16 @@ RegisterConnectionCleanup(void)
 
 
 /*
- * RegisterClientBackendCounterDecrement is called when the backend terminates.
+ * RegisterExternalClientBackendCounterDecrement is called when the backend terminates.
  * For all client backends, we register a callback that will undo
  */
 static void
-RegisterClientBackendCounterDecrement(void)
+RegisterExternalClientBackendCounterDecrement(void)
 {
 	static bool registeredCleanup = false;
 	if (registeredCleanup == false)
 	{
-		before_shmem_exit(DecrementClientBackendCounterAtExit, 0);
+		before_shmem_exit(DecrementExternalClientBackendCounterAtExit, 0);
 
 		registeredCleanup = true;
 	}
@@ -520,13 +531,13 @@ CitusCleanupConnectionsAtExit(int code, Datum arg)
 
 
 /*
- * DecrementClientBackendCounterAtExit is called before_shmem_exit() of the
+ * DecrementExternalClientBackendCounterAtExit is called before_shmem_exit() of the
  * backend for the purposes decrementing
  */
 static void
-DecrementClientBackendCounterAtExit(int code, Datum arg)
+DecrementExternalClientBackendCounterAtExit(int code, Datum arg)
 {
-	DecrementClientBackendCounter();
+	DecrementExternalClientBackendCounter();
 }
 
 
@@ -603,7 +614,7 @@ RegisterCitusConfigVariables(void)
 		false,
 #endif
 		PGC_SIGHUP,
-		GUC_STANDARD,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -667,6 +678,24 @@ RegisterCitusConfigVariables(void)
 		0.0, 0.0, 1.0,
 		PGC_USERSET,
 		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomEnumVariable(
+		"citus.create_object_propagation",
+		gettext_noop("Controls the behavior of CREATE statements in transactions for "
+					 "supported objects"),
+		gettext_noop("When creating new objects in transactions this setting is used to "
+					 "determine the behavior for propagating. When objects are created "
+					 "in a multi-statement transaction block Citus needs to switch to "
+					 "sequential mode (if not already) to make sure the objects are "
+					 "visible to later statements on shards. The switch to sequential is "
+					 "not always desired. By changing this behavior the user can trade "
+					 "off performance for full transactional consistency on the creation "
+					 "of new objects."),
+		&CreateObjectPropagationMode,
+		CREATE_OBJECT_PROPAGATION_DEFERRED, create_object_propagation_options,
+		PGC_USERSET,
+		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);
 
 	DefineCustomBoolVariable(
@@ -1312,6 +1341,23 @@ RegisterCitusConfigVariables(void)
 		&MaxCachedConnectionsPerWorker,
 		1, 0, INT_MAX,
 		PGC_USERSET,
+		GUC_STANDARD,
+		NULL, NULL, NULL);
+
+	DefineCustomIntVariable(
+		"citus.max_client_connections",
+		gettext_noop("Sets the maximum number of connections regular clients can make"),
+		gettext_noop("To ensure that a Citus cluster has a sufficient number of "
+					 "connection slots to serve queries internally, it can be "
+					 "useful to reserve connection slots for Citus internal "
+					 "connections. When max_client_connections is set to a value "
+					 "below max_connections, the remaining connections are reserved "
+					 "for connections between Citus nodes. This does not affect "
+					 "superuser_reserved_connections. If set to -1, no connections "
+					 "are reserved."),
+		&MaxClientConnections,
+		-1, -1, MaxConnections,
+		PGC_SUSET,
 		GUC_STANDARD,
 		NULL, NULL, NULL);
 
@@ -2146,12 +2192,86 @@ StatisticsCollectionGucCheckHook(bool *newval, void **extra, GucSource source)
 static void
 CitusAuthHook(Port *port, int status)
 {
+	uint64 gpid = ExtractGlobalPID(port->application_name);
+
+	/* external connections to not have a GPID immediately */
+	if (gpid == INVALID_CITUS_INTERNAL_BACKEND_GPID)
+	{
+		/*
+		 * We raise the shared connection counter pre-emptively. As a result, we may
+		 * have scenarios in which a few simultaneous connection attempts prevent
+		 * each other from succeeding, but we avoid scenarios where we oversubscribe
+		 * the system.
+		 *
+		 * By also calling RegisterExternalClientBackendCounterDecrement here, we
+		 * immediately lower the counter if we throw a FATAL error below. The client
+		 * connection counter may temporarily exceed maxClientConnections in between.
+		 */
+		RegisterExternalClientBackendCounterDecrement();
+
+		uint32 externalClientCount = IncrementExternalClientBackendCounter();
+
+		/*
+		 * Limit non-superuser client connections if citus.max_client_connections
+		 * is set.
+		 */
+		if (MaxClientConnections >= 0 &&
+			!IsSuperuser(port->user_name) &&
+			externalClientCount > MaxClientConnections)
+		{
+			ereport(FATAL, (errcode(ERRCODE_TOO_MANY_CONNECTIONS),
+							errmsg("remaining connection slots are reserved for "
+								   "non-replication superuser connections"),
+							errdetail("the server is configured to accept up to %d "
+									  "regular client connections",
+									  MaxClientConnections)));
+		}
+
+		/*
+		 * Right after this, before we assign global pid, this backend
+		 * might get blocked by a DDL as that happens during parsing.
+		 *
+		 * That's why, lets mark the backend as an external backend
+		 * which is likely to execute a distributed command.
+		 *
+		 * We do this so that this backend gets the chance to show
+		 * up in citus_lock_waits.
+		 */
+		InitializeBackendData();
+		SetBackendDataDistributedCommandOriginator(true);
+	}
+
 	/* let other authentication hooks to kick in first */
 	if (original_client_auth_hook)
 	{
 		original_client_auth_hook(port, status);
 	}
+}
 
-	RegisterClientBackendCounterDecrement();
-	IncrementClientBackendCounter();
+
+/*
+ * IsSuperuser returns whether the role with the given name is superuser.
+ */
+static bool
+IsSuperuser(char *roleName)
+{
+	if (roleName == NULL)
+	{
+		return false;
+	}
+
+	HeapTuple roleTuple = SearchSysCache1(AUTHNAME, CStringGetDatum(roleName));
+	if (!HeapTupleIsValid(roleTuple))
+	{
+		ereport(FATAL,
+				(errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+				 errmsg("role \"%s\" does not exist", roleName)));
+	}
+
+	Form_pg_authid rform = (Form_pg_authid) GETSTRUCT(roleTuple);
+	bool isSuperuser = rform->rolsuper;
+
+	ReleaseSysCache(roleTuple);
+
+	return isSuperuser;
 }

@@ -15,6 +15,8 @@ BEGIN
 END;
 $$ language plpgsql;
 SELECT create_distributed_function('table_returner(int)');
+NOTICE:  procedure row_types.table_returner is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -29,6 +31,8 @@ BEGIN
 END;
 $$ language plpgsql;
 SELECT create_distributed_function('record_returner(int)');
+NOTICE:  procedure row_types.record_returner is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 
@@ -42,6 +46,8 @@ BEGIN
 END;
 $$ language plpgsql;
 SELECT create_distributed_function('identity_returner(anyelement)');
+NOTICE:  procedure row_types.identity_returner is already distributed
+DETAIL:  Citus distributes procedures with CREATE [PROCEDURE|FUNCTION|AGGREGATE] commands
  create_distributed_function
 ---------------------------------------------------------------------
 

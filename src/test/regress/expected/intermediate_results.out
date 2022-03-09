@@ -251,9 +251,6 @@ SELECT * FROM squares ORDER BY x;
  5 | 25
 (5 rows)
 
--- empty shard interval array should raise error
-SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[0]);
-ERROR:  invalid distribution column value
 -- cannot use DDL commands
 select broadcast_intermediate_result('a', 'create table foo(int serial)');
 ERROR:  cannot execute utility commands
@@ -507,10 +504,9 @@ WARNING:  Query could not find the intermediate result file "squares_2", it was 
 (0 rows)
 
 ROLLBACK TO SAVEPOINT s1;
--- fetch from worker 2 should fail
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', :worker_2_port);
-ERROR:  could not open file "base/pgsql_job_cache/xx_x_xxx/squares_1.data": No such file or directory
-CONTEXT:  while executing command on localhost:xxxxx
+-- fetch from invalid worker port should fail
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', 57635);
+ERROR:  cannot connect to localhost:xxxxx to fetch intermediate results
 ROLLBACK TO SAVEPOINT s1;
 -- still, results aren't available on coordinator yet
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);

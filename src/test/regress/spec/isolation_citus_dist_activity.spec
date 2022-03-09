@@ -1,5 +1,9 @@
 setup
 {
+    CREATE OR REPLACE FUNCTION test_assign_global_pid()
+        RETURNS void
+        LANGUAGE C STRICT
+    AS 'citus', $$test_assign_global_pid$$;
     SET citus.shard_replication_factor TO 1;
     SET citus.shard_count TO 4;
     select setval('pg_dist_shardid_seq', GREATEST(1300000, nextval('pg_dist_shardid_seq')));
@@ -71,8 +75,7 @@ step "s2-sleep"
 
 step "s2-view-dist"
 {
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' and query not ILIKE '%BEGIN%' and query NOT ILIKE '%pg_catalog.pg_isolation_test_session_is_blocked%' ORDER BY query DESC;
-
+	SELECT query, citus_nodename_for_nodeid(citus_nodeid_for_gpid(global_pid)), citus_nodeport_for_nodeid(citus_nodeid_for_gpid(global_pid)), state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%BEGIN%'), ('%pg_catalog.pg_isolation_test_session_is_blocked%'), ('%citus_add_node%')) AND backend_type = 'client backend' ORDER BY query DESC;
 }
 
 session "s3"
@@ -89,8 +92,22 @@ step "s3-rollback"
 
 step "s3-view-worker"
 {
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_worker_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' ORDER BY query DESC;
+	SELECT query, citus_nodename_for_nodeid(citus_nodeid_for_gpid(global_pid)), citus_nodeport_for_nodeid(citus_nodeid_for_gpid(global_pid)), state, wait_event_type, wait_event, usename, datname FROM citus_stat_activity WHERE query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%csa_from_one_node%')) AND is_worker_query = true AND backend_type = 'client backend' ORDER BY query DESC;
 }
+
+session "s4"
+step "add-coordinator-to-metadata"
+{
+    SELECT 1 FROM citus_add_node('localhost', 57636, groupid:=0);
+    SELECT test_assign_global_pid();
+}
+
+step "remove-coordinator-from-metadata"
+{
+    SELECT citus_remove_node('localhost', 57636);
+}
+
+permutation "add-coordinator-to-metadata"
 
 // we prefer to sleep before "s2-view-dist" so that we can ensure
 // the "wait_event" in the output doesn't change randomly (e.g., NULL to CliendRead etc.)
@@ -98,3 +115,5 @@ permutation "s1-cache-connections" "s1-begin" "s2-begin" "s3-begin" "s1-alter-ta
 permutation "s1-cache-connections" "s1-begin" "s2-begin" "s3-begin" "s1-insert" "s2-sleep" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
 permutation "s1-cache-connections" "s1-begin" "s2-begin" "s3-begin" "s1-select" "s2-sleep" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
 permutation "s1-cache-connections" "s1-begin" "s2-begin" "s3-begin" "s1-select-router" "s2-sleep" "s2-view-dist" "s3-view-worker" "s2-rollback" "s1-commit" "s3-rollback"
+
+permutation "remove-coordinator-from-metadata"

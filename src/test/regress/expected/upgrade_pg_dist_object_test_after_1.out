@@ -1,0 +1,54 @@
+-- run this test only when old citus version is 9.0
+\set upgrade_test_old_citus_version `echo "$CITUS_OLD_VERSION"`
+SELECT substring(:'upgrade_test_old_citus_version', 'v(\d+)\.\d+\.\d+')::int = 9 AND
+       substring(:'upgrade_test_old_citus_version', 'v\d+\.(\d+)\.\d+')::int = 0
+AS upgrade_test_old_citus_version_e_9_0;
+ upgrade_test_old_citus_version_e_9_0
+---------------------------------------------------------------------
+ t
+(1 row)
+
+\gset
+\if :upgrade_test_old_citus_version_e_9_0
+\else
+\q
+\endif
+-- drop objects from previous test (uprade_basic_after.sql) for a clean test
+-- drop upgrade_basic schema and switch back to public schema
+SET search_path to public;
+DROP SCHEMA upgrade_basic CASCADE;
+NOTICE:  drop cascades to 7 other objects
+DETAIL:  drop cascades to table upgrade_basic.t
+drop cascades to table upgrade_basic.tp
+drop cascades to table upgrade_basic.t_ab
+drop cascades to table upgrade_basic.t2
+drop cascades to table upgrade_basic.r
+drop cascades to table upgrade_basic.tr
+drop cascades to table upgrade_basic.t_range
+-- as we updated citus to available version,
+--   "isn" extension
+--   "new_schema" schema
+--   "public" schema
+--   "fooschema" schema
+--   "footype" type (under schema 'fooschema')
+ -- will now be marked as distributed
+ -- but,
+ --   "seg" extension
+ -- will not be marked as distributed
+-- see underlying objects
+SELECT i.* FROM pg_catalog.pg_dist_object, pg_identify_object_as_address(classid, objid, objsubid) i ORDER BY 1, 2, 3;
+      type      | object_names | object_args
+---------------------------------------------------------------------
+  database                  | {postgres}                                               | {}
+  extension                 | {isn}                                                    | {}
+  role                      | {postgres}                                               | {}
+  schema                    | {fooschema}                                              | {}
+  schema                    | {new_schema}                                             | {}
+  schema                    | {public}                                                 | {}
+  table                     | {fooschema,footable}                                     | {}
+  table                     | {new_schema,another_dist_table}                          | {}
+  table                     | {public,dist_table}                                      | {}
+  table                     | {public,isn_dist_table}                                  | {}
+  type                      | {fooschema.footype}                                      | {}
+ (11 rows)
+

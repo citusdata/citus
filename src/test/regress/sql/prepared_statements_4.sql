@@ -16,17 +16,17 @@ SELECT key, value FROM text_partition_column_table ORDER BY key;
 
 
 
+-- TODO: Uncomment tests below once domains are supported
+-- PREPARE prepared_coercion_to_domain_insert(text) AS
+--	INSERT INTO domain_partition_column_table VALUES ($1, 1);
 
-PREPARE prepared_coercion_to_domain_insert(text) AS
-	INSERT INTO domain_partition_column_table VALUES ($1, 1);
-
-EXECUTE prepared_coercion_to_domain_insert('test-1');
-EXECUTE prepared_coercion_to_domain_insert('test-2');
-EXECUTE prepared_coercion_to_domain_insert('test-3');
-EXECUTE prepared_coercion_to_domain_insert('test-4');
-EXECUTE prepared_coercion_to_domain_insert('test-5');
-EXECUTE prepared_coercion_to_domain_insert('test-6');
-EXECUTE prepared_coercion_to_domain_insert('test-7');
+-- EXECUTE prepared_coercion_to_domain_insert('test-1');
+-- EXECUTE prepared_coercion_to_domain_insert('test-2');
+-- EXECUTE prepared_coercion_to_domain_insert('test-3');
+-- EXECUTE prepared_coercion_to_domain_insert('test-4');
+-- EXECUTE prepared_coercion_to_domain_insert('test-5');
+-- EXECUTE prepared_coercion_to_domain_insert('test-6');
+-- EXECUTE prepared_coercion_to_domain_insert('test-7');
 
 
 

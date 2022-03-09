@@ -38,6 +38,7 @@ extern bool ShouldSyncTableMetadata(Oid relationId);
 extern bool ShouldSyncTableMetadataViaCatalog(Oid relationId);
 extern List * NodeMetadataCreateCommands(void);
 extern List * DistributedObjectMetadataSyncCommandList(void);
+extern List * ColocationGroupCreateCommandList(void);
 extern List * CitusTableMetadataCreateCommandList(Oid relationId);
 extern List * NodeMetadataDropCommands(void);
 extern char * MarkObjectsDistributedCreateCommand(List *addresses,
@@ -73,13 +74,21 @@ extern List * GetSequencesFromAttrDef(Oid attrdefOid);
 extern void GetDependentSequencesWithRelation(Oid relationId, List **attnumList,
 											  List **dependentSequenceList, AttrNumber
 											  attnum);
+extern List * GetDependentFunctionsWithRelation(Oid relationId);
 extern Oid GetAttributeTypeOid(Oid relationId, AttrNumber attnum);
+extern void SetLocalEnableMetadataSync(bool state);
+extern void SyncNewColocationGroupToNodes(uint32 colocationId, int shardCount,
+										  int replicationFactor,
+										  Oid distributionColumType,
+										  Oid distributionColumnCollation);
+extern void SyncDeleteColocationGroupToNodes(uint32 colocationId);
 
 #define DELETE_ALL_NODES "DELETE FROM pg_dist_node"
 #define DELETE_ALL_PLACEMENTS "DELETE FROM pg_dist_placement"
 #define DELETE_ALL_SHARDS "DELETE FROM pg_dist_shard"
-#define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM citus.pg_dist_object"
+#define DELETE_ALL_DISTRIBUTED_OBJECTS "DELETE FROM pg_catalog.pg_dist_object"
 #define DELETE_ALL_PARTITIONS "DELETE FROM pg_dist_partition"
+#define DELETE_ALL_COLOCATION "DELETE FROM pg_catalog.pg_dist_colocation"
 #define REMOVE_ALL_SHELL_TABLES_COMMAND \
 	"SELECT worker_drop_shell_table(logicalrelid::regclass::text) FROM pg_dist_partition"
 #define REMOVE_ALL_CITUS_TABLES_COMMAND \

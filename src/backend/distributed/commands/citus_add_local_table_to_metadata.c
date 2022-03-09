@@ -31,6 +31,7 @@
 #include "distributed/commands/sequence.h"
 #include "distributed/commands/utility_hook.h"
 #include "distributed/metadata/distobject.h"
+#include "distributed/metadata/dependency.h"
 #include "distributed/foreign_key_relationship.h"
 #include "distributed/listutils.h"
 #include "distributed/local_executor.h"
@@ -317,6 +318,7 @@ CreateCitusLocalTable(Oid relationId, bool cascadeViaForeignKeys, bool autoConve
 	 * Ensure dependencies exist as we will create shell table on the other nodes
 	 * in the MX case.
 	 */
+	EnsureRelationDependenciesCanBeDistributed(&tableAddress);
 	EnsureDependenciesExistOnAllNodes(&tableAddress);
 
 	/*

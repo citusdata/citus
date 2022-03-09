@@ -106,6 +106,9 @@ int MaxSharedPoolSize = 0;
  */
 int LocalSharedPoolSize = 0;
 
+/* number of connections reserved for Citus */
+int MaxClientConnections = ALLOW_ALL_EXTERNAL_CONNECTIONS;
+
 
 /* the following two structs are used for accessing shared memory */
 static HTAB *SharedConnStatsHash = NULL;
@@ -193,6 +196,25 @@ StoreAllRemoteConnectionStats(Tuplestorestate *tupleStore, TupleDesc tupleDescri
 
 
 /*
+ * GetMaxClientConnections returns the value of citus.max_client_connections,
+ * or max_connections when it is -1 or when connecting as superuser.
+ *
+ * The latter is done because citus.max_client_connections does not apply to
+ * superuser.
+ */
+int
+GetMaxClientConnections(void)
+{
+	if (MaxClientConnections == ALLOW_ALL_EXTERNAL_CONNECTIONS || superuser())
+	{
+		return MaxConnections;
+	}
+
+	return MaxClientConnections;
+}
+
+
+/*
  * GetMaxSharedPoolSize is a wrapper around MaxSharedPoolSize which is controlled
  * via a GUC.
  *  "0" means adjust MaxSharedPoolSize automatically by using MaxConnections
@@ -204,7 +226,7 @@ GetMaxSharedPoolSize(void)
 {
 	if (MaxSharedPoolSize == ADJUST_POOLSIZE_AUTOMATICALLY)
 	{
-		return MaxConnections;
+		return GetMaxClientConnections();
 	}
 
 	return MaxSharedPoolSize;
@@ -223,7 +245,7 @@ GetLocalSharedPoolSize(void)
 {
 	if (LocalSharedPoolSize == ADJUST_POOLSIZE_AUTOMATICALLY)
 	{
-		return MaxConnections * 0.5;
+		return GetMaxClientConnections() * 0.5;
 	}
 
 	return LocalSharedPoolSize;
@@ -318,7 +340,7 @@ TryToIncrementSharedConnectionCounter(const char *hostname, int port)
 			return false;
 		}
 
-		activeBackendCount = GetAllActiveClientBackendCount();
+		activeBackendCount = GetExternalClientBackendCount();
 	}
 
 	LockConnectionSharedMemory(LW_EXCLUSIVE);

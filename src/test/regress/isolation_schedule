@@ -62,6 +62,7 @@ test: isolation_validate_vs_insert
 test: isolation_insert_select_conflict
 test: shared_connection_waits
 test: isolation_cancellation
+test: isolation_max_client_connections
 test: isolation_undistribute_table
 test: isolation_fix_partition_shard_index_names
 test: isolation_global_pid

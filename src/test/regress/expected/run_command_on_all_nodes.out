@@ -1,0 +1,88 @@
+CREATE SCHEMA run_command_on_all_nodes;
+SET search_path TO run_command_on_all_nodes;
+-- check coordinator isn't in metadata
+SELECT count(*) != 0 AS "Coordinator is in Metadata"
+FROM pg_dist_node
+WHERE groupid IN (
+    SELECT groupid FROM pg_dist_local_group
+);
+ Coordinator is in Metadata
+---------------------------------------------------------------------
+ f
+(1 row)
+
+-- run a simple select query and check it also runs in coordinator
+SELECT nodeid NOT IN (SELECT nodeid FROM pg_dist_node) AS "Is Coordinator", success, result FROM run_command_on_all_nodes('SELECT 1') ORDER BY 1;
+ Is Coordinator | success | result
+---------------------------------------------------------------------
+ f              | t       | 1
+ f              | t       | 1
+ t              | t       | 1
+(3 rows)
+
+-- check that when coordinator is not in metadata and run_command_on_all_nodes is called from
+-- a worker node, command is not run on the coordinator
+\c - - - :worker_1_port
+SELECT nodeid NOT IN (SELECT nodeid FROM pg_dist_node) AS "Is Coordinator", success, result FROM run_command_on_all_nodes('SELECT 1') ORDER BY 1;
+ Is Coordinator | success | result
+---------------------------------------------------------------------
+ f              | t       | 1
+ f              | t       | 1
+(2 rows)
+
+\c - - - :master_port
+-- create a table
+SELECT result FROM run_command_on_all_nodes('CREATE TABLE run_command_on_all_nodes.tbl (a INT)');
+    result
+---------------------------------------------------------------------
+ CREATE TABLE
+ CREATE TABLE
+ CREATE TABLE
+(3 rows)
+
+SELECT tablename FROM pg_tables WHERE schemaname = 'run_command_on_all_nodes';
+ tablename
+---------------------------------------------------------------------
+ tbl
+(1 row)
+
+\c - - - :worker_1_port
+SELECT tablename FROM pg_tables WHERE schemaname = 'run_command_on_all_nodes';
+ tablename
+---------------------------------------------------------------------
+ tbl
+(1 row)
+
+\c - - - :master_port
+SELECT result FROM run_command_on_all_nodes('SELECT tablename FROM pg_tables WHERE schemaname = ''run_command_on_all_nodes'';');
+ result
+---------------------------------------------------------------------
+ tbl
+ tbl
+ tbl
+(3 rows)
+
+-- break a node and check messages
+SELECT nodeid AS worker_1_nodeid FROM pg_dist_node WHERE nodeport = :worker_1_port \gset
+UPDATE pg_dist_node SET nodeport = 0 WHERE nodeid = :worker_1_nodeid;
+SELECT nodeid = :worker_1_nodeid AS "Is Worker 1", success, result FROM run_command_on_all_nodes('SELECT 1') ORDER BY 1;
+ Is Worker 1 | success |              result
+---------------------------------------------------------------------
+ f           | t       | 1
+ f           | t       | 1
+ t           | f       | failed to connect to localhost:xxxxx
+(3 rows)
+
+SELECT nodeid = :worker_1_nodeid AS "Is Worker 1", success, result FROM run_command_on_all_nodes('SELECT 1', give_warning_for_connection_errors:=true) ORDER BY 1;
+WARNING:  Error on node with node id xxxxx: failed to connect to localhost:xxxxx
+CONTEXT:  PL/pgSQL function run_command_on_all_nodes(text,boolean,boolean) line XX at RAISE
+ Is Worker 1 | success |              result
+---------------------------------------------------------------------
+ f           | t       | 1
+ f           | t       | 1
+ t           | f       | failed to connect to localhost:xxxxx
+(3 rows)
+
+UPDATE pg_dist_node SET nodeport = :worker_1_port WHERE nodeid = :worker_1_nodeid;
+DROP SCHEMA run_command_on_all_nodes CASCADE;
+NOTICE:  drop cascades to table run_command_on_all_nodes.tbl

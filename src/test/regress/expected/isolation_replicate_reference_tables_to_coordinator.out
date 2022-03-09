@@ -1,9 +1,17 @@
-Parsed test spec with 3 sessions
+Parsed test spec with 4 sessions
 
-starting permutation: s1-begin s2-begin s1-update-dist-table s2-lock-ref-table-placement-on-coordinator s1-lock-ref-table-placement-on-coordinator s2-update-dist-table deadlock-checker-call s1-end s2-end
+starting permutation: add-node s1-begin s2-begin s1-update-dist-table s2-lock-ref-table-placement-on-coordinator s1-lock-ref-table-placement-on-coordinator s2-update-dist-table deadlock-checker-call s1-end s2-end
 create_distributed_table
 ---------------------------------------------------------------------
 
+(1 row)
+
+step add-node:
+  SELECT 1 FROM master_add_node('localhost', 57636, groupid => 0);
+
+?column?
+---------------------------------------------------------------------
+       1
 (1 row)
 
 step s1-begin:
@@ -59,10 +67,18 @@ master_remove_node
 (1 row)
 
 
-starting permutation: s1-begin s2-begin s1-update-ref-table s2-sleep s2-view-dist s2-view-worker s2-end s1-end
+starting permutation: add-node s1-begin s2-begin s1-update-ref-table s2-sleep s2-view-dist s2-view-worker s2-end s1-end
 create_distributed_table
 ---------------------------------------------------------------------
 
+(1 row)
+
+step add-node:
+  SELECT 1 FROM master_add_node('localhost', 57636, groupid => 0);
+
+?column?
+---------------------------------------------------------------------
+       1
 (1 row)
 
 step s1-begin:
@@ -83,32 +99,37 @@ pg_sleep
 (1 row)
 
 step s2-view-dist:
-        SELECT query, query_hostname, query_hostport, distributed_query_host_name, distributed_query_host_port, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE query NOT ILIKE '%pg_prepared_xacts%' AND query NOT ILIKE '%COMMIT%' AND query NOT ILIKE '%pg_isolation_test_session_is_blocked%' AND query NOT ILIKE '%BEGIN%' ORDER BY query DESC;
+        SELECT query, state, wait_event_type, wait_event, usename, datname FROM citus_dist_stat_activity WHERE backend_type = 'client backend' AND query NOT ILIKE ALL(VALUES('%pg_prepared_xacts%'), ('%COMMIT%'), ('%pg_isolation_test_session_is_blocked%'), ('%BEGIN%'), ('%add_node%')) ORDER BY query DESC;
 
-query                                    |query_hostname  |query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                    |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
 
   SELECT check_distributed_deadlocks();
-|coordinator_host|         57636|                           |                          0|idle               |Client         |ClientRead|postgres|regression
+|idle               |Client         |ClientRead|postgres|regression
 
     update ref_table set a = a + 1;
-    |coordinator_host|         57636|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+    |idle in transaction|Client         |ClientRead|postgres|regression
 (2 rows)
 
 step s2-view-worker:
-	SELECT query, query_hostname, query_hostport, distributed_query_host_name,
-           distributed_query_host_port, state, wait_event_type, wait_event, usename, datname
-    FROM citus_worker_stat_activity
-    WHERE query NOT ILIKE '%pg_prepared_xacts%' AND
-          query NOT ILIKE '%COMMIT%' AND
-          query NOT ILIKE '%dump_local_%' AND
-          query NOT ILIKE '%citus_internal_local_blocked_processes%'
-    ORDER BY query, query_hostport DESC;
+	SELECT query, state, wait_event_type, wait_event, usename, datname
+    FROM citus_stat_activity
+    WHERE query NOT ILIKE ALL(VALUES
+      ('%pg_prepared_xacts%'),
+      ('%COMMIT%'),
+      ('%dump_local_%'),
+      ('%citus_internal_local_blocked_processes%'),
+      ('%add_node%'),
+      ('%csa_from_one_node%'))
+    AND is_worker_query = true
+    AND backend_type = 'client backend'
+    AND query != ''
+    ORDER BY query DESC;
 
-query                                                                         |query_hostname|query_hostport|distributed_query_host_name|distributed_query_host_port|state              |wait_event_type|wait_event|usename |datname
+query                                                                         |state              |wait_event_type|wait_event|usename |datname
 ---------------------------------------------------------------------
-UPDATE public.ref_table_1500777 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost     |         57638|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
-UPDATE public.ref_table_1500777 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|localhost     |         57637|coordinator_host           |                      57636|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500777 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|idle in transaction|Client         |ClientRead|postgres|regression
+UPDATE public.ref_table_1500777 ref_table SET a = (a OPERATOR(pg_catalog.+) 1)|idle in transaction|Client         |ClientRead|postgres|regression
 (2 rows)
 
 step s2-end:
@@ -123,10 +144,18 @@ master_remove_node
 (1 row)
 
 
-starting permutation: s1-begin s2-begin s1-update-ref-table s2-active-transactions s1-end s2-end
+starting permutation: add-node s1-begin s2-begin s1-update-ref-table s2-active-transactions s1-end s2-end
 create_distributed_table
 ---------------------------------------------------------------------
 
+(1 row)
+
+step add-node:
+  SELECT 1 FROM master_add_node('localhost', 57636, groupid => 0);
+
+?column?
+---------------------------------------------------------------------
+       1
 (1 row)
 
 step s1-begin:

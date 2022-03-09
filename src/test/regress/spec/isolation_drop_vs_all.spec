@@ -2,30 +2,37 @@
 // How we organize this isolation test spec, is explained at README.md file in this directory.
 //
 
-// create range distributed table to test behavior of DROP in concurrent operations
+// create distributed table to test behavior of DROP in concurrent operations
 setup
 {
 	SELECT citus_internal.replace_isolation_tester_func();
 	SELECT citus_internal.refresh_isolation_tester_prepared_statement();
 
 	SET citus.shard_replication_factor TO 1;
-	CREATE TABLE drop_hash(id integer, data text);
-	SELECT create_distributed_table('drop_hash', 'id');
+	CREATE SCHEMA drop_tests
+		CREATE TABLE drop_hash(id integer, data text);
+	SELECT create_distributed_table('drop_tests.drop_hash', 'id');
+
+	CREATE SCHEMA drop_tests_2
+		CREATE TABLE drop_hash_2(id integer, data text);
+	SELECT create_distributed_table('drop_tests_2.drop_hash_2', 'id');
 }
 
 // drop distributed table
 teardown
 {
-	DROP TABLE IF EXISTS drop_hash CASCADE;
+	DROP TABLE IF EXISTS drop_tests.drop_hash, drop_tests_2.drop_hash_2 CASCADE;
+	DROP SCHEMA IF EXISTS drop_tests, drop_tests_2 CASCADE;
 
 	SELECT citus_internal.restore_isolation_tester_func();
 }
 
 // session 1
 session "s1"
-step "s1-initialize" { COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV; }
+step "s1-initialize" { SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;}
 step "s1-begin" { BEGIN; }
 step "s1-drop" { DROP TABLE drop_hash; }
+step "s1-drop-schema" { DROP SCHEMA drop_tests CASCADE; }
 step "s1-ddl-create-index" { CREATE INDEX drop_hash_index ON drop_hash(id); }
 step "s1-ddl-drop-index" { DROP INDEX drop_hash_index; }
 step "s1-ddl-add-column" { ALTER TABLE drop_hash ADD new_column int DEFAULT 0; }
@@ -41,8 +48,11 @@ step "s1-commit" { COMMIT; }
 
 // session 2
 session "s2"
+step "s2-initialize" { SET search_path TO 'drop_tests'; }
 step "s2-begin" { BEGIN; }
 step "s2-drop" { DROP TABLE drop_hash; }
+step "s2-drop-schema" { DROP SCHEMA drop_tests CASCADE; }
+step "s2-drop-schema-2" { DROP SCHEMA drop_tests_2 CASCADE; }
 step "s2-ddl-create-index" { CREATE INDEX drop_hash_index ON drop_hash(id); }
 step "s2-ddl-drop-index" { DROP INDEX drop_hash_index; }
 step "s2-ddl-create-index-concurrently" { CREATE INDEX CONCURRENTLY drop_hash_index ON drop_hash(id); }
@@ -54,23 +64,25 @@ step "s2-distribute-table" { SELECT create_distributed_table('drop_hash', 'id');
 step "s2-commit" { COMMIT; }
 
 // permutations - DROP vs DROP
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-drop-schema" "s2-drop-schema" "s1-commit" "s2-commit" "s1-select-count"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-drop-schema" "s2-drop-schema-2" "s1-commit" "s2-commit" "s1-select-count"
 
 // permutations - DROP first
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-drop-index" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s1-drop" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-drop-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-rename-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-table-size" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-distribute-table" "s1-commit" "s2-commit" "s1-select-count"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-create-index" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s2-initialize" "s1-ddl-create-index" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-drop-index" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s1-drop" "s2-ddl-create-index-concurrently" "s1-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-add-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s2-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-drop-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-ddl-rename-column" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-table-size" "s1-commit" "s2-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-drop" "s2-distribute-table" "s1-commit" "s2-commit" "s1-select-count"
 
 // permutations - DROP second
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-create-index" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-ddl-create-index" "s1-begin" "s2-begin" "s1-ddl-drop-index" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-add-column" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-ddl-drop-column" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-ddl-rename-column" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
-permutation "s1-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"
-permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s1-begin" "s2-begin" "s1-distribute-table" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-ddl-create-index" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s2-initialize" "s1-ddl-create-index" "s1-begin" "s2-begin" "s1-ddl-drop-index" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-indexes"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-ddl-add-column" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s2-initialize" "s1-ddl-add-column" "s1-begin" "s2-begin" "s1-ddl-drop-column" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-ddl-rename-column" "s2-drop" "s1-commit" "s2-commit" "s1-select-count" "s1-show-columns"
+permutation "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-table-size" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"
+permutation "s1-drop" "s1-create-non-distributed-table" "s1-initialize" "s2-initialize" "s1-begin" "s2-begin" "s1-distribute-table" "s2-drop" "s1-commit" "s2-commit" "s1-select-count"

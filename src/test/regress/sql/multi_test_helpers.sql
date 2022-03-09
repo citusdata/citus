@@ -91,7 +91,7 @@ END;$$;
 CREATE OR REPLACE FUNCTION colocate_proc_with_table(procname text, tablerelid regclass, argument_index int)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
-    update citus.pg_dist_object
+    update pg_catalog.pg_dist_object
     set distribution_argument_index = argument_index, colocationid = pg_dist_partition.colocationid
     from pg_proc, pg_dist_partition
     where proname = procname and oid = objid and pg_dist_partition.logicalrelid = tablerelid;

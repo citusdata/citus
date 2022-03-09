@@ -132,9 +132,6 @@ WITH (FORMAT text);
 
 SELECT * FROM squares ORDER BY x;
 
--- empty shard interval array should raise error
-SELECT worker_hash_partition_table(42,1,'SELECT a FROM generate_series(1,100) AS a', 'a', 23, ARRAY[0]);
-
 -- cannot use DDL commands
 select broadcast_intermediate_result('a', 'create table foo(int serial)');
 select broadcast_intermediate_result('a', 'prepare foo as select 1');
@@ -233,8 +230,8 @@ SAVEPOINT s1;
 -- results aren't available on coordinator yet
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);
 ROLLBACK TO SAVEPOINT s1;
--- fetch from worker 2 should fail
-SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', :worker_2_port);
+-- fetch from invalid worker port should fail
+SELECT * FROM fetch_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'localhost', 57635);
 ROLLBACK TO SAVEPOINT s1;
 -- still, results aren't available on coordinator yet
 SELECT * FROM read_intermediate_results(ARRAY['squares_1', 'squares_2']::text[], 'binary') AS res (x int, x2 int);

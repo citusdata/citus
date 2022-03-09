@@ -262,12 +262,19 @@ UPDATE field_indirection_test_2 SET (ct2_col.text_1, ct1_col.int_2) = ('text2', 
 CREATE TYPE two_ints as (if1 int, if2 int);
 CREATE DOMAIN domain AS two_ints CHECK ((VALUE).if1 > 0);
 -- citus does not propagate domain objects
+-- TODO: Once domains are supported, remove enable_metadata_sync off/on change
+-- on dependent table distribution below.
 SELECT run_command_on_workers(
 $$
     CREATE DOMAIN type_tests.domain AS type_tests.two_ints CHECK ((VALUE).if1 > 0);
 $$);
 CREATE TABLE domain_indirection_test (f1 int, f3 domain, domain_array domain[]);
+
+-- Disable metadata sync since citus doesn't support distributing
+-- domains for now.
+SET citus.enable_metadata_sync TO OFF;
 SELECT create_distributed_table('domain_indirection_test', 'f1');
+RESET citus.enable_metadata_sync;
 
 -- not supported (field indirection to underlying composite type)
 INSERT INTO domain_indirection_test (f1,f3.if1, f3.if2) VALUES (0, 1, 2);
@@ -280,6 +287,47 @@ VALUES ('(1, "text1", 2)', 3, '(4, 5)'), ('(6, "text2", 7)', 8, '(9, 10)');
 UPDATE field_indirection_test_2 SET (ct2_col, ct1_col) = ('(10, "text10", 20)', '(40, 50)') WHERE int_col=8;
 
 SELECT * FROM field_indirection_test_2 ORDER BY 1,2,3;
+
+-- test different ddl propagation modes
+SET citus.create_object_propagation TO deferred;
+BEGIN;
+CREATE TYPE deferred_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+CREATE TABLE deferred_table(a int,b deferred_type);
+SELECT create_distributed_table('deferred_table', 'a');
+SHOW citus.multi_shard_modify_mode;
+COMMIT;
+
+SET citus.create_object_propagation TO automatic;
+BEGIN;
+CREATE TYPE automatic_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+CREATE TABLE automatic_table(a int,b automatic_type);
+SELECT create_distributed_table('automatic_table', 'a');
+SHOW citus.multi_shard_modify_mode;
+COMMIT;
+
+SET citus.create_object_propagation TO automatic;
+BEGIN;
+-- force parallel execution by preceding with a analytical query
+SET LOCAL citus.force_max_query_parallelization TO on;
+SELECT count(*) FROM automatic_table;
+
+CREATE TYPE automatic2_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+CREATE TABLE automatic2_table(a int,b automatic2_type);
+SELECT create_distributed_table('automatic2_table', 'a');
+SHOW citus.multi_shard_modify_mode;
+COMMIT;
+
+SET citus.create_object_propagation TO immediate;
+BEGIN;
+CREATE TYPE immediate_type AS (a int);
+SHOW citus.multi_shard_modify_mode;
+CREATE TABLE immediate_table(a int,b immediate_type);
+SELECT create_distributed_table('immediate_table', 'a');
+SHOW citus.multi_shard_modify_mode;
+COMMIT;
 
 -- clear objects
 SET client_min_messages TO error; -- suppress cascading objects dropping

@@ -4,6 +4,16 @@ SET search_path TO propagate_foreign_server;
 -- remove node to add later
 SELECT citus_remove_node('localhost', :worker_1_port);
 
+-- not related, but added here to test propagation of aggregates
+-- to newly added nodes
+CREATE AGGREGATE array_agg (anynonarray)
+(
+    sfunc = array_agg_transfn,
+    stype = internal,
+    finalfunc = array_agg_finalfn,
+    finalfunc_extra
+);
+
 -- create schema, extension and foreign server while the worker is removed
 SET citus.enable_ddl_propagation TO OFF;
 CREATE SCHEMA test_dependent_schema;
@@ -20,6 +30,13 @@ CREATE FOREIGN TABLE foreign_table (
         OPTIONS (schema_name 'test_dependent_schema', table_name 'foreign_table_test');
 
 SELECT 1 FROM citus_add_node('localhost', :master_port, groupId=>0);
+
+-- verify that the aggregate is propagated to the new node
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%propagate_foreign_server.array_agg%';$$);
+
+-- verify that the aggregate is added top pg_dist_object on the new node
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'propagate_foreign_server.array_agg'::regproc;$$);
+
 SELECT citus_add_local_table_to_metadata('foreign_table');
 ALTER TABLE foreign_table OWNER TO pg_monitor;
 

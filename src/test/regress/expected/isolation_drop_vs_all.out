@@ -1,12 +1,13 @@
 Parsed test spec with 2 sessions
 
-starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-drop s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-drop s1-commit s2-commit s1-select-count
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -23,13 +24,60 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-ddl-create-index s1-commit s2-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop-schema s2-drop-schema s1-commit s2-commit s1-select-count
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-drop-schema: DROP SCHEMA drop_tests CASCADE;
+step s2-drop-schema: DROP SCHEMA drop_tests CASCADE; <waiting ...>
+step s1-commit: COMMIT;
+step s2-drop-schema: <... completed>
+ERROR:  schema "drop_tests" does not exist
+step s2-commit: COMMIT;
+step s1-select-count: SELECT COUNT(*) FROM drop_hash;
+ERROR:  relation "drop_hash" does not exist
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop-schema s2-drop-schema-2 s1-commit s2-commit s1-select-count
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
+step s1-begin: BEGIN;
+step s2-begin: BEGIN;
+step s1-drop-schema: DROP SCHEMA drop_tests CASCADE;
+step s2-drop-schema-2: DROP SCHEMA drop_tests_2 CASCADE;
+step s1-commit: COMMIT;
+step s2-commit: COMMIT;
+step s1-select-count: SELECT COUNT(*) FROM drop_hash;
+ERROR:  relation "drop_hash" does not exist
+restore_isolation_tester_func
+---------------------------------------------------------------------
+
+(1 row)
+
+
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-ddl-create-index s1-commit s2-commit s1-select-count s1-show-indexes
+create_distributed_table
+---------------------------------------------------------------------
+
+(1 row)
+
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -53,13 +101,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-drop s2-ddl-drop-index s1-commit s2-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s2-initialize s1-ddl-create-index s1-begin s2-begin s1-drop s2-ddl-drop-index s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-ddl-create-index: CREATE INDEX drop_hash_index ON drop_hash(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -84,13 +133,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s1-drop s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s2-initialize s1-begin s1-drop s2-ddl-create-index-concurrently s1-commit s1-select-count s1-show-indexes
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
 step s2-ddl-create-index-concurrently: CREATE INDEX CONCURRENTLY drop_hash_index ON drop_hash(id); <waiting ...>
@@ -112,13 +162,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-ddl-add-column s1-commit s2-commit s1-select-count s1-show-columns
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-ddl-add-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -142,13 +193,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-drop s2-ddl-drop-column s1-commit s2-commit s1-select-count s1-show-columns
+starting permutation: s1-initialize s2-initialize s1-ddl-add-column s1-begin s2-begin s1-drop s2-ddl-drop-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-ddl-add-column: ALTER TABLE drop_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -173,13 +225,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-ddl-rename-column s1-commit s2-commit s1-select-count s1-show-columns
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-ddl-rename-column s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -203,13 +256,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s2-begin s1-drop s2-table-size s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-table-size s1-commit s2-commit s1-select-count
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -226,7 +280,7 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-drop s2-distribute-table s1-commit s2-commit s1-select-count
+starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s2-initialize s1-begin s2-begin s1-drop s2-distribute-table s1-commit s2-commit s1-select-count
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -234,7 +288,8 @@ create_distributed_table
 
 step s1-drop: DROP TABLE drop_hash;
 step s1-create-non-distributed-table: CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-drop: DROP TABLE drop_hash;
@@ -251,13 +306,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s2-begin s1-ddl-create-index s2-drop s1-commit s2-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-ddl-create-index s2-drop s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-create-index: CREATE INDEX drop_hash_index ON drop_hash(id);
@@ -280,13 +336,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl-drop-index s2-drop s1-commit s2-commit s1-select-count s1-show-indexes
+starting permutation: s1-initialize s2-initialize s1-ddl-create-index s1-begin s2-begin s1-ddl-drop-index s2-drop s1-commit s2-commit s1-select-count s1-show-indexes
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-ddl-create-index: CREATE INDEX drop_hash_index ON drop_hash(id);
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -310,13 +367,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s2-begin s1-ddl-add-column s2-drop s1-commit s2-commit s1-select-count s1-show-columns
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-ddl-add-column s2-drop s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-add-column: ALTER TABLE drop_hash ADD new_column int DEFAULT 0;
@@ -339,13 +397,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-drop-column s2-drop s1-commit s2-commit s1-select-count s1-show-columns
+starting permutation: s1-initialize s2-initialize s1-ddl-add-column s1-begin s2-begin s1-ddl-drop-column s2-drop s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-ddl-add-column: ALTER TABLE drop_hash ADD new_column int DEFAULT 0;
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
@@ -369,13 +428,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s2-begin s1-ddl-rename-column s2-drop s1-commit s2-commit s1-select-count s1-show-columns
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-ddl-rename-column s2-drop s1-commit s2-commit s1-select-count s1-show-columns
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-ddl-rename-column: ALTER TABLE drop_hash RENAME data TO new_column;
@@ -398,13 +458,14 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-initialize s1-begin s2-begin s1-table-size s2-drop s1-commit s2-commit s1-select-count
+starting permutation: s1-initialize s2-initialize s1-begin s2-begin s1-table-size s2-drop s1-commit s2-commit s1-select-count
 create_distributed_table
 ---------------------------------------------------------------------
 
 (1 row)
 
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-table-size: SELECT citus_total_relation_size('drop_hash');
@@ -424,7 +485,7 @@ restore_isolation_tester_func
 (1 row)
 
 
-starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s1-begin s2-begin s1-distribute-table s2-drop s1-commit s2-commit s1-select-count
+starting permutation: s1-drop s1-create-non-distributed-table s1-initialize s2-initialize s1-begin s2-begin s1-distribute-table s2-drop s1-commit s2-commit s1-select-count
 create_distributed_table
 ---------------------------------------------------------------------
 
@@ -432,7 +493,8 @@ create_distributed_table
 
 step s1-drop: DROP TABLE drop_hash;
 step s1-create-non-distributed-table: CREATE TABLE drop_hash(id integer, data text); COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
-step s1-initialize: COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s1-initialize: SET search_path TO 'drop_tests'; COPY drop_hash FROM PROGRAM 'echo 0, a && echo 1, b && echo 2, c && echo 3, d && echo 4, e' WITH CSV;
+step s2-initialize: SET search_path TO 'drop_tests';
 step s1-begin: BEGIN;
 step s2-begin: BEGIN;
 step s1-distribute-table: SELECT create_distributed_table('drop_hash', 'id');

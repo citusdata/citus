@@ -160,6 +160,10 @@ create aggregate binstragg(text, text)(
     combinefunc=binstragg_combinefunc,
     stype=text
 );
+-- verify that the aggregate is added into pg_dist_object, on each worker
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.binstragg'::regproc;$$);
+
+SELECT run_command_on_workers($$select count(*) from pg_aggregate where aggfnoid::text like '%binstragg%';$$);
 
 select create_distributed_function('binstragg(text,text)');
 
@@ -313,7 +317,6 @@ SELECT id%5, first(val ORDER BY key), last(val ORDER BY key)
 FROM aggdata GROUP BY id%5 ORDER BY id%5;
 
 -- test aggregate with stype which is not a by-value datum
--- also test our handling of the aggregate not existing on workers
 create function sumstring_sfunc(state text, x text)
 returns text immutable language plpgsql as $$
 begin return (state::float8 + x::float8)::text;
@@ -326,8 +329,10 @@ create aggregate sumstring(text) (
 	combinefunc = sumstring_sfunc,
 	initcond = '0'
 );
+-- verify that the aggregate is propagated
+select aggfnoid from pg_aggregate where aggfnoid::text like '%sumstring%';
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%sumstring%';$$);
 
-select sumstring(valf::text) from aggdata where valf is not null;
 select create_distributed_function('sumstring(text)');
 select sumstring(valf::text) from aggdata where valf is not null;
 
@@ -532,6 +537,80 @@ LEFT JOIN ref_table ON TRUE;
 SELECT floor(AVG(COALESCE(agg_col, 10)))
 FROM dist_table
 LEFT JOIN ref_table ON TRUE;
+
+-- try createing aggregate having non-distributable dependency type
+create table dummy_tbl (a int);
+create function dummy_fnc(a dummy_tbl, d double precision) RETURNS dummy_tbl
+    AS $$SELECT 1;$$ LANGUAGE sql;
+-- should give warning and create aggregate local only
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+
+-- clear and try again with distributed table
+DROP TABLE dummy_tbl CASCADE;
+
+create table dummy_tbl (a int);
+SELECT create_distributed_table('dummy_tbl','a');
+create function dummy_fnc(a dummy_tbl, d double precision) RETURNS dummy_tbl
+    AS $$SELECT 1;$$ LANGUAGE sql;
+
+-- test in tx block
+-- shouldn't distribute, as citus.create_object_propagation is set to deferred
+BEGIN;
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+COMMIT;
+-- verify not distributed
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+
+drop aggregate dependent_agg ( double precision);
+
+-- now try with create_object_propagation = immediate
+SET citus.create_object_propagation TO immediate;
+-- should distribute, as citus.create_object_propagation is set to immediate
+-- will switch to sequential mode
+BEGIN;
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+COMMIT;
+
+-- verify distributed
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+
+drop aggregate dependent_agg ( double precision);
+
+-- now try with create_object_propagation = automatic
+SET citus.create_object_propagation TO automatic;
+-- should distribute, as citus.create_object_propagation is set to automatic
+-- will switch to sequential mode
+BEGIN;
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+COMMIT;
+
+-- verify distributed
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+
+-- verify that the aggregate is added into pg_dist_object, on each worker
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
+
+RESET citus.create_object_propagation;
+
+-- drop and test outside of tx block
+drop aggregate dependent_agg (float8);
+-- verify that the aggregate is removed from pg_dist_object, on each worker
+SELECT run_command_on_workers($$SELECT count(*) from pg_catalog.pg_dist_object where objid = 'aggregate_support.dependent_agg'::regproc;$$);
+create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
+--verify
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
+
+DROP TABLE dummy_tbl CASCADE;
+
+SET citus.create_object_propagation TO automatic;
+begin;
+    create type typ1 as (a int);
+    create or replace function fnagg(a typ1, d double precision) RETURNS typ1 AS $$SELECT 1;$$LANGUAGE sql;
+    create aggregate dependent_agg (float8) (stype=typ1, sfunc=fnagg);
+commit;
+RESET citus.create_object_propagation;
+
+SELECT run_command_on_workers($$select aggfnoid from pg_aggregate where aggfnoid::text like '%dependent_agg%';$$);
 
 set client_min_messages to error;
 drop schema aggregate_support cascade;
