@@ -53,4 +53,11 @@ RESET client_min_messages;
 
 SELECT citus_backend_gpid() = citus_calculate_gpid(:coordinator_node_id, pg_backend_pid());
 
+SELECT nodename = citus_nodename_for_nodeid(nodeid) AND nodeport = citus_nodeport_for_nodeid(nodeid)
+FROM pg_dist_node
+WHERE isactive = true AND noderole = 'primary';
+
+SELECT citus_nodeid_for_gpid(10000000000 * 2 + 3);
+SELECT citus_pid_for_gpid(10000000000 * 2 + 3);
+
 DROP SCHEMA global_cancel CASCADE;

@@ -146,6 +146,8 @@ PG_FUNCTION_INFO_V1(master_activate_node);
 PG_FUNCTION_INFO_V1(citus_update_node);
 PG_FUNCTION_INFO_V1(master_update_node);
 PG_FUNCTION_INFO_V1(get_shard_id_for_distribution_column);
+PG_FUNCTION_INFO_V1(citus_nodename_for_nodeid);
+PG_FUNCTION_INFO_V1(citus_nodeport_for_nodeid);
 
 
 /*
@@ -1474,6 +1476,50 @@ get_shard_id_for_distribution_column(PG_FUNCTION_ARGS)
 
 
 /*
+ * citus_nodename_for_nodeid returns the node name for the node with given node id
+ */
+Datum
+citus_nodename_for_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int nodeId = PG_GETARG_INT32(0);
+
+	bool missingOk = true;
+	WorkerNode *node = FindNodeWithNodeId(nodeId, missingOk);
+
+	if (node == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	PG_RETURN_TEXT_P(cstring_to_text(node->workerName));
+}
+
+
+/*
+ * citus_nodeport_for_nodeid returns the node port for the node with given node id
+ */
+Datum
+citus_nodeport_for_nodeid(PG_FUNCTION_ARGS)
+{
+	CheckCitusVersion(ERROR);
+
+	int nodeId = PG_GETARG_INT32(0);
+
+	bool missingOk = true;
+	WorkerNode *node = FindNodeWithNodeId(nodeId, missingOk);
+
+	if (node == NULL)
+	{
+		PG_RETURN_NULL();
+	}
+
+	PG_RETURN_INT32(node->workerPort);
+}
+
+
+/*
  * FindWorkerNode searches over the worker nodes and returns the workerNode
  * if it already exists. Else, the function returns NULL.
  */
@@ -1550,21 +1596,21 @@ FindWorkerNodeAnyCluster(const char *nodeName, int32 nodePort)
 WorkerNode *
 FindNodeWithNodeId(int nodeId, bool missingOk)
 {
-	List *workerList = ActiveReadableNodeList();
-	WorkerNode *workerNode = NULL;
+	List *nodeList = ActiveReadableNodeList();
+	WorkerNode *node = NULL;
 
-	foreach_ptr(workerNode, workerList)
+	foreach_ptr(node, nodeList)
 	{
-		if (workerNode->nodeId == nodeId)
+		if (node->nodeId == nodeId)
 		{
-			return workerNode;
+			return node;
 		}
 	}
 
 	/* there isn't any node with nodeId in pg_dist_node */
 	if (!missingOk)
 	{
-		elog(ERROR, "worker node with node id %d could not be found", nodeId);
+		elog(ERROR, "node with node id %d could not be found", nodeId);
 	}
 
 	return NULL;
