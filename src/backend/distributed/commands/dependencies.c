@@ -32,6 +32,7 @@
 typedef bool (*AddressPredicate)(const ObjectAddress *);
 
 static void EnsureDependenciesCanBeDistributed(const ObjectAddress *relationAddress);
+static void ErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress);
 static void ErrorIfCircularDependencyExists(const ObjectAddress *objectAddress);
 static int ObjectAddressComparator(const void *a, const void *b);
 static List * GetDependencyCreateDDLCommands(const ObjectAddress *dependency);
@@ -150,12 +151,24 @@ EnsureDependenciesExistOnAllNodes(const ObjectAddress *target)
 static void
 EnsureDependenciesCanBeDistributed(const ObjectAddress *objectAddress)
 {
-	/* If an object circularcly depends to itself, Citus can not handle it */
+	/* If the object circularcly depends to itself, Citus can not handle it */
 	ErrorIfCircularDependencyExists(objectAddress);
 
-	/* If any of the dependency of the object can not be distributed, error out */
+	/* If the object has any unsupported dependency, error out */
+	ErrorIfHasUnsupportedDependency(objectAddress);
+}
+
+
+/*
+ * ErrorIfHasUnsupportedDependency ensures object doesn't have any dependency unsupported
+ * by Citus.
+ */
+static void
+ErrorIfHasUnsupportedDependency(const ObjectAddress *objectAddress)
+{
 	ObjectAddress *undistributableDependency = GetUndistributableDependency(
 		objectAddress);
+
 	if (undistributableDependency != NULL)
 	{
 		if (SupportedDependencyByCitus(undistributableDependency))
