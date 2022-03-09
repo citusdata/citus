@@ -37,21 +37,19 @@ SELECT create_distributed_table('t1', 'name');
 
 (1 row)
 
+-- verify that we can change the object
+COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config  IS 'this comment can be set right now';
+COMMIT;
 SELECT * FROM run_command_on_workers($$
     SELECT obj_description('text_search.my_text_search_config'::regconfig);
 $$) ORDER BY 1,2;
- nodename  | nodeport | success |                           result
+ nodename  | nodeport | success |              result
 ---------------------------------------------------------------------
- localhost |    57637 | t       | on demand propagation of text search object with a comment
- localhost |    57638 | t       | on demand propagation of text search object with a comment
+ localhost |    57637 | t       | this comment can be set right now
+ localhost |    57638 | t       | this comment can be set right now
 (2 rows)
 
--- verify that changing anything on a managed TEXT SEARCH CONFIGURATION fails after parallel execution
-COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config  IS 'this comment can''t be set right now';
-ERROR:  cannot run text search configuration command because there was a parallel operation on a distributed table in the transaction
-DETAIL:  When running command on/for a distributed text search configuration, Citus needs to perform all operations over a single connection per node to ensure consistency.
-HINT:  Try re-running the transaction with "SET LOCAL citus.multi_shard_modify_mode TO 'sequential';"
-ABORT;
+DROP TABLE t1;
 -- create an index on an already distributed table
 BEGIN;
 CREATE TEXT SEARCH CONFIGURATION my_text_search_config2 ( parser = default );
@@ -64,6 +62,7 @@ SELECT create_distributed_table('t1', 'name');
 (1 row)
 
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config2'::regconfig, (COALESCE(name, ''::character varying))::text));
+COMMIT;
 SELECT * FROM run_command_on_workers($$
     SELECT obj_description('text_search.my_text_search_config2'::regconfig);
 $$) ORDER BY 1,2;
@@ -73,7 +72,7 @@ $$) ORDER BY 1,2;
  localhost |    57638 | t       | on demand propagation of text search object with a comment 2
 (2 rows)
 
-ABORT;
+DROP TABLE t1;
 -- should be able to create a configuration based on a copy of an existing configuration
 CREATE TEXT SEARCH CONFIGURATION french_noaccent ( COPY = french );
 CREATE TABLE t2(id int, name text);

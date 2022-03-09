@@ -78,7 +78,7 @@
 #include "utils/syscache.h"
 
 bool EnableDDLPropagation = true; /* ddl propagation is enabled */
-int CreateObjectPropagationMode = CREATE_OBJECT_PROPAGATION_DEFERRED;
+int CreateObjectPropagationMode = CREATE_OBJECT_PROPAGATION_IMMEDIATE;
 PropSetCmdBehavior PropagateSetCommands = PROPSETCMD_NONE; /* SET prop off */
 static bool shouldInvalidateForeignKeyGraph = false;
 static int activeAlterTables = 0;

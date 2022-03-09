@@ -693,7 +693,7 @@ RegisterCitusConfigVariables(void)
 					 "off performance for full transactional consistency on the creation "
 					 "of new objects."),
 		&CreateObjectPropagationMode,
-		CREATE_OBJECT_PROPAGATION_DEFERRED, create_object_propagation_options,
+		CREATE_OBJECT_PROPAGATION_IMMEDIATE, create_object_propagation_options,
 		PGC_USERSET,
 		GUC_NO_SHOW_ALL,
 		NULL, NULL, NULL);

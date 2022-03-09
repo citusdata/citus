@@ -343,6 +343,7 @@ SET search_path TO "extension'test";
 -- check restriction for sequential execution
 -- enable it and see that create command errors but continues its execution by changing citus.multi_shard_modify_mode TO 'off
 BEGIN;
+    SET LOCAL citus.create_object_propagation TO deferred;
 	CREATE TABLE some_random_table (a int);
 	SELECT create_distributed_table('some_random_table', 'a');
  create_distributed_table
@@ -585,6 +586,7 @@ DROP TABLE test_extension_function;
 -- Test extension function altering distribution argument
 BEGIN;
 SET citus.shard_replication_factor = 1;
+SET citus.multi_shard_modify_mode TO sequential;
 CREATE TABLE test_extension_function(col1 float8[], col2 float8[]);
 SELECT create_distributed_table('test_extension_function', 'col1', colocate_with := 'none');
  create_distributed_table

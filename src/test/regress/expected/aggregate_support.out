@@ -1114,6 +1114,7 @@ create function dummy_fnc(a dummy_tbl, d double precision) RETURNS dummy_tbl
 -- test in tx block
 -- shouldn't distribute, as citus.create_object_propagation is set to deferred
 BEGIN;
+SET LOCAL citus.create_object_propagation TO deferred;
 create aggregate dependent_agg (float8) (stype=dummy_tbl, sfunc=dummy_fnc);
 COMMIT;
 -- verify not distributed

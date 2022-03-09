@@ -48,10 +48,9 @@ CREATE TABLE t3 (a int PRIMARY KEY, b tc2);
 SELECT create_distributed_table('t3','a');
 INSERT INTO t3 VALUES (4, ('5',6)::tc2);
 SELECT * FROM t3;
-
+COMMIT;
 -- verify typmod was propagated
 SELECT run_command_on_workers($$SELECT atttypmod FROM pg_attribute WHERE attnum = 1 AND attrelid = (SELECT typrelid FROM pg_type WHERE typname = 'tc2');$$);
-COMMIT;
 
 -- transaction block with simple type
 BEGIN;

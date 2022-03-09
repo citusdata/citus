@@ -471,14 +471,15 @@ step s2-create-extension-version-11:
 
 step s1-add-node-1:
  SELECT 1 FROM master_add_node('localhost', 57637);
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
 
+step s1-add-node-1: <... completed>
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
-
-step s2-commit:
- COMMIT;
 
 step s1-print:
  select count(*) from pg_catalog.pg_dist_object ;
@@ -489,7 +490,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    6
+    7
 (1 row)
 
 extname|extversion|nspname
@@ -499,20 +500,20 @@ seg    |       1.1|public
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(localhost,57637,t,seg)
+(localhost,57638,t,seg)
 (2 rows)
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(localhost,57637,t,1.1)
+(localhost,57638,t,1.1)
 (2 rows)
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(localhost,57637,t,public)
+(localhost,57638,t,public)
 (2 rows)
 
 master_remove_node
@@ -678,14 +679,15 @@ step s2-create-extension-with-schema1:
 
 step s1-add-node-1:
  SELECT 1 FROM master_add_node('localhost', 57637);
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
 
+step s1-add-node-1: <... completed>
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
-
-step s2-commit:
- COMMIT;
 
 step s1-print:
  select count(*) from pg_catalog.pg_dist_object ;
@@ -696,7 +698,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    6
+    7
 (1 row)
 
 extname|extversion|nspname
@@ -706,20 +708,20 @@ seg    |       1.3|schema1
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(localhost,57637,t,seg)
+(localhost,57638,t,seg)
 (2 rows)
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(localhost,57637,t,1.3)
+(localhost,57638,t,1.3)
 (2 rows)
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,"")
-(localhost,57638,t,"")
+(localhost,57637,t,schema1)
+(localhost,57638,t,schema1)
 (2 rows)
 
 master_remove_node
@@ -820,14 +822,15 @@ step s2-create-extension-version-11:
 
 step s1-remove-node-1:
  SELECT 1 FROM master_remove_node('localhost', 57637);
+ <waiting ...>
+step s2-commit: 
+ COMMIT;
 
+step s1-remove-node-1: <... completed>
 ?column?
 ---------------------------------------------------------------------
        1
 (1 row)
-
-step s2-commit:
- COMMIT;
 
 step s1-print:
  select count(*) from pg_catalog.pg_dist_object ;
@@ -838,7 +841,7 @@ step s1-print:
 
 count
 ---------------------------------------------------------------------
-    6
+    7
 (1 row)
 
 extname|extversion|nspname
@@ -848,17 +851,17 @@ seg    |       1.1|public
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57638,t,"")
+(localhost,57638,t,seg)
 (1 row)
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57638,t,"")
+(localhost,57638,t,1.1)
 (1 row)
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57638,t,"")
+(localhost,57638,t,public)
 (1 row)
 
 master_remove_node
@@ -938,7 +941,7 @@ run_command_on_workers
 
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,schema2)
+(localhost,57637,t,schema1)
 (localhost,57638,t,"")
 (2 rows)
 
