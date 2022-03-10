@@ -223,7 +223,24 @@ CreateSchemaStmtObjectAddress(Node *node, bool missing_ok)
 {
 	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
 
-	return GetObjectAddressBySchemaName(stmt->schemaname, missing_ok);
+	StringInfoData schemaName = { 0 };
+	initStringInfo(&schemaName);
+
+	if (stmt->schemaname == NULL)
+	{
+		/*
+		 * If the schema name is not provided, the schema will be created
+		 * with the name of the authorizated user.
+		 */
+		Assert(stmt->authrole != NULL);
+		appendStringInfoString(&schemaName, RoleSpecString(stmt->authrole, true));
+	}
+	else
+	{
+		appendStringInfoString(&schemaName, stmt->schemaname);
+	}
+
+	return GetObjectAddressBySchemaName(schemaName.data, missing_ok);
 }
 
 

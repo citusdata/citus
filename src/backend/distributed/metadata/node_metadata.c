@@ -275,6 +275,23 @@ citus_add_node(PG_FUNCTION_ARGS)
 	 */
 	if (!nodeAlreadyExists)
 	{
+		WorkerNode *workerNode = FindWorkerNodeAnyCluster(nodeNameString, nodePort);
+
+		/*
+		 * If the worker is not marked as a coordinator, check that
+		 * the node is not trying to add itself
+		 */
+		if (workerNode != NULL &&
+			workerNode->groupId != COORDINATOR_GROUP_ID &&
+			IsWorkerTheCurrentNode(workerNode))
+		{
+			ereport(ERROR, (errmsg("Node cannot add itself as a worker."),
+							errhint(
+								"Add the node as a coordinator by using: "
+								"SELECT citus_set_coordinator_host('%s', %d);",
+								nodeNameString, nodePort)));
+		}
+
 		ActivateNode(nodeNameString, nodePort);
 	}
 

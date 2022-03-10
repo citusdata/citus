@@ -36,7 +36,7 @@ step "s1-begin"
 
 step "s1-add-worker"
 {
-	SELECT 1 FROM master_add_node('localhost', 57638);
+    SELECT 1 FROM master_add_node('localhost', 57638);
 }
 
 step "s1-commit"
@@ -58,7 +58,7 @@ step "s1-print-distributed-objects"
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
     -- print if the function has been created
@@ -83,23 +83,23 @@ step "s2-create-schema"
 
 step "s2-create-table"
 {
-	CREATE TABLE t1 (a int, b int);
+    CREATE TABLE t1 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+    SET citus.shard_replication_factor TO 1;
+    SELECT create_distributed_table('t1', 'a');
 }
 
 step "s2-create-type"
 {
-	CREATE TYPE tt1 AS (a int, b int);
+    CREATE TYPE tt1 AS (a int, b int);
 }
 
 step "s2-create-table-with-type"
 {
-	CREATE TABLE t1 (a int, b tt1);
+    CREATE TABLE t1 (a int, b tt1);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t1', 'a');
+    SET citus.shard_replication_factor TO 1;
+    SELECT create_distributed_table('t1', 'a');
 }
 
 step "s2-distribute-function"
@@ -110,12 +110,12 @@ step "s2-distribute-function"
 
 step "s2-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s2-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 // prints from session 2 are run at the end when the worker has already been added by the
@@ -130,7 +130,7 @@ step "s2-print-distributed-objects"
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_namespace where nspname = 'myschema';$$);
 
     -- print if the type has been created
-	SELECT count(*) FROM pg_type where typname = 'tt1';
+    SELECT count(*) FROM pg_type where typname = 'tt1';
     SELECT run_command_on_workers($$SELECT count(*) FROM pg_type where typname = 'tt1';$$);
 
     -- print if the function has been created
@@ -148,10 +148,10 @@ step "s3-use-schema"
 
 step "s3-create-table"
 {
-	CREATE TABLE t2 (a int, b int);
+    CREATE TABLE t2 (a int, b int);
     -- session needs to have replication factor set to 1, can't do in setup
-	SET citus.shard_replication_factor TO 1;
-	SELECT create_distributed_table('t2', 'a');
+    SET citus.shard_replication_factor TO 1;
+    SELECT create_distributed_table('t2', 'a');
 }
 
 step "s3-wait-for-metadata-sync"
@@ -168,12 +168,12 @@ step "s3-create-schema2"
 
 step "s3-begin"
 {
-	BEGIN;
+    BEGIN;
 }
 
 step "s3-commit"
 {
-	COMMIT;
+    COMMIT;
 }
 
 step "s3-drop-coordinator-schemas"
@@ -193,14 +193,14 @@ step "s3-drop-coordinator-schemas"
 permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
 permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s1-add-worker" "s2-public-schema" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
 permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-public-schema" "s2-create-table" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
-permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-create-schema" "s2-create-table" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s1-add-worker" "s2-create-schema" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s2-create-table" "s1-add-worker" "s2-commit" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-create-schema" "s1-commit" "s2-create-table" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s1-add-worker" "s2-create-schema" "s1-commit" "s2-create-table" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s2-create-schema" "s1-add-worker" "s2-create-table" "s2-commit" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
 
 // concurrency tests with multi schema distribution
 permutation "s1-print-distributed-objects" "s2-create-schema" "s1-begin" "s2-begin" "s1-add-worker" "s2-create-table" "s1-commit" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
 permutation "s1-print-distributed-objects" "s1-add-worker" "s2-create-schema" "s2-begin" "s3-begin" "s3-use-schema" "s2-create-table" "s3-create-table" "s2-commit" "s3-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
-permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-schema" "s3-create-schema2" "s2-create-table" "s3-create-table" "s1-commit" "s3-commit" "s2-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
+permutation "s1-print-distributed-objects" "s1-begin" "s2-begin" "s3-begin" "s1-add-worker" "s2-create-schema" "s3-create-schema2" "s1-commit" "s2-create-table" "s2-commit" "s3-create-table" "s3-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"
 
 // type and schema tests
 permutation "s1-print-distributed-objects" "s1-begin" "s1-add-worker" "s2-public-schema" "s2-create-type" "s1-commit" "s2-print-distributed-objects" "s3-drop-coordinator-schemas"

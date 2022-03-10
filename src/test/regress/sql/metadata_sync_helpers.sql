@@ -437,6 +437,7 @@ ROLLBACK;
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
     SELECT assign_distributed_transaction_id(0, 8, '2021-07-09 15:41:55.542377+02');
     SET application_name to 'citus_internal gpid=10000000001';
+    SET citus.enable_ddl_propagation TO OFF;
     \set VERBOSITY terse
 
     CREATE TYPE distributed_test_type AS (a int, b int);
@@ -831,6 +832,7 @@ ROLLBACK;
 
 
 BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;
+    SET citus.enable_ddl_propagation TO OFF;
 	CREATE COLLATION collation_t1 (provider = icu, locale = 'de-u-co-phonebk');
 	CREATE COLLATION caseinsensitive (provider = icu, locale = 'und-u-ks-level2');
 

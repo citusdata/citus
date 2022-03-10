@@ -538,7 +538,28 @@ SELECT run_command_on_workers($$DROP SCHEMA localschema;$$);
  (localhost,57638,f,"ERROR:  schema ""localschema"" does not exist")
 (2 rows)
 
+CREATE ROLE schema_owner WITH LOGIN;
+NOTICE:  not propagating CREATE ROLE/USER commands to worker nodes
+HINT:  Connect to worker nodes directly to manually create all necessary users and roles.
+SELECT run_command_on_workers($$CREATE ROLE schema_owner WITH LOGIN;$$);
+      run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,"CREATE ROLE")
+ (localhost,57638,t,"CREATE ROLE")
+(2 rows)
+
 RESET citus.enable_ddl_propagation;
+-- create schema with the name of the owner
+CREATE SCHEMA AUTHORIZATION schema_owner;
+-- verify the schema is created on workers
+SELECT run_command_on_workers($$SELECT COUNT(*) FROM pg_namespace WHERE nspname='schema_owner';$$);
+ run_command_on_workers
+---------------------------------------------------------------------
+ (localhost,57637,t,1)
+ (localhost,57638,t,1)
+(2 rows)
+
+DROP SCHEMA schema_owner;
 DROP SCHEMA mx_old_schema CASCADE;
 DROP SCHEMA mx_new_schema CASCADE;
 NOTICE:  drop cascades to table mx_new_schema.table_set_schema

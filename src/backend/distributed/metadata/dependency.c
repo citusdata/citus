@@ -1259,7 +1259,7 @@ ExpandCitusSupportedTypes(ObjectAddressCollector *collector, ObjectAddress targe
 
 			/*
 			 * Tables could have indexes. Indexes themself could have dependencies that
-			 * need to be propagated. eg. TEXT SEARCH CONFIGRUATIONS. Here we add the
+			 * need to be propagated. eg. TEXT SEARCH CONFIGURATIONS. Here we add the
 			 * addresses of all indices to the list of objects to vist, as to make sure we
 			 * create all objects required by the indices before we create the table
 			 * including indices.

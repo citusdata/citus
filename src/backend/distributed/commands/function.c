@@ -1585,6 +1585,32 @@ PreprocessAlterFunctionOwnerStmt(Node *node, const char *queryString,
 
 
 /*
+ * PostprocessAlterFunctionOwnerStmt is invoked after the owner has been changed locally.
+ * Since changing the owner could result in new dependencies being found for this object
+ * we re-ensure all the dependencies for the function do exist.
+ *
+ * This is solely to propagate the new owner (and all its dependencies) if it was not
+ * already distributed in the cluster.
+ */
+List *
+PostprocessAlterFunctionOwnerStmt(Node *node, const char *queryString)
+{
+	AlterOwnerStmt *stmt = castNode(AlterOwnerStmt, node);
+	AssertObjectTypeIsFunctional(stmt->objectType);
+
+	ObjectAddress address = GetObjectAddressFromParseTree((Node *) stmt, false);
+	if (!ShouldPropagateAlterFunction(&address))
+	{
+		return NIL;
+	}
+
+	EnsureDependenciesExistOnAllNodes(&address);
+
+	return NIL;
+}
+
+
+/*
  * PreprocessDropFunctionStmt gets called during the planning phase of a DROP FUNCTION statement
  * and returns a list of DDLJob's that will drop any distributed functions from the
  * workers.

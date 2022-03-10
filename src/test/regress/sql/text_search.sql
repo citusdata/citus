@@ -2,7 +2,7 @@ CREATE SCHEMA text_search;
 CREATE SCHEMA text_search2;
 SET search_path TO text_search;
 
--- create a new configruation from scratch
+-- create a new configuration from scratch
 CREATE TEXT SEARCH CONFIGURATION my_text_search_config ( parser = default );
 CREATE TABLE t1(id int, name text);
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
@@ -26,13 +26,13 @@ COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config IS 'on demand propaga
 CREATE TABLE t1(id int, name text);
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config'::regconfig, (COALESCE(name, ''::character varying))::text));
 SELECT create_distributed_table('t1', 'name');
+-- verify that we can change the object
+COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config  IS 'this comment can be set right now';
+COMMIT;
 SELECT * FROM run_command_on_workers($$
     SELECT obj_description('text_search.my_text_search_config'::regconfig);
 $$) ORDER BY 1,2;
-
--- verify that changing anything on a managed TEXT SEARCH CONFIGURATION fails after parallel execution
-COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config  IS 'this comment can''t be set right now';
-ABORT;
+DROP TABLE t1;
 
 -- create an index on an already distributed table
 BEGIN;
@@ -41,10 +41,11 @@ COMMENT ON TEXT SEARCH CONFIGURATION my_text_search_config2 IS 'on demand propag
 CREATE TABLE t1(id int, name text);
 SELECT create_distributed_table('t1', 'name');
 CREATE INDEX t1_search_name ON t1 USING gin (to_tsvector('text_search.my_text_search_config2'::regconfig, (COALESCE(name, ''::character varying))::text));
+COMMIT;
 SELECT * FROM run_command_on_workers($$
     SELECT obj_description('text_search.my_text_search_config2'::regconfig);
 $$) ORDER BY 1,2;
-ABORT;
+DROP TABLE t1;
 
 -- should be able to create a configuration based on a copy of an existing configuration
 CREATE TEXT SEARCH CONFIGURATION french_noaccent ( COPY = french );
@@ -83,7 +84,7 @@ $$) ORDER BY 1,2;
 ALTER TEXT SEARCH CONFIGURATION french_noaccent DROP MAPPING IF EXISTS FOR asciihword;
 
 -- Comment on a text search configuration
-COMMENT ON TEXT SEARCH CONFIGURATION french_noaccent IS 'a text configuration that is butcherd to test all edge cases';
+COMMENT ON TEXT SEARCH CONFIGURATION french_noaccent IS 'a text configuration that is butchered to test all edge cases';
 SELECT * FROM run_command_on_workers($$
     SELECT obj_description('text_search.french_noaccent'::regconfig);
 $$) ORDER BY 1,2;

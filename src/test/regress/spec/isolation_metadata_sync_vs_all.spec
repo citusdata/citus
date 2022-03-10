@@ -110,8 +110,8 @@ step "s2-create-dist-table"
 
 step "s2-create-schema"
 {
-	CREATE SCHEMA dist_schema
-		CREATE TABLE dist_table_in_schema(id int, data int);
+	CREATE SCHEMA dist_schema;
+	CREATE TABLE dist_schema.dist_table_in_schema(id int, data int);
 
 	SELECT create_distributed_table('dist_schema.dist_table_in_schema', 'id');
 }
