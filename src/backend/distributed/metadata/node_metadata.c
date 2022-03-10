@@ -286,7 +286,7 @@ citus_add_node(PG_FUNCTION_ARGS)
 			ereport(ERROR, (errmsg("Node cannot add itself as a worker."),
 							errhint(
 								"Add the node as a coordinator by using: "
-								"SELECT citus_add_node(%s, %d, groupid => 0);",
+								"SELECT citus_set_coordinator_host(%s, %d);",
 								nodeNameString, nodePort)));
 		}
 
