@@ -37,7 +37,7 @@ static DistributeObjectOps Aggregate_AlterOwner = {
 	.deparse = DeparseAlterFunctionOwnerStmt,
 	.qualify = QualifyAlterFunctionOwnerStmt,
 	.preprocess = PreprocessAlterFunctionOwnerStmt,
-	.postprocess = NULL,
+	.postprocess = PostprocessAlterFunctionOwnerStmt,
 	.address = AlterFunctionOwnerObjectAddress,
 	.markDistributed = false,
 };
@@ -269,7 +269,7 @@ static DistributeObjectOps Collation_AlterOwner = {
 	.deparse = DeparseAlterCollationOwnerStmt,
 	.qualify = QualifyAlterCollationOwnerStmt,
 	.preprocess = PreprocessAlterCollationOwnerStmt,
-	.postprocess = NULL,
+	.postprocess = PostprocessAlterCollationOwnerStmt,
 	.address = AlterCollationOwnerObjectAddress,
 	.markDistributed = false,
 };
@@ -373,7 +373,7 @@ static DistributeObjectOps Function_AlterOwner = {
 	.deparse = DeparseAlterFunctionOwnerStmt,
 	.qualify = QualifyAlterFunctionOwnerStmt,
 	.preprocess = PreprocessAlterFunctionOwnerStmt,
-	.postprocess = NULL,
+	.postprocess = PostprocessAlterFunctionOwnerStmt,
 	.address = AlterFunctionOwnerObjectAddress,
 	.markDistributed = false,
 };
@@ -437,7 +437,7 @@ static DistributeObjectOps Procedure_AlterOwner = {
 	.deparse = DeparseAlterFunctionOwnerStmt,
 	.qualify = QualifyAlterFunctionOwnerStmt,
 	.preprocess = PreprocessAlterFunctionOwnerStmt,
-	.postprocess = NULL,
+	.postprocess = PostprocessAlterFunctionOwnerStmt,
 	.address = AlterFunctionOwnerObjectAddress,
 	.markDistributed = false,
 };
@@ -581,7 +581,7 @@ static DistributeObjectOps Routine_AlterOwner = {
 	.deparse = DeparseAlterFunctionOwnerStmt,
 	.qualify = QualifyAlterFunctionOwnerStmt,
 	.preprocess = PreprocessAlterFunctionOwnerStmt,
-	.postprocess = NULL,
+	.postprocess = PostprocessAlterFunctionOwnerStmt,
 	.address = AlterFunctionOwnerObjectAddress,
 	.markDistributed = false,
 };
@@ -647,7 +647,7 @@ static DistributeObjectOps Statistics_AlterOwner = {
 	.deparse = DeparseAlterStatisticsOwnerStmt,
 	.qualify = QualifyAlterStatisticsOwnerStmt,
 	.preprocess = PreprocessAlterStatisticsOwnerStmt,
-	.postprocess = NULL,
+	.postprocess = PostprocessAlterStatisticsOwnerStmt,
 	.address = NULL,
 	.markDistributed = false,
 };
