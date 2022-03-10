@@ -41,13 +41,6 @@ ExtractFieldJsonb(Datum jsonbDoc, const char *fieldName, Datum *result, bool as_
 													typeByValue, typeAlignment);
 	Datum pathDatum = PointerGetDatum(pathArrayObject);
 
-	/*
-	 * We need to check whether the result of jsonb_extract_path is NULL or not, so use
-	 * FunctionCallInvoke() instead of other function call api.
-	 *
-	 * We cannot use jsonb_path_exists to ensure not-null since it is not available in
-	 * postgres 11.
-	 */
 	FmgrInfo fmgrInfo;
 
 	if (as_text)

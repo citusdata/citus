@@ -51,7 +51,6 @@ static void SendCommandToWorkersOutsideTransaction(TargetWorkerSet targetWorkerS
 												   const char *command, const char *user,
 												   bool
 												   failOnError);
-bool IsWorkerTheCurrentNode(WorkerNode *workerNode);
 
 /*
  * SendCommandToWorker sends a command to a particular worker as part of the
@@ -665,18 +664,24 @@ IsWorkerTheCurrentNode(WorkerNode *workerNode)
 	SendRemoteCommand(workerConnection, command);
 
 	PGresult *result = GetRemoteCommandResult(workerConnection, true);
+
+	if (result == NULL)
+	{
+		return false;
+	}
+
 	List *commandResult = ReadFirstColumnAsText(result);
 
-	if (commandResult == NIL)
+	PQclear(result);
+	ForgetResults(workerConnection);
+
+	if ((list_length(commandResult) != 1))
 	{
 		return false;
 	}
 
 	StringInfo resultInfo = (StringInfo) linitial(commandResult);
 	char *workerServerId = resultInfo->data;
-
-	PQclear(result);
-	ForgetResults(workerConnection);
 
 	Datum metadata = DistNodeMetadata();
 	text *currentServerIdTextP = ExtractFieldTextP(metadata, "server_id");
