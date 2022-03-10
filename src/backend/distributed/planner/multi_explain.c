@@ -1487,7 +1487,9 @@ WrapQueryForExplainAnalyze(const char *queryString, TupleDesc tupleDesc)
 		}
 
 		Form_pg_attribute attr = &tupleDesc->attrs[columnIndex];
-		char *attrType = format_type_with_typemod(attr->atttypid, attr->atttypmod);
+		char *attrType = format_type_extended(attr->atttypid, attr->atttypmod,
+											  FORMAT_TYPE_TYPEMOD_GIVEN |
+											  FORMAT_TYPE_FORCE_QUALIFY);
 
 		appendStringInfo(columnDef, "field_%d %s", columnIndex, attrType);
 	}

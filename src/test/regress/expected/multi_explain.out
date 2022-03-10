@@ -3014,5 +3014,18 @@ Custom Scan (Citus Adaptive) (actual rows=1 loops=1)
   ->  Task
         Node: host=localhost port=xxxxx dbname=regression
         ->  Seq Scan on distributed_table_1_570032 distributed_table_xxx (actual rows=1 loops=1)
+CREATE TYPE multi_explain.int_wrapper_type AS (int_field int);
+CREATE TABLE tbl (a int, b multi_explain.int_wrapper_type);
+SELECT create_distributed_table('tbl', 'a');
+
+EXPLAIN :default_analyze_flags SELECT * FROM tbl;
+Custom Scan (Citus Adaptive) (actual rows=0 loops=1)
+  Task Count: 2
+  Tuple data received from nodes: 0 bytes
+  Tasks Shown: One of 2
+  ->  Task
+        Tuple data received from node: 0 bytes
+        Node: host=localhost port=xxxxx dbname=regression
+        ->  Seq Scan on tbl_570036 tbl (actual rows=0 loops=1)
 SET client_min_messages TO ERROR;
 DROP SCHEMA multi_explain CASCADE;
