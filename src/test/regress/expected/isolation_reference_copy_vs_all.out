@@ -277,8 +277,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''reference_copy%''');
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(localhost,57637,t,2)
+(localhost,57638,t,2)
 (2 rows)
 
 restore_isolation_tester_func
@@ -340,8 +340,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''reference_copy%''');
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(localhost,57637,t,2)
+(localhost,57638,t,2)
 (2 rows)
 
 restore_isolation_tester_func
@@ -782,8 +782,8 @@ count
 step s1-show-indexes: SELECT run_command_on_workers('SELECT COUNT(*) FROM pg_indexes WHERE tablename LIKE ''reference_copy%''');
 run_command_on_workers
 ---------------------------------------------------------------------
-(localhost,57637,t,1)
-(localhost,57638,t,1)
+(localhost,57637,t,2)
+(localhost,57638,t,2)
 (2 rows)
 
 restore_isolation_tester_func
