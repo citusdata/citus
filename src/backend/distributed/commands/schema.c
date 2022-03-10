@@ -44,6 +44,7 @@ static ObjectAddress GetObjectAddressBySchemaName(char *schemaName, bool missing
 static List * FilterDistributedSchemas(List *schemas);
 static bool SchemaHasDistributedTableWithFKey(char *schemaName);
 static bool ShouldPropagateCreateSchemaStmt(void);
+static List * GetGrantOnSchemaCommandsFromCreateSchemaStmt(Node *node);
 
 
 /*
@@ -63,13 +64,17 @@ PreprocessCreateSchemaStmt(Node *node, const char *queryString,
 
 	EnsureSequentialMode(OBJECT_SCHEMA);
 
+	/* to prevent recursion with mx we disable ddl propagation */
+	List *commands = list_make1(DISABLE_DDL_PROPAGATION);
+
 	/* deparse sql*/
 	const char *sql = DeparseTreeNode(node);
 
-	/* to prevent recursion with mx we disable ddl propagation */
-	List *commands = list_make3(DISABLE_DDL_PROPAGATION,
-								(void *) sql,
-								ENABLE_DDL_PROPAGATION);
+	commands = lappend(commands, (void *) sql);
+
+	commands = list_concat(commands, GetGrantOnSchemaCommandsFromCreateSchemaStmt(node));
+
+	commands = lappend(commands, ENABLE_DDL_PROPAGATION);
 
 	return NodeDDLTaskList(NON_COORDINATOR_NODES, commands);
 }
@@ -391,4 +396,30 @@ ShouldPropagateCreateSchemaStmt()
 	}
 
 	return true;
+}
+
+
+static List *
+GetGrantOnSchemaCommandsFromCreateSchemaStmt(Node *node)
+{
+	List *commands = NIL;
+	CreateSchemaStmt *stmt = castNode(CreateSchemaStmt, node);
+
+	Node *element = NULL;
+	foreach_ptr(element, stmt->schemaElts)
+	{
+		if (nodeTag(element) != T_GrantStmt)
+		{
+			continue;
+		}
+
+		GrantStmt *grantStmt = castNode(GrantStmt, element);
+
+		if (grantStmt->objtype == OBJECT_SCHEMA)
+		{
+			commands = lappend(commands, DeparseGrantOnSchemaStmt(element));
+		}
+	}
+
+	return commands;
 }
