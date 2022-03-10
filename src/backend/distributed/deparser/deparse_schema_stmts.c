@@ -92,11 +92,6 @@ AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt)
 		elog(ERROR, "schema creating is not supported with other create commands");
 	}
 
-	if (stmt->schemaname == NULL)
-	{
-		elog(ERROR, "schema name should be specified");
-	}
-
 	appendStringInfoString(buf, "CREATE SCHEMA ");
 
 	if (stmt->if_not_exists)
@@ -104,7 +99,19 @@ AppendCreateSchemaStmt(StringInfo buf, CreateSchemaStmt *stmt)
 		appendStringInfoString(buf, "IF NOT EXISTS ");
 	}
 
-	appendStringInfo(buf, "%s ", quote_identifier(stmt->schemaname));
+	if (stmt->schemaname != NULL)
+	{
+		appendStringInfo(buf, "%s ", quote_identifier(stmt->schemaname));
+	}
+	else
+	{
+		/*
+		 * If the schema name is not provided, the schema will be created
+		 * with the name of the authorizated user.
+		 */
+		Assert(stmt->authrole != NULL);
+		appendStringInfo(buf, "%s ", RoleSpecString(stmt->authrole, true));
+	}
 
 	if (stmt->authrole != NULL)
 	{
